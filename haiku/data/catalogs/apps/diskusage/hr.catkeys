@@ -1,0 +1,20 @@
+1	croatian	x-vnd.Haiku-DiskUsage	2197571549
+Path	Info Window		Putanja
+Open with	Pie View		Otvori pomoću
+file unavailable	Pie View		datoteka nedostupna
+DiskUsage	System name		Uporaba diska
+file unavailable	Status View		datoteka nedostupna
+Scanning %refName%	Scanner		Skeniram %refName%
+Size	Info Window		Veličina
+%d files	Status View	For UI layouting only, use the longest plural form for your language	%d datoteke
+%a, %d %b %Y, %r	Info Window		%a, %d %b %Y, %r
+Scan	Status View		Skeniraj
+Abort	Status View		Prekini
+Open	Pie View		Otvori
+Rescan	Pie View		Ponovno skeniraj
+Modified	Info Window		Izmjenjeno
+Rescan	Status View		Ponovno skeniraj
+Created	Info Window		Napravljeno
+Free on %refName%	Scanner		Slobodno na %refName%
+Get info	Pie View		Informacije
+Kind	Info Window		Vrsta
