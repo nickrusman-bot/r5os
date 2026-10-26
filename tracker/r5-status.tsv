@@ -74,7 +74,7 @@ id	r5_status	branch	commit	notes
 2126	open			
 2131	open			
 2132	open			
-2136	open			
+2136	fixed			overlay scripts/apply-desktop-enh.py
 2138	open			
 2177	open			
 2198	open			
@@ -84,7 +84,7 @@ id	r5_status	branch	commit	notes
 2499	open			
 2505	open			
 2532	open			
-2542	open			
+2542	fixed			overlay scripts/apply-desktop-enh.py
 2551	open			
 2615	open			
 2627	open			
@@ -92,7 +92,7 @@ id	r5_status	branch	commit	notes
 2657	open			
 2676	open			
 2678	open			
-2701	open			
+2701	fixed			overlay scripts/apply-desktop-enh.py
 2708	open			
 2711	open			
 2723	open			
@@ -118,10 +118,10 @@ id	r5_status	branch	commit	notes
 3076	fixed			DragStop(true) when Deskbar/team/window menus detach
 3085	open			
 3098	open			
-3115	open			
+3115	fixed			overlay scripts/apply-desktop-enh.py
 3116	open			
 3168	open			
-3171	open			
+3171	fixed			overlay scripts/apply-desktop-enh.py
 3173	open			
 3176	open			
 3207	open			
@@ -147,7 +147,7 @@ id	r5_status	branch	commit	notes
 3416	open			
 3470	open			
 3490	open			
-3505	open			
+3505	fixed			overlay scripts/apply-desktop-enh.py
 3510	open			
 3533	open			
 3545	open			
@@ -165,15 +165,15 @@ id	r5_status	branch	commit	notes
 3613	open			
 3629	open			
 3667	open			
-3677	open			
+3677	fixed			overlay scripts/apply-desktop-enh.py
 3688	open			
 3702	open			
 3705	open			
-3732	open			
+3732	fixed			overlay scripts/apply-desktop-enh.py
 3746	open			
 3753	open			
 3766	open			
-3813	open			
+3813	fixed			overlay scripts/apply-desktop-enh.py
 3844	open			
 3850	open			
 3913	open			
@@ -183,7 +183,7 @@ id	r5_status	branch	commit	notes
 4016	open			
 4062	open			
 4079	open			
-4089	open			
+4089	fixed			overlay scripts/apply-desktop-enh.py
 4095	open			
 4122	open			
 4135	open			
@@ -193,13 +193,13 @@ id	r5_status	branch	commit	notes
 4178	open			
 4181	open			
 4191	open			
-4216	open			
+4216	fixed			overlay scripts/apply-desktop-enh.py
 4219	open			
 4227	open			
 4246	open			
 4248	open			
 4268	open			
-4276	open			
+4276	fixed			overlay scripts/apply-desktop-enh.py
 4285	open			
 4286	open			
 4296	open			
@@ -232,7 +232,7 @@ id	r5_status	branch	commit	notes
 4567	open			
 4591	open			
 4611	open			
-4626	open			
+4626	fixed			overlay scripts/apply-desktop-enh.py
 4662	open			
 4684	open			
 4685	open			
@@ -241,7 +241,7 @@ id	r5_status	branch	commit	notes
 4763	open			
 4765	open			
 4792	open			
-4793	open			
+4793	fixed			overlay scripts/apply-desktop-enh.py
 4796	open			
 4798	open			
 4805	open			
@@ -267,7 +267,7 @@ id	r5_status	branch	commit	notes
 4986	open			
 4990	open			
 4991	open			
-5000	open			
+5000	fixed			overlay scripts/apply-desktop-enh.py
 5016	open			
 5025	open			
 5033	open			
@@ -340,7 +340,7 @@ id	r5_status	branch	commit	notes
 5876	open			
 5894	open			
 5926	open			
-5930	open			
+5930	fixed			overlay scripts/apply-desktop-enh.py
 5932	open			
 5949	open			
 5967	open			
@@ -2224,7 +2224,7 @@ id	r5_status	branch	commit	notes
 16240	open			
 16242	open			
 16244	open			
-16245	open			
+16245	fixed			overlay scripts/apply-desktop-enh.py
 16247	open			
 16249	open			
 16251	open			
@@ -3915,7 +3915,7 @@ id	r5_status	branch	commit	notes
 20415	open			
 20416	open			
 20418	open			
-20419	fixed			Keep Arrange by on the Desktop menu
+20419	fixed			Keep Arrange by on the Desktop menu; lazily create it so DeskWindow context menu does not SIGSEGV
 20422	open			
 20423	open			
 20425	open			

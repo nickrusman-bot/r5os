@@ -13,6 +13,15 @@ GitHub pull requests on `origin` target **`main`** directly. Do not stack PRs on
 
 Always keep `tracker/STATUS.md` current. After any ticket-status change (`tracker-set.py`, overlay fix, wontfix, not-applicable), run `python3 scripts/tracker-report.py` and include `tracker/r5-status.tsv` plus the regenerated `tracker/STATUS.md` in the same commit/PR. Never leave STATUS.md stale.
 
+## Development loop
+
+After implementing or fixing something:
+
+1. Commit locally (include the STATUS.md update in that commit).
+2. Jam the AMD64 image (`scripts/jam-r5-raw.sh` in WSL).
+3. Boot the image in QEMU (`scripts/run-qemu-r5.sh`).
+4. Ask whether to update GitHub (`git push` / PR to `main`). Do not push until the user says yes.
+
 ## Architectures
 
 R5 OS targets **64-bit only**:
