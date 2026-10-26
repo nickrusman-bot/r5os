@@ -49,6 +49,28 @@ def main() -> int:
         lines.append(f"Nog zonder R5-rij: {len(missing_status)} (opnieuw importeren).")
         lines.append("")
 
+    def count_table(title: str, field: str, col: str, limit: int | None = None) -> None:
+        tallies = Counter(row.get(field) or "" for row in haiku.values())
+        items = tallies.most_common(limit)
+        lines.append(f"## {title}")
+        lines.append("")
+        lines.append(f"| {col} | Aantal |")
+        lines.append("|---|---|")
+        for key, n in items:
+            lines.append(f"| {md_cell(key) or '—'} | {n} |")
+        lines.append("")
+
+    type_counts = Counter(row.get("type") or "" for row in haiku.values())
+    lines += [
+        f"Haiku-type in deze snapshot: **{type_counts.get('bug', 0)}** bugs, "
+        f"**{type_counts.get('enhancement', 0)}** enhancements, rest overig.",
+        "",
+    ]
+    count_table("Type", "type", "Type")
+    count_table("Priority", "priority", "Priority")
+    count_table("Milestone", "milestone", "Milestone")
+    count_table("Component (top 20)", "component", "Component", limit=20)
+
     def section(title: str, ticket_ids: list[str], limit: int = 80) -> None:
         lines.append(f"## {title}")
         lines.append("")
