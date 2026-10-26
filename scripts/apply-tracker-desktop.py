@@ -170,7 +170,7 @@ BPoseView::RemoveVolumePoses()
 				RemoveFromVSList(pose);
 			}
 			fHintLocation = pose->Location(this);
-			PlacePose(pose, Bounds());
+			PlacePose(pose, bounds);
 			locationNeedsUpdating = true;
 		}""",
         "Haiku #20363 bottom place",
