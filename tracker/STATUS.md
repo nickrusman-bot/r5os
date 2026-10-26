@@ -4,9 +4,9 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3897 |
+| open | 3892 |
 | in-progress | 1 |
-| fixed | 38 |
+| fixed | 43 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
@@ -84,9 +84,11 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 | [#3076](https://dev.haiku-os.org/ticket/3076) | assigned | Applications/Deskbar | [Deskbar] disabled menu items after dropping some file on a leaf |  |
 | [#3291](https://dev.haiku-os.org/ticket/3291) | assigned | Applications/Tracker | Deskbar overlaps icons |  |
 | [#8246](https://dev.haiku-os.org/ticket/8246) | assigned | Applications/Tracker | New folders are created on top of each other on the desktop |  |
+| [#10208](https://dev.haiku-os.org/ticket/10208) | new | Partitioning Systems | Drivesetup creating partition size errors |  |
 | [#11138](https://dev.haiku-os.org/ticket/11138) | assigned | Kits/Interface Kit | Alert _text field archived but never instantiated (easy) |  |
 | [#11397](https://dev.haiku-os.org/ticket/11397) | assigned | Applications/Deskbar | Deskbar seems that doesn't follow color scheme based on "Appearance" colors |  |
 | [#12884](https://dev.haiku-os.org/ticket/12884) | new | User Interface | Deskbar forgets settings |  |
+| [#13754](https://dev.haiku-os.org/ticket/13754) | new | Servers/input_server | Mouse + keyboard input non-functional after install |  |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
 | [#15541](https://dev.haiku-os.org/ticket/15541) | new | User Interface | Text colour in Tracker (and a few more places) is not changeable |  |
@@ -96,9 +98,12 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 | [#16116](https://dev.haiku-os.org/ticket/16116) | new | User Interface | Change standard icon size for Desktop to 48x48 |  |
 | [#16458](https://dev.haiku-os.org/ticket/16458) | new | Applications/Deskbar | Deskbar - Opens in background |  |
 | [#16471](https://dev.haiku-os.org/ticket/16471) | new | User Interface | Selected desktop icon is not distinguishable enough with black background |  |
+| [#16573](https://dev.haiku-os.org/ticket/16573) | assigned | Kits/Package Kit | Un-activated packages after install |  |
 | [#16618](https://dev.haiku-os.org/ticket/16618) | new | User Interface | HaikuControlLook: DrawMenuBarBackground Disabled Flag dont work |  |
 | [#16678](https://dev.haiku-os.org/ticket/16678) | assigned | Applications/Tracker | Tracker: use same text color for header |  |
 | [#16838](https://dev.haiku-os.org/ticket/16838) | new | User Interface | Misaligned entries in BListVIew / Save / Open dialogs |  |
+| [#17377](https://dev.haiku-os.org/ticket/17377) | new | Drivers/Graphics/radeon_hd | radeon_hd crashes in connector_probe() |  |
+| [#17664](https://dev.haiku-os.org/ticket/17664) | new | Drivers/Graphics/radeon_hd | radeon_hd "Cedar": app_server crashes writing to 0MB tiny framebuffer |  |
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
 | [#18057](https://dev.haiku-os.org/ticket/18057) | new | User Interface | Misaligned scrollbars and resize knob |  |
 | [#18060](https://dev.haiku-os.org/ticket/18060) | new | Applications/Tracker | [Tracker] Double clicking on Size column header hides all info |  |
@@ -201,5 +206,5 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 | [#2198](https://dev.haiku-os.org/ticket/2198) | new | Kits/Interface Kit | Add BTabView::SetSelectionMessage() like BListView does |  |
 | [#2474](https://dev.haiku-os.org/ticket/2474) | assigned | Drivers | Serial port driver needed for Oxford Semi UART 16950 |  |
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
-| … | | | *3817 meer in r5-status.tsv* | |
+| … | | | *3812 meer in r5-status.tsv* | |
 
