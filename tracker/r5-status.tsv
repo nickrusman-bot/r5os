@@ -3900,7 +3900,7 @@ id	r5_status	branch	commit	notes
 20391	open			
 20397	open			
 20398	open			
-20400	open			
+20400	fixed			TSC conversion: skip 0 CPUID/MSR/hypervisor/PIT divisors in arch_timer.cpp (apply-kernel-bugs.py)
 20401	open			
 20402	open			
 20403	open			

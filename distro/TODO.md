@@ -40,6 +40,9 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 - [x] **UI-fruit (layout + desktop)**  
   [#16838](https://dev.haiku-os.org/ticket/16838) list-clip, [#18057](https://dev.haiku-os.org/ticket/18057) scrollbar/resize-knop, [#15690](https://dev.haiku-os.org/ticket/15690) SoftwareUpdater, [#11138](https://dev.haiku-os.org/ticket/11138) Alert `_text`, [#16471](https://dev.haiku-os.org/ticket/16471) selectie op zwart desktop, [#16116](https://dev.haiku-os.org/ticket/16116) desktop 48px als er geen opgeslagen view-state is, [#1006](https://dev.haiku-os.org/ticket/1006) Backgrounds Revert-snapshot.
 
+- [x] **Kernel-blocker [#20400](https://dev.haiku-os.org/ticket/20400)**  
+  Early-boot divide-by-zero in TSC→`system_time` conversie: CPUID/MSR/hypervisor-leaf of PIT met frequentie 0. Guards in `arch_timer.cpp` (`scripts/apply-kernel-bugs.py`). [#18200](https://dev.haiku-os.org/ticket/18200) (swap bij veel RAM) en [#14961](https://dev.haiku-os.org/ticket/14961) (syscall-audit) zijn groter en nog open.
+
 - [ ] **Architecturen: AMD64, ARM64, optioneel RISC-V 64**  
   Beleid: alleen 64-bit. Volgorde: **AMD64** (huidige `x86_64`-image, 5625U) → **ARM64** (eerst QEMU `virt`) → **RISC-V 64** (RV64GC). Geen focus op x86-32, ARM32, PPC, SPARC, m68k; 32-bit-code niet in een drive-by slopen.
 
