@@ -3848,7 +3848,7 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 				RemoveFromVSList(pose);
 			}
 			fHintLocation = pose->Location(this);
-			PlacePose(pose, Bounds());
+			PlacePose(pose, bounds);
 			locationNeedsUpdating = true;
 		}
 
