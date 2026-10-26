@@ -1,14 +1,60 @@
 #!/usr/bin/env bash
-# Install the R5 OS Jam profile into the local Haiku tree.
+# Install the R5 OS Jam profile, version header, and artwork into the Haiku tree.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/haiku/build/jam/UserBuildConfig"
+REV="$("$ROOT/scripts/r5-version.sh" --revision)"
+VER="$("$ROOT/scripts/r5-version.sh")"
 
 if [[ ! -d "$ROOT/haiku/build/jam" ]]; then
 	echo "haiku/ is missing. Run scripts/setup-wsl.sh first." >&2
 	exit 1
 fi
 
-cp "$ROOT/distro/UserBuildConfig" "$DEST"
-echo "Wrote $DEST"
+tr -d '\r' < "$ROOT/distro/UserBuildConfig" | sed "s/^HAIKU_REVISION = .*/HAIKU_REVISION = ${REV} ;/" > "$DEST"
+echo "Wrote $DEST (HAIKU_REVISION=${REV})"
+
+hdr="$ROOT/haiku/headers/private/system/r5_os_version.h"
+printf '%s\n' \
+	'#ifndef R5_OS_VERSION_H' \
+	'#define R5_OS_VERSION_H' \
+	"#define R5_OS_VERSION \"${VER}\"" \
+	'#endif' > "$hdr"
+echo "Wrote $hdr"
+
+logoSrc="$ROOT/distro/artwork/r5-os-logo.png"
+logoDst="$ROOT/haiku/data/artwork/R5 OS logo.png"
+if [[ -f "$logoSrc" ]]; then
+	cp "$logoSrc" "$logoDst"
+	echo "Wrote $logoDst"
+fi
+
+deskSrc="$ROOT/distro/artwork/r5-os-deskbar.png"
+deskDst="$ROOT/haiku/data/artwork/R5 OS deskbar.png"
+if [[ -f "$deskSrc" ]]; then
+	cp "$deskSrc" "$deskDst"
+	echo "Wrote $deskDst"
+fi
+
+splashSrc="$ROOT/distro/artwork/r5-os-splash.png"
+if [[ -f "$splashSrc" ]]; then
+	cp "$splashSrc" "$ROOT/haiku/data/artwork/boot_splash/splash_logo-empty.png"
+	echo "Wrote splash_logo-empty.png"
+fi
+
+python3 "$ROOT/scripts/apply-branding.py" "$ROOT/haiku"
+python3 "$ROOT/scripts/apply-darkmode.py" "$ROOT/haiku"
+python3 "$ROOT/scripts/apply-ui-bugs.py" "$ROOT/haiku"
+python3 "$ROOT/scripts/apply-kernel-bugs.py" "$ROOT/haiku"
+sans="$ROOT/haiku/headers/private/kernel/boot/images-sans-tm.h"
+if [[ -f "$ROOT/distro/artwork/r5-os-splash.bgr" && -f "$sans" ]]; then
+	python3 "$ROOT/scripts/generate_images_sans_tm.py" "$sans"
+fi
+
+gen="$ROOT/haiku/generated.x86_64/build"
+if [[ -d "$gen" ]]; then
+	printf '%s\n' "$REV" > "$gen/haiku-revision"
+	rm -f "$gen/last-built-revision"
+	echo "Wrote $gen/haiku-revision"
+fi
