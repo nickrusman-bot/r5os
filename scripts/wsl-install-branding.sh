@@ -11,6 +11,11 @@ python3 "$WIN/scripts/apply-branding.py" "$HAIKU"
 python3 "$WIN/scripts/apply-darkmode.py" "$HAIKU"
 python3 "$WIN/scripts/apply-ui-bugs.py" "$HAIKU"
 python3 "$WIN/scripts/apply-kernel-bugs.py" "$HAIKU"
+for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py; do
+	if [[ -f "$WIN/scripts/$patch" ]]; then
+		python3 "$WIN/scripts/$patch" "$HAIKU"
+	fi
+done
 python3 "$WIN/scripts/generate_images_sans_tm.py" \
 	"$HAIKU/headers/private/kernel/boot/images-sans-tm.h"
 cat > "$HAIKU/headers/private/system/r5_os_version.h" <<'EOF'

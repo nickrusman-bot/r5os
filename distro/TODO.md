@@ -40,6 +40,15 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 - [x] **UI-fruit (layout + desktop)**  
   [#16838](https://dev.haiku-os.org/ticket/16838) list-clip, [#18057](https://dev.haiku-os.org/ticket/18057) scrollbar/resize-knop, [#15690](https://dev.haiku-os.org/ticket/15690) SoftwareUpdater, [#11138](https://dev.haiku-os.org/ticket/11138) Alert `_text`, [#16471](https://dev.haiku-os.org/ticket/16471) selectie op zwart desktop, [#16116](https://dev.haiku-os.org/ticket/16116) desktop 48px als er geen opgeslagen view-state is, [#1006](https://dev.haiku-os.org/ticket/1006) Backgrounds Revert-snapshot.
 
+- [x] **Deskbar**  
+  Mute [#20314](https://dev.haiku-os.org/ticket/20314), PowerStatus-maat [#18411](https://dev.haiku-os.org/ticket/18411), Appearance [#11397](https://dev.haiku-os.org/ticket/11397), selected-kleur [#18643](https://dev.haiku-os.org/ticket/18643), auto-hide-lijn [#19704](https://dev.haiku-os.org/ticket/19704), klokbreedte [#14846](https://dev.haiku-os.org/ticket/14846), menu op voorgrond [#16458](https://dev.haiku-os.org/ticket/16458), mini-mode grip [#15792](https://dev.haiku-os.org/ticket/15792)/[#15843](https://dev.haiku-os.org/ticket/15843), settings-file [#12884](https://dev.haiku-os.org/ticket/12884), drop-disabled [#3076](https://dev.haiku-os.org/ticket/3076). Overlay: `apply-deskbar-bugs.py`. Open: meerdere menu’s [#20099](https://dev.haiku-os.org/ticket/20099).
+
+- [x] **Tracker-desktop**  
+  Icon-offset/layout [#2372](https://dev.haiku-os.org/ticket/2372)/[#18514](https://dev.haiku-os.org/ticket/18514), overlap na mount/nieuw [#2864](https://dev.haiku-os.org/ticket/2864)/[#8246](https://dev.haiku-os.org/ticket/8246)/[#20363](https://dev.haiku-os.org/ticket/20363), Deskbar-marge [#3291](https://dev.haiku-os.org/ticket/3291), Arrange by [#20419](https://dev.haiku-os.org/ticket/20419), copy-statuskleur [#19070](https://dev.haiku-os.org/ticket/19070), headerkleur [#16678](https://dev.haiku-os.org/ticket/16678), count-view [#17901](https://dev.haiku-os.org/ticket/17901), Size-kolom [#18060](https://dev.haiku-os.org/ticket/18060), kolomlijn [#19084](https://dev.haiku-os.org/ticket/19084). Overlay: `apply-tracker-desktop.py`.
+
+- [x] **UI-shell**  
+  Disabled menubar [#16618](https://dev.haiku-os.org/ticket/16618), menu’s bij schermrand [#18300](https://dev.haiku-os.org/ticket/18300), live kleuren Tracker [#15541](https://dev.haiku-os.org/ticket/15541)/[#14991](https://dev.haiku-os.org/ticket/14991) (Tracker+Deskbar; niet elke app). Dark-mode-rest [#18970](https://dev.haiku-os.org/ticket/18970) deels. Overlay: `apply-ui-shell.py`. Open: menubalk-toetsen [#1852](https://dev.haiku-os.org/ticket/1852)/[#9191](https://dev.haiku-os.org/ticket/9191).
+
 - [x] **Kernel-blocker [#20400](https://dev.haiku-os.org/ticket/20400)**  
   Early-boot divide-by-zero in TSC→`system_time` conversie: CPUID/MSR/hypervisor-leaf of PIT met frequentie 0. Guards in `arch_timer.cpp` (`scripts/apply-kernel-bugs.py`). [#18200](https://dev.haiku-os.org/ticket/18200) (swap bij veel RAM) en [#14961](https://dev.haiku-os.org/ticket/14961) (syscall-audit) zijn groter en nog open.
 

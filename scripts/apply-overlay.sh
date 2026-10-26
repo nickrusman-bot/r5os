@@ -47,6 +47,11 @@ python3 "$ROOT/scripts/apply-branding.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-darkmode.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-ui-bugs.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-kernel-bugs.py" "$ROOT/haiku"
+for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py; do
+	if [[ -f "$ROOT/scripts/$patch" ]]; then
+		python3 "$ROOT/scripts/$patch" "$ROOT/haiku"
+	fi
+done
 sans="$ROOT/haiku/headers/private/kernel/boot/images-sans-tm.h"
 if [[ -f "$ROOT/distro/artwork/r5-os-splash.bgr" && -f "$sans" ]]; then
 	python3 "$ROOT/scripts/generate_images_sans_tm.py" "$sans"

@@ -115,7 +115,7 @@ id	r5_status	branch	commit	notes
 3026	open			
 3053	open			
 3056	open			
-3076	open			
+3076	fixed			DragStop(true) when Deskbar/team/window menus detach
 3085	open			
 3098	open			
 3115	open			
@@ -1076,7 +1076,7 @@ id	r5_status	branch	commit	notes
 11375	open			
 11387	open			
 11396	open			
-11397	open			
+11397	fixed			Deskbar B_COLORS_UPDATED + clock fill uses menu colors
 11399	open			
 11402	open			
 11403	open			
@@ -1318,7 +1318,7 @@ id	r5_status	branch	commit	notes
 12875	open			
 12877	open			
 12882	open			
-12884	open			
+12884	fixed			Truncate Deskbar settings files before Flatten
 12886	open			
 12887	open			
 12889	open			
@@ -1755,7 +1755,7 @@ id	r5_status	branch	commit	notes
 14841	open			
 14843	open			
 14844	open			
-14846	open			
+14846	fixed			Clock preferred width includes weekday margins
 14849	open			
 14850	open			
 14851	open			
@@ -2042,7 +2042,7 @@ id	r5_status	branch	commit	notes
 15788	open			
 15790	open			
 15791	open			
-15792	open			
+15792	fixed			Draw drag region only when actually enabled
 15793	open			
 15794	open			
 15795	open			
@@ -2063,7 +2063,7 @@ id	r5_status	branch	commit	notes
 15834	open			
 15835	open			
 15840	open			
-15843	open			
+15843	fixed			Draw drag region only when actually enabled
 15844	open			
 15847	open			
 15849	open			
@@ -2301,7 +2301,7 @@ id	r5_status	branch	commit	notes
 16452	open			
 16456	open			
 16457	open			
-16458	open			
+16458	fixed			Activate Deskbar when its menus open
 16461	open			
 16463	open			
 16464	open			
@@ -3013,7 +3013,7 @@ id	r5_status	branch	commit	notes
 18407	open			
 18408	open			
 18409	open			
-18411	open			
+18411	fixed			Deskbar PowerStatus uses tray height, not full tray width
 18412	open			
 18413	open			
 18414	open			
@@ -3113,7 +3113,7 @@ id	r5_status	branch	commit	notes
 18637	open			
 18639	open			
 18642	open			
-18643	open			
+18643	fixed			Team list uses B_MENU_SELECTED_BACKGROUND_COLOR
 18644	open			
 18648	open			
 18649	open			
@@ -3549,7 +3549,7 @@ id	r5_status	branch	commit	notes
 19698	open			
 19701	open			
 19702	open			
-19704	open			
+19704	fixed			Do not stroke auto-hide Deskbar while hidden
 19709	open			
 19710	open			
 19711	open			
@@ -3845,7 +3845,7 @@ id	r5_status	branch	commit	notes
 20310	open			
 20311	open			
 20312	open			
-20314	open			
+20314	fixed			Scan remaining mixer params for B_MUTE (apply-deskbar-bugs.py)
 20317	open			
 20318	open			
 20319	open			
