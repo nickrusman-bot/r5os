@@ -17,7 +17,7 @@ if [[ -e /dev/kvm ]] && [[ -r /dev/kvm ]]; then
 fi
 
 setsid qemu-system-x86_64 \
-	-name 'R5 OS' \
+	-name 'R5OS' \
 	-machine pc,accel="${accel}" \
 	-cpu "${cpu}" \
 	-m 2048 \

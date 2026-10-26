@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set R5 OS status for one Haiku ticket id."""
+"""Set R5OS status for one Haiku ticket id."""
 from __future__ import annotations
 
 import argparse

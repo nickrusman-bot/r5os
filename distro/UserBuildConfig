@@ -1,4 +1,4 @@
-# R5 OS image profiles (copy to haiku/build/jam/UserBuildConfig).
+# R5OS image profiles (copy to haiku/build/jam/UserBuildConfig).
 # Do not commit this file into upstream Haiku; it is gitignored there.
 
 # GitHub Haiku clones have no hrev tags. Keep in sync with distro/VERSION
@@ -12,9 +12,9 @@ DefineBuildProfile r5-vmware : vmware-image : "r5-os.vmdk" ;
 switch $(HAIKU_BUILD_PROFILE) {
 	case "r5-*" : {
 		HAIKU_ROOT_USER_NAME = user ;
-		HAIKU_ROOT_USER_REAL_NAME = "R5 OS" ;
+		HAIKU_ROOT_USER_REAL_NAME = "R5OS" ;
 		HAIKU_IMAGE_HOST_NAME = r5os ;
-		HAIKU_IMAGE_LABEL = "R5 OS" ;
+		HAIKU_IMAGE_LABEL = "R5OS" ;
 		HAIKU_IMAGE_SIZE = 1200 ;
 
 		AddGroupToHaikuImage party : 101 : user sshd ;

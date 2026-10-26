@@ -10,7 +10,7 @@ HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/hai
 
 LEAF_ELSE = (
     "resource(R_LeafLogoBitmap, \"r5_deskbar_logo.png\") #'PNG ' "
-    'import "../../../data/artwork/R5 OS deskbar.png";'
+    'import "../../../data/artwork/R5OS-deskbar.png";'
 )
 
 BAR_OFFICIAL = """\tBBitmap* icon = NULL;
@@ -109,14 +109,12 @@ def patch_deskbar_jam(path: pathlib.Path) -> None:
 def patch_installer_rdef(path: pathlib.Path) -> None:
     text = path.read_text(encoding="utf-8")
     old = 'resource(1, "walter_logo.png") #\'PNG \' import "../../../data/artwork/Walter logo.png";'
-    new = 'resource(1, "walter_logo.png") #\'PNG \' import "../../../data/artwork/R5 OS logo.png";'
-    if "R5 OS logo.png" in text and "Walter logo.png" not in text.split("#else")[-1]:
-        # unofficial branch already R5
-        if "artwork/R5 OS logo.png" in text:
-            print(f"already patched {path}")
-            return
+    new = 'resource(1, "walter_logo.png") #\'PNG \' import "../../../data/artwork/R5OS-logo.png";'
+    if "artwork/R5OS-logo.png" in text:
+        print(f"already patched {path}")
+        return
     if old not in text:
-        if "R5 OS logo.png" in text:
+        if "R5 OS logo.png" in text or "R5OS-logo.png" in text:
             print(f"already patched {path}")
             return
         raise SystemExit(f"walter import not found in {path}")
@@ -124,11 +122,35 @@ def patch_installer_rdef(path: pathlib.Path) -> None:
     print(f"patched {path}")
 
 
+def rewrite_product_name(path: pathlib.Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    new = (
+        text.replace("R5 OS logo.png", "R5OS-logo.png")
+        .replace("R5 OS deskbar.png", "R5OS-deskbar.png")
+        .replace("R5 OS", "R5OS")
+    )
+    if new == text:
+        print(f"already {path.name} (R5OS name)")
+        return
+    path.write_text(new, encoding="utf-8")
+    print(f"patched {path} (R5OS name)")
+
+
 def main() -> int:
     patch_icons_rdef(HAIKU / "src/apps/deskbar/icons.rdef")
     patch_barmenubar(HAIKU / "src/apps/deskbar/BarMenuBar.cpp")
     patch_deskbar_jam(HAIKU / "src/apps/deskbar/Jamfile")
     patch_installer_rdef(HAIKU / "src/apps/installer/Installer.rdef")
+    for rel in (
+        "src/apps/deskbar/icons.rdef",
+        "src/apps/deskbar/DeskbarMenu.cpp",
+        "src/apps/installer/Installer.rdef",
+        "src/apps/installer/InstallerWindow.cpp",
+        "src/apps/aboutsystem/AboutSystem.cpp",
+        "src/apps/aboutsystem/AboutSystem.rdef",
+        "src/apps/firstbootprompt/BootPromptWindow.cpp",
+    ):
+        rewrite_product_name(HAIKU / rel)
     return 0
 
 

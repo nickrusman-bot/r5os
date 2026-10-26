@@ -1,4 +1,4 @@
-# R5 OS
+# R5OS
 
 This tree is an independent fork. AI-assisted work is allowed here.
 
@@ -7,7 +7,7 @@ Do not push to `git.haiku-os.org` or `review.haiku-os.org`.
 Haiku does not accept AI-generated or AI-modified contributions.
 
 `upstream` is fetch-only, for optionally merging official Haiku commits into the `r5` branch.
-`origin` is the R5 OS repository and the source of truth.
+`origin` is the R5OS repository and the source of truth.
 
 GitHub pull requests on `origin` target **`main`** directly. Do not stack PRs on feature branches unless the user asks for that.
 
@@ -24,7 +24,7 @@ After implementing or fixing something:
 
 ## Architectures
 
-R5 OS targets **64-bit only**:
+R5OS targets **64-bit only**:
 
 1. **AMD64** (`x86_64`) — primary; first images and the Ryzen 5 5625U reference machine.
 2. **ARM64** (`aarch64`) — second; QEMU first, then real hardware.
@@ -34,7 +34,7 @@ Do not spend effort on 32-bit x86, ARM32, PowerPC, SPARC, or m68k unless needed 
 
 ## Versioning
 
-Public releases: **R5 OS YYYY.N** (`2026.1`, `2026.2`, …). New year resets N to 1.
+Public releases: **R5OS YYYY.N** (`2026.1`, `2026.2`, …). New year resets N to 1.
 Unreleased trees use `YYYY.N-dev` in `distro/VERSION`. Jam `HAIKU_REVISION` is `r5-` plus that string (see `scripts/r5-version.sh`). Do not use Haiku `hrev` tags as the distro version.
 
 ## Code style
