@@ -4,31 +4,31 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3892 |
+| open | 3875 |
 | in-progress | 1 |
-| fixed | 43 |
+| fixed | 60 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 open/bezig).
+Nog open in R5 OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
 | bug | 2526 |
-| enhancement | 1307 |
+| enhancement | 1290 |
 | task | 60 |
 
 ## Priority
 
 | Priority | Aantal |
 |---|---|
-| normal | 3595 |
+| normal | 3580 |
 | low | 259 |
-| high | 37 |
+| high | 35 |
 | critical | 1 |
 | blocker | 1 |
 
@@ -36,9 +36,9 @@ Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 o
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3087 |
+| Unscheduled | 3073 |
 | R1 | 427 |
-| R1.1 | 308 |
+| R1.1 | 305 |
 | — | 29 |
 | R1/beta7 | 26 |
 | R2 | 16 |
@@ -47,20 +47,20 @@ Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 o
 
 | Component | Aantal |
 |---|---|
-| Applications/Tracker | 211 |
+| Applications/Tracker | 206 |
 | Kits/Interface Kit | 164 |
-| Servers/app_server | 163 |
-| System/Kernel | 153 |
+| Servers/app_server | 161 |
+| System/Kernel | 152 |
 | Applications/WebPositive | 132 |
 | Kits/Web Kit | 126 |
 | Applications/MediaPlayer | 95 |
 | - General | 87 |
-| User Interface | 87 |
+| User Interface | 85 |
 | Drivers/Graphics/radeon_hd | 77 |
 | Applications/HaikuDepot | 68 |
 | Build System | 64 |
-| Applications/Deskbar | 55 |
 | Applications/Command Line Tools | 53 |
+| Applications/Deskbar | 51 |
 | Applications/Debugger | 45 |
 | System/POSIX | 43 |
 | Kits/Package Kit | 40 |
@@ -79,10 +79,26 @@ Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 o
 | Ticket | Haiku | Component | Samenvatting | Branch |
 |---|---|---|---|---|
 | [#1006](https://dev.haiku-os.org/ticket/1006) | assigned | Preferences/Backgrounds | inconsistent behavior of Revert button in Backgrounds preflet (easy) |  |
+| [#2136](https://dev.haiku-os.org/ticket/2136) | reopened | Applications/Deskbar | Deskbar doesn't have the 'show the desktop' feature |  |
 | [#2372](https://dev.haiku-os.org/ticket/2372) | new | Applications/Tracker | [Tracker] unneeded offset in icon mode |  |
+| [#2542](https://dev.haiku-os.org/ticket/2542) | new | User Interface | force quit for stubborn apps |  |
+| [#2701](https://dev.haiku-os.org/ticket/2701) | new | User Interface | Changing mouse pointer |  |
 | [#2864](https://dev.haiku-os.org/ticket/2864) | assigned | Applications/Tracker | after mounting, disk icons overlap on desktop |  |
 | [#3076](https://dev.haiku-os.org/ticket/3076) | assigned | Applications/Deskbar | [Deskbar] disabled menu items after dropping some file on a leaf |  |
+| [#3115](https://dev.haiku-os.org/ticket/3115) | assigned | System/Kernel | Improve Boot screen visuals |  |
+| [#3171](https://dev.haiku-os.org/ticket/3171) | assigned | Applications/Tracker | Better prompting in Tracker file operations |  |
 | [#3291](https://dev.haiku-os.org/ticket/3291) | assigned | Applications/Tracker | Deskbar overlaps icons |  |
+| [#3505](https://dev.haiku-os.org/ticket/3505) | assigned | Servers/app_server | Reposition windows on resolution change if they lie completely outside of the bounds of the new resolution |  |
+| [#3677](https://dev.haiku-os.org/ticket/3677) | new | Preferences/Appearance | Preference panels with tabs should remember the selected tab |  |
+| [#3732](https://dev.haiku-os.org/ticket/3732) | assigned | Applications/Tracker | Renaming files: selection without suffix |  |
+| [#3813](https://dev.haiku-os.org/ticket/3813) | new | Applications/Screenshot | Screenshot enhancements |  |
+| [#4089](https://dev.haiku-os.org/ticket/4089) | assigned | Servers/app_server | Per window tab/border color (easy) |  |
+| [#4216](https://dev.haiku-os.org/ticket/4216) | assigned | Applications/Tracker | Simplify the Move to / Copy to / Create Link context menus |  |
+| [#4276](https://dev.haiku-os.org/ticket/4276) | assigned | Applications/Deskbar | [Deskbar] hide application expander if there are no windows |  |
+| [#4626](https://dev.haiku-os.org/ticket/4626) | new | Applications/Deskbar | Context menu for Deskbar application entries |  |
+| [#4793](https://dev.haiku-os.org/ticket/4793) | new | Applications/Tracker | Selectable/Copyable text in file Info Panels |  |
+| [#5000](https://dev.haiku-os.org/ticket/5000) | assigned | Applications/Deskbar | Additional Deskbar click behaviour |  |
+| [#5930](https://dev.haiku-os.org/ticket/5930) | assigned | Applications/Tracker | Add "Favorites" to standard Tracker Menu |  |
 | [#8246](https://dev.haiku-os.org/ticket/8246) | assigned | Applications/Tracker | New folders are created on top of each other on the desktop |  |
 | [#10208](https://dev.haiku-os.org/ticket/10208) | new | Partitioning Systems | Drivesetup creating partition size errors |  |
 | [#11138](https://dev.haiku-os.org/ticket/11138) | assigned | Kits/Interface Kit | Alert _text field archived but never instantiated (easy) |  |
@@ -96,6 +112,7 @@ Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 o
 | [#15792](https://dev.haiku-os.org/ticket/15792) | assigned | Applications/Deskbar | [Deskbar] mini-mode confused state |  |
 | [#15843](https://dev.haiku-os.org/ticket/15843) | assigned | Applications/Deskbar | [Deskbar] left dotted grip in mini-mode |  |
 | [#16116](https://dev.haiku-os.org/ticket/16116) | new | User Interface | Change standard icon size for Desktop to 48x48 |  |
+| [#16245](https://dev.haiku-os.org/ticket/16245) | new | Servers/registrar | [Registrar] Add an Interface for Haiku to Detect and Handle Unresponsive Apps |  |
 | [#16458](https://dev.haiku-os.org/ticket/16458) | new | Applications/Deskbar | Deskbar - Opens in background |  |
 | [#16471](https://dev.haiku-os.org/ticket/16471) | new | User Interface | Selected desktop icon is not distinguishable enough with black background |  |
 | [#16573](https://dev.haiku-os.org/ticket/16573) | assigned | Kits/Package Kit | Un-activated packages after install |  |
@@ -200,11 +217,11 @@ Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 o
 | [#2126](https://dev.haiku-os.org/ticket/2126) | assigned | Servers/registrar | Cancel Shutdown does not work as expected |  |
 | [#2131](https://dev.haiku-os.org/ticket/2131) | assigned | Drivers/Graphics | AMD Geode Video controller needs a driver |  |
 | [#2132](https://dev.haiku-os.org/ticket/2132) | assigned | Drivers/Audio | AMD Geode Audio controller needs a driver |  |
-| [#2136](https://dev.haiku-os.org/ticket/2136) | reopened | Applications/Deskbar | Deskbar doesn't have the 'show the desktop' feature |  |
 | [#2138](https://dev.haiku-os.org/ticket/2138) | new | Applications/Tracker | [Tracker] ability to preview the content of files |  |
 | [#2177](https://dev.haiku-os.org/ticket/2177) | assigned | System/Boot Loader/BIOS | boot screen video mode incorrect/unsupported, but desktop okay |  |
 | [#2198](https://dev.haiku-os.org/ticket/2198) | new | Kits/Interface Kit | Add BTabView::SetSelectionMessage() like BListView does |  |
 | [#2474](https://dev.haiku-os.org/ticket/2474) | assigned | Drivers | Serial port driver needed for Oxford Semi UART 16950 |  |
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
-| … | | | *3812 meer in r5-status.tsv* | |
+| [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
+| … | | | *3795 meer in r5-status.tsv* | |
 
