@@ -3509,10 +3509,9 @@ BContainerWindow::SetupArrangeByMenu(BMenu* parent)
 	if (parent == NULL)
 		return;
 
-	// update "Clean up" on Desktop and bail out
 	if (PoseView()->IsDesktopView()) {
 		Shortcuts()->UpdateCleanupItem(Shortcuts()->FindItem(parent, kCleanup, kCleanupAll));
-		return;
+		// still offer Arrange by on the Desktop (Haiku #20419)
 	}
 
 	// bail out if no "Select ..." item found

@@ -225,6 +225,8 @@ TBarApp::SaveSettings()
 		prefs.AddBool("autoRaise", fSettings.autoRaise);
 		prefs.AddBool("autoHide", fSettings.autoHide);
 
+		fSettingsFile->SetSize(0);
+		fSettingsFile->Seek(0, SEEK_SET);
 		prefs.Flatten(fSettingsFile);
 	}
 
@@ -235,6 +237,8 @@ TBarApp::SaveSettings()
 		prefs.AddBool("showDayOfWeek", fClockSettings.showDayOfWeek);
 		prefs.AddBool("showTimeZone", fClockSettings.showTimeZone);
 
+		fClockSettingsFile->SetSize(0);
+		fClockSettingsFile->Seek(0, SEEK_SET);
 		prefs.Flatten(fClockSettingsFile);
 	}
 }
@@ -557,6 +561,7 @@ TBarApp::MessageReceived(BMessage* message)
 			fBarWindow->Lock();
 			fBarView->HideDeskbar(fSettings.autoHide);
 			fBarWindow->Unlock();
+			SaveSettings();
 			break;
 
 		case kTrackerFirst:
@@ -731,6 +736,16 @@ TBarApp::MessageReceived(BMessage* message)
 				// Notify the replicant tray (through BarView) that the time
 				// interval has changed and it should update the time view
 				// and reflow the tray icons.
+			break;
+
+		case B_COLORS_UPDATED:
+			if (fBarWindow != NULL && fBarWindow->Lock()) {
+				if (fBarView != NULL) {
+					fBarView->SetViewUIColor(B_MENU_BACKGROUND_COLOR);
+					fBarView->Invalidate();
+				}
+				fBarWindow->Unlock();
+			}
 			break;
 
 		default:

@@ -42,6 +42,8 @@ All rights reserved.
 #include <ControlLook.h>
 #include <Debug.h>
 #include <IconUtils.h>
+#include <TranslatorFormats.h>
+#include <TranslationUtils.h>
 #include <NodeInfo.h>
 
 #include "icons.h"
@@ -118,6 +120,7 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 	TBarWindow::SetDeskbarMenu(beMenu);
 
 	BBitmap* icon = NULL;
+#ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	size_t dataSize;
 	const void* data = AppResSet()->FindResource(B_VECTOR_ICON_TYPE,
 		R_LeafLogoBitmap, &dataSize);
@@ -133,6 +136,9 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 			icon = NULL;
 		}
 	}
+#else
+	icon = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "r5_deskbar_logo.png");
+#endif
 
 	fDeskbarMenuItem = new TBarMenuTitle(0.0f, 0.0f, icon, beMenu, fBarView);
 	AddItem(fDeskbarMenuItem);

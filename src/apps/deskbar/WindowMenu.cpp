@@ -229,7 +229,7 @@ TWindowMenu::DetachedFromWindow()
 		&& barview->LockLooper()) {
 		// We changed the show level in AttachedToWindow(). Undo it.
 		Window()->Show();
-		barview->DragStop();
+		barview->DragStop(true);
 		barview->UnlockLooper();
 	}
 

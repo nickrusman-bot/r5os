@@ -2513,8 +2513,11 @@ BeControlLook::_DrawButtonFrame(BView* view, BRect& rect,
 	bool isDefault = (flags & B_DEFAULT_BUTTON) != 0;
 
 	// colors
-	rgb_color lighten1 = tint_color(base, B_LIGHTEN_1_TINT); // 231
-	lighten1.red++; lighten1.green++; lighten1.blue++; // 232 = 231 + 1
+	rgb_color lighten1 = tint_color(base,
+		base.IsLight() ? B_LIGHTEN_1_TINT : B_LIGHTEN_2_TINT);
+	if (base.IsLight()) {
+		lighten1.red++; lighten1.green++; lighten1.blue++;
+	}
 	rgb_color lighten2 = tint_color(base, B_LIGHTEN_2_TINT);
 	rgb_color lightenMax = tint_color(base, B_LIGHTEN_MAX_TINT);
 	rgb_color darken1 = tint_color(base, B_DARKEN_1_TINT); // 184
@@ -2725,7 +2728,8 @@ BeControlLook::_DrawButtonBackground(BView* view, BRect& rect,
 		return;
 
 	// fill the button area
-	view->SetHighColor(tint_color(base, B_LIGHTEN_1_TINT));
+	view->SetHighColor(tint_color(base,
+		base.IsLight() ? B_LIGHTEN_1_TINT : B_LIGHTEN_2_TINT));
 	view->FillRect(rect);
 
 	bool isEnabled = (flags & B_DISABLED) == 0;

@@ -144,7 +144,7 @@ TCustomButton::Draw(BRect updateRect)
 	if (Message()->what == kStopButton) {
 		updateRect = Bounds();
 		updateRect.InsetBy(9, 8);
-		SetHighColor(0, 0, 0);
+		SetHighUIColor(B_CONTROL_TEXT_COLOR);
 		if (Value() == B_CONTROL_ON)
 			updateRect.OffsetBy(1, 1);
 		FillRect(updateRect);
@@ -156,7 +156,7 @@ TCustomButton::Draw(BRect updateRect)
 
 		updateRect.left += 3;
 		updateRect.OffsetBy(1, 0);
-		SetHighColor(0, 0, 0);
+		SetHighUIColor(B_CONTROL_TEXT_COLOR);
 		if (Value() == B_CONTROL_ON) {
 			updateRect.OffsetBy(1, 1);
 			rect.OffsetBy(1, 1);
@@ -446,7 +446,7 @@ BStatusView::BStatusView(BRect bounds, thread_id thread, StatusWindowState type)
 
 	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	SetLowUIColor(ViewUIColor());
-	SetHighColor(20, 20, 20);
+	SetHighUIColor(B_PANEL_TEXT_COLOR);
 	SetDrawingMode(B_OP_ALPHA);
 
 	const float buttonWidth = 22;

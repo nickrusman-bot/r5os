@@ -253,6 +253,9 @@ TBarView::DetachedFromWindow()
 void
 TBarView::Draw(BRect)
 {
+	if (IsHidden())
+		return;
+
 	BRect bounds(Bounds());
 
 	rgb_color hilite = tint_color(ViewColor(), B_DARKEN_1_TINT);
@@ -276,6 +279,11 @@ void
 TBarView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case B_COLORS_UPDATED:
+			SetViewUIColor(B_MENU_BACKGROUND_COLOR);
+			Invalidate();
+			break;
+
 		case B_LOCALE_CHANGED:
 		case kRealignReplicants:
 		case kShowHideTime:
@@ -642,11 +650,7 @@ TBarView::GetPreferredWindowSize(BRect screenFrame, float* width,
 	if (setToHiddenSize) {
 		windowHeight = kHiddenDimension;
 
-		if (State() == kExpandoState && !Vertical()) {
-			// top or bottom, full
-			windowWidth = screenFrame.Width();
-		} else
-			windowWidth = kHiddenDimension;
+		windowWidth = kHiddenDimension;
 	} else if (Vertical()) {
 		if (State() == kFullState) {
 			// full state has minimum screen window height

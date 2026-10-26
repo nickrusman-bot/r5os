@@ -113,7 +113,7 @@ PowerStatusView::Archive(BMessage* archive, bool deep) const
 void
 PowerStatusView::_Init()
 {
-	fShowLabel = true;
+	fShowLabel = !fInDeskbar;
 	fShowTime = false;
 	fShowStatusIcon = true;
 
@@ -981,6 +981,8 @@ PowerStatusReplicant::_OpenExtendedWindow()
 extern "C" _EXPORT BView*
 instantiate_deskbar_item(float maxWidth, float maxHeight)
 {
-	return new PowerStatusReplicant(BRect(0, 0, maxWidth - 1, maxHeight - 1),
+	float size = maxHeight > 16.0f ? maxHeight : 16.0f;
+	(void)maxWidth;
+	return new PowerStatusReplicant(BRect(0, 0, size - 1, size - 1),
 		B_FOLLOW_TOP, true);
 }

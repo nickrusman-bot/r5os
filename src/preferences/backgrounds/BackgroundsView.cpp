@@ -78,7 +78,8 @@ BackgroundsView::BackgroundsView()
 	fRecentFoldersLimit(10),
 	fPathList(1),
 	fImageList(1),
-	fFoundPositionSetting(false)
+	fFoundPositionSetting(false),
+	fRevertSnapshotValid(false)
 {
 	SetBorder(B_NO_BORDER);
 
@@ -303,6 +304,7 @@ BackgroundsView::AllAttached()
 
 	fApply->SetEnabled(false);
 	fRevert->SetEnabled(false);
+	_CaptureRevertSnapshot();
 }
 
 
@@ -426,10 +428,11 @@ BackgroundsView::MessageReceived(BMessage* message)
 				"notifyThread", B_NORMAL_PRIORITY, this);
 			resume_thread(notifyThread);
 			_UpdateButtons();
+			_CaptureRevertSnapshot();
 			break;
 		}
 		case kMsgRevertSettings:
-			_UpdateWithCurrent();
+			_RestoreRevertSnapshot();
 			break;
 
 		default:
@@ -935,6 +938,70 @@ BackgroundsView::_FindPlacementMode()
 		mode = BackgroundImage::kTiled;
 
 	return mode;
+}
+
+
+
+void
+BackgroundsView::_CaptureRevertSnapshot()
+{
+	fRevertSnapshotValid = true;
+	fRevertColor = fPicker->ValueAsColor();
+	BGImageMenuItem* imageItem = (BGImageMenuItem*)fImageMenu->FindMarked();
+	fRevertImageIndex = imageItem != NULL ? imageItem->ImageIndex() : -1;
+	fRevertPlacement = 0;
+	if (fPlacementMenu->FindItem(kMsgScalePlacement)->IsMarked())
+		fRevertPlacement = kMsgScalePlacement;
+	else if (fPlacementMenu->FindItem(kMsgCenterPlacement)->IsMarked())
+		fRevertPlacement = kMsgCenterPlacement;
+	else if (fPlacementMenu->FindItem(kMsgTilePlacement)->IsMarked())
+		fRevertPlacement = kMsgTilePlacement;
+	else
+		fRevertPlacement = kMsgManualPlacement;
+	fRevertOffset.x = atoi(fXPlacementText->Text());
+	fRevertOffset.y = atoi(fYPlacementText->Text());
+	fRevertOutline = fIconLabelOutline->Value() == B_CONTROL_ON;
+	BMenuItem* workspaceItem = fWorkspaceMenu->FindItem(kMsgCurrentWorkspace);
+	fRevertCurrentWorkspace = workspaceItem != NULL && workspaceItem->IsMarked();
+}
+
+
+void
+BackgroundsView::_RestoreRevertSnapshot()
+{
+	if (!fRevertSnapshotValid)
+		return;
+
+	fPicker->SetValue(fRevertColor);
+	fIconLabelOutline->SetValue(fRevertOutline ? B_CONTROL_ON : B_CONTROL_OFF);
+
+	BMenuItem* placement = fPlacementMenu->FindItem(fRevertPlacement);
+	if (placement != NULL)
+		placement->SetMarked(true);
+
+	BString xtext, ytext;
+	if (fRevertPlacement == kMsgManualPlacement) {
+		xtext << (int)fRevertOffset.x;
+		ytext << (int)fRevertOffset.y;
+	}
+	fXPlacementText->SetText(xtext.String());
+	fYPlacementText->SetText(ytext.String());
+
+	BGImageMenuItem* imageItem = _FindImageItem(fRevertImageIndex);
+	if (imageItem != NULL)
+		imageItem->SetMarked(true);
+
+	if (fWorkspaceMenu->CountItems() > 0) {
+		uint32 workspaceWhat = fRevertCurrentWorkspace
+			? kMsgCurrentWorkspace : kMsgAllWorkspaces;
+		BMenuItem* workspaceItem = fWorkspaceMenu->FindItem(workspaceWhat);
+		if (workspaceItem != NULL)
+			workspaceItem->SetMarked(true);
+	}
+
+	fLastImageIndex = fRevertImageIndex;
+	_UpdatePreview();
+	_UpdateButtons();
 }
 
 

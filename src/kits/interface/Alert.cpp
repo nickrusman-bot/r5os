@@ -144,17 +144,42 @@ BAlert::BAlert(BMessage* data)
 	fInvoker = NULL;
 	fAlertSem = -1;
 	fAlertValue = -1;
+	fButtonLayout = NULL;
+	fType = B_INFO_ALERT;
+	fButtonSpacing = B_EVEN_SPACING;
+	fButtonWidth = B_WIDTH_FROM_WIDEST;
+	fKeys.assign(3, 0);
 
-	fTextView = (BTextView*)FindView("_tv_");
+	int32 type;
+	if (data->FindInt32("_atype", &type) == B_OK)
+		fType = (uint8)type;
 
-	// TODO: window loses default button on dearchive!
-	// TODO: ButtonAt() doesn't work afterwards (also affects shortcuts)
+	int32 buttonWidth;
+	if (data->FindInt32("_but_width", &buttonWidth) == B_OK)
+		fButtonWidth = (uint8)buttonWidth;
 
-	TAlertView* view = (TAlertView*)FindView("_master_");
-	if (view)
-		view->SetBitmap(_CreateTypeIcon());
+	fTextView = dynamic_cast<BTextView*>(FindView("_tv_"));
+	const char* text = NULL;
+	if (data->FindString("_text", &text) == B_OK && text != NULL) {
+		if (fTextView == NULL) {
+			fTextView = new BTextView("_tv_");
+			fTextView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+			fTextView->MakeEditable(false);
+			fTextView->MakeSelectable(false);
+			fTextView->SetWordWrap(true);
+			AddChild(fTextView);
+		}
+		fTextView->SetText(text);
+	}
 
-	// Get keys
+	// Pre-layout archives used "_master_"; current code names the view
+	// "TAlertView".
+	fIconView = dynamic_cast<TAlertView*>(FindView("TAlertView"));
+	if (fIconView == NULL)
+		fIconView = dynamic_cast<TAlertView*>(FindView("_master_"));
+	if (fIconView != NULL)
+		fIconView->SetBitmap(_CreateTypeIcon());
+
 	char key;
 	for (int32 i = 0; i < 3; ++i) {
 		if (data->FindInt8("_but_key", i, (int8*)&key) == B_OK)

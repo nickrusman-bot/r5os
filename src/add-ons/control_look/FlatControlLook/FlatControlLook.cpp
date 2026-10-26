@@ -127,7 +127,7 @@ FlatControlLook::DrawMenuBarBackground(BView* view, BRect& rect, const BRect& up
 	float bottomTint = 1.0;
 
 	rgb_color customColor = base;
-	bool isEnabled = (flags & B_DISABLED) != 0;
+	bool isEnabled = (flags & B_DISABLED) == 0;
 	bool isFocused = (flags & B_FOCUSED) != 0;
 
 	if (isEnabled || isFocused) {

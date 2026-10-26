@@ -831,7 +831,7 @@ InstallerWindow::_UpdateControls()
 			"partitions available on your system.");
 
 		BString partitionRequiredDebranded = B_TRANSLATE(
-			"This operating system has to be installed on a partition "
+			"R5 OS has to be installed on a partition "
 			"that uses the Be File System, but there are currently "
 			"no such partitions available on your system.");
 

@@ -310,7 +310,11 @@ BootPromptWindow::QuitRequested()
 	// Rebooting is managed by BootPrompt.cpp.
 
 	BAlert* alert = new(std::nothrow) BAlert(
+#ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 		B_TRANSLATE_SYSTEM_NAME("Quit Haiku"),
+#else
+		B_TRANSLATE("Quit R5 OS"),
+#endif
 		B_TRANSLATE("Are you sure you want to close this window? This will "
 			"restart your system!"),
 		B_TRANSLATE("Cancel"), B_TRANSLATE("Restart system"), NULL,
@@ -377,15 +381,14 @@ BootPromptWindow::_UpdateStrings()
 	BString desktopTextHaiku = B_TRANSLATE("Try Haiku");
 	BString installTextHaiku = B_TRANSLATE("Install Haiku");
 
-	BString titleTextDebranded = B_TRANSLATE("Welcome!");
+	BString titleTextDebranded = B_TRANSLATE("Welcome to R5 OS!");
 	BString mainTextDebranded = B_TRANSLATE_COMMENT(
-			"Thank you for trying out our operating system! We hope you'll "
+			"Thank you for trying R5 OS! We hope you'll "
 			"like it!\n\n"
 			"Please select your preferred language and keymap. Both settings "
-			"can also be changed later.\n\n"
+			"can also be changed later when running R5 OS.\n\n"
 
-			"Do you wish to install the operating system now, or try it out "
-			"first?",
+			"Do you wish to install R5 OS now, or try it out first?",
 
 			"This notice appears when the build of Haiku that's currently "
 			"being used is unofficial, as in, not distributed by Haiku itself."
@@ -394,8 +397,8 @@ BootPromptWindow::_UpdateStrings()
 			"an on-going effort. You will frequently encounter untranslated "
 			"strings, but if you like, you can join in the work at "
 			"<www.haiku-os.org>.\"");
-	BString desktopTextDebranded = B_TRANSLATE("Try it out");
-	BString installTextDebranded = B_TRANSLATE("Install");
+	BString desktopTextDebranded = B_TRANSLATE("Try R5 OS");
+	BString installTextDebranded = B_TRANSLATE("Install R5 OS");
 
 #ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	SetTitle(titleTextHaiku);

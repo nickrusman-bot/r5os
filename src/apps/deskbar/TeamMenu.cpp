@@ -187,7 +187,7 @@ TTeamMenu::DetachedFromWindow()
 	if (fBarView != NULL) {
 		BLooper* looper = fBarView->Looper();
 		if (looper != NULL && looper->Lock()) {
-			fBarView->DragStop();
+			fBarView->DragStop(true);
 			looper->Unlock();
 		}
 	}

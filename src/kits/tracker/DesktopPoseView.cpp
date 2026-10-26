@@ -310,6 +310,12 @@ DesktopPoseView::AdaptToBackgroundColorChange()
 	// settings, it's expected that text will be black on white in Tracker
 	// folders, but white on blue on the desktop).
 
-	int32 desktopBrightness = ui_color(B_DESKTOP_COLOR).Brightness();
-	SetHighColor(LowColor().Brightness() <= desktopBrightness ? kWhite : kBlack);
+	SetHighUIColor(B_DOCUMENT_TEXT_COLOR);
+	rgb_color text = HighColor();
+	rgb_color bg = LowColor();
+	int32 contrast = (int32)text.Brightness() - (int32)bg.Brightness();
+	if (contrast < 0)
+		contrast = -contrast;
+	if (contrast < 80)
+		SetHighColor(bg.IsDark() ? kWhite : kBlack);
 }

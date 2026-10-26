@@ -145,6 +145,8 @@ TBarWindow::MenusBeginning()
 
 	sDeskbarMenu->ResetTargets();
 
+	Activate();
+
 	fMenusShown++;
 	BWindow::MenusBeginning();
 }

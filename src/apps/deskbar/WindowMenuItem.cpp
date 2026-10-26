@@ -135,8 +135,7 @@ TWindowMenuItem::Draw()
 
 	if (IsEnabled() && IsSelected() && !menu->IsRedrawAfterSticky()) {
 		// fill
-		rgb_color backColor = tint_color(menuColor,
-			B_HIGHLIGHT_BACKGROUND_TINT);
+		rgb_color backColor = ui_color(B_MENU_SELECTED_BACKGROUND_COLOR);
 		menu->SetLowColor(backColor);
 		menu->SetHighColor(backColor);
 		menu->FillRect(frame);

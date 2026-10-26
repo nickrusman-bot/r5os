@@ -13,6 +13,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -65,6 +66,7 @@
 #include <cpu_type.h>
 #include <parsedate.h>
 #include <system_revision.h>
+#include <r5_os_version.h>
 
 #include <Catalog.h>
 #include <Language.h>
@@ -983,13 +985,18 @@ BString
 SysInfoView::_GetOSVersion()
 {
 	BString revision;
-	// add system revision to os version
+#ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
+	revision.SetToFormat(B_TRANSLATE_COMMENT("R5 OS %s",
+		"Marketing version, e.g. R5 OS 2026.1-dev"), R5_OS_VERSION);
+	return revision;
+#else
 	const char* hrev = __get_haiku_revision();
-	if (hrev != NULL)
+	if (hrev != NULL) {
 		revision.SetToFormat(B_TRANSLATE_COMMENT("Version: %s",
 			"Version: R1 or hrev99999"), hrev);
-	else
+	} else
 		revision = B_TRANSLATE("Version:");
+#endif
 
 	return revision;
 }
@@ -1551,6 +1558,15 @@ AboutView::_CreateCreditsView()
 	font.SetSize(font.Size() + 4);
 
 	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
+#ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
+	fCreditsView->Insert("R5 OS\n");
+	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert(B_TRANSLATE(
+		"R5 OS is based on Haiku, but it is not the official distribution "
+		"from the Haiku Project. R5 OS is not associated with the Haiku "
+		"Project.\n\n"));
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
+#endif
 	fCreditsView->Insert("Haiku\n");
 
 	time_t time = ::time(NULL);

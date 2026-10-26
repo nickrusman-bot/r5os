@@ -18,6 +18,7 @@
 #include <arch/x86/timer.h>
 
 #include <x86gprintrin.h>
+#include <debug.h>
 
 
 //#define TRACE_TIMER
@@ -375,6 +376,12 @@ slower_sample:
 	// Scale the TSC delta to timer units
 	tscDeltaSlow *= TIMER_CLKNUM_HZ;
 
+	if (expired == 0 || tscDeltaSlow == 0) {
+		dprintf("CPU: PIT TSC calibration failed (expired %" B_PRIu16
+			", delta %" B_PRIu64 ")\n", expired, tscDeltaSlow);
+		return;
+	}
+
 	uint64 clockSpeed = tscDeltaSlow / expired;
 	*conversionFactor = ((uint128(expired) * uint32(1000000)) << 32)
 		/ uint128(tscDeltaSlow);
@@ -453,10 +460,14 @@ init_tsc_with_cpuid(kernel_args* args, uint32* conversionFactor)
 	if (khz == 0)
 		return;
 
+	const uint64 tscKhz = uint64(khz) * numerator / denominator;
+	if (tscKhz == 0)
+		return;
+
 	dprintf("CPU: using TSC frequency from CPUID\n");
 	// compute for microseconds as follows (1000000 << 32) / (tsc freq in Hz),
 	// or (1000 << 32) / (tsc freq in kHz)
-	*conversionFactor = (1000ULL << 32) / (khz * numerator / denominator);
+	*conversionFactor = (1000ULL << 32) / tscKhz;
 }
 
 
@@ -490,10 +501,14 @@ init_tsc_with_msr(kernel_args* args, uint32* conversionFactor)
 	if (numerator < 0x10)
 		return;
 
-	dprintf("CPU: using TSC frequency from MSR %" B_PRIu64 "\n", khz * numerator / denominator);
+	const uint64 tscKhz = khz * numerator / denominator;
+	if (tscKhz == 0)
+		return;
+
+	dprintf("CPU: using TSC frequency from MSR %" B_PRIu64 "\n", tscKhz);
 	// compute for microseconds as follows (1000000 << 32) / (tsc freq in Hz),
 	// or (1000 << 32) / (tsc freq in kHz)
-	*conversionFactor = (1000ULL << 32) / (khz * numerator / denominator);
+	*conversionFactor = (1000ULL << 32) / tscKhz;
 }
 
 
@@ -511,13 +526,16 @@ init_tsc_on_hypervisor(kernel_args* args, uint32* conversionFactor)
 	if (maxVMM >= 0x40000010) {
 		get_current_cpuid(&info, 0x40000010, 0);
 
-		uint64 clockSpeed = uint64(info.regs.eax) * 1000;
-		*conversionFactor = (uint64(1000) << 32) / info.regs.eax;
+		// Leaf present with EAX=0 still must not divide (Haiku #20400).
+		if (info.regs.eax != 0) {
+			uint64 clockSpeed = uint64(info.regs.eax) * 1000;
+			*conversionFactor = (uint64(1000) << 32) / info.regs.eax;
 
-		gCPUClockSpeed = clockSpeed;
+			gCPUClockSpeed = clockSpeed;
 
-		dprintf("CPU: TSC frequency read from hypervisor CPUID leaf\n");
-		return;
+			dprintf("CPU: TSC frequency read from hypervisor CPUID leaf\n");
+			return;
+		}
 	}
 
 	if (maxVMM >= 0x40000003) {
@@ -556,6 +574,9 @@ x86_init_tsc(kernel_args* args)
 	init_tsc_on_hypervisor(args, &conversionFactor);
 	if (conversionFactor == 0)
 		calculate_cpu_conversion_factor(2, &conversionFactor);
+
+	if (conversionFactor == 0)
+		panic("failed to calibrate TSC");
 
 	gSystemTimeConversionFactor = conversionFactor;
 

@@ -1,6 +1,7 @@
 
 #include "icons.h"
 
+#ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 resource(R_LeafLogoBitmap) vector_icon {
 	$"6E6369660102010602438798C0E5A13DF937406BAE4D330E4CA0420000AAFFFF"
 	$"00337F010216C676C7BCC676C7BCCDE4CEECDD2DCFB2D596D105DBF0CEC5DAD9"
@@ -14,6 +15,9 @@ resource(R_LeafLogoBitmap) vector_icon {
 	$"36C67BC7BFBDF1C83CC67BC7BF010A000100023CB85D0000000000003CB85D3E"
 	$"FEBEC1A530"
 };
+#else
+resource(R_LeafLogoBitmap, "r5_deskbar_logo.png") #'PNG ' import "../../../data/artwork/R5 OS deskbar.png";
+#endif
 
 resource(R_LargeNewGroupIcon) archive(, 0x00000000) BBitmap {
 	"_frame" = rect { 0.0, 0.0, 31.0, 31.0 },

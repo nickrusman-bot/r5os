@@ -205,10 +205,15 @@ BScrollView::AttachedToWindow()
 		return;
 	}
 
-	if (fHorizontalScrollBar != NULL)
-		fHorizontalScrollBar->ResizeBy(-B_V_SCROLL_BAR_WIDTH, 0);
-	else if (fVerticalScrollBar != NULL)
-		fVerticalScrollBar->ResizeBy(0, -B_H_SCROLL_BAR_HEIGHT);
+	// Use the composed scrollbar thickness so the bar lines up with the
+	// document-window resize knob (Haiku #18057).
+	if (fHorizontalScrollBar != NULL) {
+		fHorizontalScrollBar->ResizeBy(
+			-be_control_look->GetScrollBarWidth(B_VERTICAL), 0);
+	} else if (fVerticalScrollBar != NULL) {
+		fVerticalScrollBar->ResizeBy(0,
+			-be_control_look->GetScrollBarWidth(B_HORIZONTAL));
+	}
 }
 
 

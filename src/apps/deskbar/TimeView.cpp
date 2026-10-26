@@ -167,8 +167,8 @@ TTimeView::Draw(BRect /*updateRect*/)
 {
 	PushState();
 
-	SetHighColor(ViewColor());
-	SetLowColor(ViewColor());
+	SetLowUIColor(B_MENU_BACKGROUND_COLOR);
+	SetHighUIColor(B_MENU_BACKGROUND_COLOR);
 	FillRect(Bounds());
 	SetHighUIColor(B_MENU_ITEM_TEXT_COLOR);
 
@@ -196,6 +196,7 @@ TTimeView::GetPreferredSize(float* width, float* height)
 	fHeight = fontHeight.ascent + fontHeight.descent - 2;
 		// reduce height by 2px so that clock doesn't draw on top of border
 
+	timeWidth += kHMargin * 2;
 	if (Vertical()) {
 		float appWidth = static_cast<TBarApp*>(be_app)->Settings()->width;
 		*width = fMaxWidth
@@ -473,12 +474,13 @@ TTimeView::CalculateTextPlacement()
 
 	if (Vertical()) {
 		float timeWidth = StringWidth(fCurrentTimeStr);
-		if (timeWidth > fMaxWidth) {
-			// time does not fit, push it over to truncate the left side
-			// to see the entire time string you must make the window wider
+		if (timeWidth > fMaxWidth && !fShowDayOfWeek) {
 			float difference = timeWidth - fMaxWidth;
 			fDateLocation.x -= difference;
 			fTimeLocation.x -= difference;
+		} else {
+			fDateLocation.x = 0.0;
+			fTimeLocation.x = 0.0;
 		}
 	}
 }

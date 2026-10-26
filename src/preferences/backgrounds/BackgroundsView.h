@@ -176,6 +176,16 @@ protected:
 			FramePart*			fBottomRight;
 
 			bool				fFoundPositionSetting;
+			bool				fRevertSnapshotValid;
+			rgb_color			fRevertColor;
+			int32				fRevertImageIndex;
+			int32				fRevertPlacement;
+			BPoint				fRevertOffset;
+			bool				fRevertOutline;
+			bool				fRevertCurrentWorkspace;
+
+			void				_CaptureRevertSnapshot();
+			void				_RestoreRevertSnapshot();
 };
 
 #endif	// BACKGROUNDS_VIEW_H

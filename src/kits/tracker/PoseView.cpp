@@ -534,6 +534,7 @@ BPoseView::AddColumnList(BObjectList<BColumn>* list)
 void
 BPoseView::RestoreState(AttributeStreamNode* node)
 {
+	bool restoredState = false;
 	RestoreColumnState(node);
 
 	if (node != NULL) {
@@ -565,6 +566,7 @@ BPoseView::RestoreState(AttributeStreamNode* node)
 				if (state != NULL) {
 					delete fViewState;
 					fViewState = state;
+					restoredState = true;
 				}
 			}
 			delete[] buffer;
@@ -575,6 +577,9 @@ BPoseView::RestoreState(AttributeStreamNode* node)
 		// recover if desktop window view state set wrong
 		fViewState->SetViewMode(kIconMode);
 	}
+
+	if (IsDesktopView() && !restoredState)
+		fViewState->SetIconSize(48);
 }
 
 
@@ -584,6 +589,7 @@ BPoseView::RestoreState(const BMessage &message)
 	RestoreColumnState(message);
 
 	BViewState* state = BViewState::InstantiateFromMessage(message);
+	bool restoredState = state != NULL;
 	if (state != NULL) {
 		delete fViewState;
 		fViewState = state;
@@ -593,6 +599,9 @@ BPoseView::RestoreState(const BMessage &message)
 		// recover if desktop window view state set wrong
 		fViewState->SetViewMode(kIconMode);
 	}
+
+	if (IsDesktopView() && !restoredState)
+		fViewState->SetIconSize(48);
 }
 
 
@@ -1073,8 +1082,8 @@ BPoseView::GetLayoutInfo(uint32 mode, BPoint* grid, BPoint* offset) const
 
 		case kIconMode:
 		{
-			const float gridOffset = ceilf(IconSizeInt() * 0.875f),
-				offsetValue = ceilf(IconSizeInt() * 0.625f);
+			const float gridOffset = ceilf(IconSizeInt() * 0.5f),
+				offsetValue = ceilf(IconSizeInt() * 0.25f);
 			grid->Set(IconSizeInt() + gridOffset, IconSizeInt() + gridOffset);
 			offset->Set(offsetValue, offsetValue);
 			break;
@@ -1635,6 +1644,8 @@ BPoseView::AddVolumePoses()
 	}
 
 	SortPoses();
+	if (ViewMode() != kListMode)
+		CheckAutoPlacedPoses();
 	UpdateCount();
 	Invalidate();
 }
@@ -2775,6 +2786,12 @@ BPoseView::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case B_COLORS_UPDATED:
+			if (HasSystemColors())
+				AdoptSystemColors();
+			Invalidate();
+			break;
+
 		default:
 			_inherited::MessageReceived(message);
 			break;
@@ -3524,6 +3541,14 @@ BPoseView::NewFolder(const BMessage* message)
 
 		int32 index;
 		BPose* pose = EntryCreated(targetModel->NodeRef(), &nodeRef, ref.name, &index);
+		if (pose != NULL && ViewMode() != kListMode) {
+			RemoveFromVSList(pose);
+			fHintLocation = pose->Location(this);
+			BRect viewBounds(Bounds());
+			PlacePose(pose, viewBounds);
+			AddToVSList(pose);
+			pose->SetSaveLocation();
+		}
 
 		if (IsFiltering()) {
 			if (fFilteredPoseList->FindPose(&nodeRef, &index) == NULL) {
@@ -3659,7 +3684,9 @@ BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 		// we've scanned the entire desktop without finding an available
 		// position, give up and simply place it towards the top left.
 		if (checkValidLocation && !rect.Intersects(viewBounds)) {
-			fHintLocation = PinToGrid(BPoint(0.0, 0.0), fGrid, fOffset);
+			// Do not pile leftovers at 0,0 (Haiku #2864 #8246 #20363).
+			fHintLocation = PinToGrid(
+				BPoint(fOffset.x + 8, fOffset.y + 8), fGrid, fOffset);
 			pose->SetLocation(fHintLocation, this);
 			rect = pose->CalcRect(this);
 			break;
@@ -3700,6 +3727,11 @@ BPoseView::IsValidLocation(const BRect& rect)
 	// also check the deskbar frame
 	BRect deskbarFrame;
 	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
+		BPoint leftTop = deskbarFrame.LeftTop();
+		BPoint rightBottom = deskbarFrame.RightBottom();
+		ConvertFromScreen(&leftTop);
+		ConvertFromScreen(&rightBottom);
+		deskbarFrame = BRect(leftTop, rightBottom);
 		deskbarFrame.InsetBy(-10, -10);
 		if (deskbarFrame.Intersects(rect))
 			return false;
@@ -3810,19 +3842,13 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 		}
 
 		BRect rect(pose->CalcRect(this));
-		if (!rect.Intersects(bounds)) {
-			// pose doesn't fit on screen
+		if (!bounds.Contains(rect) || (desktop && !IsValidLocation(rect))) {
 			if (!locationNeedsUpdating) {
-				// didn't already invalidate and remove in the desktop case
 				Invalidate(rect);
 				RemoveFromVSList(pose);
 			}
-			BPoint loc(pose->Location(this));
-			loc.ConstrainTo(bounds);
-				// place it onscreen
-
-			pose->SetLocation(loc, this);
-				// set the new location
+			fHintLocation = pose->Location(this);
+			PlacePose(pose, Bounds());
 			locationNeedsUpdating = true;
 		}
 
@@ -5603,6 +5629,8 @@ BPoseView::FSNotification(const BMessage* message)
 				|| ((IsVolumesRoot() && settings.MountVolumesOntoDesktop())
 					&& ((!volume.IsShared() || settings.MountSharedVolumesOntoDesktop())))) {
 				CreateVolumePose(&volume);
+				if (ViewMode() != kListMode)
+					CheckAutoPlacedPoses();
 			} else if (targetModel->IsTrash()) {
 				// add trash items from newly mounted volume
 				BDirectory trashDir;
@@ -9134,7 +9162,7 @@ BPoseView::ListModeExtent() const
 BRect
 BPoseView::IconModeExtent() const
 {
-	BRect rect(fExtent.InsetByCopy(-fOffset));
+	BRect rect(fExtent);
 	if (!rect.IsValid())
 		rect.Set(LeftTop().x, LeftTop().y, LeftTop().x, LeftTop().y);
 
@@ -9754,7 +9782,7 @@ BPoseView::ResizeColumnToWidest(BColumn* column)
 		}
 	}
 
-	if (maxWidth > kMinColumnWidth || maxWidth < column->Width()) {
+	if (maxWidth > column->Width()) {
 		ResizeColumn(column, maxWidth);
 		return true;
 	}

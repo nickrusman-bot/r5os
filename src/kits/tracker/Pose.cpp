@@ -547,10 +547,11 @@ BPose::Draw(BRect rect, const BRect& updateRect, BPoseView* poseView, BView* dra
 	// will set the high color and drawing mode or they are set above or by
 	// BPoseView::MakeDragBitmap() for dragged poses.
 
-	// Set low color to high color on selected Desktop poses, don't worry,
-	// high color will be inverted again.
+	// Desktop labels sit on the wallpaper. InvertRect after drawing makes
+	// a selected name look like an unselected one on a black background
+	// (Haiku #16471). Fill with the list-selection color instead.
 	if (selected && poseView->IsDesktopView())
-		drawView->SetLowColor(poseView->HighColor());
+		drawView->SetLowColor(ui_color(B_LIST_SELECTED_BACKGROUND_COLOR));
 	else if (poseView->IsDesktopView())
 		drawView->SetLowColor(poseView->LowColor());
 	else
@@ -635,7 +636,9 @@ BPose::DrawTextWidget(BRect rect, BRect textRect, BTextWidget* widget,
 		invertRect.right = floorf(invertRect.right);
 		invertRect.bottom = floorf(invertRect.bottom);
 
-		if (windowActive || isDrawingSelectionRect) {
+		if (poseView->IsDesktopView()) {
+			// Selection fill already drawn; do not invert (Haiku #16471).
+		} else if (windowActive || isDrawingSelectionRect) {
 			// invert colors to select label using "reverse video"
 			drawView->InvertRect(invertRect);
 		} else if (!windowActive && showSelectionWhenInactive) {

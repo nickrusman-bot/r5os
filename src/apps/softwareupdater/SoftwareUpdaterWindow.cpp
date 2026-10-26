@@ -121,7 +121,7 @@ SoftwareUpdaterWindow::SoftwareUpdaterWindow()
 
 	_SetState(STATE_DISPLAY_STATUS);
 	CenterOnScreen();
-	SetFlags(Flags() ^ B_AUTO_UPDATE_SIZE_LIMITS);
+	SetFlags(Flags() & ~B_AUTO_UPDATE_SIZE_LIMITS);
 
 	AddShortcut(',', B_COMMAND_KEY, new BMessage(kMsgSettings));
 
@@ -1132,7 +1132,7 @@ PackageListView::PackageListView()
 	fLastProgressItem(NULL),
 	fLastProgressValue(-1)
 {
-	SetExplicitMinSize(BSize(B_SIZE_UNSET, 40));
+	SetExplicitMinSize(BSize(B_SIZE_UNSET, 160));
 	SetExplicitPreferredSize(BSize(B_SIZE_UNSET, 400));
 }
 

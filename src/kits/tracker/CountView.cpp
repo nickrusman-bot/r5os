@@ -206,6 +206,8 @@ BCountView::Draw(BRect updateRect)
 		color = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 
 	SetLowColor(color);
+	SetHighColor(color);
+	FillRect(bounds);
 	be_control_look->DrawBorder(this, bounds, updateRect,
 		color, B_PLAIN_BORDER, 0,
 		BControlLook::B_BOTTOM_BORDER | BControlLook::B_LEFT_BORDER);

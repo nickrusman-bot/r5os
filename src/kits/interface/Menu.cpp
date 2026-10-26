@@ -2855,8 +2855,8 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 			fExtraMenuData->frameShiftedLeft = true;
 		}
 
-		if (frame.left < 0)
-			frame.OffsetBy(-frame.left + 6, 0);
+		if (frame.left < screenFrame.left)
+			frame.OffsetBy(screenFrame.left - frame.left + 6, 0);
 
 		if (frame.bottom > screenFrame.bottom)
 			frame.OffsetBy(0, screenFrame.bottom - frame.bottom);
@@ -2873,6 +2873,8 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 
 		if (frame.right > screenFrame.right)
 			frame.OffsetBy(screenFrame.right - frame.right, 0);
+		else if (frame.left < screenFrame.left)
+			frame.OffsetBy(screenFrame.left - frame.left, 0);
 	}
 
 	if (scrollOn != NULL) {

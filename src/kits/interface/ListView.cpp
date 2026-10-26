@@ -22,6 +22,7 @@
 #include <PropertyInfo.h>
 #include <ScrollBar.h>
 #include <ScrollView.h>
+#include <Region.h>
 #include <Window.h>
 
 #include <binary_compatibility/Interface.h>
@@ -1929,7 +1930,10 @@ BListView::DrawItem(BListItem* item, BRect itemRect, bool complete)
 	else
 		SetHighColor(ui_color(B_LIST_ITEM_TEXT_COLOR));
 
+	BRegion clip(itemRect);
+	ConstrainClippingRegion(&clip);
 	item->DrawItem(this, itemRect, complete);
+	ConstrainClippingRegion(NULL);
 }
 
 

@@ -243,8 +243,10 @@ TTeamMenuItem::Draw()
 	bool canHandle = !fBarView->Dragging()
 		|| fBarView->AppCanHandleTypes(Signature());
 	uint32 flags = 0;
-	if (_IsSelected() && canHandle)
+	if (_IsSelected() && canHandle) {
 		flags |= BControlLook::B_ACTIVATED;
+		menuColor = ui_color(B_MENU_SELECTED_BACKGROUND_COLOR);
+	}
 
 	uint32 borders = BControlLook::B_TOP_BORDER;
 	if (fBarView->Vertical()) {
@@ -338,8 +340,7 @@ TTeamMenuItem::DrawContent()
 	bool canHandle = !fBarView->Dragging()
 		|| fBarView->AppCanHandleTypes(Signature());
 	if (_IsSelected() && IsEnabled() && canHandle)
-		menu->SetLowColor(tint_color(ui_color(B_MENU_BACKGROUND_COLOR),
-			B_HIGHLIGHT_BACKGROUND_TINT));
+		menu->SetLowColor(ui_color(B_MENU_SELECTED_BACKGROUND_COLOR));
 	else
 		menu->SetLowColor(ui_color(B_MENU_BACKGROUND_COLOR));
 

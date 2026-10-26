@@ -69,7 +69,8 @@ _DrawLine(BPoseView* view, BPoint from, BPoint to)
 {
 	float tint = B_NO_TINT;
 	color_which highColor = view->HighUIColor(&tint);
-	view->SetHighUIColor(view->LowUIColor(), B_DARKEN_1_TINT);
+	float lineTint = view->LowColor().IsLight() ? B_DARKEN_1_TINT : B_LIGHTEN_1_TINT;
+	view->SetHighUIColor(view->LowUIColor(), lineTint);
 	view->StrokeLine(from, to);
 	view->SetHighUIColor(highColor, tint);
 }
@@ -242,7 +243,7 @@ BTitleView::Draw(BRect /*updateRect*/, bool useOffscreen, bool updateOnly,
 	view->StrokeLine(bounds.LeftBottom(), bounds.RightBottom());
 	bounds.bottom--;
 
-	rgb_color baseColor = ui_color(B_CONTROL_BACKGROUND_COLOR);
+	rgb_color baseColor = ui_color(B_PANEL_BACKGROUND_COLOR);
 	be_control_look->DrawButtonBackground(view, bounds, bounds, baseColor, 0,
 		BControlLook::B_TOP_BORDER | BControlLook::B_BOTTOM_BORDER);
 
@@ -518,7 +519,7 @@ BColumnTitle::Draw(BView* view, bool pressed)
 			break;
 	}
 
-	view->SetHighUIColor(B_PANEL_TEXT_COLOR, pressed ? B_DARKEN_1_TINT : 1.0f);
+	view->SetHighUIColor(B_DOCUMENT_TEXT_COLOR, pressed ? B_DARKEN_1_TINT : 1.0f);
 	view->SetLowColor(baseColor);
 	view->DrawString(titleString.String(), titleLocation);
 

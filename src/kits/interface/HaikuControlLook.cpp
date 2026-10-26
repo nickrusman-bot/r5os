@@ -184,6 +184,11 @@ HaikuControlLook::DrawMenuBarBackground(BView* view, BRect& rect,
 	float topTint;
 	float bottomTint;
 
+	if ((flags & B_DISABLED) != 0) {
+		_FillGradient(view, rect, base, 1.05, 1.08);
+		return;
+	}
+
 	if ((flags & B_ACTIVATED) != 0) {
 		rgb_color bevelColor1 = tint_color(base, 1.40);
 		rgb_color bevelColor2 = tint_color(base, 1.25);
@@ -584,7 +589,8 @@ HaikuControlLook::DrawScrollBarBorder(BView* view, BRect rect,
 	bool isEnabled = (flags & B_DISABLED) == 0;
 	bool isFocused = (flags & B_FOCUSED) != 0;
 
-	view->SetHighColor(tint_color(base, B_DARKEN_2_TINT));
+	view->SetHighColor(tint_color(base,
+		base.IsLight() ? B_DARKEN_2_TINT : 0.75f));
 
 	// stroke a line around the entire scrollbar
 	// take care of border highlighting, scroll target is focus view
@@ -684,18 +690,36 @@ HaikuControlLook::DrawScrollBarBackground(BView* view, BRect& rect,
 	float darkEdge2Tint;
 	float shadowTint;
 
-	if (isEnabled) {
-		gradient1Tint = 1.10;
-		gradient2Tint = 1.05;
-		darkEdge1Tint = B_DARKEN_3_TINT;
-		darkEdge2Tint = B_DARKEN_2_TINT;
-		shadowTint = gradient1Tint;
+	if (base.IsLight()) {
+		if (isEnabled) {
+			gradient1Tint = 1.10;
+			gradient2Tint = 1.05;
+			darkEdge1Tint = B_DARKEN_3_TINT;
+			darkEdge2Tint = B_DARKEN_2_TINT;
+			shadowTint = gradient1Tint;
+		} else {
+			gradient1Tint = 0.9;
+			gradient2Tint = 0.8;
+			darkEdge1Tint = B_DARKEN_2_TINT;
+			darkEdge2Tint = B_DARKEN_2_TINT;
+			shadowTint = gradient1Tint;
+		}
 	} else {
-		gradient1Tint = 0.9;
-		gradient2Tint = 0.8;
-		darkEdge1Tint = B_DARKEN_2_TINT;
-		darkEdge2Tint = B_DARKEN_2_TINT;
-		shadowTint = gradient1Tint;
+		// Dark panel: lighten the trough and edges so the bar reads against
+		// the background (Haiku #20009).
+		if (isEnabled) {
+			gradient1Tint = 0.88;
+			gradient2Tint = 0.78;
+			darkEdge1Tint = 0.70;
+			darkEdge2Tint = 0.82;
+			shadowTint = gradient1Tint;
+		} else {
+			gradient1Tint = 0.92;
+			gradient2Tint = 0.86;
+			darkEdge1Tint = 0.80;
+			darkEdge2Tint = 0.88;
+			shadowTint = gradient1Tint;
+		}
 	}
 
 	rgb_color darkEdge1 = tint_color(base, darkEdge1Tint);

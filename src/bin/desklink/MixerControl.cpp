@@ -138,6 +138,19 @@ MixerControl::Connect(float* _value, const char** _error)
 					param = NULL;
 				}
 
+				// Mute can follow Master Gain in the parameter web; keep
+				// scanning so the Deskbar speaker can mute (Haiku #20314).
+				if (fMuteParameter == NULL) {
+					for (int i = 0; i < numParams; i++) {
+						BParameter* muteParam = fParameterWeb->ParameterAt(i);
+						if (strcmp(muteParam->Kind(), B_MUTE) == 0) {
+							fMuteParameter = muteParam;
+							fMuteMediaNode = muteParam->Web()->Node();
+							break;
+						}
+					}
+				}
+
 				if (param == NULL) {
 					errorString = fVolumeWhich
 						? "Could not find the soundcard"
