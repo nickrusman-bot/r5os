@@ -34,7 +34,12 @@ chmod +x scripts/*.sh
 Daarna de image in QEMU starten, bijvoorbeeld:
 
 ```bash
-qemu-system-x86_64 -m 2048 -enable-kvm -hda haiku/generated.x86_64/r5-os.image
+# WSL: scripts/run-qemu-r5.sh (TCG of KVM, IDE-schijf, virtio-net, USB-tablet, HDA)
+qemu-system-x86_64 -machine pc,accel=kvm -m 2048 -smp 2 \
+  -drive file=haiku/generated.x86_64/r5-os.image,format=raw,if=ide \
+  -vga std -usb -device usb-tablet \
+  -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
+  -device intel-hda -device hda-duplex
 ```
 
 Profielen: `r5-raw` (QEMU/schijf), `r5-anyboot` (ISO/USB), `r5-vmware`.
