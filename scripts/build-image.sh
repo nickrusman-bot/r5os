@@ -19,6 +19,7 @@ if [[ ! -d "$GEN" ]]; then
 	)
 fi
 
+REV="$("$ROOT/scripts/r5-version.sh" --revision)"
 cd "$GEN"
-jam -q "@$PROFILE"
-echo "Build finished for @$PROFILE in $GEN"
+jam -sHAIKU_REVISION="$REV" -q "@$PROFILE"
+echo "Build finished for @$PROFILE in $GEN ($REV)"

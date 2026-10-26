@@ -41,6 +41,10 @@ Profielen: `r5-raw` (QEMU/schijf), `r5-anyboot` (ISO/USB), `r5-vmware`.
 
 `--distro-compatibility compatible` blijft aan tot we bewust de systeem-API wijzigen.
 
+## Architecturen
+
+R5 OS is **64-bit**: **AMD64** (nu, referentiemachine 5625U), daarna **ARM64**, optioneel **RISC-V 64**. Geen focus op 32-bit of overige Haiku-ports. Zie `distro/TODO.md`.
+
 Clone **niet** op `/mnt/c/...` als je in WSL bouwt: NTFS is case-insensitive en traag. Overlay mag op Windows staan; `haiku/` en `buildtools/` het liefst op het Linux-bestandssysteem (`~/Projects/R5OS`).
 
 ## Git: R5 OS is de bron van waarheid
@@ -72,3 +76,11 @@ Daarna is `tracker/STATUS.md` het overzicht: hoeveel open, bezig, gefixt. We stu
 ## Merk
 
 Gebruik niet de merknamen of logo’s van Haiku of BeOS op de image of website. Eigen naam: **R5 OS**. AboutSystem moet de disclaimer uit `distro/DISCLAIMER.txt` tonen.
+
+## Versie
+
+Publieke releases: **R5 OS 2026.1**, **2026.2**, … (jaar, daarna +1 per release; nieuw jaar begint weer bij `.1`).
+
+Tussen builds: suffix `-dev`. Huidige boom: `distro/VERSION` (nu `2026.1-dev`). Jam gebruikt `HAIKU_REVISION=r5-<VERSION>`.
+
+Open distro-taken (o.a. Haiku-verwijzingen uit de UI): `distro/TODO.md`.
