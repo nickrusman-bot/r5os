@@ -1,0 +1,25 @@
+# R5 OS image profiles (copy to haiku/build/jam/UserBuildConfig).
+# Do not commit this file into upstream Haiku; it is gitignored there.
+
+DefineBuildProfile r5-raw : image : "r5-os.image" ;
+DefineBuildProfile r5-anyboot : anyboot-image : "r5-os-anyboot.iso" ;
+DefineBuildProfile r5-vmware : vmware-image : "r5-os.vmdk" ;
+
+switch $(HAIKU_BUILD_PROFILE) {
+	case "r5-*" : {
+		HAIKU_ROOT_USER_NAME = user ;
+		HAIKU_ROOT_USER_REAL_NAME = "R5 OS" ;
+		HAIKU_IMAGE_HOST_NAME = r5os ;
+		HAIKU_IMAGE_SIZE = 1200 ;
+
+		AddGroupToHaikuImage party : 101 : user sshd ;
+
+		AddOptionalHaikuImagePackages Welcome WebPositive Development Git ;
+		AddHaikuImageSystemPackages
+			openssh
+			pe
+			vision
+			wpa_supplicant
+			;
+	}
+}

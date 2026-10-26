@@ -1,0 +1,13 @@
+R5 OS is based on Haiku, but it is not the official distribution from the
+Haiku Project. For information about the official Haiku project, please visit
+https://www.haiku-os.org.
+
+R5 OS is not associated with the Haiku Project. For support, contact the
+maintainers of this tree.
+
+The name refers to BeOS R5 as historical inspiration. This project is not
+BeOS, is not affiliated with Be, Inc. or its successors, and does not use
+their trademarks or logos.
+
+This software is work in progress and has missing functionality as well as
+many (known and unknown) bugs. Use at your own risk.

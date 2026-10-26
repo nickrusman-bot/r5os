@@ -1,0 +1,11 @@
+/haiku/
+/buildtools/
+/generated*/
+*.image
+*.vmdk
+*.iso
+*.mmc
+*.hpkg
+.DS_Store
+Thumbs.db
+/query.csv
