@@ -14,7 +14,7 @@ id	r5_status	branch	commit	notes
 922	open			
 923	open			
 976	open			
-1006	open			
+1006	fixed			Backgrounds Revert snapshot (apply-ui-bugs.py)
 1036	open			
 1041	open			
 1042	open			
@@ -1037,7 +1037,7 @@ id	r5_status	branch	commit	notes
 11090	open			
 11100	open			
 11129	open			
-11138	open			
+11138	fixed			Alert _text after unarchive (apply-ui-bugs.py)
 11139	open			
 11141	open			
 11163	open			
@@ -1998,7 +1998,7 @@ id	r5_status	branch	commit	notes
 15673	open			
 15674	open			
 15683	open			
-15690	open			
+15690	fixed			SoftwareUpdater list min height (apply-ui-bugs.py)
 15693	open			
 15694	open			
 15696	open			
@@ -2169,7 +2169,7 @@ id	r5_status	branch	commit	notes
 16112	open			
 16113	open			
 16114	open			
-16116	open			
+16116	fixed			Desktop 48px default icon size (apply-ui-bugs.py)
 16117	open			
 16123	open			
 16124	open			
@@ -2308,7 +2308,7 @@ id	r5_status	branch	commit	notes
 16465	open			
 16466	open			
 16470	open			
-16471	open			
+16471	fixed			Selection fill on black desktop (apply-ui-bugs.py)
 16472	open			
 16475	open			
 16477	open			
@@ -2429,7 +2429,7 @@ id	r5_status	branch	commit	notes
 16830	open			
 16836	open			
 16837	open			
-16838	open			
+16838	fixed			ListView clip (apply-ui-bugs.py)
 16842	open			
 16845	open			
 16847	open			
@@ -2868,7 +2868,7 @@ id	r5_status	branch	commit	notes
 18047	open			
 18055	open			
 18056	open			
-18057	open			
+18057	fixed			Scrollbar/document resize knob (apply-ui-bugs.py)
 18059	open			
 18060	fixed			Double-click column only grows to widest
 18064	open			
@@ -3609,7 +3609,7 @@ id	r5_status	branch	commit	notes
 19831	open			
 19834	open			
 19835	open			
-19836	open			
+19836	fixed			BeControlLook contrast on dark (apply-darkmode.py)
 19839	open			
 19840	open			
 19841	open			
@@ -3687,8 +3687,8 @@ id	r5_status	branch	commit	notes
 20003	open			
 20004	open			
 20006	open			
-20008	open			
-20009	open			
+20008	fixed			Already in the Haiku tree we forked
+20009	fixed			Scrollbar trough on dark panels (apply-darkmode.py)
 20011	open			
 20015	open			
 20016	open			
