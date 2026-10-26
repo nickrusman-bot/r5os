@@ -1,4 +1,5 @@
-/haiku/
+/haiku/generated*
+/haiku/download/
 /buildtools/
 /generated*/
 *.image
