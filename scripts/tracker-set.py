@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from tracker_lib import STATUSES, default_r5_row, read_r5_status, write_r5_status
+from tracker_report import main as write_status_md
 
 
 def main() -> int:
@@ -28,6 +29,7 @@ def main() -> int:
         row["notes"] = args.notes
     rows[args.ticket_id] = row
     write_r5_status(rows)
+    write_status_md()
     print(
         f"#{args.ticket_id} -> {args.status}"
         + (f" branch={row['branch']}" if row["branch"] else "")
