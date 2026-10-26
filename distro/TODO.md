@@ -2,6 +2,17 @@
 
 Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 
+## Klaar
+
+- [x] **Versioning**  
+  Publiek: **R5 OS YYYY.N** (`2026.1`, `2026.2`, …; nieuw jaar → `.1`). Tussen builds: **`YYYY.N-dev`**. Bron: `distro/VERSION` (nu `2026.1-dev`). Jam: `HAIKU_REVISION=r5-<VERSION>`. AboutSystem toont **R5 OS 2026.1-dev**, geen Haiku-`hrev`.
+
+- [x] **Eerste UI-naam**  
+  FirstBoot Welcome/Try/Install, Deskbar **About R5 OS**, About-disclaimer, volume-label in overlay (`HAIKU_IMAGE_LABEL`). About-logo: `distro/artwork/r5-os-logo.png`.
+
+- [x] **About-versie**  
+  AboutSystem toont **R5 OS** plus `distro/VERSION` (niet de git-hash). Jam-revisiebestand wordt door `apply-overlay.sh` overschreven.
+
 ## Open
 
 - [ ] **Hardware: HP Envy (convertible) — Ryzen 5 5625U + Radeon `15e7`**  
@@ -17,11 +28,20 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 
   **Aanpak:** `0x15e7` toevoegen als Barcelo/Cezanne-APU (niet Navi). PLL/DCN voor Renoir-klasse (zelfde valkuil als #17516). eDP + backlight. Audio/ACP. Wifi hangt van de NIC in *deze* laptop af (apart). Syslog na eerste boot bewaren.
 
-- [ ] **Branding: Haiku-OS-referenties uit de UI**  
-  Zichtbare teksten, About-vensters, Welcome, Deskbar, boot/splash, AboutSystem en overige interface-strings die naar Haiku OS / haiku-os.org verwijzen, vervangen of verwijderen. Naam in de UI: **R5 OS**. Versie volgens `distro/VERSION` (nu **2026.1-dev**; releases **2026.1**, **2026.2**, …). Geen Haiku- of BeOS-merken/logo’s. Disclaimer blijft in About (`DISCLAIMER.txt`). Technische paden/API’s (`haiku/`-bron, package-namen) later; eerst wat de gebruiker ziet.
+- [x] **Branding: Deskbar-blad, splash, Installer-logo**  
+  Unofficial pad: Deskbar-blad PNG 63×22, boot-splash 372×96, Installer zelfde About-logo. Disclaimer in About blijft. Nog: Welcome-HTML (`haiku-os.org`), Deskbar-app-HVIF in Tracker.
+
+- [ ] **Branding: rest van de strings**  
+  Tracker/Welcome en overige zichtbare “Haiku”-teksten. Geen Haiku- of BeOS-merken. Technische paden/API’s later.
+
+- [x] **Dark mode (laaghangend)**  
+  [#20008](https://dev.haiku-os.org/ticket/20008) zat al in de tree. Scrollbar-trough [#20009](https://dev.haiku-os.org/ticket/20009) en BeControlLook-contrast [#19836](https://dev.haiku-os.org/ticket/19836) zitten in deze tree. [#18970](https://dev.haiku-os.org/ticket/18970) blijft een verzamelpunt.
+
+- [x] **UI-fruit (layout + desktop)**  
+  [#16838](https://dev.haiku-os.org/ticket/16838) list-clip, [#18057](https://dev.haiku-os.org/ticket/18057) scrollbar/resize-knop, [#15690](https://dev.haiku-os.org/ticket/15690) SoftwareUpdater, [#11138](https://dev.haiku-os.org/ticket/11138) Alert `_text`, [#16471](https://dev.haiku-os.org/ticket/16471) selectie op zwart desktop, [#16116](https://dev.haiku-os.org/ticket/16116) desktop 48px als er geen opgeslagen view-state is, [#1006](https://dev.haiku-os.org/ticket/1006) Backgrounds Revert-snapshot.
 
 - [ ] **Architecturen: AMD64, ARM64, optioneel RISC-V 64**  
-  Beleid: alleen 64-bit. Volgorde: **AMD64** (huidige `x86_64`-image, 5625U) → **ARM64** (eerst QEMU `virt`, Haiku-port ~desktop in QEMU 2026; Apple Silicon/RPi later) → **RISC-V 64** (RV64GC, Haiku heeft al een vroege QEMU-port). Geen tijd in x86-32, ARM32, PPC, SPARC, m68k. 32-bit-code in de boom niet in een drive-by slopen.
+  Beleid: alleen 64-bit. Volgorde: **AMD64** (huidige `x86_64`-image, 5625U) → **ARM64** (eerst QEMU `virt`) → **RISC-V 64** (RV64GC). Geen focus op x86-32, ARM32, PPC, SPARC, m68k; 32-bit-code niet in een drive-by slopen.
 
 - [ ] **Touch + tablet-mode (HP Envy convertible)**  
   Testapparaat: dezelfde Envy (touchscreen + 360°-scharnier). Eersteklas vingerinput, geen muis-emulatie. Haiku heeft HID-digitizer-IDs en een tablet-pad; **multitouch ontbreekt** ([#9545](https://dev.haiku-os.org/ticket/9545)). Touchpads ≠ touchscreen. USB/I2C HID-schermen werken vaak niet ([#7481](https://dev.haiku-os.org/ticket/7481), [#15881](https://dev.haiku-os.org/ticket/15881)); Envy’s paneel is bijna zeker **I2C-HID**.
@@ -33,9 +53,7 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 ## Later / lang
 
 - [ ] **Accelerated graphics: 2D en 3D**  
-  Bewust langetermijn, niet de volgende jam-cycle. Haiku heeft nu CPU-desktop (`app_server`) en Mesa **llvmpipe/lavapipe**; geen `radeonsi`/DRM voor Vega. Doel op de 5625U (`1002:15e7`): hardware-2D (blit/fill, vsync, cursor, multi-head) en daarna hardware-3D (Gallium/Mesa, OpenGL; Vulkan als die stack er is).
-
-  Volgorde: (1) modeset op Barcelo, (2) accelerant-2D zonder KDL, (3) GPU-buffer → scherm, (4) Mesa-driver i.p.v. llvmpipe. Dat raakt kernel, drivers en waarschijnlijk een DRM-achtige API ([Haiku #9919](https://dev.haiku-os.org/ticket/9919)). Eerst de referentiemachine laten booten met beeld; daarna deze tak.
+  Bewust langetermijn. Haiku: CPU-desktop + Mesa **llvmpipe/lavapipe**. Doel op de 5625U (`1002:15e7`): hardware-2D, daarna hardware-3D (Gallium/Mesa). Volgorde: modeset Barcelo → accelerant-2D → GPU-buffer → Mesa i.p.v. llvmpipe ([#9919](https://dev.haiku-os.org/ticket/9919)).
 
 - [ ] **Telefoon-UI**  
-  Compacte layout, rotatie, on-screen keyboard, statusbalk. Alleen zinvol ná touch + ARM64 (en modeset). Geen BeOS-Deskbar 1:1 op 6 inch.
+  Compacte layout, rotatie, on-screen keyboard, statusbalk. Alleen zinvol ná touch + ARM64 (en modeset).
