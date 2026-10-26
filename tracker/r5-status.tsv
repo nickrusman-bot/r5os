@@ -1799,7 +1799,7 @@ id	r5_status	branch	commit	notes
 14981	open			
 14984	open			
 14985	open			
-14991	open			
+14991	fixed			Tracker (not every app) reapplies system colors live
 14998	open			
 15002	open			
 15003	open			
@@ -1947,7 +1947,7 @@ id	r5_status	branch	commit	notes
 15535	open			
 15537	open			
 15540	open			
-15541	open			
+15541	fixed			Tracker reapplies document colors on B_COLORS_UPDATED
 15545	open			
 15546	open			
 15552	open			
@@ -2358,7 +2358,7 @@ id	r5_status	branch	commit	notes
 16610	open			
 16611	open			
 16613	open			
-16618	open			
+16618	fixed			DrawMenuBarBackground honors B_DISABLED
 16628	open			
 16632	open			
 16633	open			
@@ -2960,7 +2960,7 @@ id	r5_status	branch	commit	notes
 18294	open			
 18295	open			
 18296	open			
-18300	open			
+18300	fixed			Keep application menus inside the screen on the left edge
 18301	open			
 18302	open			
 18303	open			
@@ -3238,7 +3238,7 @@ id	r5_status	branch	commit	notes
 18954	open			
 18959	open			
 18964	open			
-18970	open			
+18970	in-progress			Partial: menubar/deskbar/tracker dark leftovers; metabug remains
 18972	open			
 18976	open			
 18978	open			
