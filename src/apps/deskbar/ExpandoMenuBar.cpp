@@ -291,6 +291,19 @@ TExpandoMenuBar::MouseDown(BPoint where)
 		return;
 			// absorb the message
 
+	if (Vertical() && static_cast<TBarApp*>(be_app)->Settings()->superExpando
+		&& (buttons & B_PRIMARY_MOUSE_BUTTON) != 0) {
+		app_info info;
+		if (be_roster->GetActiveAppInfo(&info) == B_OK
+			&& teamItem->Teams()->HasItem((void*)(addr_t)info.team)) {
+			TShowHideMenuItem::TeamShowHideCommon(B_MINIMIZE_WINDOW,
+				teamItem->Teams());
+			return;
+		}
+		be_roster->ActivateApp((addr_t)teamItem->Teams()->ItemAt(0));
+		return;
+	}
+
 	// check if within expander bounds to expand window items
 	if (Vertical() && static_cast<TBarApp*>(be_app)->Settings()->superExpando
 		&& teamItem->ExpanderBounds().Contains(where)) {

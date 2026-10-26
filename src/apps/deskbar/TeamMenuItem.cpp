@@ -43,10 +43,14 @@ All rights reserved.
 #include <algorithm>
 
 #include <Bitmap.h>
+#include <Catalog.h>
 #include <ControlLook.h>
 #include <Debug.h>
 #include <Font.h>
+#include <MenuItem.h>
 #include <Mime.h>
+#include <OS.h>
+#include <PopUpMenu.h>
 #include <Region.h>
 #include <Roster.h>
 #include <Resources.h>
@@ -61,7 +65,12 @@ All rights reserved.
 #include "StatusView.h"
 #include "TeamMenu.h"
 #include "WindowMenu.h"
+#include "BarSettings.h"
 #include "WindowMenuItem.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "TeamMenuItem"
 
 
 static float sHPad, sVPad, sLabelOffset = 0.0f;
@@ -150,8 +159,61 @@ TTeamMenuItem::HandleMouseDown(BPoint where)
 		showMessage.AddInt32("itemIndex", menu->IndexOf(this));
 		window->PostMessage(&showMessage, menu);
 		return true;
+	} else if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+		BPopUpMenu popup("team");
+		popup.AddItem(new BMenuItem(B_TRANSLATE("Hide all"),
+			new BMessage(B_MINIMIZE_WINDOW)));
+		popup.AddItem(new BMenuItem(B_TRANSLATE("Show all"),
+			new BMessage(B_BRING_TO_FRONT)));
+		popup.AddItem(new BMenuItem(B_TRANSLATE("Close all"),
+			new BMessage(B_QUIT_REQUESTED)));
+		popup.AddSeparatorItem();
+		popup.AddItem(new BMenuItem(B_TRANSLATE("Force quit"),
+			new BMessage(kForceQuitTeam)));
+		BMenuItem* chosen = popup.Go(menu->ConvertToScreen(where), true, true);
+		if (chosen != NULL && chosen->Message() != NULL) {
+			uint32 what = chosen->Message()->what;
+			if (what == kForceQuitTeam) {
+				int32 teamCount = fTeam->CountItems();
+				for (int32 index = 0; index < teamCount; index++)
+					kill_team((addr_t)fTeam->ItemAt(index));
+			} else {
+				TShowHideMenuItem::TeamShowHideCommon((int32)what, fTeam);
+			}
+		}
+		return true;
 	}
 
+	return false;
+}
+
+
+bool
+TTeamMenuItem::HasListedWindows() const
+{
+	if (fTeam == NULL)
+		return false;
+
+	int32 teamCount = fTeam->CountItems();
+	for (int32 i = 0; i < teamCount; i++) {
+		team_id team = (addr_t)fTeam->ItemAt(i);
+		int32 count = 0;
+		int32* tokens = get_token_list(team, &count);
+		if (tokens == NULL)
+			continue;
+		for (int32 j = 0; j < count; j++) {
+			client_window_info* info = get_window_info(tokens[j]);
+			if (info == NULL)
+				continue;
+			bool listed = TWindowMenu::WindowShouldBeListed(info);
+			free(info);
+			if (listed) {
+				free(tokens);
+				return true;
+			}
+		}
+		free(tokens);
+	}
 	return false;
 }
 
@@ -363,7 +425,8 @@ TTeamMenuItem::DrawContent()
 	// draw expander arrow
 	if (fBarView->Vertical()
 		&& static_cast<TBarApp*>(be_app)->Settings()->superExpando
-		&& fBarView->ExpandoState()) {
+		&& fBarView->ExpandoState()
+		&& HasListedWindows()) {
 		DrawExpanderArrow();
 	}
 }
@@ -476,6 +539,9 @@ TTeamMenuItem::ExpandedWindowItem(int32 id)
 BRect
 TTeamMenuItem::ExpanderBounds() const
 {
+	if (!HasListedWindows())
+		return BRect(0, 0, -1, -1);
+
 	BRect bounds(Frame());
 	bounds.left = bounds.right - kSwitchWidth;
 	return bounds;

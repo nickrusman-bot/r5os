@@ -39,6 +39,7 @@ All rights reserved.
 
 #include <Application.h>
 #include <Catalog.h>
+#include <Clipboard.h>
 #include <ControlLook.h>
 #include <Locale.h>
 #include <NodeMonitor.h>
@@ -518,6 +519,33 @@ GeneralInfoView::ReLinkTargetModel(Model* model)
 void
 GeneralInfoView::MouseDown(BPoint where)
 {
+	BMessage* currentMessage = Window() != NULL
+		? Window()->CurrentMessage() : NULL;
+	int32 buttons = 0;
+	if (currentMessage != NULL)
+		currentMessage->FindInt32("buttons", &buttons);
+	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
+		const char* copy = NULL;
+		if (fPathRect.Contains(where))
+			copy = fPathStr.String();
+		else if (fLinkRect.Contains(where))
+			copy = fLinkToStr.String();
+		else if (fSizeRect.Contains(where))
+			copy = fSizeString.String();
+		else if (fDescRect.Contains(where))
+			copy = fDescStr.String();
+		if (copy != NULL && be_clipboard->Lock()) {
+			be_clipboard->Clear();
+			BMessage* clip = be_clipboard->Data();
+			if (clip != NULL) {
+				clip->AddData("text/plain", B_MIME_TYPE, copy, strlen(copy));
+				be_clipboard->Commit();
+			}
+			be_clipboard->Unlock();
+		}
+		return;
+	}
+
 	// Start tracking the mouse if we are in any of the hotspots
 	if (fLinkRect.Contains(where)) {
 		InvertRect(fLinkRect);

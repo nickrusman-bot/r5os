@@ -29,6 +29,7 @@
 #include <debugger.h>
 #include <DirectWindow.h>
 #include <Entry.h>
+#include <File.h>
 #include <FindDirectory.h>
 #include <Message.h>
 #include <MessageFilter.h>
@@ -74,6 +75,25 @@
 #else
 #	define STRACE(a) ;
 #endif
+
+
+static float
+r5_cursor_scale(float fontScale)
+{
+	float extra = 1.0f;
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+		path.Append("r5_cursor_scale");
+		BFile file(path.Path(), B_READ_ONLY);
+		if (file.InitCheck() == B_OK)
+			file.Read(&extra, sizeof(extra));
+		if (extra < 1.0f)
+			extra = 1.0f;
+		if (extra > 3.0f)
+			extra = 3.0f;
+	}
+	return fontScale * extra;
+}
 
 
 static inline float
@@ -575,7 +595,8 @@ Desktop::Init()
 	}
 #endif
 
-	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
+	fCursorManager.InitializeCursors(r5_cursor_scale(
+		fSettings->DefaultBoldFont().Size() / 12.0f));
 
 	fVirtualScreen.HWInterface()->MoveCursorTo(
 		fVirtualScreen.Frame().Width() / 2,
@@ -1810,7 +1831,8 @@ Desktop::FontsChanged(Window* window)
 
 	RebuildAndRedrawAfterWindowChange(window, dirty);
 
-	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
+	fCursorManager.InitializeCursors(r5_cursor_scale(
+		fSettings->DefaultBoldFont().Size() / 12.0f));
 }
 
 
@@ -3668,6 +3690,28 @@ Desktop::_ScreenChanged(Screen* screen)
 	update.AddInt32("mode", screen->ColorSpace());
 
 	fVirtualScreen.UpdateFrame();
+
+	BRect screenFrame = screen->Frame();
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (window->Screen() != screen || window->IsHidden()
+			|| !window->IsNormal())
+			continue;
+		BRect frame = window->Frame();
+		if (screenFrame.Intersects(frame))
+			continue;
+		float x = frame.left;
+		float y = frame.top;
+		if (frame.right < screenFrame.left)
+			x = screenFrame.left;
+		else if (frame.left > screenFrame.right)
+			x = screenFrame.right - frame.Width();
+		if (frame.bottom < screenFrame.top)
+			y = screenFrame.top;
+		else if (frame.top > screenFrame.bottom)
+			y = screenFrame.bottom - frame.Height();
+		window->MoveBy((int32)(x - frame.left), (int32)(y - frame.top));
+	}
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {

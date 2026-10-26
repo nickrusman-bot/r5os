@@ -120,8 +120,11 @@ SizeSlider::SizeSlider(const char* name, const char* label,
 	while (size / fGranularity > kMaxSliderLimit)
 		fGranularity *= 2;
 
+	off_t units = MaxPartitionSize() / fGranularity;
+	if (units < 1)
+		units = 1;
 	SetKeyIncrementValue(int32(1024 * 1024 * 1.0 * kMaxSliderLimit
-		/ ((MaxPartitionSize() - 1) / fGranularity) + 0.5));
+		/ units + 0.5));
 
 	char buffer[64];
 	char minString[64];
@@ -144,8 +147,26 @@ SizeSlider::SetValue(int32 value)
 {
 	BSlider::SetValue(value);
 
-	fSize = (off_t(1.0 * (MaxPartitionSize() - 1) * Value()
-		/ kMaxSliderLimit + 0.5) / fGranularity) * fGranularity;
+	off_t maxSize = MaxPartitionSize();
+	if (maxSize <= 0) {
+		fSize = 0;
+		return;
+	}
+
+	off_t units = maxSize / fGranularity;
+	if (units < 1)
+		units = 1;
+
+	// Haiku #10208: do not drop a byte with MaxPartitionSize()-1, and keep
+	// the max thumb on the full aligned capacity.
+	if (Value() >= kMaxSliderLimit)
+		fSize = units * fGranularity;
+	else {
+		off_t selected = (off_t)Value() * units / kMaxSliderLimit;
+		fSize = selected * fGranularity;
+	}
+	if (fSize > maxSize)
+		fSize = maxSize;
 }
 
 
@@ -169,8 +190,16 @@ SizeSlider::SetSize(off_t size)
 	if (size == fSize)
 		return;
 
-	SetValue(int32(1.0 * kMaxSliderLimit / fGranularity * size
-		/ ((MaxPartitionSize() - 1) / fGranularity) + 0.5));
+	off_t maxSize = MaxPartitionSize();
+	off_t units = maxSize / fGranularity;
+	if (units < 1)
+		units = 1;
+	off_t sizeUnits = size / fGranularity;
+	if (sizeUnits < 0)
+		sizeUnits = 0;
+	if (sizeUnits > units)
+		sizeUnits = units;
+	SetValue(int32((1.0 * kMaxSliderLimit * sizeUnits) / units + 0.5));
 	fSize = size;
 	UpdateTextChanged();
 }

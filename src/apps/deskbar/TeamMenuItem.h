@@ -64,6 +64,7 @@ public:
 	virtual						~TTeamMenuItem();
 
 			bool				HandleMouseDown(BPoint where);
+			bool				HasListedWindows() const;
 			status_t			Invoke(BMessage* message = NULL);
 
 			void				SetOverrideWidth(float width)

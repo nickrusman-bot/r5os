@@ -1498,6 +1498,23 @@ BContainerWindow::MessageReceived(BMessage* message)
 			(new FindWindow())->Show();
 			break;
 
+		case kEditFavorites:
+		{
+			BPath path;
+			if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+				path.Append("Tracker");
+				path.Append("Go");
+				BEntry entry(path.Path());
+				entry_ref ref;
+				if (entry.GetRef(&ref) == B_OK) {
+					BMessage refs(B_REFS_RECEIVED);
+					refs.AddRef("refs", &ref);
+					be_app->PostMessage(&refs);
+				}
+			}
+			break;
+		}
+
 		case kQuitTracker:
 			be_app->PostMessage(B_QUIT_REQUESTED);
 			break;
@@ -1802,6 +1819,16 @@ BContainerWindow::AddWindowMenu(BMenu* menu)
 		new BMessage(kShowSettingsWindow), ',');
 	item->SetTarget(be_app);
 	menu->AddItem(item);
+	menu->AddSeparatorItem();
+	FavoritesMenu* favorites = new FavoritesMenu(B_TRANSLATE("Favorites"),
+		new BMessage(B_REFS_RECEIVED), new BMessage(B_REFS_RECEIVED),
+		BMessenger(be_app), false);
+	BMenuItem* editFavorites = new BMenuItem(
+		B_TRANSLATE("Edit favorites" B_UTF8_ELLIPSIS),
+		new BMessage(kEditFavorites));
+	editFavorites->SetTarget(this);
+	favorites->AddItem(editFavorites);
+	menu->AddItem(favorites);
 }
 
 
@@ -2279,14 +2306,13 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what, const 
 	FSGetBootDeskDir(&directory);
 	if (directory.InitCheck() == B_OK && directory.GetEntry(&entry) == B_OK
 		&& model.SetTo(&entry) == B_OK) {
-		navMenu->AddNavDir(&model, what, this, true);
-			// ask NavMenu to populate submenu for us
+		navMenu->AddNavDir(&model, what, this, false);
 	}
 
 	// add the home dir
 	if (find_directory(B_USER_DIRECTORY, &path) == B_OK
 		&& entry.SetTo(path.Path()) == B_OK && model.SetTo(&entry) == B_OK) {
-		navMenu->AddNavDir(&model, what, this, true);
+		navMenu->AddNavDir(&model, what, this, false);
 	}
 
 	navMenu->AddSeparatorItem();
@@ -2317,8 +2343,7 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what, const 
 			if (volume.GetRootDirectory(&directory) == B_OK
 				&& directory.GetEntry(&entry) == B_OK
 				&& model.SetTo(&entry) == B_OK) {
-				navMenu->AddNavDir(&model, what, this, true);
-					// ask NavMenu to populate submenu for us
+				navMenu->AddNavDir(&model, what, this, false);
 			}
 		}
 	}

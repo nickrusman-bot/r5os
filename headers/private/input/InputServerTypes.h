@@ -40,6 +40,7 @@
 #define IS_START_DEVICE					'Istd'
 #define IS_STOP_DEVICE					'Ispd'
 #define IS_CONTROL_DEVICES				'Icnd'
+#define IS_RETRY_UNSTARTED_DEVICES		'Irud'
 #define SYSTEM_SHUTTING_DOWN			'SSDn'
 
 #define IS_SAVE_SETTINGS			'Isst'

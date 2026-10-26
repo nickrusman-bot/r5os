@@ -354,14 +354,15 @@ Volume::InitPackages(Listener* listener)
 		// Are there any packages needing processing?  Don't want to create an
 		// empty transaction directory and then never have it cleaned up when
 		// the empty transaction gets rejected.
+		// Haiku #16573: after install, packages on disk may not yet be marked
+		// active. Queue every package file, not only the currently active set.
 		bool anyPackages = false;
-		for (PackageNodeRefHashTable::Iterator it =
-				fActiveState->ByNodeRefIterator(); it.HasNext();) {
-			Package* package = it.Next();
-			if (package->IsActive()) {
-				anyPackages = true;
-				break;
-			}
+		for (PackageFileNameHashTable::Iterator it
+				= fLatestState->ByFileNameIterator();
+			Package* package = it.Next();) {
+			(void)package;
+			anyPackages = true;
+			break;
 		}
 
 		if (anyPackages) {
@@ -375,15 +376,12 @@ Volume::InitPackages(Listener* listener)
 			if (error != B_OK)
 				RETURN_ERROR(error);
 
-			// Add all package files in currently active state to transaction.
-			for (PackageNodeRefHashTable::Iterator it =
-					fActiveState->ByNodeRefIterator(); it.HasNext();) {
-				Package* package = it.Next();
-				if (package->IsActive()) {
-					if (!transaction.AddPackageToActivate(
-							package->FileName().String()))
-						RETURN_ERROR(B_NO_MEMORY);
-				}
+			for (PackageFileNameHashTable::Iterator it
+					= fLatestState->ByFileNameIterator();
+				Package* package = it.Next();) {
+				if (!transaction.AddPackageToActivate(
+						package->FileName().String()))
+					RETURN_ERROR(B_NO_MEMORY);
 			}
 			transaction.SetFirstBootProcessing(true);
 

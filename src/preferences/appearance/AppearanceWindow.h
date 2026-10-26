@@ -27,6 +27,7 @@ class AppearanceWindow : public BWindow {
 public:
 									AppearanceWindow(BRect frame);
 			void					MessageReceived(BMessage *message);
+	virtual	bool					QuitRequested();
 
 private:
 			void					_UpdateButtons();
@@ -40,6 +41,7 @@ private:
 		AntialiasingSettingsView* 	fAntialiasingSettings;
 		FontView*					fFontSettings;
 		LookAndFeelSettingsView*	fLookAndFeelSettings;
+		BTabView*					fTabView;
 };
 
 

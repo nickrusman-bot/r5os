@@ -157,7 +157,7 @@ ScreenshotWindow::ScreenshotWindow(const Utility& utility, bool silent,
 
 	fAreaSelect = new BRadioButton(B_TRANSLATE("Selected area"),
 		new BMessage(kShowSelectedArea));
-	fAreaSelect->SetEnabled(false);
+	fAreaSelect->SetEnabled(true);
 	fActiveWindow->SetEnabled(fUtility.activeWindowFrame.IsValid());
 
 	if (fShotType == kShowSelectedArea && fAreaSelect->IsEnabled())
@@ -304,6 +304,10 @@ ScreenshotWindow::MessageReceived(BMessage* message)
 		case kShowSelectedArea:
 			fShotType = kShowSelectedArea;
 			fWindowBorder->SetEnabled(false);
+			if (!fSelectedArea.IsValid()) {
+				be_app->PostMessage(new BMessage(SS_LAUNCH_AREA_SELECTOR));
+				break;
+			}
 
 			delete fScreenshot;
 			fScreenshot = fUtility.MakeScreenshot(fIncludeCursor, fIncludeBorder, fShotType,

@@ -63,6 +63,7 @@ public:
 
 	virtual	void			MouseMoved(BPoint where, uint32 code,
 								const BMessage* message);
+	virtual	void			MouseDown(BPoint where);
 	virtual	void			Draw(BRect);
 
 			void			DrawBackground(BRect);

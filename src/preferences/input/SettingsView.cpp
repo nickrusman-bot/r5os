@@ -12,9 +12,12 @@
 #include <Box.h>
 #include <Catalog.h>
 #include <Debug.h>
+#include <File.h>
+#include <FindDirectory.h>
 #include <InterfaceDefs.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
+#include <Path.h>
 #include <SeparatorView.h>
 #include <Slider.h>
 #include <TextControl.h>
@@ -67,6 +70,14 @@ SettingsView::SettingsView(MouseSettings& settings)
 			new BMessage(kMsgAccelerationFactor), 0, 1000, B_HORIZONTAL);
 	fAccelerationSlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
 	fAccelerationSlider->SetHashMarkCount(7);
+
+	fPointerSizeSlider = new BSlider("pointer_size",
+		B_TRANSLATE("Pointer size"), new BMessage(kMsgCursorSpeed),
+		0, 1000, B_HORIZONTAL);
+	fPointerSizeSlider->SetHashMarks(B_HASH_MARKS_BOTTOM);
+	fPointerSizeSlider->SetHashMarkCount(5);
+	fPointerSizeSlider->SetLimitLabels(B_TRANSLATE("Small"),
+		B_TRANSLATE("Large"));
 
 	fMouseView = new MouseView(fSettings);
 
@@ -129,6 +140,9 @@ SettingsView::SettingsView(MouseSettings& settings)
 					.End()
 				.AddGroup(B_HORIZONTAL, 0)
 					.Add(fAccelerationSlider)
+					.End()
+				.AddGroup(B_HORIZONTAL, 0)
+					.Add(fPointerSizeSlider)
 					.End()
 				.End()
 			.End()
@@ -199,4 +213,18 @@ SettingsView::UpdateFromSettings()
 		fSettings.AcceptFirstClick() ? B_CONTROL_ON : B_CONTROL_OFF);
 	fAcceptFirstClickBox->SetEnabled(
 		fSettings.MouseMode() != B_FOCUS_FOLLOWS_MOUSE);
+
+	float extra = 1.0f;
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+		path.Append("r5_cursor_scale");
+		BFile file(path.Path(), B_READ_ONLY);
+		if (file.InitCheck() == B_OK)
+			file.Read(&extra, sizeof(extra));
+	}
+	if (extra < 1.0f)
+		extra = 1.0f;
+	if (extra > 2.0f)
+		extra = 2.0f;
+	fPointerSizeSlider->SetValue((int32)((extra - 1.0f) * 1000.0f));
 }

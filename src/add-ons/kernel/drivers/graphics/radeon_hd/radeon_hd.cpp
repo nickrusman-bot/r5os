@@ -717,6 +717,13 @@ radeon_hd_init(radeon_info &info)
 				// Evergreen+ has memory stored in MB
 				info.shared_info->graphics_memory_size
 					= read32(info.registers + CONFIG_MEMSIZE) * 1024;
+				// Haiku #17664: Cedar sometimes leaves CONFIG_MEMSIZE at 0.
+				// Retry as bytes (R700-style) before falling back to the BAR.
+				if (info.shared_info->graphics_memory_size == 0) {
+					uint32 memSize = read32(info.registers + CONFIG_MEMSIZE);
+					if (memSize > 1024)
+						info.shared_info->graphics_memory_size = memSize / 1024;
+				}
 				break;
 			case RADEON_PALM:
 			case RADEON_SUMO:
@@ -778,10 +785,17 @@ radeon_hd_init(radeon_info &info)
 			= info.shared_info->graphics_memory_size;
 	}
 
-	if (info.shared_info->frame_buffer_size < 8192) {
-		ERROR("%s: Error: frame buffer is less than 8 MiB. I give up.\n",
+	if (info.shared_info->frame_buffer_size == 0) {
+		ERROR("%s: Error: frame buffer size is 0. I give up.\n",
 			__func__);
 		return B_ERROR;
+	}
+	if (info.shared_info->frame_buffer_size < 8192) {
+		// Haiku #17664: still map a small BAR rather than leaving app_server
+		// with a NULL framebuffer.
+		ERROR("%s: Warning: frame buffer is less than 8 MiB (%" B_PRIu32
+			" KiB), continuing.\n",
+			__func__, info.shared_info->frame_buffer_size);
 	}
 
 	TRACE("%s: mapping a frame buffer of %" B_PRIu32 "MB out of %" B_PRIu32

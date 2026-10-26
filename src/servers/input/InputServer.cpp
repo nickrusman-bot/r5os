@@ -27,6 +27,7 @@
 #include <FindDirectory.h>
 #include <Locker.h>
 #include <Message.h>
+#include <MessageRunner.h>
 #include <OS.h>
 #include <Path.h>
 #include <Roster.h>
@@ -375,6 +376,12 @@ InputServer::ReadyToRun()
 	BPrivate::AppServerLink link;
 	link.StartMessage(AS_REGISTER_INPUT_SERVER);
 	link.Flush();
+
+	// Haiku #13754: USB/PS2 add-ons often register before the HID driver is
+	// ready after first boot. Retry Start() a few times.
+	BMessage retry(IS_RETRY_UNSTARTED_DEVICES);
+	retry.AddInt32("attempt", 0);
+	BMessageRunner::StartSending(this, &retry, 2000000, 1);
 }
 
 
@@ -525,6 +532,32 @@ InputServer::MessageReceived(BMessage* message)
 		case IS_UNFOCUS_IM_AWARE_VIEW:
 			status = HandleFocusUnfocusIMAwareView(message, &reply);
 			break;
+		case IS_RETRY_UNSTARTED_DEVICES:
+		{
+			int32 attempt = 0;
+			message->FindInt32("attempt", &attempt);
+
+			int32 pending = 0;
+			{
+				BAutolock lock(fInputDeviceListLocker);
+				for (int32 i = 0; i < fInputDeviceList.CountItems(); i++) {
+					InputDeviceListItem* item
+						= (InputDeviceListItem*)fInputDeviceList.ItemAt(i);
+					if (item == NULL || item->Running())
+						continue;
+					item->Start();
+					if (!item->Running())
+						pending++;
+				}
+			}
+
+			if (pending > 0 && attempt < 10) {
+				BMessage retry(IS_RETRY_UNSTARTED_DEVICES);
+				retry.AddInt32("attempt", attempt + 1);
+				BMessageRunner::StartSending(this, &retry, 2000000, 1);
+			}
+			break;
+		}
 
 		// app_server communication
 		case IS_ACQUIRE_INPUT:

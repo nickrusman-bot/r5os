@@ -9,6 +9,12 @@
 
 #include "InputMouse.h"
 
+#include <AppDefs.h>
+#include <File.h>
+#include <FindDirectory.h>
+#include <Path.h>
+#include <Roster.h>
+
 #include <Button.h>
 #include <Catalog.h>
 #include <CheckBox.h>
@@ -175,6 +181,23 @@ InputMouse::MessageReceived(BMessage* message)
 					(int32)pow(value * 4.0 / 1000, 2) * 16384);
 				fDefaultsButton->SetEnabled(fSettings->IsDefaultable());
 				fRevertButton->SetEnabled(fSettings->IsRevertable());
+			}
+			break;
+		}
+
+		case kMsgCursorSpeed:
+		{
+			int32 value;
+			if (message->FindInt32("be:value", &value) == B_OK) {
+				float extra = 1.0f + (float)value / 1000.0f;
+				BPath path;
+				if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+					path.Append("r5_cursor_scale");
+					BFile file(path.Path(),
+						B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+					if (file.InitCheck() == B_OK)
+						file.Write(&extra, sizeof(extra));
+				}
 			}
 			break;
 		}

@@ -64,6 +64,10 @@ struct desk_settings {
 	bool autoHide;
 };
 
+const uint32 kShowDesktop = 'ShDt';
+const uint32 kCheckHungApp = 'HgAp';
+const uint32 kForceQuitTeam = 'FrQt';
+
 struct clock_settings {
 	bool showSeconds;
 	bool showDayOfWeek;

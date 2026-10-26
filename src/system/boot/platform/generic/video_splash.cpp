@@ -119,19 +119,25 @@ video_display_splash(addr_t frameBuffer)
 			* gKernelArgs.frame_buffer.height * 4u,
 		gKernelArgs.frame_buffer.physical_buffer.size);
 
+	uint8 fillByte = 0;
+	uint32 fillWord = 0;
+	if (gKernelArgs.frame_buffer.depth >= 24) {
+		fillByte = 0x14;
+		fillWord = 0x00141a22;
+	}
 	if (size >= 64) {
 		// Align writes
 		for (addr_t align = (8 - (frameBuffer & 7)) & 7; pos < align; pos++)
-			*(char*)(frameBuffer + pos) = 0;
+			*(char*)(frameBuffer + pos) = fillByte;
 		// Write eight bytes, many many times, but not too many
 		for (addr_t alignSize = size - 8; pos < alignSize; pos +=8) {
-			*(uint32*)(frameBuffer + pos) = 0;
-			*(uint32*)(frameBuffer + pos + 4) = 0;
+			*(uint32*)(frameBuffer + pos) = fillWord;
+			*(uint32*)(frameBuffer + pos + 4) = fillWord;
 		}
 	}
 	// Write a few bytes more
 	for (; pos < size; pos++)
-		*(char*)(frameBuffer + pos) = 0;
+		*(char*)(frameBuffer + pos) = fillByte;
 
 	uint8* uncompressedLogo = NULL;
 	unsigned int uncompressedSize = kSplashLogoWidth * kSplashLogoHeight;

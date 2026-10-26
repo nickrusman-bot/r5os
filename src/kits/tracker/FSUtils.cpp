@@ -1176,6 +1176,8 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 			// resolve name collisions and hierarchy problems
 			if (CheckName(moveMode, &sourceEntry, &destDir,
 					collisionCount > 1, conflictCheckResult) != B_OK) {
+				if (conflictCheckResult == kCanceled)
+					break;
 				// we will skip the current item, because we got a conflict
 				// and were asked to or because there was some conflict
 
@@ -2332,9 +2334,10 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 			alert->AddButton(B_TRANSLATE("Skip all"));
 			alert->AddButton(B_TRANSLATE("Replace"));
 			alert->AddButton(B_TRANSLATE("Replace all"));
+			alert->AddButton(B_TRANSLATE("Cancel"));
+			alert->SetShortcut(4, B_ESCAPE);
 			switch (alert->Go()) {
 				case 0:
-					conflictResolution = kCanceled;
 					return B_ERROR;
 				case 1:
 					conflictResolution = kSkipAll;
@@ -2345,18 +2348,26 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 				case 3:
 					conflictResolution = kReplaceAll;
 					break;
+				default:
+					conflictResolution = kCanceled;
+					return B_ERROR;
 			}
 		} else {
-			alert = new BAlert("", replaceMsg.String(),
-				B_TRANSLATE("Cancel"), B_TRANSLATE("Replace"));
-			alert->SetShortcut(0, B_ESCAPE);
+			alert = new BAlert();
+			alert->SetText(replaceMsg.String());
+			alert->AddButton(B_TRANSLATE("Skip"));
+			alert->AddButton(B_TRANSLATE("Replace"));
+			alert->AddButton(B_TRANSLATE("Cancel"));
+			alert->SetShortcut(2, B_ESCAPE);
 			switch (alert->Go()) {
 				case 0:
-					conflictResolution = kCanceled;
 					return B_ERROR;
 				case 1:
 					conflictResolution = kReplace;
 					break;
+				default:
+					conflictResolution = kCanceled;
+					return B_ERROR;
 			}
 		}
 	}

@@ -552,7 +552,23 @@ BTextWidget::StartEdit(BPoseView* view, BPose* pose, BColumn* column)
 	SetActive(true);
 		// for widget
 
-	textView->SelectAll();
+	int32 length = textView->TextLength();
+	int32 end = length;
+	Model* model = pose->TargetModel();
+	if (model != NULL && !model->IsDirectory() && !model->IsQuery()
+		&& !model->IsVolume() && view->FirstColumn() != NULL
+		&& fAttrHash == view->FirstColumn()->AttrHash()) {
+		const char* text = textView->Text();
+		if (text != NULL) {
+			const char* dot = strrchr(text, '.');
+			if (dot != NULL && dot != text)
+				end = (int32)(dot - text);
+		}
+	}
+	if (end > 0)
+		textView->Select(0, end);
+	else
+		textView->SelectAll();
 	textView->ScrollToSelection();
 		// scroll to beginning so that text is visible
 	textView->MakeFocus();
@@ -629,7 +645,20 @@ void
 BTextWidget::SelectAll(BPoseView* view)
 {
 	BTextView* text = dynamic_cast<BTextView*>(view->FindView("WidgetTextView"));
-	if (text != NULL)
+	if (text == NULL)
+		return;
+	int32 length = text->TextLength();
+	int32 end = length;
+	const char* value = text->Text();
+	if (view->FirstColumn() != NULL
+		&& fAttrHash == view->FirstColumn()->AttrHash() && value != NULL) {
+		const char* dot = strrchr(value, '.');
+		if (dot != NULL && dot != value)
+			end = (int32)(dot - value);
+	}
+	if (end > 0)
+		text->Select(0, end);
+	else
 		text->SelectAll();
 }
 

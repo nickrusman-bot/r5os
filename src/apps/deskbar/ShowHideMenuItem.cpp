@@ -36,9 +36,13 @@ All rights reserved.
 
 #include "ShowHideMenuItem.h"
 
+#include <Application.h>
 #include <Debug.h>
+#include <MessageRunner.h>
 #include <Roster.h>
 #include <WindowInfo.h>
+
+#include "BarSettings.h"
 
 #include "WindowMenuItem.h"
 #include "tracker_private.h"
@@ -138,6 +142,10 @@ TShowHideMenuItem::TeamShowHideCommon(int32 action, const BList* teamList,
 					command = 'Tall';
 
 				messenger.SendMessage(command);
+				BMessage check(kCheckHungApp);
+				check.AddInt32("team", team);
+				check.AddString("name", aInfo.ref.name);
+				BMessageRunner::StartSending(be_app, &check, 4000000, 1);
 				break;
 			}
 		}

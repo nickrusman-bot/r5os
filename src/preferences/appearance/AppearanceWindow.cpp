@@ -13,9 +13,12 @@
 
 #include <Button.h>
 #include <Catalog.h>
+#include <File.h>
+#include <FindDirectory.h>
 #include <LayoutBuilder.h>
 #include <Locale.h>
 #include <Messenger.h>
+#include <Path.h>
 #include <SeparatorView.h>
 #include <TabView.h>
 
@@ -63,6 +66,17 @@ AppearanceWindow::AppearanceWindow(BRect frame)
 	tabView->AddTab(fLookAndFeelSettings);
 	tabView->AddTab(fAntialiasingSettings);
 	tabView->SetBorder(B_NO_BORDER);
+	fTabView = tabView;
+	BPath settingsPath;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &settingsPath) == B_OK) {
+		settingsPath.Append("Appearance_settings");
+		BFile file(settingsPath.Path(), B_READ_ONLY);
+		BMessage settings;
+		int32 tab = 0;
+		if (file.InitCheck() == B_OK && settings.Unflatten(&file) == B_OK
+			&& settings.FindInt32("tab", &tab) == B_OK)
+			tabView->Select(tab);
+	}
 
 	_UpdateButtons();
 
@@ -76,6 +90,28 @@ AppearanceWindow::AppearanceWindow(BRect frame)
 			.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,
 				B_USE_DEFAULT_SPACING, 0)
 			.AddGlue();
+}
+
+
+bool
+AppearanceWindow::QuitRequested()
+{
+	BPath settingsPath;
+	if (fTabView != NULL
+		&& find_directory(B_USER_SETTINGS_DIRECTORY, &settingsPath) == B_OK) {
+		settingsPath.Append("Appearance_settings");
+		BFile file(settingsPath.Path(), B_READ_WRITE | B_CREATE_FILE);
+		BMessage settings;
+		if (file.InitCheck() == B_OK) {
+			settings.Unflatten(&file);
+			settings.RemoveName("tab");
+			settings.AddInt32("tab", fTabView->Selection());
+			file.SetSize(0);
+			file.Seek(0, SEEK_SET);
+			settings.Flatten(&file);
+		}
+	}
+	return BWindow::QuitRequested();
 }
 
 

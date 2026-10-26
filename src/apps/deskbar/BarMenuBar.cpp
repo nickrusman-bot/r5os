@@ -38,6 +38,8 @@ All rights reserved.
 
 #include <algorithm>
 
+#include <Application.h>
+
 #include <Bitmap.h>
 #include <ControlLook.h>
 #include <Debug.h>
@@ -48,7 +50,9 @@ All rights reserved.
 
 #include "icons.h"
 
+#include "BarApp.h"
 #include "BarMenuTitle.h"
+#include "BarSettings.h"
 #include "BarView.h"
 #include "BarWindow.h"
 #include "DeskbarMenu.h"
@@ -269,6 +273,24 @@ void
 TBarMenuBar::DrawBackground(BRect updateRect)
 {
 	BMenu::DrawBackground(updateRect);
+}
+
+
+void
+TBarMenuBar::MouseDown(BPoint where)
+{
+	BMessage* currentMessage = Window() != NULL
+		? Window()->CurrentMessage() : NULL;
+	int32 buttons = 0;
+	if (currentMessage != NULL)
+		currentMessage->FindInt32("buttons", &buttons);
+	if (fDeskbarMenuItem != NULL
+		&& fDeskbarMenuItem->Frame().Contains(where)
+		&& (buttons & B_TERTIARY_MOUSE_BUTTON) != 0) {
+		be_app->PostMessage(kShowDesktop);
+		return;
+	}
+	BMenuBar::MouseDown(where);
 }
 
 

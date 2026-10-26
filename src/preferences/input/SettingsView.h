@@ -47,6 +47,7 @@ class SettingsView : public BBox {
 				BSlider*		fClickSpeedSlider;
 				BSlider*		fMouseSpeedSlider;
 				BSlider*		fAccelerationSlider;
+				BSlider*		fPointerSizeSlider;
 };
 
 #endif	/* SETTINGS_VIEW_H */

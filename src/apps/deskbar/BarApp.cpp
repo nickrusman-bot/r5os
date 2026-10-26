@@ -55,7 +55,11 @@ All rights reserved.
 #include <Messenger.h>
 #include <Mime.h>
 #include <Path.h>
+#include <Alert.h>
+#include <OS.h>
 #include <Roster.h>
+#include <String.h>
+#include <WindowInfo.h>
 
 #include <DeskbarPrivate.h>
 #include <RosterPrivate.h>
@@ -67,10 +71,16 @@ All rights reserved.
 #include "FSUtils.h"
 #include "PreferencesWindow.h"
 #include "ResourceSet.h"
+#include "BarSettings.h"
+#include "ShowHideMenuItem.h"
 #include "StatusView.h"
 #include "Switcher.h"
 
 #include "icons.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "BarApp"
 
 
 BLocker TBarApp::sSubscriberLock;
@@ -715,6 +725,46 @@ TBarApp::MessageReceived(BMessage* message)
 		case kShowSplash:
 			run_be_about();
 			break;
+
+		case kShowDesktop:
+		{
+			BList teams;
+			be_roster->GetAppList(&teams);
+			BRect zoom(0, 0, 0, 0);
+			for (int32 i = 0; i < teams.CountItems(); i++) {
+				team_id team = (addr_t)teams.ItemAt(i);
+				app_info info;
+				if (be_roster->GetRunningAppInfo(team, &info) != B_OK)
+					continue;
+				if (strcasecmp(info.signature, kTrackerSignature) == 0
+					|| strcasecmp(info.signature, kDeskbarSignature) == 0)
+					continue;
+				do_minimize_team(zoom, team, false);
+			}
+			break;
+		}
+
+		case kCheckHungApp:
+		{
+			team_id team;
+			if (message->FindInt32("team", &team) != B_OK)
+				break;
+			team_info info;
+			if (get_team_info(team, &info) != B_OK)
+				break;
+			const char* name;
+			if (message->FindString("name", &name) != B_OK)
+				name = info.args;
+			BString text(B_TRANSLATE("%name is not responding."));
+			text.ReplaceFirst("%name", name);
+			BAlert* alert = new BAlert("unresponsive", text.String(),
+				B_TRANSLATE("Wait"), B_TRANSLATE("Force quit"), NULL,
+				B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+			alert->SetShortcut(0, B_ESCAPE);
+			if (alert->Go() == 1)
+				kill_team(team);
+			break;
+		}
 
 		case B_LOCALE_CHANGED:
 		{

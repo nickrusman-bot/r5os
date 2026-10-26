@@ -118,7 +118,7 @@ TDeskbarMenu::DetachedFromWindow()
 	if (fBarView != NULL) {
 		BLooper* looper = fBarView->Looper();
 		if (looper != NULL && looper->Lock()) {
-			fBarView->DragStop(true);
+			fBarView->DragStop();
 			looper->Unlock();
 		}
 	}
@@ -277,6 +277,11 @@ B_TRANSLATE_MARK_VOID("About R5 OS")
 	item->SetMarked(BDragger::AreDraggersDrawn());
 	AddItem(item);
 
+	item = new BMenuItem(B_TRANSLATE("Show desktop"),
+		new BMessage(kShowDesktop));
+	item->SetEnabled(!dragging);
+	AddItem(item);
+
 	static const char* kMountMenuStr = B_TRANSLATE_MARK("Mount");
 
 #ifdef MOUNT_MENU_IN_DESKBAR
@@ -369,6 +374,7 @@ TDeskbarMenu::ResetTargets()
 					break;
 
 				case kShowSplash:
+				case kShowDesktop:
 				case kToggleDraggers:
 				case kConfigShow:
 				case kConfigQuit:

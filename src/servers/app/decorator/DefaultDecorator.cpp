@@ -131,6 +131,22 @@ DefaultDecorator::GetComponentColors(Component component, uint8 highlight,
 				_colors[COLOR_TAB_SHADOW] = fNonFocusTabColorShadow;
 				_colors[COLOR_TAB_TEXT] = fNonFocusTextColor;
 			}
+			if (tab != NULL && tab->title.Length() > 0) {
+				uint32 hash = 2166136261u;
+				for (int32 i = 0; i < tab->title.Length(); i++)
+					hash = (hash ^ (uint8)tab->title[i]) * 16777619u;
+				rgb_color tint = _colors[COLOR_TAB];
+				int red = (int)tint.red + (int)(hash & 31) - 16;
+				int green = (int)tint.green + (int)((hash >> 5) & 31) - 16;
+				int blue = (int)tint.blue + (int)((hash >> 10) & 31) - 16;
+				tint.red = (uint8)std::max(0, std::min(255, red));
+				tint.green = (uint8)std::max(0, std::min(255, green));
+				tint.blue = (uint8)std::max(0, std::min(255, blue));
+				_colors[COLOR_TAB] = tint;
+				_colors[COLOR_TAB_LIGHT] = tint_color(tint, B_LIGHTEN_2_TINT);
+				_colors[COLOR_TAB_BEVEL] = tint_color(tint, B_LIGHTEN_1_TINT);
+				_colors[COLOR_TAB_SHADOW] = tint_color(tint, B_DARKEN_1_TINT);
+			}
 			break;
 
 		case COMPONENT_CLOSE_BUTTON:
