@@ -49,8 +49,15 @@ def main() -> int:
         lines.append(f"Nog zonder R5-rij: {len(missing_status)} (opnieuw importeren).")
         lines.append("")
 
+    remaining_ids = [
+        tid
+        for tid, row in r5.items()
+        if row["r5_status"] in ("open", "in-progress") and tid in still_open_upstream
+    ]
+    remaining = {tid: haiku[tid] for tid in remaining_ids if tid in haiku}
+
     def count_table(title: str, field: str, col: str, limit: int | None = None) -> None:
-        tallies = Counter(row.get(field) or "" for row in haiku.values())
+        tallies = Counter(row.get(field) or "" for row in remaining.values())
         items = tallies.most_common(limit)
         lines.append(f"## {title}")
         lines.append("")
@@ -60,10 +67,11 @@ def main() -> int:
             lines.append(f"| {md_cell(key) or '—'} | {n} |")
         lines.append("")
 
-    type_counts = Counter(row.get("type") or "" for row in haiku.values())
+    type_counts = Counter(row.get("type") or "" for row in remaining.values())
     lines += [
-        f"Haiku-type in deze snapshot: **{type_counts.get('bug', 0)}** bugs, "
-        f"**{type_counts.get('enhancement', 0)}** enhancements, rest overig.",
+        f"Nog open in R5 OS: **{type_counts.get('bug', 0)}** bugs, "
+        f"**{type_counts.get('enhancement', 0)}** enhancements, rest overig "
+        f"(van {len(remaining)} open/bezig).",
         "",
     ]
     count_table("Type", "type", "Type")
