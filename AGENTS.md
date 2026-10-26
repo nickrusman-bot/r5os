@@ -9,6 +9,10 @@ Haiku does not accept AI-generated or AI-modified contributions.
 `upstream` is fetch-only, for optionally merging official Haiku commits into the `r5` branch.
 `origin` is the R5 OS repository and the source of truth.
 
+GitHub pull requests on `origin` target **`main`** directly. Do not stack PRs on feature branches unless the user asks for that.
+
+Always keep `tracker/STATUS.md` current. After any ticket-status change (`tracker-set.py`, overlay fix, wontfix, not-applicable), run `python3 scripts/tracker-report.py` and include `tracker/r5-status.tsv` plus the regenerated `tracker/STATUS.md` in the same commit/PR. Never leave STATUS.md stale.
+
 ## Architectures
 
 R5 OS targets **64-bit only**:

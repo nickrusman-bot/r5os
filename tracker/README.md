@@ -20,3 +20,5 @@ python3 scripts/tracker-set.py 12345 in-progress --branch r5/fix-foo
 python3 scripts/tracker-set.py 12345 fixed --commit abcdef1
 python3 scripts/tracker-report.py
 ```
+
+Elke R5-statuswijziging moet `STATUS.md` opnieuw genereren (`tracker-report.py`) en die file meenemen in dezelfde commit/PR.
