@@ -10,7 +10,7 @@ HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/hai
 
 def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     text = path.read_text(encoding="utf-8")
-    if new in text and old not in text:
+    if new in text:
         print(f"already {path.name} ({tag})")
         return
     if old not in text:
@@ -68,6 +68,14 @@ def main() -> int:
 """,
         "Haiku #18300 screen border",
     )
+    replace_once(
+        menu,
+        """		if (frame.left < 0)
+			frame.OffsetBy(-frame.left + 6, 0);""",
+        """		if (frame.left < screenFrame.left)
+			frame.OffsetBy(screenFrame.left - frame.left + 6, 0);""",
+        "Haiku #18300 left screen",
+    )
 
     pose = HAIKU / "src/kits/tracker/PoseView.cpp"
     replace_once(
@@ -91,6 +99,28 @@ def main() -> int:
 }
 """,
         "Haiku #15541 #14991 colors",
+    )
+    replace_once(
+        HAIKU / "src/kits/tracker/DesktopPoseView.cpp",
+        """	int32 desktopBrightness = ui_color(B_DESKTOP_COLOR).Brightness();
+	SetHighColor(LowColor().Brightness() <= desktopBrightness ? kWhite : kBlack);
+}""",
+        """	SetHighUIColor(B_DOCUMENT_TEXT_COLOR);
+	rgb_color text = HighColor();
+	rgb_color bg = LowColor();
+	int32 contrast = (int32)text.Brightness() - (int32)bg.Brightness();
+	if (contrast < 0)
+		contrast = -contrast;
+	if (contrast < 80)
+		SetHighColor(bg.IsDark() ? kWhite : kBlack);
+}""",
+        "Haiku #15541 desktop text",
+    )
+    replace_once(
+        HAIKU / "src/add-ons/control_look/FlatControlLook/FlatControlLook.cpp",
+        """	bool isEnabled = (flags & B_DISABLED) != 0;""",
+        """	bool isEnabled = (flags & B_DISABLED) == 0;""",
+        "Haiku #16618 flat look",
     )
     return 0
 
