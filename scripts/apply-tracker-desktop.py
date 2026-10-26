@@ -11,7 +11,7 @@ HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/hai
 
 def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     text = path.read_text(encoding="utf-8")
-    if new in text and old not in text:
+    if new in text:
         print(f"already {path.name} ({tag})")
         return
     if old not in text:
@@ -78,6 +78,117 @@ def main() -> int:
     )
     replace_once(
         pose,
+        """	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
+		deskbarFrame.InsetBy(-24, -24);
+		if (deskbarFrame.Intersects(rect))
+			return false;
+	}""",
+        """	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
+		BPoint leftTop = deskbarFrame.LeftTop();
+		BPoint rightBottom = deskbarFrame.RightBottom();
+		ConvertFromScreen(&leftTop);
+		ConvertFromScreen(&rightBottom);
+		deskbarFrame = BRect(leftTop, rightBottom);
+		deskbarFrame.InsetBy(-10, -10);
+		if (deskbarFrame.Intersects(rect))
+			return false;
+	}""",
+        "Haiku #3291 screen to view",
+    )
+    replace_once(
+        pose,
+        """	SortPoses();
+	UpdateCount();
+	Invalidate();
+}
+
+
+void
+BPoseView::RemoveVolumePoses()
+""",
+        """	SortPoses();
+	if (ViewMode() != kListMode)
+		CheckAutoPlacedPoses();
+	UpdateCount();
+	Invalidate();
+}
+
+
+void
+BPoseView::RemoveVolumePoses()
+""",
+        "Haiku #2864 add volumes",
+    )
+    replace_once(
+        pose,
+        """				CreateVolumePose(&volume);
+			} else if (targetModel->IsTrash()) {""",
+        """				CreateVolumePose(&volume);
+				if (ViewMode() != kListMode)
+					CheckAutoPlacedPoses();
+			} else if (targetModel->IsTrash()) {""",
+        "Haiku #2864 mount",
+    )
+    replace_once(
+        pose,
+        """		BPose* pose = EntryCreated(targetModel->NodeRef(), &nodeRef, ref.name, &index);
+
+		if (IsFiltering()) {""",
+        """		BPose* pose = EntryCreated(targetModel->NodeRef(), &nodeRef, ref.name, &index);
+		if (pose != NULL && ViewMode() != kListMode) {
+			RemoveFromVSList(pose);
+			fHintLocation = pose->Location(this);
+			BRect viewBounds(Bounds());
+			PlacePose(pose, viewBounds);
+			AddToVSList(pose);
+			pose->SetSaveLocation();
+		}
+
+		if (IsFiltering()) {""",
+        "Haiku #8246 new folder",
+    )
+    replace_once(
+        pose,
+        """		if (!rect.Intersects(bounds)) {
+			// pose doesn't fit on screen
+			if (!locationNeedsUpdating) {
+				// didn't already invalidate and remove in the desktop case
+				Invalidate(rect);
+				RemoveFromVSList(pose);
+			}
+			BPoint loc(pose->Location(this));
+			loc.ConstrainTo(bounds);
+				// place it onscreen
+
+			pose->SetLocation(loc, this);
+				// set the new location
+			locationNeedsUpdating = true;
+		}""",
+        """		if (!bounds.Contains(rect) || (desktop && !IsValidLocation(rect))) {
+			if (!locationNeedsUpdating) {
+				Invalidate(rect);
+				RemoveFromVSList(pose);
+			}
+			fHintLocation = pose->Location(this);
+			PlacePose(pose, Bounds());
+			locationNeedsUpdating = true;
+		}""",
+        "Haiku #20363 bottom place",
+    )
+    replace_once(
+        pose,
+        """	BRect rect(fExtent.InsetByCopy(-fOffset));
+	if (!rect.IsValid())
+		rect.Set(LeftTop().x, LeftTop().y, LeftTop().x, LeftTop().y);
+""",
+        """	BRect rect(fExtent);
+	if (!rect.IsValid())
+		rect.Set(LeftTop().x, LeftTop().y, LeftTop().x, LeftTop().y);
+""",
+        "Haiku #2372 icon extent",
+    )
+    replace_once(
+        pose,
         """	if (maxWidth > kMinColumnWidth || maxWidth < column->Width()) {
 		ResizeColumn(column, maxWidth);
 		return true;
@@ -141,6 +252,12 @@ def main() -> int:
 """,
         "Haiku #19070 stop/pause",
     )
+    replace_once(
+        status,
+        """	SetHighColor(20, 20, 20);""",
+        """	SetHighUIColor(B_PANEL_TEXT_COLOR);""",
+        "Haiku #19070 status text",
+    )
 
     title = HAIKU / "src/kits/tracker/TitleView.cpp"
     replace_once(
@@ -150,6 +267,12 @@ def main() -> int:
         """	view->SetHighUIColor(B_DOCUMENT_TEXT_COLOR, pressed ? B_DARKEN_1_TINT : 1.0f);
 """,
         "Haiku #16678 header text",
+    )
+    replace_once(
+        title,
+        """	rgb_color baseColor = ui_color(B_CONTROL_BACKGROUND_COLOR);""",
+        """	rgb_color baseColor = ui_color(B_PANEL_BACKGROUND_COLOR);""",
+        "Haiku #16678 header fill",
     )
     replace_once(
         title,
