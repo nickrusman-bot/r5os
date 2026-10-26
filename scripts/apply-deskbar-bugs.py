@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Deskbar/PowerStatus/volume overlay: #20314 #18411 #11397 #18643 #19704
-#14846 #16458 #15792 #15843 #12884."""
+#14846 #16458 #15792 #15843 #12884 #3076 #20099."""
 from __future__ import annotations
 
 import pathlib
@@ -11,7 +11,7 @@ HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/hai
 
 def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     text = path.read_text(encoding="utf-8")
-    if new in text and old not in text:
+    if new in text:
         print(f"already {path.name} ({tag})")
         return
     if old not in text:
@@ -248,6 +248,91 @@ TBarView::Draw(BRect)
 		prefs.Flatten(fClockSettingsFile);
 """,
         "Haiku #12884 clock size",
+    )
+    replace_once(
+        HAIKU / "src/apps/deskbar/WindowMenuItem.cpp",
+        """		rgb_color backColor = tint_color(menuColor,
+			B_HIGHLIGHT_BACKGROUND_TINT);""",
+        """		rgb_color backColor = ui_color(B_MENU_SELECTED_BACKGROUND_COLOR);""",
+        "Haiku #18643 window item",
+    )
+    replace_once(
+        barView,
+        """		if (State() == kExpandoState && !Vertical()) {
+			// top or bottom, full
+			windowWidth = screenFrame.Width();
+		} else
+			windowWidth = kHiddenDimension;""",
+        """		windowWidth = kHiddenDimension;""",
+        "Haiku #19704 hidden width",
+    )
+    replace_once(
+        timeView,
+        """		if (timeWidth > fMaxWidth) {
+			// time does not fit, push it over to truncate the left side
+			// to see the entire time string you must make the window wider
+			float difference = timeWidth - fMaxWidth;
+			fDateLocation.x -= difference;
+			fTimeLocation.x -= difference;
+		}""",
+        """		if (timeWidth > fMaxWidth && !fShowDayOfWeek) {
+			float difference = timeWidth - fMaxWidth;
+			fDateLocation.x -= difference;
+			fTimeLocation.x -= difference;
+		} else {
+			fDateLocation.x = 0.0;
+			fTimeLocation.x = 0.0;
+		}""",
+        "Haiku #14846 no left clip",
+    )
+    replace_once(
+        barApp,
+        """			fBarView->HideDeskbar(fSettings.autoHide);
+			fBarWindow->Unlock();
+			break;""",
+        """			fBarView->HideDeskbar(fSettings.autoHide);
+			fBarWindow->Unlock();
+			SaveSettings();
+			break;""",
+        "Haiku #12884 save autohide",
+    )
+    replace_once(
+        HAIKU / "src/apps/deskbar/DeskbarMenu.cpp",
+        """			fBarView->DragStop();""",
+        """			fBarView->DragStop(true);""",
+        "Haiku #3076 deskbar drag",
+    )
+    replace_once(
+        HAIKU / "src/apps/deskbar/TeamMenu.cpp",
+        """			fBarView->DragStop();""",
+        """			fBarView->DragStop(true);""",
+        "Haiku #3076 team drag",
+    )
+    replace_once(
+        HAIKU / "src/apps/deskbar/WindowMenu.cpp",
+        """		barview->DragStop();""",
+        """		barview->DragStop(true);""",
+        "Haiku #3076 window drag",
+    )
+    replace_once(
+        barApp,
+        """		default:
+			BApplication::MessageReceived(message);
+			break;""",
+        """		case B_COLORS_UPDATED:
+			if (fBarWindow != NULL && fBarWindow->Lock()) {
+				if (fBarView != NULL) {
+					fBarView->SetViewUIColor(B_MENU_BACKGROUND_COLOR);
+					fBarView->Invalidate();
+				}
+				fBarWindow->Unlock();
+			}
+			break;
+
+		default:
+			BApplication::MessageReceived(message);
+			break;""",
+        "Haiku #11397 app colors",
     )
     return 0
 

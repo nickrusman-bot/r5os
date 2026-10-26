@@ -115,7 +115,7 @@ id	r5_status	branch	commit	notes
 3026	open			
 3053	open			
 3056	open			
-3076	open			
+3076	fixed			DragStop(true) when Deskbar/team/window menus detach
 3085	open			
 3098	open			
 3115	open			
