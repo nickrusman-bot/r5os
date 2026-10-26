@@ -78,7 +78,7 @@ id	r5_status	branch	commit	notes
 2138	open			
 2177	open			
 2198	open			
-2372	open			
+2372	fixed			Smaller icon-mode offset (apply-tracker-desktop.py)
 2474	open			
 2490	open			
 2499	open			
@@ -103,7 +103,7 @@ id	r5_status	branch	commit	notes
 2816	open			
 2834	open			
 2861	open			
-2864	open			
+2864	fixed			Do not pile leftover desktop icons at 0,0
 2868	open			
 2885	open			
 2906	open			
@@ -135,7 +135,7 @@ id	r5_status	branch	commit	notes
 3259	open			
 3271	open			
 3284	open			
-3291	open			
+3291	fixed			Larger Deskbar exclusion when placing desktop icons
 3310	open			
 3322	open			
 3353	open			
@@ -614,7 +614,7 @@ id	r5_status	branch	commit	notes
 8235	open			
 8237	open			
 8244	open			
-8246	open			
+8246	fixed			Do not pile leftover desktop icons at 0,0
 8247	open			
 8258	open			
 8259	open			
@@ -2380,7 +2380,7 @@ id	r5_status	branch	commit	notes
 16674	open			
 16675	open			
 16677	open			
-16678	open			
+16678	fixed			Column headers use document text color
 16681	open			
 16682	open			
 16684	open			
@@ -2815,7 +2815,7 @@ id	r5_status	branch	commit	notes
 17894	open			
 17896	open			
 17898	open			
-17901	open			
+17901	fixed			Fill CountView before drawing the border
 17908	open			
 17915	open			
 17920	open			
@@ -2870,7 +2870,7 @@ id	r5_status	branch	commit	notes
 18056	open			
 18057	open			
 18059	open			
-18060	open			
+18060	fixed			Double-click column only grows to widest
 18064	open			
 18067	open			
 18071	open			
@@ -3056,7 +3056,7 @@ id	r5_status	branch	commit	notes
 18501	open			
 18504	open			
 18507	open			
-18514	open			
+18514	fixed			Tighter icon-mode grid
 18515	open			
 18518	open			
 18519	open			
@@ -3276,14 +3276,14 @@ id	r5_status	branch	commit	notes
 19065	open			
 19066	open			
 19069	open			
-19070	open			
+19070	fixed			Copy-status buttons use control text color
 19071	open			
 19072	open			
 19073	open			
 19075	open			
 19081	open			
 19082	open			
-19084	open			
+19084	fixed			Column-resize guide contrasts on dark backgrounds
 19094	open			
 19096	open			
 19097	open			
@@ -3880,7 +3880,7 @@ id	r5_status	branch	commit	notes
 20359	open			
 20361	open			
 20362	open			
-20363	open			
+20363	fixed			Do not pile leftover desktop icons at 0,0
 20364	open			
 20365	open			
 20366	open			
@@ -3915,7 +3915,7 @@ id	r5_status	branch	commit	notes
 20415	open			
 20416	open			
 20418	open			
-20419	open			
+20419	fixed			Keep Arrange by on the Desktop menu
 20422	open			
 20423	open			
 20425	open			
