@@ -4,29 +4,29 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3875 |
+| open | 3874 |
 | in-progress | 1 |
-| fixed | 60 |
+| fixed | 61 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 open/bezig).
+Nog open in R5OS: **2526** bugs, **1289** enhancements, rest overig (van 3875 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
 | bug | 2526 |
-| enhancement | 1290 |
+| enhancement | 1289 |
 | task | 60 |
 
 ## Priority
 
 | Priority | Aantal |
 |---|---|
-| normal | 3580 |
+| normal | 3579 |
 | low | 259 |
 | high | 35 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3073 |
+| Unscheduled | 3072 |
 | R1 | 427 |
 | R1.1 | 305 |
 | — | 29 |
@@ -49,7 +49,7 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 |---|---|
 | Applications/Tracker | 206 |
 | Kits/Interface Kit | 164 |
-| Servers/app_server | 161 |
+| Servers/app_server | 160 |
 | System/Kernel | 152 |
 | Applications/WebPositive | 132 |
 | Kits/Web Kit | 126 |
@@ -104,6 +104,7 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 | [#11138](https://dev.haiku-os.org/ticket/11138) | assigned | Kits/Interface Kit | Alert _text field archived but never instantiated (easy) |  |
 | [#11397](https://dev.haiku-os.org/ticket/11397) | assigned | Applications/Deskbar | Deskbar seems that doesn't follow color scheme based on "Appearance" colors |  |
 | [#12884](https://dev.haiku-os.org/ticket/12884) | new | User Interface | Deskbar forgets settings |  |
+| [#13087](https://dev.haiku-os.org/ticket/13087) | assigned | Servers/app_server | Global UI scaling - HiDPI |  |
 | [#13754](https://dev.haiku-os.org/ticket/13754) | new | Servers/input_server | Mouse + keyboard input non-functional after install |  |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
@@ -223,5 +224,5 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 | [#2474](https://dev.haiku-os.org/ticket/2474) | assigned | Drivers | Serial port driver needed for Oxford Semi UART 16950 |  |
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
-| … | | | *3795 meer in r5-status.tsv* | |
+| … | | | *3794 meer in r5-status.tsv* | |
 
