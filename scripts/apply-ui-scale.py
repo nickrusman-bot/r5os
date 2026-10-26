@@ -44,6 +44,24 @@ def main() -> int:
 			fTopView->_FontsUpdated(message);
 			target->MessageReceived(message);
 			Layout(false);
+			float factor = 1.0f;
+			if (message->FindFloat("r5_scale_factor", &factor) == B_OK
+				&& factor > 0.01f && factor != 1.0f
+				&& (Flags() & B_NOT_MOVABLE) == 0) {
+				float minW, maxW, minH, maxH;
+				GetSizeLimits(&minW, &maxW, &minH, &maxH);
+				float width = Frame().Width() * factor;
+				float height = Frame().Height() * factor;
+				if (width < minW)
+					width = minW;
+				if (height < minH)
+					height = minH;
+				if (maxW > 0 && width > maxW)
+					width = maxW;
+				if (maxH > 0 && height > maxH)
+					height = maxH;
+				ResizeTo(width, height);
+			}
 			break;
 		}
 """,
@@ -107,9 +125,23 @@ static const uint32 POP_UI_SCALE_MSG = 'pusc';
 #include <FindDirectory.h>
 #include <Font.h>
 #include <InterfaceDefs.h>
+#include <math.h>
 #include <Menu.h>
 """,
         "Haiku #13087 Font include",
+    )
+    replace_once(
+        HAIKU / "src/preferences/screen/ScreenWindow.cpp",
+        """#include <Font.h>
+#include <InterfaceDefs.h>
+#include <Menu.h>
+""",
+        """#include <Font.h>
+#include <InterfaceDefs.h>
+#include <math.h>
+#include <Menu.h>
+""",
+        "Haiku #13087 math.h",
     )
 
     replace_once(
@@ -153,8 +185,9 @@ r5_write_ui_scale(float scale)
 	path.SetTo(settings.Path());
 	path.Append("r5_cursor_scale");
 	BFile cursor(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	float cursorScale = 1.0f;
 	if (cursor.InitCheck() == B_OK)
-		cursor.Write(&scale, sizeof(scale));
+		cursor.Write(&cursorScale, sizeof(cursorScale));
 }
 
 
@@ -356,17 +389,18 @@ ScreenWindow::_ApplyUiScale(float scale)
 	}
 
 	float factor = scale / from;
+	r5_write_ui_scale(scale);
 	const BFont* fonts[] = {be_plain_font, be_bold_font, be_fixed_font};
 	const char* names[] = {"plain", "bold", "fixed"};
 	for (int32 i = 0; i < 3; i++) {
 		font_family family;
 		font_style style;
 		fonts[i]->GetFamilyAndStyle(&family, &style);
-		float size = fonts[i]->Size() * factor;
+		float size = roundf(fonts[i]->Size() * factor * 2.0f) / 2.0f;
 		if (size < 8.0f)
 			size = 8.0f;
-		if (size > 36.0f)
-			size = 36.0f;
+		if (size > 48.0f)
+			size = 48.0f;
 		_set_system_font_(names[i], family, style, size);
 	}
 
@@ -380,7 +414,6 @@ ScreenWindow::_ApplyUiScale(float scale)
 		set_menu_info(&info);
 	}
 
-	r5_write_ui_scale(scale);
 	fSelectedScale = scale;
 	_MarkUiScale(scale);
 	_init_global_fonts_();
@@ -531,8 +564,9 @@ BView::_FontsUpdated(BMessage* message)
 		&& factor > 0.01f && factor != 1.0f) {
 		BFont font;
 		GetFont(&font);
-		font.SetSize(font.Size() * factor);
+		font.SetSize(roundf(font.Size() * factor * 2.0f) / 2.0f);
 		SetFont(&font);
+		InvalidateLayout();
 	}
 
 	MessageReceived(message);
@@ -561,14 +595,30 @@ BView::_FontsUpdated(BMessage* message)
 			break;
 
 		case B_FONTS_UPDATED:
+		{
 			sFontHeight = -1;
 			be_plain_font->GetHeight(&sFontInfo);
 			sFontHeight = ceilf(sFontInfo.ascent + sFontInfo.descent) + 1;
 			fCachedIconSizeFrom = 0;
+			float factor = 1.0f;
+			if (message->FindFloat("r5_scale_factor", &factor) == B_OK
+				&& factor > 0.01f && factor != 1.0f) {
+				for (int32 i = 0; i < CountColumns(); i++) {
+					BColumn* column = ColumnAt(i);
+					if (column == NULL)
+						continue;
+					column->SetWidth(column->Width() * factor);
+					column->SetOffset(column->Offset() * factor);
+				}
+				if (fTitleView != NULL)
+					fTitleView->Reset();
+			}
 			SetIconPoseHeight();
 			GetLayoutInfo(ViewMode(), &fGrid, &fOffset);
+			UpdateScrollRange();
 			Invalidate();
 			break;
+		}
 """,
         "Haiku #13087 tracker icons",
     )
@@ -605,6 +655,196 @@ TBarApp::TeamIconSize()
 }
 """,
         "Haiku #13087 deskbar icons",
+    )
+
+    replace_once(
+        HAIKU / "src/preferences/screen/ScreenWindow.cpp",
+        """	path.Append("r5_cursor_scale");
+	BFile cursor(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	if (cursor.InitCheck() == B_OK)
+		cursor.Write(&scale, sizeof(scale));
+""",
+        """	path.Append("r5_cursor_scale");
+	BFile cursor(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
+	float cursorScale = 1.0f;
+	if (cursor.InitCheck() == B_OK)
+		cursor.Write(&cursorScale, sizeof(cursorScale));
+""",
+        "Haiku #13087 cursor not double-scale",
+    )
+    replace_once(
+        HAIKU / "src/preferences/screen/ScreenWindow.cpp",
+        """	float factor = scale / from;
+	const BFont* fonts[] = {be_plain_font, be_bold_font, be_fixed_font};
+""",
+        """	float factor = scale / from;
+	r5_write_ui_scale(scale);
+	const BFont* fonts[] = {be_plain_font, be_bold_font, be_fixed_font};
+""",
+        "Haiku #13087 write scale before fonts",
+    )
+    replace_once(
+        HAIKU / "src/preferences/screen/ScreenWindow.cpp",
+        """		float size = fonts[i]->Size() * factor;
+		if (size < 8.0f)
+			size = 8.0f;
+		if (size > 36.0f)
+			size = 36.0f;
+		_set_system_font_(names[i], family, style, size);
+""",
+        """		float size = roundf(fonts[i]->Size() * factor * 2.0f) / 2.0f;
+		if (size < 8.0f)
+			size = 8.0f;
+		if (size > 48.0f)
+			size = 48.0f;
+		_set_system_font_(names[i], family, style, size);
+""",
+        "Haiku #13087 round font sizes",
+    )
+    replace_once(
+        HAIKU / "src/preferences/screen/ScreenWindow.cpp",
+        """		set_menu_info(&info);
+	}
+
+	r5_write_ui_scale(scale);
+	fSelectedScale = scale;
+	_MarkUiScale(scale);
+""",
+        """		set_menu_info(&info);
+	}
+
+	fSelectedScale = scale;
+	_MarkUiScale(scale);
+""",
+        "Haiku #13087 drop late scale write",
+    )
+
+    replace_once(
+        HAIKU / "src/kits/interface/Window.cpp",
+        """		case B_FONTS_UPDATED:
+		{
+			_init_global_fonts_();
+			fTopView->_FontsUpdated(message);
+			target->MessageReceived(message);
+			Layout(false);
+			break;
+		}
+""",
+        """		case B_FONTS_UPDATED:
+		{
+			_init_global_fonts_();
+			fTopView->_FontsUpdated(message);
+			target->MessageReceived(message);
+			Layout(false);
+			float factor = 1.0f;
+			if (message->FindFloat("r5_scale_factor", &factor) == B_OK
+				&& factor > 0.01f && factor != 1.0f
+				&& (Flags() & B_NOT_MOVABLE) == 0) {
+				float minW, maxW, minH, maxH;
+				GetSizeLimits(&minW, &maxW, &minH, &maxH);
+				float width = Frame().Width() * factor;
+				float height = Frame().Height() * factor;
+				if (width < minW)
+					width = minW;
+				if (height < minH)
+					height = minH;
+				if (maxW > 0 && width > maxW)
+					width = maxW;
+				if (maxH > 0 && height > maxH)
+					height = maxH;
+				ResizeTo(width, height);
+			}
+			break;
+		}
+""",
+        "Haiku #13087 scale window frames",
+    )
+
+    replace_once(
+        HAIKU / "src/kits/interface/View.cpp",
+        """		font.SetSize(font.Size() * factor);
+		SetFont(&font);
+	}
+
+	MessageReceived(message);
+""",
+        """		font.SetSize(roundf(font.Size() * factor * 2.0f) / 2.0f);
+		SetFont(&font);
+		InvalidateLayout();
+	}
+
+	MessageReceived(message);
+""",
+        "Haiku #13087 view layout after font",
+    )
+
+    replace_once(
+        HAIKU / "src/kits/tracker/PoseView.cpp",
+        """		case B_FONTS_UPDATED:
+			sFontHeight = -1;
+			be_plain_font->GetHeight(&sFontInfo);
+			sFontHeight = ceilf(sFontInfo.ascent + sFontInfo.descent) + 1;
+			fCachedIconSizeFrom = 0;
+			SetIconPoseHeight();
+			GetLayoutInfo(ViewMode(), &fGrid, &fOffset);
+			Invalidate();
+			break;
+""",
+        """		case B_FONTS_UPDATED:
+		{
+			sFontHeight = -1;
+			be_plain_font->GetHeight(&sFontInfo);
+			sFontHeight = ceilf(sFontInfo.ascent + sFontInfo.descent) + 1;
+			fCachedIconSizeFrom = 0;
+			float factor = 1.0f;
+			if (message->FindFloat("r5_scale_factor", &factor) == B_OK
+				&& factor > 0.01f && factor != 1.0f) {
+				for (int32 i = 0; i < CountColumns(); i++) {
+					BColumn* column = ColumnAt(i);
+					if (column == NULL)
+						continue;
+					column->SetWidth(column->Width() * factor);
+					column->SetOffset(column->Offset() * factor);
+				}
+				if (fTitleView != NULL)
+					fTitleView->Reset();
+			}
+			SetIconPoseHeight();
+			GetLayoutInfo(ViewMode(), &fGrid, &fOffset);
+			UpdateScrollRange();
+			Invalidate();
+			break;
+		}
+""",
+        "Haiku #13087 tracker columns",
+    )
+
+    replace_once(
+        HAIKU / "src/kits/interface/ListView.cpp",
+        """		case B_SELECT_ALL:
+			if (fListType == B_MULTIPLE_SELECTION_LIST)
+				Select(0, CountItems() - 1, false);
+			break;
+
+		default:
+			BView::MessageReceived(message);
+	}
+""",
+        """		case B_SELECT_ALL:
+			if (fListType == B_MULTIPLE_SELECTION_LIST)
+				Select(0, CountItems() - 1, false);
+			break;
+
+		case B_FONTS_UPDATED:
+			_UpdateItems();
+			Invalidate();
+			break;
+
+		default:
+			BView::MessageReceived(message);
+	}
+""",
+        "Haiku #13087 list item heights",
     )
     return 0
 

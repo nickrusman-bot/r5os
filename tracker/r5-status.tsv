@@ -1367,7 +1367,7 @@ id	r5_status	branch	commit	notes
 13070	open			
 13078	open			
 13083	open			
-13087	fixed			Screen Scale 100-200% scales system fonts, menus, window contents, Tracker/Deskbar icons, and the pointer
+13087	fixed			Screen Scale 100-200% scales fonts, menus, window frames, Tracker columns/icons, lists, and the pointer (up and down)
 13092	open			
 13101	open			
 13102	open			
