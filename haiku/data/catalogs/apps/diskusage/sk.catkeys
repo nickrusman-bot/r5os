@@ -1,0 +1,23 @@
+1	slovak	x-vnd.Haiku-DiskUsage	2951688400
+Path	Info Window		Cesta
+Open with	Pie View		Otvoriť pomocou
+file unavailable	Pie View		súbor nedostupný
+DiskUsage	System name		Využitie disku
+file unavailable	Status View		súbor nedostupný
+Scanning %refName%	Scanner		Prehľadáva sa %refName%
+{0, plural, one{# file} other{# files}}	Status View		{0, plural, one{# súbor} few{# súbory} other{# súborov}}
+Size	Info Window		Veľkosť
+%d files	Status View	For UI layouting only, use the longest plural form for your language	%d súborov
+%a, %d %b %Y, %r	Info Window		%a, %d %b %Y, %r
+Scan	Status View		Preskúmať
+Abort	Status View		Zrušiť
+Open	Pie View		Otvoriť
+Rescan	Pie View		Znovu preskúmať
+no supporting apps	Pie View		žiadne podporujúce aplikácie
+Modified	Info Window		Zmenené
+Rescan	Status View		Znovu preskúmať
+%size% in {0, plural, one{# file} other{# files}}	Info Window		%size% v {0, plural, one{# súbore} other{# súboroch}}
+Created	Info Window		Vytvorené
+Free on %refName%	Scanner		Voľné na %refName%
+Get info	Pie View		Získať informácie
+Kind	Info Window		Druh

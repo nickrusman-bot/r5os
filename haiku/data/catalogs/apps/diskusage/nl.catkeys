@@ -1,0 +1,23 @@
+1	dutch; flemish	x-vnd.Haiku-DiskUsage	2951688400
+Path	Info Window		Pad
+Open with	Pie View		Openen met
+file unavailable	Pie View		bestand niet beschikbaar
+DiskUsage	System name		DiskUsage
+file unavailable	Status View		bestand niet beschikbaar
+Scanning %refName%	Scanner		%refName% scannen
+{0, plural, one{# file} other{# files}}	Status View		{0, plural, one{# bestand} other{# bestanden}}
+Size	Info Window		Grootte
+%d files	Status View	For UI layouting only, use the longest plural form for your language	%d bestanden
+%a, %d %b %Y, %r	Info Window		%a, %d %b %Y, %r
+Scan	Status View		Scannen
+Abort	Status View		Afbreken
+Open	Pie View		Openen
+Rescan	Pie View		Opnieuw scannen
+no supporting apps	Pie View		geen ondersteunende programma's
+Modified	Info Window		Aangepast
+Rescan	Status View		Opnieuw scannen
+%size% in {0, plural, one{# file} other{# files}}	Info Window		%size% voor {0, plural, one{# bestand} other{# bestanden}}
+Created	Info Window		Gemaakt
+Free on %refName%	Scanner		Vrij op %refName%
+Get info	Pie View		Informatie ophalen
+Kind	Info Window		Soort
