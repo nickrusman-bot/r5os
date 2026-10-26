@@ -64,26 +64,29 @@ def main() -> int:
 """,
         "Haiku #2864 #8246 #20363 place",
     )
-    replace_once(
-        pose,
-        """		deskbarFrame.InsetBy(-10, -10);
+    if "ConvertFromScreen(&leftTop)" in pose.read_text(encoding="utf-8"):
+        print("already PoseView.cpp (Haiku #3291 screen to view)")
+    else:
+        replace_once(
+            pose,
+            """		deskbarFrame.InsetBy(-10, -10);
 		if (deskbarFrame.Intersects(rect))
 			return false;
 """,
-        """		deskbarFrame.InsetBy(-24, -24);
+            """		deskbarFrame.InsetBy(-24, -24);
 		if (deskbarFrame.Intersects(rect))
 			return false;
 """,
-        "Haiku #3291 deskbar inset",
-    )
-    replace_once(
-        pose,
-        """	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
+            "Haiku #3291 deskbar inset",
+        )
+        replace_once(
+            pose,
+            """	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
 		deskbarFrame.InsetBy(-24, -24);
 		if (deskbarFrame.Intersects(rect))
 			return false;
 	}""",
-        """	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
+            """	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
 		BPoint leftTop = deskbarFrame.LeftTop();
 		BPoint rightBottom = deskbarFrame.RightBottom();
 		ConvertFromScreen(&leftTop);
@@ -93,8 +96,8 @@ def main() -> int:
 		if (deskbarFrame.Intersects(rect))
 			return false;
 	}""",
-        "Haiku #3291 screen to view",
-    )
+            "Haiku #3291 screen to view",
+        )
     replace_once(
         pose,
         """	SortPoses();
@@ -217,6 +220,62 @@ BPoseView::RemoveVolumePoses()
 	}
 """,
         "Haiku #20419 arrange by",
+    )
+    replace_once(
+        container,
+        """	if (PoseView()->IsDesktopView()) {
+		Shortcuts()->UpdateCleanupItem(Shortcuts()->FindItem(parent, kCleanup, kCleanupAll));
+		// still offer Arrange by on the Desktop (Haiku #20419)
+	}
+
+	// bail out if no "Select ..." item found
+	int32 selectIndex = parent->IndexOf(parent->FindItem(kShowSelectionWindow));
+	if (selectIndex == B_ERROR)
+		return;
+
+	// add "Arrange by >" menu before "Select..."
+	parent->AddItem(fArrangeByItem, selectIndex);
+
+	// mark items
+	uint32 attrHash;
+	int32 itemCount = fArrangeByItem->Submenu()->CountItems();
+""",
+        """	if (PoseView()->IsDesktopView()) {
+		Shortcuts()->UpdateCleanupItem(Shortcuts()->FindItem(parent, kCleanup, kCleanupAll));
+		// still offer Arrange by on the Desktop (Haiku #20419)
+	}
+
+	if (fArrangeByItem == NULL) {
+		if (fAttrMenu == NULL)
+			NewAttributesMenu();
+		fArrangeByItem = NewArrangeByMenu();
+	}
+
+	// bail out if no "Select ..." item found
+	int32 selectIndex = parent->IndexOf(parent->FindItem(kShowSelectionWindow));
+	if (selectIndex == B_ERROR || fArrangeByItem == NULL)
+		return;
+
+	// add "Arrange by >" menu before "Select..."
+	parent->AddItem(fArrangeByItem, selectIndex);
+
+	BMenu* submenu = fArrangeByItem->Submenu();
+	if (submenu == NULL)
+		return;
+
+	// mark items
+	uint32 attrHash;
+	int32 itemCount = submenu->CountItems();
+""",
+        "Haiku #20419 desktop arrange-by null",
+    )
+    replace_once(
+        container,
+        """		BMenuItem* item = fArrangeByItem->Submenu()->ItemAt(index);
+""",
+        """		BMenuItem* item = submenu->ItemAt(index);
+""",
+        "Haiku #20419 arrange-by item loop",
     )
 
     status = HAIKU / "src/kits/tracker/StatusWindow.cpp"

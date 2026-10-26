@@ -3915,7 +3915,7 @@ id	r5_status	branch	commit	notes
 20415	open			
 20416	open			
 20418	open			
-20419	fixed			Keep Arrange by on the Desktop menu
+20419	fixed			Keep Arrange by on the Desktop menu; lazily create it so DeskWindow context menu does not SIGSEGV
 20422	open			
 20423	open			
 20425	open			
