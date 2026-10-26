@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the R5 OS Jam profile, version header, and artwork into the Haiku tree.
+# Install the R5OS Jam profile, version header, and artwork into the Haiku tree.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,14 +24,14 @@ printf '%s\n' \
 echo "Wrote $hdr"
 
 logoSrc="$ROOT/distro/artwork/r5-os-logo.png"
-logoDst="$ROOT/haiku/data/artwork/R5 OS logo.png"
+logoDst="$ROOT/haiku/data/artwork/R5OS-logo.png"
 if [[ -f "$logoSrc" ]]; then
 	cp "$logoSrc" "$logoDst"
 	echo "Wrote $logoDst"
 fi
 
 deskSrc="$ROOT/distro/artwork/r5-os-deskbar.png"
-deskDst="$ROOT/haiku/data/artwork/R5 OS deskbar.png"
+deskDst="$ROOT/haiku/data/artwork/R5OS-deskbar.png"
 if [[ -f "$deskSrc" ]]; then
 	cp "$deskSrc" "$deskDst"
 	echo "Wrote $deskDst"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# haiku/ remotes: origin = R5 OS (source of truth), upstream = Haiku (fetch only).
+# haiku/ remotes: origin = R5OS (source of truth), upstream = Haiku (fetch only).
 # Optional env: R5OS_HAIKU_ORIGIN
 set -euo pipefail
 
@@ -47,6 +47,6 @@ echo "haiku remotes:"
 git remote -v
 echo "Local branch: $(git rev-parse --abbrev-ref HEAD)"
 echo
-echo "origin is R5 OS. Do not push to upstream (Haiku)."
+echo "origin is R5OS. Do not push to upstream (Haiku)."
 echo "Set R5OS_HAIKU_ORIGIN to your fork URL, then re-run this script and:"
 echo "  git push -u origin r5"

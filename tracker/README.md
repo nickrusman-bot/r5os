@@ -1,6 +1,6 @@
-# R5 OS bug tracker
+# R5OS bug tracker
 
-Haiku-tickets blijven op [dev.haiku-os.org](https://dev.haiku-os.org/). Hier houden we bij **wat R5 OS daarmee doet**.
+Haiku-tickets blijven op [dev.haiku-os.org](https://dev.haiku-os.org/). Hier houden we bij **wat R5OS daarmee doet**.
 
 | Bestand | Inhoud |
 |---|---|

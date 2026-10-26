@@ -25,7 +25,7 @@ def main() -> int:
     missing_status = [tid for tid in haiku if tid not in r5]
 
     lines = [
-        "# R5 OS ticket status",
+        "# R5OS ticket status",
         "",
         "Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.",
         "",
@@ -69,7 +69,7 @@ def main() -> int:
 
     type_counts = Counter(row.get("type") or "" for row in remaining.values())
     lines += [
-        f"Nog open in R5 OS: **{type_counts.get('bug', 0)}** bugs, "
+        f"Nog open in R5OS: **{type_counts.get('bug', 0)}** bugs, "
         f"**{type_counts.get('enhancement', 0)}** enhancements, rest overig "
         f"(van {len(remaining)} open/bezig).",
         "",
@@ -117,7 +117,7 @@ def main() -> int:
     )
 
     section("Bezig", in_progress)
-    section("Gefixt in R5 OS", fixed)
+    section("Gefixt in R5OS", fixed)
     section("Nog open (eerste 80)", open_ids, limit=80)
 
     STATUS_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")

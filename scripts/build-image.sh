@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build an R5 OS image. Usage: scripts/build-image.sh [r5-raw|r5-anyboot|r5-vmware]
+# Build an R5OS image. Usage: scripts/build-image.sh [r5-raw|r5-anyboot|r5-vmware]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

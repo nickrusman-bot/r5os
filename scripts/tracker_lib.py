@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for the R5 OS Haiku-ticket tracker."""
+"""Shared helpers for the R5OS Haiku-ticket tracker."""
 from __future__ import annotations
 
 import csv

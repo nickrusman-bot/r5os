@@ -1,4 +1,4 @@
-# R5 OS ticket status
+# R5OS ticket status
 
 Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
@@ -12,7 +12,7 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5 OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 open/bezig).
+Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 open/bezig).
 
 ## Type
 
@@ -74,7 +74,7 @@ Nog open in R5 OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 o
 |---|---|---|---|---|
 | [#18970](https://dev.haiku-os.org/ticket/18970) | assigned | User Interface | Various dark mode problems (easy) |  |
 
-## Gefixt in R5 OS
+## Gefixt in R5OS
 
 | Ticket | Haiku | Component | Samenvatting | Branch |
 |---|---|---|---|---|

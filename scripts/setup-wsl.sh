@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Clone upstream Haiku + buildtools next to the R5 OS overlay.
+# Clone upstream Haiku + buildtools next to the R5OS overlay.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,4 +30,4 @@ if ! command -v jam >/dev/null; then
 fi
 
 "$ROOT/scripts/apply-overlay.sh"
-echo "R5 OS sources are ready in $ROOT"
+echo "R5OS sources are ready in $ROOT"
