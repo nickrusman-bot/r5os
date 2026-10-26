@@ -12,13 +12,13 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
+Nog open in R5 OS: **2526** bugs, **1307** enhancements, rest overig (van 3893 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2569 |
+| bug | 2526 |
 | enhancement | 1307 |
 | task | 60 |
 
@@ -26,44 +26,44 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 
 | Priority | Aantal |
 |---|---|
-| normal | 3631 |
-| low | 260 |
-| high | 42 |
-| blocker | 2 |
+| normal | 3595 |
+| low | 259 |
+| high | 37 |
 | critical | 1 |
+| blocker | 1 |
 
 ## Milestone
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3119 |
-| R1 | 434 |
-| R1.1 | 310 |
+| Unscheduled | 3087 |
+| R1 | 427 |
+| R1.1 | 308 |
 | — | 29 |
-| R1/beta7 | 28 |
+| R1/beta7 | 26 |
 | R2 | 16 |
 
 ## Component (top 20)
 
 | Component | Aantal |
 |---|---|
-| Applications/Tracker | 223 |
-| Kits/Interface Kit | 167 |
+| Applications/Tracker | 211 |
+| Kits/Interface Kit | 164 |
 | Servers/app_server | 163 |
-| System/Kernel | 154 |
+| System/Kernel | 153 |
 | Applications/WebPositive | 132 |
 | Kits/Web Kit | 126 |
-| User Interface | 96 |
 | Applications/MediaPlayer | 95 |
-| - General | 88 |
-| Drivers/Graphics/radeon_hd | 79 |
+| - General | 87 |
+| User Interface | 87 |
+| Drivers/Graphics/radeon_hd | 77 |
 | Applications/HaikuDepot | 68 |
-| Applications/Deskbar | 65 |
 | Build System | 64 |
+| Applications/Deskbar | 55 |
 | Applications/Command Line Tools | 53 |
 | Applications/Debugger | 45 |
 | System/POSIX | 43 |
-| Kits/Package Kit | 41 |
+| Kits/Package Kit | 40 |
 | Documentation | 38 |
 | System | 37 |
 | Applications/Icon-O-Matic | 37 |
