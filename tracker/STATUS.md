@@ -4,9 +4,9 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3907 |
+| open | 3897 |
 | in-progress | 1 |
-| fixed | 28 |
+| fixed | 38 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
@@ -78,22 +78,29 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 
 | Ticket | Haiku | Component | Samenvatting | Branch |
 |---|---|---|---|---|
+| [#1006](https://dev.haiku-os.org/ticket/1006) | assigned | Preferences/Backgrounds | inconsistent behavior of Revert button in Backgrounds preflet (easy) |  |
 | [#2372](https://dev.haiku-os.org/ticket/2372) | new | Applications/Tracker | [Tracker] unneeded offset in icon mode |  |
 | [#2864](https://dev.haiku-os.org/ticket/2864) | assigned | Applications/Tracker | after mounting, disk icons overlap on desktop |  |
 | [#3076](https://dev.haiku-os.org/ticket/3076) | assigned | Applications/Deskbar | [Deskbar] disabled menu items after dropping some file on a leaf |  |
 | [#3291](https://dev.haiku-os.org/ticket/3291) | assigned | Applications/Tracker | Deskbar overlaps icons |  |
 | [#8246](https://dev.haiku-os.org/ticket/8246) | assigned | Applications/Tracker | New folders are created on top of each other on the desktop |  |
+| [#11138](https://dev.haiku-os.org/ticket/11138) | assigned | Kits/Interface Kit | Alert _text field archived but never instantiated (easy) |  |
 | [#11397](https://dev.haiku-os.org/ticket/11397) | assigned | Applications/Deskbar | Deskbar seems that doesn't follow color scheme based on "Appearance" colors |  |
 | [#12884](https://dev.haiku-os.org/ticket/12884) | new | User Interface | Deskbar forgets settings |  |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
 | [#15541](https://dev.haiku-os.org/ticket/15541) | new | User Interface | Text colour in Tracker (and a few more places) is not changeable |  |
+| [#15690](https://dev.haiku-os.org/ticket/15690) | new | Applications/SoftwareUpdater | [SoftwareUpdater] layout issue (easy) |  |
 | [#15792](https://dev.haiku-os.org/ticket/15792) | assigned | Applications/Deskbar | [Deskbar] mini-mode confused state |  |
 | [#15843](https://dev.haiku-os.org/ticket/15843) | assigned | Applications/Deskbar | [Deskbar] left dotted grip in mini-mode |  |
+| [#16116](https://dev.haiku-os.org/ticket/16116) | new | User Interface | Change standard icon size for Desktop to 48x48 |  |
 | [#16458](https://dev.haiku-os.org/ticket/16458) | new | Applications/Deskbar | Deskbar - Opens in background |  |
+| [#16471](https://dev.haiku-os.org/ticket/16471) | new | User Interface | Selected desktop icon is not distinguishable enough with black background |  |
 | [#16618](https://dev.haiku-os.org/ticket/16618) | new | User Interface | HaikuControlLook: DrawMenuBarBackground Disabled Flag dont work |  |
 | [#16678](https://dev.haiku-os.org/ticket/16678) | assigned | Applications/Tracker | Tracker: use same text color for header |  |
+| [#16838](https://dev.haiku-os.org/ticket/16838) | new | User Interface | Misaligned entries in BListVIew / Save / Open dialogs |  |
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
+| [#18057](https://dev.haiku-os.org/ticket/18057) | new | User Interface | Misaligned scrollbars and resize knob |  |
 | [#18060](https://dev.haiku-os.org/ticket/18060) | new | Applications/Tracker | [Tracker] Double clicking on Size column header hides all info |  |
 | [#18300](https://dev.haiku-os.org/ticket/18300) | new | User Interface | Application menus at screen border |  |
 | [#18411](https://dev.haiku-os.org/ticket/18411) | new | Applications/Deskbar | PowerStatus replicant is cut off |  |
@@ -102,6 +109,9 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 | [#19070](https://dev.haiku-os.org/ticket/19070) | new | Applications/Tracker | [Tracker] UI: Fixed black/gray status colours when copying |  |
 | [#19084](https://dev.haiku-os.org/ticket/19084) | new | Applications/Tracker | render glitch when resizing table columns in tracker |  |
 | [#19704](https://dev.haiku-os.org/ticket/19704) | new | Applications/Deskbar | White bar when Auto-hide in horizontal mode on the top. |  |
+| [#19836](https://dev.haiku-os.org/ticket/19836) | new | - General | BeControlLook buttons have too little contrast since BButton color updates [easy] |  |
+| [#20008](https://dev.haiku-os.org/ticket/20008) | new | Kits/Interface Kit | BTabView: Darkmode issue (easy) |  |
+| [#20009](https://dev.haiku-os.org/ticket/20009) | new | Kits/Interface Kit | BScrollbar dark mode issue (easy) |  |
 | [#20314](https://dev.haiku-os.org/ticket/20314) | reopened | Applications/Deskbar | Deskbar: volume Icon can no longer mute |  |
 | [#20363](https://dev.haiku-os.org/ticket/20363) | new | Applications/Tracker | Icon placement incorrect when creating file near bottom of the desktop. |  |
 | [#20400](https://dev.haiku-os.org/ticket/20400) | new | System/Kernel | Division by zero in early boot |  |
@@ -126,7 +136,6 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 | [#922](https://dev.haiku-os.org/ticket/922) | new | Network & Internet/PPP | add CHAP authentication support |  |
 | [#923](https://dev.haiku-os.org/ticket/923) | assigned | Network & Internet/PPP | add dial-up (phone line) modem support |  |
 | [#976](https://dev.haiku-os.org/ticket/976) | assigned | Kits/libtextencoding.so | convert_from_utf8() broken |  |
-| [#1006](https://dev.haiku-os.org/ticket/1006) | assigned | Preferences/Backgrounds | inconsistent behavior of Revert button in Backgrounds preflet (easy) |  |
 | [#1036](https://dev.haiku-os.org/ticket/1036) | new | Applications/Tracker | Tracker Doesn't Like Hard Links |  |
 | [#1041](https://dev.haiku-os.org/ticket/1041) | new | File Systems/UDF | UDF attributes support |  |
 | [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support |  |
@@ -191,5 +200,6 @@ Haiku-type in deze snapshot: **2569** bugs, **1307** enhancements, rest overig.
 | [#2177](https://dev.haiku-os.org/ticket/2177) | assigned | System/Boot Loader/BIOS | boot screen video mode incorrect/unsupported, but desktop okay |  |
 | [#2198](https://dev.haiku-os.org/ticket/2198) | new | Kits/Interface Kit | Add BTabView::SetSelectionMessage() like BListView does |  |
 | [#2474](https://dev.haiku-os.org/ticket/2474) | assigned | Drivers | Serial port driver needed for Oxford Semi UART 16950 |  |
-| … | | | *3827 meer in r5-status.tsv* | |
+| [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
+| … | | | *3817 meer in r5-status.tsv* | |
 
