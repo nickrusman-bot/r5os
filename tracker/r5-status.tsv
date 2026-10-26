@@ -934,7 +934,7 @@ id	r5_status	branch	commit	notes
 10169	open			
 10198	open			
 10200	open			
-10208	open			
+10208	fixed			apply-high-bugs.py
 10216	open			
 10234	open			
 10240	open			
@@ -1538,7 +1538,7 @@ id	r5_status	branch	commit	notes
 13748	open			
 13751	open			
 13753	open			
-13754	open			
+13754	fixed			apply-high-bugs.py
 13762	open			
 13765	open			
 13778	open			
@@ -2342,7 +2342,7 @@ id	r5_status	branch	commit	notes
 16559	open			
 16560	open			
 16572	open			
-16573	open			
+16573	fixed			apply-high-bugs.py
 16576	open			
 16580	open			
 16581	open			
@@ -2612,7 +2612,7 @@ id	r5_status	branch	commit	notes
 17367	open			
 17372	open			
 17376	open			
-17377	open			
+17377	fixed			apply-high-bugs.py
 17379	open			
 17380	open			
 17384	open			
@@ -2728,7 +2728,7 @@ id	r5_status	branch	commit	notes
 17660	open			
 17661	open			
 17663	open			
-17664	open			
+17664	fixed			apply-high-bugs.py
 17666	open			
 17667	open			
 17671	open			
