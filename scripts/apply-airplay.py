@@ -33,6 +33,10 @@ def copy_sources() -> None:
         "AirPlayPlayer.h",
         "AirPlayCrypto.cpp",
         "AirPlayCrypto.h",
+        "AirPlaySender.cpp",
+        "AirPlaySender.h",
+        "AirPlayDeskbar.cpp",
+        "AirPlayMessages.h",
         "AirPlayServer.rdef",
         "Jamfile",
         "THIRD_PARTY.md",
@@ -63,6 +67,11 @@ def extract_openssl() -> None:
         return
     devel = sorted(download.glob("openssl3_devel-*-x86_64.hpkg"))
     runtime = sorted(download.glob("openssl3-*-x86_64.hpkg"))
+    if (dest / "include" / "openssl" / "bio.h").is_file() and (
+        dest / "lib" / "libcrypto.so.3"
+    ).is_file():
+        print(f"already extracted openssl -> {dest}")
+        return
     if not devel or not runtime:
         print("warning: openssl3 hpkgs not in download/; jam may fail")
         return

@@ -6,9 +6,12 @@
  */
 
 #include "AirPlayCrypto.h"
+#include "AirPlayMessages.h"
 #include "AirPlayPlayer.h"
+#include "AirPlaySender.h"
 
 #include <Application.h>
+#include <Message.h>
 #include <Locker.h>
 #include <NetworkInterface.h>
 #include <NetworkRoster.h>
@@ -45,6 +48,7 @@ struct Session {
 
 static Session gSession;
 static BLocker gSessionLock("airplay-session");
+static AirPlaySender gSender;
 
 
 static int
@@ -612,16 +616,50 @@ class AirPlayApp : public BApplication {
 public:
 	AirPlayApp()
 		:
-		BApplication("application/x-vnd.R5OS-airplay")
+		BApplication(kAirPlaySignature)
 	{
 	}
 
 	virtual void ReadyToRun()
 	{
-		thread_id t = spawn_thread(listen_thread, "airplay-listen",
+		thread_id listen = spawn_thread(listen_thread, "airplay-listen",
 			B_NORMAL_PRIORITY, NULL);
-		if (t >= 0)
-			resume_thread(t);
+		if (listen >= 0)
+			resume_thread(listen);
+		thread_id tray = spawn_thread(_InstallDeskbar, "airplay-deskbar",
+			B_NORMAL_PRIORITY, NULL);
+		if (tray >= 0)
+			resume_thread(tray);
+	}
+
+	static int32 _InstallDeskbar(void*)
+	{
+		r5_install_airplay_deskbar();
+		return B_OK;
+	}
+
+	virtual void MessageReceived(BMessage* message)
+	{
+		switch (message->what) {
+			case kMsgAirPlayPlayTo:
+			{
+				const char* host = NULL;
+				int32 port = 0;
+				int32 ipv4 = 0;
+				message->FindString("host", &host);
+				message->FindInt32("port", &port);
+				message->FindInt32("ipv4", &ipv4);
+				if (host != NULL && port > 0)
+					gSender.Start(host, (uint16)port, (uint32)ipv4);
+				break;
+			}
+			case kMsgAirPlayStopSend:
+				gSender.Stop();
+				break;
+			default:
+				BApplication::MessageReceived(message);
+				break;
+		}
 	}
 };
 

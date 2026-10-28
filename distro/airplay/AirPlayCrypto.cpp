@@ -145,6 +145,21 @@ r5_rsa_oaep_decrypt(const uint8_t* in, int inLen, uint8_t* out, int outMax)
 
 
 int
+r5_rsa_oaep_encrypt(const uint8_t* in, int inLen, uint8_t* out, int outMax)
+{
+	RSA* rsa = airport_rsa();
+	int n;
+
+	if (rsa == NULL)
+		return -1;
+	if (outMax < RSA_size(rsa))
+		return -1;
+	n = RSA_public_encrypt(inLen, in, out, rsa, RSA_PKCS1_OAEP_PADDING);
+	return n;
+}
+
+
+int
 r5_rsa_pkcs1_sign(const uint8_t* in, int inLen, uint8_t* out, int outMax)
 {
 	RSA* rsa = airport_rsa();
@@ -170,4 +185,18 @@ r5_aes_cbc_decrypt(const uint8_t key[16], const uint8_t iv[16], uint8_t* buf,
 		return;
 	AES_init_ctx_iv(&ctx, key, iv);
 	AES_CBC_decrypt_buffer(&ctx, buf, (size_t)aligned);
+}
+
+
+void
+r5_aes_cbc_encrypt(const uint8_t key[16], const uint8_t iv[16], uint8_t* buf,
+	int len)
+{
+	struct AES_ctx ctx;
+	int aligned = len & ~15;
+
+	if (aligned <= 0)
+		return;
+	AES_init_ctx_iv(&ctx, key, iv);
+	AES_CBC_encrypt_buffer(&ctx, buf, (size_t)aligned);
 }

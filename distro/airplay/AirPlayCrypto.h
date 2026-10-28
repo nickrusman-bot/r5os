@@ -13,9 +13,13 @@ int r5_b64_encode(const uint8_t* in, int inLen, char* out, int outMax);
 
 int r5_rsa_oaep_decrypt(const uint8_t* in, int inLen, uint8_t* out,
 	int outMax);
+int r5_rsa_oaep_encrypt(const uint8_t* in, int inLen, uint8_t* out,
+	int outMax);
 int r5_rsa_pkcs1_sign(const uint8_t* in, int inLen, uint8_t* out, int outMax);
 
 void r5_aes_cbc_decrypt(const uint8_t key[16], const uint8_t iv[16],
+	uint8_t* buf, int len);
+void r5_aes_cbc_encrypt(const uint8_t key[16], const uint8_t iv[16],
 	uint8_t* buf, int len);
 
 #ifdef __cplusplus

@@ -1,5 +1,7 @@
 resource app_signature "application/x-vnd.R5OS-airplay";
 
+resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
+
 resource app_name_catalog_entry "AirPlayServer:application name" "AirPlay";
 
 resource app_version {
@@ -10,6 +12,6 @@ resource app_version {
 	variety = B_APPV_DEVELOPMENT,
 	internal = 0,
 
-	short_info = "R5OS AirPlay receiver",
-	long_info = "AirPlay 1 RAOP audio receiver with AirPlay 2 advertisement."
+	short_info = "R5OS AirPlay",
+	long_info = "AirPlay receiver and sender. Deskbar tray next to the clock."
 };
