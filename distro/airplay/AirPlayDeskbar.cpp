@@ -3,15 +3,13 @@
 #include <Archivable.h>
 #include <Deskbar.h>
 #include <Entry.h>
-#include <OS.h>
-#include <image.h>
 #include <MenuItem.h>
 #include <Messenger.h>
 #include <PopUpMenu.h>
 #include <Roster.h>
 #include <View.h>
-
 #include <stdio.h>
+
 #include <string.h>
 #include <strings.h>
 #include <arpa/inet.h>
@@ -20,25 +18,11 @@
 #include <r5_mdns.h>
 
 
-static status_t
-our_image(image_info& image)
-{
-	int32 cookie = 0;
-	while (get_next_image_info(B_CURRENT_TEAM, &cookie, &image) == B_OK) {
-		if ((char*)our_image >= (char*)image.text
-			&& (char*)our_image <= (char*)image.text + image.text_size)
-			return B_OK;
-	}
-	return B_ERROR;
-}
-
-
 class AirPlayReplicant : public BView {
 public:
 	AirPlayReplicant(BRect frame)
 		:
-		BView(frame, kAirPlayDeskbarItem, B_FOLLOW_NONE,
-			B_WILL_DRAW | B_TRANSPARENT_BACKGROUND)
+		BView(frame, kAirPlayDeskbarItem, B_FOLLOW_NONE, B_WILL_DRAW)
 	{
 	}
 
@@ -147,20 +131,26 @@ instantiate_deskbar_item(float /*maxWidth*/, float maxHeight)
 status_t
 r5_install_airplay_deskbar()
 {
-	int32 tries = 30;
-	while (--tries > 0) {
-		BDeskbar deskbar;
-		if (deskbar.IsRunning()) {
-			if (deskbar.HasItem(kAirPlayDeskbarItem))
-				return B_OK;
-			image_info info;
-			entry_ref ref;
-			if (our_image(info) != B_OK
-				|| get_ref_for_path(info.name, &ref) != B_OK)
-				return B_ERROR;
-			return deskbar.AddItem(&ref);
-		}
-		snooze(1000000);
+	BDeskbar deskbar;
+	if (!deskbar.IsRunning())
+		return B_ERROR;
+	if (deskbar.HasItem(kAirPlayDeskbarItem))
+		return B_OK;
+
+	app_info info;
+	status_t err = be_roster->GetAppInfo(kAirPlaySignature, &info);
+	if (err != B_OK) {
+		fprintf(stderr, "airplay: GetAppInfo: %s\n", strerror(err));
+		return err;
 	}
-	return B_ERROR;
+
+	int32 id = -1;
+	err = deskbar.AddItem(&info.ref, &id);
+	if (err != B_OK) {
+		AirPlayReplicant view(BRect(0, 0, 15, 15));
+		err = deskbar.AddItem(&view, &id);
+	}
+	fprintf(stderr, "airplay: Deskbar AddItem -> %s (id %ld)\n",
+		strerror(err), (long)id);
+	return err;
 }

@@ -616,7 +616,8 @@ class AirPlayApp : public BApplication {
 public:
 	AirPlayApp()
 		:
-		BApplication(kAirPlaySignature)
+		BApplication(kAirPlaySignature),
+		fTrayInstalled(false)
 	{
 	}
 
@@ -626,21 +627,21 @@ public:
 			B_NORMAL_PRIORITY, NULL);
 		if (listen >= 0)
 			resume_thread(listen);
-		thread_id tray = spawn_thread(_InstallDeskbar, "airplay-deskbar",
-			B_NORMAL_PRIORITY, NULL);
-		if (tray >= 0)
-			resume_thread(tray);
+		SetPulseRate(1000000);
+		PostMessage(kMsgAirPlayInstallTray);
 	}
 
-	static int32 _InstallDeskbar(void*)
+	virtual void Pulse()
 	{
-		r5_install_airplay_deskbar();
-		return B_OK;
+		_TryInstallTray();
 	}
 
 	virtual void MessageReceived(BMessage* message)
 	{
 		switch (message->what) {
+			case kMsgAirPlayInstallTray:
+				_TryInstallTray();
+				break;
 			case kMsgAirPlayPlayTo:
 			{
 				const char* host = NULL;
@@ -661,6 +662,19 @@ public:
 				break;
 		}
 	}
+
+private:
+			void				_TryInstallTray()
+			{
+				if (fTrayInstalled)
+					return;
+				if (r5_install_airplay_deskbar() == B_OK) {
+					fTrayInstalled = true;
+					SetPulseRate(0);
+				}
+			}
+
+			bool				fTrayInstalled;
 };
 
 
