@@ -1,0 +1,12 @@
+SubDir HAIKU_TOP src add-ons print drivers airprint ;
+
+SubDirHdrs [ FDirName $(HAIKU_TOP) headers libs print libprint ] ;
+
+AddResources AirPrint : AirPrint.rdef ;
+
+Addon AirPrint :
+	AirPrintEntry.cpp
+	AirPrint.cpp
+	AirPrintCap.cpp
+	: be libprint.a [ TargetLibstdc++ ]
+;
