@@ -17,7 +17,7 @@ id	r5_status	branch	commit	notes
 1006	fixed			Backgrounds Revert snapshot (apply-ui-bugs.py)
 1036	open			
 1041	open			
-1042	in-progress	cursor/zeroconf-1042		IPv4 mDNS: advertise hostname.local from net_server; resolve .local in libnetwork. Not DNS-SD/API yet.
+1042	in-progress	cursor/airplay-receiver		IPv4/IPv6 mDNS hostname + DNS-SD. AirPlay 1 RAOP + AirPlay 2 advertisement; pairing/PTP not implemented.
 1048	open			
 1059	open			
 1070	open			
@@ -431,7 +431,7 @@ id	r5_status	branch	commit	notes
 6724	open			
 6726	open			
 6730	open			
-6795	open			
+6795	in-progress	cursor/zeroconf-1042		IPP transport lists DNS-SD _ipp/_ipps/_universal printers in Add Printer.
 6798	open			
 6803	open			
 6818	open			
@@ -2253,7 +2253,7 @@ id	r5_status	branch	commit	notes
 16313	open			
 16315	open			
 16316	open			
-16318	open			
+16318	in-progress	cursor/zeroconf-1042		AirPrint PWG-raster driver + IPP image/pwg-raster. No URF/job status yet.
 16319	open			
 16320	open			
 16324	open			

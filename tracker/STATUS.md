@@ -4,8 +4,8 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3875 |
-| in-progress | 2 |
+| open | 3873 |
+| in-progress | 4 |
 | fixed | 59 |
 | wontfix | 0 |
 | not-applicable | 0 |
@@ -72,7 +72,9 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Ticket | Haiku | Component | Samenvatting | Branch |
 |---|---|---|---|---|
-| [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support | cursor/zeroconf-1042 |
+| [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support | cursor/airplay-receiver |
+| [#6795](https://dev.haiku-os.org/ticket/6795) | assigned | Printing | Mechanism to detect and identify network printer and offer setup wizard | cursor/zeroconf-1042 |
+| [#16318](https://dev.haiku-os.org/ticket/16318) | new | Printing | IPP-Everywhere and AirPrint - Print support the XXIst century way | cursor/zeroconf-1042 |
 | [#18970](https://dev.haiku-os.org/ticket/18970) | assigned | User Interface | Various dark mode problems (easy) |  |
 
 ## Gefixt in R5OS
@@ -223,5 +225,5 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3795 meer in r5-status.tsv* | |
+| … | | | *3793 meer in r5-status.tsv* | |
 
