@@ -199,10 +199,10 @@ public:
 private:
 			void				_TryInstall()
 			{
-				if (r5_install_airplay_deskbar() == B_OK) {
-					SetPulseRate(0);
-					Quit();
-				}
+				if (r5_install_airplay_deskbar() == B_OK)
+					SetPulseRate(10000000);
+				else
+					SetPulseRate(1000000);
 			}
 };
 
