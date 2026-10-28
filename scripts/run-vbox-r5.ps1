@@ -14,7 +14,8 @@ param(
 	[switch]$NoClip
 )
 
-$ErrorActionPreference = "Stop"
+# VBoxManage prints progress on stderr; Stop would treat that as fatal.
+$ErrorActionPreference = "Continue"
 
 function Find-VBoxManage {
 	$cmd = Get-Command VBoxManage -ErrorAction SilentlyContinue
@@ -42,10 +43,7 @@ function Get-RawImagePath {
 }
 
 function Detach-IdeDisk([string]$vbox, [string]$name) {
-	$saved = $ErrorActionPreference
-	$ErrorActionPreference = "SilentlyContinue"
-	& $vbox storageattach $name --storagectl IDE --port 0 --device 0 --medium none | Out-Null
-	$ErrorActionPreference = $saved
+	& $vbox storageattach $name --storagectl IDE --port 0 --device 0 --medium none 2>&1 | Out-Null
 }
 
 function Get-BridgeName([string]$vbox, [string]$preferred) {
@@ -128,6 +126,9 @@ Write-Host "  bridge: $bridge"
 
 Detach-IdeDisk $vbox $VmName
 & $vbox storageattach $VmName --storagectl IDE --port 0 --device 0 --type hdd --medium $vdi
+if ($LASTEXITCODE -ne 0) {
+	throw "storageattach failed"
+}
 
 Write-Host "Starting $VmName ..."
 & $vbox startvm $VmName
