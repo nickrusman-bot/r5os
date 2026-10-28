@@ -4,8 +4,8 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3876 |
-| in-progress | 1 |
+| open | 3875 |
+| in-progress | 2 |
 | fixed | 59 |
 | wontfix | 0 |
 | not-applicable | 0 |
@@ -72,6 +72,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Ticket | Haiku | Component | Samenvatting | Branch |
 |---|---|---|---|---|
+| [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support | cursor/zeroconf-1042 |
 | [#18970](https://dev.haiku-os.org/ticket/18970) | assigned | User Interface | Various dark mode problems (easy) |  |
 
 ## Gefixt in R5OS
@@ -159,7 +160,6 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#976](https://dev.haiku-os.org/ticket/976) | assigned | Kits/libtextencoding.so | convert_from_utf8() broken |  |
 | [#1036](https://dev.haiku-os.org/ticket/1036) | new | Applications/Tracker | Tracker Doesn't Like Hard Links |  |
 | [#1041](https://dev.haiku-os.org/ticket/1041) | new | File Systems/UDF | UDF attributes support |  |
-| [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support |  |
 | [#1048](https://dev.haiku-os.org/ticket/1048) | assigned | System | add support for PowerPC |  |
 | [#1059](https://dev.haiku-os.org/ticket/1059) | new | Network & Internet/PPP | [IPCP] update DNS server list |  |
 | [#1070](https://dev.haiku-os.org/ticket/1070) | new | System/Kernel | Implement a precache algorithm for the file system caches |  |
@@ -222,5 +222,6 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#2474](https://dev.haiku-os.org/ticket/2474) | assigned | Drivers | Serial port driver needed for Oxford Semi UART 16950 |  |
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
-| … | | | *3796 meer in r5-status.tsv* | |
+| [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
+| … | | | *3795 meer in r5-status.tsv* | |
 
