@@ -6,12 +6,14 @@
 # Usage:
 #   powershell -File scripts/run-vbox-r5.ps1
 #   powershell -File scripts/run-vbox-r5.ps1 -BridgeAdapter "Wi-Fi"
+#   powershell -File scripts/run-vbox-r5.ps1 -ForceConvert
 param(
 	[string]$VmName = "R5OS",
 	[string]$BridgeAdapter = $env:R5_VBOX_BRIDGE,
 	[int]$MemoryMb = 2048,
 	[int]$Cpus = 2,
-	[switch]$NoClip
+	[switch]$NoClip,
+	[switch]$ForceConvert
 )
 
 # VBoxManage prints progress on stderr; Stop would treat that as fatal.
@@ -66,6 +68,7 @@ $raw = Get-RawImagePath
 $outDir = Join-Path $PSScriptRoot "..\generated"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $vdi = Join-Path (Resolve-Path $outDir) "r5-os.vdi"
+$localRaw = Join-Path (Resolve-Path $outDir) "r5-os.img"
 
 Write-Host "R5OS VirtualBox"
 Write-Host "  No vboxsf, no auto-resize, no VBox drag-and-drop."
@@ -86,13 +89,37 @@ if ($exists) {
 	Detach-IdeDisk $vbox $VmName
 }
 
-if (Test-Path $vdi) {
-	& $vbox closemedium disk $vdi --delete 2>$null | Out-Null
-	Remove-Item -Force $vdi -ErrorAction SilentlyContinue
+$rawTime = (Get-Item $raw).LastWriteTimeUtc
+$reuse = $false
+if (-not $ForceConvert -and (Test-Path $vdi)) {
+	$vdiItem = Get-Item $vdi
+	if ($vdiItem.Length -gt 0 -and $vdiItem.LastWriteTimeUtc -ge $rawTime) {
+		$reuse = $true
+	}
 }
-& $vbox convertfromraw $raw $vdi --format VDI
-if ($LASTEXITCODE -ne 0) {
-	throw "convertfromraw failed"
+
+if ($reuse) {
+	Write-Host "  reusing $vdi (raw not newer; -ForceConvert to rebuild)"
+} else {
+	if (Test-Path $vdi) {
+		& $vbox closemedium disk $vdi --delete 2>$null | Out-Null
+		Remove-Item -Force $vdi -ErrorAction SilentlyContinue
+	}
+	# Convert from a local NTFS copy. Reading the raw image through
+	# \\wsl.localhost on first power-on often hangs until the VM is reset.
+	Write-Host "  copying raw image to $localRaw"
+	wsl -e bash -lc "cp -f /home/nickr/r5os/haiku/generated.x86_64/r5-os.image /mnt/c/Users/nickr/Projects/R5OS/generated/r5-os.img"
+	if ($LASTEXITCODE -ne 0 -or -not (Test-Path $localRaw)) {
+		throw "copy raw image failed"
+	}
+	& $vbox convertfromraw $localRaw $vdi --format VDI --variant Fixed
+	if ($LASTEXITCODE -ne 0) {
+		throw "convertfromraw failed"
+	}
+	Start-Sleep -Seconds 2
+	Write-Host "  new VDI: first boot runs package_daemon for every package."
+	Write-Host "  That often takes several minutes. Wait for the desktop."
+	Write-Host "  Do not Reset; a guest Restart of this VDI is fast afterwards."
 }
 
 if (-not $exists) {

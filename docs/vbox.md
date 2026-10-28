@@ -17,9 +17,12 @@ Needs a jammed `r5-os.image` and VirtualBox with **bridged** networking (not NAT
 ```powershell
 powershell -File scripts/run-vbox-r5.ps1
 powershell -File scripts/run-vbox-r5.ps1 -BridgeAdapter "Wi-Fi"
+powershell -File scripts/run-vbox-r5.ps1 -ForceConvert
 ```
 
-`$env:R5_VBOX_BRIDGE` also selects the host NIC. The `.vdi` lands in `generated/r5-os.vdi` (gitignored).
+`$env:R5_VBOX_BRIDGE` also selects the host NIC. The script copies the raw image onto NTFS and makes a **fixed** `.vdi` in `generated/` (gitignored). The VDI is reused unless the jammed raw image is newer, or you pass `-ForceConvert`. Converting through `\\wsl.localhost` on first power-on often hung until Reset.
+
+A **new** VDI is a virgin disk. `package_daemon` then does first-boot processing for every package (syslog: `Doing first boot processing #N for package …`). That often takes **several minutes** on VirtualBox IDE. Wait for the desktop. Do not Reset; that restarts the same work. A guest **Restart** (or Shutdown + start of the same VDI) is fast.
 
 Use this for IPv6 SLAAC, mDNS, AirPlay speakers, and SMB on the home LAN. QEMU usernet cannot.
 
