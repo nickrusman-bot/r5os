@@ -118,7 +118,8 @@ if ($reuse) {
 	}
 	Start-Sleep -Seconds 2
 	Write-Host "  new VDI: first boot runs package_daemon for every package."
-	Write-Host "  Wait for the desktop. Do not Reset; that restarts first-boot."
+	Write-Host "  That often takes several minutes. Wait for the desktop."
+	Write-Host "  Do not Reset; a guest Restart of this VDI is fast afterwards."
 }
 
 if (-not $exists) {

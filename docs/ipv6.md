@@ -12,6 +12,8 @@ On VirtualBox bridged LAN (not QEMU usernet):
 
 A home router often has SLAAC ULA (`fd…`) and **no** DHCPv6 server. Then `dhcpv6: no server` is expected. QEMU usernet is not a LAN: no multicast RA.
 
+VirtualBox bridged LAN (2026-10-28): ULA `fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd` plus `fe80::`, RS sent, PIO `A=1`, extra RAs `already assigned`, `dhcpv6: no server`.
+
 ## Test in the guest (Terminal)
 
 ```
@@ -27,8 +29,7 @@ Useful syslog:
 | `slaac …: fdae:… via fe80:…` | Second address was assigned |
 | `slaac … without SLAAC /64 prefix` | RA had no A-flag `/64`; DHCPv6 may still run |
 | `dad …: NS send:` / `socket:` / `bind` | DAD could not run; the address is **not** assigned |
-| `RS send failed: Network is unreachable` | Multicast send had no route; expected until `SO_BINDTODEVICE` is in the image |
-| `dad …: duplicate` | Address not assigned |
+| `RS send failed: Network is unreachable` | Multicast send had no route (`IPV6_MULTICAST_IF`); current image uses `SO_BINDTODEVICE` |
 | `dad …: duplicate` | Address not assigned |
 | `dhcpv6 …: no server` | No DHCPv6 on this LAN |
 

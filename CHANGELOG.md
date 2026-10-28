@@ -20,7 +20,9 @@ SLAAC must not DAD the link-local before it exists (`IPV6_MULTICAST_IF` needs an
 
 Haiku `IPV6_MULTICAST_IF` looked up the interface with an uninitialized `sockaddr_in6` (`sa_family` 0 → `EADDRNOTAVAIL`). After setting `sin6_family`/`sin6_len`, RS/DAD/DHCPv6 still logged `Network is unreachable`: IPv6 `get_route` has no unicast route for multicast. SLAAC, DAD, and DHCPv6 now use `SO_BINDTODEVICE` so `datalink_send_data` uses the interface `direct_route`. DAD stays fail-closed on send errors (RFC 4862). Shutdown no longer hangs (`select` + socket `shutdown`).
 
-VirtualBox copies the raw image onto NTFS and uses a fixed VDI. The VDI is reused unless the raw image is newer (`-ForceConvert` rebuilds). Converting on every start made a virgin disk each time, so `package_daemon` ran first-boot processing and the guest looked hung until Reset. Wait for that first boot; do not Reset.
+VirtualBox copies the raw image onto NTFS and uses a fixed VDI. The VDI is reused unless the raw image is newer (`-ForceConvert` rebuilds). Converting on every start made a virgin disk each time, so `package_daemon` ran first-boot processing and the guest looked hung until Reset. A **new** VDI first boot can take several minutes; a guest Restart is fast because packages are already processed. Do not Reset during first-boot.
+
+VBox bridged LAN (2026-10-28, Europe/Amsterdam): `router solicitation sent`, PIO `fdae:aeb4:a752:9ae4::/64 A=1`, ULA `fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd` plus `fe80::`, later RAs `already assigned`, `dhcpv6: no server`. Not a DHCPv6-server LAN. QEMU usernet was not used.
 
 ### VirtualBox text clipboard (no Guest Additions)
 

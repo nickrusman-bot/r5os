@@ -624,9 +624,9 @@ id	r5_status	branch	commit	notes
 8297	open			
 8308	open			
 8313	open			
-8316	in-progress	cursor/ipv6-slaac		IPv6 link-local on interface configure; VBox LAN showed fe80::.
-8317	in-progress	cursor/ipv6-slaac		SLAAC ULA seen once on VBox. After IPV6_MULTICAST_IF family fix, RS/DAD still ENETUNREACH. Overlay uses SO_BINDTODEVICE. Not LAN-verified on this image.
-8319	in-progress	cursor/ipv6-slaac		RFC 4862 DAD fail-closed. NS send still ENETUNREACH until SO_BINDTODEVICE is in the jammed image. Not LAN-verified.
+8316	in-progress	cursor/ipv6-slaac		VBox LAN: fe80:: plus SLAAC ULA. Link-local from NetServer; no DAD on LL.
+8317	in-progress	cursor/ipv6-slaac		VBox LAN 2026-10-28: RS sent, PIO A=1, ULA fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd, extra RA already assigned. dhcpv6 no server (no DHCPv6 on this LAN). QEMU usernet not tested.
+8319	in-progress	cursor/ipv6-slaac		RFC 4862 DAD fail-closed; SO_BINDTODEVICE. ULA was assigned on VBox LAN so NS send succeeded. No packet capture of NS/NA.
 8321	open			
 8337	open			
 8339	open			
