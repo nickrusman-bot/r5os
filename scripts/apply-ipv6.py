@@ -332,6 +332,7 @@ AutoconfigLooper::_ConfigureIPv6()
         "		_ConfigureIPv4();\n"
         "		_ConfigureIPv6();\n",
         "ready IPv6",
+        optional=True,
     )
     replace_once(
         looper,
@@ -340,6 +341,7 @@ AutoconfigLooper::_ConfigureIPv6()
         "				_ConfigureIPv4();\n"
         "				_ConfigureIPv6();\n",
         "link-up IPv6",
+        optional=True,
     )
     replace_once(
         looper,
@@ -385,6 +387,7 @@ def patch_net_server() -> None:
         """	_ConfigureIPv6LinkLocal(name);
 """,
         "enable IPv6 link-local",
+        optional=True,
     )
     replace_once(
         HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
@@ -427,11 +430,55 @@ def patch_net_server() -> None:
 		autoIPv6 = true;
 	if (startAutoConfig || autoIPv6) {
 		// start auto configuration
+		if (_LooperForDevice(name) == NULL) {
+			AutoconfigLooper* looper = new AutoconfigLooper(this, name,
+				autoIPv4, autoIPv6);
+			looper->Run();
+			fDeviceMap[name] = looper;
+		}
+""",
+        "start looper families",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """	if (startAutoConfig || autoIPv6) {
+		// start auto configuration
 		AutoconfigLooper* looper = new AutoconfigLooper(this, name, autoIPv4,
 			autoIPv6);
 		looper->Run();
+
+		fDeviceMap[name] = looper;
 """,
-        "start looper families",
+        """	if (startAutoConfig || autoIPv6) {
+		// start auto configuration
+		if (_LooperForDevice(name) == NULL) {
+			AutoconfigLooper* looper = new AutoconfigLooper(this, name,
+				autoIPv4, autoIPv6);
+			looper->Run();
+			fDeviceMap[name] = looper;
+		}
+""",
+        "one looper per device",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        '#include "NetServer.h"\n',
+        '#include "NetServer.h"\n'
+        '#include "IPv6Dad.h"\n',
+        "include IPv6Dad",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """	if (interface.FindAddress(localLinkAddress) >= 0) {
+		// uhoh... already has a local link address
+""",
+        """	if (r5_ipv6_has_address(name, addressRaw)) {
+		// uhoh... already has a local link address
+""",
+        "link-local has_address",
         optional=True,
     )
     replace_once(

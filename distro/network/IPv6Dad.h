@@ -12,6 +12,7 @@
 
 status_t r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	const in6_addr& tentative);
+bool r5_ipv6_has_address(const char* device, const in6_addr& address);
 
 
 #endif	// R5_IPV6_DAD_H

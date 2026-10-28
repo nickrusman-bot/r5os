@@ -350,27 +350,31 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 	if (globalText.Length() == 0)
 		return B_ERROR;
 
+	if (r5_ipv6_has_address(Device(), global)) {
+		syslog(LOG_INFO, "slaac %s: %s already assigned\n", Device(),
+			globalText.String());
+		return B_OK;
+	}
+
 	BNetworkInterface interface(Device());
 	BNetworkAddress address(global, 0);
-	if (interface.FindAddress(address) < 0) {
-		uint32 ifIndex = interface.Index();
-		if (ifIndex == 0)
-			ifIndex = if_nametoindex(Device());
-		status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
-		if (dad == B_NAME_IN_USE)
-			return dad;
+	uint32 ifIndex = interface.Index();
+	if (ifIndex == 0)
+		ifIndex = if_nametoindex(Device());
+	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
+	if (dad == B_NAME_IN_USE)
+		return dad;
 
-		BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
-			B_UNCONFIGURED_ADDRESS_FAMILIES);
-		BNetworkInterfaceAddress slot;
-		slot.SetAddress(address);
-		slot.SetMask(mask);
-		status_t status = interface.AddAddress(slot);
-		if (status != B_OK) {
-			syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
-				globalText.String(), strerror(status));
-			return status;
-		}
+	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
+		B_UNCONFIGURED_ADDRESS_FAMILIES);
+	BNetworkInterfaceAddress slot;
+	slot.SetAddress(address);
+	slot.SetMask(mask);
+	status_t status = interface.AddAddress(slot);
+	if (status != B_OK) {
+		syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
+			globalText.String(), strerror(status));
+		return status;
 	}
 
 	if (nameservers > 0) {

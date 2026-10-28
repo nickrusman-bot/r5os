@@ -34,6 +34,26 @@ solicited_node(const in6_addr& address, in6_addr& out)
 }
 
 
+bool
+r5_ipv6_has_address(const char* device, const in6_addr& address)
+{
+	BNetworkInterface interface(device);
+	BNetworkInterfaceAddress slot;
+	int32 count = interface.CountAddresses();
+	for (int32 i = 0; i < count; i++) {
+		if (interface.GetAddressAt(i, slot) != B_OK)
+			continue;
+		if (slot.Address().Family() != AF_INET6)
+			continue;
+		const sockaddr_in6& in6
+			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
+		if (memcmp(&in6.sin6_addr, &address, sizeof(in6_addr)) == 0)
+			return true;
+	}
+	return false;
+}
+
+
 status_t
 r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	const in6_addr& tentative)

@@ -337,13 +337,18 @@ DHCPv6Client::_HandleReply(const uint8* packet, ssize_t bytes, uint32 ifIndex)
 		return 1;
 
 	if (haveAddress) {
-		status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, leased);
-		if (dad == B_NAME_IN_USE)
-			return dad;
+		char text[INET6_ADDRSTRLEN];
+		inet_ntop(AF_INET6, &leased, text, sizeof(text));
+		if (r5_ipv6_has_address(Device(), leased)) {
+			syslog(LOG_INFO, "dhcpv6 %s: %s already assigned\n", Device(),
+				text);
+		} else {
+			status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, leased);
+			if (dad == B_NAME_IN_USE)
+				return dad;
 
-		BNetworkInterface interface(Device());
-		BNetworkAddress address(leased, 0);
-		if (interface.FindAddress(address) < 0) {
+			BNetworkInterface interface(Device());
+			BNetworkAddress address(leased, 0);
 			BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
 				B_UNCONFIGURED_ADDRESS_FAMILIES);
 			BNetworkInterfaceAddress slot;
@@ -355,10 +360,8 @@ DHCPv6Client::_HandleReply(const uint8* packet, ssize_t bytes, uint32 ifIndex)
 					Device(), strerror(status));
 				return status;
 			}
+			syslog(LOG_INFO, "dhcpv6 %s: %s\n", Device(), text);
 		}
-		char text[INET6_ADDRSTRLEN];
-		inet_ntop(AF_INET6, &leased, text, sizeof(text));
-		syslog(LOG_INFO, "dhcpv6 %s: %s\n", Device(), text);
 	}
 
 	if (nameservers > 0) {

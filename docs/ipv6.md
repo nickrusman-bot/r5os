@@ -6,9 +6,9 @@ Network preferences already has **IPv6 → Mode**: Automatic (SLAAC / DHCPv6), S
 
 On VirtualBox bridged LAN (not QEMU usernet):
 
-1. `fe80::…` link-local (always, from the MAC).
-2. A second IPv6 address if the router sends a SLAAC `/64` (A-flag) **or** a DHCPv6 IA_NA lease.
-3. Syslog lines `slaac`, `dad`, `dhcpv6`.
+1. `fe80::…` link-local (always, from the MAC) — once.
+2. A second IPv6 address if the router sends a SLAAC `/64` (A-flag) **or** a DHCPv6 IA_NA lease — once.
+3. Syslog lines `slaac`, `dad`, `dhcpv6`. `already assigned` means a second RA was ignored.
 
 A home router often has SLAAC ULA (`fd…`) and **no** DHCPv6 server. Then `dhcpv6: no server` is expected. QEMU usernet is not a LAN: no multicast RA.
 
