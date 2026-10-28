@@ -17,7 +17,7 @@ id	r5_status	branch	commit	notes
 1006	fixed			Backgrounds Revert snapshot (apply-ui-bugs.py)
 1036	open			
 1041	open			
-1042	in-progress	cursor/airplay-receiver		IPv4/IPv6 mDNS hostname + DNS-SD. AirPlay 1 RAOP + AirPlay 2 advertisement; pairing/PTP not implemented.
+1042	in-progress	cursor/airplay-receiver		IPv4 mDNS plus IPv6 ff02::fb per NIC (sin6_scope_id). AirPlay 1 RAOP + AirPlay 2 advertisement; pairing/PTP not implemented.
 1048	open			
 1059	open			
 1070	open			
@@ -625,7 +625,7 @@ id	r5_status	branch	commit	notes
 8308	open			
 8313	open			
 8316	in-progress	cursor/ipv6-slaac		VBox LAN: fe80:: plus SLAAC ULA. Link-local from NetServer; no DAD on LL.
-8317	in-progress	cursor/ipv6-slaac		VBox LAN 2026-10-28: RS sent, PIO A=1, ULA fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd, extra RA already assigned. dhcpv6 no server (no DHCPv6 on this LAN). QEMU usernet not tested.
+8317	in-progress	cursor/ipv6-slaac		VBox LAN 2026-10-28: RS sent, PIO A=1, ULA assigned. Kernel IPv6 multicast uses get_device_route. dhcpv6 no server. QEMU usernet not tested.
 8319	in-progress	cursor/ipv6-slaac		RFC 4862 DAD fail-closed; SO_BINDTODEVICE. ULA was assigned on VBox LAN so NS send succeeded. No packet capture of NS/NA.
 8321	open			
 8337	open			

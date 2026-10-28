@@ -4,12 +4,14 @@
  */
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -314,6 +316,34 @@ collect_ipv6(struct in6_addr* addrs, int max)
 }
 
 
+static int
+collect_ifindexes(uint32* indexes, int max)
+{
+	BNetworkRoster& roster = BNetworkRoster::Default();
+	BNetworkInterface interface;
+	uint32 cookie = 0;
+	int count = 0;
+
+	while (count < max && roster.GetNextInterface(&cookie, interface) == B_OK) {
+		if ((interface.Flags() & IFF_UP) == 0
+			|| (interface.Flags() & IFF_LOOPBACK) != 0)
+			continue;
+		uint32 index = interface.Index();
+		if (index == 0)
+			continue;
+		bool seen = false;
+		for (int i = 0; i < count; i++) {
+			if (indexes[i] == index)
+				seen = true;
+		}
+		if (seen)
+			continue;
+		indexes[count++] = index;
+	}
+	return count;
+}
+
+
 static bool
 first_mac(uint8_t mac[6])
 {
@@ -589,6 +619,12 @@ open_mdns6()
 	inet_pton(AF_INET6, kMdnsAddr6, &mreq.ipv6mr_multiaddr);
 	mreq.ipv6mr_interface = 0;
 	setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
+	uint32 indexes[8];
+	int nIf = collect_ifindexes(indexes, 8);
+	for (int i = 0; i < nIf; i++) {
+		mreq.ipv6mr_interface = indexes[i];
+		setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
+	}
 	setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &loop, sizeof(loop));
 	return sock;
 }
@@ -613,7 +649,23 @@ send_announce(int sock4, int sock6, const uint8_t* buf, size_t rlen)
 		dest.sin6_family = AF_INET6;
 		dest.sin6_port = htons(kMdnsPort);
 		inet_pton(AF_INET6, kMdnsAddr6, &dest.sin6_addr);
-		sendto(sock6, buf, rlen, 0, (struct sockaddr*)&dest, sizeof(dest));
+		uint32 indexes[8];
+		int nIf = collect_ifindexes(indexes, 8);
+		if (nIf == 0) {
+			if (sendto(sock6, buf, rlen, 0, (struct sockaddr*)&dest,
+					sizeof(dest)) < 0) {
+				syslog(LOG_ERR, "mdns: IPv6 announce: %s\n", strerror(errno));
+			}
+		} else {
+			for (int i = 0; i < nIf; i++) {
+				dest.sin6_scope_id = indexes[i];
+				if (sendto(sock6, buf, rlen, 0, (struct sockaddr*)&dest,
+						sizeof(dest)) < 0) {
+					syslog(LOG_ERR, "mdns: IPv6 announce if %" B_PRIu32 ": %s\n",
+						indexes[i], strerror(errno));
+				}
+			}
+		}
 	}
 }
 
