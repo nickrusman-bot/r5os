@@ -9,7 +9,6 @@
 #include <Message.h>
 #include <Mime.h>
 #include <OS.h>
-#include <PCI.h>
 #include <SerialPort.h>
 #include <String.h>
 
@@ -20,18 +19,6 @@ static const uint32 kMsgFrame = 'r5cf';
 static const uint32 kMaxBytes = 256 * 1024;
 static const char kMagic[4] = { 'R', '5', 'C', '1' };
 static const char* kPortName = "pc_serial1";
-
-
-static bool
-IsVirtualBox()
-{
-	pci_info info;
-	for (int32 i = 0; get_nth_pci_info(i, &info) == B_OK; i++) {
-		if (info.vendor_id == 0x80ee)
-			return true;
-	}
-	return false;
-}
 
 
 class ClipApp : public BApplication {
@@ -85,11 +72,6 @@ ClipApp::~ClipApp()
 void
 ClipApp::ReadyToRun()
 {
-	if (!IsVirtualBox()) {
-		Quit();
-		return;
-	}
-
 	int32 tries = 0;
 	while (!_OpenPort() && tries < 30) {
 		snooze(1000000);

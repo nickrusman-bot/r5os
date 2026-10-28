@@ -6,7 +6,7 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ### VirtualBox text clipboard (no Guest Additions)
 
-Host/guest copy-paste of Unicode text over COM1 (`\\.\pipe\R5OS-clip`). Guest `r5_vbox_clip` runs only if PCI vendor `80ee` is present. Drag-and-drop is still off: that is a Guest Additions protocol. Needs a jammed image with the overlay.
+Host/guest copy-paste of Unicode text over COM1 (`\\.\pipe\R5OS-clip`). Guest `r5_vbox_clip` opens `pc_serial1` and quits if the port never appears. Drag-and-drop is still off: that is a Guest Additions protocol. Needs a jammed image with the overlay.
 
 ### VirtualBox bridged LAN (no Guest Additions)
 
