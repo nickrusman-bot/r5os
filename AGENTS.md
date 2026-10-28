@@ -51,7 +51,7 @@ Support levels (do not skip): **buildable → bootable → functional → deskto
 7. Update `CHANGELOG.md` (newest first) for user-visible behavior, chosen paths, mistakes, and limits.
 8. Ask before `git push` / PR to `main`.
 
-Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is not a LAN** (no mDNS multicast, no Wi-Fi device, no AirPlay speakers).
+Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is not a LAN** (no mDNS multicast, no Wi-Fi device, no AirPlay speakers). For LAN on Windows use VirtualBox bridged (`scripts/run-vbox-r5.ps1`); no Guest Additions (no vboxsf, no auto-resize, no VBox clipboard).
 
 If a test cannot run, say which one and why.
 

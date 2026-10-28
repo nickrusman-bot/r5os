@@ -3,6 +3,7 @@
 /buildtools/
 /generated*/
 *.image
+*.vdi
 *.vmdk
 *.iso
 *.mmc
