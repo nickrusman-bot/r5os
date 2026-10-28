@@ -386,13 +386,204 @@ def patch_net_server() -> None:
 """,
         "enable IPv6 link-local",
     )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """	bool startAutoConfig = false;
+""",
+        """	bool startAutoConfig = false;
+	bool autoIPv4 = false;
+	bool autoIPv6 = false;
+	bool sawIPv6 = false;
+""",
+        "family auto flags",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """		if (addressSettings.IsAutoConfigure())
+			startAutoConfig = true;
+""",
+        """		if (addressSettings.Family() == AF_INET6)
+			sawIPv6 = true;
+		if (addressSettings.IsAutoConfigure()) {
+			startAutoConfig = true;
+			if (addressSettings.Family() == AF_INET6)
+				autoIPv6 = true;
+			else
+				autoIPv4 = true;
+		}
+""",
+        "per-family auto_config",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """	if (startAutoConfig) {
+		// start auto configuration
+		AutoconfigLooper* looper = new AutoconfigLooper(this, name);
+		looper->Run();
+""",
+        """	if (!sawIPv6)
+		autoIPv6 = true;
+	if (startAutoConfig || autoIPv6) {
+		// start auto configuration
+		AutoconfigLooper* looper = new AutoconfigLooper(this, name, autoIPv4,
+			autoIPv6);
+		looper->Run();
+""",
+        "start looper families",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """	address.AddString("family", "inet");
+	address.AddBool("auto_config", true);
+	interface.AddMessage("address", &address);
+""",
+        """	address.AddString("family", "inet");
+	address.AddBool("auto_config", true);
+	interface.AddMessage("address", &address);
+	BMessage address6;
+	address6.AddString("family", "inet6");
+	address6.AddBool("auto_config", true);
+	interface.AddMessage("address", &address6);
+""",
+        "default inet6 auto",
+        optional=True,
+    )
+
+
+def patch_looper_families() -> None:
+    header = HAIKU / "src" / "servers" / "net" / "AutoconfigLooper.h"
+    replace_once(
+        header,
+        """								AutoconfigLooper(BMessenger target,
+									const char* device);
+""",
+        """								AutoconfigLooper(BMessenger target,
+									const char* device,
+									bool autoIPv4 = true,
+									bool autoIPv6 = true);
+""",
+        "ctor families",
+        optional=True,
+    )
+    replace_once(
+        header,
+        """			bool				fJoiningNetwork;
+""",
+        """			bool				fJoiningNetwork;
+			bool				fAutoIPv4;
+			bool				fAutoIPv6;
+""",
+        "family members",
+        optional=True,
+    )
+
+    looper = HAIKU / "src" / "servers" / "net" / "AutoconfigLooper.cpp"
+    replace_once(
+        looper,
+        """AutoconfigLooper::AutoconfigLooper(BMessenger target, const char* device)
+	: BLooper(device),
+	fTarget(target),
+	fDevice(device),
+	fCurrentClient(NULL),
+	fSLAACClient(NULL),
+	fDHCPv6Client(NULL),
+	fLastMediaStatus(0),
+	fJoiningNetwork(false)
+{
+""",
+        """AutoconfigLooper::AutoconfigLooper(BMessenger target, const char* device,
+	bool autoIPv4, bool autoIPv6)
+	: BLooper(device),
+	fTarget(target),
+	fDevice(device),
+	fCurrentClient(NULL),
+	fSLAACClient(NULL),
+	fDHCPv6Client(NULL),
+	fLastMediaStatus(0),
+	fJoiningNetwork(false),
+	fAutoIPv4(autoIPv4),
+	fAutoIPv6(autoIPv6)
+{
+""",
+        "ctor init families",
+        optional=True,
+    )
+    replace_once(
+        looper,
+        """	if (interface.HasLink()) {
+		_ConfigureIPv4();
+		_ConfigureIPv6();
+""",
+        """	if (interface.HasLink()) {
+		if (fAutoIPv4)
+			_ConfigureIPv4();
+		if (fAutoIPv6)
+			_ConfigureIPv6();
+""",
+        "ready family gate",
+        optional=True,
+    )
+    replace_once(
+        looper,
+        """				_ConfigureIPv4();
+				_ConfigureIPv6();
+""",
+        """				if (fAutoIPv4)
+					_ConfigureIPv4();
+				if (fAutoIPv6)
+					_ConfigureIPv6();
+""",
+        "link-up family gate",
+        optional=True,
+    )
+
+
+def patch_prefs() -> None:
+    view = HAIKU / "src" / "preferences" / "network" / "InterfaceAddressView.cpp"
+    replace_once(
+        view,
+        """	if (fFamily == AF_INET6) {
+		// Automatic can be DHCPv6 or Router Advertisements
+		fModePopUpMenu->AddItem(new BMenuItem(B_TRANSLATE("Automatic"),
+			new BMessage(kModeAuto)));
+	}
+""",
+        """	if (fFamily == AF_INET6) {
+		// Automatic can be DHCPv6 or Router Advertisements
+		fModePopUpMenu->AddItem(new BMenuItem(
+			B_TRANSLATE("Automatic (SLAAC / DHCPv6)"),
+			new BMessage(kModeAuto)));
+	}
+""",
+        "ipv6 mode label",
+        optional=True,
+    )
+    replace_once(
+        view,
+        """	fModeField->SetToolTip(
+		B_TRANSLATE("The method for obtaining an IP address"));
+""",
+        """	fModeField->SetToolTip(fFamily == AF_INET6
+		? B_TRANSLATE("Automatic uses router advertisements (SLAAC) and "
+			"DHCPv6. Test in Terminal: grep -E 'slaac|dad|dhcpv6' "
+			"/var/log/syslog")
+		: B_TRANSLATE("The method for obtaining an IP address"));
+""",
+        "ipv6 mode tooltip",
+        optional=True,
+    )
 
 
 def main() -> int:
     copy_sources()
     patch_jam()
     patch_looper()
+    patch_looper_families()
     patch_net_server()
+    patch_prefs()
     return 0
 
 

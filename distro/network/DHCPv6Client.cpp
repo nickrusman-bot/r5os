@@ -338,7 +338,7 @@ DHCPv6Client::_HandleReply(const uint8* packet, ssize_t bytes, uint32 ifIndex)
 
 	if (haveAddress) {
 		status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, leased);
-		if (dad != B_OK)
+		if (dad == B_NAME_IN_USE)
 			return dad;
 
 		BNetworkInterface interface(Device());

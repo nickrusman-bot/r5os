@@ -7,13 +7,16 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <net/if.h>
 #include <netinet/icmp6.h>
 #include <netinet/in.h>
+#include <netinet6/in6.h>
 #include <string.h>
 #include <syslog.h>
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <NetworkInterface.h>
 #include <OS.h>
 
 
@@ -36,8 +39,11 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	const in6_addr& tentative)
 {
 	int socket = ::socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-	if (socket < 0)
-		return errno;
+	if (socket < 0) {
+		syslog(LOG_ERR, "dad %s: socket: %s (continuing without DAD)\n",
+			device, strerror(errno));
+		return B_OK;
+	}
 
 	int hops = 255;
 	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
@@ -62,7 +68,23 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	local.sin6_len = sizeof(local);
 	local.sin6_family = AF_INET6;
 	local.sin6_scope_id = ifIndex;
-	bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local));
+
+	BNetworkInterface interface(device);
+	BNetworkInterfaceAddress slot;
+	int32 count = interface.CountAddresses();
+	for (int32 i = 0; i < count; i++) {
+		if (interface.GetAddressAt(i, slot) != B_OK)
+			continue;
+		if (slot.Address().Family() != AF_INET6)
+			continue;
+		const sockaddr_in6& in6
+			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
+		if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
+			continue;
+		local.sin6_addr = in6.sin6_addr;
+		bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local));
+		break;
+	}
 
 	uint8 packet[32];
 	memset(packet, 0, sizeof(packet));
@@ -71,6 +93,9 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	ns->nd_ns_type = ND_NEIGHBOR_SOLICIT;
 	ns->nd_ns_code = 0;
 	ns->nd_ns_target = tentative;
+	packet[24] = ND_OPT_SOURCE_LINKADDR;
+	packet[25] = 1;
+	memcpy(packet + 26, mac, 6);
 
 	sockaddr_in6 dest;
 	memset(&dest, 0, sizeof(dest));
@@ -79,20 +104,25 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	dest.sin6_scope_id = ifIndex;
 	dest.sin6_addr = group;
 
-	ssize_t packetLen = sizeof(struct nd_neighbor_solicit);
-	if (sendto(socket, packet, packetLen, 0,
-			reinterpret_cast<sockaddr*>(&dest), sizeof(dest)) < 0) {
-		packet[24] = ND_OPT_SOURCE_LINKADDR;
-		packet[25] = 1;
-		memcpy(packet + 26, mac, 6);
-		packetLen = sizeof(packet);
-		if (sendto(socket, packet, packetLen, 0,
-				reinterpret_cast<sockaddr*>(&dest), sizeof(dest)) < 0) {
-			status_t error = errno;
-			close(socket);
-			syslog(LOG_ERR, "dad %s: NS failed: %s\n", device, strerror(error));
-			return error;
+	bool sent = false;
+	status_t sendError = B_OK;
+	for (int32 tries = 0; tries < 8; tries++) {
+		if (sendto(socket, packet, sizeof(packet), 0,
+				reinterpret_cast<sockaddr*>(&dest), sizeof(dest)) >= 0) {
+			sent = true;
+			break;
 		}
+		sendError = errno;
+		if (sendError != ENETUNREACH && sendError != EHOSTUNREACH
+			&& sendError != EAGAIN)
+			break;
+		snooze(250000);
+	}
+	if (!sent) {
+		close(socket);
+		syslog(LOG_ERR, "dad %s: NS failed: %s (continuing without DAD)\n",
+			device, strerror(sendError));
+		return B_OK;
 	}
 
 	timeval timeout;

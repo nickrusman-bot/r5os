@@ -104,15 +104,25 @@ SLAACClient::_EnsureLinkLocal(BNetworkInterface& interface)
 	raw.s6_addr[14] = fMAC[4];
 	raw.s6_addr[15] = fMAC[5];
 
-	BNetworkAddress local(raw, 0);
-	if (interface.FindAddress(local) >= 0)
-		return B_OK;
+	BNetworkInterfaceAddress slot;
+	int32 count = interface.CountAddresses();
+	for (int32 i = 0; i < count; i++) {
+		if (interface.GetAddressAt(i, slot) != B_OK)
+			continue;
+		if (slot.Address().Family() != AF_INET6)
+			continue;
+		const sockaddr_in6& in6
+			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
+		if (IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
+			return B_OK;
+	}
 
+	BNetworkAddress local(raw, 0);
 	uint32 ifIndex = interface.Index();
 	if (ifIndex == 0)
 		ifIndex = if_nametoindex(Device());
 	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, raw);
-	if (dad != B_OK)
+	if (dad == B_NAME_IN_USE)
 		return dad;
 
 	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
@@ -261,6 +271,9 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 	bool havePrefix = false;
 	BMessage resolver(kMsgConfigureResolver);
 	int32 nameservers = 0;
+	uint8 raFlags = ra->nd_ra_flags_reserved;
+	bool managed = (raFlags & ND_RA_FLAG_MANAGED) != 0;
+	bool other = (raFlags & ND_RA_FLAG_OTHER) != 0;
 
 	while (option + 2 <= end) {
 		uint8 type = option[0];
@@ -275,6 +288,13 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 			&& bytesLen >= sizeof(struct nd_opt_prefix_info)) {
 			const struct nd_opt_prefix_info* info
 				= reinterpret_cast<const struct nd_opt_prefix_info*>(option);
+			char prefixText[INET6_ADDRSTRLEN];
+			inet_ntop(AF_INET6, &info->nd_opt_pi_prefix, prefixText,
+				sizeof(prefixText));
+			syslog(LOG_INFO, "slaac %s: PIO %s/%u A=%d L=%d\n", Device(),
+				prefixText, info->nd_opt_pi_prefix_len,
+				(info->nd_opt_pi_flags_reserved & ND_OPT_PI_FLAG_AUTO) != 0,
+				(info->nd_opt_pi_flags_reserved & ND_OPT_PI_FLAG_ONLINK) != 0);
 			if ((info->nd_opt_pi_flags_reserved & ND_OPT_PI_FLAG_AUTO) != 0
 				&& info->nd_opt_pi_prefix_len == 64
 				&& !IN6_IS_ADDR_LINKLOCAL(&info->nd_opt_pi_prefix)) {
@@ -299,9 +319,28 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		option += bytesLen;
 	}
 
+	if (lifetime > 0) {
+		BNetworkInterface routeInterface(Device());
+		BNetworkAddress gateway(from.sin6_addr, 0);
+		routeInterface.RemoveDefaultRoute(AF_INET6);
+		status_t routeStatus = routeInterface.AddDefaultRoute(gateway);
+		if (routeStatus != B_OK) {
+			syslog(LOG_ERR, "slaac %s: default route failed: %s\n", Device(),
+				strerror(routeStatus));
+		}
+	}
+
 	if (!havePrefix) {
-		syslog(LOG_INFO, "slaac %s: RA from %s without SLAAC /64 prefix\n",
-			Device(), _ToString(from.sin6_addr).String());
+		syslog(LOG_INFO, "slaac %s: RA from %s M=%d O=%d without SLAAC /64 "
+			"prefix (DHCPv6 %s)\n", Device(),
+			_ToString(from.sin6_addr).String(), managed, other,
+			(managed || other) ? "should run" : "may be absent");
+		if (nameservers > 0) {
+			resolver.AddString("device", Device());
+			resolver.AddInt32("nameserver_count", nameservers);
+			BMessage reply;
+			Target().SendMessage(&resolver, &reply);
+		}
 		return B_BAD_VALUE;
 	}
 
@@ -318,7 +357,7 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		if (ifIndex == 0)
 			ifIndex = if_nametoindex(Device());
 		status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
-		if (dad != B_OK)
+		if (dad == B_NAME_IN_USE)
 			return dad;
 
 		BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
@@ -331,16 +370,6 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 			syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
 				globalText.String(), strerror(status));
 			return status;
-		}
-	}
-
-	if (lifetime > 0) {
-		BNetworkAddress gateway(from.sin6_addr, 0);
-		interface.RemoveDefaultRoute(AF_INET6);
-		status_t routeStatus = interface.AddDefaultRoute(gateway);
-		if (routeStatus != B_OK) {
-			syslog(LOG_ERR, "slaac %s: default route failed: %s\n", Device(),
-				strerror(routeStatus));
 		}
 	}
 

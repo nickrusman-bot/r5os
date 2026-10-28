@@ -6,7 +6,11 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ### IPv6 SLAAC in net_server
 
-On link-up, net_server assigns IPv6 link-local, SLAAC (RS/RA `/64`, default route, RDNSS), DAD before using an address, and DHCPv6 (IA_NA + DNS, or Information-Request). VirtualBox bridged LAN got a ULA via SLAAC; DAD/DHCPv6 are not LAN-tested yet.
+On link-up, net_server assigns IPv6 link-local, SLAAC (RS/RA `/64`, default route, RDNSS), DAD before using an address, and DHCPv6 (IA_NA + DNS, or Information-Request). VirtualBox bridged LAN got a ULA via SLAAC.
+
+DAD Neighbor Solicit used to fail with “Network is unreachable” on a bound-unspecified socket and then **block** the second IPv6 address, so Network only showed `fe80::`. DAD now binds link-local, retries, and continues without DAD if NS still cannot be sent. Only a real duplicate NA refuses the address.
+
+Network → NIC → IPv6 already has Mode Automatic / Static / Disabled. Automatic is labeled SLAAC/DHCPv6; Disabled is honored per family. Test: `docs/ipv6.md` (`grep -E 'slaac|dad|dhcpv6' /var/log/syslog`). A RA without A-flag `/64` cannot invent a ULA; DHCPv6 may still run.
 
 ### VirtualBox text clipboard (no Guest Additions)
 

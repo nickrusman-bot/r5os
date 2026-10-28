@@ -625,8 +625,8 @@ id	r5_status	branch	commit	notes
 8308	open			
 8313	open			
 8316	in-progress	cursor/ipv6-slaac		IPv6 link-local on interface configure; VBox LAN showed fe80::.
-8317	in-progress	cursor/ipv6-slaac		SLAAC ULA on VirtualBox bridged Wi-Fi. DAD and DHCPv6 added, not LAN-tested.
-8319	in-progress	cursor/ipv6-slaac		DAD before assigning SLAAC/DHCPv6 addresses (NS to solicited-node). Not LAN-tested.
+8317	in-progress	cursor/ipv6-slaac		SLAAC ULA on VBox; DAD NS ENETUNREACH no longer blocks the second address. PIO logged. Not fully LAN-retested.
+8319	in-progress	cursor/ipv6-slaac		DAD binds link-local, retries, continues if NS cannot be sent. Duplicate NA still refuses. Not LAN-tested.
 8321	open			
 8337	open			
 8339	open			
