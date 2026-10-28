@@ -48,20 +48,19 @@ public:
 	{
 	}
 
-	static AirPlayReplicant* Instantiate(BMessage* archive)
-	{
-		if (!validate_instantiation(archive, "AirPlayReplicant"))
-			return NULL;
-		return new AirPlayReplicant(archive);
-	}
+	static BArchivable* Instantiate(BMessage* archive);
 
 	virtual status_t Archive(BMessage* archive, bool deep = true) const
 	{
 		status_t err = BView::Archive(archive, deep);
-		if (err == B_OK)
+		if (err != B_OK)
+			return err;
+		archive->RemoveName("class");
+		err = archive->AddString("class", "AirPlayReplicant");
+		if (err == B_OK) {
+			archive->RemoveName("add_on");
 			err = archive->AddString("add_on", kAirPlayTraySignature);
-		if (err == B_OK)
-			err = archive->AddString("class", "AirPlayReplicant");
+		}
 		return err;
 	}
 
@@ -139,11 +138,22 @@ public:
 };
 
 
+_EXPORT BArchivable*
+AirPlayReplicant::Instantiate(BMessage* archive)
+{
+	r5_airplay_log("replicant", "Instantiate");
+	if (!validate_instantiation(archive, "AirPlayReplicant"))
+		return NULL;
+	return new AirPlayReplicant(archive);
+}
+
+
 extern "C" _EXPORT BView*
 instantiate_deskbar_item(float /*maxWidth*/, float maxHeight)
 {
 	r5_airplay_log("replicant", "instantiate_deskbar_item height %.0f",
 		maxHeight);
+	(void)&AirPlayReplicant::Instantiate;
 	return new AirPlayReplicant(BRect(0, 0, maxHeight - 1, maxHeight - 1));
 }
 
