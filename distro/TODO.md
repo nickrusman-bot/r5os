@@ -5,13 +5,13 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 ## Klaar
 
 - [x] **Versioning**  
-  Publiek: **R5OS YYYY.N** (`2026.1`, `2026.2`, …; nieuw jaar → `.1`). Tussen builds: **`YYYY.N-dev`**. Bron: `distro/VERSION` (nu `2026.1-dev`). Jam: `HAIKU_REVISION=r5-<VERSION>`. AboutSystem toont **R5OS 2026.1-dev**, geen Haiku-`hrev`.
+  Publiek: **R5OS YYYY.N** (`2026.1`, `2026.2`, …; nieuw jaar → `.1`). Tussen builds: **`YYYY.N-dev`**. Bron: `distro/VERSION` (nu `2026.1-dev`). Buildnummer: `distro/BUILD` (nu `10001`). Jam: `HAIKU_REVISION=r5-<VERSION>`. AboutSystem toont **R5OS 2026.1-dev Build 10001**, geen Haiku-`hrev`. What's new-tab: `distro/WHATSNEW`.
 
 - [x] **Eerste UI-naam**  
   FirstBoot Welcome/Try/Install, Deskbar **About R5OS**, About-disclaimer, volume-label in overlay (`HAIKU_IMAGE_LABEL`). About-logo: `distro/artwork/r5-os-logo.png`.
 
 - [x] **About-versie**  
-  AboutSystem toont **R5OS** plus `distro/VERSION` (niet de git-hash). Jam-revisiebestand wordt door `apply-overlay.sh` overschreven.
+  AboutSystem toont **R5OS** plus `distro/VERSION` en `distro/BUILD` (niet de git-hash). Jam-revisiebestand wordt door `apply-overlay.sh` overschreven. What's new staat naast Credits.
 
 ## Open
 

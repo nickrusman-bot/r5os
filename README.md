@@ -89,6 +89,6 @@ Gebruik niet de merknamen of logo’s van Haiku of BeOS op de image of website. 
 
 Publieke releases: **R5OS 2026.1**, **2026.2**, … (jaar, daarna +1 per release; nieuw jaar begint weer bij `.1`).
 
-Tussen builds: suffix `-dev`. Huidige boom: `distro/VERSION` (nu `2026.1-dev`). Jam gebruikt `HAIKU_REVISION=r5-<VERSION>`.
+Tussen builds: suffix `-dev`. Huidige boom: `distro/VERSION` (nu `2026.1-dev`) plus oplopend `distro/BUILD` (nu `10001`). About toont **R5OS 2026.1-dev Build 10001** en een What's new-tab (`distro/WHATSNEW`). Jam gebruikt `HAIKU_REVISION=r5-<VERSION>`, niet het buildnummer. Bump `BUILD` alleen bij een nieuwe What's new-sectie.
 
 Open distro-taken (o.a. Haiku-verwijzingen uit de UI): `distro/TODO.md`.

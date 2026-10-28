@@ -1,0 +1,23 @@
+R5OS 2026.1-dev Build 10001 - IPv6
+On a home network the computer can take an IPv6 address from the router as well as IPv4. Open Network, select the card, and look under IPv6. Automatic is the default. You should see a link-local address and, if the router offers one, a second address. Set IPv6 to Disabled if you do not want that.
+
+R5OS 2026.1-dev Build 10001 - Shutdown
+Shutting down should no longer sit forever while the network stack closes.
+
+R5OS 2026.1-dev Build 10001 - AirPlay
+We've added AirPlay so you can play this computer's sound on speakers on your Wi-Fi network, such as Sonos. Open the AirPlay icon in the Deskbar, pick a speaker, and choose Play to. You can also receive classic AirPlay 1 audio on this computer. An iPhone usually will not list R5OS in Control Center yet — AirPlay 2 pairing is not included.
+
+R5OS 2026.1-dev Build 10001 - Wi-Fi
+Wi-Fi is on one screen: scan, enter a password, and connect. Open it from Network preferences or from the network icon in the Deskbar. Networks you join are remembered, and R5OS can reconnect after sleep or a dropped link. The Deskbar tooltip shows the network name, or that it is still connecting.
+
+R5OS 2026.1-dev Build 10001 - AirPrint
+You can add network printers that speak AirPrint or IPP. Open the printer settings, add a printer, and choose one that appears on the network. This is new; not every printer has been tried.
+
+R5OS 2026.1-dev Build 10001 - Dark Mode
+You can switch the desktop to a dark look. Open Preferences → Appearance, choose a dark color scheme, and apply it. More of the system (Deskbar, Tracker, windows) follows those colors than before. Some apps still keep their own look.
+
+R5OS 2026.1-dev Build 10001 - Desktop and Deskbar
+Icons on the Desktop overlap less, sit clearer of the Deskbar, and keep a sensible size. The Deskbar clock, mute, battery, and menus behave more predictably. Lists, scrollbars, and alert windows clip and resize more cleanly.
+
+R5OS 2026.1-dev Build 10001 - Name and About
+The system identifies as R5OS in the Deskbar, installer, boot splash, and About R5OS. Open About R5OS from the Deskbar leaf menu. This is not an official Haiku release.

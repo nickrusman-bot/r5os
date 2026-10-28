@@ -22,6 +22,7 @@ cat > "$HAIKU/headers/private/system/r5_os_version.h" <<'EOF'
 #ifndef R5_OS_VERSION_H
 #define R5_OS_VERSION_H
 #define R5_OS_VERSION "2026.1-dev"
+#define R5_OS_BUILD 10001
 #endif
 EOF
 printf '%s\n' 'r5-2026.1-dev' > "$HAIKU/generated.x86_64/build/haiku-revision"
