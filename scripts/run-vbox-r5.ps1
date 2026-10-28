@@ -24,9 +24,11 @@ function Find-VBoxManage {
 	$guess = @(
 		"${env:ProgramFiles}\Oracle\VirtualBox\VBoxManage.exe",
 		"${env:ProgramFiles(x86)}\Oracle\VirtualBox\VBoxManage.exe"
-	) | Where-Object { Test-Path $_ }
-	if ($guess) {
-		return $guess[0]
+	)
+	foreach ($path in $guess) {
+		if (Test-Path $path) {
+			return $path
+		}
 	}
 	throw "VBoxManage not found. Install VirtualBox and retry."
 }
