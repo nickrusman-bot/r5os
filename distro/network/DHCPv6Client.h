@@ -32,6 +32,7 @@ private:
 									uint32 ifIndex);
 
 			thread_id			fThread;
+			int					fSocket;
 			uint8				fMAC[6];
 			uint32				fTransaction;
 			uint8				fServerId[128];

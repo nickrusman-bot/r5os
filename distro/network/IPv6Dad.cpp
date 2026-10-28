@@ -23,25 +23,17 @@
 static const bigtime_t kRetransTimer = 1000000;
 
 
-static status_t
-link_local_for_multicast_if(const char* device, in6_addr& out)
+static bool
+slot_link_local(const BNetworkInterfaceAddress& slot, in6_addr& out)
 {
-	BNetworkInterface interface(device);
-	BNetworkInterfaceAddress slot;
-	int32 count = interface.CountAddresses();
-	for (int32 i = 0; i < count; i++) {
-		if (interface.GetAddressAt(i, slot) != B_OK)
-			continue;
-		if (slot.Address().Family() != AF_INET6)
-			continue;
-		const sockaddr_in6& in6
-			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
-		if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
-			continue;
-		out = in6.sin6_addr;
-		return B_OK;
-	}
-	return EADDRNOTAVAIL;
+	if (slot.Address().Family() != AF_INET6)
+		return false;
+	const sockaddr_in6& in6
+		= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
+	if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
+		return false;
+	out = in6.sin6_addr;
+	return true;
 }
 
 
@@ -84,13 +76,36 @@ wait_readable(int socket, bigtime_t remaining)
 }
 
 
+status_t
+r5_ipv6_link_local(const char* device, in6_addr& out)
+{
+	BNetworkInterface interface(device);
+	BNetworkInterfaceAddress slot;
+	int32 first = interface.FindFirstAddress(AF_INET6);
+	if (first >= 0 && interface.GetAddressAt(first, slot) == B_OK
+		&& slot_link_local(slot, out))
+		return B_OK;
+	for (int32 i = 0; i < 32; i++) {
+		if (interface.GetAddressAt(i, slot) != B_OK)
+			continue;
+		if (slot_link_local(slot, out))
+			return B_OK;
+	}
+	return EADDRNOTAVAIL;
+}
+
+
 bool
 r5_ipv6_has_address(const char* device, const in6_addr& address)
 {
 	BNetworkInterface interface(device);
+	BNetworkAddress needle(address, 0);
+	if (interface.FindAddress(needle) >= 0)
+		return true;
 	BNetworkInterfaceAddress slot;
-	int32 count = interface.CountAddresses();
-	for (int32 i = 0; i < count; i++) {
+	int32 first = interface.FindFirstAddress(AF_INET6);
+	int32 start = first >= 0 ? first : 0;
+	for (int32 i = start; i < start + 32; i++) {
 		if (interface.GetAddressAt(i, slot) != B_OK)
 			continue;
 		if (slot.Address().Family() != AF_INET6)
@@ -125,7 +140,7 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* /*mac*/,
 	}
 
 	in6_addr multicastIf;
-	status = link_local_for_multicast_if(device, multicastIf);
+	status = r5_ipv6_link_local(device, multicastIf);
 	if (status != B_OK) {
 		close(socket);
 		syslog(LOG_ERR, "dad %s: no link-local for IPV6_MULTICAST_IF: %s\n",

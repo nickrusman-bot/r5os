@@ -34,6 +34,7 @@ private:
 			BString				_ToString(const in6_addr& address) const;
 
 			thread_id			fThread;
+			int					fSocket;
 			uint8				fMAC[6];
 			bool				fHaveMAC;
 };

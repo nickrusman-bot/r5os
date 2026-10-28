@@ -16,6 +16,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -68,6 +69,7 @@ DHCPv6Client::DHCPv6Client(BMessenger target, const char* device)
 	:
 	AutoconfigClient("dhcpv6", target, device),
 	fThread(-1),
+	fSocket(-1),
 	fTransaction(0),
 	fServerIdLength(0),
 	fHaveMAC(false)
@@ -90,10 +92,10 @@ DHCPv6Client::DHCPv6Client(BMessenger target, const char* device)
 DHCPv6Client::~DHCPv6Client()
 {
 	thread_id thread = fThread;
+	fThread = -1;
+	if (fSocket >= 0)
+		shutdown(fSocket, SHUT_RDWR);
 	if (thread != -1) {
-		fThread = -1;
-		suspend_thread(thread);
-		resume_thread(thread);
 		UnlockLooper();
 		wait_for_thread(thread, NULL);
 		LockLooper();
@@ -127,20 +129,8 @@ DHCPv6Client::_Thread(void* data)
 status_t
 DHCPv6Client::_EnsureLinkLocal()
 {
-	BNetworkInterface interface(Device());
-	BNetworkInterfaceAddress slot;
-	int32 count = interface.CountAddresses();
-	for (int32 i = 0; i < count; i++) {
-		if (interface.GetAddressAt(i, slot) != B_OK)
-			continue;
-		if (slot.Address().Family() != AF_INET6)
-			continue;
-		const sockaddr_in6& in6
-			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
-		if (IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
-			return B_OK;
-	}
-	return B_ERROR;
+	in6_addr local;
+	return r5_ipv6_link_local(Device(), local);
 }
 
 
@@ -158,8 +148,6 @@ DHCPv6Client::_OpenSocket(uint32& ifIndex)
 
 	int hops = 1;
 	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
-	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifIndex,
-		sizeof(ifIndex));
 
 	sockaddr_in6 local;
 	memset(&local, 0, sizeof(local));
@@ -167,20 +155,9 @@ DHCPv6Client::_OpenSocket(uint32& ifIndex)
 	local.sin6_family = AF_INET6;
 	local.sin6_port = htons(kClientPort);
 	local.sin6_scope_id = ifIndex;
-
-	BNetworkInterfaceAddress slot;
-	int32 count = interface.CountAddresses();
-	for (int32 i = 0; i < count; i++) {
-		if (interface.GetAddressAt(i, slot) != B_OK)
-			continue;
-		if (slot.Address().Family() != AF_INET6)
-			continue;
-		const sockaddr_in6& in6
-			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
-		if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
-			continue;
-		local.sin6_addr = in6.sin6_addr;
-		break;
+	if (r5_ipv6_link_local(Device(), local.sin6_addr) == B_OK) {
+		setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &local.sin6_addr,
+			sizeof(local.sin6_addr));
 	}
 
 	if (bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local)) < 0) {
@@ -381,10 +358,10 @@ DHCPv6Client::_HandleReply(const uint8* packet, ssize_t bytes, uint32 ifIndex)
 status_t
 DHCPv6Client::_Run()
 {
-	for (int32 i = 0; i < 20 && fThread != -1; i++) {
+	for (int32 i = 0; i < 15 && fThread != -1; i++) {
 		if (_EnsureLinkLocal() == B_OK)
 			break;
-		snooze(500000);
+		snooze(200000);
 	}
 	if (_EnsureLinkLocal() != B_OK) {
 		syslog(LOG_ERR, "dhcpv6 %s: waiting for link-local timed out\n",
@@ -396,6 +373,7 @@ DHCPv6Client::_Run()
 	int socket = _OpenSocket(ifIndex);
 	if (socket < 0)
 		return errno;
+	fSocket = socket;
 
 	bool informationOnly = false;
 	status_t status = B_TIMED_OUT;
@@ -468,6 +446,7 @@ DHCPv6Client::_Run()
 		}
 	}
 
+	fSocket = -1;
 	close(socket);
 	if (status != B_OK)
 		syslog(LOG_INFO, "dhcpv6 %s: no server\n", Device());

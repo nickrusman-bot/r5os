@@ -16,6 +16,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -38,6 +39,7 @@ SLAACClient::SLAACClient(BMessenger target, const char* device)
 	:
 	AutoconfigClient("slaac", target, device),
 	fThread(-1),
+	fSocket(-1),
 	fHaveMAC(false)
 {
 	memset(fMAC, 0, sizeof(fMAC));
@@ -55,10 +57,10 @@ SLAACClient::SLAACClient(BMessenger target, const char* device)
 SLAACClient::~SLAACClient()
 {
 	thread_id thread = fThread;
+	fThread = -1;
+	if (fSocket >= 0)
+		shutdown(fSocket, SHUT_RDWR);
 	if (thread != -1) {
-		fThread = -1;
-		suspend_thread(thread);
-		resume_thread(thread);
 		UnlockLooper();
 		wait_for_thread(thread, NULL);
 		LockLooper();
@@ -105,27 +107,11 @@ SLAACClient::_EnsureLinkLocal(BNetworkInterface& interface)
 	raw.s6_addr[14] = fMAC[4];
 	raw.s6_addr[15] = fMAC[5];
 
-	BNetworkInterfaceAddress slot;
-	int32 count = interface.CountAddresses();
-	for (int32 i = 0; i < count; i++) {
-		if (interface.GetAddressAt(i, slot) != B_OK)
-			continue;
-		if (slot.Address().Family() != AF_INET6)
-			continue;
-		const sockaddr_in6& in6
-			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
-		if (IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
-			return B_OK;
-	}
+	in6_addr existing;
+	if (r5_ipv6_link_local(Device(), existing) == B_OK)
+		return B_OK;
 
 	BNetworkAddress local(raw, 0);
-	uint32 ifIndex = interface.Index();
-	if (ifIndex == 0)
-		ifIndex = if_nametoindex(Device());
-	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, raw);
-	if (dad != B_OK)
-		return dad;
-
 	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
 		B_UNCONFIGURED_ADDRESS_FAMILIES);
 	BNetworkInterfaceAddress address;
@@ -166,8 +152,11 @@ SLAACClient::_BindAndJoin(int socket, uint32 ifIndex)
 	int hops = 255;
 	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
 	setsockopt(socket, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &hops, sizeof(hops));
-	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifIndex,
-		sizeof(ifIndex));
+	in6_addr multicastIf;
+	if (r5_ipv6_link_local(Device(), multicastIf) == B_OK) {
+		setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &multicastIf,
+			sizeof(multicastIf));
+	}
 
 	BNetworkInterface interface(Device());
 	sockaddr_in6 local;
@@ -414,6 +403,7 @@ SLAACClient::_Run()
 			strerror(errno));
 		return errno;
 	}
+	fSocket = socket;
 
 	uint32 ifIndex = interface.Index();
 	if (ifIndex == 0)
@@ -448,6 +438,8 @@ SLAACClient::_Run()
 		if (ready < 0) {
 			if (errno == EINTR)
 				continue;
+			if (errno == EBADF || fThread == -1)
+				break;
 			syslog(LOG_ERR, "slaac %s: select: %s\n", Device(),
 				strerror(errno));
 			break;
@@ -475,6 +467,7 @@ SLAACClient::_Run()
 		}
 	}
 
+	fSocket = -1;
 	close(socket);
 	return configured ? B_OK : B_TIMED_OUT;
 }
