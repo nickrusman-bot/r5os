@@ -77,7 +77,9 @@ Do not claim AirPlay 2 pairing/PTP, mirroring, or LAN discovery unless implement
 
 Keep `tracker/STATUS.md` current. After any ticket-status change, run `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Implemented ≠ tested ≠ verified.
 
-`CHANGELOG.md`: problem, what changed, upstream ticket if any, limits, how/where tested.
+`CHANGELOG.md`: problem, what changed, upstream ticket if any, limits, how/where tested. Newest first. Record mistakes and the fix. Do not claim working behavior without evidence. Distinguish compile, test, and confirmed R5OS/LAN results. Never invent test results.
+
+After a task, report **Veranderd / Getest / Onbewezen / Documentatie**. Tracker edits: `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Code, changelog, and tracker must not contradict each other.
 
 ## Versioning
 

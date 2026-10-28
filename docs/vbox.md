@@ -24,6 +24,8 @@ powershell -File scripts/run-vbox-r5.ps1 -ForceConvert
 
 A **new** VDI is a virgin disk. `package_daemon` then does first-boot processing for every package (syslog: `Doing first boot processing #N for package …`, `activated-packages: No such file`). On VirtualBox IDE that often takes **several minutes** (QEMU virtio of an image that already completed first-boot is about five seconds). Wait for the desktop. Do not Reset; that restarts the same work. A guest **Restart** of the same VDI is fast.
 
+IDE syslog `invalid target lun 2`–`7` / `target device not present` is the empty slave and secondary channel. Reset is still ~5s with those lines, so they are not the long first boot.
+
 Use this for IPv6 SLAAC, mDNS, AirPlay speakers, and SMB on the home LAN. QEMU usernet cannot.
 
 ## USB stick (Ryzen 5 5625U)
