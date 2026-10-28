@@ -118,7 +118,7 @@ id	r5_status	branch	commit	notes
 3076	fixed			DragStop(true) when Deskbar/team/window menus detach
 3085	open			
 3098	open			
-3115	fixed			overlay scripts/apply-desktop-enh.py
+3115	open			reverted dark splash fill; it haloed the black logo and icons
 3116	open			
 3168	open			
 3171	fixed			overlay scripts/apply-desktop-enh.py

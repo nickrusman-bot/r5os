@@ -4,29 +4,29 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3875 |
+| open | 3876 |
 | in-progress | 1 |
-| fixed | 60 |
+| fixed | 59 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 open/bezig).
+Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
 | bug | 2526 |
-| enhancement | 1290 |
+| enhancement | 1291 |
 | task | 60 |
 
 ## Priority
 
 | Priority | Aantal |
 |---|---|
-| normal | 3580 |
+| normal | 3581 |
 | low | 259 |
 | high | 35 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3073 |
+| Unscheduled | 3074 |
 | R1 | 427 |
 | R1.1 | 305 |
 | — | 29 |
@@ -50,7 +50,7 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 | Applications/Tracker | 206 |
 | Kits/Interface Kit | 164 |
 | Servers/app_server | 161 |
-| System/Kernel | 152 |
+| System/Kernel | 153 |
 | Applications/WebPositive | 132 |
 | Kits/Web Kit | 126 |
 | Applications/MediaPlayer | 95 |
@@ -85,7 +85,6 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 | [#2701](https://dev.haiku-os.org/ticket/2701) | new | User Interface | Changing mouse pointer |  |
 | [#2864](https://dev.haiku-os.org/ticket/2864) | assigned | Applications/Tracker | after mounting, disk icons overlap on desktop |  |
 | [#3076](https://dev.haiku-os.org/ticket/3076) | assigned | Applications/Deskbar | [Deskbar] disabled menu items after dropping some file on a leaf |  |
-| [#3115](https://dev.haiku-os.org/ticket/3115) | assigned | System/Kernel | Improve Boot screen visuals |  |
 | [#3171](https://dev.haiku-os.org/ticket/3171) | assigned | Applications/Tracker | Better prompting in Tracker file operations |  |
 | [#3291](https://dev.haiku-os.org/ticket/3291) | assigned | Applications/Tracker | Deskbar overlaps icons |  |
 | [#3505](https://dev.haiku-os.org/ticket/3505) | assigned | Servers/app_server | Reposition windows on resolution change if they lie completely outside of the bounds of the new resolution |  |
@@ -223,5 +222,5 @@ Nog open in R5OS: **2526** bugs, **1290** enhancements, rest overig (van 3876 op
 | [#2474](https://dev.haiku-os.org/ticket/2474) | assigned | Drivers | Serial port driver needed for Oxford Semi UART 16950 |  |
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
-| … | | | *3795 meer in r5-status.tsv* | |
+| … | | | *3796 meer in r5-status.tsv* | |
 

@@ -6,7 +6,6 @@
 #4089 #3505 app_server
 #3677 Appearance tabs
 #2701 pointer size
-#3115 boot splash
 """
 from __future__ import annotations
 
@@ -1284,20 +1283,6 @@ AppearanceWindow::MessageReceived(BMessage *message)
 
     replace_once(
         HAIKU / "src/system/boot/platform/generic/video_splash.cpp",
-        """	if (size >= 64) {
-		// Align writes
-		for (addr_t align = (8 - (frameBuffer & 7)) & 7; pos < align; pos++)
-			*(char*)(frameBuffer + pos) = 0;
-		// Write eight bytes, many many times, but not too many
-		for (addr_t alignSize = size - 8; pos < alignSize; pos +=8) {
-			*(uint32*)(frameBuffer + pos) = 0;
-			*(uint32*)(frameBuffer + pos + 4) = 0;
-		}
-	}
-	// Write a few bytes more
-	for (; pos < size; pos++)
-		*(char*)(frameBuffer + pos) = 0;
-""",
         """	uint8 fillByte = 0;
 	uint32 fillWord = 0;
 	if (gKernelArgs.frame_buffer.depth >= 24) {
@@ -1318,7 +1303,21 @@ AppearanceWindow::MessageReceived(BMessage *message)
 	for (; pos < size; pos++)
 		*(char*)(frameBuffer + pos) = fillByte;
 """,
-        "Haiku #3115 dark splash fill",
+        """	if (size >= 64) {
+		// Align writes
+		for (addr_t align = (8 - (frameBuffer & 7)) & 7; pos < align; pos++)
+			*(char*)(frameBuffer + pos) = 0;
+		// Write eight bytes, many many times, but not too many
+		for (addr_t alignSize = size - 8; pos < alignSize; pos +=8) {
+			*(uint32*)(frameBuffer + pos) = 0;
+			*(uint32*)(frameBuffer + pos + 4) = 0;
+		}
+	}
+	// Write a few bytes more
+	for (; pos < size; pos++)
+		*(char*)(frameBuffer + pos) = 0;
+""",
+        "Haiku #3115 revert splash fill",
     )
 
 
