@@ -25,8 +25,10 @@ private:
 	static	status_t			_Thread(void* data);
 			status_t			_Run();
 			status_t			_EnsureLinkLocal(BNetworkInterface& interface);
+			status_t			_BindAndJoin(int socket, uint32 ifIndex);
 			status_t			_SendSolicit(int socket, uint32 ifIndex);
-			status_t			_HandleAdvert(int socket, uint32 ifIndex);
+			status_t			_ApplyAdvert(const uint8* buffer, ssize_t bytes,
+									const sockaddr_in6& from);
 			void				_BuildSlaacAddress(const in6_addr& prefix,
 									in6_addr& out) const;
 			BString				_ToString(const in6_addr& address) const;

@@ -10,6 +10,7 @@
 #include <net/if.h>
 #include <netinet/icmp6.h>
 #include <netinet/in.h>
+#include <netinet6/in6.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -26,7 +27,8 @@
 
 
 static const int kMaxSolicits = 3;
-static const bigtime_t kSolicitWait = 4000000;
+static const bigtime_t kSolicitInterval = 4000000;
+static const bigtime_t kRetryInterval = 60000000;
 static const uint8 kRdnsOption = 25;
 
 
@@ -140,6 +142,57 @@ SLAACClient::_ToString(const in6_addr& address) const
 
 
 status_t
+SLAACClient::_BindAndJoin(int socket, uint32 ifIndex)
+{
+	int hops = 255;
+	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
+	setsockopt(socket, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &hops, sizeof(hops));
+	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifIndex,
+		sizeof(ifIndex));
+
+	BNetworkInterface interface(Device());
+	sockaddr_in6 local;
+	memset(&local, 0, sizeof(local));
+	local.sin6_len = sizeof(local);
+	local.sin6_family = AF_INET6;
+	local.sin6_scope_id = ifIndex;
+
+	BNetworkInterfaceAddress slot;
+	int32 count = interface.CountAddresses();
+	for (int32 i = 0; i < count; i++) {
+		if (interface.GetAddressAt(i, slot) != B_OK)
+			continue;
+		const BNetworkAddress& address = slot.Address();
+		if (address.Family() != AF_INET6)
+			continue;
+		const sockaddr_in6& in6
+			= *reinterpret_cast<const sockaddr_in6*>(&address.SockAddr());
+		if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
+			continue;
+		local.sin6_addr = in6.sin6_addr;
+		break;
+	}
+
+	if (bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local)) < 0) {
+		syslog(LOG_ERR, "slaac %s: bind failed: %s\n", Device(),
+			strerror(errno));
+	}
+
+	ipv6_mreq membership;
+	memset(&membership, 0, sizeof(membership));
+	inet_pton(AF_INET6, "ff02::1", &membership.ipv6mr_multiaddr);
+	membership.ipv6mr_interface = ifIndex;
+	if (setsockopt(socket, IPPROTO_IPV6, IPV6_JOIN_GROUP, &membership,
+			sizeof(membership)) < 0) {
+		syslog(LOG_ERR, "slaac %s: join ff02::1 failed: %s (index %" B_PRIu32
+			")\n", Device(), strerror(errno), ifIndex);
+		return errno;
+	}
+	return B_OK;
+}
+
+
+status_t
 SLAACClient::_SendSolicit(int socket, uint32 ifIndex)
 {
 	uint8 packet[16];
@@ -166,22 +219,19 @@ SLAACClient::_SendSolicit(int socket, uint32 ifIndex)
 			strerror(errno));
 		return errno;
 	}
+	syslog(LOG_INFO, "slaac %s: router solicitation sent\n", Device());
 	return B_OK;
 }
 
 
 status_t
-SLAACClient::_HandleAdvert(int socket, uint32 ifIndex)
+SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
+	const sockaddr_in6& from)
 {
-	uint8 buffer[1280];
-	sockaddr_in6 from;
-	socklen_t fromLen = sizeof(from);
-	ssize_t bytes = recvfrom(socket, buffer, sizeof(buffer), 0,
-		reinterpret_cast<sockaddr*>(&from), &fromLen);
 	if (bytes < (ssize_t)sizeof(struct nd_router_advert))
 		return B_BAD_VALUE;
 
-	uint8* data = buffer;
+	const uint8* data = buffer;
 	ssize_t length = bytes;
 	if (length >= 40 && (data[0] >> 4) == 6) {
 		data += 40;
@@ -190,14 +240,14 @@ SLAACClient::_HandleAdvert(int socket, uint32 ifIndex)
 	if (length < (ssize_t)sizeof(struct nd_router_advert))
 		return B_BAD_VALUE;
 
-	struct nd_router_advert* ra
-		= reinterpret_cast<struct nd_router_advert*>(data);
+	const struct nd_router_advert* ra
+		= reinterpret_cast<const struct nd_router_advert*>(data);
 	if (ra->nd_ra_type != ND_ROUTER_ADVERT || ra->nd_ra_code != 0)
 		return B_BAD_VALUE;
 
 	uint16 lifetime = ntohs(ra->nd_ra_router_lifetime);
-	uint8* option = data + sizeof(struct nd_router_advert);
-	uint8* end = data + length;
+	const uint8* option = data + sizeof(struct nd_router_advert);
+	const uint8* end = data + length;
 
 	in6_addr prefix;
 	bool havePrefix = false;
@@ -215,8 +265,8 @@ SLAACClient::_HandleAdvert(int socket, uint32 ifIndex)
 
 		if (type == ND_OPT_PREFIX_INFORMATION
 			&& bytesLen >= sizeof(struct nd_opt_prefix_info)) {
-			struct nd_opt_prefix_info* info
-				= reinterpret_cast<struct nd_opt_prefix_info*>(option);
+			const struct nd_opt_prefix_info* info
+				= reinterpret_cast<const struct nd_opt_prefix_info*>(option);
 			if ((info->nd_opt_pi_flags_reserved & ND_OPT_PI_FLAG_AUTO) != 0
 				&& info->nd_opt_pi_prefix_len == 64
 				&& !IN6_IS_ADDR_LINKLOCAL(&info->nd_opt_pi_prefix)) {
@@ -224,8 +274,8 @@ SLAACClient::_HandleAdvert(int socket, uint32 ifIndex)
 				havePrefix = true;
 			}
 		} else if (type == kRdnsOption && bytesLen >= 24) {
-			uint8* addr = option + 8;
-			uint8* addrEnd = option + bytesLen;
+			const uint8* addr = option + 8;
+			const uint8* addrEnd = option + bytesLen;
 			while (addr + 16 <= addrEnd) {
 				in6_addr dns;
 				memcpy(&dns, addr, 16);
@@ -241,8 +291,11 @@ SLAACClient::_HandleAdvert(int socket, uint32 ifIndex)
 		option += bytesLen;
 	}
 
-	if (!havePrefix)
+	if (!havePrefix) {
+		syslog(LOG_INFO, "slaac %s: RA from %s without SLAAC /64 prefix\n",
+			Device(), _ToString(from.sin6_addr).String());
 		return B_BAD_VALUE;
+	}
 
 	in6_addr global;
 	_BuildSlaacAddress(prefix, global);
@@ -285,7 +338,6 @@ SLAACClient::_HandleAdvert(int socket, uint32 ifIndex)
 
 	syslog(LOG_INFO, "slaac %s: %s via %s\n", Device(), globalText.String(),
 		_ToString(from.sin6_addr).String());
-	(void)ifIndex;
 	return B_OK;
 }
 
@@ -308,46 +360,60 @@ SLAACClient::_Run()
 	}
 
 	int socket = ::socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
-	if (socket < 0)
+	if (socket < 0) {
+		syslog(LOG_ERR, "slaac %s: raw socket failed: %s\n", Device(),
+			strerror(errno));
 		return errno;
-
-	int hops = 255;
-	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
-	setsockopt(socket, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &hops, sizeof(hops));
+	}
 
 	uint32 ifIndex = interface.Index();
-	ipv6_mreq membership;
-	memset(&membership, 0, sizeof(membership));
-	inet_pton(AF_INET6, "ff02::1", &membership.ipv6mr_multiaddr);
-	membership.ipv6mr_interface = ifIndex;
-	setsockopt(socket, IPPROTO_IPV6, IPV6_JOIN_GROUP, &membership,
-		sizeof(membership));
+	if (ifIndex == 0)
+		ifIndex = if_nametoindex(Device());
+	syslog(LOG_INFO, "slaac %s: listening, ifindex %" B_PRIu32 "\n", Device(),
+		ifIndex);
 
-#ifdef ICMP6_FILTER
-	struct icmp6_filter filter;
-	ICMP6_FILTER_SETBLOCKALL(&filter);
-	ICMP6_FILTER_SETPASS(ND_ROUTER_ADVERT, &filter);
-	setsockopt(socket, IPPROTO_ICMPV6, ICMP6_FILTER, &filter, sizeof(filter));
-#endif
+	_BindAndJoin(socket, ifIndex);
 
 	timeval timeout;
-	timeout.tv_sec = kSolicitWait / 1000000;
-	timeout.tv_usec = kSolicitWait % 1000000;
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 0;
 	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-	status = B_TIMED_OUT;
-	for (int32 tryIndex = 0; tryIndex < kMaxSolicits && fThread != -1;
-			tryIndex++) {
-		if (_SendSolicit(socket, ifIndex) != B_OK)
+	int32 solicits = 0;
+	bigtime_t nextSolicit = 0;
+	bool configured = false;
+
+	while (fThread != -1) {
+		bigtime_t now = system_time();
+		if (now >= nextSolicit && (!configured || solicits < kMaxSolicits)) {
+			_SendSolicit(socket, ifIndex);
+			solicits++;
+			if (solicits < kMaxSolicits)
+				nextSolicit = now + kSolicitInterval;
+			else
+				nextSolicit = now + kRetryInterval;
+		}
+
+		uint8 packet[1280];
+		sockaddr_in6 from;
+		socklen_t fromLen = sizeof(from);
+		ssize_t bytes = recvfrom(socket, packet, sizeof(packet), 0,
+			reinterpret_cast<sockaddr*>(&from), &fromLen);
+		if (bytes < 0) {
+			if (errno != EAGAIN && errno != EINTR && errno != ETIMEDOUT)
+				syslog(LOG_ERR, "slaac %s: recv: %s\n", Device(),
+					strerror(errno));
 			continue;
-		status = _HandleAdvert(socket, ifIndex);
-		if (status == B_OK)
-			break;
+		}
+
+		status = _ApplyAdvert(packet, bytes, from);
+		if (status == B_OK) {
+			configured = true;
+			solicits = kMaxSolicits;
+			nextSolicit = now + kRetryInterval;
+		}
 	}
 
 	close(socket);
-	if (status != B_OK) {
-		syslog(LOG_DEBUG, "slaac %s: no router advertisement\n", Device());
-	}
-	return status;
+	return configured ? B_OK : B_TIMED_OUT;
 }
