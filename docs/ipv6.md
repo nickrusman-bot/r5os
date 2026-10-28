@@ -29,7 +29,8 @@ Useful syslog:
 | `slaac …: fdae:… via fe80:…` | Second address was assigned |
 | `slaac … without SLAAC /64 prefix` | RA had no A-flag `/64`; DHCPv6 may still run |
 | `dad …: NS send:` / `socket:` / `bind` | DAD could not run; the address is **not** assigned |
-| `RS send failed: Network is unreachable` | Multicast send had no route (`IPV6_MULTICAST_IF`); current image uses `SO_BINDTODEVICE` |
+| `RS send failed: Network is unreachable` | Multicast send had no route; kernel now uses the interface `direct_route` |
+| `mdns: IPv6 announce` | IPv6 mDNS send to `ff02::fb` failed |
 | `dad …: duplicate` | Address not assigned |
 | `dhcpv6 …: no server` | No DHCPv6 on this LAN |
 

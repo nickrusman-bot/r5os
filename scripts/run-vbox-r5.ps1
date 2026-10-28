@@ -89,11 +89,13 @@ if ($exists) {
 	Detach-IdeDisk $vbox $VmName
 }
 
-$rawTime = (Get-Item $raw).LastWriteTimeUtc
+# \\wsl.localhost LastWriteTime is often stale. Use the Linux mtime.
+$rawEpoch = wsl -e bash -lc "stat -c %Y /home/nickr/r5os/haiku/generated.x86_64/r5-os.image"
 $reuse = $false
-if (-not $ForceConvert -and (Test-Path $vdi)) {
+if (-not $ForceConvert -and (Test-Path $vdi) -and $rawEpoch -match '^\d+$') {
 	$vdiItem = Get-Item $vdi
-	if ($vdiItem.Length -gt 0 -and $vdiItem.LastWriteTimeUtc -ge $rawTime) {
+	$vdiEpoch = [DateTimeOffset]::new($vdiItem.LastWriteTimeUtc).ToUnixTimeSeconds()
+	if ($vdiItem.Length -gt 0 -and $vdiEpoch -ge [int64]$rawEpoch) {
 		$reuse = $true
 	}
 }

@@ -650,6 +650,130 @@ def patch_kernel_multicast_if() -> None:
     )
 
 
+def patch_datalink_device_route() -> None:
+    header = HAIKU / "headers" / "private" / "net" / "net_datalink.h"
+    replace_once(
+        header,
+        """	status_t		(*update_route_info)(net_domain* domain,
+						net_route_info* info);
+};
+""",
+        """	status_t		(*update_route_info)(net_domain* domain,
+						net_route_info* info);
+	status_t		(*get_device_route)(net_domain* domain, uint32 index,
+						net_route** _route);
+};
+""",
+        "datalink get_device_route",
+        optional=True,
+    )
+    datalink = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "stack" / "datalink.cpp"
+    )
+    replace_once(
+        datalink,
+        """	register_route_info,
+	unregister_route_info,
+	update_route_info
+};
+""",
+        """	register_route_info,
+	unregister_route_info,
+	update_route_info,
+	get_device_route
+};
+""",
+        "datalink get_device_route export",
+        optional=True,
+    )
+
+
+def patch_kernel_multicast_route() -> None:
+    path = HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols" / "ipv6" / "ipv6.cpp"
+    replace_once(
+        path,
+        """	sockaddr_in6* destination = (sockaddr_in6*)buffer->destination;
+
+	// handle IPV6_MULTICAST_IF
+	if (IN6_IS_ADDR_MULTICAST(&destination->sin6_addr)
+		&& protocol->multicast_address != NULL) {
+		net_interface_address* address = sDatalinkModule->get_interface_address(
+			protocol->multicast_address);
+		if (address == NULL || (address->interface->flags & IFF_UP) == 0) {
+			sDatalinkModule->put_interface_address(address);
+			return EADDRNOTAVAIL;
+		}
+
+		sDatalinkModule->put_interface_address(buffer->interface_address);
+		buffer->interface_address = address;
+			// the buffer takes over ownership of the address
+
+		net_route* route = sDatalinkModule->get_route(sDomain, address->local);
+		if (route == NULL)
+			return ENETUNREACH;
+
+		return sDatalinkModule->send_routed_data(route, buffer);
+	}
+
+	return sDatalinkModule->send_data(protocol, sDomain, buffer);
+}
+""",
+        """	sockaddr_in6* destination = (sockaddr_in6*)buffer->destination;
+
+	if (IN6_IS_ADDR_MULTICAST(&destination->sin6_addr) && protocol != NULL) {
+		uint32 index = 0;
+		if (protocol->multicast_address != NULL) {
+			net_interface_address* address
+				= sDatalinkModule->get_interface_address(
+					protocol->multicast_address);
+			if (address == NULL
+				|| (address->interface->flags & IFF_UP) == 0) {
+				sDatalinkModule->put_interface_address(address);
+				return EADDRNOTAVAIL;
+			}
+
+			index = address->interface->index;
+			sDatalinkModule->put_interface_address(buffer->interface_address);
+			buffer->interface_address = address;
+		} else if (protocol->socket != NULL
+			&& protocol->socket->bound_to_device != 0) {
+			index = protocol->socket->bound_to_device;
+		} else if (destination->sin6_scope_id != 0)
+			index = destination->sin6_scope_id;
+
+		if (index != 0) {
+			net_route* route = NULL;
+			status_t status = sDatalinkModule->get_device_route(sDomain,
+				index, &route);
+			if (status != B_OK)
+				return status;
+			status = ipv6_send_routed_data(protocol, route, buffer);
+			sDatalinkModule->put_route(sDomain, route);
+			return status;
+		}
+	}
+
+	return sDatalinkModule->send_data(protocol, sDomain, buffer);
+}
+""",
+        "IPv6 multicast device route",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """			status = sDatalinkModule->send_routed_data(route, buffer);
+			sDatalinkModule->put_route(sDomain, route);
+			return status;
+""",
+        """			status = ipv6_send_routed_data(protocol, route, buffer);
+			sDatalinkModule->put_route(sDomain, route);
+			return status;
+""",
+        "IPv6 multicast via ipv6_send_routed_data",
+        optional=True,
+    )
+
+
 def main() -> int:
     copy_sources()
     patch_jam()
@@ -658,6 +782,8 @@ def main() -> int:
     patch_net_server()
     patch_prefs()
     patch_kernel_multicast_if()
+    patch_datalink_device_route()
+    patch_kernel_multicast_route()
     return 0
 
 
