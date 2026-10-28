@@ -4,11 +4,13 @@
 #include <SupportDefs.h>
 
 enum {
-	kMsgAirPlayPlayTo	= 'apto',
-	kMsgAirPlayStopSend	= 'apst'
+	kMsgAirPlayPlayTo		= 'apto',
+	kMsgAirPlayStopSend		= 'apst',
+	kMsgAirPlayInstallTray	= 'apdb'
 };
 
 #define kAirPlaySignature		"application/x-vnd.R5OS-airplay"
+#define kAirPlayTraySignature	"application/x-vnd.R5OS-airplay-tray"
 #define kAirPlayDeskbarItem		"AirPlay"
 
 status_t r5_install_airplay_deskbar();
