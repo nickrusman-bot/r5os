@@ -1,16 +1,18 @@
+#include "AirPlayLog.h"
 #include "AirPlayMessages.h"
 
 #include <Application.h>
 #include <Archivable.h>
 #include <Deskbar.h>
 #include <Entry.h>
+#include <FindDirectory.h>
 #include <MenuItem.h>
 #include <Messenger.h>
+#include <Path.h>
 #include <PopUpMenu.h>
 #include <View.h>
 
 #include <image.h>
-#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <arpa/inet.h>
@@ -65,6 +67,8 @@ public:
 
 	virtual void AttachedToWindow()
 	{
+		r5_airplay_log("replicant", "AttachedToWindow frame %.0fx%.0f",
+			Bounds().Width() + 1, Bounds().Height() + 1);
 		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 		BView::AttachedToWindow();
 	}
@@ -138,6 +142,8 @@ public:
 extern "C" _EXPORT BView*
 instantiate_deskbar_item(float /*maxWidth*/, float maxHeight)
 {
+	r5_airplay_log("replicant", "instantiate_deskbar_item height %.0f",
+		maxHeight);
 	return new AirPlayReplicant(BRect(0, 0, maxHeight - 1, maxHeight - 1));
 }
 
@@ -146,25 +152,49 @@ status_t
 r5_install_airplay_deskbar()
 {
 	BDeskbar deskbar;
-	if (!deskbar.IsRunning())
+	bool running = deskbar.IsRunning();
+	bool has = running && deskbar.HasItem(kAirPlayDeskbarItem);
+	r5_airplay_log("install", "deskbar running=%d has=%d count=%ld",
+		running, has, running ? (long)deskbar.CountItems() : -1L);
+	if (!running)
 		return B_ERROR;
-	if (deskbar.HasItem(kAirPlayDeskbarItem))
+	if (has)
 		return B_OK;
 
-	image_info info;
-	status_t err = our_image(info);
+	BPath path;
+	status_t err = find_directory(B_SYSTEM_SERVERS_DIRECTORY, &path);
+	if (err == B_OK)
+		err = path.Append("airplay_deskbar");
+
+	BEntry entry;
+	if (err == B_OK)
+		err = entry.SetTo(path.Path());
+	if (err != B_OK || !entry.Exists()) {
+		image_info info;
+		err = our_image(info);
+		if (err == B_OK) {
+			path.SetTo(info.name);
+			err = entry.SetTo(path.Path());
+		}
+	}
+
+	r5_airplay_log("install", "addon path %s exists=%d err=%s",
+		path.Path() != NULL ? path.Path() : "(null)",
+		entry.Exists(), strerror(err));
 	if (err != B_OK)
 		return err;
 
 	entry_ref ref;
-	err = get_ref_for_path(info.name, &ref);
-	if (err != B_OK)
+	err = entry.GetRef(&ref);
+	if (err != B_OK) {
+		r5_airplay_log("install", "GetRef %s", strerror(err));
 		return err;
+	}
 
 	int32 id = -1;
 	err = deskbar.AddItem(&ref, &id);
-	fprintf(stderr, "airplay tray: AddItem -> %s (id %ld, %s)\n",
-		strerror(err), (long)id, info.name);
+	r5_airplay_log("install", "AddItem -> %s (id %ld) has=%d",
+		strerror(err), (long)id, deskbar.HasItem(kAirPlayDeskbarItem));
 	return err;
 }
 
@@ -179,6 +209,7 @@ public:
 
 	virtual void ReadyToRun()
 	{
+		r5_airplay_log("tray", "ReadyToRun");
 		SetPulseRate(1000000);
 		_TryInstall();
 	}
@@ -191,10 +222,8 @@ public:
 private:
 			void				_TryInstall()
 			{
-				if (r5_install_airplay_deskbar() == B_OK) {
-					SetPulseRate(0);
-					Quit();
-				}
+				if (r5_install_airplay_deskbar() == B_OK)
+					SetPulseRate(10000000);
 			}
 };
 
@@ -202,7 +231,9 @@ private:
 int
 main()
 {
+	r5_airplay_log("tray", "main");
 	AirPlayTrayApp app;
 	app.Run();
+	r5_airplay_log("tray", "main exit");
 	return 0;
 }

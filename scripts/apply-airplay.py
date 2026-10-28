@@ -36,6 +36,7 @@ def copy_sources() -> None:
         "AirPlaySender.cpp",
         "AirPlaySender.h",
         "AirPlayDeskbar.cpp",
+        "AirPlayLog.h",
         "AirPlayMessages.h",
         "AirPlayServer.rdef",
         "AirPlayDeskbar.rdef",
@@ -162,9 +163,14 @@ def patch_launch() -> None:
     )
     replace_once(
         HAIKU / "data" / "launch" / "system",
-        "service x-vnd.R5OS-airplay-tray {\n",
-        "job x-vnd.R5OS-airplay-tray {\n",
-        "airplay tray is job",
+        "\n"
+        "job x-vnd.R5OS-airplay-tray {\n"
+        "	launch /system/servers/airplay_deskbar\n"
+        "	no_safemode\n"
+        "	legacy\n"
+        "}\n",
+        "\n",
+        "remove leftover airplay tray job",
     )
 
 

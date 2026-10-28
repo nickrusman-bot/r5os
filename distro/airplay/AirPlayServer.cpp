@@ -10,12 +10,18 @@
 #include "AirPlayPlayer.h"
 #include "AirPlaySender.h"
 
+#include "AirPlayLog.h"
+
 #include <Application.h>
+#include <Deskbar.h>
+#include <Entry.h>
+#include <FindDirectory.h>
 #include <Message.h>
 #include <Locker.h>
 #include <NetworkInterface.h>
 #include <NetworkRoster.h>
 #include <OS.h>
+#include <Path.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -616,16 +622,25 @@ class AirPlayApp : public BApplication {
 public:
 	AirPlayApp()
 		:
-		BApplication(kAirPlaySignature)
+		BApplication(kAirPlaySignature),
+		fTrayOk(false)
 	{
 	}
 
 	virtual void ReadyToRun()
 	{
+		r5_airplay_log("server", "ReadyToRun");
 		thread_id listen = spawn_thread(listen_thread, "airplay-listen",
 			B_NORMAL_PRIORITY, NULL);
 		if (listen >= 0)
 			resume_thread(listen);
+		SetPulseRate(1000000);
+		_TryInstallTray();
+	}
+
+	virtual void Pulse()
+	{
+		_TryInstallTray();
 	}
 
 	virtual void MessageReceived(BMessage* message)
@@ -651,6 +666,59 @@ public:
 				break;
 		}
 	}
+
+private:
+			void				_TryInstallTray()
+			{
+				if (fTrayOk)
+					return;
+
+				BDeskbar deskbar;
+				bool running = deskbar.IsRunning();
+				bool has = running && deskbar.HasItem(kAirPlayDeskbarItem);
+				r5_airplay_log("server", "deskbar running=%d has=%d count=%ld",
+					running, has,
+					running ? (long)deskbar.CountItems() : -1L);
+				if (!running)
+					return;
+				if (has) {
+					fTrayOk = true;
+					SetPulseRate(0);
+					return;
+				}
+
+				BPath path;
+				status_t err = find_directory(B_SYSTEM_SERVERS_DIRECTORY, &path);
+				if (err == B_OK)
+					err = path.Append("airplay_deskbar");
+				BEntry entry;
+				if (err == B_OK)
+					err = entry.SetTo(path.Path());
+				r5_airplay_log("server", "addon %s exists=%d init=%s",
+					path.Path() != NULL ? path.Path() : "(null)",
+					entry.Exists(), strerror(err));
+				if (err != B_OK)
+					return;
+
+				entry_ref ref;
+				err = entry.GetRef(&ref);
+				if (err != B_OK) {
+					r5_airplay_log("server", "GetRef %s", strerror(err));
+					return;
+				}
+
+				int32 id = -1;
+				err = deskbar.AddItem(&ref, &id);
+				r5_airplay_log("server", "AddItem -> %s (id %ld) has=%d",
+					strerror(err), (long)id,
+					deskbar.HasItem(kAirPlayDeskbarItem));
+				if (err == B_OK) {
+					fTrayOk = true;
+					SetPulseRate(0);
+				}
+			}
+
+			bool				fTrayOk;
 };
 
 
