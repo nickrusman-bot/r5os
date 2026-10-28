@@ -41,6 +41,13 @@ function Get-RawImagePath {
 	throw "r5-os.image not found. Jam AMD64 first (scripts/jam-r5-raw.sh)."
 }
 
+function Detach-IdeDisk([string]$vbox, [string]$name) {
+	$saved = $ErrorActionPreference
+	$ErrorActionPreference = "SilentlyContinue"
+	& $vbox storageattach $name --storagectl IDE --port 0 --device 0 --medium none | Out-Null
+	$ErrorActionPreference = $saved
+}
+
 function Get-BridgeName([string]$vbox, [string]$preferred) {
 	$names = & $vbox list bridgedifs | ForEach-Object {
 		if ($_ -match '^Name:\s+(.+)$') { $Matches[1].Trim() }
@@ -78,7 +85,7 @@ if ($running -match "`"$VmName`"") {
 $all = & $vbox list vms
 $exists = $all -match "`"$VmName`""
 if ($exists) {
-	& $vbox storageattach $VmName --storagectl IDE --port 0 --device 0 --medium none 2>$null | Out-Null
+	Detach-IdeDisk $vbox $VmName
 }
 
 if (Test-Path $vdi) {
@@ -119,7 +126,7 @@ Write-Host "  bridge: $bridge"
 	--uart1 "0x3F8" 4 `
 	--uartmode1 server "\\.\pipe\R5OS-clip"
 
-& $vbox storageattach $VmName --storagectl IDE --port 0 --device 0 --medium none 2>$null | Out-Null
+Detach-IdeDisk $vbox $VmName
 & $vbox storageattach $VmName --storagectl IDE --port 0 --device 0 --type hdd --medium $vdi
 
 Write-Host "Starting $VmName ..."
