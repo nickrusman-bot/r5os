@@ -9,6 +9,7 @@ Dit is **niet** de officiële Haiku-distributie en **niet** BeOS. Zie `distro/DI
 | Pad | Rol |
 |---|---|
 | `distro/` | Overlay: Jam-profiel, disclaimer, later branding en extra apps |
+| `docs/ROADMAP.md` | Productrichting (geen agent-regels; die staan in `AGENTS.md`) |
 | `tracker/` | Alle open Haiku-tickets + of R5OS ze al gefixt heeft |
 | `scripts/` | Clone, overlay, image, ticket-sync |
 | `haiku/` | R5OS-fork van de OS-bron (`r5`-branch; niet in *deze* git) |
