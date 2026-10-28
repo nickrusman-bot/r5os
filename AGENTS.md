@@ -1,48 +1,92 @@
 # R5OS
 
-This tree is an independent fork. AI-assisted work is allowed here.
+Independent Haiku-based OS. AI-assisted work is allowed here.
 
-Do not open GitHub pull requests against `haiku/haiku`.
-Do not push to `git.haiku-os.org` or `review.haiku-os.org`.
-Haiku does not accept AI-generated or AI-modified contributions.
+Haiku is a codebase and a source of fixes, not the product owner. Do not open PRs against `haiku/haiku`. Do not push to `git.haiku-os.org` or `review.haiku-os.org`. Haiku does not accept AI-generated or AI-modified contributions.
 
-`upstream` is fetch-only, for optionally merging official Haiku commits into the `r5` branch.
-`origin` is the R5OS repository and the source of truth.
+`upstream` is fetch-only (optional merge into `r5`). `origin` is source of truth.
 
-GitHub pull requests on `origin` target **`main`** directly. Do not stack PRs on feature branches unless the user asks for that.
+GitHub PRs on `origin` target **`main`**. Do not stack PRs unless the user asks.
 
-Always keep `tracker/STATUS.md` current. After any ticket-status change (`tracker-set.py`, overlay fix, wontfix, not-applicable), run `python3 scripts/tracker-report.py` and include `tracker/r5-status.tsv` plus the regenerated `tracker/STATUS.md` in the same commit/PR. Never leave STATUS.md stale.
+Create PRs with Cursor `ManagePullRequest`. If that fails (GitHub App missing), give the compare URL. Do not silently use `gh pr create` unless the user asks.
 
-Keep `CHANGELOG.md` current (newest first). User-visible behavior, why a path was chosen, and mistakes belong there — not only commit messages.
+Roadmap (R5 Hub, Store, Vulkan, …): `docs/ROADMAP.md`. Do not implement unrelated roadmap items during a focused fix.
 
-## Development loop
+## Compatibility
 
-After implementing or fixing something:
+Keep Haiku APIs and, where practical, ABI for the same CPU architecture. Prefer additive APIs. Do not replace a working component only to look modern.
 
-1. Commit locally (include the STATUS.md update in that commit).
-2. Jam the AMD64 image (`scripts/jam-r5-raw.sh` in WSL).
-3. Boot the image in QEMU (`scripts/run-qemu-r5.sh`).
-4. Ask whether to update GitHub (`git push` / PR to `main`). Do not push until the user says yes.
+R5OS may add APIs, services, and desktop features without upstream approval. Do not revert R5OS behavior just to match Haiku. Do not merge `upstream` blindly: check overlays, APIs, and supported arches.
+
+If a break is required: document why, what it hits, and the migration path.
+
+## AI
+
+Use AI to read code, patch, port, test, review races/overflows, and write changelog/tracker files. Generated code is not automatically correct. Verify against source, build, and boot. Prefer small diffs. No drive-by refactors.
+
+Kernel, MMU, scheduler, drivers, filesystems: inspect the path and fail cases. Compile success is not a kernel fix.
 
 ## Architectures
 
-R5OS targets **64-bit only**:
+Official targets are **64-bit only**:
 
-1. **AMD64** (`x86_64`) — primary; first images and the Ryzen 5 5625U reference machine.
-2. **ARM64** (`aarch64`) — second; QEMU first, then real hardware.
-3. **RISC-V 64** (`riscv64`, RV64GC) — optional third, after AMD64/ARM64 are usable.
+1. **AMD64** (`x86_64`) — primary. Ryzen 5 5625U is the reference machine.
+2. **ARM64** (`aarch64`) — QEMU first, then hardware.
+3. **RISC-V 64** (`riscv64`, RV64GC) — after AMD64/ARM64 are usable.
 
-Do not spend effort on 32-bit x86, ARM32, PowerPC, SPARC, or m68k unless needed to keep the tree building. Do not drop Haiku’s existing 32-bit ports in drive-by commits.
+Do not spend effort on 32-bit x86, ARM32, PowerPC, SPARC, or m68k except to keep the tree building. Do not drop Haiku 32-bit ports in drive-by commits.
+
+One OS, three targets. Keep CPU-specific init, traps, page tables, and atomics in arch directories. AMD64 success does not prove ARM64 or RISC-V.
+
+Support levels (do not skip): **buildable → bootable → functional → desktop-capable → release-supported**. Compiling is not “supported”.
+
+## Development loop
+
+1. Run relevant tests; inspect the diff for unrelated edits.
+2. Commit locally. Ticket-status changes must include `python3 scripts/tracker-report.py` plus `tracker/r5-status.tsv` and `tracker/STATUS.md` in the same commit.
+3. Apply overlays into the WSL Haiku tree (`scripts/apply-overlay.sh` or the relevant `apply-*.py`). `scripts/jam-r5-raw.sh` does not apply overlays by itself.
+4. Jam AMD64 (`scripts/jam-r5-raw.sh` in WSL).
+5. Boot QEMU (`scripts/run-qemu-r5.sh`).
+6. For arch-specific code, test that arch (or state that it was not tested).
+7. Update `CHANGELOG.md` (newest first) for user-visible behavior, chosen paths, mistakes, and limits.
+8. Ask before `git push` / PR to `main`.
+
+Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is not a LAN** (no mDNS multicast, no Wi-Fi device, no AirPlay speakers).
+
+If a test cannot run, say which one and why.
+
+## Overlays
+
+`distro/` + `scripts/apply-*.py` patch the Haiku tree. Scripts must be idempotent. Fail loudly if a required pattern is missing.
+
+`replace_once` matching a short substring can insert **duplicates**. After apply, grep for doubled `SYSTEM_SERVERS`, launch jobs, and includes.
+
+Hook new `apply-*.py` into `scripts/apply-overlay.sh`. Keep upstream imports distinct from R5OS-only changes. Temporary overlays must not become silent architecture.
+
+## launch_daemon and Deskbar
+
+- A **service** that `Quit()`s is restarted forever.
+- A **job** without an `on …` event often never starts. User-session jobs belong in `data/launch/user` under `target desktop` (e.g. `on initial_volumes_mounted`, `requires` Deskbar).
+- Deskbar replicants: export `instantiate_deskbar_item` **and** a non-inline `_EXPORT Class::Instantiate(BMessage*)`. Do not `load_add_on` a full server (OpenSSL, Media Kit, globals) into Deskbar. `BView::Archive` may write `class=BView` first; replace it. Dummy AddItem id `999` plus `HasItem=0` means unarchive failed.
+
+## Networking claims
+
+Do not claim AirPlay 2 pairing/PTP, mirroring, or LAN discovery unless implemented and tested on a real network. Credit third-party code (license + AboutSystem / `THIRD_PARTY.md`).
+
+## Tracker and changelog
+
+Keep `tracker/STATUS.md` current. After any ticket-status change, run `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Implemented ≠ tested ≠ verified.
+
+`CHANGELOG.md`: problem, what changed, upstream ticket if any, limits, how/where tested.
 
 ## Versioning
 
-Public releases: **R5OS YYYY.N** (`2026.1`, `2026.2`, …). New year resets N to 1.
-Unreleased trees use `YYYY.N-dev` in `distro/VERSION`. Jam `HAIKU_REVISION` is `r5-` plus that string (see `scripts/r5-version.sh`). Do not use Haiku `hrev` tags as the distro version.
+Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`. Jam `HAIKU_REVISION` is `r5-` plus that string (`scripts/r5-version.sh`). Do not use Haiku `hrev` as the distro version.
 
 ## Code style
 
-Follow Haiku coding guidelines for anything under `haiku/` (tabs for indent, 100-column limit, InterCaps types/functions, `f`/`k`/`g`/`s` prefixes, two blank lines between functions, C++ casts, `int32`/`status_t`, no style-only noise in a functional commit).
+Under `haiku/`: Haiku guidelines (tabs, 100 columns, InterCaps, `f`/`k`/`g`/`s`, two blank lines between functions, C++ casts, `int32`/`status_t`).
 
 https://www.haiku-os.org/development/coding-guidelines/
 
-Prefer matching the file you are editing over inventing a new style. Do not mix a bugfix with a drive-by reformat; style-only changes say "no functional change" in the commit message. Use `haiku-format` / `src/tools/checkstyle/` when the tree is available.
+Match the file you edit. Do not mix a fix with a reformat. Style-only commits say “no functional change”. Use `haiku-format` / `src/tools/checkstyle/` when available.
