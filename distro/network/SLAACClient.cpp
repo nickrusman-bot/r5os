@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -122,7 +123,7 @@ SLAACClient::_EnsureLinkLocal(BNetworkInterface& interface)
 	if (ifIndex == 0)
 		ifIndex = if_nametoindex(Device());
 	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, raw);
-	if (dad == B_NAME_IN_USE)
+	if (dad != B_OK)
 		return dad;
 
 	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
@@ -362,7 +363,7 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 	if (ifIndex == 0)
 		ifIndex = if_nametoindex(Device());
 	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
-	if (dad == B_NAME_IN_USE)
+	if (dad != B_OK)
 		return dad;
 
 	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
@@ -422,11 +423,6 @@ SLAACClient::_Run()
 
 	_BindAndJoin(socket, ifIndex);
 
-	timeval timeout;
-	timeout.tv_sec = 1;
-	timeout.tv_usec = 0;
-	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
 	int32 solicits = 0;
 	bigtime_t nextSolicit = 0;
 	bool configured = false;
@@ -441,6 +437,23 @@ SLAACClient::_Run()
 			else
 				nextSolicit = now + kRetryInterval;
 		}
+
+		fd_set readSet;
+		FD_ZERO(&readSet);
+		FD_SET(socket, &readSet);
+		timeval wait;
+		wait.tv_sec = 1;
+		wait.tv_usec = 0;
+		int ready = select(socket + 1, &readSet, NULL, NULL, &wait);
+		if (ready < 0) {
+			if (errno == EINTR)
+				continue;
+			syslog(LOG_ERR, "slaac %s: select: %s\n", Device(),
+				strerror(errno));
+			break;
+		}
+		if (ready == 0)
+			continue;
 
 		uint8 packet[1280];
 		sockaddr_in6 from;

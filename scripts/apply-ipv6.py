@@ -34,6 +34,7 @@ def copy_sources() -> None:
         "SLAACClient.h",
         "IPv6Dad.cpp",
         "IPv6Dad.h",
+        "IPv6DadPacket.h",
         "DHCPv6Client.cpp",
         "DHCPv6Client.h",
     ):

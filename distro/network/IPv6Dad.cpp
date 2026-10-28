@@ -4,15 +4,15 @@
 
 
 #include "IPv6Dad.h"
+#include "IPv6DadPacket.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
-#include <net/if.h>
-#include <netinet/icmp6.h>
 #include <netinet/in.h>
 #include <netinet6/in6.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -20,17 +20,67 @@
 #include <OS.h>
 
 
-static void
-solicited_node(const in6_addr& address, in6_addr& out)
+static const bigtime_t kRetransTimer = 1000000;
+
+
+static status_t
+link_local_for_multicast_if(const char* device, in6_addr& out)
 {
-	memset(&out, 0, sizeof(out));
-	out.s6_addr[0] = 0xff;
-	out.s6_addr[1] = 0x02;
-	out.s6_addr[11] = 0x01;
-	out.s6_addr[12] = 0xff;
-	out.s6_addr[13] = address.s6_addr[13];
-	out.s6_addr[14] = address.s6_addr[14];
-	out.s6_addr[15] = address.s6_addr[15];
+	BNetworkInterface interface(device);
+	BNetworkInterfaceAddress slot;
+	int32 count = interface.CountAddresses();
+	for (int32 i = 0; i < count; i++) {
+		if (interface.GetAddressAt(i, slot) != B_OK)
+			continue;
+		if (slot.Address().Family() != AF_INET6)
+			continue;
+		const sockaddr_in6& in6
+			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
+		if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
+			continue;
+		out = in6.sin6_addr;
+		return B_OK;
+	}
+	return EADDRNOTAVAIL;
+}
+
+
+static status_t
+set_int_option(int socket, int level, int option, int value)
+{
+	if (setsockopt(socket, level, option, &value, sizeof(value)) < 0)
+		return errno;
+	return B_OK;
+}
+
+
+static status_t
+join_group(int socket, uint32 ifIndex, const in6_addr& group)
+{
+	ipv6_mreq membership;
+	memset(&membership, 0, sizeof(membership));
+	membership.ipv6mr_multiaddr = group;
+	membership.ipv6mr_interface = ifIndex;
+	if (setsockopt(socket, IPPROTO_IPV6, IPV6_JOIN_GROUP, &membership,
+			sizeof(membership)) < 0)
+		return errno;
+	return B_OK;
+}
+
+
+static int
+wait_readable(int socket, bigtime_t remaining)
+{
+	if (remaining <= 0)
+		return 0;
+
+	fd_set readSet;
+	FD_ZERO(&readSet);
+	FD_SET(socket, &readSet);
+	timeval wait;
+	wait.tv_sec = remaining / 1000000;
+	wait.tv_usec = remaining % 1000000;
+	return select(socket + 1, &readSet, NULL, NULL, &wait);
 }
 
 
@@ -55,67 +105,84 @@ r5_ipv6_has_address(const char* device, const in6_addr& address)
 
 
 status_t
-r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
+r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* /*mac*/,
 	const in6_addr& tentative)
 {
 	int socket = ::socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
 	if (socket < 0) {
-		syslog(LOG_ERR, "dad %s: socket: %s (continuing without DAD)\n",
-			device, strerror(errno));
-		return B_OK;
+		status_t error = errno;
+		syslog(LOG_ERR, "dad %s: socket: %s\n", device, strerror(error));
+		return error;
 	}
 
-	int hops = 255;
-	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
-	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &ifIndex,
-		sizeof(ifIndex));
+	status_t status = set_int_option(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
+		255);
+	if (status != B_OK) {
+		close(socket);
+		syslog(LOG_ERR, "dad %s: IPV6_MULTICAST_HOPS: %s\n", device,
+			strerror(status));
+		return status;
+	}
 
-	in6_addr group;
-	solicited_node(tentative, group);
-	ipv6_mreq membership;
-	memset(&membership, 0, sizeof(membership));
-	membership.ipv6mr_multiaddr = group;
-	membership.ipv6mr_interface = ifIndex;
-	setsockopt(socket, IPPROTO_IPV6, IPV6_JOIN_GROUP, &membership,
-		sizeof(membership));
+	in6_addr multicastIf;
+	status = link_local_for_multicast_if(device, multicastIf);
+	if (status != B_OK) {
+		close(socket);
+		syslog(LOG_ERR, "dad %s: no link-local for IPV6_MULTICAST_IF: %s\n",
+			device, strerror(status));
+		return status;
+	}
 
-	inet_pton(AF_INET6, "ff02::1", &membership.ipv6mr_multiaddr);
-	setsockopt(socket, IPPROTO_IPV6, IPV6_JOIN_GROUP, &membership,
-		sizeof(membership));
+	// Haiku's IPV6_MULTICAST_IF takes an interface IPv6 address, not an
+	// ifindex (see ipv6_setsockopt). That selects the outgoing interface
+	// without binding the DAD source away from ::.
+	if (setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &multicastIf,
+			sizeof(multicastIf)) < 0) {
+		status = errno;
+		close(socket);
+		syslog(LOG_ERR, "dad %s: IPV6_MULTICAST_IF: %s\n", device,
+			strerror(status));
+		return status;
+	}
 
 	sockaddr_in6 local;
 	memset(&local, 0, sizeof(local));
 	local.sin6_len = sizeof(local);
 	local.sin6_family = AF_INET6;
 	local.sin6_scope_id = ifIndex;
-
-	BNetworkInterface interface(device);
-	BNetworkInterfaceAddress slot;
-	int32 count = interface.CountAddresses();
-	for (int32 i = 0; i < count; i++) {
-		if (interface.GetAddressAt(i, slot) != B_OK)
-			continue;
-		if (slot.Address().Family() != AF_INET6)
-			continue;
-		const sockaddr_in6& in6
-			= *reinterpret_cast<const sockaddr_in6*>(&slot.Address().SockAddr());
-		if (!IN6_IS_ADDR_LINKLOCAL(&in6.sin6_addr))
-			continue;
-		local.sin6_addr = in6.sin6_addr;
-		bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local));
-		break;
+	if (bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local)) < 0) {
+		status = errno;
+		close(socket);
+		syslog(LOG_ERR, "dad %s: bind :: : %s\n", device, strerror(status));
+		return status;
 	}
 
-	uint8 packet[32];
-	memset(packet, 0, sizeof(packet));
-	struct nd_neighbor_solicit* ns
-		= reinterpret_cast<struct nd_neighbor_solicit*>(packet);
-	ns->nd_ns_type = ND_NEIGHBOR_SOLICIT;
-	ns->nd_ns_code = 0;
-	ns->nd_ns_target = tentative;
-	packet[24] = ND_OPT_SOURCE_LINKADDR;
-	packet[25] = 1;
-	memcpy(packet + 26, mac, 6);
+	in6_addr group;
+	r5_ipv6_solicited_node(tentative, group);
+	status = join_group(socket, ifIndex, group);
+	if (status != B_OK) {
+		close(socket);
+		syslog(LOG_ERR, "dad %s: join solicited-node: %s\n", device,
+			strerror(status));
+		return status;
+	}
+
+	in6_addr allNodes;
+	memset(&allNodes, 0, sizeof(allNodes));
+	inet_pton(AF_INET6, "ff02::1", &allNodes);
+	status = join_group(socket, ifIndex, allNodes);
+	if (status != B_OK) {
+		close(socket);
+		syslog(LOG_ERR, "dad %s: join ff02::1: %s\n", device, strerror(status));
+		return status;
+	}
+
+	uint8 packet[sizeof(struct nd_neighbor_solicit)];
+	ssize_t packetLen = r5_ipv6_dad_build_ns(packet, sizeof(packet), tentative);
+	if (packetLen < 0) {
+		close(socket);
+		return B_BAD_VALUE;
+	}
 
 	sockaddr_in6 dest;
 	memset(&dest, 0, sizeof(dest));
@@ -124,68 +191,67 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* mac,
 	dest.sin6_scope_id = ifIndex;
 	dest.sin6_addr = group;
 
-	bool sent = false;
-	status_t sendError = B_OK;
-	for (int32 tries = 0; tries < 8; tries++) {
-		if (sendto(socket, packet, sizeof(packet), 0,
-				reinterpret_cast<sockaddr*>(&dest), sizeof(dest)) >= 0) {
-			sent = true;
+	if (sendto(socket, packet, (size_t)packetLen, 0,
+			reinterpret_cast<sockaddr*>(&dest), sizeof(dest)) < 0) {
+		status = errno;
+		close(socket);
+		syslog(LOG_ERR, "dad %s: NS send: %s\n", device, strerror(status));
+		return status;
+	}
+
+	bigtime_t deadline = system_time() + kRetransTimer;
+	bool duplicate = false;
+	bool ownNsSeen = false;
+	int ioError = 0;
+
+	while (system_time() < deadline) {
+		int ready = wait_readable(socket, deadline - system_time());
+		if (ready == 0)
+			break;
+		if (ready < 0) {
+			if (errno == EINTR)
+				continue;
+			ioError = errno;
+			syslog(LOG_ERR, "dad %s: select: %s\n", device, strerror(ioError));
 			break;
 		}
-		sendError = errno;
-		if (sendError != ENETUNREACH && sendError != EHOSTUNREACH
-			&& sendError != EAGAIN)
-			break;
-		snooze(250000);
-	}
-	if (!sent) {
-		close(socket);
-		syslog(LOG_ERR, "dad %s: NS failed: %s (continuing without DAD)\n",
-			device, strerror(sendError));
-		return B_OK;
-	}
 
-	timeval timeout;
-	timeout.tv_sec = 1;
-	timeout.tv_usec = 0;
-	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-	bigtime_t deadline = system_time() + 1000000;
-	bool duplicate = false;
-	while (system_time() < deadline) {
 		uint8 incoming[1280];
 		sockaddr_in6 from;
 		socklen_t fromLen = sizeof(from);
 		ssize_t bytes = recvfrom(socket, incoming, sizeof(incoming), 0,
 			reinterpret_cast<sockaddr*>(&from), &fromLen);
-		if (bytes < 0)
+		if (bytes < 0) {
+			if (errno == EINTR || errno == EAGAIN || errno == ETIMEDOUT)
+				continue;
+			ioError = errno;
+			syslog(LOG_ERR, "dad %s: recv: %s\n", device, strerror(ioError));
 			break;
-
-		const uint8* data = incoming;
-		ssize_t length = bytes;
-		if (length >= 40 && (data[0] >> 4) == 6) {
-			data += 40;
-			length -= 40;
 		}
-		if (length < (ssize_t)sizeof(struct nd_neighbor_advert))
-			continue;
 
-		const struct nd_neighbor_advert* na
-			= reinterpret_cast<const struct nd_neighbor_advert*>(data);
-		if (na->nd_na_type != ND_NEIGHBOR_ADVERT)
+		ssize_t icmpLen = 0;
+		const uint8* icmp = r5_ipv6_dad_icmp(incoming, bytes, icmpLen);
+		r5_ipv6_dad_event event = r5_ipv6_dad_event_for(icmp, icmpLen,
+			tentative, packet, (size_t)packetLen, ownNsSeen);
+		if (event == R5_IPV6_DAD_OWN_NS) {
+			ownNsSeen = true;
 			continue;
-		if (memcmp(&na->nd_na_target, &tentative, sizeof(in6_addr)) == 0) {
+		}
+		if (event == R5_IPV6_DAD_DUP_NA || event == R5_IPV6_DAD_DUP_NS) {
 			duplicate = true;
 			break;
 		}
 	}
 
 	close(socket);
+
 	if (duplicate) {
 		char text[INET6_ADDRSTRLEN];
 		inet_ntop(AF_INET6, &tentative, text, sizeof(text));
 		syslog(LOG_ERR, "dad %s: duplicate %s\n", device, text);
 		return B_NAME_IN_USE;
 	}
+	if (ioError != 0)
+		return ioError;
 	return B_OK;
 }

@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -344,7 +345,7 @@ DHCPv6Client::_HandleReply(const uint8* packet, ssize_t bytes, uint32 ifIndex)
 				text);
 		} else {
 			status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, leased);
-			if (dad == B_NAME_IN_USE)
+			if (dad != B_OK)
 				return dad;
 
 			BNetworkInterface interface(Device());
@@ -396,11 +397,6 @@ DHCPv6Client::_Run()
 	if (socket < 0)
 		return errno;
 
-	timeval timeout;
-	timeout.tv_sec = 2;
-	timeout.tv_usec = 0;
-	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
 	bool informationOnly = false;
 	status_t status = B_TIMED_OUT;
 
@@ -410,6 +406,15 @@ DHCPv6Client::_Run()
 		if (length < 0)
 			break;
 		if (_Send(socket, ifIndex, packet, (size_t)length) != B_OK)
+			continue;
+
+		fd_set readSet;
+		FD_ZERO(&readSet);
+		FD_SET(socket, &readSet);
+		timeval wait;
+		wait.tv_sec = 2;
+		wait.tv_usec = 0;
+		if (select(socket + 1, &readSet, NULL, NULL, &wait) <= 0)
 			continue;
 
 		uint8 incoming[1280];
@@ -425,6 +430,12 @@ DHCPv6Client::_Run()
 			length = _BuildSolicit(packet, sizeof(packet), false);
 			if (length > 0)
 				_Send(socket, ifIndex, packet, (size_t)length);
+			FD_ZERO(&readSet);
+			FD_SET(socket, &readSet);
+			wait.tv_sec = 2;
+			wait.tv_usec = 0;
+			if (select(socket + 1, &readSet, NULL, NULL, &wait) <= 0)
+				continue;
 			bytes = recvfrom(socket, incoming, sizeof(incoming), 0,
 				reinterpret_cast<sockaddr*>(&from), &fromLen);
 			if (bytes > 0)
@@ -439,13 +450,21 @@ DHCPv6Client::_Run()
 		uint8 packet[768];
 		ssize_t length = _BuildSolicit(packet, sizeof(packet), true);
 		if (length > 0 && _Send(socket, ifIndex, packet, (size_t)length) == B_OK) {
-			uint8 incoming[1280];
-			sockaddr_in6 from;
-			socklen_t fromLen = sizeof(from);
-			ssize_t bytes = recvfrom(socket, incoming, sizeof(incoming), 0,
-				reinterpret_cast<sockaddr*>(&from), &fromLen);
-			if (bytes > 0)
-				status = _HandleReply(incoming, bytes, ifIndex);
+			fd_set readSet;
+			FD_ZERO(&readSet);
+			FD_SET(socket, &readSet);
+			timeval wait;
+			wait.tv_sec = 2;
+			wait.tv_usec = 0;
+			if (select(socket + 1, &readSet, NULL, NULL, &wait) > 0) {
+				uint8 incoming[1280];
+				sockaddr_in6 from;
+				socklen_t fromLen = sizeof(from);
+				ssize_t bytes = recvfrom(socket, incoming, sizeof(incoming), 0,
+					reinterpret_cast<sockaddr*>(&from), &fromLen);
+				if (bytes > 0)
+					status = _HandleReply(incoming, bytes, ifIndex);
+			}
 		}
 	}
 

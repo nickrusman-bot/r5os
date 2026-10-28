@@ -26,7 +26,8 @@ Useful syslog:
 | `slaac …: PIO fd…/64 A=1 L=1` | Router offered SLAAC |
 | `slaac …: fdae:… via fe80:…` | Second address was assigned |
 | `slaac … without SLAAC /64 prefix` | RA had no A-flag `/64`; DHCPv6 may still run |
-| `dad …: NS failed … continuing without DAD` | Probe could not be sent; address is still used |
+| `dad …: NS send:` / `socket:` / `bind` | DAD could not run; the address is **not** assigned |
+| `dad …: duplicate` | Address not assigned |
 | `dad …: duplicate` | Address not assigned |
 | `dhcpv6 …: no server` | No DHCPv6 on this LAN |
 
