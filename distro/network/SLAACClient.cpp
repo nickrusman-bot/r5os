@@ -152,10 +152,11 @@ SLAACClient::_BindAndJoin(int socket, uint32 ifIndex)
 	int hops = 255;
 	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
 	setsockopt(socket, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &hops, sizeof(hops));
-	in6_addr multicastIf;
-	if (r5_ipv6_link_local(Device(), multicastIf) == B_OK) {
-		setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &multicastIf,
-			sizeof(multicastIf));
+	if (setsockopt(socket, SOL_SOCKET, SO_BINDTODEVICE, &ifIndex,
+			sizeof(ifIndex)) < 0) {
+		syslog(LOG_ERR, "slaac %s: SO_BINDTODEVICE: %s\n", Device(),
+			strerror(errno));
+		return errno;
 	}
 
 	BNetworkInterface interface(Device());

@@ -13,6 +13,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -139,23 +140,14 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* /*mac*/,
 		return status;
 	}
 
-	in6_addr multicastIf;
-	status = r5_ipv6_link_local(device, multicastIf);
-	if (status != B_OK) {
-		close(socket);
-		syslog(LOG_ERR, "dad %s: no link-local for IPV6_MULTICAST_IF: %s\n",
-			device, strerror(status));
-		return status;
-	}
-
-	// Haiku's IPV6_MULTICAST_IF takes an interface IPv6 address, not an
-	// ifindex (see ipv6_setsockopt). That selects the outgoing interface
-	// without binding the DAD source away from ::.
-	if (setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &multicastIf,
-			sizeof(multicastIf)) < 0) {
+	// Haiku IPv6 has no unicast route for multicast. IPV6_MULTICAST_IF
+	// then does get_route(local) and returns ENETUNREACH. SO_BINDTODEVICE
+	// uses the interface direct_route instead (datalink_send_data).
+	if (setsockopt(socket, SOL_SOCKET, SO_BINDTODEVICE, &ifIndex,
+			sizeof(ifIndex)) < 0) {
 		status = errno;
 		close(socket);
-		syslog(LOG_ERR, "dad %s: IPV6_MULTICAST_IF: %s\n", device,
+		syslog(LOG_ERR, "dad %s: SO_BINDTODEVICE: %s\n", device,
 			strerror(status));
 		return status;
 	}

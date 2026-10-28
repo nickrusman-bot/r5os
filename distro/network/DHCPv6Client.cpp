@@ -148,6 +148,13 @@ DHCPv6Client::_OpenSocket(uint32& ifIndex)
 
 	int hops = 1;
 	setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &hops, sizeof(hops));
+	if (setsockopt(socket, SOL_SOCKET, SO_BINDTODEVICE, &ifIndex,
+			sizeof(ifIndex)) < 0) {
+		syslog(LOG_ERR, "dhcpv6 %s: SO_BINDTODEVICE: %s\n", Device(),
+			strerror(errno));
+		close(socket);
+		return -1;
+	}
 
 	sockaddr_in6 local;
 	memset(&local, 0, sizeof(local));
@@ -155,10 +162,7 @@ DHCPv6Client::_OpenSocket(uint32& ifIndex)
 	local.sin6_family = AF_INET6;
 	local.sin6_port = htons(kClientPort);
 	local.sin6_scope_id = ifIndex;
-	if (r5_ipv6_link_local(Device(), local.sin6_addr) == B_OK) {
-		setsockopt(socket, IPPROTO_IPV6, IPV6_MULTICAST_IF, &local.sin6_addr,
-			sizeof(local.sin6_addr));
-	}
+	r5_ipv6_link_local(Device(), local.sin6_addr);
 
 	if (bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local)) < 0) {
 		syslog(LOG_ERR, "dhcpv6 %s: bind: %s\n", Device(), strerror(errno));
