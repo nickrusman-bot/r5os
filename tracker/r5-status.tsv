@@ -17,7 +17,7 @@ id	r5_status	branch	commit	notes
 1006	fixed			Backgrounds Revert snapshot (apply-ui-bugs.py)
 1036	open			
 1041	open			
-1042	open			
+1042	in-progress	cursor/zeroconf-1042		IPv4 mDNS: advertise hostname.local from net_server; resolve .local in libnetwork. Not DNS-SD/API yet.
 1048	open			
 1059	open			
 1070	open			
