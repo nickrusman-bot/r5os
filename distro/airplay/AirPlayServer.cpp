@@ -616,8 +616,7 @@ class AirPlayApp : public BApplication {
 public:
 	AirPlayApp()
 		:
-		BApplication(kAirPlaySignature),
-		fTrayInstalled(false)
+		BApplication(kAirPlaySignature)
 	{
 	}
 
@@ -627,21 +626,11 @@ public:
 			B_NORMAL_PRIORITY, NULL);
 		if (listen >= 0)
 			resume_thread(listen);
-		SetPulseRate(1000000);
-		PostMessage(kMsgAirPlayInstallTray);
-	}
-
-	virtual void Pulse()
-	{
-		_TryInstallTray();
 	}
 
 	virtual void MessageReceived(BMessage* message)
 	{
 		switch (message->what) {
-			case kMsgAirPlayInstallTray:
-				_TryInstallTray();
-				break;
 			case kMsgAirPlayPlayTo:
 			{
 				const char* host = NULL;
@@ -662,19 +651,6 @@ public:
 				break;
 		}
 	}
-
-private:
-			void				_TryInstallTray()
-			{
-				if (fTrayInstalled)
-					return;
-				if (r5_install_airplay_deskbar() == B_OK) {
-					fTrayInstalled = true;
-					SetPulseRate(0);
-				}
-			}
-
-			bool				fTrayInstalled;
 };
 
 

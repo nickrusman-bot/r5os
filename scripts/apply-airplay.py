@@ -38,6 +38,7 @@ def copy_sources() -> None:
         "AirPlayDeskbar.cpp",
         "AirPlayMessages.h",
         "AirPlayServer.rdef",
+        "AirPlayDeskbar.rdef",
         "Jamfile",
         "THIRD_PARTY.md",
     ):
@@ -115,6 +116,13 @@ def patch_jams() -> None:
         "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
         "airplay SYSTEM_SERVERS",
     )
+    replace_once(
+        HAIKU / "build" / "jam" / "images" / "definitions" / "regular",
+        "SYSTEM_SERVERS += airplay_server ;\n",
+        "SYSTEM_SERVERS += airplay_server ;\n"
+        "SYSTEM_SERVERS += airplay_deskbar ;\n",
+        "airplay_deskbar SYSTEM_SERVERS",
+    )
 
 
 def patch_launch() -> None:
@@ -137,6 +145,26 @@ def patch_launch() -> None:
         "	legacy\n"
         "}\n",
         "airplay launch job",
+    )
+    replace_once(
+        HAIKU / "data" / "launch" / "system",
+        "service x-vnd.R5OS-airplay {\n"
+        "	launch /system/servers/airplay_server\n"
+        "	no_safemode\n"
+        "	legacy\n"
+        "}\n",
+        "service x-vnd.R5OS-airplay {\n"
+        "	launch /system/servers/airplay_server\n"
+        "	no_safemode\n"
+        "	legacy\n"
+        "}\n"
+        "\n"
+        "service x-vnd.R5OS-airplay-tray {\n"
+        "	launch /system/servers/airplay_deskbar\n"
+        "	no_safemode\n"
+        "	legacy\n"
+        "}\n",
+        "airplay tray launch job",
     )
 
 

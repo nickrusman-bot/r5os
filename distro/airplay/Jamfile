@@ -17,8 +17,14 @@ Application airplay_server :
 	AirPlayPlayer.cpp
 	AirPlayCrypto.cpp
 	AirPlaySender.cpp
-	AirPlayDeskbar.cpp
 	alac.c
 	aes.c
 	: be media network bnetapi $(opensslLib) [ TargetLibstdc++ ]
+	;
+
+AddResources airplay_deskbar : AirPlayDeskbar.rdef ;
+
+Application airplay_deskbar :
+	AirPlayDeskbar.cpp
+	: be network bnetapi [ TargetLibstdc++ ]
 	;

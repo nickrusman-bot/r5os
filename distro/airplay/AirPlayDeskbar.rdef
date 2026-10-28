@@ -1,0 +1,17 @@
+resource app_signature "application/x-vnd.R5OS-airplay-tray";
+
+resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
+
+resource app_name_catalog_entry "AirPlayDeskbar:application name" "AirPlay";
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+
+	short_info = "R5OS AirPlay tray",
+	long_info = "Deskbar tray for the R5OS AirPlay server."
+};
