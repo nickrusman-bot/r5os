@@ -17,7 +17,7 @@ Order is impact, not ticket number.
    4. SMB in Tracker
    5. Simple firewall (incoming closed by default)
    6. WireGuard
-   7. QEMU bridged/tap for LAN tests (usernet is not a LAN)
+   7. LAN tests: VirtualBox bridged (no Guest Additions) or QEMU bridged/tap (usernet is not a LAN)
 4. **Dark mode** through system apps and Deskbar (Haiku #18970).
 5. **Polish** — notifications, screenshot, emoji/fonts, image clipboard.
 
