@@ -3,6 +3,7 @@ Add-Type -AssemblyName System.Drawing
 $root = Split-Path $PSScriptRoot
 $art = Join-Path $root "distro\artwork"
 $srcPath = Join-Path $art "r5-os-logo.png"
+$blackPath = Join-Path $art "r5-os-logo-on-black.png"
 if (-not (Test-Path $srcPath)) {
 	throw "Missing $srcPath - run distill-logo.ps1 first."
 }
@@ -32,6 +33,12 @@ function Draw-Contained([System.Drawing.Bitmap]$dst, [System.Drawing.Bitmap]$src
 }
 
 $src = [System.Drawing.Bitmap]::FromFile($srcPath)
+$srcBlack = $null
+if (Test-Path $blackPath) {
+	$srcBlack = [System.Drawing.Bitmap]::FromFile($blackPath)
+} else {
+	$srcBlack = $src
+}
 
 $desk = New-TransparentBitmap 63 22
 Draw-Contained $desk $src 1
@@ -40,17 +47,16 @@ $desk.Save($deskPath, [System.Drawing.Imaging.ImageFormat]::Png)
 Write-Host ("Wrote {0} {1}x{2}" -f $deskPath, $desk.Width, $desk.Height)
 $desk.Dispose()
 
-# Splash: 372x96, opaque black (boot loader strips alpha → RGB).
+# Splash: 372x96, opaque black. Use the reverse (light) mark.
 $splash = New-Object System.Drawing.Bitmap 372, 96, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $sg = [System.Drawing.Graphics]::FromImage($splash)
 $sg.Clear([System.Drawing.Color]::FromArgb(255, 0, 0, 0))
 $sg.Dispose()
-Draw-Contained $splash $src 8
+Draw-Contained $splash $srcBlack 10
 $splashPath = Join-Path $art "r5-os-splash.png"
 $splash.Save($splashPath, [System.Drawing.Imaging.ImageFormat]::Png)
 Write-Host ("Wrote {0} {1}x{2}" -f $splashPath, $splash.Width, $splash.Height)
 
-# Raw BGR for generate_images_sans_tm.py (matches generate_boot_screen).
 $bgrPath = Join-Path $art "r5-os-splash.bgr"
 $bytes = New-Object byte[] ($splash.Width * $splash.Height * 3)
 $i = 0
@@ -66,4 +72,5 @@ for ($y = 0; $y -lt $splash.Height; $y++) {
 Write-Host ("Wrote {0} {1} bytes" -f $bgrPath, $bytes.Length)
 
 $splash.Dispose()
+if ($srcBlack -ne $src) { $srcBlack.Dispose() }
 $src.Dispose()
