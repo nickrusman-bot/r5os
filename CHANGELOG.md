@@ -4,9 +4,13 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-28 (Europe/Amsterdam)
 
+### VirtualBox text clipboard (no Guest Additions)
+
+Host/guest copy-paste of Unicode text over COM1 (`\\.\pipe\R5OS-clip`). Guest `r5_vbox_clip` runs only if PCI vendor `80ee` is present. Drag-and-drop is still off: that is a Guest Additions protocol. Needs a jammed image with the overlay.
+
 ### VirtualBox bridged LAN (no Guest Additions)
 
-`scripts/run-vbox-r5.ps1` boots the raw image as IDE + Intel PRO/1000 on a bridged NIC. No vboxsf, no auto-resize; VBox clipboard and drag-and-drop are disabled. USB stick: Rufus DD of the same image (`docs/vbox.md`).
+`scripts/run-vbox-r5.ps1` boots the raw image as IDE + Intel PRO/1000 on a bridged NIC. No vboxsf, no auto-resize. USB stick: Rufus DD of the same image (`docs/vbox.md`).
 
 ### AGENTS.md vs roadmap
 

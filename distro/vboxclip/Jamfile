@@ -1,0 +1,11 @@
+SubDir HAIKU_TOP src servers r5_vbox_clip ;
+
+UsePrivateHeaders drivers ;
+UseHeaders [ FDirName $(HAIKU_TOP) headers os drivers ] : true ;
+
+AddResources r5_vbox_clip : VBoxClip.rdef ;
+
+Application r5_vbox_clip :
+	VBoxClip.cpp
+	: be device [ TargetLibstdc++ ]
+	;

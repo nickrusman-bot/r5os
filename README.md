@@ -32,7 +32,7 @@ chmod +x scripts/*.sh
 ./scripts/build-image.sh r5-raw
 ```
 
-LAN-tests (IPv6, mDNS): VirtualBox bridged, geen Guest Additions — `scripts/run-vbox-r5.ps1` en `docs/vbox.md`.
+LAN-tests (IPv6, mDNS): VirtualBox bridged, geen Guest Additions — `scripts/run-vbox-r5.ps1` en `docs/vbox.md`. Tekst-klembord via COM1; geen vboxsf, geen auto-resize, geen VBox drag-and-drop.
 
 Daarna de image in QEMU starten, bijvoorbeeld:
 

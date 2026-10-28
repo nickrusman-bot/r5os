@@ -4,9 +4,11 @@ Haiku/R5OS has **no VirtualBox Guest Additions**. Expect:
 
 - no `vboxsf` shared folders
 - no automatic guest resolution
-- no shared clipboard from VirtualBox
+- no VirtualBox drag-and-drop (that protocol is Guest Additions)
 
-The guest uses ordinary PC devices: IDE disk, Intel PRO/1000 (`ipro1000`), VESA/VBoxVGA, USB tablet. The VM has clipboard and drag-and-drop turned off.
+**Text clipboard** is a COM1 named-pipe bridge (`r5_vbox_clip` in the guest, `scripts/vbox-clipboard-host.ps1` on Windows). It is not Devices → Shared Clipboard. Unicode text only, ~256 KB. `-NoClip` skips the host helper.
+
+The guest uses ordinary PC devices: IDE disk, Intel PRO/1000 (`ipro1000`), VESA/VBoxVGA, USB tablet. VBox clipboard-mode and drag-and-drop stay off.
 
 ## VirtualBox (Windows)
 

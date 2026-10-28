@@ -1,6 +1,7 @@
 # Boot r5-os.image in VirtualBox on the LAN (bridged Intel PRO/1000).
 # Haiku has no VirtualBox Guest Additions in this tree:
-# no vboxsf, no auto-resize, no shared clipboard.
+# no vboxsf, no auto-resize, no VBox drag-and-drop.
+# Text clipboard uses COM1 (named pipe), not Devices > Shared Clipboard.
 #
 # Usage:
 #   powershell -File scripts/run-vbox-r5.ps1
@@ -9,7 +10,8 @@ param(
 	[string]$VmName = "R5OS",
 	[string]$BridgeAdapter = $env:R5_VBOX_BRIDGE,
 	[int]$MemoryMb = 2048,
-	[int]$Cpus = 2
+	[int]$Cpus = 2,
+	[switch]$NoClip
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,7 +61,8 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $vdi = Join-Path (Resolve-Path $outDir) "r5-os.vdi"
 
 Write-Host "R5OS VirtualBox"
-Write-Host "  No vboxsf, no auto-resize, no shared clipboard."
+Write-Host "  No vboxsf, no auto-resize, no VBox drag-and-drop."
+Write-Host "  Text clipboard: COM1 pipe (not Guest Additions)."
 Write-Host "  Disk: Intel IDE  NIC: Intel PRO/1000 (ipro1000)  Net: bridged"
 Write-Host "  raw: $raw"
 
@@ -110,11 +113,28 @@ Write-Host "  bridge: $bridge"
 	--ioapic on `
 	--pae off `
 	--clipboard-mode disabled `
-	--draganddrop disabled
+	--draganddrop disabled `
+	--uart1 "0x3F8" 4 `
+	--uartmode1 server "\\.\pipe\R5OS-clip"
 
 & $vbox storageattach $VmName --storagectl IDE --port 0 --device 0 --medium none 2>$null | Out-Null
 & $vbox storageattach $VmName --storagectl IDE --port 0 --device 0 --type hdd --medium $vdi
 
 Write-Host "Starting $VmName ..."
 & $vbox startvm $VmName
+
+if (-not $NoClip) {
+	Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+		Where-Object { $_.CommandLine -like "*vbox-clipboard-host.ps1*" } |
+		ForEach-Object {
+			Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+		}
+	$hostClip = Join-Path $PSScriptRoot "vbox-clipboard-host.ps1"
+	Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -ArgumentList @(
+		"-NoProfile", "-STA", "-ExecutionPolicy", "Bypass",
+		"-File", $hostClip
+	) | Out-Null
+	Write-Host "  clipboard host: \\.\pipe\R5OS-clip"
+}
+
 Write-Host "LAN IPv6/mDNS can work here. QEMU usernet cannot."
