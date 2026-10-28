@@ -747,7 +747,7 @@ def patch_kernel_multicast_route() -> None:
 				index, &route);
 			if (status != B_OK)
 				return status;
-			status = sDatalinkModule->send_routed_data(route, buffer);
+			status = ipv6_send_routed_data(protocol, route, buffer);
 			sDatalinkModule->put_route(sDomain, route);
 			return status;
 		}
@@ -757,6 +757,19 @@ def patch_kernel_multicast_route() -> None:
 }
 """,
         "IPv6 multicast device route",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """			status = sDatalinkModule->send_routed_data(route, buffer);
+			sDatalinkModule->put_route(sDomain, route);
+			return status;
+""",
+        """			status = ipv6_send_routed_data(protocol, route, buffer);
+			sDatalinkModule->put_route(sDomain, route);
+			return status;
+""",
+        "IPv6 multicast via ipv6_send_routed_data",
         optional=True,
     )
 
