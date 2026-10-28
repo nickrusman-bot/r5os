@@ -11,7 +11,7 @@ Order is impact, not ticket number.
 1. **Hardware on the Ryzen 5 5625U** — Wi-Fi, GPU, backlight, sleep/resume, HiDPI without breaking layout.
 2. **Browser** — a current WebKit/Qt browser in the image. WebPositive is the weak daily app.
 3. **Network** — remaining items after Wi-Fi join/remember/tray:
-   1. IPv6 in apps (SLAAC in net_server started; still needs DAD, app/DNS checks, LAN test)
+   1. IPv6 in apps (SLAAC + DAD + DHCPv6 in net_server; still needs app/DNS checks and more LAN tests)
    2. DNS that uses DHCP servers and still resolves `.local`
    3. Captive portal
    4. SMB in Tracker

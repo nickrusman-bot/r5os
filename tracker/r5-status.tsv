@@ -624,9 +624,9 @@ id	r5_status	branch	commit	notes
 8297	open			
 8308	open			
 8313	open			
-8316	in-progress	cursor/ipv6-slaac		IPv6 link-local on interface configure; SLAAC client for RS/RA.
-8317	in-progress	cursor/ipv6-slaac		SLAAC global /64 + default route + optional RDNSS. No DAD. Not LAN-tested.
-8319	open			
+8316	in-progress	cursor/ipv6-slaac		IPv6 link-local on interface configure; VBox LAN showed fe80::.
+8317	in-progress	cursor/ipv6-slaac		SLAAC ULA on VirtualBox bridged Wi-Fi. DAD and DHCPv6 added, not LAN-tested.
+8319	in-progress	cursor/ipv6-slaac		DAD before assigning SLAAC/DHCPv6 addresses (NS to solicited-node). Not LAN-tested.
 8321	open			
 8337	open			
 8339	open			

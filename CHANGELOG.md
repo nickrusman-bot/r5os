@@ -6,7 +6,7 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ### IPv6 SLAAC in net_server
 
-On link-up, net_server assigns an IPv6 link-local address and runs SLAAC next to DHCP: Router Solicitation, global /64 from RA (A-flag), default route, optional RDNSS into resolv.conf. The SLAAC helper stays up and listens for unsolicited RAs (the first LAN boot only got `fe80::`). VirtualBox bridged LAN got a ULA via SLAAC. No DAD (#8319), no DHCPv6.
+On link-up, net_server assigns IPv6 link-local, SLAAC (RS/RA `/64`, default route, RDNSS), DAD before using an address, and DHCPv6 (IA_NA + DNS, or Information-Request). VirtualBox bridged LAN got a ULA via SLAAC; DAD/DHCPv6 are not LAN-tested yet.
 
 ### VirtualBox text clipboard (no Guest Additions)
 

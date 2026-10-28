@@ -4,8 +4,8 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3871 |
-| in-progress | 6 |
+| open | 3870 |
+| in-progress | 7 |
 | fixed | 59 |
 | wontfix | 0 |
 | not-applicable | 0 |
@@ -76,6 +76,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#6795](https://dev.haiku-os.org/ticket/6795) | assigned | Printing | Mechanism to detect and identify network printer and offer setup wizard | cursor/zeroconf-1042 |
 | [#8316](https://dev.haiku-os.org/ticket/8316) | assigned | Network & Internet/IPv6 | Haiku needs IPv6 link scope Auto Configuration | cursor/ipv6-slaac |
 | [#8317](https://dev.haiku-os.org/ticket/8317) | assigned | Network & Internet/IPv6 | Haiku needs IPv6 global scope Auto Configuration | cursor/ipv6-slaac |
+| [#8319](https://dev.haiku-os.org/ticket/8319) | assigned | Network & Internet/IPv6 | Haiku needs IPv6 Duplicate Address Detection | cursor/ipv6-slaac |
 | [#16318](https://dev.haiku-os.org/ticket/16318) | new | Printing | IPP-Everywhere and AirPrint - Print support the XXIst century way | cursor/zeroconf-1042 |
 | [#18970](https://dev.haiku-os.org/ticket/18970) | assigned | User Interface | Various dark mode problems (easy) |  |
 
@@ -227,5 +228,5 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3791 meer in r5-status.tsv* | |
+| … | | | *3790 meer in r5-status.tsv* | |
 

@@ -1,9 +1,10 @@
 /*
- * IPv6 SLAAC for net_server (RFC 4861/4862). No DAD yet (Haiku #8319).
+ * IPv6 SLAAC for net_server (RFC 4861/4862) with DAD (Haiku #8319).
  */
 
 
 #include "SLAACClient.h"
+#include "IPv6Dad.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -106,6 +107,13 @@ SLAACClient::_EnsureLinkLocal(BNetworkInterface& interface)
 	BNetworkAddress local(raw, 0);
 	if (interface.FindAddress(local) >= 0)
 		return B_OK;
+
+	uint32 ifIndex = interface.Index();
+	if (ifIndex == 0)
+		ifIndex = if_nametoindex(Device());
+	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, raw);
+	if (dad != B_OK)
+		return dad;
 
 	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
 		B_UNCONFIGURED_ADDRESS_FAMILIES);
@@ -306,6 +314,13 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 	BNetworkInterface interface(Device());
 	BNetworkAddress address(global, 0);
 	if (interface.FindAddress(address) < 0) {
+		uint32 ifIndex = interface.Index();
+		if (ifIndex == 0)
+			ifIndex = if_nametoindex(Device());
+		status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
+		if (dad != B_OK)
+			return dad;
+
 		BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
 			B_UNCONFIGURED_ADDRESS_FAMILIES);
 		BNetworkInterfaceAddress slot;
