@@ -1,6 +1,6 @@
 resource app_signature "application/x-vnd.R5OS-airplay-tray";
 
-resource app_flags B_EXCLUSIVE_LAUNCH | B_BACKGROUND_APP;
+resource app_flags B_SINGLE_LAUNCH | B_BACKGROUND_APP;
 
 resource app_name_catalog_entry "AirPlayDeskbar:application name" "AirPlay";
 
@@ -13,5 +13,5 @@ resource app_version {
 	internal = 0,
 
 	short_info = "R5OS AirPlay tray",
-	long_info = "Deskbar tray for the R5OS AirPlay server."
+	long_info = "Installs the AirPlay replicant into Deskbar, then exits."
 };

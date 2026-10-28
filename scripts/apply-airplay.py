@@ -113,15 +113,9 @@ def patch_jams() -> None:
         HAIKU / "build" / "jam" / "images" / "definitions" / "regular",
         "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
         "SYSTEM_SERVERS += airplay_server ;\n"
+        "SYSTEM_SERVERS += airplay_deskbar ;\n"
         "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
         "airplay SYSTEM_SERVERS",
-    )
-    replace_once(
-        HAIKU / "build" / "jam" / "images" / "definitions" / "regular",
-        "SYSTEM_SERVERS += airplay_server ;\n",
-        "SYSTEM_SERVERS += airplay_server ;\n"
-        "SYSTEM_SERVERS += airplay_deskbar ;\n",
-        "airplay_deskbar SYSTEM_SERVERS",
     )
 
 
@@ -165,6 +159,12 @@ def patch_launch() -> None:
         "	legacy\n"
         "}\n",
         "airplay tray launch job",
+    )
+    replace_once(
+        HAIKU / "data" / "launch" / "system",
+        "service x-vnd.R5OS-airplay-tray {\n",
+        "job x-vnd.R5OS-airplay-tray {\n",
+        "airplay tray is job",
     )
 
 

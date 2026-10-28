@@ -13,6 +13,8 @@ GitHub pull requests on `origin` target **`main`** directly. Do not stack PRs on
 
 Always keep `tracker/STATUS.md` current. After any ticket-status change (`tracker-set.py`, overlay fix, wontfix, not-applicable), run `python3 scripts/tracker-report.py` and include `tracker/r5-status.tsv` plus the regenerated `tracker/STATUS.md` in the same commit/PR. Never leave STATUS.md stale.
 
+Keep `CHANGELOG.md` current (newest first). User-visible behavior, why a path was chosen, and mistakes belong there — not only commit messages.
+
 ## Development loop
 
 After implementing or fixing something:

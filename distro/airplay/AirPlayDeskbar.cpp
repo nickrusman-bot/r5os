@@ -1,13 +1,15 @@
 #include "AirPlayMessages.h"
 
 #include <Application.h>
+#include <Archivable.h>
 #include <Deskbar.h>
+#include <Entry.h>
 #include <MenuItem.h>
 #include <Messenger.h>
 #include <PopUpMenu.h>
 #include <View.h>
-#include <Window.h>
 
+#include <image.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -17,12 +19,48 @@
 #include <r5_mdns.h>
 
 
+static status_t
+our_image(image_info& image)
+{
+	int32 cookie = 0;
+	while (get_next_image_info(B_CURRENT_TEAM, &cookie, &image) == B_OK) {
+		if ((char*)our_image >= (char*)image.text
+			&& (char*)our_image <= (char*)image.text + image.text_size)
+			return B_OK;
+	}
+	return B_ERROR;
+}
+
+
 class AirPlayReplicant : public BView {
 public:
 	AirPlayReplicant(BRect frame)
 		:
-		BView(frame, kAirPlayDeskbarItem, B_FOLLOW_ALL, B_WILL_DRAW)
+		BView(frame, kAirPlayDeskbarItem, B_FOLLOW_NONE, B_WILL_DRAW)
 	{
+	}
+
+	AirPlayReplicant(BMessage* archive)
+		:
+		BView(archive)
+	{
+	}
+
+	static AirPlayReplicant* Instantiate(BMessage* archive)
+	{
+		if (!validate_instantiation(archive, "AirPlayReplicant"))
+			return NULL;
+		return new AirPlayReplicant(archive);
+	}
+
+	virtual status_t Archive(BMessage* archive, bool deep = true) const
+	{
+		status_t err = BView::Archive(archive, deep);
+		if (err == B_OK)
+			err = archive->AddString("add_on", kAirPlayTraySignature);
+		if (err == B_OK)
+			err = archive->AddString("class", "AirPlayReplicant");
+		return err;
 	}
 
 	virtual void AttachedToWindow()
@@ -97,82 +135,67 @@ public:
 };
 
 
-class AirPlayTrayWindow : public BWindow {
-public:
-	AirPlayTrayWindow()
-		:
-		BWindow(BRect(0, 0, 15, 15), "AirPlay", B_NO_BORDER_WINDOW_LOOK,
-			B_FLOATING_ALL_WINDOW_FEEL,
-			B_NOT_MOVABLE | B_NOT_CLOSABLE | B_NOT_ZOOMABLE
-				| B_NOT_MINIMIZABLE | B_AVOID_FOCUS
-				| B_WILL_ACCEPT_FIRST_CLICK | B_ASYNCHRONOUS_CONTROLS)
-	{
-		AddChild(new AirPlayReplicant(Bounds()));
-	}
+extern "C" _EXPORT BView*
+instantiate_deskbar_item(float /*maxWidth*/, float maxHeight)
+{
+	return new AirPlayReplicant(BRect(0, 0, maxHeight - 1, maxHeight - 1));
+}
 
-	void DockToDeskbar()
-	{
-		BRect db;
-		if (get_deskbar_frame(&db) != B_OK || !db.IsValid()
-			|| db.Width() < 8 || db.Height() < 8) {
-			if (!IsHidden())
-				Hide();
-			return;
-		}
 
-		float size = db.Height();
-		if (size < 16)
-			size = 16;
-		float x;
-		if (db.left > 64)
-			x = db.left - size;
-		else
-			x = db.right + 1;
-		float y = db.top;
-		MoveTo(x, y);
-		ResizeTo(size - 1, size - 1);
-		if (IsHidden())
-			Show();
-	}
+status_t
+r5_install_airplay_deskbar()
+{
+	BDeskbar deskbar;
+	if (!deskbar.IsRunning())
+		return B_ERROR;
+	if (deskbar.HasItem(kAirPlayDeskbarItem))
+		return B_OK;
 
-	virtual bool QuitRequested()
-	{
-		return false;
-	}
-};
+	image_info info;
+	status_t err = our_image(info);
+	if (err != B_OK)
+		return err;
+
+	entry_ref ref;
+	err = get_ref_for_path(info.name, &ref);
+	if (err != B_OK)
+		return err;
+
+	int32 id = -1;
+	err = deskbar.AddItem(&ref, &id);
+	fprintf(stderr, "airplay tray: AddItem -> %s (id %ld, %s)\n",
+		strerror(err), (long)id, info.name);
+	return err;
+}
 
 
 class AirPlayTrayApp : public BApplication {
 public:
 	AirPlayTrayApp()
 		:
-		BApplication(kAirPlayTraySignature),
-		fWindow(NULL)
+		BApplication(kAirPlayTraySignature)
 	{
 	}
 
 	virtual void ReadyToRun()
 	{
-		fWindow = new AirPlayTrayWindow();
-		SetPulseRate(500000);
-		_Dock();
+		SetPulseRate(1000000);
+		_TryInstall();
 	}
 
 	virtual void Pulse()
 	{
-		_Dock();
+		_TryInstall();
 	}
 
 private:
-			void				_Dock()
+			void				_TryInstall()
 			{
-				if (fWindow == NULL || !fWindow->Lock())
-					return;
-				fWindow->DockToDeskbar();
-				fWindow->Unlock();
+				if (r5_install_airplay_deskbar() == B_OK) {
+					SetPulseRate(0);
+					Quit();
+				}
 			}
-
-			AirPlayTrayWindow*	fWindow;
 };
 
 
