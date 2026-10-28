@@ -31,6 +31,75 @@ function Draw-Contained([System.Drawing.Bitmap]$dst, [System.Drawing.Bitmap]$src
 	$g.Dispose()
 }
 
+function Set-LogoSubtitleR5OS([string]$path) {
+	$bmp = [System.Drawing.Bitmap]::FromFile($path)
+	$clone = New-Object System.Drawing.Bitmap $bmp.Width, $bmp.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+	$g0 = [System.Drawing.Graphics]::FromImage($clone)
+	$g0.DrawImage($bmp, 0, 0, $bmp.Width, $bmp.Height)
+	$g0.Dispose()
+	$bmp.Dispose()
+
+	$rowFill = New-Object int[] $clone.Height
+	for ($y = 0; $y -lt $clone.Height; $y++) {
+		$n = 0
+		for ($x = 0; $x -lt $clone.Width; $x++) {
+			$c = $clone.GetPixel($x, $y)
+			if ($c.A -gt 24) { $n++ }
+		}
+		$rowFill[$y] = $n
+	}
+	$half = [int]($clone.Height * 0.55)
+	$gapStart = -1
+	$emptyRun = 0
+	for ($y = $half; $y -lt $clone.Height; $y++) {
+		if ($rowFill[$y] -lt [Math]::Max(3, $clone.Width / 40)) {
+			$emptyRun++
+			if ($emptyRun -ge 4 -and $gapStart -lt 0) {
+				$gapStart = $y - $emptyRun + 1
+			}
+		} else {
+			if ($gapStart -ge 0) { break }
+			$emptyRun = 0
+		}
+	}
+	if ($gapStart -lt 0) {
+		$gapStart = [int]($clone.Height * 0.72)
+	}
+
+	$g = [System.Drawing.Graphics]::FromImage($clone)
+	$g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+	$g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+	$g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+	$g.FillRectangle(
+		[System.Drawing.Brushes]::Transparent,
+		0, $gapStart, $clone.Width, $clone.Height - $gapStart)
+	$g.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceOver
+
+	$fontSize = [Math]::Max(12, [int]($clone.Height * 0.13))
+	$font = New-Object System.Drawing.Font "Segoe UI", $fontSize, ([System.Drawing.FontStyle]::Bold)
+	$label = "R5OS"
+	$sz = $g.MeasureString($label, $font)
+	$x = ($clone.Width - $sz.Width) / 2
+	$y = $gapStart + (($clone.Height - $gapStart - $sz.Height) / 2)
+	$rect = New-Object System.Drawing.RectangleF $x, $y, $sz.Width, $sz.Height
+	$c1 = [System.Drawing.Color]::FromArgb(255, 70, 130, 230)
+	$c2 = [System.Drawing.Color]::FromArgb(255, 170, 130, 235)
+	$brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush (
+		(New-Object System.Drawing.PointF $x, $y),
+		(New-Object System.Drawing.PointF ($x + $sz.Width), ($y + $sz.Height)),
+		$c1, $c2)
+	$g.DrawString($label, $font, $brush, $rect)
+	$brush.Dispose()
+	$font.Dispose()
+	$g.Dispose()
+
+	$clone.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+	$clone.Dispose()
+	Write-Host ("Updated logo subtitle to R5OS: {0}" -f $path)
+}
+
+Set-LogoSubtitleR5OS $srcPath
+
 $src = [System.Drawing.Bitmap]::FromFile($srcPath)
 
 $desk = New-TransparentBitmap 63 22
