@@ -22,6 +22,7 @@ switch $(HAIKU_BUILD_PROFILE) {
 		AddOptionalHaikuImagePackages Welcome WebPositive Development Git ;
 		AddHaikuImageSystemPackages
 			openssh
+			openssl3
 			pe
 			vision
 			wpa_supplicant

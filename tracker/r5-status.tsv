@@ -17,7 +17,7 @@ id	r5_status	branch	commit	notes
 1006	fixed			Backgrounds Revert snapshot (apply-ui-bugs.py)
 1036	open			
 1041	open			
-1042	in-progress	cursor/zeroconf-1042		IPv4 mDNS hostname + DNS-SD browse API. Not a full app API or IPv6.
+1042	in-progress	cursor/airplay-receiver		IPv4/IPv6 mDNS hostname + DNS-SD. AirPlay 1 RAOP + AirPlay 2 advertisement; pairing/PTP not implemented.
 1048	open			
 1059	open			
 1070	open			

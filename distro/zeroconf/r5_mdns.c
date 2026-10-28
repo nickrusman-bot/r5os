@@ -18,9 +18,11 @@
 
 #define MDNS_PORT			5353
 #define MDNS_ADDR			"224.0.0.251"
+#define MDNS_ADDR6			"ff02::fb"
 #define MDNS_TIMEOUT_MS		800
 #define MDNS_MAX_ADDRS		8
 #define DNS_TYPE_A			1
+#define DNS_TYPE_AAAA		28
 #define DNS_TYPE_PTR		12
 #define DNS_TYPE_TXT		16
 #define DNS_TYPE_SRV		33
@@ -232,22 +234,50 @@ mdns_query(const char* name, uint16_t type, uint8_t* replies, size_t replyCap,
 		return 0;
 	}
 
+	int sock6 = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+	if (sock6 >= 0) {
+		struct sockaddr_in6 dest6;
+		int only = 1;
+		memset(&dest6, 0, sizeof(dest6));
+		dest6.sin6_len = sizeof(dest6);
+		dest6.sin6_family = AF_INET6;
+		dest6.sin6_port = htons(MDNS_PORT);
+		inet_pton(AF_INET6, MDNS_ADDR6, &dest6.sin6_addr);
+		setsockopt(sock6, IPPROTO_IPV6, IPV6_V6ONLY, &only, sizeof(only));
+		sendto(sock6, query, qlen, 0, (struct sockaddr*)&dest6, sizeof(dest6));
+	}
+
 	pfd.fd = sock;
 	pfd.events = POLLIN;
 	while (nfound < maxReplies) {
 		int n;
 		ssize_t got;
+		struct pollfd pfds[2];
+		int nfds = 1;
 
-		n = poll(&pfd, 1, nfound == 0 ? timeoutMs : 150);
+		pfds[0] = pfd;
+		if (sock6 >= 0) {
+			pfds[1].fd = sock6;
+			pfds[1].events = POLLIN;
+			nfds = 2;
+		}
+		n = poll(pfds, nfds, nfound == 0 ? timeoutMs : 150);
 		if (n <= 0)
 			break;
-		got = recv(sock, replies + nfound * replyCap, replyCap, 0);
-		if (got <= 0)
-			break;
-		replyLens[nfound] = (size_t)got;
-		nfound++;
+		int si;
+		for (si = 0; si < nfds && nfound < maxReplies; si++) {
+			if ((pfds[si].revents & POLLIN) == 0)
+				continue;
+			got = recv(pfds[si].fd, replies + nfound * replyCap, replyCap, 0);
+			if (got <= 0)
+				continue;
+			replyLens[nfound] = (size_t)got;
+			nfound++;
+		}
 	}
 	close(sock);
+	if (sock6 >= 0)
+		close(sock6);
 	return nfound;
 }
 
@@ -345,6 +375,74 @@ parse_a_records(const uint8_t* msg, size_t len, struct in_addr* addrs, int max)
 
 
 static struct addrinfo*
+make_ai6(const struct addrinfo* pai, const struct in6_addr* addr)
+{
+	struct addrinfo* ai;
+	struct sockaddr_in6* sin6;
+
+	ai = (struct addrinfo*)calloc(1, sizeof(*ai) + sizeof(*sin6));
+	if (ai == NULL)
+		return NULL;
+	sin6 = (struct sockaddr_in6*)(ai + 1);
+	sin6->sin6_len = sizeof(*sin6);
+	sin6->sin6_family = AF_INET6;
+	sin6->sin6_addr = *addr;
+
+	if (pai != NULL) {
+		ai->ai_flags = pai->ai_flags;
+		ai->ai_socktype = pai->ai_socktype;
+		ai->ai_protocol = pai->ai_protocol;
+	}
+	ai->ai_family = AF_INET6;
+	ai->ai_addrlen = sizeof(*sin6);
+	ai->ai_addr = (struct sockaddr*)sin6;
+	return ai;
+}
+
+
+struct aaaa_parse_state {
+	struct in6_addr addrs[MDNS_MAX_ADDRS];
+	int count;
+};
+
+
+static int
+parse_aaaa_cb(const uint8_t* msg, size_t len, size_t nameOff, uint16_t type,
+	uint16_t classValue, const uint8_t* rdata, uint16_t rdlength, void* cookie)
+{
+	struct aaaa_parse_state* st = (struct aaaa_parse_state*)cookie;
+
+	(void)msg;
+	(void)len;
+	(void)nameOff;
+	(void)classValue;
+	if (type == DNS_TYPE_AAAA && rdlength == 16 && st->count < MDNS_MAX_ADDRS) {
+		memcpy(&st->addrs[st->count], rdata, 16);
+		st->count++;
+	}
+	return 0;
+}
+
+
+static int
+parse_aaaa_records(const uint8_t* msg, size_t len, struct in6_addr* addrs,
+	int max)
+{
+	struct aaaa_parse_state state;
+	int n;
+
+	memset(&state, 0, sizeof(state));
+	foreach_rr(msg, len, parse_aaaa_cb, &state);
+	n = state.count;
+	if (n > max)
+		n = max;
+	if (n > 0)
+		memcpy(addrs, state.addrs, (size_t)n * sizeof(struct in6_addr));
+	return n;
+}
+
+
+static struct addrinfo*
 make_ai(const struct addrinfo* pai, struct in_addr addr)
 {
 	struct addrinfo* ai;
@@ -379,27 +477,55 @@ r5_mdns_getaddrinfo(const char* hostname, const struct addrinfo* pai,
 	struct addrinfo* head = NULL;
 	struct addrinfo* tail = NULL;
 	struct in_addr found[MDNS_MAX_ADDRS];
+	struct in6_addr found6[MDNS_MAX_ADDRS];
 	int nmsg;
 	int nfound = 0;
+	int nfound6 = 0;
 	int i;
+	int want4 = (pai == NULL || pai->ai_family == AF_UNSPEC
+		|| pai->ai_family == AF_INET);
+	int want6 = (pai == NULL || pai->ai_family == AF_UNSPEC
+		|| pai->ai_family == AF_INET6);
 
 	if (res == NULL)
 		return EAI_FAIL;
 	*res = NULL;
 	if (hostname == NULL || !ends_with_local(hostname))
 		return EAI_NONAME;
-	if (pai != NULL && pai->ai_family != AF_UNSPEC && pai->ai_family != AF_INET)
+	if (!want4 && !want6)
 		return EAI_FAMILY;
 
-	nmsg = mdns_query(hostname, DNS_TYPE_A, (uint8_t*)replies, 1500, lens,
-		MDNS_MAX_ADDRS, MDNS_TIMEOUT_MS);
-	for (i = 0; i < nmsg && nfound < MDNS_MAX_ADDRS; i++) {
-		nfound += parse_a_records(replies[i], lens[i], found + nfound,
-			MDNS_MAX_ADDRS - nfound);
+	if (want4) {
+		nmsg = mdns_query(hostname, DNS_TYPE_A, (uint8_t*)replies, 1500, lens,
+			MDNS_MAX_ADDRS, MDNS_TIMEOUT_MS);
+		for (i = 0; i < nmsg && nfound < MDNS_MAX_ADDRS; i++) {
+			nfound += parse_a_records(replies[i], lens[i], found + nfound,
+				MDNS_MAX_ADDRS - nfound);
+		}
+	}
+	if (want6) {
+		nmsg = mdns_query(hostname, DNS_TYPE_AAAA, (uint8_t*)replies, 1500, lens,
+			MDNS_MAX_ADDRS, MDNS_TIMEOUT_MS);
+		for (i = 0; i < nmsg && nfound6 < MDNS_MAX_ADDRS; i++) {
+			nfound6 += parse_aaaa_records(replies[i], lens[i], found6 + nfound6,
+				MDNS_MAX_ADDRS - nfound6);
+		}
 	}
 
 	for (i = 0; i < nfound; i++) {
 		struct addrinfo* ai = make_ai(pai, found[i]);
+		if (ai == NULL) {
+			freeaddrinfo(head);
+			return EAI_MEMORY;
+		}
+		if (head == NULL)
+			head = ai;
+		else
+			tail->ai_next = ai;
+		tail = ai;
+	}
+	for (i = 0; i < nfound6; i++) {
+		struct addrinfo* ai = make_ai6(pai, &found6[i]);
 		if (ai == NULL) {
 			freeaddrinfo(head);
 			return EAI_MEMORY;

@@ -1,0 +1,15 @@
+resource app_signature "application/x-vnd.R5OS-airplay";
+
+resource app_name_catalog_entry "AirPlayServer:application name" "AirPlay";
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+
+	short_info = "R5OS AirPlay receiver",
+	long_info = "AirPlay 1 RAOP audio receiver with AirPlay 2 advertisement."
+};

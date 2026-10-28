@@ -1,0 +1,22 @@
+SubDir HAIKU_TOP src servers airplay ;
+
+UsePrivateHeaders net shared ;
+
+local opensslRoot = [ FDirName $(HAIKU_TOP) generated.$(TARGET_PACKAGING_ARCH)
+	r5-openssl ] ;
+local opensslInc = [ FDirName $(opensslRoot) include ] ;
+local opensslLib = [ FDirName $(opensslRoot) lib libcrypto.so.3 ] ;
+
+UseHeaders $(opensslInc) : true ;
+SubDirHdrs [ FDirName $(HAIKU_TOP) src servers airplay ] ;
+
+AddResources airplay_server : AirPlayServer.rdef ;
+
+Application airplay_server :
+	AirPlayServer.cpp
+	AirPlayPlayer.cpp
+	AirPlayCrypto.cpp
+	alac.c
+	aes.c
+	: be media network bnetapi $(opensslLib) [ TargetLibstdc++ ]
+	;

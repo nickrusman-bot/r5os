@@ -72,7 +72,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Ticket | Haiku | Component | Samenvatting | Branch |
 |---|---|---|---|---|
-| [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support | cursor/zeroconf-1042 |
+| [#1042](https://dev.haiku-os.org/ticket/1042) | assigned | Network & Internet | implement ZeroConf/Bonjour support | cursor/airplay-receiver |
 | [#6795](https://dev.haiku-os.org/ticket/6795) | assigned | Printing | Mechanism to detect and identify network printer and offer setup wizard | cursor/zeroconf-1042 |
 | [#16318](https://dev.haiku-os.org/ticket/16318) | new | Printing | IPP-Everywhere and AirPrint - Print support the XXIst century way | cursor/zeroconf-1042 |
 | [#18970](https://dev.haiku-os.org/ticket/18970) | assigned | User Interface | Various dark mode problems (easy) |  |
