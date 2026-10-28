@@ -19,7 +19,7 @@ powershell -File scripts/run-vbox-r5.ps1
 powershell -File scripts/run-vbox-r5.ps1 -BridgeAdapter "Wi-Fi"
 ```
 
-`$env:R5_VBOX_BRIDGE` also selects the host NIC. The `.vdi` lands in `generated/r5-os.vdi` (gitignored).
+`$env:R5_VBOX_BRIDGE` also selects the host NIC. The script copies the raw image onto NTFS and makes a **fixed** `.vdi` in `generated/` (gitignored). Converting through `\\wsl.localhost` on first power-on often hung until Reset.
 
 Use this for IPv6 SLAAC, mDNS, AirPlay speakers, and SMB on the home LAN. QEMU usernet cannot.
 

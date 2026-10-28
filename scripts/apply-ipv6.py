@@ -625,6 +625,31 @@ def patch_prefs() -> None:
     )
 
 
+def patch_kernel_multicast_if() -> None:
+    path = HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols" / "ipv6" / "ipv6.cpp"
+    replace_once(
+        path,
+        """			struct sockaddr_in6* address = new (std::nothrow) sockaddr_in6;
+			if (address == NULL)
+				return B_NO_MEMORY;
+
+			if (user_memcpy(&address->sin6_addr, value, sizeof(in6_addr))
+""",
+        """			struct sockaddr_in6* address = new (std::nothrow) sockaddr_in6;
+			if (address == NULL)
+				return B_NO_MEMORY;
+
+			memset(address, 0, sizeof(*address));
+			address->sin6_len = sizeof(*address);
+			address->sin6_family = AF_INET6;
+
+			if (user_memcpy(&address->sin6_addr, value, sizeof(in6_addr))
+""",
+        "IPV6_MULTICAST_IF family",
+        optional=True,
+    )
+
+
 def main() -> int:
     copy_sources()
     patch_jam()
@@ -632,6 +657,7 @@ def main() -> int:
     patch_looper_families()
     patch_net_server()
     patch_prefs()
+    patch_kernel_multicast_if()
     return 0
 
 

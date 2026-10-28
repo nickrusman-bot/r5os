@@ -66,6 +66,7 @@ $raw = Get-RawImagePath
 $outDir = Join-Path $PSScriptRoot "..\generated"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $vdi = Join-Path (Resolve-Path $outDir) "r5-os.vdi"
+$localRaw = Join-Path (Resolve-Path $outDir) "r5-os.img"
 
 Write-Host "R5OS VirtualBox"
 Write-Host "  No vboxsf, no auto-resize, no VBox drag-and-drop."
@@ -90,10 +91,18 @@ if (Test-Path $vdi) {
 	& $vbox closemedium disk $vdi --delete 2>$null | Out-Null
 	Remove-Item -Force $vdi -ErrorAction SilentlyContinue
 }
-& $vbox convertfromraw $raw $vdi --format VDI
+# Convert from a local NTFS copy. Reading the raw image through
+# \\wsl.localhost on first power-on often hangs until the VM is reset.
+Write-Host "  copying raw image to $localRaw"
+wsl -e bash -lc "cp -f /home/nickr/r5os/haiku/generated.x86_64/r5-os.image /mnt/c/Users/nickr/Projects/R5OS/generated/r5-os.img"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $localRaw)) {
+	throw "copy raw image failed"
+}
+& $vbox convertfromraw $localRaw $vdi --format VDI --variant Fixed
 if ($LASTEXITCODE -ne 0) {
 	throw "convertfromraw failed"
 }
+Start-Sleep -Seconds 2
 
 if (-not $exists) {
 	& $vbox createvm --name $VmName --ostype Other_64 --register | Out-Null
