@@ -4,6 +4,10 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-28 (Europe/Amsterdam)
 
+### IPv6 SLAAC in net_server
+
+On link-up, net_server assigns an IPv6 link-local address and runs SLAAC next to DHCP: Router Solicitation, global /64 from RA (A-flag), default route, optional RDNSS into resolv.conf. No DAD (#8319), no DHCPv6.
+
 ### VirtualBox text clipboard (no Guest Additions)
 
 Host/guest copy-paste of Unicode text over COM1 (`\\.\pipe\R5OS-clip`). Guest `r5_vbox_clip` opens `pc_serial1` and quits if the port never appears. Drag-and-drop is still off: that is a Guest Additions protocol. Needs a jammed image with the overlay.
