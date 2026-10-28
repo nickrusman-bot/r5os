@@ -64,6 +64,110 @@ def patch_cpp() -> None:
     )
     replace_once(
         path,
+        "	virtual void			Draw(BRect updateRect);\n\n"
+        "private:\n"
+        "			BBitmap*		fLogo;\n",
+        "	virtual void			Draw(BRect updateRect);\n\n"
+        "			BSize			_DisplaySize() const;\n\n"
+        "private:\n"
+        "			BBitmap*		fLogo;\n",
+        "LogoView display size decl",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """BSize
+LogoView::MinSize()
+{
+	if (fLogo == NULL)
+		return BSize(0, 0);
+
+	return BSize(fLogo->Bounds().Width(), fLogo->Bounds().Height());
+}
+
+
+BSize
+LogoView::MaxSize()
+{
+	if (fLogo == NULL)
+		return BSize(0, 0);
+
+	return BSize(B_SIZE_UNLIMITED, fLogo->Bounds().Height());
+}
+
+
+void
+LogoView::Draw(BRect updateRect)
+{
+	if (fLogo == NULL)
+		return;
+
+	BRect bounds(Bounds());
+	SetLowColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
+	FillRect(bounds, B_SOLID_LOW);
+
+	DrawBitmap(fLogo, BPoint((bounds.Width() - fLogo->Bounds().Width()) / 2, 0));
+}
+""",
+        """BSize
+LogoView::_DisplaySize() const
+{
+	if (fLogo == NULL)
+		return BSize(0, 0);
+
+	// Unofficial Haiku used Walter logo.png (170x110). Keep the R5OS
+	// wordmark in that box so About does not grow with a 420px asset.
+	const float kMaxWidth = 170.0f;
+	const float kMaxHeight = 110.0f;
+	float width = fLogo->Bounds().Width();
+	float height = fLogo->Bounds().Height();
+	float scale = 1.0f;
+	if (width > kMaxWidth)
+		scale = kMaxWidth / width;
+	if (height * scale > kMaxHeight)
+		scale = kMaxHeight / height;
+	return BSize(width * scale, height * scale);
+}
+
+
+BSize
+LogoView::MinSize()
+{
+	return _DisplaySize();
+}
+
+
+BSize
+LogoView::MaxSize()
+{
+	BSize size = _DisplaySize();
+	if (size.width > 0)
+		size.width = B_SIZE_UNLIMITED;
+	return size;
+}
+
+
+void
+LogoView::Draw(BRect updateRect)
+{
+	if (fLogo == NULL)
+		return;
+
+	BRect bounds(Bounds());
+	SetLowColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
+	FillRect(bounds, B_SOLID_LOW);
+
+	BSize size = _DisplaySize();
+	float left = (bounds.Width() - size.width) / 2;
+	BRect dest(left, 0, left + size.width, size.height);
+	DrawBitmap(fLogo, fLogo->Bounds(), dest, B_FILTER_BITMAP_BILINEAR);
+}
+""",
+        "LogoView Walter size",
+        optional=True,
+    )
+    replace_once(
+        path,
         """	revision.SetToFormat(B_TRANSLATE_COMMENT("R5OS %s",
 		"Marketing version, e.g. R5OS 2026.1-dev"), R5_OS_VERSION);
 	return revision;
