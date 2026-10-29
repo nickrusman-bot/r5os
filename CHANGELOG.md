@@ -34,9 +34,11 @@ Jam AMD64 2026-10-29 16:59 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` 
 
 VBox 17:01 Europe/Amsterdam: Terminal `id` still `uid=0(root)`. `/system/var/log/syslog` had no `r5-desktop` / Login lines: the helper only syslog()s on error, exits in milliseconds, and does not call `openlog`. Target("desktop") was still starting Tracker as uid 0 *before* the helper, so the root copy won. Login now starts Tracker/Deskbar through `r5-desktop` first, refuses a uid-0 Tracker team, then Target. Session trace goes to `/tmp/r5-session.log` and `/system/var/log/r5-session.log`.
 
-Jam AMD64 2026-10-29 17:07 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. `id` after Sign in not confirmed yet.
+Jam AMD64 2026-10-29 17:07 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
 
-Isolation is only true if `id` after Sign in is not uid 0 and `ls /boot/home/users/<name>` is permission denied.
+VBox 17:14 Europe/Amsterdam (guest clock 4:09 PM, UTC): Terminal `id` is **`uid=1001(user)`** `gid=100(users)` `groups=100(users),103(admin)`. Deskbar shows Tracker and Terminal (not `r5-desktop`). Mouse works. Session log is `/tmp/r5-session.log` (lowercase), not next to syslog; `/system/var/log/` is packagefs and that copy often cannot be created. Isolation of another account’s home was not tested on this first-boot VDI (`nicky` is not an image account).
+
+Isolation of extra homes is only true if `ls /boot/home/users/<name>` is permission denied.
 
 ### First administrator off uid 0 (plan)
 
