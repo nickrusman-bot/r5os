@@ -84,7 +84,9 @@ LoginApp::ReadyToRun()
 		return;
 	}
 
-	fLoginWindow = new LoginWindow(screen.Frame());
+	fDesktopWindow = new DesktopWindow(screen.Frame(), false);
+	fDesktopWindow->Show();
+	fLoginWindow = new LoginWindow(BRect(0, 0, 360, 320));
 	fLoginWindow->Show();
 }
 

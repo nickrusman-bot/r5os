@@ -80,6 +80,15 @@ def patch_launch() -> None:
     )
 
 
+def patch_first_boot() -> None:
+    replace_once(
+        HAIKU / "src" / "apps" / "firstbootprompt" / "BootPrompt.cpp",
+        '\t\t\tBLaunchRoster().Target("desktop");\n',
+        '\t\t\tBLaunchRoster().Target("login");\n',
+        "Try R5OS starts login",
+    )
+
+
 def patch_image() -> None:
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
     replace_once(
@@ -96,6 +105,7 @@ def patch_image() -> None:
 def main() -> int:
     copy_sources()
     patch_launch()
+    patch_first_boot()
     patch_image()
     return 0
 

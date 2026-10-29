@@ -8,19 +8,17 @@
 
 #include "LoginView.h"
 
-#include <WindowPrivate.h>
-
 
 LoginWindow::LoginWindow(BRect frame)
 	:
-	BWindow(frame, "R5OS", kDesktopWindowLook, kDesktopWindowFeel,
-		B_NOT_MOVABLE | B_NOT_CLOSABLE | B_NOT_ZOOMABLE
-			| B_NOT_MINIMIZABLE | B_NOT_RESIZABLE
-			| B_ASYNCHRONOUS_CONTROLS | B_QUIT_ON_WINDOW_CLOSE,
+	BWindow(frame, "Sign in", B_TITLED_WINDOW_LOOK, B_MODAL_ALL_WINDOW_FEEL,
+		B_NOT_CLOSABLE | B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE
+			| B_AUTO_UPDATE_SIZE_LIMITS | B_ASYNCHRONOUS_CONTROLS,
 		B_ALL_WORKSPACES)
 {
 	AddChild(new LoginView());
 	SetPulseRate(1000000LL);
+	CenterOnScreen();
 }
 
 

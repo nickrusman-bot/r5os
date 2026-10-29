@@ -11,7 +11,6 @@
 #include <Font.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
-#include <Screen.h>
 #include <String.h>
 #include <StringItem.h>
 #include <Window.h>
@@ -161,19 +160,7 @@ LoginView::~LoginView()
 void
 LoginView::AttachedToWindow()
 {
-	BScreen screen;
-	rgb_color desktop = screen.DesktopColor();
-	SetViewColor(desktop);
-	SetLowColor(desktop);
-	bool dark = (desktop.red + desktop.green + desktop.blue) < 3 * 90;
-	rgb_color text = dark
-		? (rgb_color){232, 232, 232, 255}
-		: (rgb_color){32, 32, 32, 255};
-	SetHighColor(text);
-	fNameView->SetHighColor(text);
-	fLoginView->SetHighColor(text);
-	fInfoView->SetHighColor(text);
-	fClockView->SetHighColor(text);
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
 	fUserList->SetTarget(this);
 	fPasswordControl->SetTarget(this);
