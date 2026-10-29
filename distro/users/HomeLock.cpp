@@ -10,6 +10,7 @@
 #include "HomeLock.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -57,7 +58,7 @@ lock_private_homes()
 			|| strcmp(entry->d_name, "users") == 0)
 			continue;
 
-		char path[B_PATH_NAME_LENGTH];
+		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", kHome, entry->d_name);
 
 		struct stat st;
@@ -77,7 +78,7 @@ lock_private_homes()
 		if (entry->d_name[0] == '.')
 			continue;
 
-		char path[B_PATH_NAME_LENGTH];
+		char path[PATH_MAX];
 		snprintf(path, sizeof(path), "%s/%s", kUsers, entry->d_name);
 		lock_entry(path, 0700, homeStat.st_dev);
 	}
