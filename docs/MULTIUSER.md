@@ -119,4 +119,4 @@ VBox 2026-10-29 Europe/Amsterdam (live Try): one account showed `user`; with `ni
 3. An open app (StyledEdit or Terminal) is gone after log out.
 4. Restart / Shut down on Sign in still work.
 
-Not VBox-tested yet. Isolation (other homes) is still later.
+VBox 2026-10-29 14:01 Europe/Amsterdam: Log out returned to Sign in; Login is not in the Deskbar list. Isolation (other homes) is still later. StyledEdit/Terminal leftover was not rechecked on this pass.
