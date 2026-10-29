@@ -638,6 +638,12 @@ public:
 		_TryInstallTray();
 	}
 
+	virtual bool QuitRequested()
+	{
+		SetPulseRate(0);
+		return true;
+	}
+
 	virtual void Pulse()
 	{
 		_TryInstallTray();

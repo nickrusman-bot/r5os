@@ -13,15 +13,20 @@ SRC = ROOT / "distro" / "airplay"
 THIRD = SRC / "third_party"
 
 
-def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
+def replace_once(
+    path: pathlib.Path, old: str, new: str, tag: str, optional: bool = False
+) -> None:
     text = path.read_text(encoding="utf-8")
     if new in text:
         print(f"already {path.name} ({tag})")
         return
     if old not in text:
+        if optional:
+            print(f"skip {path.name} ({tag})")
+            return
         raise SystemExit(f"pattern not found in {path} ({tag})")
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
-    print(f"patched {path} ({tag})")
+    print(f"patched {path.name} ({tag})")
 
 
 def copy_sources() -> None:
@@ -110,14 +115,19 @@ def patch_jams() -> None:
         "SubInclude HAIKU_TOP src servers airplay ;\n",
         "airplay jam",
     )
-    replace_once(
-        HAIKU / "build" / "jam" / "images" / "definitions" / "regular",
-        "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
-        "SYSTEM_SERVERS += airplay_server ;\n"
-        "SYSTEM_SERVERS += airplay_deskbar ;\n"
-        "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
-        "airplay SYSTEM_SERVERS",
-    )
+    regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_SERVERS += airplay_server ;" in text:
+        print("already regular (airplay SYSTEM_SERVERS)")
+    else:
+        replace_once(
+            regular,
+            "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
+            "SYSTEM_SERVERS += airplay_server ;\n"
+            "SYSTEM_SERVERS += airplay_deskbar ;\n"
+            "SYSTEM_SERVERS += [ FFilterByBuildFeatures\n",
+            "airplay SYSTEM_SERVERS",
+        )
 
 
 def patch_launch() -> None:
@@ -141,26 +151,21 @@ def patch_launch() -> None:
         "}\n",
         "airplay launch job",
     )
-    replace_once(
-        HAIKU / "data" / "launch" / "system",
-        "service x-vnd.R5OS-airplay {\n"
-        "	launch /system/servers/airplay_server\n"
-        "	no_safemode\n"
-        "	legacy\n"
-        "}\n",
-        "service x-vnd.R5OS-airplay {\n"
-        "	launch /system/servers/airplay_server\n"
-        "	no_safemode\n"
-        "	legacy\n"
-        "}\n"
+    system = HAIKU / "data" / "launch" / "system"
+    tray_service = (
         "\n"
         "service x-vnd.R5OS-airplay-tray {\n"
         "	launch /system/servers/airplay_deskbar\n"
         "	no_safemode\n"
         "	legacy\n"
-        "}\n",
-        "airplay tray launch job",
+        "}\n"
     )
+    system_text = system.read_text(encoding="utf-8")
+    if tray_service in system_text:
+        system.write_text(system_text.replace(tray_service, "\n", 1), encoding="utf-8")
+        print("patched system (remove airplay tray service)")
+    else:
+        print("already system (remove airplay tray service)")
     replace_once(
         HAIKU / "data" / "launch" / "system",
         "\n"
@@ -171,6 +176,29 @@ def patch_launch() -> None:
         "}\n",
         "\n",
         "remove leftover airplay tray job",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "data" / "launch" / "user",
+        """	service x-vnd.Be-TSKB {
+		launch /system/Deskbar
+		on initial_volumes_mounted
+	}
+""",
+        """	service x-vnd.Be-TSKB {
+		launch /system/Deskbar
+		on initial_volumes_mounted
+	}
+
+	job x-vnd.R5OS-airplay-tray {
+		launch /system/servers/airplay_deskbar
+		requires x-vnd.Be-TSKB
+		on initial_volumes_mounted
+		legacy
+		no_safemode
+	}
+""",
+        "airplay tray user job",
     )
 
 

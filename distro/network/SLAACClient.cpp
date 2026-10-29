@@ -56,17 +56,33 @@ SLAACClient::SLAACClient(BMessenger target, const char* device)
 }
 
 
+static void
+stop_worker(thread_id thread, int socket)
+{
+	if (socket >= 0)
+		shutdown(socket, SHUT_RDWR);
+	if (thread < 0)
+		return;
+
+	status_t ignored;
+	wait_for_thread_etc(thread, B_RELATIVE_TIMEOUT, 500000, &ignored);
+	kill_thread(thread);
+	wait_for_thread_etc(thread, B_RELATIVE_TIMEOUT, 250000, &ignored);
+}
+
+
 SLAACClient::~SLAACClient()
 {
 	thread_id thread = fThread;
+	int socket = fSocket;
 	fThread = -1;
-	if (fSocket >= 0)
-		shutdown(fSocket, SHUT_RDWR);
+	fSocket = -1;
 	if (thread != -1) {
 		UnlockLooper();
-		wait_for_thread(thread, NULL);
+		stop_worker(thread, socket);
 		LockLooper();
-	}
+	} else if (socket >= 0)
+		shutdown(socket, SHUT_RDWR);
 }
 
 
@@ -270,8 +286,7 @@ SLAACClient::_ApplyResolver(BMessage& resolver, int32 nameservers)
 		return;
 	resolver.AddString("device", Device());
 	resolver.AddInt32("nameserver_count", nameservers);
-	BMessage reply;
-	Target().SendMessage(&resolver, &reply);
+	Target().SendMessage(&resolver);
 }
 
 
@@ -416,7 +431,7 @@ SLAACClient::_Run()
 {
 	BNetworkInterface interface(Device());
 	status_t status = B_ERROR;
-	for (int32 i = 0; i < 10; i++) {
+	for (int32 i = 0; i < 10 && fThread != -1; i++) {
 		status = _EnsureLinkLocal(interface);
 		if (status == B_OK)
 			break;

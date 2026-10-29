@@ -34,6 +34,7 @@ public:
 
 private:
 	static int32	_Reader(void* cookie);
+	void			_StopReader();
 	bool			_OpenPort();
 	void			_WriteFrame(const void* data, uint32 length);
 	BString			_ClipboardText();
@@ -46,6 +47,7 @@ private:
 	BString			fLastSent;
 	BString			fLastRecv;
 	bool			fOpen;
+	volatile bool	fStopping;
 };
 
 
@@ -53,19 +55,15 @@ ClipApp::ClipApp()
 	:
 	BApplication("application/x-vnd.R5OS-vbox-clip"),
 	fReader(-1),
-	fOpen(false)
+	fOpen(false),
+	fStopping(false)
 {
 }
 
 
 ClipApp::~ClipApp()
 {
-	if (fReader >= 0) {
-		kill_thread(fReader);
-		wait_for_thread(fReader, NULL);
-	}
-	if (fOpen)
-		fPort.Close();
+	_StopReader();
 }
 
 
@@ -73,11 +71,11 @@ void
 ClipApp::ReadyToRun()
 {
 	int32 tries = 0;
-	while (!_OpenPort() && tries < 30) {
-		snooze(1000000);
+	while (!fStopping && !_OpenPort() && tries < 30) {
+		snooze(200000);
 		tries++;
 	}
-	if (!fOpen) {
+	if (fStopping || !fOpen) {
 		Quit();
 		return;
 	}
@@ -94,6 +92,7 @@ ClipApp::ReadyToRun()
 bool
 ClipApp::QuitRequested()
 {
+	_StopReader();
 	return true;
 }
 
@@ -136,15 +135,35 @@ ClipApp::_Reader(void* cookie)
 
 
 void
+ClipApp::_StopReader()
+{
+	fStopping = true;
+	thread_id reader = fReader;
+	fReader = -1;
+	if (fOpen) {
+		fPort.Close();
+		fOpen = false;
+	}
+	if (reader < 0)
+		return;
+	kill_thread(reader);
+	status_t ignored;
+	wait_for_thread_etc(reader, B_RELATIVE_TIMEOUT, 250000, &ignored);
+}
+
+
+void
 ClipApp::ReadLoop()
 {
 	uint8 buffer[4096];
 	BString frame;
 	int32 needed = 8;
 
-	fPort.SetTimeout(B_INFINITE_TIMEOUT);
-	for (;;) {
+	fPort.SetTimeout(250000);
+	while (!fStopping) {
 		ssize_t available = fPort.WaitForInput();
+		if (fStopping)
+			return;
 		if (available <= 0)
 			continue;
 
