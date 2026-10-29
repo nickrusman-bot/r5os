@@ -7,6 +7,7 @@
 
 
 #include <Application.h>
+#include <Path.h>
 
 
 const uint32 kAttemptLogin = 'logi';
@@ -37,7 +38,12 @@ private:
 	status_t		ValidateLogin(const char* login, const char* password);
 	void			_EnableDesktopJobs();
 	status_t		_LaunchSessionApp(const char* program,
-						const char* argument = NULL);
+						const char* argument = NULL,
+						const char* argument2 = NULL,
+						const char* argument3 = NULL,
+						const char* argument4 = NULL);
+	void			_LaunchSessionHooks();
+	status_t		_SessionHome(BPath& path) const;
 	status_t		_WaitRunning(const char* signature);
 	status_t		_WaitSessionTeam(const char* signature);
 	void			_HideLogin();

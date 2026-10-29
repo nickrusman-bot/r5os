@@ -105,6 +105,29 @@ def patch_launch() -> None:
     else:
         print("already user (no r5-desktop wrap)")
     disarm_desktop_target()
+    patch_autologin()
+    copy_first_login_script()
+
+
+def patch_autologin() -> None:
+    replace_once(
+        HAIKU / "data" / "launch" / "system",
+        "# target login\n"
+        "job x-vnd.Haiku-autologin {\n"
+        "	launch /system/bin/autologin\n"
+        "}\n",
+        "# R5OS Login owns Sign in. autologin StartSession spawned\n"
+        "# launch_daemon as uid 0 (user, then root) and raced Tracker.\n",
+        "no autologin job",
+    )
+
+
+def copy_first_login_script() -> None:
+    dest = HAIKU / "data" / "system" / "boot" / "first_login" / "default_deskbar_items.sh"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(SRC / "default_deskbar_items.sh", dest)
+    dest.touch()
+    print(f"copied default_deskbar_items.sh -> {dest}")
 
 
 def disarm_desktop_target() -> None:
