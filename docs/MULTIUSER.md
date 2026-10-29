@@ -226,7 +226,7 @@ ls /boot/home/Desktop
 
 4. Log out, Sign in as `user`. Terminal `id` is `user` and `$HOME` is `/boot/home`. `ls /boot/home/users/nick` is permission denied.
 
-Still one screen. Preferences are not filtered. `/boot/trash` stays the administrator’s when `user` signs in; a standard account does not take it. `autologin` still starts `launch_daemon user`.
+Still one screen. Preferences are not filtered. Trash is `$h/trash` for the signed-in account (the image’s `/boot/trash` moves to `/boot/home/trash` once). `autologin` still starts `launch_daemon user`. Shell `HOME` comes from `finddir B_USER_DIRECTORY`, not a hardcoded `/boot/home`.
 
 Earlier check, still as `user`:
 

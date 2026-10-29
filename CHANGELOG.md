@@ -12,7 +12,13 @@ This does **not** call `BLaunchRoster::StartSession`. That spawns another `launc
 
 `/boot/trash` is chown’d only for the `/boot/home` account. A standard user’s Trash may not work. Preferences are not hidden by role. Not a second graphical session.
 
-Jam AMD64 2026-10-29 19:53 Europe/Amsterdam: `jam_exit=0` (Login, `r5-desktop`, What’s new, image). VBox `-ForceConvert` started. Sign in as a standard account is not confirmed yet.
+Jam AMD64 2026-10-29 19:53 Europe/Amsterdam: `jam_exit=0` (Login, `r5-desktop`, What’s new, image). VBox `-ForceConvert` started.
+
+VBox 19:55 Europe/Amsterdam (guest clock 6:55 PM, UTC): Sign in as `nicky` reached a blue desktop. Terminal `id` was `uid=1002(nicky) gid=100(users) groups=100(users)`. `ls /boot/home/Desktop` was permission denied. `ls` in `nicky`’s folder showed Desktop, Documents, and the rest. `echo $HOME` was still `/boot/home`, and the shell reported `sh: /boot/home/config/settings/profile: Permission denied`. The desktop showed the volume icon only: no Trash, Home, Quick Tour, or User Guide. Sign in as `user` afterwards: `uid=1001(user)`, `$HOME` `/boot/home`, `ls /boot/home/users/nicky` permission denied. A Deskbar crash dialog sat over Sign in (`/system/Deskbar`).
+
+`/bin/sh` sources `SetupEnvironment`, which forced `HOME=/boot/home` for every account. Trash is `find_directory(B_TRASH_DIRECTORY)`, which was `/boot/trash` mode `0700` for the administrator, so Tracker drew no Trash pose. Home, Quick Tour, and User Guide are symlinks that the image only puts in `/boot/home/Desktop`. Those three are now created in each account’s Desktop. Trash is `$h/trash` (the old `/boot/trash` moves to `/boot/home/trash` once). Deskbar no longer calls through a missing settings file on quit.
+
+Jam AMD64 2026-10-29 20:14 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Not confirmed on this image yet.
 
 ### First administrator off uid 0 (build 10007)
 

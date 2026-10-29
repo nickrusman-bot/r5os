@@ -226,6 +226,10 @@ add_to_group(const char* groupName, const char* user, BString& errorText)
 }
 
 
+static void ensure_desktop_links(const char* home);
+static void ensure_private_trash(const char* home, uid_t uid, gid_t gid);
+
+
 static status_t
 create_home(const char* home, uid_t uid, gid_t gid)
 {
@@ -253,6 +257,15 @@ create_home(const char* home, uid_t uid, gid_t gid)
 	mkdir(settings.String(), 0700);
 	chmod(settings.String(), 0700);
 	chown(settings.String(), uid, gid);
+
+	BString deskbar;
+	deskbar.SetToFormat("%s/config/settings/deskbar", home);
+	mkdir(deskbar.String(), 0700);
+	chmod(deskbar.String(), 0700);
+	chown(deskbar.String(), uid, gid);
+
+	ensure_desktop_links(home);
+	ensure_private_trash(home, uid, gid);
 	lock_private_homes();
 	return B_OK;
 }
@@ -428,6 +441,53 @@ chown_tree(const char* path, uid_t uid, gid_t gid, dev_t homeDevice)
 		chown_tree(child, uid, gid, homeDevice);
 	}
 	closedir(dir);
+}
+
+
+static void
+ensure_desktop_link(const char* home, const char* name, const char* target)
+{
+	BString path;
+	path.SetToFormat("%s/Desktop/%s", home, name);
+	struct stat st;
+	if (lstat(path.String(), &st) == 0)
+		return;
+	symlink(target, path.String());
+}
+
+
+static void
+ensure_desktop_links(const char* home)
+{
+	if (home == NULL)
+		return;
+	ensure_desktop_link(home, "Home", home);
+	ensure_desktop_link(home, "Quick Tour", "/boot/system/bin/quicktour");
+	ensure_desktop_link(home, "User Guide", "/boot/system/bin/userguide");
+}
+
+
+// Trash follows the account home ($h/trash). The image only had /boot/trash,
+// which was mode 0700 for the administrator, so a standard account got no icon.
+static void
+ensure_private_trash(const char* home, uid_t uid, gid_t gid)
+{
+	if (home == NULL)
+		return;
+
+	BString dest;
+	dest.SetToFormat("%s/trash", home);
+	struct stat st;
+	if (lstat(dest.String(), &st) != 0) {
+		if (strcmp(home, kHome) == 0 && lstat("/boot/trash", &st) == 0
+			&& S_ISDIR(st.st_mode)) {
+			if (rename("/boot/trash", dest.String()) != 0)
+				mkdir(dest.String(), 0700);
+		} else
+			mkdir(dest.String(), 0700);
+	}
+	chmod(dest.String(), 0700);
+	lchown(dest.String(), uid, gid);
 }
 
 
@@ -625,6 +685,8 @@ write_desktop_session(const char* login)
 		if (status != B_OK)
 			return status;
 	}
+	ensure_desktop_links(home.String());
+	ensure_private_trash(home.String(), uid, gid);
 
 	FILE* file = fopen(kSessionPath, "w");
 	if (file == NULL)
@@ -639,8 +701,6 @@ write_desktop_session(const char* login)
 	if (chmod(kSessionPath, 0600) != 0 || chown(kSessionPath, 0, 0) != 0)
 		return errno;
 
-	if (firstHome)
-		adopt_trash(uid, gid);
 	lock_private_homes();
 	return B_OK;
 }
