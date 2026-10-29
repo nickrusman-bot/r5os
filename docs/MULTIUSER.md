@@ -9,7 +9,7 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Image user is `HAIKU_ROOT_USER_NAME = user` (`distro/UserBuildConfig`), real name `R5OS`, host `r5os`.
 - Home is **`/boot/home`**. Tracker Desktop, `~/config`, mail, and `find_directory(B_USER_* )` all point there for the live session.
 - `/etc/passwd` and `/etc/shadow` exist. Tools: `src/bin/multiuser` (`useradd`, `userdel`, `passwd`, `su`, `login`) and `verify_password()`.
-- Graphical **Login** already exists: `src/apps/login`. After `crypt`/`shadow` check it calls `BLaunchRoster().StartSession(login)` (Haiku #8940). It is **not** the default boot path. `target desktop` in `data/launch/user` starts Tracker and Deskbar on `initial_volumes_mounted` with no login.
+- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). `StartSession` for a different account is not wired (would start a second app_server). Logout is not wired.
 - Default desktop user is often **UID 0** on Haiku images. GUI restrictions would not be security. New accounts must not be UID 0.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
 - Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Many apps already use `find_directory`. Hardcoded `/boot/home` is the bug to fix when found.
@@ -57,6 +57,7 @@ Detect actual layout. Typical live disk: one `user` and `/boot/home` already ful
 | `apply-vboxclip.py` | COM1 clipboard | `distro/vboxclip` | Yes (copy-in) |
 | `apply-ipv6.py` | SLAAC/DAD/DHCPv6 + kernel IPv6 | `distro/network` + kernel patches | Yes; kernel hunks are the riskiest to absorb |
 | `apply-users.py` | Users & Accounts preflet | `distro/users` | Yes (copy-in) |
+| `apply-login.py` | Login app + launch `run { login }` | `distro/login` | Yes (copy-in) |
 | `apply-about.py` | About version, What’s new | `distro/WHATSNEW` | Yes |
 
 Jam/image/tracker scripts (`jam-r5-raw.sh`, `r5-version.sh`, `tracker-report.py`, QEMU/VBox runners) stay. They are not OS patches.
@@ -70,7 +71,7 @@ Longer term: vendor or submodule the Haiku tree under `haiku/` in `origin` so co
 | Role | Source |
 |---|---|
 | Marketing version | `distro/VERSION` (`2026.1-dev`) |
-| Build number | `distro/BUILD` (this work: **10003**) |
+| Build number | `distro/BUILD` (this work: **10004**) |
 | Jam revision | `r5-${VERSION}` via `scripts/r5-version.sh --revision` → `UserBuildConfig` `HAIKU_REVISION` |
 | About / generated header | `headers/private/system/r5_os_version.h` (`R5_OS_VERSION`, `R5_OS_BUILD`) written by `apply-overlay.sh` / `jam-r5-raw.sh` |
 | What’s new text | `distro/WHATSNEW` copied to About `r5_whatsnew.txt` |
@@ -82,7 +83,7 @@ Do not treat Haiku `hrev` as the product version.
 
 1. **Build 10002:** document the model; Users & Accounts lists `passwd`; What’s new rebuilds with the notes file.
 2. **Build 10003:** add/disable/delete; new UIDs ≥ 1000 via `useradd`; group `admin`; UID 0 `user` kept; last-admin checks.
-3. Put Login on the boot path; stop auto-starting `target desktop` until authenticated.
+3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. Logout: stop user launch jobs, then Login.
 5. Permission isolation tests (home not world-readable).
 6. Per-user settings audit (`find_directory`).
@@ -99,4 +100,14 @@ VBox 2026-10-29, Europe/Amsterdam (bridged, first-boot VDI, build 10003):
 4. Delete a non-admin — after delete, the list was `user` and `nicky3` only.
 5. Original `user` (UID 0) refuse delete/disable — Disable and Delete stay inactive unless a removable account is selected; `user` was not removed.
 
-Login as that person is **out of scope**. Add-account label alignment is later polish. The preflet icon is the Haiku Login/Tracker people vector.
+Add-account label alignment is later polish. The preflet icon is the Haiku Login/Tracker people vector.
+
+## Tests for sign-in (build 10004)
+
+1. Boot to the sign-in screen (no Tracker/Deskbar yet). One person: `user` / R5OS.
+2. Empty password + Sign in starts the desktop.
+3. Wrong password stays on the sign-in screen with an error.
+4. Restart and Shut down at the bottom still work.
+5. Extra people from Users & Accounts appear in the list; signing in as them still opens the same `user` session until isolation exists.
+
+Not VBox-tested yet.
