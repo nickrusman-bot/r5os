@@ -22,6 +22,27 @@ static const char* kSignature = "application/x-vnd.R5OS-Users";
 
 
 static bool
+is_listed_account(const struct passwd* pwd)
+{
+	if (pwd == NULL || pwd->pw_name == NULL || pwd->pw_name[0] == '\0')
+		return false;
+	if (strcmp(pwd->pw_name, "sshd") == 0
+		|| strcmp(pwd->pw_name, "ftp") == 0
+		|| strcmp(pwd->pw_name, "nobody") == 0)
+		return false;
+
+	const char* home = pwd->pw_dir;
+	if (home == NULL || home[0] == '\0')
+		return false;
+	if (strcmp(home, "/boot/home") == 0)
+		return true;
+	if (strncmp(home, "/boot/home/", 11) == 0)
+		return true;
+	return false;
+}
+
+
+static bool
 is_admin_user(const struct passwd* pwd)
 {
 	if (pwd == NULL)
@@ -79,7 +100,7 @@ private:
 			struct passwd* pwd = getpwent();
 			if (pwd == NULL)
 				break;
-			if (pwd->pw_name == NULL || pwd->pw_name[0] == '\0')
+			if (!is_listed_account(pwd))
 				continue;
 
 			const char* home = pwd->pw_dir != NULL ? pwd->pw_dir : "";
