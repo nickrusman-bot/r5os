@@ -20,6 +20,8 @@ Jam AMD64 2026-10-29 22:02 Europe/Amsterdam: `jam_exit=0` (Users, Time, Screen, 
 
 VBox 22:04 Europe/Amsterdam (guest clock 9:04 PM, UTC): signed in as standard account `nick` (uid 1002, `/boot/home/users/nick`). Network: lock at the bottom right, Revert / Disable / Renegotiate gray. Users: after Unlock, “Unlocked for a few minutes” and Lock at the bottom right, Add on. Network stayed Locked while Users was unlocked — the grant is per preference window.
 
+VBox 22:06 Europe/Amsterdam (guest clock 9:06 PM, UTC): Screen and Time, still as `nick`, Locked at the bottom right. Screen: Revert and Apply gray, workspace +/− gray. Time: Revert gray. The date and analog clock still update.
+
 ### Sign in as that person (build 10008)
 
 The session file is the account whose password just worked, not always the first administrator. `r5-desktop` already drops to that name before Tracker and Deskbar. A standard account’s home is `/boot/home/users/<name>` (`create_home` on sign-in). `user` still gets `/boot/home`. Log out deletes the session file.
