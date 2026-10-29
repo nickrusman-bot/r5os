@@ -4,7 +4,7 @@ Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nod
 
 This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
 
-Current tree: **R5OS 2026.1-dev Build 10009** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
+Current tree: **R5OS 2026.1-dev Build 10010** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
 ## What is in the image now
 
@@ -15,7 +15,7 @@ User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG
 - Wi-Fi join/remember, IPv6 SLAAC/DAD on a home LAN, AirPrint/IPP add, AirPlay 1 to speakers (not AirPlay 2 pairing).
 - Shutdown no longer waits forever on IPv6 SLAAC or the VirtualBox COM1 clipboard helper.
 - **Users & Accounts** in Preferences: list, add, disable, delete. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`, now a normal user id (1000 or higher), not 0.
-- **Sign-in screen** before Tracker/Deskbar. **Log out** from the Deskbar leaf returns to Sign in. After a valid password, Tracker and Deskbar run as that account: a standard person uses `/boot/home/users/<name>`, their own Trash, and their own MIME database. Folder icons (including the leaf menu) are the same yellow folders for everyone. There is still **one screen**.
+- **Sign-in screen** before Tracker/Deskbar. The leaf menu says **Log out** and the account name, then returns to Sign in. Restart and a cold boot also return to Sign in. After a valid password, Tracker and Deskbar run as that account: a standard person uses `/boot/home/users/<name>`, their own Trash, and their own MIME database. Folder icons (including the leaf menu) are the same yellow folders for everyone. There is still **one screen**.
 - **Locked machine settings.** Preferences are not hidden by role. Network, Screen, Time, and Users stay in the list. An administrator changes them immediately. A standard account looks, then unlocks the bottom-right lock with an administrator name and password (checked by Sign in, uid 0). That lasts a few minutes and is per window. Personal prefs (Appearance, Backgrounds, …) stay with the signed-in person.
 
 Home folders of extra accounts are private (`0700`). `user` is in group `admin` and cannot list another person’s home. Appearance/Deskbar/Tracker/background and most bundled apps already use `find_directory`. MidiPlayer, Joysticks, and PoorMan follow that in `distro/user-paths`. Printers, Repositories, and VirtualMemory are still machine-wide and not locked yet. Not done: `StartSession` (that would start a second app_server), one combined Preferences window. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.

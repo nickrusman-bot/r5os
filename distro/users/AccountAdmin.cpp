@@ -408,8 +408,10 @@ ensure_system_root()
 		return B_OK;
 	if (getpwnam(kSystemRootName) != NULL)
 		return B_NAME_IN_USE;
-	return add_unix_user(kSystemRootName, 0, 0, "/boot/system", "/bin/sh",
-		"System", "!");
+	mkdir("/boot/system/var", 0755);
+	mkdir("/boot/system/var/root", 0700);
+	return add_unix_user(kSystemRootName, 0, 0, "/boot/system/var/root",
+		"/bin/sh", "System", "!");
 }
 
 

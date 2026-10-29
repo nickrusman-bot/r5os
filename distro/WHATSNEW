@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10010 - Log out name, Sign in after Restart
+The leaf menu says Log out and your account name. Restart and a cold boot go to Sign in again after the first administrator is no longer user id 0.
+
 R5OS 2026.1-dev Build 10009 - Locked machine settings
 Network, Screen, Time, and Users & Accounts stay in Preferences for everyone. An administrator can change them. Another account can look, then open the lock at the bottom right with an administrator's name and password. Until then the buttons in that window stay off. That lasts a few minutes and is checked by Sign in. Appearance and the other personal settings stay with the person who is signed in.
 
