@@ -891,6 +891,46 @@ def patch_ipv6_route_lookup() -> None:
     )
 
 
+def patch_ipv6_default_route_specificity() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols"
+        / "ipv6" / "ipv6_address.cpp"
+    )
+    replace_once(
+        path,
+        """static int32
+ipv6_first_mask_bit(const sockaddr *_mask)
+{
+	if (_mask == NULL)
+		return 0;
+
+	const uint8 *pmask = ((const sockaddr_in6 *)_mask)->sin6_addr.s6_addr;
+	for (uint8 i = 0; i < sizeof(in6_addr); ++i) {
+""",
+        """static int32
+ipv6_first_mask_bit(const sockaddr *_mask)
+{
+	if (_mask == NULL)
+		return 0;
+
+	const uint8 *pmask = ((const sockaddr_in6 *)_mask)->sin6_addr.s6_addr;
+	bool allZero = true;
+	for (uint8 i = 0; i < sizeof(in6_addr); ++i) {
+		if (pmask[i] != 0) {
+			allZero = false;
+			break;
+		}
+	}
+	if (allZero)
+		return 128;
+
+	for (uint8 i = 0; i < sizeof(in6_addr); ++i) {
+""",
+        "IPv6 default mask least specific",
+        optional=True,
+    )
+
+
 def patch_kernel_multicast_route() -> None:
     path = HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols" / "ipv6" / "ipv6.cpp"
     replace_once(
@@ -1051,6 +1091,7 @@ def main() -> int:
     patch_datalink_device_route()
     patch_alias_local_routes()
     patch_ipv6_route_lookup()
+    patch_ipv6_default_route_specificity()
     patch_kernel_multicast_route()
     return 0
 
