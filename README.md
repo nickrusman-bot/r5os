@@ -17,7 +17,7 @@ User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG
 - **Users & Accounts** in Preferences: list, add, disable, delete. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`.
 - **Sign-in screen** before Tracker/Deskbar. **Log out** from the Deskbar leaf returns to Sign in. Same session after password; not separate desktops.
 
-Home folders of extra accounts are private (`0700`). The first account is user id 0, so it can still read them. Not done: per-user settings, a non-zero uid for the first account. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
+Home folders of extra accounts are private (`0700`). The first account is user id 0, so it can still read them. Appearance/Deskbar/Tracker/background and most bundled apps already use `find_directory`; uid 0 still points that at `/boot/home`. MidiPlayer, Joysticks, and PoorMan follow that in `distro/user-paths`. Network/Screen/Time stay machine-wide. Not done: a non-zero uid for the first account, `StartSession`. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
 
 ## Layout
 

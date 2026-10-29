@@ -4,13 +4,27 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### Joysticks on the image
+
+Deskbar → Preferences includes Joysticks (`SYSTEM_PREFERENCES`). Settings dir is `find_directory(B_USER_SETTINGS_DIRECTORY)/joysticks`. Without a game port the preflet should still open.
+
+VBox 2026-10-29 15:26 Europe/Amsterdam: Joysticks was in Preferences. As `user`, `id` was uid 0 and `$HOME` was `/boot/home`. `su nicky` showed uid 1001, `HOME=/boot/home/users/nicky`, and that home listed `config Desktop Documents Downloads Music Pictures Videos`. `su nicky -c 'ls /boot/home/Desktop'` — permission denied. Sign in is still one session.
+
+### Per-user settings audit
+
+Appearance, Backgrounds, Deskbar, Tracker, and app_server desktop settings already call `find_directory(B_USER_* )`. For uid 0 that still maps to `/boot/home` (`get_user_home_path`). Extra accounts would get their own `config/settings` only after a real session switch. The AirPlay deskbar log no longer writes `/boot/home/airplay_deskbar.log`. Not a second desktop.
+
+Bundled apps (second pass): Mail, Terminal, Screenshot, ShowImage, Clock, DeskCalc, HaikuDepot, People, ProcessController, Workspaces and most other image apps already use `find_directory`. MidiPlayer, Joysticks, and PoorMan now live as native copies under `distro/user-paths` (apply copies files; not a string patch). WebPositive stays the image `webpositive.hpkg`. Preflet split accepted: personal vs machine (Network, Screen, Time). No second desktop.
+
+Jam AMD64 2026-10-29 15:01 Europe/Amsterdam: `jam_exit=0` with those MidiPlayer/Joysticks/PoorMan sources in the tree (`haiku.hpkg` rebuilt). VBox 15:12: MidiPlayer wrote `/boot/home/config/settings/MidiPlayerSettings` (0-byte file with attributes; Tracker cannot open it as a document). PoorMan `public_html` existed. Not a second desktop.
+
 ### Private home folders (build 10006)
 
 `/boot/home` is `0711` so other accounts can reach `/boot/home/users/<name>` but not list the first account’s files. Names directly under `/boot/home` except `users` are `0700` (directories) or `0600` (files). Each extra home is `0700`. Login applies this before Sign in; creating an account does too.
 
 The first account `user` is still uid 0. Mode bits do not stop that account from reading other homes. Sign in is still one shared session.
 
-VBox 2026-10-29 14:30 Europe/Amsterdam: `ls -ld` showed `/boot/home` `drwx--x--x`, Desktop `drwx------`, `users` `drwxr-xr-x`. `su nicky -c 'ls /boot/home/Desktop'` — permission denied. `su nicky -c 'ls /boot/home/users/nicky'` listed that home.
+VBox 2026-10-29 14:30 Europe/Amsterdam: `ls -ld` showed `/boot/home` `drwx--x--x`, Desktop `drwx------`, `users` `drwxr-xr-x`. `su nicky -c 'ls /boot/home/Desktop'` — permission denied. `su nicky -c 'ls /boot/home/users/nicky'` listed that home. As uid 0 `user`, listing nicky’s home still worked.
 
 ### Log out (build 10005)
 

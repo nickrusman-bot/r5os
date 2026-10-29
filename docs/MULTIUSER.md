@@ -12,7 +12,7 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. Uid 0 `user` still reads them.
 - Default desktop user is often **UID 0** on Haiku images. GUI restrictions would not be security. New accounts must not be UID 0.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
-- Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Many apps already use `find_directory`. Hardcoded `/boot/home` is the bug to fix when found.
+- Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Appearance, Backgrounds, Deskbar, Tracker, and app_server `DesktopSettings` already use `find_directory`. That call still returns `/boot/home/…` for **uid 0** (`get_user_home_path` skips `getpwuid` and uses `kUserDirectory`). Extra people (uid ≥ 1000) would get `$HOME/config/settings` **if** they had their own session. Sign in does not switch uid yet.
 - Packages: system-wide in `/boot/system`. Per-user config in `~/config`. Do not invent a second package format.
 
 ### Chosen home layout
@@ -86,7 +86,7 @@ Do not treat Haiku `hrev` as the product version.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
-6. Per-user settings audit (`find_directory`).
+6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (copy at apply time, not a string patch). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time). Uid 0 still maps user dirs to `/boot/home`. `StartSession` still later.
 7. Lock screen; then guest/Public.
 8. Absorb kernel/UI overlays into a real in-tree fork.
 
@@ -130,4 +130,128 @@ After Sign in, in Terminal:
 3. `su nicky -c 'ls /boot/home/users/nicky'` — that home is readable by `nicky`.
 4. As `user` (uid 0), `ls /boot/home/users/nicky` still works.
 
-VBox 2026-10-29 14:30 Europe/Amsterdam: 1–3 confirmed (`nicky`). Test 4 was not captured.
+VBox 2026-10-29 14:30 Europe/Amsterdam: 1–4 confirmed (`nicky`; uid 0 `user` still listed that home).
+
+## Testing a second account (limits)
+
+There is **no second desktop**. Sign in as `nicky` still starts Tracker/Deskbar as uid 0 `user` (`/boot/home`). Use that as the negative check, then `su` for the home that does exist.
+
+1. Preferences → Users & Accounts: add `nicky` (standard) if missing. Home must be `/boot/home/users/nicky`.
+2. Deskbar → Log out → Sign in, choose `nicky`, password, Sign in.
+3. Tracker Desktop is still `/boot/home` (first account). MidiPlayer/Joysticks/PoorMan still write there. That is expected until `StartSession`.
+4. Terminal, still as `user`:
+
+```
+echo $HOME
+id
+su nicky -c 'echo HOME=$HOME; id; ls /boot/home/users/nicky'
+su nicky -c 'ls /boot/home/Desktop'
+```
+
+`$HOME` as `user` is `/boot/home`. As `nicky` it is `/boot/home/users/nicky`. Listing `/boot/home/Desktop` as `nicky` should be permission denied. Uid 0 `user` can still `ls /boot/home/users/nicky`.
+
+Do not run MidiPlayer/Joysticks via `su nicky` and expect a separate GUI: `app_server` is still the first session.
+
+Joysticks is on the image (Deskbar → Preferences → Joysticks). Without a stick the window should still open. After that:
+
+```
+ls -ld /boot/home/config/settings/joysticks
+```
+
+VBox 2026-10-29 15:26 Europe/Amsterdam: steps 4 confirmed (`nicky` uid 1001, own home listed, Desktop of `user` permission denied). Joysticks appeared in Preferences.
+
+## Settings audit (Appearance, Deskbar, Tracker, background)
+
+Haiku `find_directory(B_USER_* )` resolves `$h` via `get_user_home_path`:
+
+- **uid ≠ 0:** `getpwuid_r` → `pw_dir` (e.g. `/boot/home/users/nicky/config/settings`).
+- **uid 0:** always `kUserDirectory` (`/boot/home`). Launch_daemon/registrar must not call `getpwuid_r`.
+
+Checked in the jammed AMD64 tree (2026-10-29):
+
+| Surface | Path API | Hardcoded `/boot/home`? |
+|---|---|---|
+| Appearance | `B_USER_SETTINGS_DIRECTORY` | no |
+| Backgrounds | `B_USER_SETTINGS_DIRECTORY`, `B_DESKTOP_DIRECTORY` | no |
+| Deskbar | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DESKBAR_DIRECTORY` | no |
+| Tracker | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DIRECTORY` (cwd) | comments/examples only |
+| app_server colours/fonts | `DesktopSettings` / `DecorManager` `B_USER_SETTINGS_DIRECTORY` | unused `#define DECORATORS_DIR` still hardcodes a home add-on path |
+| R5OS AirPlay log | now `B_USER_LOG_DIRECTORY` | was `/boot/home/airplay_deskbar.log` |
+| Joysticks preflet | `B_USER_SETTINGS_DIRECTORY` / `joysticks` | native copy `distro/user-paths` |
+| Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
+| Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
+
+Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.
+
+### Bundled applications
+
+First audit pass was desktop prefs only. 2026-10-29 14:47 Europe/Amsterdam: `src/apps` and `src/preferences` in the jammed AMD64 tree, plus R5OS `distro/` apps.
+
+Most image apps already call `find_directory` for settings or folders (Mail, Terminal, Screenshot, ShowImage, Clock, DeskCalc, HaikuDepot, People, ProcessController, Workspaces, …). Same uid-0 limit as the desktop prefs.
+
+Hardcoded `/boot/home` in app code, grouped:
+
+| App | What | Role |
+|---|---|---|
+| CodyCam, Icon-O-Matic, TextSearch, MediaConverter | `find_directory(B_USER_DIRECTORY)` then `/boot/home` | fallback / default folder, not the settings file |
+| WebPositive | image `webpositive.hpkg` | not this tree; defaults still hardcoded in that package |
+| MidiPlayer | `B_USER_SETTINGS_DIRECTORY` / `MidiPlayerSettings` | `distro/user-paths` |
+| PoorMan | `B_USER_DIRECTORY` / `public_html` | `distro/user-paths` |
+| Joysticks | `B_USER_SETTINGS_DIRECTORY` / `joysticks` | `distro/user-paths` |
+| PackageInstaller | `/boot/home/config` rewrite | BeOS path migration |
+| MediaPlayer, Tracker `PROFILE` | Desktop dump paths | debug leftovers |
+| Login, Users, HomeLock | `/boot/home` and `users/` | layout on purpose |
+| AirPlay log | `B_USER_LOG_DIRECTORY` | R5OS overlay, already switched |
+
+Not in this git: **Pe** and **Vision** (optional image packages). Demos without settings (GLTeapot, Mandelbrot, …) have no home path.
+
+Native copies in `distro/user-paths` (MidiPlayer, Joysticks, PoorMan). Apply only copies files. No string patch. PackageInstaller BeOS rewrite and MediaPlayer/Tracker debug dumps stay. WebPositive stays the haikuports package.
+
+### Preference apps (accepted 2026-10-29)
+
+Deskbar still shows the usual Preferences list to everyone. This split is what we will follow; menus are not hidden yet. A second user does not have their own prefs until `StartSession`.
+
+Until then, even personal preflets write `/boot/home/config/settings` because the live session is uid 0.
+
+**Personal (already `B_USER_*`).** A normal account should keep their own:
+
+| Preflet | In Deskbar Preferences | Notes |
+|---|---|---|
+| Appearance | yes | colours, fonts, antialiasing |
+| Backgrounds | yes | desktop picture |
+| Deskbar | yes | settings live in the Deskbar app |
+| Tracker | yes | settings live in Tracker |
+| Keymap | yes | |
+| Input | yes | mouse, touchpad, keyboard repeat |
+| ScreenSaver | yes | which saver + delay |
+| Shortcuts | yes | |
+| Sounds | yes | |
+| Notifications | yes | |
+| E-mail | yes | accounts in `~/config/settings` |
+| Media | yes | |
+| Locale | yes | Locale Kit catalogs, not this preflet’s own `find_directory` |
+| FileTypes | yes | user overrides; system types stay in the system |
+| Joysticks | yes (on the image) | `find_directory`; keep personal |
+| DataTranslations | power user | window/settings file is user; add-ons mixed |
+| Bluetooth | if hardware | settings file is user; the radio is the machine |
+
+**Machine-wide. Do not make these per-user.** Visible in Preferences; they describe this computer. Later: hide or lock for a non-admin.
+
+| Preflet | Visible today | Why stay shared | Path today |
+|---|---|---|---|
+| Network | yes | interfaces, DHCP, IPv6 — `net_server` | not `find_directory` in the preflet |
+| Screen | yes | resolution / workspace of the display | window frame in `B_USER_SETTINGS`; mode is app_server |
+| Time | yes | clock and timezone for the machine | also writes some `B_USER_SETTINGS` (NTP UI) |
+| Printers | yes | queues on this host | `B_USER_PRINTERS_DIRECTORY` (odd for shared printers) |
+| Repositories | yes | pkgman sources | system settings + a user file |
+| VirtualMemory | power user | swap is the machine | settings file is `B_USER_SETTINGS` (wrong place) |
+
+**Admin only:**
+
+| Preflet | Visible today | Decision |
+|---|---|---|
+| Users | yes, in Preferences | administrators only; not a personal theme |
+
+**Not this pass:** hide Network/Screen/Time from a standard user; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`.
+
+CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Leave them.
