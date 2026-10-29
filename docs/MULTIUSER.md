@@ -132,6 +132,32 @@ After Sign in, in Terminal:
 
 VBox 2026-10-29 14:30 Europe/Amsterdam: 1–4 confirmed (`nicky`; uid 0 `user` still listed that home).
 
+## Testing a second account (limits)
+
+There is **no second desktop**. Sign in as `nicky` still starts Tracker/Deskbar as uid 0 `user` (`/boot/home`). Use that as the negative check, then `su` for the home that does exist.
+
+1. Preferences → Users & Accounts: add `nicky` (standard) if missing. Home must be `/boot/home/users/nicky`.
+2. Deskbar → Log out → Sign in, choose `nicky`, password, Sign in.
+3. Tracker Desktop is still `/boot/home` (first account). MidiPlayer/Joysticks/PoorMan still write there. That is expected until `StartSession`.
+4. Terminal, still as `user`:
+
+```
+echo $HOME
+id
+su nicky -c 'echo HOME=$HOME; id; ls /boot/home/users/nicky'
+su nicky -c 'ls /boot/home/Desktop'
+```
+
+`$HOME` as `user` is `/boot/home`. As `nicky` it is `/boot/home/users/nicky`. Listing `/boot/home/Desktop` as `nicky` should be permission denied. Uid 0 `user` can still `ls /boot/home/users/nicky`.
+
+Do not run MidiPlayer/Joysticks via `su nicky` and expect a separate GUI: `app_server` is still the first session.
+
+Joysticks is on the image (Deskbar → Preferences → Joysticks). Without a stick the window should still open. After that:
+
+```
+ls -ld /boot/home/config/settings/joysticks
+```
+
 ## Settings audit (Appearance, Deskbar, Tracker, background)
 
 Haiku `find_directory(B_USER_* )` resolves `$h` via `get_user_home_path`:
@@ -203,7 +229,7 @@ Until then, even personal preflets write `/boot/home/config/settings` because th
 | Media | yes | |
 | Locale | yes | Locale Kit catalogs, not this preflet’s own `find_directory` |
 | FileTypes | yes | user overrides; system types stay in the system |
-| Joysticks | often unused | now `find_directory`; keep personal |
+| Joysticks | yes (on the image) | `find_directory`; keep personal |
 | DataTranslations | power user | window/settings file is user; add-ons mixed |
 | Bluetooth | if hardware | settings file is user; the radio is the machine |
 

@@ -46,17 +46,28 @@ def patch_jams() -> None:
     )
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
     text = regular.read_text(encoding="utf-8")
-    if "SYSTEM_PREFERENCES += Users ;" in text:
+    if "SYSTEM_PREFERENCES += Users ;" not in text:
+        replace_once(
+            regular,
+            "SYSTEM_PREFERENCES += [ FFilterByBuildFeatures\n"
+            "	Bluetooth\n",
+            "SYSTEM_PREFERENCES += Users ;\n"
+            "SYSTEM_PREFERENCES += [ FFilterByBuildFeatures\n"
+            "	Bluetooth\n",
+            "users SYSTEM_PREFERENCES",
+        )
+        text = regular.read_text(encoding="utf-8")
+    else:
         print("already regular (Users SYSTEM_PREFERENCES)")
+    if "SYSTEM_PREFERENCES += Joysticks ;" in text:
+        print("already regular (Joysticks SYSTEM_PREFERENCES)")
         return
     replace_once(
         regular,
-        "SYSTEM_PREFERENCES += [ FFilterByBuildFeatures\n"
-        "	Bluetooth\n",
+        "SYSTEM_PREFERENCES += Users ;\n",
         "SYSTEM_PREFERENCES += Users ;\n"
-        "SYSTEM_PREFERENCES += [ FFilterByBuildFeatures\n"
-        "	Bluetooth\n",
-        "users SYSTEM_PREFERENCES",
+        "SYSTEM_PREFERENCES += Joysticks ;\n",
+        "joysticks SYSTEM_PREFERENCES",
     )
 
 
