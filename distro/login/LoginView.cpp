@@ -80,8 +80,6 @@ LoginView::LoginView()
 	fUserList(NULL),
 	fWelcomeView(NULL),
 	fHintView(NULL),
-	fNameView(NULL),
-	fLoginView(NULL),
 	fPasswordControl(NULL),
 	fLoginButton(NULL),
 	fInfoView(NULL),
@@ -111,16 +109,6 @@ LoginView::LoginView()
 	fHintView->SetAlignment(B_ALIGN_CENTER);
 	fHintView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
-	fNameView = new BStringView("display", "R5OS");
-	BFont nameFont(be_bold_font);
-	fNameView->SetFont(&nameFont);
-	fNameView->SetAlignment(B_ALIGN_CENTER);
-	fNameView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-	fLoginView = new BStringView("loginName", "");
-	fLoginView->SetAlignment(B_ALIGN_CENTER);
-	fLoginView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
 	fPasswordControl = new BTextControl("password", "Password", "", NULL);
 	fPasswordControl->TextView()->HideTyping(true);
 
@@ -142,8 +130,6 @@ LoginView::LoginView()
 		.Add(fWelcomeView)
 		.Add(fHintView)
 		.Add(fUserScroll)
-		.Add(fNameView)
-		.Add(fLoginView)
 		.Add(fPasswordControl)
 		.Add(fLoginButton)
 		.Add(fInfoView);
@@ -268,35 +254,29 @@ LoginView::_ShowSelected()
 			fUserList->Select(0);
 	}
 	if (item == NULL) {
-		fNameView->SetText("R5OS");
-		fLoginView->SetText("");
+		fSelectedLogin = "";
 		return;
 	}
 
-	fNameView->SetText(item->Text());
-	fLoginView->SetText(item->Login());
+	fSelectedLogin = item->Login();
 }
 
 
 void
 LoginView::_AttemptLogin()
 {
-	UserItem* item = dynamic_cast<UserItem*>(
-		fUserList->ItemAt(fUserList->CurrentSelection()));
-	if (item == NULL && fUserList->CountItems() > 0)
-		item = dynamic_cast<UserItem*>(fUserList->ItemAt(0));
-	const char* login = NULL;
-	if (item != NULL)
-		login = item->Login();
-	else if (fLoginView->Text()[0] != '\0')
-		login = fLoginView->Text();
-	if (login == NULL || login[0] == '\0') {
+	if (fSelectedLogin.Length() == 0 && fUserList->CountItems() > 0) {
+		UserItem* item = dynamic_cast<UserItem*>(fUserList->ItemAt(0));
+		if (item != NULL)
+			fSelectedLogin = item->Login();
+	}
+	if (fSelectedLogin.Length() == 0) {
 		fInfoView->SetText("Choose a person first.");
 		return;
 	}
 
 	BMessage* message = new BMessage(kAttemptLogin);
-	message->AddString("login", login);
+	message->AddString("login", fSelectedLogin.String());
 	message->AddString("password", fPasswordControl->Text());
 	_EnableControls(false);
 	fInfoView->SetText("");

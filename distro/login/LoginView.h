@@ -9,6 +9,7 @@
 #include <Button.h>
 #include <ListView.h>
 #include <ScrollView.h>
+#include <String.h>
 #include <StringView.h>
 #include <TextControl.h>
 #include <View.h>
@@ -35,8 +36,6 @@ private:
 	BListView*		fUserList;
 	BStringView*	fWelcomeView;
 	BStringView*	fHintView;
-	BStringView*	fNameView;
-	BStringView*	fLoginView;
 	BTextControl*	fPasswordControl;
 	BButton*		fLoginButton;
 	BStringView*	fInfoView;
@@ -44,6 +43,7 @@ private:
 	BButton*		fHaltButton;
 	BButton*		fRebootButton;
 	BScrollView*	fUserScroll;
+	BString			fSelectedLogin;
 };
 
 

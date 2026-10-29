@@ -14,6 +14,10 @@ VBox 2026-10-29 13:01 Europe/Amsterdam: Sign in appeared as a yellow tab over a 
 
 VBox 2026-10-29 13:07 Europe/Amsterdam: the form showed `R5OS` / `user`. Sign in printed `Name not found`: password was accepted, then `BLaunchRoster().Start("desktop")` looked up a job named desktop (`B_NAME_NOT_FOUND`). FirstBootPrompt uses `Target("desktop")`; Login now does too. Welcome copy: “Welcome to R5OS” / “Please login with your credentials”.
 
+VBox 2026-10-29 13:16 Europe/Amsterdam: Sign in reached the desktop. Restart powered the VM off: `reboot` stayed false on `kRebootAction`. Restart now calls `ShutDown(true, …)`. The gecos line `R5OS` above `user` is removed; Welcome is enough.
+
+VBox 2026-10-29 13:15 Europe/Amsterdam: Sign in reached the desktop. Restart powered the VM off: `kRebootAction` fell into `ShutDown` with `reboot` still false (Haiku Login had the same fall-through). Restart now sets `reboot = true`. The extra `R5OS` / `user` lines were passwd gecos and login; they duplicated Welcome when there is one account, so they are gone. The people list still appears when there is more than one account.
+
 ### Multi-user foundations (build 10002)
 
 R5OS is still a single shared desktop (`user`, `/boot/home`, often UID 0). Haiku already has `passwd`/`shadow`, `useradd`, and `src/apps/login` (`StartSession`); none of that is the boot path. First step: document the model (`docs/MULTIUSER.md`), put **Users & Accounts** in Preferences as a **read-only** `getpwent` list, bump **build 10002**, and stop hardcoding `10001` in `wsl-install-branding.sh`. Extra homes will be `/boot/home/users/<name>`; the first account keeps `/boot/home`. Login, isolation, and account create/delete are not in this build.

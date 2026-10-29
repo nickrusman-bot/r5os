@@ -44,6 +44,7 @@ def copy_sources() -> None:
         "main.cpp",
     ):
         shutil.copy2(SRC / name, dest / name)
+        (dest / name).touch()
         print(f"copied {name} -> {dest}")
 
 

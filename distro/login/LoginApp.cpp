@@ -100,10 +100,10 @@ LoginApp::MessageReceived(BMessage* message)
 		case kAttemptLogin:
 			TryLogin(message);
 			break;
-		case kHaltAction:
-			reboot = false;
-			// FALLTHROUGH
 		case kRebootAction:
+			reboot = true;
+			// FALLTHROUGH
+		case kHaltAction:
 		{
 			BRoster roster;
 			BRoster::Private rosterPrivate(roster);
