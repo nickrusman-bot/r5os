@@ -33,6 +33,8 @@ private:
 	void			_EnableControls(bool enable);
 
 	BListView*		fUserList;
+	BStringView*	fWelcomeView;
+	BStringView*	fHintView;
 	BStringView*	fNameView;
 	BStringView*	fLoginView;
 	BTextControl*	fPasswordControl;

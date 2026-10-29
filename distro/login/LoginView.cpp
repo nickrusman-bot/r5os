@@ -78,6 +78,8 @@ LoginView::LoginView()
 	:
 	BView("LoginView", B_WILL_DRAW | B_PULSE_NEEDED | B_SUPPORTS_LAYOUT),
 	fUserList(NULL),
+	fWelcomeView(NULL),
+	fHintView(NULL),
 	fNameView(NULL),
 	fLoginView(NULL),
 	fPasswordControl(NULL),
@@ -97,9 +99,20 @@ LoginView::LoginView()
 	fUserList->SetExplicitMaxSize(BSize(280, 120));
 	fUserScroll = new BScrollView("userssv", fUserList, 0, false, true);
 
+	fWelcomeView = new BStringView("welcome", "Welcome to R5OS");
+	BFont welcomeFont(be_bold_font);
+	welcomeFont.SetSize(be_plain_font->Size() * 1.6f);
+	fWelcomeView->SetFont(&welcomeFont);
+	fWelcomeView->SetAlignment(B_ALIGN_CENTER);
+	fWelcomeView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+
+	fHintView = new BStringView("hint",
+		"Please login with your credentials");
+	fHintView->SetAlignment(B_ALIGN_CENTER);
+	fHintView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+
 	fNameView = new BStringView("display", "R5OS");
 	BFont nameFont(be_bold_font);
-	nameFont.SetSize(be_plain_font->Size() * 1.6f);
 	fNameView->SetFont(&nameFont);
 	fNameView->SetAlignment(B_ALIGN_CENTER);
 	fNameView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
@@ -126,6 +139,8 @@ LoginView::LoginView()
 	BGroupView* people = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
 	people->SetName("people");
 	BLayoutBuilder::Group<>(people)
+		.Add(fWelcomeView)
+		.Add(fHintView)
 		.Add(fUserScroll)
 		.Add(fNameView)
 		.Add(fLoginView)
@@ -268,13 +283,20 @@ LoginView::_AttemptLogin()
 {
 	UserItem* item = dynamic_cast<UserItem*>(
 		fUserList->ItemAt(fUserList->CurrentSelection()));
-	if (item == NULL) {
+	if (item == NULL && fUserList->CountItems() > 0)
+		item = dynamic_cast<UserItem*>(fUserList->ItemAt(0));
+	const char* login = NULL;
+	if (item != NULL)
+		login = item->Login();
+	else if (fLoginView->Text()[0] != '\0')
+		login = fLoginView->Text();
+	if (login == NULL || login[0] == '\0') {
 		fInfoView->SetText("Choose a person first.");
 		return;
 	}
 
 	BMessage* message = new BMessage(kAttemptLogin);
-	message->AddString("login", item->Login());
+	message->AddString("login", login);
 	message->AddString("password", fPasswordControl->Text());
 	_EnableControls(false);
 	fInfoView->SetText("");

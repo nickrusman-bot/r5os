@@ -158,7 +158,7 @@ LoginApp::TryLogin(BMessage* message)
 		const char* password = message->GetString("password");
 		status = ValidateLogin(login, password);
 		if (status == B_OK) {
-			status = BLaunchRoster().Start("desktop");
+			status = BLaunchRoster().Target("desktop");
 			if (status == B_OK)
 				Quit();
 		}
@@ -171,6 +171,8 @@ LoginApp::TryLogin(BMessage* message)
 		reply.AddInt32("error", status);
 		if (status == B_PERMISSION_DENIED || status == ENOENT)
 			reply.AddString("text", "That password is not right.");
+		else if (status == B_NAME_NOT_FOUND)
+			reply.AddString("text", "Could not start the desktop.");
 		else
 			reply.AddString("text", strerror(status));
 		message->SendReply(&reply);
