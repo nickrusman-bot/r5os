@@ -13,6 +13,7 @@ class LoginWindow : public BWindow {
 public:
 					LoginWindow(BRect frame);
 	virtual			~LoginWindow();
+	void			PrepareForSignIn();
 };
 
 

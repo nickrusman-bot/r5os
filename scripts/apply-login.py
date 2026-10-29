@@ -90,6 +90,80 @@ def patch_first_boot() -> None:
     )
 
 
+def patch_deskbar() -> None:
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "BarSettings.h",
+        "const uint32 kForceQuitTeam = 'FrQt';\n",
+        "const uint32 kForceQuitTeam = 'FrQt';\n"
+        "const uint32 kLogoutSession = 'lout';\n",
+        "Deskbar logout message",
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
+        "	AddSeparatorItem();\n"
+        "\n"
+        "	BMenu* shutdownMenu = new BMenu(B_TRANSLATE(\"Shutdown\" B_UTF8_ELLIPSIS));\n",
+        "	AddSeparatorItem();\n"
+        "\n"
+        "	item = new BMenuItem(B_TRANSLATE(\"Log out\"),\n"
+        "		new BMessage(kLogoutSession));\n"
+        "	item->SetEnabled(!dragging);\n"
+        "	item->SetTarget(be_app);\n"
+        "	AddItem(item);\n"
+        "\n"
+        "	BMenu* shutdownMenu = new BMenu(B_TRANSLATE(\"Shutdown\" B_UTF8_ELLIPSIS));\n",
+        "Deskbar Log out item",
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
+        "				case kRebootSystem:\n"
+        "				case kSuspendSystem:\n"
+        "				case kShutdownSystem:\n",
+        "				case kRebootSystem:\n"
+        "				case kSuspendSystem:\n"
+        "				case kShutdownSystem:\n"
+        "				case kLogoutSession:\n",
+        "Deskbar Log out target",
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "BarApp.cpp",
+        "#include <Roster.h>\n",
+        "#include <LaunchRoster.h>\n"
+        "#include <Roster.h>\n",
+        "Deskbar LaunchRoster include",
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "BarApp.cpp",
+        "		case kShowSplash:\n"
+        "			run_be_about();\n"
+        "			break;\n",
+        "		case kLogoutSession:\n"
+        "		{\n"
+        "			BAlert* alert = new BAlert(\"Log out\",\n"
+        "				\"Log out of this session?\",\n"
+        "				\"Cancel\", \"Log out\");\n"
+        "			alert->SetShortcut(0, B_ESCAPE);\n"
+        "			if (alert->Go() != 1)\n"
+        "				break;\n"
+        "\n"
+        "			BMessenger login(\"application/x-vnd.Haiku-Login\");\n"
+        "			if (login.IsValid())\n"
+        "				login.SendMessage(kLogoutSession);\n"
+        "			else {\n"
+        "				BLaunchRoster roster;\n"
+        "				roster.StopTarget(\"desktop\");\n"
+        "				roster.Target(\"login\");\n"
+        "			}\n"
+        "			break;\n"
+        "		}\n"
+        "\n"
+        "		case kShowSplash:\n"
+        "			run_be_about();\n"
+        "			break;\n",
+        "Deskbar Log out handler",
+    )
+
+
 def patch_image() -> None:
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
     replace_once(
@@ -107,6 +181,7 @@ def main() -> int:
     copy_sources()
     patch_launch()
     patch_first_boot()
+    patch_deskbar()
     patch_image()
     return 0
 

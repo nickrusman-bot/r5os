@@ -214,6 +214,16 @@ LoginView::MessageReceived(BMessage* message)
 
 
 void
+LoginView::PrepareForSignIn()
+{
+	fPasswordControl->SetText("");
+	fInfoView->SetText("");
+	_EnableControls(true);
+	fPasswordControl->MakeFocus(true);
+}
+
+
+void
 LoginView::Pulse()
 {
 	time_t now = time(NULL);

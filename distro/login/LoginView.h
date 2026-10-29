@@ -26,6 +26,7 @@ public:
 	virtual void	AttachedToWindow();
 	virtual void	MessageReceived(BMessage* message);
 	virtual void	Pulse();
+	void			PrepareForSignIn();
 
 private:
 	void			_FillUsers();
