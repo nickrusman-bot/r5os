@@ -16,7 +16,9 @@ VBox 2026-10-29 13:07 Europe/Amsterdam: the form showed `R5OS` / `user`. Sign in
 
 VBox 2026-10-29 13:16 Europe/Amsterdam: Sign in reached the desktop. Restart powered the VM off: `reboot` stayed false on `kRebootAction`. Restart now calls `ShutDown(true, …)`. The gecos line `R5OS` above `user` is removed; Welcome is enough.
 
-VBox 2026-10-29 13:15 Europe/Amsterdam: Sign in reached the desktop. Restart powered the VM off: `kRebootAction` fell into `ShutDown` with `reboot` still false (Haiku Login had the same fall-through). Restart now sets `reboot = true`. The extra `R5OS` / `user` lines were passwd gecos and login; they duplicated Welcome when there is one account, so they are gone. The people list still appears when there is more than one account.
+VBox 2026-10-29 13:22 Europe/Amsterdam: Restart works.
+
+The login name `user` had disappeared with the gecos line. It is shown again as `pw_name` (not display name R5OS). Jam 13:26 Europe/Amsterdam; VBox `-ForceConvert` 13:27. The people list still appears when there is more than one account.
 
 ### Multi-user foundations (build 10002)
 

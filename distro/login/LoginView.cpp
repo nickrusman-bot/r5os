@@ -80,6 +80,7 @@ LoginView::LoginView()
 	fUserList(NULL),
 	fWelcomeView(NULL),
 	fHintView(NULL),
+	fLoginView(NULL),
 	fPasswordControl(NULL),
 	fLoginButton(NULL),
 	fInfoView(NULL),
@@ -109,6 +110,12 @@ LoginView::LoginView()
 	fHintView->SetAlignment(B_ALIGN_CENTER);
 	fHintView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
+	fLoginView = new BStringView("loginName", "");
+	BFont loginFont(be_bold_font);
+	fLoginView->SetFont(&loginFont);
+	fLoginView->SetAlignment(B_ALIGN_CENTER);
+	fLoginView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+
 	fPasswordControl = new BTextControl("password", "Password", "", NULL);
 	fPasswordControl->TextView()->HideTyping(true);
 
@@ -130,6 +137,7 @@ LoginView::LoginView()
 		.Add(fWelcomeView)
 		.Add(fHintView)
 		.Add(fUserScroll)
+		.Add(fLoginView)
 		.Add(fPasswordControl)
 		.Add(fLoginButton)
 		.Add(fInfoView);
@@ -229,9 +237,7 @@ LoginView::_FillUsers()
 		if (!is_listed_account(pwd) || is_disabled_user(pwd->pw_name))
 			continue;
 
-		const char* gecos = pwd->pw_gecos != NULL ? pwd->pw_gecos : "";
-		const char* label = gecos[0] != '\0' ? gecos : pwd->pw_name;
-		fUserList->AddItem(new UserItem(label, pwd->pw_name));
+		fUserList->AddItem(new UserItem(pwd->pw_name, pwd->pw_name));
 	}
 	endpwent();
 
@@ -255,10 +261,12 @@ LoginView::_ShowSelected()
 	}
 	if (item == NULL) {
 		fSelectedLogin = "";
+		fLoginView->SetText("");
 		return;
 	}
 
 	fSelectedLogin = item->Login();
+	fLoginView->SetText(item->Login());
 }
 
 

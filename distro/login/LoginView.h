@@ -36,6 +36,7 @@ private:
 	BListView*		fUserList;
 	BStringView*	fWelcomeView;
 	BStringView*	fHintView;
+	BStringView*	fLoginView;
 	BTextControl*	fPasswordControl;
 	BButton*		fLoginButton;
 	BStringView*	fInfoView;
