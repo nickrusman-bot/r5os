@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	open			
+8940	in-progress	cursor/multiuser-foundations		Users & Accounts lists passwd (read-only). Haiku Login exists; not the boot path. No isolation yet.
 8944	open			
 8948	open			
 8956	open			

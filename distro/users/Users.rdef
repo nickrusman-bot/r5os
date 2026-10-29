@@ -1,0 +1,17 @@
+resource app_signature "application/x-vnd.R5OS-Users";
+
+resource app_flags B_SINGLE_LAUNCH;
+
+resource app_name_catalog_entry "x-vnd.R5OS-Users:System name:Users & Accounts";
+
+resource app_version {
+	major  = 1,
+	middle = 0,
+	minor  = 0,
+
+	variety = B_APPV_DEVELOPMENT,
+	internal = 0,
+
+	short_info = "Users & Accounts",
+	long_info = "R5OS account list. Read-only in this build."
+};

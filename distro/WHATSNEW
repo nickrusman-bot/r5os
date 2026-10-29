@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10002 - Users & Accounts
+Preferences now includes Users & Accounts. It lists the accounts that already exist on this computer (name, user id, home folder, and whether the account looks like an administrator). You cannot yet add people, set passwords, log in as someone else, or keep separate desktops. Everyone still shares the same session.
+
 R5OS 2026.1-dev Build 10001 - IPv6
 On a home network the computer can take an IPv6 address from the router as well as IPv4, and use that address to reach the rest of the network. Open Network, select the card, and look under IPv6. Automatic is the default. You should see a link-local address and, if the router offers one, a second address. Set IPv6 to Disabled if you do not want that.
 

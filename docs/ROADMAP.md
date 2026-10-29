@@ -8,9 +8,10 @@ R5OS modernizes a Haiku-based desktop without waiting on upstream schedules. Com
 
 Order is impact, not ticket number.
 
-1. **Hardware on the Ryzen 5 5625U** — Wi-Fi, GPU, backlight, sleep/resume, HiDPI without breaking layout.
-2. **Browser** — a current WebKit/Qt browser in the image. WebPositive is the weak daily app.
-3. **Network** — remaining items after Wi-Fi join/remember/tray:
+1. **Multi-user** — real accounts, login/logout, per-user settings. Plan: `docs/MULTIUSER.md`. Do not skip isolation or treat a list of names as “done”.
+2. **Hardware on the Ryzen 5 5625U** — Wi-Fi, GPU, backlight, sleep/resume, HiDPI without breaking layout.
+3. **Browser** — a current WebKit/Qt browser in the image. WebPositive is the weak daily app.
+4. **Network** — remaining items after Wi-Fi join/remember/tray:
    1. IPv6 in apps (SLAAC + DAD + DHCPv6 in net_server; Network IPv6 Mode; still needs more LAN tests)
    2. DNS that uses DHCP servers and still resolves `.local`
    3. Captive portal
@@ -18,8 +19,8 @@ Order is impact, not ticket number.
    5. Simple firewall (incoming closed by default)
    6. WireGuard
    7. LAN tests: VirtualBox bridged (no Guest Additions) or QEMU bridged/tap (usernet is not a LAN)
-4. **Dark mode** through system apps and Deskbar (Haiku #18970).
-5. **Polish** — notifications, screenshot, emoji/fonts, image clipboard.
+5. **Dark mode** through system apps and Deskbar (Haiku #18970).
+6. **Polish** — notifications, screenshot, emoji/fonts, image clipboard.
 
 Zeroconf, AirPrint, AirPlay 1, and the NetworkStatus tray are started; they are not “done” until hardware/LAN tests exist.
 

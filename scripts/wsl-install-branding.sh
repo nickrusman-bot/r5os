@@ -18,16 +18,18 @@ for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py ap
 done
 python3 "$WIN/scripts/generate_images_sans_tm.py" \
 	"$HAIKU/headers/private/kernel/boot/images-sans-tm.h"
-cat > "$HAIKU/headers/private/system/r5_os_version.h" <<'EOF'
-#ifndef R5_OS_VERSION_H
-#define R5_OS_VERSION_H
-#define R5_OS_VERSION "2026.1-dev"
-#define R5_OS_BUILD 10001
-#endif
-EOF
-printf '%s\n' 'r5-2026.1-dev' > "$HAIKU/generated.x86_64/build/haiku-revision"
+ver="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/VERSION" | head -1 | tr -d '\r' | tr -d '[:space:]')"
+build="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/BUILD" | head -1 | tr -d '\r' | tr -d '[:space:]')"
+rev="r5-${ver}"
+printf '%s\n' \
+	'#ifndef R5_OS_VERSION_H' \
+	'#define R5_OS_VERSION_H' \
+	"#define R5_OS_VERSION \"${ver}\"" \
+	"#define R5_OS_BUILD ${build}" \
+	'#endif' > "$HAIKU/headers/private/system/r5_os_version.h"
+printf '%s\n' "$rev" > "$HAIKU/generated.x86_64/build/haiku-revision"
 rm -f "$HAIKU/generated.x86_64/build/last-built-revision"
-tr -d '\r' < "$WIN/distro/UserBuildConfig" | sed 's/^HAIKU_REVISION = .*/HAIKU_REVISION = r5-2026.1-dev ;/' > "$HAIKU/build/jam/UserBuildConfig"
+tr -d '\r' < "$WIN/distro/UserBuildConfig" | sed "s/^HAIKU_REVISION = .*/HAIKU_REVISION = ${rev} ;/" > "$HAIKU/build/jam/UserBuildConfig"
 touch "$HAIKU/src/apps/aboutsystem/AboutSystem.cpp" \
 	"$HAIKU/src/apps/deskbar/BarMenuBar.cpp" \
 	"$HAIKU/src/apps/deskbar/icons.rdef" \
