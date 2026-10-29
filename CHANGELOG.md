@@ -24,6 +24,16 @@ VBox 20:16 Europe/Amsterdam (guest clock 7:16 PM, UTC): Sign in as `nicky`. Term
 
 VBox 20:17 Europe/Amsterdam (guest clock 7:17 PM, UTC): Sign in as `user`. `id` was `uid=1001(user) gid=100(users) groups=100(users),103(admin)`. `ls /boot/home/users/nicky` was permission denied. That desktop also showed Home, Quick Tour, User Guide, and Trash. No Deskbar crash dialog on this pass.
 
+Deskbar leaf-menu folders were yellow for `nicky` and blue-grey for `user`. Tracker reads `~/config/settings/mime_db` first. `user` had that database because registrar (uid 0) writes into `/boot/home`. `nicky` had none and used the system yellow folder icon. Sign in now copies `/boot/system/data/mime_db` into that account’s settings if missing, and puts the system directory icon on `application/x-vnd.be-directory` so every account gets the yellow folders. Registrar follows the session file instead of always `/boot/home`.
+
+Jam AMD64 2026-10-29 20:45 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox 20:47 Europe/Amsterdam (guest clock 7:47 PM, UTC): `nicky`’s leaf menu (Applications, Demos, Desktop applets, Preferences) was the yellow folder. `user`’s same four items were the blue-grey folder. `nicky`’s `config/settings/mime_db` was present (7:48 PM). Copying the directory type was not enough. Those menu rows are merged folders, type `application/x-vnd.haiku-virtual-directory`, whose icon is blue. A standard account often cannot create `/tmp/tracker/virtual-directories` (mode 0755, owned by whoever opened the menu first), so Tracker keeps the real system folder and its yellow icon. The administrator can, and then sees the blue virtual-directory icon. That type now uses the same yellow icon as `application/x-vnd.be-directory`. Sign-in copies both types into the account database again.
+
+Jam AMD64 2026-10-29 21:13 Europe/Amsterdam: `jam_exit=0` (8116 targets). Optional translator headers were missing again; the image still built. VBox `-ForceConvert` started 21:16 Europe/Amsterdam.
+
+VBox 21:16 Europe/Amsterdam (guest clock 8:16 PM, UTC): the leaf menu showed Applications, Demos, Desktop applets, and Preferences with the yellow folder. This was the fresh disk, so that desktop is the first account (`user`). `nicky` is not on a fresh image until Users & Accounts creates the account again.
+
 ### First administrator off uid 0 (build 10007)
 
 Login (still uid 0) rewrites `/etc/passwd` so the `/boot/home` account is the first free uid ≥ 1000 (sshd keeps 1000), primary group `users`, member of `admin`. It `chown`s `/boot/home` except `/boot/home/users/<other>`. Desktop jobs start through `/system/apps/r5-desktop`, which drops to that uid before exec. Not `StartSession`. Sign in as a standard user still opens this administrator desktop.

@@ -8,7 +8,9 @@
 
 #include "HomeLock.h"
 
+#include <fs_attr.h>
 #include <Message.h>
+#include <Node.h>
 #include <OS.h>
 #include <String.h>
 
@@ -228,6 +230,7 @@ add_to_group(const char* groupName, const char* user, BString& errorText)
 
 static void ensure_desktop_links(const char* home);
 static void ensure_private_trash(const char* home, uid_t uid, gid_t gid);
+static void ensure_user_mime_db(const char* home, uid_t uid, gid_t gid);
 
 
 static status_t
@@ -266,6 +269,7 @@ create_home(const char* home, uid_t uid, gid_t gid)
 
 	ensure_desktop_links(home);
 	ensure_private_trash(home, uid, gid);
+	ensure_user_mime_db(home, uid, gid);
 	lock_private_homes();
 	return B_OK;
 }
@@ -491,6 +495,136 @@ ensure_private_trash(const char* home, uid_t uid, gid_t gid)
 }
 
 
+static status_t
+copy_node_attributes(BNode& src, BNode& dst)
+{
+	src.RewindAttrs();
+	char name[B_ATTR_NAME_LENGTH];
+	while (src.GetNextAttrName(name) == B_OK) {
+		attr_info info;
+		if (src.GetAttrInfo(name, &info) != B_OK || info.size < 0)
+			continue;
+		if (info.size == 0) {
+			dst.WriteAttr(name, info.type, 0, NULL, 0);
+			continue;
+		}
+		void* buffer = malloc((size_t)info.size);
+		if (buffer == NULL)
+			return B_NO_MEMORY;
+		ssize_t bytes = src.ReadAttr(name, info.type, 0, buffer, info.size);
+		if (bytes > 0)
+			dst.WriteAttr(name, info.type, 0, buffer, bytes);
+		free(buffer);
+	}
+	return B_OK;
+}
+
+
+static void
+copy_mime_entry(const char* srcPath, const char* dstPath, uid_t uid, gid_t gid)
+{
+	struct stat st;
+	if (lstat(srcPath, &st) != 0)
+		return;
+
+	if (S_ISDIR(st.st_mode)) {
+		mkdir(dstPath, 0755);
+		chmod(dstPath, 0755);
+		lchown(dstPath, uid, gid);
+		BNode src(srcPath);
+		BNode dst(dstPath);
+		if (src.InitCheck() == B_OK && dst.InitCheck() == B_OK)
+			copy_node_attributes(src, dst);
+
+		DIR* dir = opendir(srcPath);
+		if (dir == NULL)
+			return;
+		while (struct dirent* entry = readdir(dir)) {
+			if (strcmp(entry->d_name, ".") == 0
+				|| strcmp(entry->d_name, "..") == 0)
+				continue;
+			BString childSrc;
+			BString childDst;
+			childSrc.SetToFormat("%s/%s", srcPath, entry->d_name);
+			childDst.SetToFormat("%s/%s", dstPath, entry->d_name);
+			copy_mime_entry(childSrc.String(), childDst.String(), uid, gid);
+		}
+		closedir(dir);
+		return;
+	}
+
+	int in = open(srcPath, O_RDONLY);
+	if (in < 0)
+		return;
+	int out = open(dstPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (out < 0) {
+		close(in);
+		return;
+	}
+
+	char buffer[4096];
+	ssize_t n;
+	while ((n = read(in, buffer, sizeof(buffer))) > 0) {
+		if (write(out, buffer, n) != n)
+			break;
+	}
+	close(in);
+	close(out);
+	chmod(dstPath, 0644);
+	lchown(dstPath, uid, gid);
+
+	BNode src(srcPath);
+	BNode dst(dstPath);
+	if (src.InitCheck() == B_OK && dst.InitCheck() == B_OK)
+		copy_node_attributes(src, dst);
+}
+
+
+static void
+ensure_user_mime_db(const char* home, uid_t uid, gid_t gid)
+{
+	if (home == NULL)
+		return;
+
+	static const char* kSystemMime = "/boot/system/data/mime_db";
+	struct stat st;
+	if (lstat(kSystemMime, &st) != 0 || !S_ISDIR(st.st_mode))
+		return;
+
+	BString dest;
+	dest.SetToFormat("%s/config/settings/mime_db", home);
+	mkdir(dest.String(), 0700);
+	chmod(dest.String(), 0700);
+	lchown(dest.String(), uid, gid);
+
+	BString application;
+	application.SetToFormat("%s/application", dest.String());
+	if (lstat(application.String(), &st) != 0)
+		copy_mime_entry(kSystemMime, dest.String(), uid, gid);
+
+	// Tracker reads the user mime_db first. The leaf menu draws merged
+	// folders as application/x-vnd.haiku-virtual-directory (blue). Ordinary
+	// folders use application/x-vnd.be-directory (yellow). Keep both on the
+	// yellow system icon, including when this database already existed.
+	mkdir(application.String(), 0755);
+	chmod(application.String(), 0755);
+	lchown(application.String(), uid, gid);
+	static const char* kYellowTypes[] = {
+		"application/x-vnd.be-directory",
+		"application/x-vnd.haiku-virtual-directory",
+		NULL
+	};
+	for (int32 i = 0; kYellowTypes[i] != NULL; i++) {
+		BString srcType;
+		BString dstType;
+		srcType.SetToFormat("%s/%s", kSystemMime, kYellowTypes[i]);
+		dstType.SetToFormat("%s/%s", dest.String(), kYellowTypes[i]);
+		unlink(dstType.String());
+		copy_mime_entry(srcType.String(), dstType.String(), uid, gid);
+	}
+}
+
+
 static void
 adopt_trash(uid_t uid, gid_t gid)
 {
@@ -687,6 +821,7 @@ write_desktop_session(const char* login)
 	}
 	ensure_desktop_links(home.String());
 	ensure_private_trash(home.String(), uid, gid);
+	ensure_user_mime_db(home.String(), uid, gid);
 
 	FILE* file = fopen(kSessionPath, "w");
 	if (file == NULL)
