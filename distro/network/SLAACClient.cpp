@@ -356,7 +356,49 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		option += bytesLen;
 	}
 
-	if (lifetime > 0 || (havePrefix && !fHaveDefaultRoute)) {
+	_ApplyResolver(resolver, nameservers);
+
+	bool addedAddress = false;
+	if (havePrefix) {
+		in6_addr global;
+		_BuildSlaacAddress(prefix, global);
+		BString globalText = _ToString(global);
+		if (globalText.Length() == 0)
+			return B_ERROR;
+
+		if (r5_ipv6_has_address(Device(), global)) {
+			syslog(LOG_INFO, "slaac %s: %s already assigned\n", Device(),
+				globalText.String());
+		} else {
+			BNetworkInterface interface(Device());
+			BNetworkAddress address(global, 0);
+			status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
+			if (dad != B_OK)
+				return dad;
+
+			BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::",
+				(uint16)0, B_UNCONFIGURED_ADDRESS_FAMILIES);
+			BNetworkInterfaceAddress slot;
+			slot.SetAddress(address);
+			slot.SetMask(mask);
+			status_t status = interface.AddAddress(slot);
+			if (status != B_OK) {
+				syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
+					globalText.String(), strerror(status));
+				return status;
+			}
+			addedAddress = true;
+			syslog(LOG_INFO, "slaac %s: %s via %s\n", Device(),
+				globalText.String(), _ToString(from.sin6_addr).String());
+		}
+	} else {
+		syslog(LOG_INFO, "slaac %s: RA from %s M=%d O=%d without SLAAC /64 "
+			"prefix (DHCPv6 %s)\n", Device(),
+			_ToString(from.sin6_addr).String(), managed, other,
+			(managed || other) ? "should run" : "may be absent");
+	}
+
+	if (lifetime > 0 || addedAddress || (havePrefix && !fHaveDefaultRoute)) {
 		if (lifetime == 0) {
 			syslog(LOG_INFO, "slaac %s: RA lifetime 0, using advertiser "
 				"as default router\n", Device());
@@ -364,53 +406,8 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		if (_ApplyDefaultRoute(from, ifIndex) == B_OK)
 			fHaveDefaultRoute = true;
 	}
-	_ApplyResolver(resolver, nameservers);
 
-	if (!havePrefix) {
-		syslog(LOG_INFO, "slaac %s: RA from %s M=%d O=%d without SLAAC /64 "
-			"prefix (DHCPv6 %s)\n", Device(),
-			_ToString(from.sin6_addr).String(), managed, other,
-			(managed || other) ? "should run" : "may be absent");
-		return B_BAD_VALUE;
-	}
-
-	in6_addr global;
-	_BuildSlaacAddress(prefix, global);
-	BString globalText = _ToString(global);
-	if (globalText.Length() == 0)
-		return B_ERROR;
-
-	if (r5_ipv6_has_address(Device(), global)) {
-		syslog(LOG_INFO, "slaac %s: %s already assigned\n", Device(),
-			globalText.String());
-		return B_OK;
-	}
-
-	BNetworkInterface interface(Device());
-	BNetworkAddress address(global, 0);
-	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
-	if (dad != B_OK)
-		return dad;
-
-	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
-		B_UNCONFIGURED_ADDRESS_FAMILIES);
-	BNetworkInterfaceAddress slot;
-	slot.SetAddress(address);
-	slot.SetMask(mask);
-	status_t status = interface.AddAddress(slot);
-	if (status != B_OK) {
-		syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
-			globalText.String(), strerror(status));
-		return status;
-	}
-
-	syslog(LOG_INFO, "slaac %s: %s via %s\n", Device(), globalText.String(),
-		_ToString(from.sin6_addr).String());
-	// SIOCADDRT binds ::/0 to FirstForFamily (fe80). Re-add after the ULA
-	// exists so the default route's interface_address is the ULA.
-	if (fHaveDefaultRoute && fDefaultGateway.sin6_family == AF_INET6)
-		_ApplyDefaultRoute(fDefaultGateway, ifIndex);
-	return B_OK;
+	return havePrefix ? B_OK : B_BAD_VALUE;
 }
 
 

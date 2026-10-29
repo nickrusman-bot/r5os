@@ -1477,6 +1477,152 @@ def patch_ipv6_copy_sa_len() -> None:
     )
 
 
+def patch_icmp6_echo_reply() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols"
+        / "icmp6" / "icmp6.cpp"
+    )
+    replace_once(
+        path,
+        """			if (buffer->interface_address != NULL) {
+				// We only reply to echo requests of our local interface; we
+				// don't reply to broadcast requests
+				if (!domain->address_module->equal_addresses(
+						buffer->interface_address->local, buffer->destination))
+					break;
+			}
+
+			net_buffer *reply = gBufferModule->duplicate(buffer);
+			if (reply == NULL)
+				return B_NO_MEMORY;
+
+			gBufferModule->swap_addresses(reply);
+
+			// There already is an ICMP header, and we'll reuse it
+			NetBufferHeaderReader<icmp6_hdr> header(reply);
+
+			header->icmp6_type = ICMP6_ECHO_REPLY;
+			header->icmp6_code = 0;
+			header->icmp6_cksum = 0;
+
+			header.Sync();
+
+			*ICMP6ChecksumField(reply) = Checksum::PseudoHeader(addressModule,
+				gBufferModule, buffer, IPPROTO_ICMPV6);
+
+			status_t status = domain->module->send_data(NULL, reply);
+			if (status < B_OK) {
+				gBufferModule->free(reply);
+				return status;
+			}
+		}
+
+		case ICMP6_DST_UNREACH:
+""",
+        """			net_buffer *reply = gBufferModule->duplicate(buffer);
+			if (reply == NULL)
+				return B_NO_MEMORY;
+
+			gBufferModule->swap_addresses(reply);
+
+			// There already is an ICMP header, and we'll reuse it
+			NetBufferHeaderReader<icmp6_hdr> header(reply);
+
+			header->icmp6_type = ICMP6_ECHO_REPLY;
+			header->icmp6_code = 0;
+			header->icmp6_cksum = 0;
+
+			header.Sync();
+
+			*ICMP6ChecksumField(reply) = Checksum::PseudoHeader(addressModule,
+				gBufferModule, reply, IPPROTO_ICMPV6);
+
+			status_t status = domain->module->send_data(NULL, reply);
+			if (status < B_OK) {
+				gBufferModule->free(reply);
+				return status;
+			}
+			break;
+		}
+
+		case ICMP6_DST_UNREACH:
+""",
+        "ICMPv6 echo checksum and break",
+        optional=True,
+    )
+
+
+def patch_default_route_same_interface() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "stack" / "routes.cpp"
+    )
+    replace_once(
+        path,
+        """			if (route->interface_address == description->interface_address)
+				return route;
+
+			continue;
+""",
+        """			if (route->interface_address == description->interface_address
+				|| (route->interface_address != NULL
+					&& description->interface_address != NULL
+					&& route->interface_address->interface
+						== description->interface_address->interface))
+				return route;
+
+			continue;
+""",
+        "IPv6 default route per interface",
+        optional=True,
+    )
+
+
+def patch_ping6_optional_pktinfo() -> None:
+    path = HAIKU / "src" / "bin" / "network" / "ping" / "ping6.c"
+    replace_once(
+        path,
+        """	if ((hoplim = get_hoplim(mhdr)) == -1) {
+		warnx("failed to get receiving hop limit");
+		return;
+	}
+	if ((pktinfo = get_rcvpktinfo(mhdr)) == NULL) {
+		warnx("failed to get receiving packet information");
+		return;
+	}
+""",
+        """	hoplim = get_hoplim(mhdr);
+	if (hoplim == -1)
+		hoplim = 64;
+	pktinfo = get_rcvpktinfo(mhdr);
+""",
+        "ping6 without PKTINFO still counts",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """			if ((options & F_VERBOSE) != 0) {
+				struct sockaddr_in6 dstsa;
+
+				memset(&dstsa, 0, sizeof(dstsa));
+				dstsa.sin6_family = AF_INET6;
+				dstsa.sin6_len = sizeof(dstsa);
+				dstsa.sin6_scope_id = pktinfo->ipi6_ifindex;
+				dstsa.sin6_addr = pktinfo->ipi6_addr;
+""",
+        """			if ((options & F_VERBOSE) != 0 && pktinfo != NULL) {
+				struct sockaddr_in6 dstsa;
+
+				memset(&dstsa, 0, sizeof(dstsa));
+				dstsa.sin6_family = AF_INET6;
+				dstsa.sin6_len = sizeof(dstsa);
+				dstsa.sin6_scope_id = pktinfo->ipi6_ifindex;
+				dstsa.sin6_addr = pktinfo->ipi6_addr;
+""",
+        "ping6 verbose pktinfo null",
+        optional=True,
+    )
+
+
 def main() -> int:
     copy_sources()
     patch_jam()
@@ -1494,6 +1640,9 @@ def main() -> int:
     patch_ipv6_local_loopback()
     patch_udp_ipv6_source()
     patch_ipv6_copy_sa_len()
+    patch_icmp6_echo_reply()
+    patch_default_route_same_interface()
+    patch_ping6_optional_pktinfo()
     return 0
 
 
