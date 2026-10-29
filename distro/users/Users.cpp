@@ -214,7 +214,7 @@ public:
 	{
 		SetExplicitMinSize(BSize(kAvatarSide, kAvatarSide));
 		SetExplicitMaxSize(BSize(kAvatarSide, kAvatarSide));
-		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 	}
 
 	~AvatarView()
@@ -278,7 +278,13 @@ public:
 		fAdmin(admin),
 		fDisabled(disabled)
 	{
-		SetHeight(40);
+		SetHeight(44);
+	}
+
+	virtual void Update(BView* owner, const BFont* font)
+	{
+		BStringItem::Update(owner, font);
+		SetHeight(44);
 	}
 
 	const char* Name() const		{ return fName.String(); }
@@ -306,8 +312,13 @@ public:
 		if (fDisabled)
 			sub << "  ·  off";
 		owner->SetFont(be_plain_font);
-		owner->SetHighColor(tint_color(text, IsSelected() ? 0.15 : 0.35));
-		owner->DrawString(sub.String(), BPoint(frame.left + 10, frame.top + 32));
+		if (IsSelected())
+			owner->SetHighColor(text);
+		else {
+			owner->SetHighColor(tint_color(ui_color(B_LIST_ITEM_TEXT_COLOR),
+				0.45));
+		}
+		owner->DrawString(sub.String(), BPoint(frame.left + 10, frame.top + 34));
 	}
 
 private:
@@ -340,18 +351,39 @@ public:
 		fRepeat = new BTextControl("repeat", "Repeat", "", NULL);
 		fRepeat->TextView()->HideTyping(true);
 
-		BLayoutBuilder::Group<> layout(this, B_VERTICAL, B_USE_SMALL_SPACING);
-		layout.SetInsets(B_USE_WINDOW_INSETS);
-		if (fCurrent != NULL)
-			layout.Add(fCurrent);
-		layout.Add(fNext)
-			.Add(fRepeat)
-			.AddGroup(B_HORIZONTAL)
-				.AddGlue()
-				.Add(new BButton("cancel", "Cancel",
-					new BMessage(B_QUIT_REQUESTED)))
-				.Add(new BButton("ok", "Change", new BMessage('pwok')))
-			.End();
+		if (fCurrent != NULL) {
+			BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
+				.SetInsets(B_USE_WINDOW_INSETS)
+				.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+					.Add(fCurrent->CreateLabelLayoutItem(), 0, 0)
+					.Add(fCurrent->CreateTextViewLayoutItem(), 1, 0)
+					.Add(fNext->CreateLabelLayoutItem(), 0, 1)
+					.Add(fNext->CreateTextViewLayoutItem(), 1, 1)
+					.Add(fRepeat->CreateLabelLayoutItem(), 0, 2)
+					.Add(fRepeat->CreateTextViewLayoutItem(), 1, 2)
+				.End()
+				.AddGroup(B_HORIZONTAL)
+					.AddGlue()
+					.Add(new BButton("cancel", "Cancel",
+						new BMessage(B_QUIT_REQUESTED)))
+					.Add(new BButton("ok", "Change", new BMessage('pwok')))
+				.End();
+		} else {
+			BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
+				.SetInsets(B_USE_WINDOW_INSETS)
+				.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+					.Add(fNext->CreateLabelLayoutItem(), 0, 0)
+					.Add(fNext->CreateTextViewLayoutItem(), 1, 0)
+					.Add(fRepeat->CreateLabelLayoutItem(), 0, 1)
+					.Add(fRepeat->CreateTextViewLayoutItem(), 1, 1)
+				.End()
+				.AddGroup(B_HORIZONTAL)
+					.AddGlue()
+					.Add(new BButton("cancel", "Cancel",
+						new BMessage(B_QUIT_REQUESTED)))
+					.Add(new BButton("ok", "Change", new BMessage('pwok')))
+				.End();
+		}
 
 		if (fCurrent != NULL)
 			fCurrent->MakeFocus(true);
@@ -432,10 +464,16 @@ public:
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 			.SetInsets(B_USE_WINDOW_INSETS)
-			.Add(fName)
-			.Add(fReal)
-			.Add(fPassword)
-			.Add(fRepeat)
+			.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+				.Add(fName->CreateLabelLayoutItem(), 0, 0)
+				.Add(fName->CreateTextViewLayoutItem(), 1, 0)
+				.Add(fReal->CreateLabelLayoutItem(), 0, 1)
+				.Add(fReal->CreateTextViewLayoutItem(), 1, 1)
+				.Add(fPassword->CreateLabelLayoutItem(), 0, 2)
+				.Add(fPassword->CreateTextViewLayoutItem(), 1, 2)
+				.Add(fRepeat->CreateLabelLayoutItem(), 0, 3)
+				.Add(fRepeat->CreateTextViewLayoutItem(), 1, 3)
+			.End()
 			.Add(fAdmin)
 			.AddGroup(B_HORIZONTAL)
 				.AddGlue()
@@ -530,36 +568,54 @@ public:
 			.End();
 
 		fAvatar = new AvatarView();
+		fAvatar->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 		fNameView = new BStringView("username", "");
-		fNameView->SetFont(be_plain_font);
+		fNameView->SetExplicitAlignment(
+			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
+		BStringView* userLabel = new BStringView("user-label", "Username");
+		userLabel->SetExplicitAlignment(
+			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
 		fReal = new BTextControl("real", "Name", "", NULL);
 		fEmail = new BTextControl("email", "Email", "", NULL);
 		fRole = new BStringView("role", "");
+		fRole->SetExplicitAlignment(
+			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
+		BStringView* accountLabel = new BStringView("account-label", "Account");
+		accountLabel->SetExplicitAlignment(
+			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
+
+		BButton* choose = new BButton("picture", "Choose picture...",
+			new BMessage(kMsgPick));
+		BButton* clear = new BButton("clear", "Remove picture",
+			new BMessage(kMsgClearPicture));
+		choose->SetExplicitMinSize(BSize(148, B_SIZE_UNSET));
+		clear->SetExplicitMinSize(BSize(148, B_SIZE_UNSET));
 
 		BGroupView* card = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-		card->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 		BLayoutBuilder::Group<>(card)
-			.SetInsets(B_USE_BIG_SPACING)
 			.AddGroup(B_HORIZONTAL, B_USE_BIG_SPACING)
 				.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
-					.Add(fAvatar)
-					.Add(new BButton("picture", "Choose picture...",
-						new BMessage(kMsgPick)))
-					.Add(new BButton("clear", "Remove picture",
-						new BMessage(kMsgClearPicture)))
-				.End()
-				.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
-					.Add(fReal)
-					.Add(fNameView)
-					.Add(fEmail)
-					.Add(fRole)
-					.Add(new BButton("password", "Change password...",
-						new BMessage(kMsgPassword)))
 					.AddGlue()
+					.Add(fAvatar)
+					.Add(choose)
+					.Add(clear)
+					.AddGlue()
+				.End()
+				.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+					.Add(fReal->CreateLabelLayoutItem(), 0, 0)
+					.Add(fReal->CreateTextViewLayoutItem(), 1, 0)
+					.Add(userLabel, 0, 1)
+					.Add(fNameView, 1, 1)
+					.Add(fEmail->CreateLabelLayoutItem(), 0, 2)
+					.Add(fEmail->CreateTextViewLayoutItem(), 1, 2)
+					.Add(accountLabel, 0, 3)
+					.Add(fRole, 1, 3)
 				.End()
 			.End()
 			.AddGroup(B_HORIZONTAL)
 				.AddGlue()
+				.Add(new BButton("password", "Change password...",
+					new BMessage(kMsgPassword)))
 				.Add(new BButton("save", "Save", new BMessage(kMsgSave)))
 			.End();
 
@@ -732,9 +788,7 @@ private:
 			return;
 		fAccount = pwd->pw_name;
 		fReal->SetText(pwd->pw_gecos != NULL ? pwd->pw_gecos : "");
-		BString userLine("Username   ");
-		userLine << pwd->pw_name;
-		fNameView->SetText(userLine.String());
+		fNameView->SetText(pwd->pw_name);
 		BString role(is_admin_user(pwd) ? "Administrator" : "Standard account");
 		if (is_disabled_user(pwd->pw_name))
 			role << "  ·  sign-in off";

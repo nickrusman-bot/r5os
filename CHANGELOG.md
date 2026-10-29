@@ -10,7 +10,13 @@ Users & Accounts is a card: round picture (initials until you choose one), name,
 
 Name and password go through Login (uid 0). The signed-in person must type the current password. An administrator setting someone else's password does not. Email and the picture live in that account's `config/settings/r5-account` (mode 0600). Username stays fixed.
 
-Jam AMD64 2026-10-29 22:42 Europe/Amsterdam: `jam_exit=0` (Users, Login, image). Not confirmed on a boot yet.
+Jam AMD64 2026-10-29 22:42 Europe/Amsterdam: `jam_exit=0` (Users, Login, image).
+
+VBox 22:44 Europe/Amsterdam (guest 9:44 PM, UTC): as `user`, the card and Change password opened. The card background was white (`B_DOCUMENT_BACKGROUND_COLOR`) and the labels did not share one column.
+
+The card now uses the normal panel color. Name, username, email, and account sit on one grid. Choose picture and Remove picture share one width under the avatar. Change password and Save sit on the same row. The people row shows the name and the account on two lines. Same build number (10011).
+
+Jam AMD64 2026-10-29 22:51 Europe/Amsterdam: `jam_exit=0` (Users, image). The aligned card is in that image. Not yet seen in VBox.
 
 ### Log out name and Sign in after Restart (build 10010)
 
