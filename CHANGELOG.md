@@ -26,7 +26,11 @@ VBox 20:17 Europe/Amsterdam (guest clock 7:17 PM, UTC): Sign in as `user`. `id` 
 
 Deskbar leaf-menu folders were yellow for `nicky` and blue-grey for `user`. Tracker reads `~/config/settings/mime_db` first. `user` had that database because registrar (uid 0) writes into `/boot/home`. `nicky` had none and used the system yellow folder icon. Sign in now copies `/boot/system/data/mime_db` into that account’s settings if missing, and puts the system directory icon on `application/x-vnd.be-directory` so every account gets the yellow folders. Registrar follows the session file instead of always `/boot/home`.
 
-Jam AMD64 2026-10-29 20:45 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Yellow folders for both accounts not confirmed yet.
+Jam AMD64 2026-10-29 20:45 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox 20:47 Europe/Amsterdam (guest clock 7:47 PM, UTC): `nicky`’s leaf menu (Applications, Demos, Desktop applets, Preferences) was the yellow folder. `user`’s same four items were the blue-grey folder. `nicky`’s `config/settings/mime_db` was present (7:48 PM). Copying the directory type was not enough. Those menu rows are merged folders, type `application/x-vnd.haiku-virtual-directory`, whose icon is blue. A standard account often cannot create `/tmp/tracker/virtual-directories` (mode 0755, owned by whoever opened the menu first), so Tracker keeps the real system folder and its yellow icon. The administrator can, and then sees the blue virtual-directory icon. That type now uses the same yellow icon as `application/x-vnd.be-directory`. Sign-in copies both types into the account database again.
+
+Jam AMD64 2026-10-29 21:13 Europe/Amsterdam: `jam_exit=0` (8116 targets). Optional translator headers were missing again; the image still built. VBox `-ForceConvert` started 21:16 Europe/Amsterdam. Both leaf menus yellow on this image is not confirmed yet. A fresh disk has no `nicky` until Users & Accounts creates that account again.
 
 ### First administrator off uid 0 (build 10007)
 

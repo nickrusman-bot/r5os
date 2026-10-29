@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/session-user		Build 10008: per-user mime_db, yellow folder icons. VBox 20:16 session as nicky confirmed; mime icons not yet.
+8940	in-progress	cursor/session-user		Build 10008: leaf-menu virtual-directory icon is the yellow folder. Jam 21:13. VBox 20:47 showed user blue before this; new image not checked yet.
 8944	open			
 8948	open			
 8956	open			

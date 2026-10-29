@@ -602,17 +602,26 @@ ensure_user_mime_db(const char* home, uid_t uid, gid_t gid)
 	if (lstat(application.String(), &st) != 0)
 		copy_mime_entry(kSystemMime, dest.String(), uid, gid);
 
-	// Tracker reads the user mime_db first. Keep the Haiku yellow folder
-	// icon, not whatever registrar wrote into /boot/home as uid 0.
-	BString srcType;
-	BString dstType;
-	srcType.SetToFormat("%s/application/x-vnd.be-directory", kSystemMime);
-	dstType.SetToFormat("%s/application/x-vnd.be-directory", dest.String());
+	// Tracker reads the user mime_db first. The leaf menu draws merged
+	// folders as application/x-vnd.haiku-virtual-directory (blue). Ordinary
+	// folders use application/x-vnd.be-directory (yellow). Keep both on the
+	// yellow system icon, including when this database already existed.
 	mkdir(application.String(), 0755);
 	chmod(application.String(), 0755);
 	lchown(application.String(), uid, gid);
-	unlink(dstType.String());
-	copy_mime_entry(srcType.String(), dstType.String(), uid, gid);
+	static const char* kYellowTypes[] = {
+		"application/x-vnd.be-directory",
+		"application/x-vnd.haiku-virtual-directory",
+		NULL
+	};
+	for (int32 i = 0; kYellowTypes[i] != NULL; i++) {
+		BString srcType;
+		BString dstType;
+		srcType.SetToFormat("%s/%s", kSystemMime, kYellowTypes[i]);
+		dstType.SetToFormat("%s/%s", dest.String(), kYellowTypes[i]);
+		unlink(dstType.String());
+		copy_mime_entry(srcType.String(), dstType.String(), uid, gid);
+	}
 }
 
 
