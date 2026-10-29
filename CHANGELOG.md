@@ -60,9 +60,9 @@ VBox 18:14 Europe/Amsterdam (guest clock 5:14 PM, UTC): **Log out** returned to 
 
 VBox after that Sign in: `ls /boot/home/users/nick` as the administrator is **Permission denied**. Isolation of that extra home holds on this VDI (uid 1001 cannot list another person’s folder).
 
-The image no longer runs `x-vnd.Haiku-autologin` (`StartSession` of uid 0 spawned `launch_daemon root`). After Deskbar is up, Login starts `dstcheck`, `~/config/settings/boot/UserBootscript` if that file exists, and first-login `PostInstallScript` if `~/config/settings/first_login` exists. `default_deskbar_items.sh` does not launch ProcessController `-deskbar` (that was Damned). Volume and tray replicants stay `r5-tray` / `desklink`. Not StartSession.
+After Deskbar is up, Login starts `dstcheck`, `~/config/settings/boot/UserBootscript` if that file exists, and first-login `PostInstallScript` if `~/config/settings/first_login` exists. `default_deskbar_items.sh` does not launch ProcessController `-deskbar` (that was Damned). Volume and tray replicants stay `r5-tray` / `desklink`.
 
-Jam AMD64 2026-10-29 18:26 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. No `launch_daemon root` after Sign in is not confirmed yet.
+Jam AMD64 2026-10-29 18:26 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Boot stayed on the **R5OS splash**: removing `x-vnd.Haiku-autologin` meant no user `launch_daemon`, so `app_server` and Login (in `data/launch/user`) never started. Autologin is back. It still `StartSession`s `getpwuid(0)` (`user` on first boot, `root` after migrate). Desktop jobs stay off `initial_volumes_mounted` so that daemon does not start Tracker. Not StartSession as the product path.
 
 ### First administrator off uid 0 (plan)
 
