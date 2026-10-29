@@ -41,6 +41,7 @@ private:
 			int					fSocket;
 			uint8				fMAC[6];
 			bool				fHaveMAC;
+			bool				fHaveDefaultRoute;
 };
 
 

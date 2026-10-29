@@ -40,7 +40,8 @@ SLAACClient::SLAACClient(BMessenger target, const char* device)
 	AutoconfigClient("slaac", target, device),
 	fThread(-1),
 	fSocket(-1),
-	fHaveMAC(false)
+	fHaveMAC(false),
+	fHaveDefaultRoute(false)
 {
 	memset(fMAC, 0, sizeof(fMAC));
 
@@ -353,12 +354,13 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		option += bytesLen;
 	}
 
-	if (lifetime > 0 || havePrefix) {
+	if (lifetime > 0 || (havePrefix && !fHaveDefaultRoute)) {
 		if (lifetime == 0) {
 			syslog(LOG_INFO, "slaac %s: RA lifetime 0, using advertiser "
 				"as default router\n", Device());
 		}
-		_ApplyDefaultRoute(from, ifIndex);
+		if (_ApplyDefaultRoute(from, ifIndex) == B_OK)
+			fHaveDefaultRoute = true;
 	}
 	_ApplyResolver(resolver, nameservers);
 
