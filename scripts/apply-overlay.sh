@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/haiku/build/jam/UserBuildConfig"
 REV="$("$ROOT/scripts/r5-version.sh" --revision)"
 VER="$("$ROOT/scripts/r5-version.sh")"
+BUILD="$("$ROOT/scripts/r5-version.sh" --build)"
 
 if [[ ! -d "$ROOT/haiku/build/jam" ]]; then
 	echo "haiku/ is missing. Run scripts/setup-wsl.sh first." >&2
@@ -20,8 +21,9 @@ printf '%s\n' \
 	'#ifndef R5_OS_VERSION_H' \
 	'#define R5_OS_VERSION_H' \
 	"#define R5_OS_VERSION \"${VER}\"" \
+	"#define R5_OS_BUILD ${BUILD}" \
 	'#endif' > "$hdr"
-echo "Wrote $hdr"
+echo "Wrote $hdr (R5_OS_VERSION=${VER} R5_OS_BUILD=${BUILD})"
 
 logoSrc="$ROOT/distro/artwork/r5-os-logo.png"
 logoDst="$ROOT/haiku/data/artwork/R5OS-logo.png"
@@ -47,7 +49,7 @@ python3 "$ROOT/scripts/apply-branding.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-darkmode.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-ui-bugs.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-kernel-bugs.py" "$ROOT/haiku"
-for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py apply-high-bugs.py apply-qemu-drivers.py apply-desktop-enh.py apply-zeroconf.py apply-airplay.py apply-wifi.py apply-vboxclip.py apply-ipv6.py; do
+for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py apply-high-bugs.py apply-qemu-drivers.py apply-desktop-enh.py apply-zeroconf.py apply-airplay.py apply-wifi.py apply-vboxclip.py apply-ipv6.py apply-about.py; do
 	if [[ -f "$ROOT/scripts/$patch" ]]; then
 		python3 "$ROOT/scripts/$patch" "$ROOT/haiku"
 	fi

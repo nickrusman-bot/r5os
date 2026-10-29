@@ -37,6 +37,7 @@ def main() -> int:
 	root = Path(__file__).resolve().parents[1]
 	src = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "distro" / "artwork" / "r5-os-logo.jpg"
 	out = root / "distro" / "artwork" / "r5-os-logo.png"
+	# Keep a sharp source; AboutSystem scales into Walter's 170x110 box.
 	distill(src, out, 420)
 	return 0
 

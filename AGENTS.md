@@ -83,7 +83,9 @@ After a task, report **Veranderd / Getest / Onbewezen / Documentatie**. Tracker 
 
 ## Versioning
 
-Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`. Jam `HAIKU_REVISION` is `r5-` plus that string (`scripts/r5-version.sh`). Do not use Haiku `hrev` as the distro version.
+Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`. Integer **build** in `distro/BUILD` (starts at 10001). About shows `R5OS YYYY.N-dev Build 10001`. Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh`), not the build number. Do not use Haiku `hrev` as the distro version.
+
+Bump `distro/BUILD` when adding a **What's new** section (`distro/WHATSNEW`). Do not bump on every jam. Headings: `R5OS <VERSION> Build <N> - Title`. Newest build first.
 
 ## Code style
 
