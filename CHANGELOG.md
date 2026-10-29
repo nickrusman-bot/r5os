@@ -14,7 +14,11 @@ Jam AMD64 2026-10-29 15:58 Europe/Amsterdam: `jam_exit=0` (Login, Users, `r5-des
 
 VBox first boot: Sign in showed **General system error**. Login had rewritten `/etc/passwd` on disk; `getpwnam` still talks to the registrar, which had not changed uid, so migrate returned `B_ERROR`. That rewrite also left **no uid 0 account**. Restart then stuck on the black bootsplash. Registrar cannot change an existing uid (`B_BAD_VALUE`); useradd uses `B_REG_UPDATE_USER` + `add user`. Migrate now deletes `user` and adds it back at a free uid ≥ 1000, and adds a locked `root` uid 0 so boot still has a root account. Session file is `/tmp/r5-desktop-session`. Migrate runs only after a valid password, not when Sign in appears.
 
-Jam AMD64 2026-10-29 16:20 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started a fresh VDI. Sign in / `id` after this fix not confirmed yet. The previous VDI was already mutated; use this new disk.
+Jam AMD64 2026-10-29 16:20 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started a fresh VDI.
+
+VBox after that Sign in: password accepted, then a **empty blue screen** (app_server, no Tracker/Deskbar). Target("desktop") returned OK but the wrapped jobs did not come up. Login now launches Tracker and Deskbar itself through `r5-desktop` (no libbe; session file under `/boot/system/settings`) and waits for Tracker before hiding Sign in. launch_daemon does not start those two as uid 0.
+
+Jam AMD64 2026-10-29 16:29 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Tracker after Sign in not confirmed yet.
 
 Isolation is only true if `id` after Sign in is not uid 0 and `ls /boot/home/users/<name>` is permission denied.
 

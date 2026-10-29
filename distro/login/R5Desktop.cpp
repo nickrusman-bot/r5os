@@ -1,6 +1,6 @@
 /*
- * Launch a desktop job as the administrator from the session file.
- * launch_daemon stays uid 0; this helper drops before exec.
+ * Drop to the signed-in administrator and exec the desktop job.
+ * launch_daemon and Login stay uid 0.
  */
 
 
@@ -10,54 +10,60 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 
-static const char* kSessionPath = "/tmp/r5-desktop-session";
+static const char* kSessionPaths[] = {
+	"/boot/system/settings/r5-desktop-session",
+	"/tmp/r5-desktop-session",
+	NULL
+};
+
+
+static bool
+read_session_name(char* name, size_t nameSize)
+{
+	for (int i = 0; kSessionPaths[i] != NULL; i++) {
+		FILE* file = fopen(kSessionPaths[i], "r");
+		if (file == NULL)
+			continue;
+		if (fgets(name, nameSize, file) == NULL) {
+			fclose(file);
+			continue;
+		}
+		fclose(file);
+
+		size_t length = strlen(name);
+		while (length > 0
+			&& (name[length - 1] == '\n' || name[length - 1] == '\r'
+				|| name[length - 1] == ' ')) {
+			name[--length] = '\0';
+		}
+		if (length > 0)
+			return true;
+	}
+	return false;
+}
 
 
 int
 main(int argc, char** argv)
 {
 	if (argc < 2 || argv[1] == NULL || argv[1][0] == '\0') {
-		fprintf(stderr, "r5-desktop: missing command\n");
-		return 1;
-	}
-
-	if (geteuid() != 0) {
-		execv(argv[1], argv + 1);
-		fprintf(stderr, "r5-desktop: exec %s: %s\n", argv[1], strerror(errno));
-		return 1;
-	}
-
-	FILE* file = fopen(kSessionPath, "r");
-	if (file == NULL) {
-		fprintf(stderr, "r5-desktop: no session file\n");
+		syslog(LOG_ERR, "r5-desktop: missing command");
 		return 1;
 	}
 
 	char name[64];
-	if (fgets(name, sizeof(name), file) == NULL) {
-		fclose(file);
-		fprintf(stderr, "r5-desktop: empty session file\n");
-		return 1;
-	}
-	fclose(file);
-
-	size_t length = strlen(name);
-	while (length > 0
-		&& (name[length - 1] == '\n' || name[length - 1] == '\r'
-			|| name[length - 1] == ' ')) {
-		name[--length] = '\0';
-	}
-	if (length == 0) {
-		fprintf(stderr, "r5-desktop: blank session user\n");
+	if (!read_session_name(name, sizeof(name))) {
+		syslog(LOG_ERR, "r5-desktop: no session file");
 		return 1;
 	}
 
 	struct passwd* pwd = getpwnam(name);
 	if (pwd == NULL || strcmp(pwd->pw_name, name) != 0 || pwd->pw_uid == 0) {
-		fprintf(stderr, "r5-desktop: session user %s is not allowed\n", name);
+		syslog(LOG_ERR, "r5-desktop: session user %s is not allowed", name);
 		return 1;
 	}
 
@@ -68,14 +74,19 @@ main(int argc, char** argv)
 	if (pwd->pw_shell != NULL && pwd->pw_shell[0] != '\0')
 		setenv("SHELL", pwd->pw_shell, 1);
 
-	if (setgid(pwd->pw_gid) != 0
-		|| initgroups(pwd->pw_name, pwd->pw_gid) != 0
-		|| setuid(pwd->pw_uid) != 0 || geteuid() == 0) {
-		fprintf(stderr, "r5-desktop: could not drop privileges\n");
+	if (setresgid(pwd->pw_gid, pwd->pw_gid, pwd->pw_gid) != 0) {
+		syslog(LOG_ERR, "r5-desktop: setresgid: %s", strerror(errno));
+		return 1;
+	}
+	if (initgroups(pwd->pw_name, pwd->pw_gid) != 0)
+		syslog(LOG_WARNING, "r5-desktop: initgroups: %s", strerror(errno));
+	if (setresuid(pwd->pw_uid, pwd->pw_uid, pwd->pw_uid) != 0
+		|| geteuid() == 0) {
+		syslog(LOG_ERR, "r5-desktop: setresuid: %s", strerror(errno));
 		return 1;
 	}
 
 	execv(argv[1], argv + 1);
-	fprintf(stderr, "r5-desktop: exec %s: %s\n", argv[1], strerror(errno));
+	syslog(LOG_ERR, "r5-desktop: exec %s: %s", argv[1], strerror(errno));
 	return 1;
 }

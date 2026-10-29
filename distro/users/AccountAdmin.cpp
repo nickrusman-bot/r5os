@@ -38,7 +38,7 @@ const char* kAdminGroupName = "admin";
 
 static const char* kHome = "/boot/home";
 static const char* kUsersRoot = "/boot/home/users";
-static const char* kSessionPath = "/tmp/r5-desktop-session";
+static const char* kSessionPath = "/boot/system/settings/r5-desktop-session";
 static const char* kSystemRootName = "root";
 
 

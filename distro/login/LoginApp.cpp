@@ -12,6 +12,7 @@
 #include "LoginWindow.h"
 
 #include <Alert.h>
+#include <Entry.h>
 #include <LaunchRoster.h>
 #include <List.h>
 #include <OS.h>
@@ -213,6 +214,12 @@ LoginApp::TryLogin(BMessage* message)
 			if (status == B_OK) {
 				_EnableDesktopJobs();
 				status = BLaunchRoster().Target("desktop");
+				if (status == B_OK)
+					status = _LaunchSessionApp("/system/Tracker");
+				if (status == B_OK)
+					status = _LaunchSessionApp("/system/Deskbar");
+				if (status == B_OK)
+					status = _WaitRunning("application/x-vnd.Be-TRAK");
 			}
 			if (status == B_OK)
 				_HideLogin();
@@ -226,7 +233,7 @@ LoginApp::TryLogin(BMessage* message)
 		reply.AddInt32("error", status);
 		if (status == B_PERMISSION_DENIED || status == ENOENT)
 			reply.AddString("text", "That password is not right.");
-		else if (status == B_NAME_NOT_FOUND)
+		else if (status == B_NAME_NOT_FOUND || status == B_TIMED_OUT)
 			reply.AddString("text", "Could not start the desktop.");
 		else {
 			BString text("Could not start the session: ");
@@ -280,8 +287,38 @@ LoginApp::_EnableDesktopJobs()
 	if (roster.GetJobs("desktop", jobs) != B_OK)
 		return;
 
-	for (int32 i = 0; i < jobs.CountStrings(); i++)
-		roster.SetEnabled(jobs.StringAt(i), true);
+	for (int32 i = 0; i < jobs.CountStrings(); i++) {
+		const char* name = jobs.StringAt(i);
+		bool sessionApp = strstr(name, "Be-TRAK") != NULL
+			|| strstr(name, "Be-TSKB") != NULL;
+		roster.SetEnabled(name, !sessionApp);
+	}
+}
+
+
+status_t
+LoginApp::_LaunchSessionApp(const char* program)
+{
+	entry_ref helper;
+	status_t status = get_ref_for_path("/system/apps/r5-desktop", &helper);
+	if (status != B_OK)
+		return status;
+
+	const char* args[] = { program, NULL };
+	return be_roster->Launch(&helper, 1, args);
+}
+
+
+status_t
+LoginApp::_WaitRunning(const char* signature)
+{
+	const bigtime_t deadline = system_time() + 8000000LL;
+	while (system_time() < deadline) {
+		if (be_roster->IsRunning(signature))
+			return B_OK;
+		snooze(100000);
+	}
+	return B_TIMED_OUT;
 }
 
 
