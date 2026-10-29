@@ -16,7 +16,13 @@ VBox 22:44 Europe/Amsterdam (guest 9:44 PM, UTC): as `user`, the card and Change
 
 The card now uses the normal panel color. Name, username, email, and account sit on one grid. Choose picture and Remove picture share one width under the avatar. Change password and Save sit on the same row. The people row shows the name and the account on two lines. Same build number (10011).
 
-Jam AMD64 2026-10-29 22:51 Europe/Amsterdam: `jam_exit=0` (Users, image). The aligned card is in that image. Not yet seen in VBox.
+Jam AMD64 2026-10-29 22:51 Europe/Amsterdam: `jam_exit=0` (Users, image).
+
+VBox 22:56 Europe/Amsterdam: the panel color is right, and the people list (name, then account) looks right. As `nicky` the window title was "Your account" but the people list was still there, and the lock blocked editing that account's own name, email, picture, and password. As `user`, Name and Email grew into tall boxes; the label sat in the middle of the row and the text sat at the top. `IsHidden()` before the window is shown follows the window, so the list was never actually hidden. A grid row beside the avatar took the spare height.
+
+The people column is now a layout item, hidden after the window is shown, unless this account may manage people. The signed-in person's card stays editable while Locked. Name and Email stay one line, labels share the right edge, and the first row starts level with the top of the list. Rules for the next window are in `docs/STYLE.md`.
+
+Jam AMD64 2026-10-29 23:09 Europe/Amsterdam: `jam_exit=0` (Users, image). Not yet seen in VBox.
 
 ### Log out name and Sign in after Restart (build 10010)
 

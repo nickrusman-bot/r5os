@@ -118,3 +118,5 @@ Under `haiku/`: Haiku guidelines (tabs, 100 columns, InterCaps, `f`/`k`/`g`/`s`,
 https://www.haiku-os.org/development/coding-guidelines/
 
 Match the file you edit. Do not mix a fix with a reformat. Style-only commits say “no functional change”. Use `haiku-format` / `src/tools/checkstyle/` when available.
+
+Desktop forms and the account card: `docs/STYLE.md`.

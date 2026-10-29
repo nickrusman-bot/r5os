@@ -13,6 +13,7 @@
 #include <Font.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
+#include <LayoutItem.h>
 #include <ListView.h>
 #include <Messenger.h>
 #include <Path.h>
@@ -330,6 +331,25 @@ private:
 };
 
 
+static void
+pin_one_line(BTextControl* control)
+{
+	if (control == NULL)
+		return;
+	float height = control->PreferredSize().Height();
+	if (height < 8)
+		height = be_plain_font->Size() + 12;
+	BSize maxSize(B_SIZE_UNSET, height);
+	control->TextView()->SetExplicitMaxSize(maxSize);
+	BLayoutItem* field = control->CreateTextViewLayoutItem();
+	field->SetExplicitMaxSize(maxSize);
+	field->SetExplicitAlignment(
+		BAlignment(B_ALIGN_USE_FULL_WIDTH, B_ALIGN_VERTICAL_CENTER));
+	control->CreateLabelLayoutItem()->SetExplicitAlignment(
+		BAlignment(B_ALIGN_RIGHT, B_ALIGN_VERTICAL_CENTER));
+}
+
+
 class PasswordWindow : public BWindow {
 public:
 	PasswordWindow(BWindow* parent, const char* name, bool needCurrent)
@@ -350,6 +370,9 @@ public:
 		fNext->TextView()->HideTyping(true);
 		fRepeat = new BTextControl("repeat", "Repeat", "", NULL);
 		fRepeat->TextView()->HideTyping(true);
+		pin_one_line(fCurrent);
+		pin_one_line(fNext);
+		pin_one_line(fRepeat);
 
 		if (fCurrent != NULL) {
 			BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
@@ -460,6 +483,10 @@ public:
 		fPassword->TextView()->HideTyping(true);
 		fRepeat = new BTextControl("repeat", "Repeat password", "", NULL);
 		fRepeat->TextView()->HideTyping(true);
+		pin_one_line(fName);
+		pin_one_line(fReal);
+		pin_one_line(fPassword);
+		pin_one_line(fRepeat);
 		fAdmin = new BCheckBox("admin", "Administrator", NULL);
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
@@ -540,6 +567,9 @@ public:
 			B_TITLED_WINDOW, B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
 		fList(NULL),
 		fPeople(NULL),
+		fPeopleItem(NULL),
+		fCard(NULL),
+		fLock(NULL),
 		fAvatar(NULL),
 		fPanel(NULL),
 		fPhoto(NULL),
@@ -573,8 +603,6 @@ public:
 		fNameView->SetExplicitAlignment(
 			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
 		BStringView* userLabel = new BStringView("user-label", "Username");
-		userLabel->SetExplicitAlignment(
-			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
 		fReal = new BTextControl("real", "Name", "", NULL);
 		fEmail = new BTextControl("email", "Email", "", NULL);
 		fRole = new BStringView("role", "");
@@ -582,7 +610,11 @@ public:
 			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
 		BStringView* accountLabel = new BStringView("account-label", "Account");
 		accountLabel->SetExplicitAlignment(
-			BAlignment(B_ALIGN_LEFT, B_ALIGN_VERTICAL_CENTER));
+			BAlignment(B_ALIGN_RIGHT, B_ALIGN_VERTICAL_CENTER));
+		userLabel->SetExplicitAlignment(
+			BAlignment(B_ALIGN_RIGHT, B_ALIGN_VERTICAL_CENTER));
+		pin_one_line(fReal);
+		pin_one_line(fEmail);
 
 		BButton* choose = new BButton("picture", "Choose picture...",
 			new BMessage(kMsgPick));
@@ -591,27 +623,35 @@ public:
 		choose->SetExplicitMinSize(BSize(148, B_SIZE_UNSET));
 		clear->SetExplicitMinSize(BSize(148, B_SIZE_UNSET));
 
-		BGroupView* card = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-		BLayoutBuilder::Group<>(card)
+		// Same height as "People", so Name starts on the list's top line.
+		BStringView* align = new BStringView("card-align", " ");
+		align->SetFont(&font);
+
+		fCard = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
+		BLayoutBuilder::Group<>(fCard)
+			.Add(align)
 			.AddGroup(B_HORIZONTAL, B_USE_BIG_SPACING)
 				.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
-					.AddGlue()
 					.Add(fAvatar)
 					.Add(choose)
 					.Add(clear)
 					.AddGlue()
 				.End()
-				.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
-					.Add(fReal->CreateLabelLayoutItem(), 0, 0)
-					.Add(fReal->CreateTextViewLayoutItem(), 1, 0)
-					.Add(userLabel, 0, 1)
-					.Add(fNameView, 1, 1)
-					.Add(fEmail->CreateLabelLayoutItem(), 0, 2)
-					.Add(fEmail->CreateTextViewLayoutItem(), 1, 2)
-					.Add(accountLabel, 0, 3)
-					.Add(fRole, 1, 3)
+				.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
+					.AddGrid(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING)
+						.Add(fReal->CreateLabelLayoutItem(), 0, 0)
+						.Add(fReal->CreateTextViewLayoutItem(), 1, 0)
+						.Add(userLabel, 0, 1)
+						.Add(fNameView, 1, 1)
+						.Add(fEmail->CreateLabelLayoutItem(), 0, 2)
+						.Add(fEmail->CreateTextViewLayoutItem(), 1, 2)
+						.Add(accountLabel, 0, 3)
+						.Add(fRole, 1, 3)
+					.End()
+					.AddGlue()
 				.End()
 			.End()
+			.AddGlue()
 			.AddGroup(B_HORIZONTAL)
 				.AddGlue()
 				.Add(new BButton("password", "Change password...",
@@ -619,19 +659,29 @@ public:
 				.Add(new BButton("save", "Save", new BMessage(kMsgSave)))
 			.End();
 
+		BGroupView* columns = new BGroupView(B_HORIZONTAL, B_USE_BIG_SPACING);
+		fPeopleItem = columns->GetLayout()->AddView(fPeople);
+		columns->GetLayout()->AddView(fCard);
+		fLock = new AdminLockBar();
+
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 			.SetInsets(B_USE_WINDOW_INSETS)
-			.AddGroup(B_HORIZONTAL, B_USE_BIG_SPACING)
-				.Add(fPeople)
-				.Add(card)
-			.End()
+			.Add(columns)
 			.AddGroup(B_HORIZONTAL)
 				.AddGlue()
-				.Add(new AdminLockBar())
+				.Add(fLock)
 			.End();
 
 		_Fill();
 		CenterOnScreen();
+	}
+
+	virtual void Show()
+	{
+		BWindow::Show();
+		// Hide() before the window is on screen looks hidden already, because
+		// IsHidden() follows the window. Apply the people column after Show().
+		_ApplyChrome();
 	}
 
 	~UsersWindow()
@@ -695,15 +745,9 @@ private:
 	void _ApplyChrome()
 	{
 		fManaging = _Managing();
-		if (fManaging) {
-			if (fPeople->IsHidden())
-				fPeople->Show();
-			SetTitle("Users & Accounts");
-		} else {
-			if (!fPeople->IsHidden())
-				fPeople->Hide();
-			SetTitle("Your account");
-		}
+		if (fPeopleItem != NULL)
+			fPeopleItem->SetVisible(fManaging);
+		SetTitle(fManaging ? "Users & Accounts" : "Your account");
 	}
 
 	void _Fill()
@@ -814,6 +858,8 @@ private:
 		}
 		fAvatar->SetPerson(fReal->Text()[0] != '\0' ? fReal->Text()
 			: pwd->pw_name, fPhoto);
+		if (fLock != NULL && fCard != NULL)
+			fLock->SetExempt(fCard, pwd->pw_uid == getuid());
 	}
 
 	BBitmap* _BitmapFromBlob(const void* data, ssize_t size) const
@@ -1033,6 +1079,9 @@ private:
 
 	BListView*		fList;
 	BGroupView*		fPeople;
+	BLayoutItem*	fPeopleItem;
+	BGroupView*		fCard;
+	AdminLockBar*	fLock;
 	AvatarView*		fAvatar;
 	BStringView*	fNameView;
 	BStringView*	fRole;

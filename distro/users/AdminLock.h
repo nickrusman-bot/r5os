@@ -40,12 +40,16 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 
 			bool				AcceptsInput(BHandler* target) const;
+			// A view under here stays usable while the machine lock is on.
+			// Used for the signed-in person's own account card.
+			void				SetExempt(BView* view, bool exempt);
 
 private:
 			void				_Reload();
 			void				_SyncControls();
 			void				_Prune();
 			void				_DisableTree(BView* view);
+			bool				_IsExempt(BView* view) const;
 
 			BStringView*		fLabel;
 			BButton*			fButton;
@@ -53,6 +57,7 @@ private:
 			BMessageRunner*		fWatch;
 			BMessageFilter*		fFilter;
 			BList				fForced;
+			BList				fExempt;
 			bool				fAdmin;
 			bool				fUnlocked;
 			bool				fSyncing;
