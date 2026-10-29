@@ -38,3 +38,11 @@ Useful syslog:
 | `dhcpv6 …: no server` | No DHCPv6 on this LAN |
 
 Network → select the NIC → **IPv6**. Tooltip on Mode repeats the grep command.
+
+Outbound test (there is no `ping6` command):
+
+```
+ping -6 -c 3 ipv6.google.com
+```
+
+The source must be the ULA (`fdae:…`), not `fe80::`. `ping -6 -S fdae:… ipv6.google.com` forces the source if needed.

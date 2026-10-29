@@ -911,6 +911,69 @@ def patch_kernel_multicast_route() -> None:
         "IPv6 multicast via ipv6_send_routed_data",
         optional=True,
     )
+    replace_once(
+        path,
+        """status_t
+ipv6_send_routed_data(net_protocol* _protocol, struct net_route* route,
+	net_buffer* buffer)
+{
+""",
+        """static void
+ipv6_prefer_nonlocal_source(net_interface* interface, sockaddr_in6& source,
+	const sockaddr_in6& destination)
+{
+	// Default IPv6 routes are bound to the first address (link-local).
+	// Off-link destinations must not use fe80 as the source (RFC 6724).
+	if (!IN6_IS_ADDR_LINKLOCAL(&source.sin6_addr))
+		return;
+	if (IN6_IS_ADDR_LINKLOCAL(&destination.sin6_addr)
+		|| IN6_IS_ADDR_MC_LINKLOCAL(&destination.sin6_addr)
+		|| IN6_IS_ADDR_MC_NODELOCAL(&destination.sin6_addr))
+		return;
+
+	net_interface_address* address = NULL;
+	while (sDatalinkModule->get_next_interface_address(interface, &address)) {
+		if (address->local == NULL || address->local->sa_family != AF_INET6)
+			continue;
+		const sockaddr_in6* local
+			= (const sockaddr_in6*)address->local;
+		if (IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+			|| IN6_IS_ADDR_UNSPECIFIED(&local->sin6_addr)
+			|| IN6_IS_ADDR_LOOPBACK(&local->sin6_addr)
+			|| IN6_IS_ADDR_MULTICAST(&local->sin6_addr))
+			continue;
+		source.sin6_addr = local->sin6_addr;
+		sDatalinkModule->put_interface_address(address);
+		return;
+	}
+}
+
+
+status_t
+ipv6_send_routed_data(net_protocol* _protocol, struct net_route* route,
+	net_buffer* buffer)
+{
+""",
+        "IPv6 RFC 6724 source pick",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """	sockaddr_in6& source = *(sockaddr_in6*)buffer->source;
+	sockaddr_in6& destination = *(sockaddr_in6*)buffer->destination;
+
+	buffer->msg_flags &= ~(MSG_BCAST | MSG_MCAST);
+""",
+        """	sockaddr_in6& source = *(sockaddr_in6*)buffer->source;
+	sockaddr_in6& destination = *(sockaddr_in6*)buffer->destination;
+
+	ipv6_prefer_nonlocal_source(interface, source, destination);
+
+	buffer->msg_flags &= ~(MSG_BCAST | MSG_MCAST);
+""",
+        "IPv6 use ULA source off-link",
+        optional=True,
+    )
 
 
 def main() -> int:
