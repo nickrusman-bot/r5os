@@ -19,6 +19,10 @@ COPIES = (
     ("apps/poorman/constants.cpp", "src/apps/poorman/constants.cpp"),
     ("apps/poorman/constants.h", "src/apps/poorman/constants.h"),
     ("preferences/joysticks/JoyWin.cpp", "src/preferences/joysticks/JoyWin.cpp"),
+    ("storage/mime/DatabaseLocation.h",
+     "headers/private/storage/mime/DatabaseLocation.h"),
+    ("storage/mime/database_support.cpp",
+     "src/kits/storage/mime/database_support.cpp"),
 )
 
 

@@ -228,7 +228,7 @@ ls /boot/home/Desktop
 
 VBox 2026-10-29 20:16 Europe/Amsterdam (guest 7:16 PM, UTC), account `nicky`: `$HOME` was `/boot/home/users/nicky`, no profile error, `ls /boot/home/Desktop` permission denied, desktop icons Home, Quick Tour, User Guide, and Trash. Tracker window title `nicky`. At 20:17, Sign in as `user`: `uid=1001(user)` and `ls /boot/home/users/nicky` permission denied.
 
-Still one screen. Preferences are not filtered. Trash is `$h/trash` for the signed-in account (the image’s `/boot/trash` moves to `/boot/home/trash` once). `autologin` still starts `launch_daemon user`. Shell `HOME` comes from `finddir B_USER_DIRECTORY`, not a hardcoded `/boot/home`.
+Still one screen. Preferences are not filtered. Trash is `$h/trash` for the signed-in account (the image’s `/boot/trash` moves to `/boot/home/trash` once). `autologin` still starts `launch_daemon user`. Shell `HOME` comes from `finddir B_USER_DIRECTORY`, not a hardcoded `/boot/home`. Each account has `~/config/settings/mime_db`. Folder icons come from the system yellow directory type, not the registrar overlay that used to live only in `/boot/home`.
 
 Earlier check, still as `user`:
 
