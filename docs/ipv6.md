@@ -19,6 +19,7 @@ VirtualBox bridged LAN (2026-10-28): ULA `fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd
 ```
 grep -E 'slaac|dad|dhcpv6' /var/log/syslog
 ifconfig /dev/net/ipro1000/0
+route
 ```
 
 Useful syslog:
@@ -26,6 +27,8 @@ Useful syslog:
 | Line | Meaning |
 |---|---|
 | `slaac …: PIO fd…/64 A=1 L=1` | Router offered SLAAC |
+| `slaac …: default route via fe80:…%N` | Off-link IPv6 has a gateway on this NIC |
+| `dad …: … unique` | DAD sent an NS and heard no conflict |
 | `slaac …: fdae:… via fe80:…` | Second address was assigned |
 | `slaac … without SLAAC /64 prefix` | RA had no A-flag `/64`; DHCPv6 may still run |
 | `dad …: NS send:` / `socket:` / `bind` | DAD could not run; the address is **not** assigned |
@@ -35,3 +38,13 @@ Useful syslog:
 | `dhcpv6 …: no server` | No DHCPv6 on this LAN |
 
 Network → select the NIC → **IPv6**. Tooltip on Mode repeats the grep command.
+
+Outbound test (there is no `ping6` command):
+
+```
+ping -6 -c 3 ipv6.google.com
+```
+
+The source must be the ULA (`fdae:…`), not `fe80::`. `ping -I` needs `IPV6_PKTINFO` (not in Haiku); use `fe80:…%2` instead.
+
+Ping to `ipv6.google.com` will fail until the router offers a public `2xxx:` address. A ULA is only for the LAN. After the alias-route fix, `ping -6 -c 3 fdae:…` (own address) should show replies, and `route` should list that host with `HL`.

@@ -252,13 +252,14 @@ r5_ipv6_dad(const char* device, uint32 ifIndex, const uint8* /*mac*/,
 
 	close(socket);
 
+	char text[INET6_ADDRSTRLEN];
+	inet_ntop(AF_INET6, &tentative, text, sizeof(text));
 	if (duplicate) {
-		char text[INET6_ADDRSTRLEN];
-		inet_ntop(AF_INET6, &tentative, text, sizeof(text));
 		syslog(LOG_ERR, "dad %s: duplicate %s\n", device, text);
 		return B_NAME_IN_USE;
 	}
 	if (ioError != 0)
 		return ioError;
+	syslog(LOG_INFO, "dad %s: %s unique\n", device, text);
 	return B_OK;
 }

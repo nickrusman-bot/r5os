@@ -40,9 +40,11 @@ SLAACClient::SLAACClient(BMessenger target, const char* device)
 	AutoconfigClient("slaac", target, device),
 	fThread(-1),
 	fSocket(-1),
-	fHaveMAC(false)
+	fHaveMAC(false),
+	fHaveDefaultRoute(false)
 {
 	memset(fMAC, 0, sizeof(fMAC));
+	memset(&fDefaultGateway, 0, sizeof(fDefaultGateway));
 
 	BNetworkAddress link;
 	BNetworkInterface interface(device);
@@ -234,8 +236,48 @@ SLAACClient::_SendSolicit(int socket, uint32 ifIndex)
 
 
 status_t
+SLAACClient::_ApplyDefaultRoute(const sockaddr_in6& from, uint32 ifIndex)
+{
+	sockaddr_in6 gatewayAddr = from;
+	gatewayAddr.sin6_len = sizeof(gatewayAddr);
+	gatewayAddr.sin6_family = AF_INET6;
+	gatewayAddr.sin6_port = 0;
+	if (IN6_IS_ADDR_LINKLOCAL(&gatewayAddr.sin6_addr)
+		&& gatewayAddr.sin6_scope_id == 0)
+		gatewayAddr.sin6_scope_id = ifIndex;
+
+	BNetworkAddress gateway(gatewayAddr);
+	BNetworkInterface routeInterface(Device());
+	routeInterface.RemoveDefaultRoute(AF_INET6);
+	status_t routeStatus = routeInterface.AddDefaultRoute(gateway);
+	if (routeStatus != B_OK) {
+		syslog(LOG_ERR, "slaac %s: default route failed: %s\n", Device(),
+			strerror(routeStatus));
+		return routeStatus;
+	}
+	fDefaultGateway = gatewayAddr;
+	syslog(LOG_INFO, "slaac %s: default route via %s%%%" B_PRIu32 "\n",
+		Device(), _ToString(gatewayAddr.sin6_addr).String(),
+		gatewayAddr.sin6_scope_id);
+	return B_OK;
+}
+
+
+void
+SLAACClient::_ApplyResolver(BMessage& resolver, int32 nameservers)
+{
+	if (nameservers <= 0)
+		return;
+	resolver.AddString("device", Device());
+	resolver.AddInt32("nameserver_count", nameservers);
+	BMessage reply;
+	Target().SendMessage(&resolver, &reply);
+}
+
+
+status_t
 SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
-	const sockaddr_in6& from)
+	const sockaddr_in6& from, uint32 ifIndex)
 {
 	if (bytes < (ssize_t)sizeof(struct nd_router_advert))
 		return B_BAD_VALUE;
@@ -255,6 +297,10 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		return B_BAD_VALUE;
 
 	uint16 lifetime = ntohs(ra->nd_ra_router_lifetime);
+	syslog(LOG_INFO, "slaac %s: RA from %s lifetime=%u M=%d O=%d\n",
+		Device(), _ToString(from.sin6_addr).String(), lifetime,
+		(ra->nd_ra_flags_reserved & ND_RA_FLAG_MANAGED) != 0,
+		(ra->nd_ra_flags_reserved & ND_RA_FLAG_OTHER) != 0);
 	const uint8* option = data + sizeof(struct nd_router_advert);
 	const uint8* end = data + length;
 
@@ -310,74 +356,58 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		option += bytesLen;
 	}
 
-	if (lifetime > 0) {
-		BNetworkInterface routeInterface(Device());
-		BNetworkAddress gateway(from.sin6_addr, 0);
-		routeInterface.RemoveDefaultRoute(AF_INET6);
-		status_t routeStatus = routeInterface.AddDefaultRoute(gateway);
-		if (routeStatus != B_OK) {
-			syslog(LOG_ERR, "slaac %s: default route failed: %s\n", Device(),
-				strerror(routeStatus));
-		}
-	}
+	_ApplyResolver(resolver, nameservers);
 
-	if (!havePrefix) {
+	bool addedAddress = false;
+	if (havePrefix) {
+		in6_addr global;
+		_BuildSlaacAddress(prefix, global);
+		BString globalText = _ToString(global);
+		if (globalText.Length() == 0)
+			return B_ERROR;
+
+		if (r5_ipv6_has_address(Device(), global)) {
+			syslog(LOG_INFO, "slaac %s: %s already assigned\n", Device(),
+				globalText.String());
+		} else {
+			BNetworkInterface interface(Device());
+			BNetworkAddress address(global, 0);
+			status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
+			if (dad != B_OK)
+				return dad;
+
+			BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::",
+				(uint16)0, B_UNCONFIGURED_ADDRESS_FAMILIES);
+			BNetworkInterfaceAddress slot;
+			slot.SetAddress(address);
+			slot.SetMask(mask);
+			status_t status = interface.AddAddress(slot);
+			if (status != B_OK) {
+				syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
+					globalText.String(), strerror(status));
+				return status;
+			}
+			addedAddress = true;
+			syslog(LOG_INFO, "slaac %s: %s via %s\n", Device(),
+				globalText.String(), _ToString(from.sin6_addr).String());
+		}
+	} else {
 		syslog(LOG_INFO, "slaac %s: RA from %s M=%d O=%d without SLAAC /64 "
 			"prefix (DHCPv6 %s)\n", Device(),
 			_ToString(from.sin6_addr).String(), managed, other,
 			(managed || other) ? "should run" : "may be absent");
-		if (nameservers > 0) {
-			resolver.AddString("device", Device());
-			resolver.AddInt32("nameserver_count", nameservers);
-			BMessage reply;
-			Target().SendMessage(&resolver, &reply);
+	}
+
+	if (lifetime > 0 || addedAddress || (havePrefix && !fHaveDefaultRoute)) {
+		if (lifetime == 0) {
+			syslog(LOG_INFO, "slaac %s: RA lifetime 0, using advertiser "
+				"as default router\n", Device());
 		}
-		return B_BAD_VALUE;
+		if (_ApplyDefaultRoute(from, ifIndex) == B_OK)
+			fHaveDefaultRoute = true;
 	}
 
-	in6_addr global;
-	_BuildSlaacAddress(prefix, global);
-	BString globalText = _ToString(global);
-	if (globalText.Length() == 0)
-		return B_ERROR;
-
-	if (r5_ipv6_has_address(Device(), global)) {
-		syslog(LOG_INFO, "slaac %s: %s already assigned\n", Device(),
-			globalText.String());
-		return B_OK;
-	}
-
-	BNetworkInterface interface(Device());
-	BNetworkAddress address(global, 0);
-	uint32 ifIndex = interface.Index();
-	if (ifIndex == 0)
-		ifIndex = if_nametoindex(Device());
-	status_t dad = r5_ipv6_dad(Device(), ifIndex, fMAC, global);
-	if (dad != B_OK)
-		return dad;
-
-	BNetworkAddress mask(AF_INET6, "ffff:ffff:ffff:ffff::", (uint16)0,
-		B_UNCONFIGURED_ADDRESS_FAMILIES);
-	BNetworkInterfaceAddress slot;
-	slot.SetAddress(address);
-	slot.SetMask(mask);
-	status_t status = interface.AddAddress(slot);
-	if (status != B_OK) {
-		syslog(LOG_ERR, "slaac %s: add %s failed: %s\n", Device(),
-			globalText.String(), strerror(status));
-		return status;
-	}
-
-	if (nameservers > 0) {
-		resolver.AddString("device", Device());
-		resolver.AddInt32("nameserver_count", nameservers);
-		BMessage reply;
-		Target().SendMessage(&resolver, &reply);
-	}
-
-	syslog(LOG_INFO, "slaac %s: %s via %s\n", Device(), globalText.String(),
-		_ToString(from.sin6_addr).String());
-	return B_OK;
+	return havePrefix ? B_OK : B_BAD_VALUE;
 }
 
 
@@ -460,7 +490,7 @@ SLAACClient::_Run()
 			continue;
 		}
 
-		status = _ApplyAdvert(packet, bytes, from);
+		status = _ApplyAdvert(packet, bytes, from, ifIndex);
 		if (status == B_OK) {
 			configured = true;
 			solicits = kMaxSolicits;
