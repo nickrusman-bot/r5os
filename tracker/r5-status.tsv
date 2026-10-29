@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/prefs-audit		apply-user-paths: MidiPlayer, Joysticks, PoorMan, in-tree WebPositive defaults. Preflet split is a proposal (personal vs Network/Screen/Time). Uid 0 still /boot/home. Not StartSession.
+8940	in-progress	cursor/prefs-audit		distro/user-paths copies (not string overlay): MidiPlayer, Joysticks, PoorMan. Preflet split accepted: personal vs Network/Screen/Time. Uid 0 still /boot/home. Not StartSession.
 8944	open			
 8948	open			
 8956	open			

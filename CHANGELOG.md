@@ -8,9 +8,9 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 Appearance, Backgrounds, Deskbar, Tracker, and app_server desktop settings already call `find_directory(B_USER_* )`. For uid 0 that still maps to `/boot/home` (`get_user_home_path`). Extra accounts would get their own `config/settings` only after a real session switch. The AirPlay deskbar log no longer writes `/boot/home/airplay_deskbar.log`. Not a second desktop.
 
-Bundled apps (second pass): Mail, Terminal, Screenshot, ShowImage, Clock, DeskCalc, HaikuDepot, People, ProcessController, Workspaces and most other image apps already use `find_directory`. Overlay `apply-user-paths.py`: MidiPlayer settings, Joysticks settings dir, PoorMan `public_html`, in-tree WebPositive download/welcome defaults. The image still ships `webpositive.hpkg`. CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Pe and Vision are haikuports packages. Preflet split (personal vs machine) is documented as a proposal; Network/Screen/Time stay shared. No second desktop.
+Bundled apps (second pass): Mail, Terminal, Screenshot, ShowImage, Clock, DeskCalc, HaikuDepot, People, ProcessController, Workspaces and most other image apps already use `find_directory`. MidiPlayer, Joysticks, and PoorMan now live as native copies under `distro/user-paths` (apply copies files; not a string patch). WebPositive stays the image `webpositive.hpkg`. Preflet split accepted: personal vs machine (Network, Screen, Time). No second desktop.
 
-Jam AMD64 2026-10-29 15:01 Europe/Amsterdam: `jam_exit=0` after `apply-user-paths.py` (`haiku.hpkg` rebuilt). Compile only. Not VBox-tested as a second desktop. WebPositive in the image is still the haikuports package.
+Jam AMD64 2026-10-29 15:01 Europe/Amsterdam: `jam_exit=0` with those MidiPlayer/Joysticks/PoorMan sources in the tree (`haiku.hpkg` rebuilt). Compile only. Not VBox-tested as a second desktop.
 
 ### Private home folders (build 10006)
 
