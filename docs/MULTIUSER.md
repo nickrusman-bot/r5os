@@ -10,7 +10,7 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Home is **`/boot/home`**. Tracker Desktop, `~/config`, mail, and `find_directory(B_USER_* )` all point there for the live session.
 - `/etc/passwd` and `/etc/shadow` exist. Tools: `src/bin/multiuser` (`useradd`, `userdel`, `passwd`, `su`, `login`) and `verify_password()`.
 - Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. **Build 10007:** After a valid password, Login asks the registrar to move `user` to a free uid ≥ 1000 (delete + add; uid on an existing account cannot change) and keeps a locked `root` at uid 0. Tracker/Deskbar start via `r5-desktop` (`load_image` then exit so Deskbar shows Tracker/Deskbar, not four helper names). Login stops `x-vnd.Be-TRAK` / `x-vnd.Be-TSKB` by name before that; `GetJobs("desktop")` fails without a session daemon. launch_daemon jobs are not prefixed with `r5-desktop`. app_server keeps those apps on the existing screen (uid 0 Login desktop) until `StartSession`; otherwise they open a second, invisible desktop. Do not rewrite `/etc/passwd` behind the registrar. Extra homes then apply to the person at the desktop. Sign in as someone else is still this desktop. Log out does not message the launch daemon (a `launch_daemon user` stopped in the debugger never replies). Sign in does not call `Target("desktop")`. `target desktop` jobs are not tied to `initial_volumes_mounted`.
-- Image `passwd` still ships `user` as uid 0; Login migrates that account to the first free uid ≥ 1000 before Sign in and `chown`s `/boot/home`. VBox 2026-10-29 17:14 Europe/Amsterdam: after Sign in, Terminal `id` was `uid=1001(user)` `gid=100(users)` `groups=100(users),103(admin)`. Tracker/Deskbar run as that uid (`r5-desktop`). VBox 18:14: Log out returned to Sign in, Restart worked, no Damned, no `launch_daemon user` crash. Debugger showed a Teams window. New accounts must not be UID 0. Extra-home isolation (`ls` denied) was not tested on that VDI.
+- Image `passwd` still ships `user` as uid 0; Login migrates that account to the first free uid ≥ 1000 before Sign in and `chown`s `/boot/home`. VBox 2026-10-29 17:14 Europe/Amsterdam: after Sign in, Terminal `id` was `uid=1001(user)` `gid=100(users)` `groups=100(users),103(admin)`. Tracker/Deskbar run as that uid (`r5-desktop`). VBox 18:14: Log out returned to Sign in, Restart worked, no Damned, no `launch_daemon user` crash. Debugger showed a Teams window. `ls /boot/home/users/nick` as `user` is permission denied. New accounts must not be UID 0. `autologin` stays: without it the user launch_daemon never starts, so app_server and Login never leave the boot splash. VBox 18:34: splash then desktop; Teams shows `launch_daemon user`, no crash.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
 - Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Appearance, Backgrounds, Deskbar, Tracker, and app_server `DesktopSettings` already use `find_directory`. For uid 0 that still maps to `/boot/home` (`get_user_home_path` skips `getpwuid` and uses `kUserDirectory`). After migrate, the desktop uid is ≥ 1000 so `find_directory` follows that account’s home (`/boot/home` for `user`). Sign in as someone else is still this administrator desktop (`StartSession` is not used).
 - Packages: system-wide in `/boot/system`. Per-user config in `~/config`. Do not invent a second package format.
@@ -198,13 +198,13 @@ VBox 2026-10-29 14:30 Europe/Amsterdam: 1–4 confirmed (`nicky`; uid 0 `user` s
 
 ## Tests for administrator off uid 0 (build 10007)
 
-Not run yet. Call it isolation only if these pass on VBox:
+Call it isolation only if `ls` of another home is denied.
 
-1. Sign in as `user`: `id` is not uid 0; `$HOME` is `/boot/home`.
-2. If a standard user exists: `ls /boot/home/users/<name>` is permission denied; `su <name>` can list that home; `su <name> -c 'ls /boot/home/Desktop'` is denied.
+1. Sign in as `user`: `id` is not uid 0; `$HOME` is `/boot/home`. VBox 17:14: `uid=1001(user)`.
+2. If a standard user exists: `ls /boot/home/users/<name>` is permission denied. VBox: `ls /boot/home/users/nick` denied. `su <name>` listing that home and `su <name> -c 'ls /boot/home/Desktop'` denied were not captured.
 3. Sign in as the standard user still opens the administrator desktop (until `StartSession`).
 4. Administrator can still add a standard user (Users talks to Login).
-5. Log out, Sign in again. `launch_daemon` still running.
+5. Log out, Sign in again. VBox 18:14: Log out and Restart worked. `launch_daemon root` was still present until autologin was removed from the image.
 6. Fresh image (migrate from uid 0) and a disk that already had a standard user (new uid must not collide).
 
 ## Testing a second account (limits)

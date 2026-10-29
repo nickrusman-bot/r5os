@@ -58,7 +58,15 @@ Jam AMD64 2026-10-29 18:10 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` 
 
 VBox 18:14 Europe/Amsterdam (guest clock 5:14 PM, UTC): **Log out** returned to Sign in. No ProcessController **Damned** / Initialization failed. No **launch_daemon user** crash dialog. **Restart** came back to the desktop. Debugger opened a **Teams** window (kernel_team, launch_daemon, Login, Tracker, Deskbar, Debugger; Deskbar listed Debugger with that window, not “No windows”). Team list also has **launch_daemon root** (autologin `StartSession` after migrate names uid 0 `root`). Attaching from a crash dialog was not in this shot (there was no crash). Extra-home isolation still untested.
 
-Isolation of extra homes is only true if `ls /boot/home/users/<name>` is permission denied.
+VBox after that Sign in: `ls /boot/home/users/nick` as the administrator is **Permission denied**. Isolation of that extra home holds on this VDI (uid 1001 cannot list another person’s folder).
+
+After Deskbar is up, Login starts `dstcheck`, `~/config/settings/boot/UserBootscript` if that file exists, and first-login `PostInstallScript` if `~/config/settings/first_login` exists. `default_deskbar_items.sh` does not launch ProcessController `-deskbar` (that was Damned). Volume and tray replicants stay `r5-tray` / `desklink`.
+
+Jam AMD64 2026-10-29 18:26 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Boot stayed on the **R5OS splash**: removing `x-vnd.Haiku-autologin` meant no user `launch_daemon`, so `app_server` and Login (in `data/launch/user`) never started. Autologin is back. It still `StartSession`s `getpwuid(0)` (`user` on first boot, `root` after migrate). Desktop jobs stay off `initial_volumes_mounted` so that daemon does not start Tracker. Not StartSession as the product path.
+
+Jam AMD64 2026-10-29 18:33 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox 18:34 Europe/Amsterdam (guest clock 5:34 PM, UTC): boot left the splash, Sign in reached the desktop. Debugger **Teams** lists `launch_daemon`, **`launch_daemon user`**, `app_server`, Login, Tracker, Deskbar, Debugger (no crash dialog, not “No windows”). `launch_daemon user` is autologin `StartSession` of uid 0 while that account was still named `user`. Not `launch_daemon root` on this first-boot VDI. Isolation and second Sign in were not rechecked on this disk.
 
 ### First administrator off uid 0 (plan)
 

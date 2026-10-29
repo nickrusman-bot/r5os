@@ -264,6 +264,7 @@ LoginApp::TryLogin(BMessage* message)
 						"--add-volume");
 					_LaunchSessionApp("/system/servers/airplay_deskbar");
 					_LaunchSessionApp("/system/servers/r5_vbox_clip");
+					_LaunchSessionHooks();
 				}
 				r5_session_log("sign-in done: %s", strerror(status));
 			}
@@ -363,14 +364,21 @@ LoginApp::_EnableDesktopJobs()
 
 
 status_t
-LoginApp::_LaunchSessionApp(const char* program, const char* argument)
+LoginApp::_LaunchSessionApp(const char* program, const char* argument,
+	const char* argument2, const char* argument3, const char* argument4)
 {
-	const char* args[4];
+	const char* args[8];
 	int32 count = 0;
 	args[count++] = "/system/apps/r5-desktop";
 	args[count++] = program;
 	if (argument != NULL && argument[0] != '\0')
 		args[count++] = argument;
+	if (argument2 != NULL && argument2[0] != '\0')
+		args[count++] = argument2;
+	if (argument3 != NULL && argument3[0] != '\0')
+		args[count++] = argument3;
+	if (argument4 != NULL && argument4[0] != '\0')
+		args[count++] = argument4;
 	args[count] = NULL;
 
 	r5_session_log("launch %s", program);
@@ -391,6 +399,75 @@ LoginApp::_LaunchSessionApp(const char* program, const char* argument)
 	}
 	r5_session_log("r5-desktop %s ok", program);
 	return B_OK;
+}
+
+
+void
+LoginApp::_LaunchSessionHooks()
+{
+	status_t status = _LaunchSessionApp("/system/bin/dstcheck");
+	if (status != B_OK)
+		r5_session_log("dstcheck: %s", strerror(status));
+
+	BPath home;
+	if (_SessionHome(home) != B_OK)
+		return;
+
+	BPath script(home);
+	if (script.Append("config/settings/boot/UserBootscript") == B_OK
+		&& access(script.Path(), R_OK) == 0) {
+		status = _LaunchSessionApp("/bin/sh", script.Path());
+		if (status != B_OK)
+			r5_session_log("UserBootscript: %s", strerror(status));
+	}
+
+	BPath marker(home);
+	if (marker.Append("config/settings/first_login") == B_OK
+		&& access(marker.Path(), F_OK) == 0) {
+		status = _LaunchSessionApp("/bin/sh", "/system/boot/PostInstallScript",
+			"first login", marker.Path(), "/boot/system/boot/first-login");
+		if (status != B_OK)
+			r5_session_log("first-login: %s", strerror(status));
+	}
+}
+
+
+status_t
+LoginApp::_SessionHome(BPath& path) const
+{
+	static const char* kPaths[] = {
+		"/boot/system/settings/r5-desktop-session",
+		"/tmp/r5-desktop-session",
+		NULL
+	};
+
+	char name[64];
+	name[0] = '\0';
+	for (int i = 0; kPaths[i] != NULL; i++) {
+		FILE* file = fopen(kPaths[i], "r");
+		if (file == NULL)
+			continue;
+		if (fgets(name, sizeof(name), file) == NULL) {
+			fclose(file);
+			continue;
+		}
+		fclose(file);
+		break;
+	}
+
+	size_t length = strlen(name);
+	while (length > 0
+		&& (name[length - 1] == '\n' || name[length - 1] == '\r'
+			|| name[length - 1] == ' ')) {
+		name[--length] = '\0';
+	}
+	if (length == 0)
+		return B_NAME_NOT_FOUND;
+
+	struct passwd* pwd = getpwnam(name);
+	if (pwd == NULL || pwd->pw_dir == NULL || pwd->pw_dir[0] == '\0')
+		return ENOENT;
+	return path.SetTo(pwd->pw_dir);
 }
 
 
