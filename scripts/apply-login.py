@@ -164,6 +164,25 @@ def patch_deskbar() -> None:
     )
 
 
+def patch_installer() -> None:
+    replace_once(
+        HAIKU / "src" / "apps" / "installer" / "InstallerApp.cpp",
+        "		} else {\n"
+        "			// Return to FirstBootPrompt if the user hasn't\n"
+        "			// installed Haiku yet\n"
+        "			be_roster->Launch(\"application/x-vnd.Haiku-FirstBootPrompt\");\n"
+        "		}\n",
+        "		} else if (!be_roster->IsRunning(\n"
+        "				\"application/x-vnd.Haiku-Login\")) {\n"
+        "			// Live Try/Install: Installer cancelled and Deskbar is\n"
+        "			// not running. Log out also stops Deskbar; if Sign in is\n"
+        "			// up, do not reopen FirstBootPrompt.\n"
+        "			be_roster->Launch(\"application/x-vnd.Haiku-FirstBootPrompt\");\n"
+        "		}\n",
+        "Installer skip FirstBootPrompt when Login runs",
+    )
+
+
 def patch_image() -> None:
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
     replace_once(
@@ -182,6 +201,7 @@ def main() -> int:
     patch_launch()
     patch_first_boot()
     patch_deskbar()
+    patch_installer()
     patch_image()
     return 0
 
