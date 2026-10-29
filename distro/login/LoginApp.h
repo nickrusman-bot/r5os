@@ -13,6 +13,7 @@ const uint32 kAttemptLogin = 'logi';
 const uint32 kHaltAction = 'halt';
 const uint32 kRebootAction = 'rebo';
 const uint32 kSuspendAction = 'susp';
+const uint32 kLogoutAction = 'lout';
 const uint32 kLoginBad = 'lgba';
 const uint32 kLoginOk = 'lgok';
 
@@ -31,7 +32,13 @@ public:
 
 private:
 	void			TryLogin(BMessage* message);
+	void			Logout();
 	status_t		ValidateLogin(const char* login, const char* password);
+	void			_EnableDesktopJobs();
+	void			_HideLogin();
+	void			_ShowLogin();
+	void			_QuitUserApps();
+	void			_WaitGone(const char* signature);
 
 	DesktopWindow*	fDesktopWindow;
 	LoginWindow*	fLoginWindow;

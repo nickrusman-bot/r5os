@@ -9,7 +9,7 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Image user is `HAIKU_ROOT_USER_NAME = user` (`distro/UserBuildConfig`), real name `R5OS`, host `r5os`.
 - Home is **`/boot/home`**. Tracker Desktop, `~/config`, mail, and `find_directory(B_USER_* )` all point there for the live session.
 - `/etc/passwd` and `/etc/shadow` exist. Tools: `src/bin/multiuser` (`useradd`, `userdel`, `passwd`, `su`, `login`) and `verify_password()`.
-- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). `StartSession` for a different account is not wired (would start a second app_server). Logout is not wired.
+- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). Homes are not isolated.
 - Default desktop user is often **UID 0** on Haiku images. GUI restrictions would not be security. New accounts must not be UID 0.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
 - Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Many apps already use `find_directory`. Hardcoded `/boot/home` is the bug to fix when found.
@@ -71,7 +71,7 @@ Longer term: vendor or submodule the Haiku tree under `haiku/` in `origin` so co
 | Role | Source |
 |---|---|
 | Marketing version | `distro/VERSION` (`2026.1-dev`) |
-| Build number | `distro/BUILD` (this work: **10004**) |
+| Build number | `distro/BUILD` (this work: **10005**) |
 | Jam revision | `r5-${VERSION}` via `scripts/r5-version.sh --revision` → `UserBuildConfig` `HAIKU_REVISION` |
 | About / generated header | `headers/private/system/r5_os_version.h` (`R5_OS_VERSION`, `R5_OS_BUILD`) written by `apply-overlay.sh` / `jam-r5-raw.sh` |
 | What’s new text | `distro/WHATSNEW` copied to About `r5_whatsnew.txt` |
@@ -84,7 +84,7 @@ Do not treat Haiku `hrev` as the product version.
 1. **Build 10002:** document the model; Users & Accounts lists `passwd`; What’s new rebuilds with the notes file.
 2. **Build 10003:** add/disable/delete; new UIDs ≥ 1000 via `useradd`; group `admin`; UID 0 `user` kept; last-admin checks.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
-4. Logout: stop user launch jobs, then Login.
+4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. Permission isolation tests (home not world-readable).
 6. Per-user settings audit (`find_directory`).
 7. Lock screen; then guest/Public.
@@ -110,4 +110,13 @@ Add-account label alignment is later polish. The preflet icon is the Haiku Login
 4. Restart and Shut down at the bottom still work.
 5. Extra people from Users & Accounts appear in the list; signing in as them still opens the same `user` session until isolation exists.
 
-Not VBox-tested yet.
+VBox 2026-10-29 Europe/Amsterdam (live Try): one account showed `user`; with `nicky` the list showed both. Restart worked. Empty password signed in.
+
+## Tests for log out (build 10005)
+
+1. Sign in, then Deskbar leaf **Log out** → confirm → Sign in is back (no Tracker/Deskbar).
+2. Sign in again reaches the desktop.
+3. An open app (StyledEdit or Terminal) is gone after log out.
+4. Restart / Shut down on Sign in still work.
+
+Not VBox-tested yet. Isolation (other homes) is still later.

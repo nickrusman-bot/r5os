@@ -28,3 +28,12 @@ LoginWindow::LoginWindow(BRect frame)
 LoginWindow::~LoginWindow()
 {
 }
+
+
+void
+LoginWindow::PrepareForSignIn()
+{
+	LoginView* view = dynamic_cast<LoginView*>(FindView("LoginView"));
+	if (view != NULL)
+		view->PrepareForSignIn();
+}

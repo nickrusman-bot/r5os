@@ -11,9 +11,13 @@
 
 #include <Alert.h>
 #include <LaunchRoster.h>
+#include <List.h>
+#include <OS.h>
+#include <Roster.h>
 #include <RosterPrivate.h>
 #include <Screen.h>
 #include <String.h>
+#include <StringList.h>
 
 #include <errno.h>
 #include <pwd.h>
@@ -49,6 +53,31 @@ password_matches(const struct passwd* pwd, const char* plain)
 		plain = "";
 	char* encrypted = crypt(plain, required);
 	return encrypted != NULL && strcmp(encrypted, required) == 0;
+}
+
+
+static bool
+keep_team(const char* signature, team_id team, team_id self)
+{
+	if (team == self)
+		return true;
+	if (signature == NULL || signature[0] == '\0')
+		return true;
+	if (strcmp(signature, kLoginAppSig) == 0)
+		return true;
+	if (strcmp(signature, "application/x-vnd.Be-TRAK") == 0)
+		return true;
+	if (strcmp(signature, "application/x-vnd.Be-TSKB") == 0)
+		return true;
+	if (strcmp(signature, "application/x-vnd.R5OS-airplay") == 0)
+		return true;
+	if (strstr(signature, "server") != NULL
+		|| strstr(signature, "daemon") != NULL
+		|| strstr(signature, "launch") != NULL
+		|| strstr(signature, "registrar") != NULL
+		|| strstr(signature, "ROST") != NULL)
+		return true;
+	return false;
 }
 
 
@@ -99,6 +128,9 @@ LoginApp::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kAttemptLogin:
 			TryLogin(message);
+			break;
+		case kLogoutAction:
+			Logout();
 			break;
 		case kRebootAction:
 			reboot = true;
@@ -158,9 +190,10 @@ LoginApp::TryLogin(BMessage* message)
 		const char* password = message->GetString("password");
 		status = ValidateLogin(login, password);
 		if (status == B_OK) {
+			_EnableDesktopJobs();
 			status = BLaunchRoster().Target("desktop");
 			if (status == B_OK)
-				Quit();
+				_HideLogin();
 		}
 	}
 
@@ -180,6 +213,17 @@ LoginApp::TryLogin(BMessage* message)
 }
 
 
+void
+LoginApp::Logout()
+{
+	_QuitUserApps();
+	BLaunchRoster().StopTarget("desktop");
+	_WaitGone("application/x-vnd.Be-TRAK");
+	_WaitGone("application/x-vnd.Be-TSKB");
+	_ShowLogin();
+}
+
+
 status_t
 LoginApp::ValidateLogin(const char* login, const char* password)
 {
@@ -191,4 +235,71 @@ LoginApp::ValidateLogin(const char* login, const char* password)
 		return B_OK;
 
 	return B_PERMISSION_DENIED;
+}
+
+
+void
+LoginApp::_EnableDesktopJobs()
+{
+	BStringList jobs;
+	BLaunchRoster roster;
+	if (roster.GetJobs("desktop", jobs) != B_OK)
+		return;
+
+	for (int32 i = 0; i < jobs.CountStrings(); i++)
+		roster.SetEnabled(jobs.StringAt(i), true);
+}
+
+
+void
+LoginApp::_HideLogin()
+{
+	if (fLoginWindow != NULL && !fLoginWindow->IsHidden())
+		fLoginWindow->Hide();
+	if (fDesktopWindow != NULL && !fDesktopWindow->IsHidden())
+		fDesktopWindow->Hide();
+}
+
+
+void
+LoginApp::_ShowLogin()
+{
+	if (fDesktopWindow != NULL) {
+		if (fDesktopWindow->IsHidden())
+			fDesktopWindow->Show();
+		fDesktopWindow->Activate();
+	}
+	if (fLoginWindow != NULL) {
+		if (fLoginWindow->IsHidden())
+			fLoginWindow->Show();
+		fLoginWindow->Activate();
+		fLoginWindow->PrepareForSignIn();
+	}
+}
+
+
+void
+LoginApp::_QuitUserApps()
+{
+	BList teams;
+	be_roster->GetAppList(&teams);
+	team_id self = Team();
+	for (int32 i = 0; i < teams.CountItems(); i++) {
+		team_id team = (team_id)(addr_t)teams.ItemAt(i);
+		app_info info;
+		if (be_roster->GetRunningAppInfo(team, &info) != B_OK)
+			continue;
+		if (keep_team(info.signature, team, self))
+			continue;
+		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+	}
+}
+
+
+void
+LoginApp::_WaitGone(const char* signature)
+{
+	const bigtime_t deadline = system_time() + 8000000LL;
+	while (be_roster->IsRunning(signature) && system_time() < deadline)
+		snooze(100000);
 }

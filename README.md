@@ -4,7 +4,7 @@ Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nod
 
 This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
 
-Current tree: **R5OS 2026.1-dev Build 10004** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
+Current tree: **R5OS 2026.1-dev Build 10005** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
 ## What is in the image now
 
@@ -15,9 +15,9 @@ User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG
 - Wi-Fi join/remember, IPv6 SLAAC/DAD on a home LAN, AirPrint/IPP add, AirPlay 1 to speakers (not AirPlay 2 pairing).
 - Shutdown no longer waits forever on IPv6 SLAAC or the VirtualBox COM1 clipboard helper.
 - **Users & Accounts** in Preferences: list, add, disable, delete. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`.
-- **Sign-in screen** before Tracker/Deskbar. Same session after password; not separate desktops.
+- **Sign-in screen** before Tracker/Deskbar. **Log out** from the Deskbar leaf returns to Sign in. Same session after password; not separate desktops.
 
-Not done: logout, home isolation, per-user settings. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
+Not done: home isolation, per-user settings. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
 
 ## Layout
 

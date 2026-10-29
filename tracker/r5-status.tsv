@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/login-screen		Build 10004: Login on boot path (centered person, password, power). Same session after password, not StartSession. Logout/isolation not done.
+8940	in-progress	cursor/logout		Build 10005: Login on boot path; Deskbar Log out stops desktop target and shows Sign in. Same session, not StartSession. Isolation not done.
 8944	open			
 8948	open			
 8956	open			

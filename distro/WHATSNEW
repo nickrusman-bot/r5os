@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10005 - Log out
+The leaf menu can log you out. Tracker, Deskbar, and other session apps close, then Sign in comes back. The next Sign in is still the same computer session — homes are not isolated yet.
+
 R5OS 2026.1-dev Build 10004 - Sign in
 The desktop waits at a sign-in screen. Choose a person, type the password, and press Sign in. Restart and Shut down sit at the bottom. An empty password still works if the account has none. This is a gate, not separate desktops: after sign-in you still get the same session until logout and isolation exist.
 
