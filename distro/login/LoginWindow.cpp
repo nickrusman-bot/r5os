@@ -8,6 +8,8 @@
 
 #include "LoginView.h"
 
+#include <LayoutBuilder.h>
+
 
 LoginWindow::LoginWindow(BRect frame)
 	:
@@ -16,7 +18,8 @@ LoginWindow::LoginWindow(BRect frame)
 			| B_AUTO_UPDATE_SIZE_LIMITS | B_ASYNCHRONOUS_CONTROLS,
 		B_ALL_WORKSPACES)
 {
-	AddChild(new LoginView());
+	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
+		.Add(new LoginView());
 	SetPulseRate(1000000LL);
 	CenterOnScreen();
 }

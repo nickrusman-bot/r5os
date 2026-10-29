@@ -76,7 +76,7 @@ private:
 
 LoginView::LoginView()
 	:
-	BView("LoginView", B_WILL_DRAW | B_PULSE_NEEDED),
+	BView("LoginView", B_WILL_DRAW | B_PULSE_NEEDED | B_SUPPORTS_LAYOUT),
 	fUserList(NULL),
 	fNameView(NULL),
 	fLoginView(NULL),
@@ -136,13 +136,7 @@ LoginView::LoginView()
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 		.SetInsets(B_USE_WINDOW_INSETS)
-		.AddGlue()
-		.AddGroup(B_HORIZONTAL)
-			.AddGlue()
-			.Add(people)
-			.AddGlue()
-		.End()
-		.AddGlue()
+		.Add(people)
 		.AddGroup(B_HORIZONTAL)
 			.Add(fClockView)
 			.AddGlue()
