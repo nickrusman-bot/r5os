@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Users & Accounts preference (read-only). Idempotent build-tool copy."""
+"""Users & Accounts preference. Idempotent build-tool copy."""
 from __future__ import annotations
 
 import pathlib

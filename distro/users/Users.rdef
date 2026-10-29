@@ -13,5 +13,5 @@ resource app_version {
 	internal = 0,
 
 	short_info = "Users & Accounts",
-	long_info = "R5OS account list. Read-only in this build."
+	long_info = "R5OS account list and basic add/disable/delete."
 };

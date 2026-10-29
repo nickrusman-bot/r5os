@@ -68,7 +68,7 @@ Longer term: vendor or submodule the Haiku tree under `haiku/` in `origin` so co
 | Role | Source |
 |---|---|
 | Marketing version | `distro/VERSION` (`2026.1-dev`) |
-| Build number | `distro/BUILD` (this work: **10002**) |
+| Build number | `distro/BUILD` (this work: **10003**) |
 | Jam revision | `r5-${VERSION}` via `scripts/r5-version.sh --revision` → `UserBuildConfig` `HAIKU_REVISION` |
 | About / generated header | `headers/private/system/r5_os_version.h` (`R5_OS_VERSION`, `R5_OS_BUILD`) written by `apply-overlay.sh` / `jam-r5-raw.sh` |
 | What’s new text | `distro/WHATSNEW` copied to About `r5_whatsnew.txt` |
@@ -78,16 +78,15 @@ Do not treat Haiku `hrev` as the product version.
 
 ## Implementation order
 
-1. **This build (10002):** document the model; Users & Accounts lists `passwd` (read-only); version/What’s new consistent; no new string-patch features.
-2. Non-zero UIDs for new accounts; keep UID 0 only as compatibility for the first migrated user until it can be dropped.
-3. Create/disable/delete in the preflet via `useradd`/`userdel` with confirmation and last-admin checks.
-4. Put Login on the boot path; stop auto-starting `target desktop` until authenticated.
-5. Logout: stop user launch jobs, then Login.
-6. Permission isolation tests (home not world-readable).
-7. Per-user settings audit (`find_directory`).
-8. Lock screen; then guest/Public.
-9. Absorb kernel/UI overlays into a real in-tree fork.
+1. **Build 10002:** document the model; Users & Accounts lists `passwd`; What’s new rebuilds with the notes file.
+2. **Build 10003:** add/disable/delete; new UIDs ≥ 1000 via `useradd`; group `admin`; UID 0 `user` kept; last-admin checks.
+3. Put Login on the boot path; stop auto-starting `target desktop` until authenticated.
+4. Logout: stop user launch jobs, then Login.
+5. Permission isolation tests (home not world-readable).
+6. Per-user settings audit (`find_directory`).
+7. Lock screen; then guest/Public.
+8. Absorb kernel/UI overlays into a real in-tree fork.
 
 ## Tests for this step
 
-Open Preferences → Users & Accounts. Expect the live `user` (and any other `passwd` rows). Creating a second desktop, login, and blocking another user’s files are **out of scope** here.
+Open Users & Accounts. Add a standard user (UID ≥ 1000, home under `/boot/home/users`). Disable and delete a non-admin test user. The original `user` (UID 0) must refuse delete/disable. Login as that person is **out of scope**.
