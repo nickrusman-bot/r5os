@@ -20,6 +20,7 @@
 #include <Window.h>
 
 #include "AccountAdmin.h"
+#include "AdminLock.h"
 #include "HomeLock.h"
 
 #include <pwd.h>
@@ -209,10 +210,9 @@ public:
 		SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 		SetInsets(0, 0, 0, 0);
 		SetText("New people get user id 1000 or higher and a folder under "
-			"/boot/home/users. Those folders are private to that account. "
-			"They still share this desktop until a later session switch. "
-			"An empty password is allowed. The first account keeps "
-			"/boot/home and is no longer user id 0 after Sign in.");
+			"/boot/home/users. Those folders are private. Sign in starts "
+			"the desktop as that person. One screen. An empty password is "
+			"allowed. Add, disable, and delete need an administrator.");
 		SetExplicitMinSize(BSize(280, 72));
 		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 72));
 		SetExplicitPreferredSize(BSize(420, 56));
@@ -249,6 +249,7 @@ public:
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 			.SetInsets(B_USE_WINDOW_INSETS)
+			.Add(new AdminLockBar())
 			.Add(title)
 			.Add(new NoteView())
 			.Add(new BScrollView("scroll", fList, 0, false, true))
@@ -282,6 +283,9 @@ public:
 				break;
 			case kMsgDelete:
 				_Delete();
+				break;
+			case kMsgAdminLockChanged:
+				_UpdateButtons();
 				break;
 			default:
 				BWindow::MessageReceived(message);
@@ -345,7 +349,7 @@ private:
 	void
 	_UpdateButtons()
 	{
-		bool admin = current_user_is_admin();
+		bool admin = r5_admin_change_allowed();
 		fAdd->SetEnabled(admin);
 		UserItem* item = _Selected();
 		if (!admin || item == NULL) {
@@ -364,8 +368,8 @@ private:
 	void
 	_Add()
 	{
-		if (!current_user_is_admin()) {
-			show_error("Only an administrator can add accounts.");
+		if (!r5_admin_change_allowed()) {
+			show_error("Unlock this with an administrator password.");
 			return;
 		}
 		CreateWindow* window = new CreateWindow(this);

@@ -39,32 +39,6 @@ const char* kLoginAppSig = "application/x-vnd.Haiku-Login";
 
 
 static bool
-password_matches(const struct passwd* pwd, const char* plain)
-{
-	if (pwd == NULL)
-		return false;
-
-	const char* required = pwd->pw_passwd;
-	if (required != NULL && strcmp(required, "x") == 0) {
-		struct spwd* shadow = getspnam(pwd->pw_name);
-		if (shadow == NULL)
-			return false;
-		required = shadow->sp_pwdp;
-	}
-
-	if (required == NULL || required[0] == '\0')
-		return plain == NULL || plain[0] == '\0';
-	if (required[0] == '!')
-		return false;
-
-	if (plain == NULL)
-		plain = "";
-	char* encrypted = crypt(plain, required);
-	return encrypted != NULL && strcmp(encrypted, required) == 0;
-}
-
-
-static bool
 keep_team(const app_info& info, team_id self)
 {
 	if (info.team == self)
@@ -158,6 +132,7 @@ LoginApp::ReadyToRun()
 	}
 
 	lock_private_homes();
+	refresh_machine_settings_access();
 	fDesktopWindow = new DesktopWindow(screen.Frame(), false);
 	fDesktopWindow->Show();
 	_OpenLoginWindow();
@@ -176,6 +151,12 @@ LoginApp::MessageReceived(BMessage* message)
 		case kMsgAdminAdd:
 		case kMsgAdminDelete:
 		case kMsgAdminSetDisabled:
+		case kMsgAdminQuery:
+		case kMsgAdminUnlock:
+		case kMsgAdminRelock:
+		case kMsgAdminSetClock:
+		case kMsgAdminSetTimezone:
+		case kMsgAdminSetClockGmt:
 			HandleAdmin(message);
 			break;
 		case kLogoutAction:
@@ -308,6 +289,7 @@ LoginApp::Logout()
 	// reply; launch_daemon user is the team in the crash dialog, and while
 	// it sits in the debugger that reply never comes.
 	r5_session_log("logout");
+	clear_admin_grants();
 	clear_desktop_session();
 	_QuitUserApps();
 	_WaitGone("application/x-vnd.Haiku-ProcessController");
@@ -328,7 +310,7 @@ LoginApp::ValidateLogin(const char* login, const char* password)
 	if (pwd == NULL || strcmp(pwd->pw_name, login) != 0)
 		return ENOENT;
 
-	if (password_matches(pwd, password))
+	if (account_password_matches(pwd, password))
 		return B_OK;
 
 	return B_PERMISSION_DENIED;

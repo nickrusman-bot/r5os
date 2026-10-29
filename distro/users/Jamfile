@@ -8,6 +8,7 @@ UsePrivateHeaders shared ;
 
 Application Users :
 	AccountAdmin.cpp
+	AdminLock.cpp
 	HomeLock.cpp
 	Users.cpp
 	: be [ TargetLibstdc++ ]
