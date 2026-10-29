@@ -28,6 +28,8 @@ const uint32 kMsgAdminRelock = 'r5al';
 const uint32 kMsgAdminSetClock = 'r5at';
 const uint32 kMsgAdminSetTimezone = 'r5az';
 const uint32 kMsgAdminSetClockGmt = 'r5ag';
+const uint32 kMsgAdminGetProfile = 'r5ah';
+const uint32 kMsgAdminSetProfile = 'r5af';
 
 // How long an administrator password keeps one preference app unlocked.
 static const int32 kAdminGrantSeconds = 5 * 60;

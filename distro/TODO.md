@@ -24,7 +24,7 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
   VBox 2026-10-29 22:26 Europe/Amsterdam: Restart na de eerste Sign in kwam weer op Sign in. Log out, daarna Sign in als iemand anders; het slot was weer dicht.
 
   **Daarna, in deze volgorde**
-  1. Wachtwoord wijzigen in Users & Accounts (eigen wachtwoord; administrator mag dat van een ander).
+  1. Wachtwoord en profielkaart (build 10011, nog niet op een boot gezien): eigen kaart met foto, naam, e-mail, wachtwoord. Lijst alleen na Unlock. Sign in toont wel iedereen.
   2. Zelfde slot op Printers, Repositories, VirtualMemory; settings naar `B_SYSTEM_SETTINGS` (niet per-user laten staan).
   3. Lock screen: sessie blijft, alleen het scherm op slot.
   4. Guest-account en Public/Shared-map, pas als gewone homes privé blijven.

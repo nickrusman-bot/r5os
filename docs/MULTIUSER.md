@@ -39,7 +39,7 @@ Detect actual layout. Typical live disk: one `user` and `/boot/home` already ful
 
 The image has **one administrator**: login name `user`, gecos R5OS, home `/boot/home`. That is who should work at the desktop after Sign in.
 
-A **standard user** is optional: created in Users & Accounts, uid ≥ 1000, home `/boot/home/users/<name>`, group `users`, not `admin`. Sign in as that person (build 10008) starts Tracker and Deskbar as that uid and home. One screen. Preferences stay visible. Network, Screen, Time, and Users & Accounts are locked until an administrator password is entered (build 10009).
+A **standard user** is optional: created in Users & Accounts, uid ≥ 1000, home `/boot/home/users/<name>`, group `users`, not `admin`. Sign in as that person (build 10008) starts Tracker and Deskbar as that uid and home. One screen. Preferences stay visible. Network, Screen, Time, and Users & Accounts are locked until an administrator password is entered (build 10009). Users & Accounts (build 10011) shows that person their own card only. The people list appears after Unlock. Sign in still lists every account that can sign in.
 
 `nicky` / `nicky2` / `nicky3` were accounts added on VBox disks while testing Add/Delete. They are not in the jammed image and not a product role. Tests may create a standard user with any valid name.
 

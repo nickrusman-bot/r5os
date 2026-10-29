@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10011 - Your account
+Users & Accounts opens on your own card: picture, name, username, email, and password. Other people stay hidden until an administrator unlocks the list. Sign in still shows everyone who can sign in.
+
 R5OS 2026.1-dev Build 10010 - Log out name, Sign in after Restart
 The leaf menu says Log out and your account name. Restart and a cold boot go to Sign in again after the first administrator is no longer user id 0.
 

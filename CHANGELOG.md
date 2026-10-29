@@ -4,6 +4,14 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### Your account (build 10011)
+
+Users & Accounts is a card: round picture (initials until you choose one), name, username, email, and Change password. A standard account sees only that card. An administrator, or Unlock, also sees the people list and Add / Disable / Delete. Sign in still lists everyone who can sign in.
+
+Name and password go through Login (uid 0). The signed-in person must type the current password. An administrator setting someone else's password does not. Email and the picture live in that account's `config/settings/r5-account` (mode 0600). Username stays fixed.
+
+Jam AMD64 2026-10-29 22:42 Europe/Amsterdam: `jam_exit=0` (Users, Login, image). Not confirmed on a boot yet.
+
 ### Log out name and Sign in after Restart (build 10010)
 
 The Deskbar leaf item is `Log out <name>` for the signed-in account.

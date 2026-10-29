@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/session-user		Build 10010 VBox 22:26: Restart to Sign in; Log out then other account; lock closed. 10009 lock nick.
+8940	in-progress	cursor/session-user		Build 10011 account card (own only until unlock). 10010 VBox 22:26 restart/logout.
 8944	open			
 8948	open			
 8956	open			
