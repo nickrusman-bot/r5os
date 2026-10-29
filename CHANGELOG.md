@@ -18,7 +18,9 @@ VBox 2026-10-29 13:16 Europe/Amsterdam: Sign in reached the desktop. Restart pow
 
 VBox 2026-10-29 13:22 Europe/Amsterdam: Restart works.
 
-The login name `user` had disappeared with the gecos line. It is shown again as `pw_name` (not display name R5OS). Jam 13:26 Europe/Amsterdam; VBox `-ForceConvert` 13:27. The people list still appears when there is more than one account.
+The login name `user` had disappeared with the gecos line. It is shown again as `pw_name` (not display name R5OS). Jam 13:26 Europe/Amsterdam; VBox `-ForceConvert` 13:27.
+
+VBox 2026-10-29 13:27 Europe/Amsterdam: live Try, one account — Welcome, hint, **user**, Password, Sign in, Restart, Shut down. 13:28: with `nicky` added, the list shows `user` and `nicky`; the selected login stays above Password. Restart was already confirmed. Logout and isolation are still not done.
 
 ### Multi-user foundations (build 10002)
 
