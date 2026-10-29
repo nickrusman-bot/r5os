@@ -12,7 +12,9 @@ VBox 2026-10-29: the preflet listed `user` and **sshd** (home under `/packages`)
 
 ### Users & Accounts add/disable/delete (build 10003)
 
-Add / Disable / Enable / Delete in the preflet. Haiku `useradd` starts UIDs at 1000 and skips taken ids (sshd is 1000, so the first extra person is usually 1001). New homes are `/boot/home/users/<name>` with Desktop/Documents/…. Administrators go in group `admin`. UID 0 `user` cannot be deleted or disabled; the last enabled administrator cannot be removed. Empty password uses `passwd -d` (not on argv). Non-empty uses `crypt` + registrar. Disable prefixes `!` on the shadow hash so Enable can restore it. Still one shared desktop. Login as the new person is out of scope. Not guest-tested yet.
+Add / Disable / Enable / Delete in the preflet. Haiku `useradd` starts UIDs at 1000 and skips taken ids (sshd is 1000, so the first extra person is usually 1001). New homes are `/boot/home/users/<name>` with Desktop/Documents/…. Administrators go in group `admin`. UID 0 `user` cannot be deleted or disabled; the last enabled administrator cannot be removed. Empty password uses `passwd -d` (not on argv). Non-empty uses `crypt` + registrar. Disable prefixes `!` on the shadow hash so Enable can restore it. Still one shared desktop. Login as the new person is out of scope.
+
+VBox 2026-10-29 12:18 Europe/Amsterdam: the preflet listed `user` uid 0, Add enabled, Disable/Delete greyed until a row is selected. The intro `BStringView` was one long line, so `B_AUTO_UPDATE_SIZE_LIMITS` made the window wider than the screen and not resizable. The note now wraps and the window is centered. Add/delete was not tried yet.
 
 ### Shutdown hung after IPv6 SLAAC
 

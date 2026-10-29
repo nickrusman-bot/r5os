@@ -15,6 +15,7 @@
 #include <StringView.h>
 #include <SupportDefs.h>
 #include <TextControl.h>
+#include <TextView.h>
 #include <Window.h>
 
 #include <RegistrarDefs.h>
@@ -456,11 +457,41 @@ private:
 };
 
 
+class NoteView : public BTextView {
+public:
+	NoteView()
+		:
+		BTextView("note", B_WILL_DRAW)
+	{
+		MakeEditable(false);
+		MakeSelectable(false);
+		SetStylable(false);
+		SetWordWrap(true);
+		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+		SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
+		SetInsets(0, 0, 0, 0);
+		SetText("New people get user id 1000 or higher and a folder under "
+			"/boot/home/users. They still share this desktop. An empty "
+			"password is allowed.");
+		SetExplicitMinSize(BSize(280, 48));
+		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 72));
+		SetExplicitPreferredSize(BSize(420, 56));
+	}
+
+	virtual void
+	FrameResized(float width, float height)
+	{
+		BTextView::FrameResized(width, height);
+		SetTextRect(Bounds());
+	}
+};
+
+
 class UsersWindow : public BWindow {
 public:
 	UsersWindow()
 		:
-		BWindow(BRect(80, 80, 620, 460), "Users & Accounts",
+		BWindow(BRect(80, 80, 520, 420), "Users & Accounts",
 			B_TITLED_WINDOW, B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
 		fList(NULL)
 	{
@@ -469,15 +500,9 @@ public:
 		BFont font(be_bold_font);
 		title->SetFont(&font);
 
-		BStringView* note = new BStringView("note",
-			"New accounts get user id 1000 or higher (often 1001, because "
-			"sshd already uses 1000) and a folder under /boot/home/users. "
-			"They still share this desktop until login exists. An empty "
-			"password means anyone at the keyboard can use the account.");
-		note->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
 		fList = new BListView("users");
 		fList->SetSelectionMessage(new BMessage(kMsgSelect));
+		fList->SetExplicitMinSize(BSize(280, 140));
 		fAdd = new BButton("add", "Add...", new BMessage(kMsgAdd));
 		fDisable = new BButton("disable", "Disable", new BMessage(kMsgDisable));
 		fDelete = new BButton("delete", "Delete...", new BMessage(kMsgDelete));
@@ -485,7 +510,7 @@ public:
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 			.SetInsets(B_USE_WINDOW_INSETS)
 			.Add(title)
-			.Add(note)
+			.Add(new NoteView())
 			.Add(new BScrollView("scroll", fList, 0, false, true))
 			.AddGroup(B_HORIZONTAL)
 				.Add(fAdd)
@@ -495,6 +520,7 @@ public:
 			.End();
 
 		_Fill();
+		CenterOnScreen();
 	}
 
 	virtual void
