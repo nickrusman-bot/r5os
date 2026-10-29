@@ -13,6 +13,7 @@
 #include <LaunchRoster.h>
 #include <List.h>
 #include <OS.h>
+#include <Path.h>
 #include <Roster.h>
 #include <RosterPrivate.h>
 #include <Screen.h>
@@ -57,10 +58,14 @@ password_matches(const struct passwd* pwd, const char* plain)
 
 
 static bool
-keep_team(const char* signature, team_id team, team_id self)
+keep_team(const app_info& info, team_id self)
 {
-	if (team == self)
+	if (info.team == self)
 		return true;
+	if ((info.flags & B_BACKGROUND_APP) != 0)
+		return true;
+
+	const char* signature = info.signature;
 	if (signature == NULL || signature[0] == '\0')
 		return true;
 	if (strcmp(signature, kLoginAppSig) == 0)
@@ -76,6 +81,11 @@ keep_team(const char* signature, team_id team, team_id self)
 		|| strstr(signature, "launch") != NULL
 		|| strstr(signature, "registrar") != NULL
 		|| strstr(signature, "ROST") != NULL)
+		return true;
+
+	BPath path(&info.ref);
+	if (path.InitCheck() == B_OK && path.Path() != NULL
+		&& strstr(path.Path(), "/servers/") != NULL)
 		return true;
 	return false;
 }
@@ -254,26 +264,34 @@ LoginApp::_EnableDesktopJobs()
 void
 LoginApp::_HideLogin()
 {
-	if (fLoginWindow != NULL && !fLoginWindow->IsHidden())
-		fLoginWindow->Hide();
-	if (fDesktopWindow != NULL && !fDesktopWindow->IsHidden())
-		fDesktopWindow->Hide();
+	if (fLoginWindow != NULL && fLoginWindow->Lock()) {
+		if (!fLoginWindow->IsHidden())
+			fLoginWindow->Hide();
+		fLoginWindow->Unlock();
+	}
+	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
+		if (!fDesktopWindow->IsHidden())
+			fDesktopWindow->Hide();
+		fDesktopWindow->Unlock();
+	}
 }
 
 
 void
 LoginApp::_ShowLogin()
 {
-	if (fDesktopWindow != NULL) {
+	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
 		if (fDesktopWindow->IsHidden())
 			fDesktopWindow->Show();
 		fDesktopWindow->Activate();
+		fDesktopWindow->Unlock();
 	}
-	if (fLoginWindow != NULL) {
+	if (fLoginWindow != NULL && fLoginWindow->Lock()) {
 		if (fLoginWindow->IsHidden())
 			fLoginWindow->Show();
-		fLoginWindow->Activate();
 		fLoginWindow->PrepareForSignIn();
+		fLoginWindow->Activate();
+		fLoginWindow->Unlock();
 	}
 }
 
@@ -289,7 +307,7 @@ LoginApp::_QuitUserApps()
 		app_info info;
 		if (be_roster->GetRunningAppInfo(team, &info) != B_OK)
 			continue;
-		if (keep_team(info.signature, team, self))
+		if (keep_team(info, self))
 			continue;
 		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
 	}
