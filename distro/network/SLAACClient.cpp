@@ -294,6 +294,10 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		return B_BAD_VALUE;
 
 	uint16 lifetime = ntohs(ra->nd_ra_router_lifetime);
+	syslog(LOG_INFO, "slaac %s: RA from %s lifetime=%u M=%d O=%d\n",
+		Device(), _ToString(from.sin6_addr).String(), lifetime,
+		(ra->nd_ra_flags_reserved & ND_RA_FLAG_MANAGED) != 0,
+		(ra->nd_ra_flags_reserved & ND_RA_FLAG_OTHER) != 0);
 	const uint8* option = data + sizeof(struct nd_router_advert);
 	const uint8* end = data + length;
 
@@ -349,8 +353,13 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 		option += bytesLen;
 	}
 
-	if (lifetime > 0)
+	if (lifetime > 0 || havePrefix) {
+		if (lifetime == 0) {
+			syslog(LOG_INFO, "slaac %s: RA lifetime 0, using advertiser "
+				"as default router\n", Device());
+		}
 		_ApplyDefaultRoute(from, ifIndex);
+	}
 	_ApplyResolver(resolver, nameservers);
 
 	if (!havePrefix) {
