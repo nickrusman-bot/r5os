@@ -158,6 +158,8 @@ Joysticks is on the image (Deskbar → Preferences → Joysticks). Without a sti
 ls -ld /boot/home/config/settings/joysticks
 ```
 
+VBox 2026-10-29 15:26 Europe/Amsterdam: steps 4 confirmed (`nicky` uid 1001, own home listed, Desktop of `user` permission denied). Joysticks appeared in Preferences.
+
 ## Settings audit (Appearance, Deskbar, Tracker, background)
 
 Haiku `find_directory(B_USER_* )` resolves `$h` via `get_user_home_path`:

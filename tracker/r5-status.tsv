@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/prefs-audit		Joysticks on the image. distro/user-paths: MidiPlayer, Joysticks, PoorMan. Preflet split accepted. Sign in as nicky is still uid 0. Not StartSession.
+8940	in-progress	cursor/prefs-audit		VBox 15:26: Joysticks in Preferences; su nicky home + Desktop denied. distro/user-paths MidiPlayer/Joysticks/PoorMan. Sign in still uid 0. Not StartSession.
 8944	open			
 8948	open			
 8956	open			
