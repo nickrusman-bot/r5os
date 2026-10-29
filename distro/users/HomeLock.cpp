@@ -3,7 +3,7 @@
  *
  * /boot/home stays traversable (0711) because extra homes live in
  * /boot/home/users/<name>. Private names under /boot/home are 0700/0600.
- * The historic account is often uid 0, which ignores these bits.
+ * After Sign in, the first account is a person uid, so these bits apply.
  */
 
 

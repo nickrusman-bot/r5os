@@ -1,8 +1,14 @@
 SubDir HAIKU_TOP src apps login ;
 
-UsePrivateHeaders app interface ;
+UsePrivateSystemHeaders ;
+UsePrivateHeaders app ;
+UsePrivateHeaders interface ;
+UsePrivateHeaders kernel ;
+UsePrivateHeaders libroot ;
+UsePrivateHeaders shared ;
 
 Application Login :
+	AccountAdmin.cpp
 	DesktopWindow.cpp
 	HomeLock.cpp
 	LoginApp.cpp
@@ -11,4 +17,14 @@ Application Login :
 	main.cpp
 	: be tracker [ TargetLibstdc++ ] localestub
 	: Login.rdef
+;
+
+Application r5-desktop :
+	R5Desktop.cpp
+	: [ TargetLibstdc++ ]
+;
+
+Application r5-tray :
+	TrayApp.cpp
+	: be [ TargetLibstdc++ ]
 ;

@@ -41,6 +41,9 @@ def copy_sources() -> None:
         "LoginView.h",
         "LoginWindow.cpp",
         "LoginWindow.h",
+        "R5Desktop.cpp",
+        "SessionLog.h",
+        "TrayApp.cpp",
         "main.cpp",
     ):
         shutil.copy2(SRC / name, dest / name)
@@ -48,7 +51,12 @@ def copy_sources() -> None:
         print(f"copied {name} -> {dest}")
 
     users = ROOT / "distro" / "users"
-    for name in ("HomeLock.cpp", "HomeLock.h"):
+    for name in (
+        "AccountAdmin.cpp",
+        "AccountAdmin.h",
+        "HomeLock.cpp",
+        "HomeLock.h",
+    ):
         shutil.copy2(users / name, dest / name)
         (dest / name).touch()
         print(f"copied {name} -> {dest}")
@@ -85,6 +93,39 @@ def patch_launch() -> None:
         "}\n",
         "run login not desktop",
     )
+    launch = HAIKU / "data" / "launch" / "user"
+    text = launch.read_text(encoding="utf-8")
+    unwrapped = (
+        text.replace("/system/bin/r5-desktop ", "")
+        .replace("/system/apps/r5-desktop ", "")
+    )
+    if unwrapped != text:
+        launch.write_text(unwrapped, encoding="utf-8")
+        print("unwrapped user (r5-desktop prefixes)")
+    else:
+        print("already user (no r5-desktop wrap)")
+    disarm_desktop_target()
+
+
+def disarm_desktop_target() -> None:
+    """Desktop jobs must not start as the autologin uid (still 0)."""
+    launch = HAIKU / "data" / "launch" / "user"
+    text = launch.read_text(encoding="utf-8")
+    start = text.find("target desktop {")
+    if start < 0:
+        raise SystemExit(f"target desktop not found in {launch}")
+    end = text.find("\ntarget ", start + 1)
+    if end < 0:
+        raise SystemExit(f"target after desktop not found in {launch}")
+    block = text[start:end]
+    needle = "\n\t\ton initial_volumes_mounted\n"
+    count = block.count(needle)
+    if count == 0:
+        print("already desktop (no initial_volumes_mounted)")
+        return
+    block = block.replace(needle, "\n")
+    launch.write_text(text[:start] + block + text[end:], encoding="utf-8")
+    print(f"desktop jobs: removed {count} initial_volumes_mounted")
 
 
 def patch_first_boot() -> None:
@@ -191,14 +232,46 @@ def patch_installer() -> None:
 
 def patch_image() -> None:
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_BIN += r5-desktop ;" in text:
+        text = text.replace("SYSTEM_BIN += r5-desktop ;\n", "")
+        regular.write_text(text, encoding="utf-8")
+        print("patched regular (drop r5-desktop SYSTEM_BIN)")
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_APPS += r5-desktop ;\nSYSTEM_APPS += Login ;\n" in text:
+        text = text.replace(
+            "SYSTEM_APPS += r5-desktop ;\nSYSTEM_APPS += Login ;\n",
+            "SYSTEM_APPS += r5-desktop ;\n",
+            1,
+        )
+        regular.write_text(text, encoding="utf-8")
+        print("patched regular (drop duplicate Login SYSTEM_APPS)")
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_APPS += Login ;" in text:
+        print("already regular (Login SYSTEM_APPS)")
+    else:
+        replace_once(
+            regular,
+            "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
+            "	ActivityMonitor\n",
+            "SYSTEM_APPS += Login ;\n"
+            "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
+            "	ActivityMonitor\n",
+            "Login SYSTEM_APPS",
+        )
     replace_once(
         regular,
-        "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
-        "	ActivityMonitor\n",
+        "SYSTEM_APPS += Login ;\n",
         "SYSTEM_APPS += Login ;\n"
-        "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
-        "	ActivityMonitor\n",
-        "Login SYSTEM_APPS",
+        "SYSTEM_APPS += r5-desktop ;\n",
+        "r5-desktop SYSTEM_APPS",
+    )
+    replace_once(
+        regular,
+        "SYSTEM_APPS += r5-desktop ;\n",
+        "SYSTEM_APPS += r5-desktop ;\n"
+        "SYSTEM_APPS += r5-tray ;\n",
+        "r5-tray SYSTEM_APPS",
     )
 
 

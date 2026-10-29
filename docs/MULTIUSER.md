@@ -9,10 +9,10 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Image user is `HAIKU_ROOT_USER_NAME = user` (`distro/UserBuildConfig`), real name `R5OS`, host `r5os`.
 - Home is **`/boot/home`**. Tracker Desktop, `~/config`, mail, and `find_directory(B_USER_* )` all point there for the live session.
 - `/etc/passwd` and `/etc/shadow` exist. Tools: `src/bin/multiuser` (`useradd`, `userdel`, `passwd`, `su`, `login`) and `verify_password()`.
-- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. Uid 0 `user` still reads them.
-- Default desktop user is often **UID 0** on Haiku images. GUI restrictions would not be security. New accounts must not be UID 0.
+- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. **Build 10007:** After a valid password, Login asks the registrar to move `user` to a free uid ≥ 1000 (delete + add; uid on an existing account cannot change) and keeps a locked `root` at uid 0. Tracker/Deskbar start via `r5-desktop` (`load_image` then exit so Deskbar shows Tracker/Deskbar, not four helper names). Login stops `x-vnd.Be-TRAK` / `x-vnd.Be-TSKB` by name before that; `GetJobs("desktop")` fails without a session daemon. launch_daemon jobs are not prefixed with `r5-desktop`. app_server keeps those apps on the existing screen (uid 0 Login desktop) until `StartSession`; otherwise they open a second, invisible desktop. Do not rewrite `/etc/passwd` behind the registrar. Extra homes then apply to the person at the desktop. Sign in as someone else is still this desktop. Log out does not message the launch daemon (a `launch_daemon user` stopped in the debugger never replies). Sign in does not call `Target("desktop")`. `target desktop` jobs are not tied to `initial_volumes_mounted`.
+- Image `passwd` still ships `user` as uid 0; Login migrates that account to the first free uid ≥ 1000 before Sign in and `chown`s `/boot/home`. VBox 2026-10-29 17:14 Europe/Amsterdam: after Sign in, Terminal `id` was `uid=1001(user)` `gid=100(users)` `groups=100(users),103(admin)`. Tracker/Deskbar run as that uid (`r5-desktop`). VBox 18:14: Log out returned to Sign in, Restart worked, no Damned, no `launch_daemon user` crash. Debugger showed a Teams window. New accounts must not be UID 0. Extra-home isolation (`ls` denied) was not tested on that VDI.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
-- Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Appearance, Backgrounds, Deskbar, Tracker, and app_server `DesktopSettings` already use `find_directory`. That call still returns `/boot/home/…` for **uid 0** (`get_user_home_path` skips `getpwuid` and uses `kUserDirectory`). Extra people (uid ≥ 1000) would get `$HOME/config/settings` **if** they had their own session. Sign in does not switch uid yet.
+- Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Appearance, Backgrounds, Deskbar, Tracker, and app_server `DesktopSettings` already use `find_directory`. For uid 0 that still maps to `/boot/home` (`get_user_home_path` skips `getpwuid` and uses `kUserDirectory`). After migrate, the desktop uid is ≥ 1000 so `find_directory` follows that account’s home (`/boot/home` for `user`). Sign in as someone else is still this administrator desktop (`StartSession` is not used).
 - Packages: system-wide in `/boot/system`. Per-user config in `~/config`. Do not invent a second package format.
 
 ### Chosen home layout
@@ -34,6 +34,68 @@ Admin vs standard: POSIX groups (not only a checkbox). Privileged work through a
 ### Migration of existing disks
 
 Detect actual layout. Typical live disk: one `user` and `/boot/home` already full of files. Map that identity to the first administrator. Back up before chown/move. Fresh install: first-boot create-admin is a later step. If the layout is unknown, refuse destructive changes.
+
+## Who the people are
+
+The image has **one administrator**: login name `user`, gecos R5OS, home `/boot/home`. That is who should work at the desktop after Sign in.
+
+A **standard user** is optional: created in Users & Accounts, uid ≥ 1000, home `/boot/home/users/<name>`, group `users`, not `admin`. They should be able to work on the system **after** `StartSession`. Until then they exist in `passwd` and have a private folder; Sign in as them still opens the administrator’s desktop.
+
+`nicky` / `nicky2` / `nicky3` were accounts added on VBox disks while testing Add/Delete. They are not in the jammed image and not a product role. Tests may create a standard user with any valid name.
+
+`sshd` (uid 1000), `ftp`, `nobody` stay hidden. Do not reuse uid 1000 for `user`.
+
+No new overlays for this work. Changes live in `distro/users` and `distro/login` (copy-in). No `replace_once` on libroot unless the uid-0 `get_user_home_path` skip can stay as-is (it must: launch_daemon and registrar).
+
+## First administrator off uid 0 (plan)
+
+**Goal:** Tracker/Deskbar run as the administrator, not root. Home stays `/boot/home`. Mode `0700` on extra homes then applies to the person at the desktop.
+
+**Not this step:** `StartSession`, second `app_server`, hiding Network/Screen/Time, renaming `user`, moving home to `/boot/home/users/user`.
+
+### What stays uid 0
+
+Kernel, `launch_daemon`, registrar, net_server, package_daemon, and Login **until** the desktop starts. `get_user_home_path` still short-circuits uid 0 to `kUserDirectory` so those daemons do not call `getpwuid_r`.
+
+### Identity after migration
+
+| | Now | After this step |
+|---|---|---|
+| Login name | `user` | `user` |
+| Role | administrator | administrator (`admin` / `wheel`) |
+| Home | `/boot/home` | `/boot/home` (do not move) |
+| uid | 0 | first **unused** uid ≥ 1000 (not `sshd`’s 1000, not an existing person) |
+| gid | 0 | real group (`users` plus `admin`) |
+
+On a disk that already has a standard user at 1001, `user` becomes e.g. 1002. Collision is worse than a gap in the number space.
+
+Do not `chown` `/boot/home/users/<other>`.
+
+### Both halves
+
+**A. `passwd` + `chown` of `/boot/home` (except other people’s folders).** Alone this does nothing: Tracker stays euid 0.
+
+**B. Desktop jobs run as `user`’s new uid** after a valid password, around `Target("desktop")`. Login may stay uid 0 so Log out and Sign in still work.
+
+Sign in as a standard user still starts **this** administrator desktop until `StartSession`. Isolation test: that desktop cannot `ls` the standard user’s folder.
+
+### Users & Accounts
+
+Add/Delete/Disable currently spawn `useradd` only if `geteuid()==0`. After the drop that fails. Use registrar / `user_group` (shadow already does) or a small helper that only `admin` may call. Preflet: member of `admin`, not euid 0. Last-admin check stays. The old “uid 0 cannot be deleted” rule becomes “last administrator cannot be deleted”.
+
+### Fresh image vs existing disk
+
+1. Jam image: `user` is already uid ≥ 1000 in image `passwd`.
+2. Existing disk: once, if `user` is still uid 0, pick a free uid, update `passwd`/`group`, `chown`, stop. Unknown layout: refuse. If uid is already ≥ 1000, do nothing.
+
+### Tests (call it isolation only if 1–2 pass on VBox)
+
+1. Sign in as `user`: `id` is not uid 0; `$HOME` is `/boot/home`.
+2. If a standard user exists: `ls /boot/home/users/<name>` as that session is permission denied; `su <name>` can list that home; `su <name> -c 'ls /boot/home/Desktop'` is denied.
+3. Sign in as the standard user still opens the administrator desktop (until `StartSession`).
+4. Administrator can still add a standard user (helper).
+5. Log out, Sign in again. launch_daemon still running.
+6. Fresh image and a disk that still had uid 0 `user`.
 
 ## Overlay inventory
 
@@ -71,7 +133,7 @@ Longer term: vendor or submodule the Haiku tree under `haiku/` in `origin` so co
 | Role | Source |
 |---|---|
 | Marketing version | `distro/VERSION` (`2026.1-dev`) |
-| Build number | `distro/BUILD` (this work: **10006**) |
+| Build number | `distro/BUILD` (this work: **10007**) |
 | Jam revision | `r5-${VERSION}` via `scripts/r5-version.sh --revision` → `UserBuildConfig` `HAIKU_REVISION` |
 | About / generated header | `headers/private/system/r5_os_version.h` (`R5_OS_VERSION`, `R5_OS_BUILD`) written by `apply-overlay.sh` / `jam-r5-raw.sh` |
 | What’s new text | `distro/WHATSNEW` copied to About `r5_whatsnew.txt` |
@@ -86,9 +148,11 @@ Do not treat Haiku `hrev` as the product version.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
-6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (copy at apply time, not a string patch). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time). Uid 0 still maps user dirs to `/boot/home`. `StartSession` still later.
-7. Lock screen; then guest/Public.
-8. Absorb kernel/UI overlays into a real in-tree fork.
+6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (apply copies files). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time).
+7. **First administrator off uid 0** (build 10007). Runtime `passwd` + `chown`; Tracker/Deskbar via `/system/apps/r5-desktop` (`load_image`, then the helper exits). Not launch wraps. Not `StartSession`.
+8. **`StartSession`:** Sign in as a standard user is that uid and home. One graphical session.
+9. Lock screen; then guest/Public.
+10. Absorb leftover kernel/UI string overlays into native source; do not add new ones.
 
 ## Tests for this step
 
@@ -131,6 +195,17 @@ After Sign in, in Terminal:
 4. As `user` (uid 0), `ls /boot/home/users/nicky` still works.
 
 VBox 2026-10-29 14:30 Europe/Amsterdam: 1–4 confirmed (`nicky`; uid 0 `user` still listed that home).
+
+## Tests for administrator off uid 0 (build 10007)
+
+Not run yet. Call it isolation only if these pass on VBox:
+
+1. Sign in as `user`: `id` is not uid 0; `$HOME` is `/boot/home`.
+2. If a standard user exists: `ls /boot/home/users/<name>` is permission denied; `su <name>` can list that home; `su <name> -c 'ls /boot/home/Desktop'` is denied.
+3. Sign in as the standard user still opens the administrator desktop (until `StartSession`).
+4. Administrator can still add a standard user (Users talks to Login).
+5. Log out, Sign in again. `launch_daemon` still running.
+6. Fresh image (migrate from uid 0) and a disk that already had a standard user (new uid must not collide).
 
 ## Testing a second account (limits)
 
@@ -181,7 +256,7 @@ Checked in the jammed AMD64 tree (2026-10-29):
 | Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
 | Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
 
-Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.
+Until `StartSession`, changing Appearance still writes the first home (`/boot/home`). After build 10007 that is the administrator’s uid, not 0. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.
 
 ### Bundled applications
 

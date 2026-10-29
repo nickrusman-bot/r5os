@@ -6,9 +6,11 @@
 
 #include "LoginApp.h"
 
+#include "AccountAdmin.h"
 #include "DesktopWindow.h"
 #include "HomeLock.h"
 #include "LoginWindow.h"
+#include "SessionLog.h"
 
 #include <Alert.h>
 #include <LaunchRoster.h>
@@ -22,12 +24,16 @@
 #include <StringList.h>
 
 #include <errno.h>
+#include <image.h>
 #include <pwd.h>
 #include <shadow.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
+
+extern char** environ;
 
 const char* kLoginAppSig = "application/x-vnd.Haiku-Login";
 
@@ -92,6 +98,33 @@ keep_team(const app_info& info, team_id self)
 }
 
 
+static const char* kSessionJobs[] = {
+	"x-vnd.Be-TRAK",
+	"x-vnd.Be-TSKB",
+	"x-vnd.R5OS-NetworkStatus",
+	"x-vnd.R5OS-airplay-tray",
+	"x-vnd.R5OS-vbox-clip",
+	NULL
+};
+
+
+static bool
+is_session_job(const char* name)
+{
+	if (name == NULL)
+		return false;
+	for (int32 i = 0; kSessionJobs[i] != NULL; i++) {
+		if (strcmp(name, kSessionJobs[i]) == 0)
+			return true;
+	}
+	return strstr(name, "Be-TRAK") != NULL
+		|| strstr(name, "Be-TSKB") != NULL
+		|| strstr(name, "NetworkStatus") != NULL
+		|| strstr(name, "airplay-tray") != NULL
+		|| strstr(name, "vbox-clip") != NULL;
+}
+
+
 LoginApp::LoginApp()
 	:
 	BApplication(kLoginAppSig),
@@ -139,6 +172,11 @@ LoginApp::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kAttemptLogin:
 			TryLogin(message);
+			break;
+		case kMsgAdminAdd:
+		case kMsgAdminDelete:
+		case kMsgAdminSetDisabled:
+			HandleAdmin(message);
 			break;
 		case kLogoutAction:
 			Logout();
@@ -201,8 +239,34 @@ LoginApp::TryLogin(BMessage* message)
 		const char* password = message->GetString("password");
 		status = ValidateLogin(login, password);
 		if (status == B_OK) {
-			_EnableDesktopJobs();
-			status = BLaunchRoster().Target("desktop");
+			status = migrate_admin_off_root();
+			if (status == B_OK)
+				status = write_desktop_session();
+			if (status == B_OK) {
+				r5_session_log("sign-in %s", login);
+				_EnableDesktopJobs();
+				status = _WaitGone("application/x-vnd.Be-TRAK");
+				if (status == B_OK)
+					status = _WaitGone("application/x-vnd.Be-TSKB");
+				if (status == B_OK)
+					status = _LaunchSessionApp("/system/Tracker");
+				if (status == B_OK)
+					status = _LaunchSessionApp("/system/Deskbar");
+				if (status == B_OK)
+					status = _WaitSessionTeam("application/x-vnd.Be-TRAK");
+				if (status == B_OK)
+					status = _WaitSessionTeam("application/x-vnd.Be-TSKB");
+				// Do not Target("desktop"). That asks launch_daemon user,
+				// still uid 0 from autologin, to start Tracker again.
+				if (status == B_OK) {
+					_LaunchSessionApp("/system/apps/r5-tray");
+					_LaunchSessionApp("/system/bin/desklink",
+						"--add-volume");
+					_LaunchSessionApp("/system/servers/airplay_deskbar");
+					_LaunchSessionApp("/system/servers/r5_vbox_clip");
+				}
+				r5_session_log("sign-in done: %s", strerror(status));
+			}
 			if (status == B_OK)
 				_HideLogin();
 		}
@@ -215,23 +279,43 @@ LoginApp::TryLogin(BMessage* message)
 		reply.AddInt32("error", status);
 		if (status == B_PERMISSION_DENIED || status == ENOENT)
 			reply.AddString("text", "That password is not right.");
-		else if (status == B_NAME_NOT_FOUND)
+		else if (status == B_NAME_NOT_FOUND || status == B_TIMED_OUT)
 			reply.AddString("text", "Could not start the desktop.");
-		else
-			reply.AddString("text", strerror(status));
+		else {
+			BString text("Could not start the session: ");
+			text << strerror(status);
+			reply.AddString("text", text.String());
+		}
 		message->SendReply(&reply);
 	}
 }
 
 
 void
+LoginApp::HandleAdmin(BMessage* message)
+{
+	BMessage reply;
+	handle_admin_message(message, reply);
+	message->SendReply(&reply);
+}
+
+
+void
 LoginApp::Logout()
 {
+	// Do not call the launch daemon. Stop/SetEnabled/GetJobs wait for a
+	// reply; launch_daemon user is the team in the crash dialog, and while
+	// it sits in the debugger that reply never comes.
+	r5_session_log("logout");
 	_QuitUserApps();
-	BLaunchRoster().StopTarget("desktop");
+	_WaitGone("application/x-vnd.Haiku-ProcessController");
+	_WaitGone("application/x-vnd.Haiku-NetworkStatus");
+	_WaitGone("application/x-vnd.R5OS-airplay-tray");
+	_WaitGone("application/x-vnd.R5OS-vbox-clip");
 	_WaitGone("application/x-vnd.Be-TRAK");
 	_WaitGone("application/x-vnd.Be-TSKB");
 	_ShowLogin();
+	r5_session_log("logout done");
 }
 
 
@@ -252,28 +336,115 @@ LoginApp::ValidateLogin(const char* login, const char* password)
 void
 LoginApp::_EnableDesktopJobs()
 {
-	BStringList jobs;
 	BLaunchRoster roster;
-	if (roster.GetJobs("desktop", jobs) != B_OK)
-		return;
+	for (int32 i = 0; kSessionJobs[i] != NULL; i++) {
+		roster.SetEnabled(kSessionJobs[i], false);
+		roster.Stop(kSessionJobs[i], true);
+	}
 
-	for (int32 i = 0; i < jobs.CountStrings(); i++)
-		roster.SetEnabled(jobs.StringAt(i), true);
+	BStringList jobs;
+	status_t jobsStatus = roster.GetJobs("desktop", jobs);
+	if (jobsStatus != B_OK) {
+		r5_session_log("GetJobs(desktop): %s", strerror(jobsStatus));
+		syslog(LOG_WARNING, "Login: GetJobs(desktop) failed; "
+			"session jobs stopped by name");
+		return;
+	}
+
+	for (int32 i = 0; i < jobs.CountStrings(); i++) {
+		const char* name = jobs.StringAt(i);
+		if (is_session_job(name)) {
+			roster.SetEnabled(name, false);
+			roster.Stop(name, true);
+		} else
+			roster.SetEnabled(name, true);
+	}
+}
+
+
+status_t
+LoginApp::_LaunchSessionApp(const char* program, const char* argument)
+{
+	const char* args[4];
+	int32 count = 0;
+	args[count++] = "/system/apps/r5-desktop";
+	args[count++] = program;
+	if (argument != NULL && argument[0] != '\0')
+		args[count++] = argument;
+	args[count] = NULL;
+
+	r5_session_log("launch %s", program);
+	thread_id thread = load_image(count, args, (const char**)environ);
+	if (thread < B_OK) {
+		r5_session_log("load_image r5-desktop %s: %s", program,
+			strerror(thread));
+		return thread;
+	}
+	resume_thread(thread);
+
+	status_t result = B_ERROR;
+	wait_for_thread(thread, &result);
+	if (result != B_OK) {
+		r5_session_log("r5-desktop %s: %s", program, strerror(result));
+		syslog(LOG_ERR, "Login: r5-desktop %s: %s", program, strerror(result));
+		return result < B_OK ? result : B_ERROR;
+	}
+	r5_session_log("r5-desktop %s ok", program);
+	return B_OK;
+}
+
+
+status_t
+LoginApp::_WaitRunning(const char* signature)
+{
+	const bigtime_t deadline = system_time() + 8000000LL;
+	while (system_time() < deadline) {
+		if (be_roster->IsRunning(signature))
+			return B_OK;
+		snooze(100000);
+	}
+	r5_session_log("timeout waiting for %s", signature);
+	return B_TIMED_OUT;
+}
+
+
+status_t
+LoginApp::_WaitSessionTeam(const char* signature)
+{
+	status_t status = _WaitRunning(signature);
+	if (status != B_OK)
+		return status;
+
+	team_id team = be_roster->TeamFor(signature);
+	team_info info;
+	if (team < 0 || get_team_info(team, &info) != B_OK) {
+		r5_session_log("%s: no team info", signature);
+		return B_BAD_TEAM_ID;
+	}
+	r5_session_log("%s team %d uid=%d gid=%d", signature, (int)team,
+		(int)info.uid, (int)info.gid);
+	if (info.uid == 0) {
+		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+		return B_NOT_ALLOWED;
+	}
+	return B_OK;
 }
 
 
 void
 LoginApp::_HideLogin()
 {
-	if (fLoginWindow != NULL && fLoginWindow->Lock()) {
-		if (!fLoginWindow->IsHidden())
-			fLoginWindow->Hide();
-		fLoginWindow->Unlock();
+	if (fLoginWindow != NULL) {
+		BWindow* window = fLoginWindow;
+		fLoginWindow = NULL;
+		if (window->Lock())
+			window->Quit();
 	}
-	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
-		if (!fDesktopWindow->IsHidden())
-			fDesktopWindow->Hide();
-		fDesktopWindow->Unlock();
+	if (fDesktopWindow != NULL) {
+		BWindow* window = fDesktopWindow;
+		fDesktopWindow = NULL;
+		if (window->Lock())
+			window->Quit();
 	}
 }
 
@@ -281,7 +452,11 @@ LoginApp::_HideLogin()
 void
 LoginApp::_ShowLogin()
 {
-	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
+	if (fDesktopWindow == NULL) {
+		BScreen screen;
+		fDesktopWindow = new DesktopWindow(screen.Frame(), false);
+		fDesktopWindow->Show();
+	} else if (fDesktopWindow->Lock()) {
 		if (fDesktopWindow->IsHidden())
 			fDesktopWindow->Show();
 		fDesktopWindow->Unlock();
@@ -323,10 +498,31 @@ LoginApp::_QuitUserApps()
 }
 
 
-void
+status_t
 LoginApp::_WaitGone(const char* signature)
 {
-	const bigtime_t deadline = system_time() + 8000000LL;
+	if (!be_roster->IsRunning(signature))
+		return B_OK;
+
+	team_id team = be_roster->TeamFor(signature);
+	if (team >= 0)
+		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+
+	const bigtime_t deadline = system_time() + 3000000LL;
 	while (be_roster->IsRunning(signature) && system_time() < deadline)
 		snooze(100000);
+	if (be_roster->IsRunning(signature)) {
+		team = be_roster->TeamFor(signature);
+		r5_session_log("killing %s team %d", signature, (int)team);
+		if (team >= 0)
+			kill_team(team);
+		const bigtime_t killDeadline = system_time() + 1000000LL;
+		while (be_roster->IsRunning(signature) && system_time() < killDeadline)
+			snooze(100000);
+	}
+	if (be_roster->IsRunning(signature)) {
+		r5_session_log("still running %s", signature);
+		return B_BUSY;
+	}
+	return B_OK;
 }

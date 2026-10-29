@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10007 - Administrator is not root
+After Sign in, the first account (`user`, home folder `/boot/home`) is a normal user id (1000 or higher), not 0. Tracker and Deskbar run as that person. Another account’s folder under home/users stays unreadable. Sign in as someone else still opens this same desktop for now. Users & Accounts still works: the sign-in program applies the changes.
+
 R5OS 2026.1-dev Build 10006 - Private home folders
 Another account cannot open your Desktop or Documents. Extra people still live under home/users. The original account is user id 0, so that one can still read the others. Everyone still shares one desktop after Sign in.
 

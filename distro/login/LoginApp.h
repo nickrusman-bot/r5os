@@ -33,13 +33,18 @@ public:
 private:
 	void			TryLogin(BMessage* message);
 	void			Logout();
+	void			HandleAdmin(BMessage* message);
 	status_t		ValidateLogin(const char* login, const char* password);
 	void			_EnableDesktopJobs();
+	status_t		_LaunchSessionApp(const char* program,
+						const char* argument = NULL);
+	status_t		_WaitRunning(const char* signature);
+	status_t		_WaitSessionTeam(const char* signature);
 	void			_HideLogin();
 	void			_ShowLogin();
 	void			_OpenLoginWindow();
 	void			_QuitUserApps();
-	void			_WaitGone(const char* signature);
+	status_t		_WaitGone(const char* signature);
 
 	DesktopWindow*	fDesktopWindow;
 	LoginWindow*	fLoginWindow;
