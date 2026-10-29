@@ -864,6 +864,33 @@ status_t
     )
 
 
+def patch_ipv6_route_lookup() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "stack" / "routes.cpp"
+    )
+    replace_once(
+        path,
+        """		if (route->mask) {
+			sockaddr maskedAddress;
+			domain->address_module->mask_address(address, route->mask,
+				&maskedAddress);
+			if (!domain->address_module->equal_addresses(&maskedAddress,
+					route->destination))
+				continue;
+""",
+        """		if (route->mask) {
+			sockaddr_storage maskedAddress;
+			domain->address_module->mask_address(address, route->mask,
+				(sockaddr*)&maskedAddress);
+			if (!domain->address_module->equal_addresses(
+					(sockaddr*)&maskedAddress, route->destination))
+				continue;
+""",
+        "IPv6 route lookup mask buffer",
+        optional=True,
+    )
+
+
 def patch_kernel_multicast_route() -> None:
     path = HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols" / "ipv6" / "ipv6.cpp"
     replace_once(
@@ -1023,6 +1050,7 @@ def main() -> int:
     patch_kernel_multicast_if()
     patch_datalink_device_route()
     patch_alias_local_routes()
+    patch_ipv6_route_lookup()
     patch_kernel_multicast_route()
     return 0
 
