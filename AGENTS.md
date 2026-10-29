@@ -71,7 +71,7 @@ Inventory and migration order: `docs/MULTIUSER.md`.
 
 ## Multi-user
 
-First interactive session is still the historic single desktop (`HAIKU_ROOT_USER_NAME = user`, home `/boot/home`). Do not claim login, isolation, or per-user settings until those are implemented **and** tested.
+First interactive session is still the historic account (`HAIKU_ROOT_USER_NAME = user`, home `/boot/home`). A sign-in screen can gate Tracker/Deskbar. Do not claim isolation, logout, or a per-user desktop until those are implemented **and** tested.
 
 Keep `/boot/home` as the first account’s home (Haiku apps and `find_directory`). Additional accounts go under `/boot/home/users/<name>`. Do not hardcode home paths in apps; use `find_directory` / POSIX `getpwuid`.
 

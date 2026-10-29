@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10004 - Sign in
+The desktop waits at a sign-in screen. Choose a person, type the password, and press Sign in. Restart and Shut down sit at the bottom. An empty password still works if the account has none. This is a gate, not separate desktops: after sign-in you still get the same session until logout and isolation exist.
+
 R5OS 2026.1-dev Build 10003 - Add and remove accounts
 Users & Accounts can add a person, disable an account, or delete it. Open it from Preferences. New people get a user id of 1000 or higher and a folder under home/users. System accounts such as sshd stay off the list. The original administrator cannot be removed. An empty password is allowed; that is convenient, not a lock. Everyone still shares the same desktop until a login screen exists.
 

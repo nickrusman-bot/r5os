@@ -1,0 +1,13 @@
+SubDir HAIKU_TOP src apps login ;
+
+UsePrivateHeaders app interface ;
+
+Application Login :
+	DesktopWindow.cpp
+	LoginApp.cpp
+	LoginWindow.cpp
+	LoginView.cpp
+	main.cpp
+	: be tracker [ TargetLibstdc++ ] localestub
+	: Login.rdef
+;
