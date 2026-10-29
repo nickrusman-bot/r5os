@@ -24,6 +24,10 @@ The people column is now a layout item, hidden after the window is shown, unless
 
 Jam AMD64 2026-10-29 23:09 Europe/Amsterdam: `jam_exit=0` (Users, image). Not yet seen in VBox.
 
+VBox 23:12 Europe/Amsterdam: as `nicky`, Your account no longer showed the people list. Change password closed as if it had worked, and the password stayed the old one. Login's message switch never included profile get/set (`r5ah`, `r5af`), so the request was dropped. The reply had no `error` field and Users treated that as success. The same hole covered Save of name, email, and picture. Login now handles those messages, and a reply without `error` is a failure.
+
+Jam AMD64 2026-10-29 23:19 Europe/Amsterdam: `jam_exit=0` (Login, Users, image). Not yet seen in VBox.
+
 ### Log out name and Sign in after Restart (build 10010)
 
 The Deskbar leaf item is `Log out <name>` for the signed-in account.

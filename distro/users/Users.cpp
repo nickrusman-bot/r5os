@@ -90,7 +90,10 @@ ask_login(BMessage& request, BMessage& reply, BString& error)
 	}
 
 	int32 code = B_OK;
-	reply.FindInt32("error", &code);
+	if (reply.FindInt32("error", &code) != B_OK) {
+		error = "Sign in did not answer.";
+		return B_ERROR;
+	}
 	const char* text = NULL;
 	reply.FindString("text", &text);
 	if (code != B_OK) {
