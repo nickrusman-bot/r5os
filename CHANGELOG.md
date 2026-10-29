@@ -50,6 +50,10 @@ VBox 17:34 Europe/Amsterdam: Trash icon is correct. Log out reached Sign in slow
 
 Jam AMD64 2026-10-29 17:41 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Log out then Sign in again not confirmed yet.
 
+VBox 17:43 Europe/Amsterdam (guest clock 4:43 PM, UTC): Documents, Downloads, Music, Pictures, and Videos are in `/boot/home`. Trash icon is correct. **launch_daemon user** still crashed (`autologin` → `StartSession("user")` while that account was uid 0; the daemon stays uid 0). Choosing Debug put **Debugger** in the Deskbar with **No windows**. Log out after confirm did nothing: `Stop`/`SetEnabled` wait for a reply from that daemon, and a team stopped in the debugger never replies, so Sign in was never shown.
+
+Log out no longer talks to the launch daemon. It quits Tracker, Deskbar, and the session tray apps, then shows Sign in (`kill_team` if quit is ignored). Sign in does not call `Target("desktop")`. Jobs inside `target desktop` no longer use `on initial_volumes_mounted`, so that uid-0 daemon does not start Tracker beside `r5-desktop`. The Debugger team window is shown as soon as it exists (`Hide()` before the first `Show()` left the show level at 1, which Deskbar skips). `user-bootscript`, `dstcheck`, and `first-login` in that target do not run. Not a second account. Not StartSession.
+
 Isolation of extra homes is only true if `ls /boot/home/users/<name>` is permission denied.
 
 ### First administrator off uid 0 (plan)

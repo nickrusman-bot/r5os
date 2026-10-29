@@ -256,10 +256,8 @@ LoginApp::TryLogin(BMessage* message)
 					status = _WaitSessionTeam("application/x-vnd.Be-TRAK");
 				if (status == B_OK)
 					status = _WaitSessionTeam("application/x-vnd.Be-TSKB");
-				if (status == B_OK)
-					status = BLaunchRoster().Target("desktop");
-				if (status == B_OK)
-					_EnableDesktopJobs();
+				// Do not Target("desktop"). That asks launch_daemon user,
+				// still uid 0 from autologin, to start Tracker again.
 				if (status == B_OK) {
 					_LaunchSessionApp("/system/apps/r5-tray");
 					_LaunchSessionApp("/system/bin/desklink",
@@ -305,10 +303,15 @@ LoginApp::HandleAdmin(BMessage* message)
 void
 LoginApp::Logout()
 {
+	// Do not call the launch daemon. Stop/SetEnabled/GetJobs wait for a
+	// reply; launch_daemon user is the team in the crash dialog, and while
+	// it sits in the debugger that reply never comes.
 	r5_session_log("logout");
-	_EnableDesktopJobs();
 	_QuitUserApps();
 	_WaitGone("application/x-vnd.Haiku-ProcessController");
+	_WaitGone("application/x-vnd.Haiku-NetworkStatus");
+	_WaitGone("application/x-vnd.R5OS-airplay-tray");
+	_WaitGone("application/x-vnd.R5OS-vbox-clip");
 	_WaitGone("application/x-vnd.Be-TRAK");
 	_WaitGone("application/x-vnd.Be-TSKB");
 	_ShowLogin();
@@ -508,6 +511,15 @@ LoginApp::_WaitGone(const char* signature)
 	const bigtime_t deadline = system_time() + 3000000LL;
 	while (be_roster->IsRunning(signature) && system_time() < deadline)
 		snooze(100000);
+	if (be_roster->IsRunning(signature)) {
+		team = be_roster->TeamFor(signature);
+		r5_session_log("killing %s team %d", signature, (int)team);
+		if (team >= 0)
+			kill_team(team);
+		const bigtime_t killDeadline = system_time() + 1000000LL;
+		while (be_roster->IsRunning(signature) && system_time() < killDeadline)
+			snooze(100000);
+	}
 	if (be_roster->IsRunning(signature)) {
 		r5_session_log("still running %s", signature);
 		return B_BUSY;

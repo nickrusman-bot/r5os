@@ -104,6 +104,28 @@ def patch_launch() -> None:
         print("unwrapped user (r5-desktop prefixes)")
     else:
         print("already user (no r5-desktop wrap)")
+    disarm_desktop_target()
+
+
+def disarm_desktop_target() -> None:
+    """Desktop jobs must not start as the autologin uid (still 0)."""
+    launch = HAIKU / "data" / "launch" / "user"
+    text = launch.read_text(encoding="utf-8")
+    start = text.find("target desktop {")
+    if start < 0:
+        raise SystemExit(f"target desktop not found in {launch}")
+    end = text.find("\ntarget ", start + 1)
+    if end < 0:
+        raise SystemExit(f"target after desktop not found in {launch}")
+    block = text[start:end]
+    needle = "\n\t\ton initial_volumes_mounted\n"
+    count = block.count(needle)
+    if count == 0:
+        print("already desktop (no initial_volumes_mounted)")
+        return
+    block = block.replace(needle, "\n")
+    launch.write_text(text[:start] + block + text[end:], encoding="utf-8")
+    print(f"desktop jobs: removed {count} initial_volumes_mounted")
 
 
 def patch_first_boot() -> None:
