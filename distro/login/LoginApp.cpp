@@ -12,7 +12,6 @@
 #include "LoginWindow.h"
 
 #include <Alert.h>
-#include <Entry.h>
 #include <LaunchRoster.h>
 #include <List.h>
 #include <OS.h>
@@ -24,12 +23,15 @@
 #include <StringList.h>
 
 #include <errno.h>
+#include <image.h>
 #include <pwd.h>
 #include <shadow.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+extern char** environ;
 
 const char* kLoginAppSig = "application/x-vnd.Haiku-Login";
 
@@ -220,6 +222,8 @@ LoginApp::TryLogin(BMessage* message)
 					status = _LaunchSessionApp("/system/Deskbar");
 				if (status == B_OK)
 					status = _WaitRunning("application/x-vnd.Be-TRAK");
+				if (status == B_OK)
+					status = _WaitRunning("application/x-vnd.Be-TSKB");
 			}
 			if (status == B_OK)
 				_HideLogin();
@@ -299,13 +303,16 @@ LoginApp::_EnableDesktopJobs()
 status_t
 LoginApp::_LaunchSessionApp(const char* program)
 {
-	entry_ref helper;
-	status_t status = get_ref_for_path("/system/apps/r5-desktop", &helper);
-	if (status != B_OK)
-		return status;
-
-	const char* args[] = { program, NULL };
-	return be_roster->Launch(&helper, 1, args);
+	const char* args[] = {
+		"/system/apps/r5-desktop",
+		program,
+		NULL
+	};
+	thread_id thread = load_image(2, args, (const char**)environ);
+	if (thread < B_OK)
+		return thread;
+	resume_thread(thread);
+	return B_OK;
 }
 
 
@@ -325,15 +332,17 @@ LoginApp::_WaitRunning(const char* signature)
 void
 LoginApp::_HideLogin()
 {
-	if (fLoginWindow != NULL && fLoginWindow->Lock()) {
-		if (!fLoginWindow->IsHidden())
-			fLoginWindow->Hide();
-		fLoginWindow->Unlock();
+	if (fLoginWindow != NULL) {
+		BWindow* window = fLoginWindow;
+		fLoginWindow = NULL;
+		if (window->Lock())
+			window->Quit();
 	}
-	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
-		if (!fDesktopWindow->IsHidden())
-			fDesktopWindow->Hide();
-		fDesktopWindow->Unlock();
+	if (fDesktopWindow != NULL) {
+		BWindow* window = fDesktopWindow;
+		fDesktopWindow = NULL;
+		if (window->Lock())
+			window->Quit();
 	}
 }
 
@@ -341,7 +350,11 @@ LoginApp::_HideLogin()
 void
 LoginApp::_ShowLogin()
 {
-	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
+	if (fDesktopWindow == NULL) {
+		BScreen screen;
+		fDesktopWindow = new DesktopWindow(screen.Frame(), false);
+		fDesktopWindow->Show();
+	} else if (fDesktopWindow->Lock()) {
 		if (fDesktopWindow->IsHidden())
 			fDesktopWindow->Show();
 		fDesktopWindow->Unlock();

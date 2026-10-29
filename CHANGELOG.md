@@ -18,7 +18,11 @@ Jam AMD64 2026-10-29 16:20 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` 
 
 VBox after that Sign in: password accepted, then a **empty blue screen** (app_server, no Tracker/Deskbar). Target("desktop") returned OK but the wrapped jobs did not come up. Login now launches Tracker and Deskbar itself through `r5-desktop` (no libbe; session file under `/boot/system/settings`) and waits for Tracker before hiding Sign in. launch_daemon does not start those two as uid 0.
 
-Jam AMD64 2026-10-29 16:29 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Tracker after Sign in not confirmed yet.
+Jam AMD64 2026-10-29 16:29 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox Sign in still empty blue, a bit longer wait. Tracker registered (`IsRunning`) but its windows were on a **second app_server desktop** for uid 1001; the screen stays on uid 0 (Login). `AS_GET_DESKTOP` now reuses the existing screen until `StartSession`. Login starts Tracker/Deskbar with `load_image` (not `BRoster::Launch`, which would reuse one r5-desktop team) and quits the Sign in wallpaper window.
+
+Jam AMD64 2026-10-29 16:36 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Shared app_server desktop after Sign in not confirmed yet.
 
 Isolation is only true if `id` after Sign in is not uid 0 and `ls /boot/home/users/<name>` is permission denied.
 
