@@ -86,7 +86,7 @@ Do not treat Haiku `hrev` as the product version.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
-6. **Settings audit:** desktop prefs plus bundled apps (see below). Uid 0 still maps `find_directory` to `/boot/home`. Leftover hardcoded settings: Joysticks, MidiPlayer, PoorMan, WebPositive defaults. `StartSession` still later.
+6. **Settings audit:** desktop prefs plus bundled apps (see below). Overlay `apply-user-paths.py` moves MidiPlayer, Joysticks, PoorMan, and in-tree WebPositive defaults onto `find_directory`. Uid 0 still maps that to `/boot/home`. Preflet split (per-user vs machine) is a proposal, not done. `StartSession` still later.
 7. Lock screen; then guest/Public.
 8. Absorb kernel/UI overlays into a real in-tree fork.
 
@@ -149,7 +149,7 @@ Checked in the jammed AMD64 tree (2026-10-29):
 | Tracker | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DIRECTORY` (cwd) | comments/examples only |
 | app_server colours/fonts | `DesktopSettings` / `DecorManager` `B_USER_SETTINGS_DIRECTORY` | unused `#define DECORATORS_DIR` still hardcodes a home add-on path |
 | R5OS AirPlay log | now `B_USER_LOG_DIRECTORY` | was `/boot/home/airplay_deskbar.log` |
-| Joysticks preflet | `JOYSTICKFILESETTINGS` | yes — leftover, not this desktop path |
+| Joysticks preflet | now `B_USER_SETTINGS_DIRECTORY` / `joysticks` | overlay `apply-user-paths.py` |
 | Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
 | Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
 
@@ -166,10 +166,10 @@ Hardcoded `/boot/home` in app code, grouped:
 | App | What | Role |
 |---|---|---|
 | CodyCam, Icon-O-Matic, TextSearch, MediaConverter | `find_directory(B_USER_DIRECTORY)` then `/boot/home` | fallback / default folder, not the settings file |
-| WebPositive (in-tree) | default download `/boot/home/Desktop/`; welcome `file:///boot/home/config/settings/…` | settings **defaults**. The image ships `webpositive.hpkg`, not this tree’s binary |
-| MidiPlayer | `#define SETTINGS_FILE "/boot/home/config/settings/MidiPlayerSettings"` | real settings path |
-| PoorMan | default web folder `/boot/home/public_html` | default document root |
-| Joysticks | `JOYSTICKFILESETTINGS` | real settings path |
+| WebPositive (in-tree) | `DefaultDownloadPath()` / `DefaultStartPageURL()` via `find_directory` | image still ships `webpositive.hpkg` |
+| MidiPlayer | `B_USER_SETTINGS_DIRECTORY` / `MidiPlayerSettings` | overlay |
+| PoorMan | `B_USER_DIRECTORY` / `public_html` | overlay |
+| Joysticks | `B_USER_SETTINGS_DIRECTORY` / `joysticks` | overlay |
 | PackageInstaller | `/boot/home/config` rewrite | BeOS path migration |
 | MediaPlayer, Tracker `PROFILE` | Desktop dump paths | debug leftovers |
 | Login, Users, HomeLock | `/boot/home` and `users/` | layout on purpose |
@@ -177,4 +177,53 @@ Hardcoded `/boot/home` in app code, grouped:
 
 Not in this git: **Pe** and **Vision** (optional image packages). Demos without settings (GLTeapot, Mandelbrot, …) have no home path.
 
-No new overlay patches for those Haiku leftovers this round.
+`apply-user-paths.py` covers MidiPlayer, Joysticks, PoorMan, and in-tree WebPositive defaults. PackageInstaller BeOS rewrite and MediaPlayer/Tracker debug dumps stay.
+
+### Preference apps (proposal)
+
+This is a split for a later session, not a claim that menus are hidden or that a second user has their own prefs. Deskbar still shows the usual Preferences list to everyone.
+
+Until `StartSession`, even “per-user” preflets write `/boot/home/config/settings` because the live session is uid 0.
+
+**Leave as personal (already `B_USER_*`; no code change except Joysticks above).** A normal account should keep their own:
+
+| Preflet | In Deskbar Preferences | Notes |
+|---|---|---|
+| Appearance | yes | colours, fonts, antialiasing |
+| Backgrounds | yes | desktop picture |
+| Deskbar | yes | settings live in the Deskbar app |
+| Tracker | yes | settings live in Tracker |
+| Keymap | yes | |
+| Input | yes | mouse, touchpad, keyboard repeat |
+| ScreenSaver | yes | which saver + delay |
+| Shortcuts | yes | |
+| Sounds | yes | |
+| Notifications | yes | |
+| E-mail | yes | accounts in `~/config/settings` |
+| Media | yes | |
+| Locale | yes | Locale Kit catalogs, not this preflet’s own `find_directory` |
+| FileTypes | yes | user overrides; system types stay in the system |
+| Joysticks | often unused | now `find_directory`; keep personal |
+| DataTranslations | power user | window/settings file is user; add-ons mixed |
+| Bluetooth | if hardware | settings file is user; the radio is the machine |
+
+**Keep machine-wide. Do not make these per-user.** Visible in Preferences, but they describe this computer. Later: hide or lock for a non-admin.
+
+| Preflet | Visible today | Why stay shared | Path today |
+|---|---|---|---|
+| Network | yes | interfaces, DHCP, IPv6 — `net_server` | not `find_directory` in the preflet |
+| Screen | yes | resolution / workspace of the display | window frame in `B_USER_SETTINGS`; mode is app_server |
+| Time | yes | clock and timezone for the machine | also writes some `B_USER_SETTINGS` (NTP UI) |
+| Printers | yes | queues on this host | `B_USER_PRINTERS_DIRECTORY` (odd for shared printers) |
+| Repositories | yes | pkgman sources | system settings + a user file |
+| VirtualMemory | power user | swap is the machine | settings file is `B_USER_SETTINGS` (wrong place) |
+
+**Admin only (already not a “my desktop” preflet):**
+
+| Preflet | Visible today | Proposal |
+|---|---|---|
+| Users | yes, in Preferences | keep for administrators; not a personal theme |
+
+**Do not do in this pass:** hide Network/Screen/Time from a standard user; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`.
+
+CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Leave them.
