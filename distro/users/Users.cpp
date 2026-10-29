@@ -9,6 +9,7 @@
 #include <CheckBox.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
+#include <Messenger.h>
 #include <ScrollView.h>
 #include <String.h>
 #include <StringItem.h>
@@ -18,108 +19,21 @@
 #include <TextView.h>
 #include <Window.h>
 
-#include <RegistrarDefs.h>
-#include <user_group.h>
-#include <util/KMessage.h>
-
+#include "AccountAdmin.h"
 #include "HomeLock.h"
 
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <grp.h>
 #include <pwd.h>
-#include <shadow.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 
 
 static const char* kSignature = "application/x-vnd.R5OS-Users";
-static const char* kUsersRoot = "/boot/home/users";
-static const char* kAdminGroup = "admin";
-static const uid_t kMinNewUid = 1000;
 
 static const uint32 kMsgAdd = 'uadd';
 static const uint32 kMsgDelete = 'udel';
 static const uint32 kMsgDisable = 'udis';
 static const uint32 kMsgRefresh = 'urfr';
 static const uint32 kMsgSelect = 'usel';
-
-
-static bool
-is_listed_account(const struct passwd* pwd)
-{
-	if (pwd == NULL || pwd->pw_name == NULL || pwd->pw_name[0] == '\0')
-		return false;
-	if (strcmp(pwd->pw_name, "sshd") == 0
-		|| strcmp(pwd->pw_name, "ftp") == 0
-		|| strcmp(pwd->pw_name, "nobody") == 0)
-		return false;
-
-	const char* home = pwd->pw_dir;
-	if (home == NULL || home[0] == '\0')
-		return false;
-	if (strcmp(home, "/boot/home") == 0)
-		return true;
-	if (strncmp(home, "/boot/home/", 11) == 0)
-		return true;
-	return false;
-}
-
-
-static bool
-group_has_member(const char* groupName, const char* user)
-{
-	struct group* group = getgrnam(groupName);
-	if (group == NULL || group->gr_mem == NULL || user == NULL)
-		return false;
-	for (int32 i = 0; group->gr_mem[i] != NULL; i++) {
-		if (strcmp(group->gr_mem[i], user) == 0)
-			return true;
-	}
-	return false;
-}
-
-
-static bool
-is_admin_user(const struct passwd* pwd)
-{
-	if (pwd == NULL)
-		return false;
-	if (pwd->pw_uid == 0 || pwd->pw_gid == 0)
-		return true;
-	return group_has_member("wheel", pwd->pw_name)
-		|| group_has_member(kAdminGroup, pwd->pw_name);
-}
-
-
-static bool
-is_disabled_user(const char* name)
-{
-	struct spwd* shadow = getspnam(name);
-	if (shadow == NULL || shadow->sp_pwdp == NULL)
-		return false;
-	return shadow->sp_pwdp[0] == '!';
-}
-
-
-static bool
-valid_username(const char* name)
-{
-	if (name == NULL || name[0] == '\0' || strlen(name) > 31)
-		return false;
-	if (!islower((unsigned char)name[0]) && name[0] != '_')
-		return false;
-	for (const char* p = name; *p != '\0'; p++) {
-		if (!islower((unsigned char)*p) && !isdigit((unsigned char)*p)
-			&& *p != '_' && *p != '-')
-			return false;
-	}
-	return true;
-}
 
 
 static void
@@ -135,40 +49,6 @@ wipe_string(BString& text)
 }
 
 
-static status_t
-run_argv(char** argv, BString& errorText)
-{
-	pid_t pid = fork();
-	if (pid < 0) {
-		errorText = strerror(errno);
-		return errno;
-	}
-	if (pid == 0) {
-		int nullFd = open("/dev/null", O_RDWR);
-		if (nullFd >= 0) {
-			dup2(nullFd, STDIN_FILENO);
-			dup2(nullFd, STDOUT_FILENO);
-			dup2(nullFd, STDERR_FILENO);
-			if (nullFd > 2)
-				close(nullFd);
-		}
-		execv(argv[0], argv);
-		_exit(127);
-	}
-
-	int status = 0;
-	if (waitpid(pid, &status, 0) < 0) {
-		errorText = strerror(errno);
-		return errno;
-	}
-	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-		errorText.SetToFormat("%s failed", argv[0]);
-		return B_ERROR;
-	}
-	return B_OK;
-}
-
-
 static void
 show_error(const char* text)
 {
@@ -179,184 +59,31 @@ show_error(const char* text)
 
 
 static status_t
-set_shadow_password(const char* user, const char* encrypted)
+ask_login(BMessage& request, BString& error)
 {
-	struct passwd* pwd = getpwnam(user);
-	if (pwd == NULL)
-		return ENOENT;
-
-	BPrivate::KMessage message(BPrivate::B_REG_UPDATE_USER);
-	if (message.AddInt32("uid", pwd->pw_uid) != B_OK
-		|| message.AddInt32("last changed", (int32)time(NULL)) != B_OK
-		|| message.AddString("password", "x") != B_OK
-		|| message.AddString("shadow password", encrypted) != B_OK)
-		return B_NO_MEMORY;
-
-	BPrivate::KMessage reply;
-	return BPrivate::send_authentication_request_to_registrar(message, reply);
-}
-
-
-static status_t
-ensure_admin_group(BString& errorText)
-{
-	if (getgrnam(kAdminGroup) != NULL)
-		return B_OK;
-	char* argv[] = {
-		const_cast<char*>("/bin/groupadd"),
-		const_cast<char*>(kAdminGroup),
-		NULL
-	};
-	return run_argv(argv, errorText);
-}
-
-
-static status_t
-add_to_admin_group(const char* user, BString& errorText)
-{
-	status_t status = ensure_admin_group(errorText);
-	if (status != B_OK)
-		return status;
-	char* argv[] = {
-		const_cast<char*>("/bin/groupmod"),
-		const_cast<char*>("-A"),
-		const_cast<char*>(user),
-		const_cast<char*>(kAdminGroup),
-		NULL
-	};
-	return run_argv(argv, errorText);
-}
-
-
-static status_t
-create_home(const char* home, uid_t uid, gid_t gid)
-{
-	mkdir(kUsersRoot, 0755);
-	if (mkdir(home, 0700) != 0 && errno != EEXIST)
-		return errno;
-	chmod(home, 0700);
-	if (chown(home, uid, gid) != 0)
-		return errno;
-
-	static const char* kFolders[] = {
-		"Desktop", "Documents", "Pictures", "Videos", "Downloads", "Music",
-		"config", NULL
-	};
-	for (int32 i = 0; kFolders[i] != NULL; i++) {
-		BString path;
-		path.SetToFormat("%s/%s", home, kFolders[i]);
-		mkdir(path.String(), 0700);
-		chmod(path.String(), 0700);
-		chown(path.String(), uid, gid);
-	}
-
-	BString settings;
-	settings.SetToFormat("%s/config/settings", home);
-	mkdir(settings.String(), 0700);
-	chmod(settings.String(), 0700);
-	chown(settings.String(), uid, gid);
-	lock_private_homes();
-	return B_OK;
-}
-
-
-static int32
-admin_count()
-{
-	int32 count = 0;
-	setpwent();
-	for (;;) {
-		struct passwd* pwd = getpwent();
-		if (pwd == NULL)
-			break;
-		if (!is_listed_account(pwd) || !is_admin_user(pwd))
-			continue;
-		if (!is_disabled_user(pwd->pw_name))
-			count++;
-	}
-	endpwent();
-	return count;
-}
-
-
-static status_t
-create_account(const char* name, const char* real, const char* password,
-	bool admin, BString& error)
-{
-	if (!valid_username(name)) {
-		error = "Use a lowercase username of letters, digits, underscore "
-			"or hyphen.";
-		return B_BAD_VALUE;
-	}
-	if (getpwnam(name) != NULL) {
-		error = "That username already exists.";
-		return B_NAME_IN_USE;
-	}
-
-	BString home;
-	home.SetToFormat("%s/%s", kUsersRoot, name);
-	char* argv[] = {
-		const_cast<char*>("/bin/useradd"),
-		const_cast<char*>("-d"),
-		const_cast<char*>(home.String()),
-		const_cast<char*>("-n"),
-		const_cast<char*>(real),
-		const_cast<char*>("-s"),
-		const_cast<char*>("/bin/sh"),
-		const_cast<char*>(name),
-		NULL
-	};
-	status_t status = run_argv(argv, error);
-	if (status != B_OK)
-		return status;
-
-	struct passwd* pwd = getpwnam(name);
-	if (pwd == NULL) {
-		error = "The account was not created.";
-		return B_ERROR;
-	}
-	if (pwd->pw_uid < kMinNewUid) {
-		char* delArgv[] = {
-			const_cast<char*>("/bin/userdel"),
-			const_cast<char*>(name),
-			NULL
-		};
-		run_argv(delArgv, error);
-		error = "The new account did not get a user id of 1000 or higher.";
+	BMessenger login(kR5LoginSignature);
+	if (!login.IsValid()) {
+		error = "Sign in must be running to change accounts.";
 		return B_ERROR;
 	}
 
-	create_home(home.String(), pwd->pw_uid, pwd->pw_gid);
-
-	if (password == NULL || password[0] == '\0') {
-		char* delArgv[] = {
-			const_cast<char*>("/bin/passwd"),
-			const_cast<char*>("-d"),
-			const_cast<char*>(name),
-			NULL
-		};
-		if (run_argv(delArgv, error) != B_OK)
-			return B_ERROR;
-	} else {
-		char* encrypted = crypt(password, NULL);
-		if (encrypted == NULL) {
-			error = "Could not encrypt the password.";
-			return B_ERROR;
-		}
-		if (set_shadow_password(name, encrypted) != B_OK) {
-			error = "The account exists, but the password was not set.";
-			return B_ERROR;
-		}
+	BMessage reply;
+	status_t status = login.SendMessage(&request, &reply);
+	if (status != B_OK) {
+		error = strerror(status);
+		return status;
 	}
 
-	if (admin && add_to_admin_group(name, error) != B_OK) {
-		BString text;
-		text.SetToFormat("The account exists, but it is not an administrator: "
-			"%s", error.String());
+	int32 code = B_OK;
+	reply.FindInt32("error", &code);
+	const char* text = NULL;
+	reply.FindString("text", &text);
+	if (code != B_OK) {
+		error = text != NULL ? text : strerror(code);
+		return code;
+	}
+	if (text != NULL && text[0] != '\0' && status != B_OK)
 		error = text;
-		return B_ERROR;
-	}
-
 	return B_OK;
 }
 
@@ -439,9 +166,14 @@ public:
 			return;
 		}
 
+		BMessage request(kMsgAdminAdd);
+		request.AddString("name", name);
+		request.AddString("real", fReal->Text());
+		request.AddString("password", password.String());
+		request.AddBool("admin", fAdmin->Value() == B_CONTROL_ON);
+
 		BString error;
-		status_t status = create_account(name, fReal->Text(),
-			password.String(), fAdmin->Value() == B_CONTROL_ON, error);
+		status_t status = ask_login(request, error);
 		wipe_string(password);
 		wipe_string(repeat);
 		if (status != B_OK) {
@@ -478,8 +210,9 @@ public:
 		SetInsets(0, 0, 0, 0);
 		SetText("New people get user id 1000 or higher and a folder under "
 			"/boot/home/users. Those folders are private to that account. "
-			"They still share this desktop. An empty password is allowed. "
-			"The first account is user id 0, so it can still read the others.");
+			"They still share this desktop until a later session switch. "
+			"An empty password is allowed. The first account keeps "
+			"/boot/home and is no longer user id 0 after Sign in.");
 		SetExplicitMinSize(BSize(280, 72));
 		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 72));
 		SetExplicitPreferredSize(BSize(420, 56));
@@ -599,30 +332,40 @@ private:
 			fList->ItemAt(fList->CurrentSelection()));
 	}
 
+	bool
+	_SelectedIsFirstHome() const
+	{
+		UserItem* item = _Selected();
+		if (item == NULL)
+			return false;
+		struct passwd* pwd = getpwnam(item->Name());
+		return is_first_home_admin(pwd);
+	}
+
 	void
 	_UpdateButtons()
 	{
-		bool root = geteuid() == 0;
-		fAdd->SetEnabled(root);
+		bool admin = current_user_is_admin();
+		fAdd->SetEnabled(admin);
 		UserItem* item = _Selected();
-		if (!root || item == NULL) {
+		if (!admin || item == NULL) {
 			fDisable->SetEnabled(false);
 			fDelete->SetEnabled(false);
 			fDisable->SetLabel("Disable");
 			return;
 		}
 
-		bool originalAdmin = item->Uid() == 0;
-		fDelete->SetEnabled(!originalAdmin);
-		fDisable->SetEnabled(!originalAdmin);
+		bool firstHome = _SelectedIsFirstHome();
+		fDelete->SetEnabled(!firstHome);
+		fDisable->SetEnabled(!firstHome);
 		fDisable->SetLabel(item->IsDisabled() ? "Enable" : "Disable");
 	}
 
 	void
 	_Add()
 	{
-		if (geteuid() != 0) {
-			show_error("Only the administrator session can add accounts.");
+		if (!current_user_is_admin()) {
+			show_error("Only an administrator can add accounts.");
 			return;
 		}
 		CreateWindow* window = new CreateWindow(this);
@@ -636,37 +379,18 @@ private:
 		UserItem* item = _Selected();
 		if (item == NULL)
 			return;
-		if (item->Uid() == 0) {
+		if (_SelectedIsFirstHome()) {
 			show_error("The original administrator account cannot be "
 				"disabled.");
 			return;
 		}
 
-		if (item->IsDisabled()) {
-			struct spwd* shadow = getspnam(item->Name());
-			const char* current = "";
-			if (shadow != NULL && shadow->sp_pwdp != NULL)
-				current = shadow->sp_pwdp;
-			if (current[0] == '!')
-				current++;
-			if (set_shadow_password(item->Name(), current) != B_OK)
-				show_error("Could not enable the account.");
-			_Fill();
-			return;
-		}
-
-		if (item->IsAdmin() && admin_count() <= 1) {
-			show_error("There must be at least one administrator.");
-			return;
-		}
-
-		BString locked("!");
-		struct spwd* shadow = getspnam(item->Name());
-		if (shadow != NULL && shadow->sp_pwdp != NULL
-			&& shadow->sp_pwdp[0] != '!')
-			locked << shadow->sp_pwdp;
-		if (set_shadow_password(item->Name(), locked.String()) != B_OK)
-			show_error("Could not disable the account.");
+		BMessage request(kMsgAdminSetDisabled);
+		request.AddString("name", item->Name());
+		request.AddBool("disable", !item->IsDisabled());
+		BString error;
+		if (ask_login(request, error) != B_OK)
+			show_error(error.String());
 		_Fill();
 	}
 
@@ -676,16 +400,12 @@ private:
 		UserItem* item = _Selected();
 		if (item == NULL)
 			return;
-		if (item->Uid() == 0) {
+		if (_SelectedIsFirstHome()) {
 			show_error("The original administrator account cannot be deleted.");
 			return;
 		}
 		if (item->Uid() == getuid()) {
 			show_error("You cannot delete the account that is signed in.");
-			return;
-		}
-		if (item->IsAdmin() && !item->IsDisabled() && admin_count() <= 1) {
-			show_error("There must be at least one administrator.");
 			return;
 		}
 
@@ -697,33 +417,12 @@ private:
 		if (choice == 0)
 			return;
 
-		BString home;
-		struct passwd* pwd = getpwnam(item->Name());
-		if (pwd != NULL && pwd->pw_dir != NULL)
-			home = pwd->pw_dir;
-
+		BMessage request(kMsgAdminDelete);
+		request.AddString("name", item->Name());
+		request.AddBool("delete_files", choice == 2);
 		BString error;
-		BString userName(item->Name());
-		char* argv[] = {
-			const_cast<char*>("/bin/userdel"),
-			const_cast<char*>(userName.String()),
-			NULL
-		};
-		if (run_argv(argv, error) != B_OK) {
+		if (ask_login(request, error) != B_OK)
 			show_error(error.String());
-			return;
-		}
-
-		if (choice == 2 && home.FindFirst("/boot/home/users/") == 0) {
-			char* rmArgv[] = {
-				const_cast<char*>("/bin/rm"),
-				const_cast<char*>("-rf"),
-				const_cast<char*>(home.String()),
-				NULL
-			};
-			run_argv(rmArgv, error);
-		}
-
 		_Fill();
 	}
 

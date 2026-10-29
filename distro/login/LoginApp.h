@@ -33,6 +33,7 @@ public:
 private:
 	void			TryLogin(BMessage* message);
 	void			Logout();
+	void			HandleAdmin(BMessage* message);
 	status_t		ValidateLogin(const char* login, const char* password);
 	void			_EnableDesktopJobs();
 	void			_HideLogin();

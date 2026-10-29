@@ -9,8 +9,8 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Image user is `HAIKU_ROOT_USER_NAME = user` (`distro/UserBuildConfig`), real name `R5OS`, host `r5os`.
 - Home is **`/boot/home`**. Tracker Desktop, `~/config`, mail, and `find_directory(B_USER_* )` all point there for the live session.
 - `/etc/passwd` and `/etc/shadow` exist. Tools: `src/bin/multiuser` (`useradd`, `userdel`, `passwd`, `su`, `login`) and `verify_password()`.
-- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. Uid 0 `user` still reads them.
-- Default desktop user is often **UID 0** on Haiku images. GUI restrictions would not be security. New accounts must not be UID 0.
+- Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. **Build 10007:** Login migrates `user` off uid 0 and wraps Tracker/Deskbar with `r5-desktop`. Extra homes then apply to the person at the desktop. Sign in as someone else is still this desktop.
+- Image `passwd` still ships `user` as uid 0; Login migrates that account to the first free uid ≥ 1000 before Sign in and `chown`s `/boot/home`. Tracker/Deskbar then run as that uid (`r5-desktop`). New accounts must not be UID 0.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
 - Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Appearance, Backgrounds, Deskbar, Tracker, and app_server `DesktopSettings` already use `find_directory`. That call still returns `/boot/home/…` for **uid 0** (`get_user_home_path` skips `getpwuid` and uses `kUserDirectory`). Extra people (uid ≥ 1000) would get `$HOME/config/settings` **if** they had their own session. Sign in does not switch uid yet.
 - Packages: system-wide in `/boot/system`. Per-user config in `~/config`. Do not invent a second package format.
@@ -133,7 +133,7 @@ Longer term: vendor or submodule the Haiku tree under `haiku/` in `origin` so co
 | Role | Source |
 |---|---|
 | Marketing version | `distro/VERSION` (`2026.1-dev`) |
-| Build number | `distro/BUILD` (this work: **10006**) |
+| Build number | `distro/BUILD` (this work: **10007**) |
 | Jam revision | `r5-${VERSION}` via `scripts/r5-version.sh --revision` → `UserBuildConfig` `HAIKU_REVISION` |
 | About / generated header | `headers/private/system/r5_os_version.h` (`R5_OS_VERSION`, `R5_OS_BUILD`) written by `apply-overlay.sh` / `jam-r5-raw.sh` |
 | What’s new text | `distro/WHATSNEW` copied to About `r5_whatsnew.txt` |
@@ -149,7 +149,7 @@ Do not treat Haiku `hrev` as the product version.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
 6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (apply copies files). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time).
-7. **First administrator off uid 0** (next). Proposal below. Not `StartSession`.
+7. **First administrator off uid 0** (build 10007). Runtime `passwd` + `chown`; desktop jobs via `/system/apps/r5-desktop`. Not `StartSession`.
 8. **`StartSession`:** Sign in as a standard user is that uid and home. One graphical session.
 9. Lock screen; then guest/Public.
 10. Absorb leftover kernel/UI string overlays into native source; do not add new ones.
@@ -195,6 +195,17 @@ After Sign in, in Terminal:
 4. As `user` (uid 0), `ls /boot/home/users/nicky` still works.
 
 VBox 2026-10-29 14:30 Europe/Amsterdam: 1–4 confirmed (`nicky`; uid 0 `user` still listed that home).
+
+## Tests for administrator off uid 0 (build 10007)
+
+Not run yet. Call it isolation only if these pass on VBox:
+
+1. Sign in as `user`: `id` is not uid 0; `$HOME` is `/boot/home`.
+2. If a standard user exists: `ls /boot/home/users/<name>` is permission denied; `su <name>` can list that home; `su <name> -c 'ls /boot/home/Desktop'` is denied.
+3. Sign in as the standard user still opens the administrator desktop (until `StartSession`).
+4. Administrator can still add a standard user (Users talks to Login).
+5. Log out, Sign in again. `launch_daemon` still running.
+6. Fresh image (migrate from uid 0) and a disk that already had a standard user (new uid must not collide).
 
 ## Testing a second account (limits)
 
@@ -245,7 +256,7 @@ Checked in the jammed AMD64 tree (2026-10-29):
 | Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
 | Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
 
-Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.
+Until `StartSession`, changing Appearance still writes the first home (`/boot/home`). After build 10007 that is the administrator’s uid, not 0. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.
 
 ### Bundled applications
 

@@ -6,6 +6,7 @@
 
 #include "LoginApp.h"
 
+#include "AccountAdmin.h"
 #include "DesktopWindow.h"
 #include "HomeLock.h"
 #include "LoginWindow.h"
@@ -124,6 +125,7 @@ LoginApp::ReadyToRun()
 		return;
 	}
 
+	migrate_admin_off_root();
 	lock_private_homes();
 	fDesktopWindow = new DesktopWindow(screen.Frame(), false);
 	fDesktopWindow->Show();
@@ -139,6 +141,11 @@ LoginApp::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kAttemptLogin:
 			TryLogin(message);
+			break;
+		case kMsgAdminAdd:
+		case kMsgAdminDelete:
+		case kMsgAdminSetDisabled:
+			HandleAdmin(message);
 			break;
 		case kLogoutAction:
 			Logout();
@@ -201,8 +208,13 @@ LoginApp::TryLogin(BMessage* message)
 		const char* password = message->GetString("password");
 		status = ValidateLogin(login, password);
 		if (status == B_OK) {
-			_EnableDesktopJobs();
-			status = BLaunchRoster().Target("desktop");
+			status = migrate_admin_off_root();
+			if (status == B_OK)
+				status = write_desktop_session();
+			if (status == B_OK) {
+				_EnableDesktopJobs();
+				status = BLaunchRoster().Target("desktop");
+			}
 			if (status == B_OK)
 				_HideLogin();
 		}
@@ -217,10 +229,22 @@ LoginApp::TryLogin(BMessage* message)
 			reply.AddString("text", "That password is not right.");
 		else if (status == B_NAME_NOT_FOUND)
 			reply.AddString("text", "Could not start the desktop.");
+		else if (status == B_NOT_ALLOWED)
+			reply.AddString("text",
+				"Could not move the administrator off user id 0.");
 		else
 			reply.AddString("text", strerror(status));
 		message->SendReply(&reply);
 	}
+}
+
+
+void
+LoginApp::HandleAdmin(BMessage* message)
+{
+	BMessage reply;
+	handle_admin_message(message, reply);
+	message->SendReply(&reply);
 }
 
 

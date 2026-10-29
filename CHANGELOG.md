@@ -4,6 +4,14 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### First administrator off uid 0 (build 10007)
+
+Login (still uid 0) rewrites `/etc/passwd` so the `/boot/home` account is the first free uid ≥ 1000 (sshd keeps 1000), primary group `users`, member of `admin`. It `chown`s `/boot/home` except `/boot/home/users/<other>`. Desktop jobs start through `/system/apps/r5-desktop`, which drops to that uid before exec. Not `StartSession`. Sign in as a standard user still opens this administrator desktop.
+
+Users & Accounts talks to Login for add/disable/delete (preflet euid is no longer 0). The `/boot/home` account cannot be deleted or disabled. Last-admin check stays.
+
+Jam AMD64 2026-10-29 15:58 Europe/Amsterdam: `jam_exit=0` (Login, Users, `r5-desktop`, image). Not VBox-tested yet. Isolation is only true if `id` after Sign in is not uid 0 and `ls /boot/home/users/<name>` is permission denied.
+
 ### First administrator off uid 0 (plan)
 
 Documented in `docs/MULTIUSER.md` and `AGENTS.md`. Product people: administrator `user` at `/boot/home`, optional standard users under `/boot/home/users/<name>`. Test names such as `nicky` are VBox fixtures, not image accounts. Next code: unused uid ≥ 1000 (not sshd 1000), `chown` of the first home, desktop jobs as that uid, Users & Accounts via an admin helper. No new overlays. Not `StartSession`. Not implemented yet.

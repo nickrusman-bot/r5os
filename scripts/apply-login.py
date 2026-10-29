@@ -41,6 +41,7 @@ def copy_sources() -> None:
         "LoginView.h",
         "LoginWindow.cpp",
         "LoginWindow.h",
+        "R5Desktop.cpp",
         "main.cpp",
     ):
         shutil.copy2(SRC / name, dest / name)
@@ -48,7 +49,12 @@ def copy_sources() -> None:
         print(f"copied {name} -> {dest}")
 
     users = ROOT / "distro" / "users"
-    for name in ("HomeLock.cpp", "HomeLock.h"):
+    for name in (
+        "AccountAdmin.cpp",
+        "AccountAdmin.h",
+        "HomeLock.cpp",
+        "HomeLock.h",
+    ):
         shutil.copy2(users / name, dest / name)
         (dest / name).touch()
         print(f"copied {name} -> {dest}")
@@ -85,6 +91,75 @@ def patch_launch() -> None:
         "}\n",
         "run login not desktop",
     )
+    wraps = (
+        (
+            "\t\tlaunch /system/Tracker\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/Tracker\n",
+            "wrap Tracker",
+        ),
+        (
+            "\t\tlaunch /system/Deskbar\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/Deskbar\n",
+            "wrap Deskbar",
+        ),
+        (
+            "\t\tlaunch /system/servers/airplay_deskbar\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/servers/airplay_deskbar\n",
+            "wrap airplay",
+        ),
+        (
+            "\t\tlaunch /system/apps/NetworkStatus --deskbar\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/apps/NetworkStatus "
+            "--deskbar\n",
+            "wrap NetworkStatus",
+        ),
+        (
+            "\t\tlaunch /system/servers/r5_vbox_clip\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/servers/r5_vbox_clip\n",
+            "wrap vbox clip",
+        ),
+        (
+            "\t\tlaunch /system/apps/LaunchBox\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/apps/LaunchBox\n",
+            "wrap LaunchBox",
+        ),
+        (
+            "\t\tlaunch /system/servers/mail_daemon\n",
+            "\t\tlaunch /system/apps/r5-desktop /system/servers/mail_daemon\n",
+            "wrap mail_daemon",
+        ),
+        (
+            "\t\tlaunch /bin/sh ~/config/settings/boot/UserBootscript\n",
+            "\t\tlaunch /system/apps/r5-desktop /bin/sh "
+            "~/config/settings/boot/UserBootscript\n",
+            "wrap UserBootscript",
+        ),
+        (
+            '\t\tlaunch /bin/sh /system/boot/PostInstallScript "first login" '
+            "~/config/settings/first_login /boot/system/boot/first-login\n",
+            "\t\tlaunch /system/apps/r5-desktop /bin/sh "
+            '/system/boot/PostInstallScript "first login" '
+            "~/config/settings/first_login /boot/system/boot/first-login\n",
+            "wrap first-login",
+        ),
+        (
+            "\t\tlaunch /bin/ln -sf /boot/system/apps/Installer "
+            "~/Desktop/Installer\n",
+            "\t\tlaunch /system/apps/r5-desktop /bin/ln -sf "
+            "/boot/system/apps/Installer ~/Desktop/Installer\n",
+            "wrap installer link",
+        ),
+    )
+    launch = HAIKU / "data" / "launch" / "user"
+    text = launch.read_text(encoding="utf-8")
+    if "/system/bin/r5-desktop" in text:
+        launch.write_text(
+            text.replace("/system/bin/r5-desktop", "/system/apps/r5-desktop"),
+            encoding="utf-8",
+        )
+        print("patched user (r5-desktop apps path)")
+    for old, new, tag in wraps:
+        replace_once(launch, old, new, tag, optional=True)
 
 
 def patch_first_boot() -> None:
@@ -191,14 +266,39 @@ def patch_installer() -> None:
 
 def patch_image() -> None:
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_BIN += r5-desktop ;" in text:
+        text = text.replace("SYSTEM_BIN += r5-desktop ;\n", "")
+        regular.write_text(text, encoding="utf-8")
+        print("patched regular (drop r5-desktop SYSTEM_BIN)")
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_APPS += r5-desktop ;\nSYSTEM_APPS += Login ;\n" in text:
+        text = text.replace(
+            "SYSTEM_APPS += r5-desktop ;\nSYSTEM_APPS += Login ;\n",
+            "SYSTEM_APPS += r5-desktop ;\n",
+            1,
+        )
+        regular.write_text(text, encoding="utf-8")
+        print("patched regular (drop duplicate Login SYSTEM_APPS)")
+    text = regular.read_text(encoding="utf-8")
+    if "SYSTEM_APPS += Login ;" in text:
+        print("already regular (Login SYSTEM_APPS)")
+    else:
+        replace_once(
+            regular,
+            "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
+            "	ActivityMonitor\n",
+            "SYSTEM_APPS += Login ;\n"
+            "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
+            "	ActivityMonitor\n",
+            "Login SYSTEM_APPS",
+        )
     replace_once(
         regular,
-        "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
-        "	ActivityMonitor\n",
+        "SYSTEM_APPS += Login ;\n",
         "SYSTEM_APPS += Login ;\n"
-        "SYSTEM_APPS += [ FFilterByBuildFeatures\n"
-        "	ActivityMonitor\n",
-        "Login SYSTEM_APPS",
+        "SYSTEM_APPS += r5-desktop ;\n",
+        "r5-desktop SYSTEM_APPS",
     )
 
 
