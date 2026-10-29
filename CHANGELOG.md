@@ -30,7 +30,9 @@ Jam AMD64 2026-10-29 20:45 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` 
 
 VBox 20:47 Europe/Amsterdam (guest clock 7:47 PM, UTC): `nicky`’s leaf menu (Applications, Demos, Desktop applets, Preferences) was the yellow folder. `user`’s same four items were the blue-grey folder. `nicky`’s `config/settings/mime_db` was present (7:48 PM). Copying the directory type was not enough. Those menu rows are merged folders, type `application/x-vnd.haiku-virtual-directory`, whose icon is blue. A standard account often cannot create `/tmp/tracker/virtual-directories` (mode 0755, owned by whoever opened the menu first), so Tracker keeps the real system folder and its yellow icon. The administrator can, and then sees the blue virtual-directory icon. That type now uses the same yellow icon as `application/x-vnd.be-directory`. Sign-in copies both types into the account database again.
 
-Jam AMD64 2026-10-29 21:13 Europe/Amsterdam: `jam_exit=0` (8116 targets). Optional translator headers were missing again; the image still built. VBox `-ForceConvert` started 21:16 Europe/Amsterdam. Both leaf menus yellow on this image is not confirmed yet. A fresh disk has no `nicky` until Users & Accounts creates that account again.
+Jam AMD64 2026-10-29 21:13 Europe/Amsterdam: `jam_exit=0` (8116 targets). Optional translator headers were missing again; the image still built. VBox `-ForceConvert` started 21:16 Europe/Amsterdam.
+
+VBox 21:16 Europe/Amsterdam (guest clock 8:16 PM, UTC): the leaf menu showed Applications, Demos, Desktop applets, and Preferences with the yellow folder. This was the fresh disk, so that desktop is the first account (`user`). `nicky` is not on a fresh image until Users & Accounts creates the account again.
 
 ### First administrator off uid 0 (build 10007)
 
