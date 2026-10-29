@@ -1227,6 +1227,256 @@ refresh_machine_settings_access()
 }
 
 
+static bool
+sender_uid(BMessage* request, uid_t& uid)
+{
+	if (request == NULL)
+		return false;
+	team_info info;
+	if (get_team_info(request->ReturnAddress().Team(), &info) != B_OK)
+		return false;
+	uid = info.uid;
+	return true;
+}
+
+
+static bool
+sender_may_edit(BMessage* request, const struct passwd* pwd)
+{
+	if (pwd == NULL)
+		return false;
+	if (sender_may_change(request))
+		return true;
+	uid_t uid = (uid_t)-1;
+	return sender_uid(request, uid) && uid == pwd->pw_uid;
+}
+
+
+static BString
+account_settings_dir(const char* home)
+{
+	BString path;
+	if (home != NULL)
+		path.SetToFormat("%s/config/settings/r5-account", home);
+	return path;
+}
+
+
+static status_t
+ensure_account_dir(const struct passwd* pwd, BString& dir)
+{
+	if (pwd == NULL || pwd->pw_dir == NULL)
+		return B_BAD_VALUE;
+	BString settings;
+	settings.SetToFormat("%s/config/settings", pwd->pw_dir);
+	mkdir(settings.String(), 0700);
+	chown(settings.String(), pwd->pw_uid, pwd->pw_gid);
+	dir = account_settings_dir(pwd->pw_dir);
+	if (mkdir(dir.String(), 0700) != 0 && errno != EEXIST)
+		return errno;
+	chmod(dir.String(), 0700);
+	if (chown(dir.String(), pwd->pw_uid, pwd->pw_gid) != 0)
+		return errno;
+	return B_OK;
+}
+
+
+static status_t
+write_owned_file(const char* path, const void* data, size_t size,
+	uid_t uid, gid_t gid)
+{
+	int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	if (fd < 0)
+		return errno;
+	const char* bytes = (const char*)data;
+	size_t done = 0;
+	while (done < size) {
+		ssize_t wrote = write(fd, bytes + done, size - done);
+		if (wrote < 0) {
+			int error = errno;
+			close(fd);
+			return error;
+		}
+		done += wrote;
+	}
+	close(fd);
+	chmod(path, 0600);
+	chown(path, uid, gid);
+	return B_OK;
+}
+
+
+static void
+read_profile_files(const struct passwd* pwd, BMessage& reply)
+{
+	if (pwd == NULL || pwd->pw_dir == NULL)
+		return;
+	BString dir = account_settings_dir(pwd->pw_dir);
+	BString emailPath;
+	emailPath.SetToFormat("%s/email", dir.String());
+	FILE* file = fopen(emailPath.String(), "r");
+	if (file != NULL) {
+		char buffer[256];
+		if (fgets(buffer, sizeof(buffer), file) != NULL) {
+			size_t length = strlen(buffer);
+			while (length > 0 && (buffer[length - 1] == '\n'
+				|| buffer[length - 1] == '\r'))
+				buffer[--length] = '\0';
+			reply.AddString("email", buffer);
+		}
+		fclose(file);
+	}
+
+	BString picturePath;
+	picturePath.SetToFormat("%s/picture", dir.String());
+	int fd = open(picturePath.String(), O_RDONLY);
+	if (fd < 0)
+		return;
+	struct stat st;
+	if (fstat(fd, &st) != 0 || st.st_size < 12 || st.st_size > 512 * 1024) {
+		close(fd);
+		return;
+	}
+	char* bytes = new char[st.st_size];
+	ssize_t got = read(fd, bytes, st.st_size);
+	close(fd);
+	if (got == st.st_size)
+		reply.AddData("picture", B_RAW_TYPE, bytes, got);
+	delete[] bytes;
+}
+
+
+static status_t
+update_profile(BMessage* request, BString& error)
+{
+	const char* name = NULL;
+	request->FindString("name", &name);
+	struct passwd* pwd = name != NULL ? getpwnam(name) : NULL;
+	if (pwd == NULL || name == NULL || strcmp(pwd->pw_name, name) != 0
+		|| !is_listed_account(pwd)) {
+		error = "That account was not found.";
+		return ENOENT;
+	}
+	if (!sender_may_edit(request, pwd)) {
+		error = "Unlock this with an administrator password.";
+		return B_PERMISSION_DENIED;
+	}
+
+	char account[64];
+	snprintf(account, sizeof(account), "%s", pwd->pw_name);
+	uid_t uid = pwd->pw_uid;
+	gid_t gid = pwd->pw_gid;
+	BString home(pwd->pw_dir != NULL ? pwd->pw_dir : "");
+	bool self = false;
+	uid_t sender = (uid_t)-1;
+	if (sender_uid(request, sender))
+		self = sender == uid;
+
+	const char* real = NULL;
+	if (request->FindString("real", &real) == B_OK && real != NULL) {
+		if (strchr(real, ':') != NULL || strchr(real, '\n') != NULL
+			|| strchr(real, '\r') != NULL) {
+			error = "The name cannot contain a colon or a new line.";
+			return B_BAD_VALUE;
+		}
+		if (strlen(real) > 80) {
+			error = "That name is too long.";
+			return B_BAD_VALUE;
+		}
+		BPrivate::KMessage message(BPrivate::B_REG_UPDATE_USER);
+		if (message.AddInt32("uid", uid) != B_OK
+			|| message.AddString("real name", real) != B_OK)
+			return B_NO_MEMORY;
+		BPrivate::KMessage registrarReply;
+		status_t status = BPrivate::send_authentication_request_to_registrar(
+			message, registrarReply);
+		if (status != B_OK) {
+			error = "The name could not be saved.";
+			return status;
+		}
+	}
+
+	const char* password = request->GetString("password", NULL);
+	if (password != NULL && password[0] != '\0') {
+		pwd = getpwnam(account);
+		if (self && !account_password_matches(pwd,
+			request->GetString("current", ""))) {
+			error = "That password is not right.";
+			return B_PERMISSION_DENIED;
+		}
+		char* encrypted = crypt(password, NULL);
+		if (encrypted == NULL) {
+			error = "Could not encrypt the password.";
+			return B_ERROR;
+		}
+		BString hash(encrypted);
+		if (set_shadow_password(account, hash.String()) != B_OK) {
+			error = "The password could not be saved.";
+			return B_ERROR;
+		}
+	}
+
+	pwd = getpwnam(account);
+	if (pwd == NULL) {
+		error = "That account was not found.";
+		return ENOENT;
+	}
+	home.SetTo(pwd->pw_dir != NULL ? pwd->pw_dir : "");
+	uid = pwd->pw_uid;
+	gid = pwd->pw_gid;
+
+	const char* email = NULL;
+	bool hasEmail = request->FindString("email", &email) == B_OK;
+	const void* picture = NULL;
+	ssize_t pictureSize = 0;
+	bool hasPicture = request->FindData("picture", B_RAW_TYPE, &picture,
+		&pictureSize) == B_OK;
+	bool clearPicture = request->GetBool("clear_picture", false);
+	if (!hasEmail && !hasPicture && !clearPicture)
+		return B_OK;
+
+	BString dir;
+	status_t status = ensure_account_dir(pwd, dir);
+	if (status != B_OK) {
+		error = "The account folder could not be updated.";
+		return status;
+	}
+	if (hasEmail) {
+		if (email == NULL)
+			email = "";
+		if (strlen(email) > 200 || strchr(email, '\n') != NULL) {
+			error = "That email address cannot be saved.";
+			return B_BAD_VALUE;
+		}
+		BString path;
+		path.SetToFormat("%s/email", dir.String());
+		status = write_owned_file(path.String(), email, strlen(email),
+			uid, gid);
+		if (status != B_OK) {
+			error = "The email address could not be saved.";
+			return status;
+		}
+	}
+	BString picturePath;
+	picturePath.SetToFormat("%s/picture", dir.String());
+	if (clearPicture)
+		unlink(picturePath.String());
+	else if (hasPicture) {
+		if (pictureSize < 12 || pictureSize > 512 * 1024) {
+			error = "That picture is too large.";
+			return B_BAD_VALUE;
+		}
+		status = write_owned_file(picturePath.String(), picture, pictureSize,
+			uid, gid);
+		if (status != B_OK) {
+			error = "The picture could not be saved.";
+			return status;
+		}
+	}
+	return B_OK;
+}
+
+
 static void
 deny_locked(BMessage& reply)
 {
@@ -1295,6 +1545,31 @@ handle_admin_message(BMessage* request, BMessage& reply)
 			reply.AddBool("unlocked", sender_is_admin(request));
 			reply.AddInt32("error", B_OK);
 			return B_OK;
+
+		case kMsgAdminGetProfile:
+		{
+			const char* name = NULL;
+			request->FindString("name", &name);
+			struct passwd* pwd = name != NULL ? getpwnam(name) : NULL;
+			if (pwd == NULL || !is_listed_account(pwd)
+				|| !sender_may_edit(request, pwd)) {
+				reply.AddString("text", "That account was not found.");
+				reply.AddInt32("error", B_PERMISSION_DENIED);
+				return B_PERMISSION_DENIED;
+			}
+			read_profile_files(pwd, reply);
+			reply.AddInt32("error", B_OK);
+			return B_OK;
+		}
+		case kMsgAdminSetProfile:
+			status = update_profile(request, error);
+			if (status != B_OK) {
+				if (error.Length() > 0)
+					reply.AddString("text", error.String());
+				reply.AddInt32("error", status);
+			} else
+				reply.AddInt32("error", B_OK);
+			return status;
 
 		case kMsgAdminSetClock:
 		case kMsgAdminSetTimezone:
@@ -1386,10 +1661,8 @@ handle_admin_message(BMessage* request, BMessage& reply)
 			break;
 	}
 
-	if (status != B_OK) {
-		if (error.Length() > 0)
-			reply.AddString("text", error.String());
-		reply.AddInt32("error", status);
-	}
+	if (status != B_OK && error.Length() > 0)
+		reply.AddString("text", error.String());
+	reply.AddInt32("error", status == B_OK ? B_OK : status);
 	return status;
 }

@@ -157,6 +157,11 @@ LoginApp::MessageReceived(BMessage* message)
 		case kMsgAdminSetClock:
 		case kMsgAdminSetTimezone:
 		case kMsgAdminSetClockGmt:
+		case kMsgAdminGetProfile:
+		case kMsgAdminSetProfile:
+			// New account messages must be listed here. An unhandled
+			// message still gets an empty reply, and Users treats a missing
+			// "error" field as failure.
 			HandleAdmin(message);
 			break;
 		case kLogoutAction:

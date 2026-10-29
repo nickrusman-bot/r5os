@@ -11,6 +11,6 @@ Application Users :
 	AdminLock.cpp
 	HomeLock.cpp
 	Users.cpp
-	: be [ TargetLibstdc++ ]
+	: be tracker translation [ TargetLibstdc++ ]
 	: Users.rdef
 ;

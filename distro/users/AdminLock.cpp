@@ -315,6 +315,8 @@ AdminLockBar::AcceptsInput(BHandler* target) const
 	BView* view = dynamic_cast<BView*>(target);
 	if (view == NULL || is_under(view, const_cast<AdminLockBar*>(this)))
 		return true;
+	if (_IsExempt(view))
+		return true;
 
 	for (BView* item = view; item != NULL; item = item->Parent()) {
 		if (dynamic_cast<BScrollBar*>(item) != NULL)
@@ -347,6 +349,33 @@ AdminLockBar::MessageReceived(BMessage* message)
 			BGroupView::MessageReceived(message);
 			break;
 	}
+}
+
+
+void
+AdminLockBar::SetExempt(BView* view, bool exempt)
+{
+	if (view == NULL)
+		return;
+	if (exempt) {
+		if (!fExempt.HasItem(view))
+			fExempt.AddItem(view);
+	} else
+		fExempt.RemoveItem(view);
+	if (Window() != NULL)
+		_SyncControls();
+}
+
+
+
+bool
+AdminLockBar::_IsExempt(BView* view) const
+{
+	for (BView* item = view; item != NULL; item = item->Parent()) {
+		if (fExempt.HasItem(item))
+			return true;
+	}
+	return false;
 }
 
 
@@ -409,7 +438,7 @@ AdminLockBar::_Prune()
 void
 AdminLockBar::_DisableTree(BView* view)
 {
-	if (view == NULL || is_under(view, this))
+	if (view == NULL || is_under(view, this) || _IsExempt(view))
 		return;
 
 	BControl* control = dynamic_cast<BControl*>(view);
@@ -440,6 +469,13 @@ AdminLockBar::_SyncControls()
 		}
 		fForced.MakeEmpty();
 	} else {
+		for (int32 i = fForced.CountItems() - 1; i >= 0; i--) {
+			BControl* control = (BControl*)fForced.ItemAt(i);
+			if (!_IsExempt(control))
+				continue;
+			control->SetEnabled(true);
+			fForced.RemoveItem(i);
+		}
 		int32 count = Window()->CountChildren();
 		for (int32 i = 0; i < count; i++)
 			_DisableTree(Window()->ChildAt(i));

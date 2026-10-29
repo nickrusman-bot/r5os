@@ -4,13 +4,43 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### Your account (build 10011)
+
+Users & Accounts is a card: round picture (initials until you choose one), name, username, email, and Change password. A standard account sees only that card. An administrator, or Unlock, also sees the people list and Add / Disable / Delete. Sign in still lists everyone who can sign in.
+
+Name and password go through Login (uid 0). The signed-in person must type the current password. An administrator setting someone else's password does not. Email and the picture live in that account's `config/settings/r5-account` (mode 0600). Username stays fixed.
+
+Jam AMD64 2026-10-29 22:42 Europe/Amsterdam: `jam_exit=0` (Users, Login, image).
+
+VBox 22:44 Europe/Amsterdam (guest 9:44 PM, UTC): as `user`, the card and Change password opened. The card background was white (`B_DOCUMENT_BACKGROUND_COLOR`) and the labels did not share one column.
+
+The card now uses the normal panel color. Name, username, email, and account sit on one grid. Choose picture and Remove picture share one width under the avatar. Change password and Save sit on the same row. The people row shows the name and the account on two lines. Same build number (10011).
+
+Jam AMD64 2026-10-29 22:51 Europe/Amsterdam: `jam_exit=0` (Users, image).
+
+VBox 22:56 Europe/Amsterdam: the panel color is right, and the people list (name, then account) looks right. As `nicky` the window title was "Your account" but the people list was still there, and the lock blocked editing that account's own name, email, picture, and password. As `user`, Name and Email grew into tall boxes; the label sat in the middle of the row and the text sat at the top. `IsHidden()` before the window is shown follows the window, so the list was never actually hidden. A grid row beside the avatar took the spare height.
+
+The people column is now a layout item, hidden after the window is shown, unless this account may manage people. The signed-in person's card stays editable while Locked. Name and Email stay one line, labels share the right edge, and the first row starts level with the top of the list. Rules for the next window are in `docs/STYLE.md`.
+
+Jam AMD64 2026-10-29 23:09 Europe/Amsterdam: `jam_exit=0` (Users, image). Not yet seen in VBox.
+
+VBox 23:12 Europe/Amsterdam: as `nicky`, Your account no longer showed the people list. Change password closed as if it had worked, and the password stayed the old one. Login's message switch never included profile get/set (`r5ah`, `r5af`), so the request was dropped. The reply had no `error` field and Users treated that as success. The same hole covered Save of name, email, and picture. Login now handles those messages, and a reply without `error` is a failure.
+
+Jam AMD64 2026-10-29 23:19 Europe/Amsterdam: `jam_exit=0` (Login, Users, image). Not yet seen in VBox.
+
+VBox 23:25 Europe/Amsterdam (guest 9:58 PM, UTC): as `user`, Users & Accounts showed the people list, a one-line Name and Email, and `nicky` as a standard account. As `nicky`, the own card worked, including a password change. Add account created the person and then reported "Sign in did not answer." Add, Disable, and Delete returned no `error` field on success, and the stricter reply check treated that as failure.
+
+Success on those three requests now includes `error` 0. Login relinked 2026-10-29 23:28 Europe/Amsterdam. The image was not rebuilt, so the running VBox still shows the false alert.
+
 ### Log out name and Sign in after Restart (build 10010)
 
 The Deskbar leaf item is `Log out <name>` for the signed-in account.
 
 After the first Sign in, uid 0 is locked `root` with home `/boot/system`. `autologin` still `StartSession`s that uid-0 name (Login must stay uid 0). `/boot/system` is packagefs, so the user `launch_daemon` could not take the screen and Restart/Reset stayed on the boot splash. The session daemon now uses `/boot/system/var/root` when uid 0 has no writable home. Still not `StartSession` of the signed-in person.
 
-Jam AMD64 2026-10-29 22:20 Europe/Amsterdam: `jam_exit=0` (launch_daemon, Deskbar, Login, image). Not confirmed on a boot after Restart yet.
+Jam AMD64 2026-10-29 22:20 Europe/Amsterdam: `jam_exit=0` (launch_daemon, Deskbar, Login, image).
+
+VBox 22:26 Europe/Amsterdam: after the first Sign in, Restart reached Sign in, not the splash. Log out, then Sign in as someone else. The preference lock was closed again after Log out.
 
 ### Locked machine settings (build 10009)
 
