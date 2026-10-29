@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/session-user		Build 10009: lock bottom-right; controls disabled while locked. VBox 21:49 showed label only. Not rebooted.
+8940	in-progress	cursor/session-user		Build 10009: VBox 22:04 nick uid 1002; Network locked gray buttons; Users unlocked per window.
 8944	open			
 8948	open			
 8956	open			

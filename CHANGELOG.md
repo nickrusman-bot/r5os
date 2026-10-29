@@ -16,7 +16,9 @@ VBox `-ForceConvert` 21:45 Europe/Amsterdam: the VM powered on. Fresh disk, so t
 
 VBox 21:49 Europe/Amsterdam (guest clock 8:49 PM, UTC): Network showed Locked and Unlock at the top left. Add, Apply, and the other controls stayed active. The lock now sits on the bottom right of Network, Screen, Time, and Users. While it is locked, buttons, checkboxes, menus, and text fields in that window are disabled. Scrolling still works.
 
-Jam AMD64 2026-10-29 22:02 Europe/Amsterdam: `jam_exit=0` (Users, Time, Screen, Network, image). Not confirmed on a boot of this build yet.
+Jam AMD64 2026-10-29 22:02 Europe/Amsterdam: `jam_exit=0` (Users, Time, Screen, Network, image).
+
+VBox 22:04 Europe/Amsterdam (guest clock 9:04 PM, UTC): signed in as standard account `nick` (uid 1002, `/boot/home/users/nick`). Network: lock at the bottom right, Revert / Disable / Renegotiate gray. Users: after Unlock, “Unlocked for a few minutes” and Lock at the bottom right, Add on. Network stayed Locked while Users was unlocked — the grant is per preference window.
 
 ### Sign in as that person (build 10008)
 

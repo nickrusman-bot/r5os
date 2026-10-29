@@ -341,6 +341,8 @@ Deskbar shows the same Preferences list to everyone (build 10009). Nothing is hi
 |---|---|---|
 | Users | yes, in Preferences | list is visible to everyone; Add, Disable, and Delete need the lock |
 
-**Not this pass:** one combined Preferences window; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`. VBox with this image powered on 2026-10-29 21:45 Europe/Amsterdam. The lock is not confirmed in the desktop yet.
+**Not this pass:** one combined Preferences window; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`.
+
+VBox 2026-10-29 22:04 Europe/Amsterdam (guest 9:04 PM, UTC): as `nick` (uid 1002), Network stayed locked with the gray buttons at the bottom right. Users unlocked for a few minutes in the same session. The grant is per preference window.
 
 CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Leave them.
