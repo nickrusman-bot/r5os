@@ -1,25 +1,39 @@
 # R5OS
 
-Eigen distro op basis van [Haiku](https://www.haiku-os.org/), genoemd naar BeOS R5 als historische inspiratie.
+Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nods to BeOS R5 as history, not as a product claim.
 
-Dit is **niet** de officiële Haiku-distributie en **niet** BeOS. Zie `distro/DISCLAIMER.txt`.
+This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
 
-## Indeling
+Current tree: **R5OS 2026.1-dev Build 10003** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
-| Pad | Rol |
+## What is in the image now
+
+User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG.md`):
+
+- Branding as R5OS (Deskbar, installer, splash, About).
+- Dark appearance, desktop/Deskbar layout fixes.
+- Wi-Fi join/remember, IPv6 SLAAC/DAD on a home LAN, AirPrint/IPP add, AirPlay 1 to speakers (not AirPlay 2 pairing).
+- Shutdown no longer waits forever on IPv6 SLAAC or the VirtualBox COM1 clipboard helper.
+- **Users & Accounts** in Preferences: list, add, disable, delete. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`. Everyone still shares one desktop until a login screen exists.
+
+Not done: login on the boot path, logout, home isolation, per-user settings. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
+
+## Layout
+
+| Path | Role |
 |---|---|
-| `distro/` | Overlay: Jam-profiel, disclaimer, later branding en extra apps |
-| `docs/ROADMAP.md` | Productrichting (geen agent-regels; die staan in `AGENTS.md`) |
-| `tracker/` | Alle open Haiku-tickets + of R5OS ze al gefixt heeft |
-| `scripts/` | Clone, overlay, image, ticket-sync |
-| `haiku/` | R5OS-fork van de OS-bron (`r5`-branch; niet in *deze* git) |
-| `buildtools/` | Haiku buildtools (na setup, fetch-only) |
+| `distro/` | Overlay: version, What’s new, Jam profile, branding, extra apps (Users, Wi-Fi, AirPlay, …) |
+| `docs/` | Roadmap, multi-user, IPv6, VirtualBox |
+| `tracker/` | Open Haiku tickets and whether R5OS already fixed them |
+| `scripts/` | Clone, overlay, jam, QEMU/VBox, ticket sync |
+| `haiku/` | R5OS fork of the OS sources (`r5` branch; not in *this* git) |
+| `buildtools/` | Haiku build tools (after setup, fetch-only) |
 
-`haiku/` is een **eigen fork**. Bugfixes mergen we in `r5` en pushen we alleen naar jullie git. We pushen niet naar Haiku: hun beleid weigert AI-gegenereerde of AI-aangepaste bijdragen.
+`haiku/` is our fork. We merge bugfixes into `r5` and push only to our git. We do not push to Haiku: their policy refuses AI-generated or AI-modified contributions.
 
-## Eerste build (WSL Ubuntu)
+## First build (WSL Ubuntu)
 
-Haiku bouwt niet native op Windows. In WSL:
+Haiku does not build natively on Windows. In WSL:
 
 ```bash
 sudo apt update
@@ -32,12 +46,14 @@ chmod +x scripts/*.sh
 ./scripts/build-image.sh r5-raw
 ```
 
-LAN-tests (IPv6, mDNS): VirtualBox bridged, geen Guest Additions — `scripts/run-vbox-r5.ps1` en `docs/vbox.md`. Tekst-klembord via COM1; geen vboxsf, geen auto-resize, geen VBox drag-and-drop.
+Jam AMD64 with overlays applied (`scripts/apply-overlay.sh`, then `scripts/jam-r5-raw.sh` in WSL). `jam-r5-raw.sh` does not apply overlays by itself.
 
-Daarna de image in QEMU starten, bijvoorbeeld:
+LAN tests (IPv6, mDNS): VirtualBox bridged, no Guest Additions — `scripts/run-vbox-r5.ps1` and `docs/vbox.md`. Use `-ForceConvert` when the raw image is new. Text clipboard is COM1, not Guest Additions. No vboxsf, no auto-resize, no VBox drag-and-drop. QEMU usernet is not a LAN.
+
+Then boot the image in QEMU, for example:
 
 ```bash
-# WSL: scripts/run-qemu-r5.sh (TCG of KVM, IDE-schijf, virtio-net, USB-tablet, HDA)
+# WSL: scripts/run-qemu-r5.sh (TCG or KVM, IDE disk, virtio-net, USB tablet, HDA)
 qemu-system-x86_64 -machine pc,accel=kvm -m 2048 -smp 2 \
   -drive file=haiku/generated.x86_64/r5-os.image,format=raw,if=ide \
   -vga std -usb -device usb-tablet \
@@ -45,50 +61,52 @@ qemu-system-x86_64 -machine pc,accel=kvm -m 2048 -smp 2 \
   -device intel-hda -device hda-duplex
 ```
 
-Profielen: `r5-raw` (QEMU/schijf), `r5-anyboot` (ISO/USB), `r5-vmware`.
+Profiles: `r5-raw` (QEMU/disk), `r5-anyboot` (ISO/USB), `r5-vmware`.
 
-`--distro-compatibility compatible` blijft aan tot we bewust de systeem-API wijzigen.
+`--distro-compatibility compatible` stays on until we deliberately change the system API.
 
-## Architecturen
+## Architectures
 
-R5OS is **64-bit**: **AMD64** (nu, referentiemachine 5625U), daarna **ARM64**, optioneel **RISC-V 64**. Geen focus op 32-bit of overige Haiku-ports. Zie `distro/TODO.md`.
+R5OS is **64-bit only**: **AMD64** first (reference machine: Ryzen 5 5625U), then **ARM64**, then **RISC-V 64**. No focus on 32-bit or the other Haiku ports. See `distro/TODO.md` and `AGENTS.md`.
 
-Clone **niet** op `/mnt/c/...` als je in WSL bouwt: NTFS is case-insensitive en traag. Overlay mag op Windows staan; `haiku/` en `buildtools/` het liefst op het Linux-bestandssysteem (`~/Projects/R5OS`).
+Do **not** clone onto `/mnt/c/...` if you build in WSL: NTFS is case-insensitive and slow. The overlay may live on Windows; keep `haiku/` and `buildtools/` on the Linux filesystem (`~/Projects/R5OS`).
 
-## Git: R5OS is de bron van waarheid
+## Git: R5OS is the source of truth
 
 ```text
-origin     <jullie haiku-fork>                 push/pull
-upstream   https://review.haiku-os.org/haiku   alleen fetch
-branch     r5
+origin     our product repo (this tree)        push/pull
+upstream   https://review.haiku-os.org/haiku   fetch only
+branch     r5   (Haiku sources, separate clone)
 ```
 
-1. Lege repo aanmaken voor de fork (GitHub, Codeberg of Origin).
-2. `export R5OS_HAIKU_ORIGIN=git@github.com:<jij>/r5os-haiku.git`
-3. `./scripts/setup-wsl.sh` en daarna `git -C haiku push -u origin r5`
-4. Fix: `./scripts/new-bugfix.sh 12345 korte-slug` → commit → mergen in `r5` → `./scripts/publish-bugfix.sh` → `python3 scripts/tracker-set.py 12345 fixed --commit <sha>`
-5. Officiële Haiku-commits ophalen (optioneel): `./scripts/sync-upstream.sh`
+GitHub pull requests on `origin` target **`main`**.
 
-## Open Haiku-bugs bijhouden
+1. Create an empty repo for the Haiku-source fork if you still use one (GitHub, Codeberg, or Origin).
+2. `export R5OS_HAIKU_ORIGIN=git@github.com:<you>/r5os-haiku.git`
+3. `./scripts/setup-wsl.sh`, then `git -C haiku push -u origin r5`
+4. Fix: `./scripts/new-bugfix.sh 12345 short-slug` → commit → merge to `r5` → `./scripts/publish-bugfix.sh` → `python3 scripts/tracker-set.py 12345 fixed --commit <sha>`
+5. Optional Haiku commits: `./scripts/sync-upstream.sh`
 
-Haiku’s Trac is de lijst van open bugs; **`tracker/`** is ons werkboek. Per ticket: `open`, `in-progress`, `fixed`, `wontfix`, of `not-applicable`. Importeren overschrijft nooit een R5-status.
+## Tracking open Haiku bugs
 
-Trac blokkeert automatische downloads. Eenmalig (en daarna af en toe) in de browser CSV opslaan:
+Haiku’s Trac is the list of open bugs; **`tracker/`** is our workbook. Per ticket: `open`, `in-progress`, `fixed`, `wontfix`, or `not-applicable`. Import never overwrites an R5 status.
 
-1. [Open tickets (CSV-query)](https://dev.haiku-os.org/query?status=new&status=assigned&status=reopened&col=id&col=summary&col=status&col=type&col=priority&col=component&col=milestone&order=id&max=10000)
-2. Onderaan **Comma-delimited Text** downloaden
+Trac blocks automated downloads. Once (and now and then) save CSV in a browser:
+
+1. [Open tickets (CSV query)](https://dev.haiku-os.org/query?status=new&status=assigned&status=reopened&col=id&col=summary&col=status&col=type&col=priority&col=component&col=milestone&order=id&max=10000)
+2. Download **Comma-delimited Text** at the bottom
 3. `./scripts/tracker-sync.sh ~/Downloads/query.csv`
 
-Daarna is `tracker/STATUS.md` het overzicht: hoeveel open, bezig, gefixt. We sturen geen patches naar Haiku; hun ticketnummer is alleen het id in onze fork.
+`tracker/STATUS.md` is the overview: how many open, in progress, fixed. We do not send patches to Haiku; their ticket number is only the id in our fork.
 
-## Merk
+## Branding
 
-Gebruik niet de merknamen of logo’s van Haiku of BeOS op de image of website. Eigen naam: **R5OS**. AboutSystem moet de disclaimer uit `distro/DISCLAIMER.txt` tonen.
+Do not use Haiku or BeOS names or logos on the image or website. Our name is **R5OS**. About R5OS must show the disclaimer from `distro/DISCLAIMER.txt`.
 
-## Versie
+## Version
 
-Publieke releases: **R5OS 2026.1**, **2026.2**, … (jaar, daarna +1 per release; nieuw jaar begint weer bij `.1`).
+Public releases: **R5OS 2026.1**, **2026.2**, … (year, then +1 per release; a new year starts at `.1` again).
 
-Tussen builds: suffix `-dev`. Huidige boom: `distro/VERSION` (nu `2026.1-dev`) plus oplopend `distro/BUILD` (nu `10001`). About toont **R5OS 2026.1-dev Build 10001** en een What's new-tab (`distro/WHATSNEW`). Jam gebruikt `HAIKU_REVISION=r5-<VERSION>`, niet het buildnummer. Bump `BUILD` alleen bij een nieuwe What's new-sectie.
+Unreleased trees use a `-dev` suffix. About shows **R5OS YYYY.N-dev Build N**. Jam uses `HAIKU_REVISION=r5-<VERSION>`, not the build number. Bump `distro/BUILD` only when adding a What’s new section.
 
-Open distro-taken (o.a. Haiku-verwijzingen uit de UI): `distro/TODO.md`.
+Open distro tasks (including leftover Haiku wording in the UI): `distro/TODO.md`.
