@@ -14,7 +14,9 @@ VBox 2026-10-29: the preflet listed `user` and **sshd** (home under `/packages`)
 
 Add / Disable / Enable / Delete in the preflet. Haiku `useradd` starts UIDs at 1000 and skips taken ids (sshd is 1000, so the first extra person is usually 1001). New homes are `/boot/home/users/<name>` with Desktop/Documents/…. Administrators go in group `admin`. UID 0 `user` cannot be deleted or disabled; the last enabled administrator cannot be removed. Empty password uses `passwd -d` (not on argv). Non-empty uses `crypt` + registrar. Disable prefixes `!` on the shadow hash so Enable can restore it. Still one shared desktop. Login as the new person is out of scope.
 
-VBox 2026-10-29 12:18 Europe/Amsterdam: the preflet listed `user` uid 0, Add enabled, Disable/Delete greyed until a row is selected. The intro `BStringView` was one long line, so `B_AUTO_UPDATE_SIZE_LIMITS` made the window wider than the screen and not resizable. The note now wraps and the window is centered. Add/delete was not tried yet.
+VBox 2026-10-29 12:18 Europe/Amsterdam: the preflet listed `user` uid 0, Add enabled, Disable/Delete greyed until a row is selected. The intro `BStringView` was one long line, so `B_AUTO_UPDATE_SIZE_LIMITS` made the window wider than the screen and not resizable. The note now wraps and the window is centered.
+
+VBox 2026-10-29 12:25 Europe/Amsterdam: Add created `nicky` uid 1001 `/boot/home/users/nicky` standard, then `nicky2`/`nicky3` uid 1002/1003 administrators. Tracker showed those three folders. After delete, only `user` and `nicky3` remained. Wrapped window fits. Add-account labels are still uneven (later polish). The preflet had no icon; it now uses the Haiku Login people vector.
 
 ### Shutdown hung after IPv6 SLAAC
 

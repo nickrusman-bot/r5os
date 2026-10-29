@@ -27,6 +27,8 @@ Session home must come from `passwd` + `find_directory`, not copied path strings
 
 Reuse `src/apps/login`. One graphical session at a time. Logout must tear down Tracker/Deskbar/user jobs (`data/launch/user`) so the next login does not inherit processes or `~/`. Lock screen is a later feature (keep the session). Guest and Public/Shared folders after permissions work.
 
+Layout target for that screen: Windows 11-like arrangement (centered person, name, password under it, power at the bottom). Haiku widgets, not a Windows chrome clone.
+
 Admin vs standard: POSIX groups (not only a checkbox). Privileged work through a checked helper, not “run Deskbar as root”. Never delete or demote the last administrator without a recovery path.
 
 ### Migration of existing disks
