@@ -130,4 +130,4 @@ After Sign in, in Terminal:
 3. `su nicky -c 'ls /boot/home/users/nicky'` — that home is readable by `nicky`.
 4. As `user` (uid 0), `ls /boot/home/users/nicky` still works.
 
-Not VBox-tested yet.
+VBox 2026-10-29 14:30 Europe/Amsterdam: 1–3 confirmed (`nicky`). Test 4 was not captured.
