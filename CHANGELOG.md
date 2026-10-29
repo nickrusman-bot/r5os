@@ -10,7 +10,9 @@ The Deskbar leaf item is `Log out <name>` for the signed-in account.
 
 After the first Sign in, uid 0 is locked `root` with home `/boot/system`. `autologin` still `StartSession`s that uid-0 name (Login must stay uid 0). `/boot/system` is packagefs, so the user `launch_daemon` could not take the screen and Restart/Reset stayed on the boot splash. The session daemon now uses `/boot/system/var/root` when uid 0 has no writable home. Still not `StartSession` of the signed-in person.
 
-Jam AMD64 2026-10-29 22:20 Europe/Amsterdam: `jam_exit=0` (launch_daemon, Deskbar, Login, image). Not confirmed on a boot after Restart yet.
+Jam AMD64 2026-10-29 22:20 Europe/Amsterdam: `jam_exit=0` (launch_daemon, Deskbar, Login, image).
+
+VBox 22:26 Europe/Amsterdam: after the first Sign in, Restart reached Sign in, not the splash. Log out, then Sign in as someone else. The preference lock was closed again after Log out.
 
 ### Locked machine settings (build 10009)
 

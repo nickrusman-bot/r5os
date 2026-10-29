@@ -21,9 +21,7 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 - [ ] **Multi-user: afronden**  
   Kern zit erin (build 10010). Volgorde, niet alles in één patch. Details: `docs/MULTIUSER.md`.
 
-  **Eerst bevestigen**
-  - Herstart ná de eerste Sign in (migrate) komt weer op Sign in, niet de splash.
-  - Log out → Sign in als iemand anders; slot weer dicht na Log out.
+  VBox 2026-10-29 22:26 Europe/Amsterdam: Restart na de eerste Sign in kwam weer op Sign in. Log out, daarna Sign in als iemand anders; het slot was weer dicht.
 
   **Daarna, in deze volgorde**
   1. Wachtwoord wijzigen in Users & Accounts (eigen wachtwoord; administrator mag dat van een ander).
