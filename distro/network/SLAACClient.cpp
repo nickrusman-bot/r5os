@@ -65,11 +65,9 @@ stop_worker(thread_id thread, int socket)
 		return;
 
 	status_t ignored;
-	if (wait_for_thread_etc(thread, B_RELATIVE_TIMEOUT, 2000000, &ignored)
-			!= B_OK) {
-		kill_thread(thread);
-		wait_for_thread(thread, NULL);
-	}
+	wait_for_thread_etc(thread, B_RELATIVE_TIMEOUT, 500000, &ignored);
+	kill_thread(thread);
+	wait_for_thread_etc(thread, B_RELATIVE_TIMEOUT, 250000, &ignored);
 }
 
 

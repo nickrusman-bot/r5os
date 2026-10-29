@@ -213,7 +213,8 @@ class AirPlayTrayApp : public BApplication {
 public:
 	AirPlayTrayApp()
 		:
-		BApplication(kAirPlayTraySignature)
+		BApplication(kAirPlayTraySignature),
+		fTries(0)
 	{
 	}
 
@@ -232,9 +233,11 @@ public:
 private:
 			void				_TryInstall()
 			{
-				if (r5_install_airplay_deskbar() == B_OK)
-					SetPulseRate(10000000);
+				if (r5_install_airplay_deskbar() == B_OK || ++fTries >= 30)
+					Quit();
 			}
+
+			int32				fTries;
 };
 
 
