@@ -125,7 +125,6 @@ LoginApp::ReadyToRun()
 		return;
 	}
 
-	migrate_admin_off_root();
 	lock_private_homes();
 	fDesktopWindow = new DesktopWindow(screen.Frame(), false);
 	fDesktopWindow->Show();
@@ -229,11 +228,11 @@ LoginApp::TryLogin(BMessage* message)
 			reply.AddString("text", "That password is not right.");
 		else if (status == B_NAME_NOT_FOUND)
 			reply.AddString("text", "Could not start the desktop.");
-		else if (status == B_NOT_ALLOWED)
-			reply.AddString("text",
-				"Could not move the administrator off user id 0.");
-		else
-			reply.AddString("text", strerror(status));
+		else {
+			BString text("Could not start the session: ");
+			text << strerror(status);
+			reply.AddString("text", text.String());
+		}
 		message->SendReply(&reply);
 	}
 }

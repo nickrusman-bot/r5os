@@ -38,8 +38,8 @@ const char* kAdminGroupName = "admin";
 
 static const char* kHome = "/boot/home";
 static const char* kUsersRoot = "/boot/home/users";
-static const char* kSessionPath = "/boot/system/var/r5-desktop-session";
-static const char* kSessionDir = "/boot/system/var";
+static const char* kSessionPath = "/tmp/r5-desktop-session";
+static const char* kSystemRootName = "root";
 
 
 static bool
@@ -316,98 +316,56 @@ users_gid()
 
 
 static status_t
-read_file(const char* path, BString& text)
+add_unix_user(const char* name, uid_t uid, gid_t gid, const char* home,
+	const char* shell, const char* realName, const char* shadow)
 {
-	FILE* file = fopen(path, "r");
-	if (file == NULL)
-		return errno;
-	text.Truncate(0);
-	char buffer[1024];
-	while (fgets(buffer, sizeof(buffer), file) != NULL)
-		text << buffer;
-	fclose(file);
-	return B_OK;
+	BPrivate::KMessage message(BPrivate::B_REG_UPDATE_USER);
+	if (message.AddInt32("uid", uid) != B_OK
+		|| message.AddInt32("gid", gid) != B_OK
+		|| message.AddString("name", name) != B_OK
+		|| message.AddString("password", "x") != B_OK
+		|| message.AddString("home", home != NULL ? home : "") != B_OK
+		|| message.AddString("shell",
+			shell != NULL && shell[0] != '\0' ? shell : "/bin/sh") != B_OK
+		|| message.AddString("real name",
+			realName != NULL ? realName : "") != B_OK
+		|| message.AddString("shadow password",
+			shadow != NULL ? shadow : "") != B_OK
+		|| message.AddInt32("last changed", (int32)time(NULL)) != B_OK
+		|| message.AddInt32("min", -1) != B_OK
+		|| message.AddInt32("max", -1) != B_OK
+		|| message.AddInt32("warn", 7) != B_OK
+		|| message.AddInt32("inactive", -1) != B_OK
+		|| message.AddInt32("expiration", 99999) != B_OK
+		|| message.AddInt32("flags", 0) != B_OK
+		|| message.AddBool("add user", true) != B_OK)
+		return B_NO_MEMORY;
+
+	BPrivate::KMessage reply;
+	return BPrivate::send_authentication_request_to_registrar(message, reply);
 }
 
 
 static status_t
-write_file_atomic(const char* path, const BString& text)
+delete_unix_user(const char* name)
 {
-	BString temp(path);
-	temp << ".r5tmp";
-	FILE* file = fopen(temp.String(), "w");
-	if (file == NULL)
-		return errno;
-	if (fwrite(text.String(), 1, text.Length(), file) != (size_t)text.Length()) {
-		fclose(file);
-		unlink(temp.String());
-		return EIO;
-	}
-	if (fclose(file) != 0) {
-		unlink(temp.String());
-		return errno;
-	}
-	if (rename(temp.String(), path) != 0) {
-		int error = errno;
-		unlink(temp.String());
-		return error;
-	}
-	chmod(path, 0644);
-	return B_OK;
-}
-
-
-static const char*
-passwd_path()
-{
-	if (access("/boot/system/settings/etc/passwd", F_OK) == 0)
-		return "/boot/system/settings/etc/passwd";
-	return "/etc/passwd";
+	BPrivate::KMessage message(BPrivate::B_REG_DELETE_USER);
+	if (message.AddString("name", name) != B_OK)
+		return B_NO_MEMORY;
+	BPrivate::KMessage reply;
+	return BPrivate::send_authentication_request_to_registrar(message, reply);
 }
 
 
 static status_t
-replace_passwd_ids(const char* user, uid_t uid, gid_t gid)
+ensure_system_root()
 {
-	BString text;
-	const char* path = passwd_path();
-	status_t status = read_file(path, text);
-	if (status != B_OK)
-		return status;
-
-	BString prefix;
-	prefix << user << ":";
-	int32 offset = 0;
-	int32 lineStart = 0;
-	bool found = false;
-	BString output;
-	while (offset <= text.Length()) {
-		if (offset == text.Length() || text.ByteAt(offset) == '\n') {
-			BString line(text.String() + lineStart, offset - lineStart);
-			if (line.FindFirst(prefix) == 0) {
-				int32 first = line.FindFirst(':');
-				int32 second = first >= 0 ? line.FindFirst(':', first + 1) : -1;
-				int32 third = second >= 0 ? line.FindFirst(':', second + 1) : -1;
-				int32 fourth = third >= 0 ? line.FindFirst(':', third + 1) : -1;
-				if (first < 0 || second < 0 || third < 0 || fourth < 0)
-					return B_BAD_DATA;
-				BString rebuilt;
-				line.CopyInto(rebuilt, 0, second + 1);
-				rebuilt << uid << ":" << gid;
-				rebuilt << line.String() + fourth;
-				line = rebuilt;
-				found = true;
-			}
-			output << line;
-			if (offset < text.Length())
-				output << '\n';
-			lineStart = offset + 1;
-		}
-		offset++;
-	}
-	if (!found)
-		return B_NAME_NOT_FOUND;
-	return write_file_atomic(path, output);
+	if (getpwuid(0) != NULL)
+		return B_OK;
+	if (getpwnam(kSystemRootName) != NULL)
+		return B_NAME_IN_USE;
+	return add_unix_user(kSystemRootName, 0, 0, "/boot/system", "/bin/sh",
+		"System", "!");
 }
 
 
@@ -514,21 +472,51 @@ migrate_admin_off_root()
 	status_t status = find_first_home_admin(name, uid, gid);
 	if (status != B_OK)
 		return status;
-	if (uid != 0)
+	if (uid != 0) {
+		ensure_system_root();
 		return B_OK;
+	}
 
 	struct stat homeStat;
 	if (lstat(kHome, &homeStat) != 0 || !S_ISDIR(homeStat.st_mode))
 		return B_NOT_A_DIRECTORY;
 
+	struct passwd* pwd = getpwnam(name.String());
+	if (pwd == NULL)
+		return ENOENT;
+
+	BString home(pwd->pw_dir != NULL ? pwd->pw_dir : kHome);
+	BString shell(pwd->pw_shell != NULL ? pwd->pw_shell : "/bin/sh");
+	BString realName(pwd->pw_gecos != NULL ? pwd->pw_gecos : "");
+	BString shadow;
+	struct spwd* spwd = getspnam(name.String());
+	if (spwd != NULL && spwd->sp_pwdp != NULL)
+		shadow = spwd->sp_pwdp;
+
 	uid_t newUid = first_free_person_uid();
 	gid_t newGid = users_gid();
-	status = replace_passwd_ids(name.String(), newUid, newGid);
+
+	status = delete_unix_user(name.String());
 	if (status != B_OK)
 		return status;
 
+	status = ensure_system_root();
+	if (status != B_OK) {
+		add_unix_user(name.String(), 0, 0, home.String(), shell.String(),
+			realName.String(), shadow.String());
+		return status;
+	}
+
+	status = add_unix_user(name.String(), newUid, newGid, home.String(),
+		shell.String(), realName.String(), shadow.String());
+	if (status != B_OK) {
+		add_unix_user(name.String(), 0, 0, home.String(), shell.String(),
+			realName.String(), shadow.String());
+		return status;
+	}
+
 	endpwent();
-	struct passwd* pwd = getpwnam(name.String());
+	pwd = getpwnam(name.String());
 	if (pwd == NULL || pwd->pw_uid != newUid)
 		return B_ERROR;
 
@@ -559,7 +547,6 @@ write_desktop_session()
 	if (uid == 0)
 		return B_NOT_ALLOWED;
 
-	mkdir(kSessionDir, 0755);
 	FILE* file = fopen(kSessionPath, "w");
 	if (file == NULL)
 		return errno;

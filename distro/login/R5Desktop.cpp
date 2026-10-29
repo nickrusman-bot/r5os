@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 
-static const char* kSessionPath = "/boot/system/var/r5-desktop-session";
+static const char* kSessionPath = "/tmp/r5-desktop-session";
 
 
 int
