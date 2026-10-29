@@ -42,6 +42,7 @@ def copy_sources() -> None:
         "LoginWindow.cpp",
         "LoginWindow.h",
         "R5Desktop.cpp",
+        "SessionLog.h",
         "main.cpp",
     ):
         shutil.copy2(SRC / name, dest / name)

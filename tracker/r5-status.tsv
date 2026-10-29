@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/uid0-plan		Build 10007: VBox id=0(root) after Sign in. GetJobs(desktop) fails without session daemon; stop TRAK/TSKB by name. Not StartSession.
+8940	in-progress	cursor/uid0-plan		Build 10007: VBox id still 0(root); syslog empty. Helper first, then Target. Log /tmp/r5-session.log. Not StartSession.
 8944	open			
 8948	open			
 8956	open			

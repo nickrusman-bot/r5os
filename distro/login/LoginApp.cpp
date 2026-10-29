@@ -10,6 +10,7 @@
 #include "DesktopWindow.h"
 #include "HomeLock.h"
 #include "LoginWindow.h"
+#include "SessionLog.h"
 
 #include <Alert.h>
 #include <LaunchRoster.h>
@@ -242,12 +243,9 @@ LoginApp::TryLogin(BMessage* message)
 			if (status == B_OK)
 				status = write_desktop_session();
 			if (status == B_OK) {
+				r5_session_log("sign-in %s", login);
 				_EnableDesktopJobs();
-				status = BLaunchRoster().Target("desktop");
-				if (status == B_OK)
-					_EnableDesktopJobs();
-				if (status == B_OK)
-					status = _WaitGone("application/x-vnd.Be-TRAK");
+				status = _WaitGone("application/x-vnd.Be-TRAK");
 				if (status == B_OK)
 					status = _WaitGone("application/x-vnd.Be-TSKB");
 				if (status == B_OK)
@@ -255,15 +253,20 @@ LoginApp::TryLogin(BMessage* message)
 				if (status == B_OK)
 					status = _LaunchSessionApp("/system/Deskbar");
 				if (status == B_OK)
-					status = _WaitRunning("application/x-vnd.Be-TRAK");
+					status = _WaitSessionTeam("application/x-vnd.Be-TRAK");
 				if (status == B_OK)
-					status = _WaitRunning("application/x-vnd.Be-TSKB");
+					status = _WaitSessionTeam("application/x-vnd.Be-TSKB");
+				if (status == B_OK)
+					status = BLaunchRoster().Target("desktop");
+				if (status == B_OK)
+					_EnableDesktopJobs();
 				if (status == B_OK) {
 					_LaunchSessionApp("/system/apps/NetworkStatus",
 						"--deskbar");
 					_LaunchSessionApp("/system/servers/airplay_deskbar");
 					_LaunchSessionApp("/system/servers/r5_vbox_clip");
 				}
+				r5_session_log("sign-in done: %s", strerror(status));
 			}
 			if (status == B_OK)
 				_HideLogin();
@@ -333,7 +336,9 @@ LoginApp::_EnableDesktopJobs()
 	}
 
 	BStringList jobs;
-	if (roster.GetJobs("desktop", jobs) != B_OK) {
+	status_t jobsStatus = roster.GetJobs("desktop", jobs);
+	if (jobsStatus != B_OK) {
+		r5_session_log("GetJobs(desktop): %s", strerror(jobsStatus));
 		syslog(LOG_WARNING, "Login: GetJobs(desktop) failed; "
 			"session jobs stopped by name");
 		return;
@@ -361,17 +366,23 @@ LoginApp::_LaunchSessionApp(const char* program, const char* argument)
 		args[count++] = argument;
 	args[count] = NULL;
 
+	r5_session_log("launch %s", program);
 	thread_id thread = load_image(count, args, (const char**)environ);
-	if (thread < B_OK)
+	if (thread < B_OK) {
+		r5_session_log("load_image r5-desktop %s: %s", program,
+			strerror(thread));
 		return thread;
+	}
 	resume_thread(thread);
 
 	status_t result = B_ERROR;
 	wait_for_thread(thread, &result);
 	if (result != B_OK) {
+		r5_session_log("r5-desktop %s: %s", program, strerror(result));
 		syslog(LOG_ERR, "Login: r5-desktop %s: %s", program, strerror(result));
 		return result < B_OK ? result : B_ERROR;
 	}
+	r5_session_log("r5-desktop %s ok", program);
 	return B_OK;
 }
 
@@ -385,7 +396,31 @@ LoginApp::_WaitRunning(const char* signature)
 			return B_OK;
 		snooze(100000);
 	}
+	r5_session_log("timeout waiting for %s", signature);
 	return B_TIMED_OUT;
+}
+
+
+status_t
+LoginApp::_WaitSessionTeam(const char* signature)
+{
+	status_t status = _WaitRunning(signature);
+	if (status != B_OK)
+		return status;
+
+	team_id team = be_roster->TeamFor(signature);
+	team_info info;
+	if (team < 0 || get_team_info(team, &info) != B_OK) {
+		r5_session_log("%s: no team info", signature);
+		return B_BAD_TEAM_ID;
+	}
+	r5_session_log("%s team %d uid=%d gid=%d", signature, (int)team,
+		(int)info.uid, (int)info.gid);
+	if (info.uid == 0) {
+		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+		return B_NOT_ALLOWED;
+	}
+	return B_OK;
 }
 
 

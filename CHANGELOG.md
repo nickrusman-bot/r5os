@@ -30,7 +30,11 @@ Jam AMD64 2026-10-29 16:49 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` 
 
 VBox 16:51 Europe/Amsterdam (guest clock 3:51 PM, UTC): desktop icons, mouse, Deskbar names **Tracker / AboutSystem / Terminal** (not four `r5-desktop`). Terminal `id` was **`uid=0(root)`** `gid=0(root)` `groups=0(root),101(party)`. Migrate did add `root` at uid 0, but Tracker came from launch_daemon as uid 0. `GetJobs("desktop")` returns `B_NAME_NOT_FOUND` without a session daemon (`StartSession` is not used), so Login never disabled Be-TRAK/Be-TSKB. Target then starts Tracker as root; the helper’s second Tracker is a single-instance no-op. Login now stops those jobs by hardcoded name and waits until uid-0 Tracker is gone before `r5-desktop` starts the session copy.
 
-Jam AMD64 2026-10-29 16:59 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. `id` after Sign in not confirmed yet.
+Jam AMD64 2026-10-29 16:59 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox 17:01 Europe/Amsterdam: Terminal `id` still `uid=0(root)`. `/system/var/log/syslog` had no `r5-desktop` / Login lines: the helper only syslog()s on error, exits in milliseconds, and does not call `openlog`. Target("desktop") was still starting Tracker as uid 0 *before* the helper, so the root copy won. Login now starts Tracker/Deskbar through `r5-desktop` first, refuses a uid-0 Tracker team, then Target. Session trace goes to `/tmp/r5-session.log` and `/system/var/log/r5-session.log`.
+
+Jam AMD64 2026-10-29 17:07 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. `id` after Sign in not confirmed yet.
 
 Isolation is only true if `id` after Sign in is not uid 0 and `ls /boot/home/users/<name>` is permission denied.
 

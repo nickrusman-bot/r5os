@@ -39,6 +39,7 @@ private:
 	status_t		_LaunchSessionApp(const char* program,
 						const char* argument = NULL);
 	status_t		_WaitRunning(const char* signature);
+	status_t		_WaitSessionTeam(const char* signature);
 	void			_HideLogin();
 	void			_ShowLogin();
 	void			_OpenLoginWindow();

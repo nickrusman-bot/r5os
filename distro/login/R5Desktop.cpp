@@ -7,6 +7,8 @@
  */
 
 
+#include "SessionLog.h"
+
 #include <errno.h>
 #include <grp.h>
 #include <image.h>
@@ -60,21 +62,28 @@ int
 main(int argc, char** argv)
 {
 	if (argc < 2 || argv[1] == NULL || argv[1][0] == '\0') {
+		r5_session_log("missing command");
 		syslog(LOG_ERR, "r5-desktop: missing command");
 		return 1;
 	}
 
 	char name[64];
 	if (!read_session_name(name, sizeof(name))) {
+		r5_session_log("no session file for %s", argv[1]);
 		syslog(LOG_ERR, "r5-desktop: no session file");
 		return 1;
 	}
 
 	struct passwd* pwd = getpwnam(name);
 	if (pwd == NULL || strcmp(pwd->pw_name, name) != 0 || pwd->pw_uid == 0) {
+		r5_session_log("session user %s uid=%d not allowed", name,
+			pwd != NULL ? (int)pwd->pw_uid : -1);
 		syslog(LOG_ERR, "r5-desktop: session user %s is not allowed", name);
 		return 1;
 	}
+
+	r5_session_log("session %s uid=%d gid=%d cmd=%s", name, (int)pwd->pw_uid,
+		(int)pwd->pw_gid, argv[1]);
 
 	if (pwd->pw_dir != NULL && pwd->pw_dir[0] != '\0')
 		setenv("HOME", pwd->pw_dir, 1);
@@ -84,24 +93,32 @@ main(int argc, char** argv)
 		setenv("SHELL", pwd->pw_shell, 1);
 
 	if (setresgid(pwd->pw_gid, pwd->pw_gid, pwd->pw_gid) != 0) {
+		r5_session_log("setresgid: %s", strerror(errno));
 		syslog(LOG_ERR, "r5-desktop: setresgid: %s", strerror(errno));
 		return 1;
 	}
 	if (initgroups(pwd->pw_name, pwd->pw_gid) != 0)
-		syslog(LOG_WARNING, "r5-desktop: initgroups: %s", strerror(errno));
+		r5_session_log("initgroups: %s", strerror(errno));
 	if (setresuid(pwd->pw_uid, pwd->pw_uid, pwd->pw_uid) != 0
 		|| geteuid() == 0) {
+		r5_session_log("setresuid: %s euid=%d", strerror(errno),
+			(int)geteuid());
 		syslog(LOG_ERR, "r5-desktop: setresuid: %s", strerror(errno));
 		return 1;
 	}
 
+	r5_session_log("dropped uid=%d euid=%d, load_image %s", (int)getuid(),
+		(int)geteuid(), argv[1]);
+
 	thread_id thread = load_image(argc - 1, (const char**)(argv + 1),
 		(const char**)environ);
 	if (thread < B_OK) {
+		r5_session_log("load_image %s: %s", argv[1], strerror(thread));
 		syslog(LOG_ERR, "r5-desktop: load_image %s: %s", argv[1],
 			strerror(thread));
 		return 1;
 	}
 	resume_thread(thread);
+	r5_session_log("started team thread %d for %s", (int)thread, argv[1]);
 	return 0;
 }
