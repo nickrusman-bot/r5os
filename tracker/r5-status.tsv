@@ -624,9 +624,9 @@ id	r5_status	branch	commit	notes
 8297	open			
 8308	open			
 8313	open			
-8316	in-progress	cursor/ipv6-slaac		VBox LAN: fe80:: plus SLAAC ULA. Link-local from NetServer; no DAD on LL.
-8317	in-progress	cursor/ipv6-slaac		VBox LAN 2026-10-28 after ipv6_send_routed_data: ULA fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd, PIO A=1, already assigned, dhcpv6 no server. QEMU usernet not tested.
-8319	in-progress	cursor/ipv6-slaac		ULA assigned on VBox LAN after DAD (fail-closed). No packet capture of NS/NA.
+8316	in-progress	cursor/ipv6-finish		VBox LAN: fe80 plus SLAAC ULA. Default IPv6 route now uses RA gateway scope_id. Outbound ping/wget not run.
+8317	in-progress	cursor/ipv6-finish		ULA assigned after DAD. Default route via fe80%ifindex. Dual-stack resolv.conf merge. No GUA/DHCPv6-server LAN. Apps outbound not tested.
+8319	in-progress	cursor/ipv6-finish		DAD fail-closed; syslog dad unique. Host packet-helper tests pass. No pcap of NS/NA on the wire.
 8321	open			
 8337	open			
 8339	open			

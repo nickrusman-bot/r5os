@@ -28,7 +28,11 @@ private:
 			status_t			_BindAndJoin(int socket, uint32 ifIndex);
 			status_t			_SendSolicit(int socket, uint32 ifIndex);
 			status_t			_ApplyAdvert(const uint8* buffer, ssize_t bytes,
-									const sockaddr_in6& from);
+									const sockaddr_in6& from, uint32 ifIndex);
+			status_t			_ApplyDefaultRoute(const sockaddr_in6& from,
+									uint32 ifIndex);
+			void				_ApplyResolver(BMessage& resolver,
+									int32 nameservers);
 			void				_BuildSlaacAddress(const in6_addr& prefix,
 									in6_addr& out) const;
 			BString				_ToString(const in6_addr& address) const;

@@ -19,6 +19,7 @@ VirtualBox bridged LAN (2026-10-28): ULA `fdae:aeb4:a752:9ae4:a00:27ff:fe44:61dd
 ```
 grep -E 'slaac|dad|dhcpv6' /var/log/syslog
 ifconfig /dev/net/ipro1000/0
+route
 ```
 
 Useful syslog:
@@ -26,6 +27,8 @@ Useful syslog:
 | Line | Meaning |
 |---|---|
 | `slaac …: PIO fd…/64 A=1 L=1` | Router offered SLAAC |
+| `slaac …: default route via fe80:…%N` | Off-link IPv6 has a gateway on this NIC |
+| `dad …: … unique` | DAD sent an NS and heard no conflict |
 | `slaac …: fdae:… via fe80:…` | Second address was assigned |
 | `slaac … without SLAAC /64 prefix` | RA had no A-flag `/64`; DHCPv6 may still run |
 | `dad …: NS send:` / `socket:` / `bind` | DAD could not run; the address is **not** assigned |

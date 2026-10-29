@@ -2,6 +2,16 @@
 
 Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
+## 2026-10-29 (Europe/Amsterdam)
+
+### IPv6 default route and dual-stack DNS
+
+SLAAC put a ULA on the NIC but the default route used the router’s `fe80::` **without** `sin6_scope_id`, so apps could not send off-link IPv6. The route now copies the RA source sockaddr and fills the interface index. Syslog: `default route via fe80:…%N` and `dad … unique`.
+
+RDNSS from an RA no longer replaces `resolv.conf` (that wiped IPv4 DHCP nameservers). Existing nameservers are kept and new ones are appended. Extra RAs still refresh the route and DNS.
+
+Host DAD packet helpers: `scripts/test_ipv6_dad.cpp`. Outbound `ping`/`wget` over IPv6 was not run in this change. DHCPv6 IA_NA still needs a LAN with a DHCPv6 server. Wi-Fi + IPv6 on the Envy was not tested.
+
 ## 2026-10-28 (Europe/Amsterdam)
 
 ### About R5OS: build number and What's new

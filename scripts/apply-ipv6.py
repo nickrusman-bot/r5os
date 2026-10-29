@@ -499,6 +499,145 @@ def patch_net_server() -> None:
         "default inet6 auto",
         optional=True,
     )
+    replace_once(
+        HAIKU / "src" / "servers" / "net" / "NetServer.cpp",
+        """status_t
+NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
+{
+	// Store resolver settings in resolv.conf file, while maintaining any
+	// user specified settings already present.
+
+	BPath path;
+	if (find_directory(B_SYSTEM_SETTINGS_DIRECTORY, &path) != B_OK
+		|| path.Append("network/resolv.conf") != B_OK)
+		return B_ERROR;
+
+	FILE* file = fopen(path.Path(), "r+");
+	// open existing resolv.conf if possible
+	if (file == NULL) {
+		// no existing resolv.conf, create a new one
+		file = fopen(path.Path(), "w");
+		if (file == NULL) {
+			fprintf(stderr, "Could not open resolv.conf: %s\\n",
+				strerror(errno));
+			return errno;
+		}
+	} else {
+		// An existing resolv.conf was found, parse it for user settings
+		const char* staticDNS = "# Static DNS Only";
+		size_t sizeStaticDNS = strlen(staticDNS);
+		const char* dynamicDNS = "# Dynamic DNS entries";
+		size_t sizeDynamicDNS = strlen(dynamicDNS);
+		char resolveConfBuffer[80];
+		size_t sizeResolveConfBuffer = sizeof(resolveConfBuffer);
+
+		while (fgets(resolveConfBuffer, sizeResolveConfBuffer, file)) {
+			if (strncmp(resolveConfBuffer, staticDNS, sizeStaticDNS) == 0) {
+				// If DNS is set to static only, don't modify
+				fclose(file);
+				return B_OK;
+			} else if (strncmp(resolveConfBuffer, dynamicDNS, sizeDynamicDNS)
+					== 0) {
+				// Overwrite existing dynamic entries
+				break;
+			}
+		}
+
+		if (feof(file) != 0) {
+			// No static entries found, close and re-open as new file
+			fclose(file);
+			file = fopen(path.Path(), "w");
+			if (file == NULL) {
+				fprintf(stderr, "Could not open resolv.conf: %s\\n",
+					strerror(errno));
+				return errno;
+			}
+		}
+	}
+
+	fprintf(file, "# Added automatically by DHCP\\n");
+
+	const char* nameserver;
+	for (int32 i = 0; resolverConfiguration.FindString("nameserver", i,
+			&nameserver) == B_OK; i++) {
+		fprintf(file, "nameserver %s\\n", nameserver);
+	}
+""",
+        """status_t
+NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
+{
+	// Union IPv4 DHCP and IPv6 RDNSS nameservers. A rewrite that only
+	// listed RDNSS wiped the IPv4 servers and broke dual-stack DNS.
+
+	BPath path;
+	if (find_directory(B_SYSTEM_SETTINGS_DIRECTORY, &path) != B_OK
+		|| path.Append("network/resolv.conf") != B_OK)
+		return B_ERROR;
+
+	char servers[8][INET6_ADDRSTRLEN];
+	int32 nServers = 0;
+	bool staticOnly = false;
+
+	FILE* existing = fopen(path.Path(), "r");
+	if (existing != NULL) {
+		char line[128];
+		while (fgets(line, sizeof(line), existing) != NULL) {
+			if (strncmp(line, "# Static DNS Only", 17) == 0) {
+				staticOnly = true;
+				break;
+			}
+			if (strncmp(line, "nameserver ", 11) == 0) {
+				char* start = line + 11;
+				size_t length = strlen(start);
+				while (length > 0 && (start[length - 1] == '\\n'
+						|| start[length - 1] == '\\r')) {
+					start[--length] = '\\0';
+				}
+				bool have = false;
+				for (int32 i = 0; i < nServers; i++) {
+					if (strcmp(servers[i], start) == 0)
+						have = true;
+				}
+				if (!have && nServers < 8 && start[0] != '\\0') {
+					strlcpy(servers[nServers], start, sizeof(servers[0]));
+					nServers++;
+				}
+			}
+		}
+		fclose(existing);
+	}
+	if (staticOnly)
+		return B_OK;
+
+	const char* nameserver;
+	for (int32 i = 0; resolverConfiguration.FindString("nameserver", i,
+			&nameserver) == B_OK; i++) {
+		if (nameserver == NULL || nameserver[0] == '\\0')
+			continue;
+		bool have = false;
+		for (int32 j = 0; j < nServers; j++) {
+			if (strcmp(servers[j], nameserver) == 0)
+				have = true;
+		}
+		if (!have && nServers < 8) {
+			strlcpy(servers[nServers], nameserver, sizeof(servers[0]));
+			nServers++;
+		}
+	}
+
+	FILE* file = fopen(path.Path(), "w");
+	if (file == NULL) {
+		fprintf(stderr, "Could not open resolv.conf: %s\\n", strerror(errno));
+		return errno;
+	}
+
+	fprintf(file, "# Added automatically by DHCP\\n");
+	for (int32 i = 0; i < nServers; i++)
+		fprintf(file, "nameserver %s\\n", servers[i]);
+""",
+        "merge IPv4/IPv6 nameservers",
+        optional=True,
+    )
 
 
 def patch_looper_families() -> None:
