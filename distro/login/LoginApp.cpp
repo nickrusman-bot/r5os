@@ -241,7 +241,7 @@ LoginApp::TryLogin(BMessage* message)
 		if (status == B_OK) {
 			status = migrate_admin_off_root();
 			if (status == B_OK)
-				status = write_desktop_session();
+				status = write_desktop_session(login);
 			if (status == B_OK) {
 				r5_session_log("sign-in %s", login);
 				_EnableDesktopJobs();
@@ -308,6 +308,7 @@ LoginApp::Logout()
 	// reply; launch_daemon user is the team in the crash dialog, and while
 	// it sits in the debugger that reply never comes.
 	r5_session_log("logout");
+	clear_desktop_session();
 	_QuitUserApps();
 	_WaitGone("application/x-vnd.Haiku-ProcessController");
 	_WaitGone("application/x-vnd.Haiku-NetworkStatus");
@@ -501,6 +502,28 @@ LoginApp::_WaitSessionTeam(const char* signature)
 	r5_session_log("%s team %d uid=%d gid=%d", signature, (int)team,
 		(int)info.uid, (int)info.gid);
 	if (info.uid == 0) {
+		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+		return B_NOT_ALLOWED;
+	}
+
+	char name[64];
+	name[0] = '\0';
+	FILE* file = fopen("/boot/system/settings/r5-desktop-session", "r");
+	if (file != NULL) {
+		if (fgets(name, sizeof(name), file) == NULL)
+			name[0] = '\0';
+		fclose(file);
+	}
+	size_t length = strlen(name);
+	while (length > 0
+		&& (name[length - 1] == '\n' || name[length - 1] == '\r'
+			|| name[length - 1] == ' ')) {
+		name[--length] = '\0';
+	}
+	struct passwd* pwd = length > 0 ? getpwnam(name) : NULL;
+	if (pwd == NULL || pwd->pw_uid != info.uid) {
+		r5_session_log("%s uid %d is not session %s", signature,
+			(int)info.uid, length > 0 ? name : "(none)");
 		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
 		return B_NOT_ALLOWED;
 	}

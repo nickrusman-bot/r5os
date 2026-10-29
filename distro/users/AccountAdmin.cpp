@@ -573,30 +573,87 @@ migrate_admin_off_root()
 }
 
 
+static bool
+is_session_home(const struct passwd* pwd)
+{
+	if (pwd == NULL || pwd->pw_dir == NULL || pwd->pw_name == NULL)
+		return false;
+	if (strcmp(pwd->pw_dir, kHome) == 0)
+		return true;
+
+	BString expected;
+	expected.SetToFormat("%s/%s", kUsersRoot, pwd->pw_name);
+	return expected == pwd->pw_dir;
+}
+
+
 status_t
-write_desktop_session()
+write_desktop_session(const char* login)
 {
 	if (geteuid() != 0)
 		return B_PERMISSION_DENIED;
-
-	BString name;
-	uid_t uid = 0;
-	gid_t gid = 0;
-	status_t status = find_first_home_admin(name, uid, gid);
-	if (status != B_OK)
-		return status;
-	if (uid == 0)
+	if (login == NULL || login[0] == '\0')
+		return B_BAD_VALUE;
+	if (is_disabled_user(login))
 		return B_NOT_ALLOWED;
+
+	struct passwd* pwd = getpwnam(login);
+	if (pwd == NULL || strcmp(pwd->pw_name, login) != 0)
+		return ENOENT;
+	if (!is_listed_account(pwd) || !is_session_home(pwd))
+		return B_NOT_ALLOWED;
+	if (pwd->pw_uid == 0)
+		return B_NOT_ALLOWED;
+
+	// getpwnam() uses one static buffer. Copy before create_home().
+	char name[64];
+	if (snprintf(name, sizeof(name), "%s", pwd->pw_name) >= (int)sizeof(name))
+		return B_NAME_TOO_LONG;
+	if (strchr(name, '\n') != NULL || strchr(name, '\r') != NULL)
+		return B_BAD_VALUE;
+	uid_t uid = pwd->pw_uid;
+	gid_t gid = pwd->pw_gid;
+	BString home(pwd->pw_dir);
+	bool firstHome = home == kHome;
+
+	// Do not run ensure_person_dirs() here: that always rewrites /boot/home
+	// and would give a standard account the administrator's folders.
+	if (firstHome)
+		ensure_person_dirs(uid, gid);
+	else {
+		status_t status = create_home(home.String(), uid, gid);
+		if (status != B_OK)
+			return status;
+	}
 
 	FILE* file = fopen(kSessionPath, "w");
 	if (file == NULL)
 		return errno;
-	fprintf(file, "%s\n", name.String());
+	if (fprintf(file, "%s\n", name) < 0) {
+		fclose(file);
+		unlink(kSessionPath);
+		return EIO;
+	}
 	if (fclose(file) != 0)
 		return errno;
-	chmod(kSessionPath, 0600);
-	chown(kSessionPath, 0, 0);
-	adopt_trash(uid, gid);
+	if (chmod(kSessionPath, 0600) != 0 || chown(kSessionPath, 0, 0) != 0)
+		return errno;
+
+	if (firstHome)
+		adopt_trash(uid, gid);
+	lock_private_homes();
+	return B_OK;
+}
+
+
+status_t
+clear_desktop_session()
+{
+	if (geteuid() != 0)
+		return B_PERMISSION_DENIED;
+
+	unlink(kSessionPath);
+	unlink("/tmp/r5-desktop-session");
 	return B_OK;
 }
 

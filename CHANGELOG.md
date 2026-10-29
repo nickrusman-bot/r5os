@@ -4,6 +4,16 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### Sign in as that person (build 10008)
+
+The session file is the account whose password just worked, not always the first administrator. `r5-desktop` already drops to that name before Tracker and Deskbar. A standard account’s home is `/boot/home/users/<name>` (`create_home` on sign-in). `user` still gets `/boot/home`. Log out deletes the session file.
+
+This does **not** call `BLaunchRoster::StartSession`. That spawns another `launch_daemon <name>`, which reads `data/launch/user` and starts a second `app_server`. Removing autologin instead left the boot splash. Autologin stays. Desktop jobs stay off `initial_volumes_mounted`. One shared screen.
+
+`/boot/trash` is chown’d only for the `/boot/home` account. A standard user’s Trash may not work. Preferences are not hidden by role. Not a second graphical session.
+
+Jam AMD64 2026-10-29 19:53 Europe/Amsterdam: `jam_exit=0` (Login, `r5-desktop`, What’s new, image). VBox `-ForceConvert` started. Sign in as a standard account is not confirmed yet.
+
 ### First administrator off uid 0 (build 10007)
 
 Login (still uid 0) rewrites `/etc/passwd` so the `/boot/home` account is the first free uid ≥ 1000 (sshd keeps 1000), primary group `users`, member of `admin`. It `chown`s `/boot/home` except `/boot/home/users/<other>`. Desktop jobs start through `/system/apps/r5-desktop`, which drops to that uid before exec. Not `StartSession`. Sign in as a standard user still opens this administrator desktop.
