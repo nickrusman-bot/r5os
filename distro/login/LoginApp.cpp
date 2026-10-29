@@ -96,6 +96,19 @@ keep_team(const app_info& info, team_id self)
 }
 
 
+static bool
+is_session_job(const char* name)
+{
+	if (name == NULL)
+		return false;
+	return strstr(name, "Be-TRAK") != NULL
+		|| strstr(name, "Be-TSKB") != NULL
+		|| strstr(name, "NetworkStatus") != NULL
+		|| strstr(name, "airplay-tray") != NULL
+		|| strstr(name, "vbox-clip") != NULL;
+}
+
+
 LoginApp::LoginApp()
 	:
 	BApplication(kLoginAppSig),
@@ -217,6 +230,8 @@ LoginApp::TryLogin(BMessage* message)
 				_EnableDesktopJobs();
 				status = BLaunchRoster().Target("desktop");
 				if (status == B_OK)
+					_EnableDesktopJobs();
+				if (status == B_OK)
 					status = _LaunchSessionApp("/system/Tracker");
 				if (status == B_OK)
 					status = _LaunchSessionApp("/system/Deskbar");
@@ -224,6 +239,12 @@ LoginApp::TryLogin(BMessage* message)
 					status = _WaitRunning("application/x-vnd.Be-TRAK");
 				if (status == B_OK)
 					status = _WaitRunning("application/x-vnd.Be-TSKB");
+				if (status == B_OK) {
+					_LaunchSessionApp("/system/apps/NetworkStatus",
+						"--deskbar");
+					_LaunchSessionApp("/system/servers/airplay_deskbar");
+					_LaunchSessionApp("/system/servers/r5_vbox_clip");
+				}
 			}
 			if (status == B_OK)
 				_HideLogin();
@@ -293,22 +314,27 @@ LoginApp::_EnableDesktopJobs()
 
 	for (int32 i = 0; i < jobs.CountStrings(); i++) {
 		const char* name = jobs.StringAt(i);
-		bool sessionApp = strstr(name, "Be-TRAK") != NULL
-			|| strstr(name, "Be-TSKB") != NULL;
-		roster.SetEnabled(name, !sessionApp);
+		if (is_session_job(name)) {
+			roster.SetEnabled(name, false);
+			roster.Stop(name);
+		} else
+			roster.SetEnabled(name, true);
 	}
 }
 
 
 status_t
-LoginApp::_LaunchSessionApp(const char* program)
+LoginApp::_LaunchSessionApp(const char* program, const char* argument)
 {
-	const char* args[] = {
-		"/system/apps/r5-desktop",
-		program,
-		NULL
-	};
-	thread_id thread = load_image(2, args, (const char**)environ);
+	const char* args[4];
+	int32 count = 0;
+	args[count++] = "/system/apps/r5-desktop";
+	args[count++] = program;
+	if (argument != NULL && argument[0] != '\0')
+		args[count++] = argument;
+	args[count] = NULL;
+
+	thread_id thread = load_image(count, args, (const char**)environ);
 	if (thread < B_OK)
 		return thread;
 	resume_thread(thread);

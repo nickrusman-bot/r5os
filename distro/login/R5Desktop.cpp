@@ -1,17 +1,26 @@
 /*
- * Drop to the signed-in administrator and exec the desktop job.
+ * Drop to the signed-in administrator and start the desktop job as a
+ * new team. Exec would keep the team name r5-desktop in Deskbar.
+ * The helper then exits. Do not wrap launch_daemon jobs with this
+ * binary: a service whose team exits is restarted forever.
  * launch_daemon and Login stay uid 0.
  */
 
 
 #include <errno.h>
 #include <grp.h>
+#include <image.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
+
+#include <OS.h>
+
+
+extern char** environ;
 
 
 static const char* kSessionPaths[] = {
@@ -86,7 +95,13 @@ main(int argc, char** argv)
 		return 1;
 	}
 
-	execv(argv[1], argv + 1);
-	syslog(LOG_ERR, "r5-desktop: exec %s: %s", argv[1], strerror(errno));
-	return 1;
+	thread_id thread = load_image(argc - 1, (const char**)(argv + 1),
+		(const char**)environ);
+	if (thread < B_OK) {
+		syslog(LOG_ERR, "r5-desktop: load_image %s: %s", argv[1],
+			strerror(thread));
+		return 1;
+	}
+	resume_thread(thread);
+	return 0;
 }

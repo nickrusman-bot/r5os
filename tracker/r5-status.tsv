@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/uid0-plan		Build 10007: migrate user off uid 0; r5-desktop wraps Tracker/Deskbar. Not VBox-tested. Not StartSession.
+8940	in-progress	cursor/uid0-plan		Build 10007: r5-desktop load_image then exit; launch unwrap. VBox: desktop icons, 4x r5-desktop, mouse stuck. Not StartSession.
 8944	open			
 8948	open			
 8956	open			

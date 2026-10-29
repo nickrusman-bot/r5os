@@ -24,6 +24,10 @@ VBox Sign in still empty blue, a bit longer wait. Tracker registered (`IsRunning
 
 Jam AMD64 2026-10-29 16:36 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Shared app_server desktop after Sign in not confirmed yet.
 
+VBox after that Sign in: desktop icons appeared (R5OS, home, Quick Tour, User Guide, Trash) at 15:38 Europe/Amsterdam. Deskbar listed **four `r5-desktop` teams**. The mouse cursor sat as a hand and did not move. Haiku `exec` keeps the team name of the helper, so Tracker, Deskbar, NetworkStatus and the clip/AirPlay tray all showed as `r5-desktop`. `r5-desktop` now `load_image`s the real binary and exits. launch_daemon jobs are not wrapped with it (a service whose team exits is restarted forever). Login still starts Tracker, Deskbar, NetworkStatus, `airplay_deskbar`, and `r5_vbox_clip` through the helper after Target("desktop"), and stops those launch jobs so Target does not also spawn uid-0 copies.
+
+Jam AMD64 2026-10-29 16:49 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Deskbar names and mouse after Sign in not confirmed yet.
+
 Isolation is only true if `id` after Sign in is not uid 0 and `ls /boot/home/users/<name>` is permission denied.
 
 ### First administrator off uid 0 (plan)

@@ -91,75 +91,17 @@ def patch_launch() -> None:
         "}\n",
         "run login not desktop",
     )
-    wraps = (
-        (
-            "\t\tlaunch /system/Tracker\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/Tracker\n",
-            "wrap Tracker",
-        ),
-        (
-            "\t\tlaunch /system/Deskbar\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/Deskbar\n",
-            "wrap Deskbar",
-        ),
-        (
-            "\t\tlaunch /system/servers/airplay_deskbar\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/servers/airplay_deskbar\n",
-            "wrap airplay",
-        ),
-        (
-            "\t\tlaunch /system/apps/NetworkStatus --deskbar\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/apps/NetworkStatus "
-            "--deskbar\n",
-            "wrap NetworkStatus",
-        ),
-        (
-            "\t\tlaunch /system/servers/r5_vbox_clip\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/servers/r5_vbox_clip\n",
-            "wrap vbox clip",
-        ),
-        (
-            "\t\tlaunch /system/apps/LaunchBox\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/apps/LaunchBox\n",
-            "wrap LaunchBox",
-        ),
-        (
-            "\t\tlaunch /system/servers/mail_daemon\n",
-            "\t\tlaunch /system/apps/r5-desktop /system/servers/mail_daemon\n",
-            "wrap mail_daemon",
-        ),
-        (
-            "\t\tlaunch /bin/sh ~/config/settings/boot/UserBootscript\n",
-            "\t\tlaunch /system/apps/r5-desktop /bin/sh "
-            "~/config/settings/boot/UserBootscript\n",
-            "wrap UserBootscript",
-        ),
-        (
-            '\t\tlaunch /bin/sh /system/boot/PostInstallScript "first login" '
-            "~/config/settings/first_login /boot/system/boot/first-login\n",
-            "\t\tlaunch /system/apps/r5-desktop /bin/sh "
-            '/system/boot/PostInstallScript "first login" '
-            "~/config/settings/first_login /boot/system/boot/first-login\n",
-            "wrap first-login",
-        ),
-        (
-            "\t\tlaunch /bin/ln -sf /boot/system/apps/Installer "
-            "~/Desktop/Installer\n",
-            "\t\tlaunch /system/apps/r5-desktop /bin/ln -sf "
-            "/boot/system/apps/Installer ~/Desktop/Installer\n",
-            "wrap installer link",
-        ),
-    )
     launch = HAIKU / "data" / "launch" / "user"
     text = launch.read_text(encoding="utf-8")
-    if "/system/bin/r5-desktop" in text:
-        launch.write_text(
-            text.replace("/system/bin/r5-desktop", "/system/apps/r5-desktop"),
-            encoding="utf-8",
-        )
-        print("patched user (r5-desktop apps path)")
-    for old, new, tag in wraps:
-        replace_once(launch, old, new, tag, optional=True)
+    unwrapped = (
+        text.replace("/system/bin/r5-desktop ", "")
+        .replace("/system/apps/r5-desktop ", "")
+    )
+    if unwrapped != text:
+        launch.write_text(unwrapped, encoding="utf-8")
+        print("unwrapped user (r5-desktop prefixes)")
+    else:
+        print("already user (no r5-desktop wrap)")
 
 
 def patch_first_boot() -> None:
