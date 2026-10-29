@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/session-user		Build 10008: Sign in is that account. VBox nicky uid 1002; HOME and Trash were still the administrator. HOME via finddir, trash is $h/trash.
+8940	in-progress	cursor/session-user		Build 10008 VBox 20:16: nicky HOME=/boot/home/users/nicky, own Trash and desktop links; user cannot list that home. Prefs not hidden per role.
 8944	open			
 8948	open			
 8956	open			
