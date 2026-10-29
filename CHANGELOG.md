@@ -4,6 +4,24 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### Locked machine settings (build 10009)
+
+Network, Screen, Time, and Users & Accounts stay visible. An administrator (group `admin`, or the `/boot/home` account) changes them immediately. A standard account sees the same window with a lock. Unlock sends that administrator's name and password to Login, which is still uid 0. The preference app itself stays the signed-in user. The grant lasts 5 minutes and is dropped on Log out. It applies to that preference app only.
+
+Time's clock and timezone go through Login, because the kernel allows those calls only for uid 0. Screen mode is refused in app_server unless the client is an administrator or holds a grant (`/boot/system/settings/r5-machine-unlock`). Network settings files are group `admin` mode `0664`. During a standard account's grant the directory is world-writable, because that account is not in `admin` and only one person is at the screen. Personal preflets are not locked.
+
+Jam AMD64 2026-10-29 21:44 Europe/Amsterdam: `jam_exit=0` (Login, Users, Time, Screen, Network, app_server, image).
+
+VBox `-ForceConvert` 21:45 Europe/Amsterdam: the VM powered on. Fresh disk, so the first desktop waits on `package_daemon`.
+
+VBox 21:49 Europe/Amsterdam (guest clock 8:49 PM, UTC): Network showed Locked and Unlock at the top left. Add, Apply, and the other controls stayed active. The lock now sits on the bottom right of Network, Screen, Time, and Users. While it is locked, buttons, checkboxes, menus, and text fields in that window are disabled. Scrolling still works.
+
+Jam AMD64 2026-10-29 22:02 Europe/Amsterdam: `jam_exit=0` (Users, Time, Screen, Network, image).
+
+VBox 22:04 Europe/Amsterdam (guest clock 9:04 PM, UTC): signed in as standard account `nick` (uid 1002, `/boot/home/users/nick`). Network: lock at the bottom right, Revert / Disable / Renegotiate gray. Users: after Unlock, “Unlocked for a few minutes” and Lock at the bottom right, Add on. Network stayed Locked while Users was unlocked — the grant is per preference window.
+
+VBox 22:06 Europe/Amsterdam (guest clock 9:06 PM, UTC): Screen and Time, still as `nick`, Locked at the bottom right. Screen: Revert and Apply gray, workspace +/− gray. Time: Revert gray. The date and analog clock still update.
+
 ### Sign in as that person (build 10008)
 
 The session file is the account whose password just worked, not always the first administrator. `r5-desktop` already drops to that name before Tracker and Deskbar. A standard account’s home is `/boot/home/users/<name>` (`create_home` on sign-in). `user` still gets `/boot/home`. Log out deletes the session file.

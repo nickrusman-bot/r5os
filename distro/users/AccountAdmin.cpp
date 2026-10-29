@@ -15,6 +15,7 @@
 #include <String.h>
 
 #include <RegistrarDefs.h>
+#include <syscalls.h>
 #include <user_group.h>
 #include <util/KMessage.h>
 
@@ -105,6 +106,32 @@ is_disabled_user(const char* name)
 	if (shadow == NULL || shadow->sp_pwdp == NULL)
 		return false;
 	return shadow->sp_pwdp[0] == '!';
+}
+
+
+bool
+account_password_matches(const struct passwd* pwd, const char* plain)
+{
+	if (pwd == NULL)
+		return false;
+
+	const char* required = pwd->pw_passwd;
+	if (required != NULL && strcmp(required, "x") == 0) {
+		struct spwd* shadow = getspnam(pwd->pw_name);
+		if (shadow == NULL)
+			return false;
+		required = shadow->sp_pwdp;
+	}
+
+	if (required == NULL || required[0] == '\0')
+		return plain == NULL || plain[0] == '\0';
+	if (required[0] == '!')
+		return false;
+
+	if (plain == NULL)
+		plain = "";
+	char* encrypted = crypt(plain, required);
+	return encrypted != NULL && strcmp(encrypted, required) == 0;
 }
 
 
@@ -1029,6 +1056,183 @@ delete_account(const char* name, bool deleteFiles, BString& error)
 }
 
 
+struct admin_grant {
+	team_id	team;
+	time_t	until;
+};
+
+static const int32 kMaxAdminGrants = 8;
+static admin_grant sGrants[kMaxAdminGrants];
+static const char* kGrantPath = "/boot/system/settings/r5-machine-unlock";
+static const char* kNetworkSettings = "/boot/system/settings/network";
+
+
+static void
+forget_expired_grants()
+{
+	time_t now = time(NULL);
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team > 0 && sGrants[i].until <= now)
+			sGrants[i].team = -1;
+	}
+}
+
+
+static bool
+team_has_grant(team_id team)
+{
+	forget_expired_grants();
+	if (team <= 0)
+		return false;
+	time_t now = time(NULL);
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team == team && sGrants[i].until > now)
+			return true;
+	}
+	return false;
+}
+
+
+static bool
+any_grant()
+{
+	forget_expired_grants();
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team > 0)
+			return true;
+	}
+	return false;
+}
+
+
+static void
+remember_grant(team_id team)
+{
+	forget_expired_grants();
+	time_t until = time(NULL) + kAdminGrantSeconds;
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team == team) {
+			sGrants[i].until = until;
+			return;
+		}
+	}
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team <= 0) {
+			sGrants[i].team = team;
+			sGrants[i].until = until;
+			return;
+		}
+	}
+}
+
+
+static void
+forget_grant(team_id team)
+{
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team == team)
+			sGrants[i].team = -1;
+	}
+}
+
+
+static bool
+sender_may_change(BMessage* request)
+{
+	if (sender_is_admin(request))
+		return true;
+	if (request == NULL)
+		return false;
+	return team_has_grant(request->ReturnAddress().Team());
+}
+
+
+static void
+chmod_settings_tree(const char* dir, mode_t dirMode, mode_t fileMode, gid_t gid)
+{
+	if (dir == NULL)
+		return;
+	chmod(dir, dirMode);
+	chown(dir, 0, gid);
+	DIR* folder = opendir(dir);
+	if (folder == NULL)
+		return;
+	while (struct dirent* entry = readdir(folder)) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		BString path;
+		path.SetToFormat("%s/%s", dir, entry->d_name);
+		struct stat st;
+		if (lstat(path.String(), &st) != 0 || S_ISLNK(st.st_mode))
+			continue;
+		if (S_ISDIR(st.st_mode))
+			chmod_settings_tree(path.String(), dirMode, fileMode, gid);
+		else {
+			chmod(path.String(), fileMode);
+			chown(path.String(), 0, gid);
+		}
+	}
+	closedir(folder);
+}
+
+
+static void
+write_grant_file()
+{
+	FILE* file = fopen(kGrantPath, "w");
+	if (file == NULL)
+		return;
+	forget_expired_grants();
+	for (int32 i = 0; i < kMaxAdminGrants; i++) {
+		if (sGrants[i].team <= 0)
+			continue;
+		fprintf(file, "team %ld until %lld\n", (long)sGrants[i].team,
+			(long long)sGrants[i].until);
+	}
+	fclose(file);
+	chmod(kGrantPath, 0644);
+}
+
+
+void refresh_machine_settings_access();
+
+
+void
+clear_admin_grants()
+{
+	for (int32 i = 0; i < kMaxAdminGrants; i++)
+		sGrants[i].team = -1;
+	refresh_machine_settings_access();
+}
+
+
+void
+refresh_machine_settings_access()
+{
+	BString error;
+	ensure_admin_group(error);
+	struct group* admin = getgrnam(kAdminGroupName);
+	gid_t gid = admin != NULL ? admin->gr_gid : 0;
+	mkdir(kNetworkSettings, 0755);
+	// An administrator is in group admin and can write. A granted standard
+	// account is not, so those few minutes use a world-writable directory.
+	// One person is at this screen.
+	if (any_grant())
+		chmod_settings_tree(kNetworkSettings, 0777, 0666, gid);
+	else
+		chmod_settings_tree(kNetworkSettings, 0775, 0664, gid);
+	write_grant_file();
+}
+
+
+static void
+deny_locked(BMessage& reply)
+{
+	reply.AddString("text", "Unlock this with an administrator password.");
+	reply.AddInt32("error", B_PERMISSION_DENIED);
+}
+
+
 status_t
 handle_admin_message(BMessage* request, BMessage& reply)
 {
@@ -1037,15 +1241,117 @@ handle_admin_message(BMessage* request, BMessage& reply)
 		return B_BAD_VALUE;
 	if (geteuid() != 0) {
 		reply.AddString("text", "Account changes require the sign-in helper.");
-		return B_PERMISSION_DENIED;
-	}
-	if (!sender_is_admin(request)) {
-		reply.AddString("text", "Only an administrator can change accounts.");
+		reply.AddInt32("error", B_PERMISSION_DENIED);
 		return B_PERMISSION_DENIED;
 	}
 
+	team_id sender = request->ReturnAddress().Team();
 	BString error;
-	status_t status = B_BAD_VALUE;
+	status_t status = B_OK;
+	switch (request->what) {
+		case kMsgAdminQuery:
+		{
+			bool admin = sender_is_admin(request);
+			reply.AddBool("admin", admin);
+			reply.AddBool("unlocked", admin || team_has_grant(sender));
+			reply.AddInt32("error", B_OK);
+			refresh_machine_settings_access();
+			return B_OK;
+		}
+		case kMsgAdminUnlock:
+		{
+			const char* name = NULL;
+			request->FindString("name", &name);
+			const char* password = request->GetString("password", "");
+			struct passwd* pwd = name != NULL ? getpwnam(name) : NULL;
+			if (pwd == NULL || name == NULL || strcmp(pwd->pw_name, name) != 0)
+				status = ENOENT;
+			else if (!is_listed_account(pwd) || !is_admin_user(pwd))
+				status = B_NOT_ALLOWED;
+			else if (is_disabled_user(name))
+				status = B_NOT_ALLOWED;
+			else if (!account_password_matches(pwd, password))
+				status = B_PERMISSION_DENIED;
+			else {
+				remember_grant(sender);
+				refresh_machine_settings_access();
+				reply.AddBool("unlocked", true);
+				reply.AddInt32("error", B_OK);
+				return B_OK;
+			}
+			if (status == B_PERMISSION_DENIED)
+				error = "That password is not right.";
+			else if (status == ENOENT)
+				error = "That account was not found.";
+			else
+				error = "That account cannot unlock settings.";
+			break;
+		}
+		case kMsgAdminRelock:
+			forget_grant(sender);
+			refresh_machine_settings_access();
+			reply.AddBool("unlocked", sender_is_admin(request));
+			reply.AddInt32("error", B_OK);
+			return B_OK;
+
+		case kMsgAdminSetClock:
+		case kMsgAdminSetTimezone:
+		case kMsgAdminSetClockGmt:
+			if (!sender_may_change(request)) {
+				deny_locked(reply);
+				return B_PERMISSION_DENIED;
+			}
+			if (request->what == kMsgAdminSetClock) {
+				int64 seconds = 0;
+				if (request->FindInt64("seconds", &seconds) != B_OK)
+					status = B_BAD_VALUE;
+				else {
+					status = _kern_set_real_time_clock(
+						(bigtime_t)seconds * 1000000);
+				}
+			} else if (request->what == kMsgAdminSetTimezone) {
+				int32 offset = 0;
+				const char* name = NULL;
+				request->FindInt32("offset", &offset);
+				request->FindString("name", &name);
+				if (name == NULL)
+					name = "";
+				status = _kern_set_timezone(offset, name, strlen(name));
+			} else {
+				status = _kern_set_real_time_clock_is_gmt(
+					request->GetBool("gmt", false));
+			}
+			if (status != B_OK)
+				error = "The clock could not be changed.";
+			break;
+
+		default:
+			break;
+	}
+
+	if (request->what == kMsgAdminUnlock) {
+		if (error.Length() > 0)
+			reply.AddString("text", error.String());
+		reply.AddInt32("error", status);
+		return status;
+	}
+	if (request->what == kMsgAdminSetClock || request->what == kMsgAdminSetTimezone
+		|| request->what == kMsgAdminSetClockGmt) {
+		if (status != B_OK) {
+			if (error.Length() > 0)
+				reply.AddString("text", error.String());
+			reply.AddInt32("error", status);
+		} else
+			reply.AddInt32("error", B_OK);
+		return status;
+	}
+
+	if (!sender_may_change(request)) {
+		deny_locked(reply);
+		return B_PERMISSION_DENIED;
+	}
+
+	status = B_BAD_VALUE;
 	switch (request->what) {
 		case kMsgAdminAdd:
 		{

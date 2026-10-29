@@ -39,7 +39,7 @@ Detect actual layout. Typical live disk: one `user` and `/boot/home` already ful
 
 The image has **one administrator**: login name `user`, gecos R5OS, home `/boot/home`. That is who should work at the desktop after Sign in.
 
-A **standard user** is optional: created in Users & Accounts, uid ≥ 1000, home `/boot/home/users/<name>`, group `users`, not `admin`. Sign in as that person (build 10008) starts Tracker and Deskbar as that uid and home. One screen. Preferences stay visible.
+A **standard user** is optional: created in Users & Accounts, uid ≥ 1000, home `/boot/home/users/<name>`, group `users`, not `admin`. Sign in as that person (build 10008) starts Tracker and Deskbar as that uid and home. One screen. Preferences stay visible. Network, Screen, Time, and Users & Accounts are locked until an administrator password is entered (build 10009).
 
 `nicky` / `nicky2` / `nicky3` were accounts added on VBox disks while testing Add/Delete. They are not in the jammed image and not a product role. Tests may create a standard user with any valid name.
 
@@ -300,9 +300,7 @@ Native copies in `distro/user-paths` (MidiPlayer, Joysticks, PoorMan). Apply onl
 
 ### Preference apps (accepted 2026-10-29)
 
-Deskbar still shows the usual Preferences list to everyone. This split is what we will follow; menus are not hidden yet. A second user gets their own `~/config/settings` when they sign in (build 10008). Network, Screen, and Time stay in the menu.
-
-Until then, even personal preflets write `/boot/home/config/settings` because the live session is uid 0.
+Deskbar shows the same Preferences list to everyone (build 10009). Nothing is hidden. A second user gets their own `~/config/settings` when they sign in (build 10008). Personal preflets write that account's settings. Network, Screen, Time, and Users & Accounts stay in the list and are locked for a standard account.
 
 **Personal (already `B_USER_*`).** A normal account should keep their own:
 
@@ -326,7 +324,7 @@ Until then, even personal preflets write `/boot/home/config/settings` because th
 | DataTranslations | power user | window/settings file is user; add-ons mixed |
 | Bluetooth | if hardware | settings file is user; the radio is the machine |
 
-**Machine-wide. Do not make these per-user.** Visible in Preferences; they describe this computer. Later: hide or lock for a non-admin.
+**Machine-wide. Do not make these per-user.** Visible in Preferences. Build 10009: a standard account can look, and unlocks changes with an administrator name and password for 5 minutes. The lock sits at the bottom right. While it is locked, the controls in that window are disabled; the lists still scroll. Login checks the password and performs the privileged part. The preference app stays the signed-in uid. An administrator opens them unlocked. Log out drops the grant.
 
 | Preflet | Visible today | Why stay shared | Path today |
 |---|---|---|---|
@@ -341,8 +339,10 @@ Until then, even personal preflets write `/boot/home/config/settings` because th
 
 | Preflet | Visible today | Decision |
 |---|---|---|
-| Users | yes, in Preferences | administrators only; not a personal theme |
+| Users | yes, in Preferences | list is visible to everyone; Add, Disable, and Delete need the lock |
 
-**Not this pass:** hide Network/Screen/Time from a standard user; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`.
+**Not this pass:** one combined Preferences window; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`.
+
+VBox 2026-10-29 22:04 Europe/Amsterdam (guest 9:04 PM, UTC): as `nick` (uid 1002), Network stayed locked with the gray buttons at the bottom right. Users unlocked for a few minutes in the same session. The grant is per preference window. Screen and Time at 22:06: Locked, Revert/Apply gray.
 
 CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Leave them.
