@@ -263,6 +263,12 @@ LoginApp::TryLogin(BMessage* message)
 				if (status == B_OK) {
 					_LaunchSessionApp("/system/apps/NetworkStatus",
 						"--deskbar");
+					_LaunchSessionApp("/system/apps/ProcessController",
+						"-deskbar");
+					_LaunchSessionApp("/system/apps/PowerStatus",
+						"--deskbar");
+					_LaunchSessionApp("/system/bin/desklink",
+						"--add-volume");
 					_LaunchSessionApp("/system/servers/airplay_deskbar");
 					_LaunchSessionApp("/system/servers/r5_vbox_clip");
 				}
