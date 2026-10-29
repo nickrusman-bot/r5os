@@ -86,7 +86,7 @@ Do not treat Haiku `hrev` as the product version.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
-6. **Settings audit:** Appearance / Backgrounds / Deskbar / Tracker / app_server already `find_directory`. Uid 0 still maps that to `/boot/home`. AirPlay deskbar log no longer hardcodes `/boot/home`. Leftover: Joysticks preflet path; `StartSession`.
+6. **Settings audit:** desktop prefs plus bundled apps (see below). Uid 0 still maps `find_directory` to `/boot/home`. Leftover hardcoded settings: Joysticks, MidiPlayer, PoorMan, WebPositive defaults. `StartSession` still later.
 7. Lock screen; then guest/Public.
 8. Absorb kernel/UI overlays into a real in-tree fork.
 
@@ -154,3 +154,27 @@ Checked in the jammed AMD64 tree (2026-10-29):
 | Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
 
 Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.
+
+### Bundled applications
+
+First audit pass was desktop prefs only. 2026-10-29 14:47 Europe/Amsterdam: `src/apps` and `src/preferences` in the jammed AMD64 tree, plus R5OS `distro/` apps.
+
+Most image apps already call `find_directory` for settings or folders (Mail, Terminal, Screenshot, ShowImage, Clock, DeskCalc, HaikuDepot, People, ProcessController, Workspaces, …). Same uid-0 limit as the desktop prefs.
+
+Hardcoded `/boot/home` in app code, grouped:
+
+| App | What | Role |
+|---|---|---|
+| CodyCam, Icon-O-Matic, TextSearch, MediaConverter | `find_directory(B_USER_DIRECTORY)` then `/boot/home` | fallback / default folder, not the settings file |
+| WebPositive (in-tree) | default download `/boot/home/Desktop/`; welcome `file:///boot/home/config/settings/…` | settings **defaults**. The image ships `webpositive.hpkg`, not this tree’s binary |
+| MidiPlayer | `#define SETTINGS_FILE "/boot/home/config/settings/MidiPlayerSettings"` | real settings path |
+| PoorMan | default web folder `/boot/home/public_html` | default document root |
+| Joysticks | `JOYSTICKFILESETTINGS` | real settings path |
+| PackageInstaller | `/boot/home/config` rewrite | BeOS path migration |
+| MediaPlayer, Tracker `PROFILE` | Desktop dump paths | debug leftovers |
+| Login, Users, HomeLock | `/boot/home` and `users/` | layout on purpose |
+| AirPlay log | `B_USER_LOG_DIRECTORY` | R5OS overlay, already switched |
+
+Not in this git: **Pe** and **Vision** (optional image packages). Demos without settings (GLTeapot, Mandelbrot, …) have no home path.
+
+No new overlay patches for those Haiku leftovers this round.
