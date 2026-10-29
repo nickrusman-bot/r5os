@@ -14,6 +14,8 @@ VBox 2026-10-29 13:54 Europe/Amsterdam: Log out no longer crashed, but the scree
 
 VBox 2026-10-29 14:01 Europe/Amsterdam: Log out returned to Sign in. Login is not a Deskbar team. Same session after the next Sign in. Isolation is still not done.
 
+VBox 2026-10-29 14:09 Europe/Amsterdam: after opening Installer from Applications, Log out showed FirstBootPrompt (Try R5OS). Installer `Quit()` relaunches that prompt when Deskbar is not running (live cancel-install path). Log out stops Deskbar first. Installer now skips that launch if Sign in is running.
+
 ### Sign-in screen (build 10004)
 
 Haiku Login is the boot path instead of auto-starting Tracker/Deskbar. Native widgets: person in the middle (list hidden when there is only one), password under the name, Sign in, clock plus Restart/Shut down at the bottom. After a valid password, `BLaunchRoster().Target("desktop")` starts the existing user session. `StartSession` for another account is not used yet (second app_server). Empty password is allowed when shadow is empty. Disabled accounts (`!`) are omitted.

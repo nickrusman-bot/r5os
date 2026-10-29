@@ -57,7 +57,7 @@ Detect actual layout. Typical live disk: one `user` and `/boot/home` already ful
 | `apply-vboxclip.py` | COM1 clipboard | `distro/vboxclip` | Yes (copy-in) |
 | `apply-ipv6.py` | SLAAC/DAD/DHCPv6 + kernel IPv6 | `distro/network` + kernel patches | Yes; kernel hunks are the riskiest to absorb |
 | `apply-users.py` | Users & Accounts preflet | `distro/users` | Yes (copy-in) |
-| `apply-login.py` | Login app + launch `run { login }` | `distro/login` | Yes (copy-in) |
+| `apply-login.py` | Login app + launch `run { login }` + Deskbar Log out; Installer must not reopen FirstBootPrompt on Log out | `distro/login` | Yes (copy-in) |
 | `apply-about.py` | About version, What’s new | `distro/WHATSNEW` | Yes |
 
 Jam/image/tracker scripts (`jam-r5-raw.sh`, `r5-version.sh`, `tracker-report.py`, QEMU/VBox runners) stay. They are not OS patches.
