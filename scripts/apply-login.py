@@ -47,6 +47,12 @@ def copy_sources() -> None:
         (dest / name).touch()
         print(f"copied {name} -> {dest}")
 
+    users = ROOT / "distro" / "users"
+    for name in ("HomeLock.cpp", "HomeLock.h"):
+        shutil.copy2(users / name, dest / name)
+        (dest / name).touch()
+        print(f"copied {name} -> {dest}")
+
 
 def patch_launch() -> None:
     replace_once(

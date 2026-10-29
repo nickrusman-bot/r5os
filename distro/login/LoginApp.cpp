@@ -7,6 +7,7 @@
 #include "LoginApp.h"
 
 #include "DesktopWindow.h"
+#include "HomeLock.h"
 #include "LoginWindow.h"
 
 #include <Alert.h>
@@ -123,6 +124,7 @@ LoginApp::ReadyToRun()
 		return;
 	}
 
+	lock_private_homes();
 	fDesktopWindow = new DesktopWindow(screen.Frame(), false);
 	fDesktopWindow->Show();
 	_OpenLoginWindow();

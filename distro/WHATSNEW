@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10006 - Private home folders
+Another account cannot open your Desktop or Documents. Extra people still live under home/users. The original account is user id 0, so that one can still read the others. Everyone still shares one desktop after Sign in.
+
 R5OS 2026.1-dev Build 10005 - Log out
 The leaf menu can log you out. Tracker, Deskbar, and other session apps close, then Sign in comes back. The next Sign in is still the same computer session — homes are not isolated yet.
 

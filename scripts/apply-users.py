@@ -30,8 +30,9 @@ def replace_once(
 def copy_sources() -> None:
     dest = HAIKU / "src" / "preferences" / "users"
     dest.mkdir(parents=True, exist_ok=True)
-    for name in ("Users.cpp", "Users.rdef", "Jamfile"):
+    for name in ("HomeLock.cpp", "HomeLock.h", "Users.cpp", "Users.rdef", "Jamfile"):
         shutil.copy2(SRC / name, dest / name)
+        (dest / name).touch()
         print(f"copied {name} -> {dest}")
 
 

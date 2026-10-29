@@ -4,6 +4,7 @@ UsePrivateHeaders app interface ;
 
 Application Login :
 	DesktopWindow.cpp
+	HomeLock.cpp
 	LoginApp.cpp
 	LoginWindow.cpp
 	LoginView.cpp
