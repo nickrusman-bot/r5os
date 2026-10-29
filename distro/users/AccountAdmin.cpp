@@ -1661,10 +1661,8 @@ handle_admin_message(BMessage* request, BMessage& reply)
 			break;
 	}
 
-	if (status != B_OK) {
-		if (error.Length() > 0)
-			reply.AddString("text", error.String());
-		reply.AddInt32("error", status);
-	}
+	if (status != B_OK && error.Length() > 0)
+		reply.AddString("text", error.String());
+	reply.AddInt32("error", status == B_OK ? B_OK : status);
 	return status;
 }

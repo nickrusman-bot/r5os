@@ -161,7 +161,7 @@ LoginApp::MessageReceived(BMessage* message)
 		case kMsgAdminSetProfile:
 			// New account messages must be listed here. An unhandled
 			// message still gets an empty reply, and Users treats a missing
-			// "error" field as success.
+			// "error" field as failure.
 			HandleAdmin(message);
 			break;
 		case kLogoutAction:

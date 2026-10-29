@@ -28,6 +28,10 @@ VBox 23:12 Europe/Amsterdam: as `nicky`, Your account no longer showed the peopl
 
 Jam AMD64 2026-10-29 23:19 Europe/Amsterdam: `jam_exit=0` (Login, Users, image). Not yet seen in VBox.
 
+VBox 23:25 Europe/Amsterdam (guest 9:58 PM, UTC): as `user`, Users & Accounts showed the people list, a one-line Name and Email, and `nicky` as a standard account. As `nicky`, the own card worked, including a password change. Add account created the person and then reported "Sign in did not answer." Add, Disable, and Delete returned no `error` field on success, and the stricter reply check treated that as failure.
+
+Success on those three requests now includes `error` 0. Login relinked 2026-10-29 23:28 Europe/Amsterdam. The image was not rebuilt, so the running VBox still shows the false alert.
+
 ### Log out name and Sign in after Restart (build 10010)
 
 The Deskbar leaf item is `Log out <name>` for the signed-in account.
