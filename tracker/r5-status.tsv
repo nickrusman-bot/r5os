@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/uid0-plan		Build 10007: VBox ls nick denied. Autologin kept (else splash). dstcheck+UserBootscript via Login. Not StartSession.
+8940	in-progress	cursor/uid0-plan		Build 10007: VBox 18:34 splash→desktop. launch_daemon user present, no crash. ls nick denied earlier. Not StartSession.
 8944	open			
 8948	open			
 8956	open			
