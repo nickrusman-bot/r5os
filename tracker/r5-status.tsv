@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/multiuser-foundations		Build 10003: add/disable/enable/delete in Users & Accounts; UID >= 1000 via useradd; extra homes /boot/home/users. Login not the boot path. No isolation yet.
+8940	in-progress	cursor/multiuser-foundations		Build 10003 Users & Accounts. VBox 2026-10-29: list user uid 0 (sshd hidden); add nicky 1001 /boot/home/users/nicky; delete left user+nicky3; UID 0 not removed. Disable not screenshot. Login not boot path.
 8944	open			
 8948	open			
 8956	open			

@@ -91,4 +91,12 @@ Do not treat Haiku `hrev` as the product version.
 
 ## Tests for this step
 
-Open Users & Accounts. Add a standard user (UID ≥ 1000, home under `/boot/home/users`). Disable and delete a non-admin test user. The original `user` (UID 0) must refuse delete/disable. Login as that person is **out of scope**.
+VBox 2026-10-29, Europe/Amsterdam (bridged, first-boot VDI, build 10003):
+
+1. Open Users & Accounts — listed `user` uid 0 `/boot/home` administrator (R5OS). `sshd` was not listed.
+2. Add a standard user — `nicky` uid 1001, home `/boot/home/users/nicky`. Also added `nicky2`/`nicky3` uid 1002/1003 as administrators. Tracker showed those three folders.
+3. Disable a non-admin — not captured in the screenshots.
+4. Delete a non-admin — after delete, the list was `user` and `nicky3` only.
+5. Original `user` (UID 0) refuse delete/disable — Disable and Delete stay inactive unless a removable account is selected; `user` was not removed.
+
+Login as that person is **out of scope**. Add-account label alignment is later polish. The preflet icon is the Haiku Login/Tracker people vector.
