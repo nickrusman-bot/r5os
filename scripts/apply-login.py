@@ -310,6 +310,27 @@ def patch_image() -> None:
     )
 
 
+def patch_session_paths() -> None:
+    # Shells source this and would otherwise force every account onto
+    # /boot/home, then fail to read that account's profile.
+    replace_once(
+        HAIKU / "data" / "system" / "boot" / "SetupEnvironment",
+        "export HOME=/boot/home\n",
+        "export HOME=`finddir B_USER_DIRECTORY`\n"
+        "if [ -z \"$HOME\" ]; then\n"
+        "\texport HOME=/boot/home\n"
+        "fi\n",
+        "HOME follows the signed-in account",
+    )
+    replace_once(
+        HAIKU / "src" / "system" / "libroot" / "os" / "find_directory.cpp",
+        '\t\t\t\ttemplatePath = "trash"; '
+        "// TODO: add suffix for current user\n",
+        '\t\t\t\ttemplatePath = "$h/trash";\n',
+        "per-account trash",
+    )
+
+
 def main() -> int:
     copy_sources()
     patch_launch()
@@ -317,6 +338,7 @@ def main() -> int:
     patch_deskbar()
     patch_installer()
     patch_image()
+    patch_session_paths()
     return 0
 
 

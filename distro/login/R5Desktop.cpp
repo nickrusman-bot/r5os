@@ -1,5 +1,5 @@
 /*
- * Drop to the signed-in administrator and start the desktop job as a
+ * Drop to the account named in the session file and start the job as a
  * new team. Exec would keep the team name r5-desktop in Deskbar.
  * The helper then exits. Do not wrap launch_daemon jobs with this
  * binary: a service whose team exits is restarted forever.

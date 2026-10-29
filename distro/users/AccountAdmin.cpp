@@ -226,6 +226,10 @@ add_to_group(const char* groupName, const char* user, BString& errorText)
 }
 
 
+static void ensure_desktop_links(const char* home);
+static void ensure_private_trash(const char* home, uid_t uid, gid_t gid);
+
+
 static status_t
 create_home(const char* home, uid_t uid, gid_t gid)
 {
@@ -253,6 +257,15 @@ create_home(const char* home, uid_t uid, gid_t gid)
 	mkdir(settings.String(), 0700);
 	chmod(settings.String(), 0700);
 	chown(settings.String(), uid, gid);
+
+	BString deskbar;
+	deskbar.SetToFormat("%s/config/settings/deskbar", home);
+	mkdir(deskbar.String(), 0700);
+	chmod(deskbar.String(), 0700);
+	chown(deskbar.String(), uid, gid);
+
+	ensure_desktop_links(home);
+	ensure_private_trash(home, uid, gid);
 	lock_private_homes();
 	return B_OK;
 }
@@ -432,6 +445,53 @@ chown_tree(const char* path, uid_t uid, gid_t gid, dev_t homeDevice)
 
 
 static void
+ensure_desktop_link(const char* home, const char* name, const char* target)
+{
+	BString path;
+	path.SetToFormat("%s/Desktop/%s", home, name);
+	struct stat st;
+	if (lstat(path.String(), &st) == 0)
+		return;
+	symlink(target, path.String());
+}
+
+
+static void
+ensure_desktop_links(const char* home)
+{
+	if (home == NULL)
+		return;
+	ensure_desktop_link(home, "Home", home);
+	ensure_desktop_link(home, "Quick Tour", "/boot/system/bin/quicktour");
+	ensure_desktop_link(home, "User Guide", "/boot/system/bin/userguide");
+}
+
+
+// Trash follows the account home ($h/trash). The image only had /boot/trash,
+// which was mode 0700 for the administrator, so a standard account got no icon.
+static void
+ensure_private_trash(const char* home, uid_t uid, gid_t gid)
+{
+	if (home == NULL)
+		return;
+
+	BString dest;
+	dest.SetToFormat("%s/trash", home);
+	struct stat st;
+	if (lstat(dest.String(), &st) != 0) {
+		if (strcmp(home, kHome) == 0 && lstat("/boot/trash", &st) == 0
+			&& S_ISDIR(st.st_mode)) {
+			if (rename("/boot/trash", dest.String()) != 0)
+				mkdir(dest.String(), 0700);
+		} else
+			mkdir(dest.String(), 0700);
+	}
+	chmod(dest.String(), 0700);
+	lchown(dest.String(), uid, gid);
+}
+
+
+static void
 adopt_trash(uid_t uid, gid_t gid)
 {
 	struct stat st;
@@ -573,30 +633,87 @@ migrate_admin_off_root()
 }
 
 
+static bool
+is_session_home(const struct passwd* pwd)
+{
+	if (pwd == NULL || pwd->pw_dir == NULL || pwd->pw_name == NULL)
+		return false;
+	if (strcmp(pwd->pw_dir, kHome) == 0)
+		return true;
+
+	BString expected;
+	expected.SetToFormat("%s/%s", kUsersRoot, pwd->pw_name);
+	return expected == pwd->pw_dir;
+}
+
+
 status_t
-write_desktop_session()
+write_desktop_session(const char* login)
 {
 	if (geteuid() != 0)
 		return B_PERMISSION_DENIED;
-
-	BString name;
-	uid_t uid = 0;
-	gid_t gid = 0;
-	status_t status = find_first_home_admin(name, uid, gid);
-	if (status != B_OK)
-		return status;
-	if (uid == 0)
+	if (login == NULL || login[0] == '\0')
+		return B_BAD_VALUE;
+	if (is_disabled_user(login))
 		return B_NOT_ALLOWED;
+
+	struct passwd* pwd = getpwnam(login);
+	if (pwd == NULL || strcmp(pwd->pw_name, login) != 0)
+		return ENOENT;
+	if (!is_listed_account(pwd) || !is_session_home(pwd))
+		return B_NOT_ALLOWED;
+	if (pwd->pw_uid == 0)
+		return B_NOT_ALLOWED;
+
+	// getpwnam() uses one static buffer. Copy before create_home().
+	char name[64];
+	if (snprintf(name, sizeof(name), "%s", pwd->pw_name) >= (int)sizeof(name))
+		return B_NAME_TOO_LONG;
+	if (strchr(name, '\n') != NULL || strchr(name, '\r') != NULL)
+		return B_BAD_VALUE;
+	uid_t uid = pwd->pw_uid;
+	gid_t gid = pwd->pw_gid;
+	BString home(pwd->pw_dir);
+	bool firstHome = home == kHome;
+
+	// Do not run ensure_person_dirs() here: that always rewrites /boot/home
+	// and would give a standard account the administrator's folders.
+	if (firstHome)
+		ensure_person_dirs(uid, gid);
+	else {
+		status_t status = create_home(home.String(), uid, gid);
+		if (status != B_OK)
+			return status;
+	}
+	ensure_desktop_links(home.String());
+	ensure_private_trash(home.String(), uid, gid);
 
 	FILE* file = fopen(kSessionPath, "w");
 	if (file == NULL)
 		return errno;
-	fprintf(file, "%s\n", name.String());
+	if (fprintf(file, "%s\n", name) < 0) {
+		fclose(file);
+		unlink(kSessionPath);
+		return EIO;
+	}
 	if (fclose(file) != 0)
 		return errno;
-	chmod(kSessionPath, 0600);
-	chown(kSessionPath, 0, 0);
-	adopt_trash(uid, gid);
+	if (chmod(kSessionPath, 0600) != 0 || chown(kSessionPath, 0, 0) != 0)
+		return errno;
+
+	lock_private_homes();
+	return B_OK;
+}
+
+
+status_t
+clear_desktop_session()
+{
+	if (geteuid() != 0)
+		return B_PERMISSION_DENIED;
+
+	unlink(kSessionPath);
+	unlink("/tmp/r5-desktop-session");
 	return B_OK;
 }
 

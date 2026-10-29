@@ -334,6 +334,19 @@ TBarView::Draw(BRect)
 			break;""",
         "Haiku #11397 app colors",
     )
+    replace_once(
+        barApp,
+        "\tif (fSettingsFile->InitCheck() == B_OK) {\n",
+        "\tif (fSettingsFile != NULL && fSettingsFile->InitCheck() == B_OK) {\n",
+        "deskbar settings file may be unset",
+    )
+    replace_once(
+        barApp,
+        "\tif (fClockSettingsFile->InitCheck() == B_OK) {\n",
+        "\tif (fClockSettingsFile != NULL\n"
+        "\t\t&& fClockSettingsFile->InitCheck() == B_OK) {\n",
+        "deskbar clock settings file may be unset",
+    )
     return 0
 
 

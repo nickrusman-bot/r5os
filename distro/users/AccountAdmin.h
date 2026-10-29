@@ -32,7 +32,8 @@ bool current_user_is_admin();
 int32 admin_count();
 
 status_t migrate_admin_off_root();
-status_t write_desktop_session();
+status_t write_desktop_session(const char* login);
+status_t clear_desktop_session();
 status_t handle_admin_message(BMessage* request, BMessage& reply);
 
 
