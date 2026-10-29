@@ -324,7 +324,7 @@ Deskbar shows the same Preferences list to everyone (build 10009). Nothing is hi
 | DataTranslations | power user | window/settings file is user; add-ons mixed |
 | Bluetooth | if hardware | settings file is user; the radio is the machine |
 
-**Machine-wide. Do not make these per-user.** Visible in Preferences. Build 10009: a standard account can look, and unlocks changes with an administrator name and password for 5 minutes. Login checks the password and performs the privileged part. The preference app stays the signed-in uid. An administrator opens them unlocked. Log out drops the grant.
+**Machine-wide. Do not make these per-user.** Visible in Preferences. Build 10009: a standard account can look, and unlocks changes with an administrator name and password for 5 minutes. The lock sits at the bottom right. While it is locked, the controls in that window are disabled; the lists still scroll. Login checks the password and performs the privileged part. The preference app stays the signed-in uid. An administrator opens them unlocked. Log out drops the grant.
 
 | Preflet | Visible today | Why stay shared | Path today |
 |---|---|---|---|

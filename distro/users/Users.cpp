@@ -249,7 +249,6 @@ public:
 
 		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
 			.SetInsets(B_USE_WINDOW_INSETS)
-			.Add(new AdminLockBar())
 			.Add(title)
 			.Add(new NoteView())
 			.Add(new BScrollView("scroll", fList, 0, false, true))
@@ -258,6 +257,7 @@ public:
 				.Add(fDisable)
 				.Add(fDelete)
 				.AddGlue()
+				.Add(new AdminLockBar())
 			.End();
 
 		_Fill();

@@ -7,11 +7,14 @@
 
 
 #include <GroupView.h>
+#include <List.h>
 #include <SupportDefs.h>
 
 
 class BButton;
+class BHandler;
 class BMessage;
+class BMessageFilter;
 class BMessageRunner;
 class BString;
 class BStringView;
@@ -31,16 +34,28 @@ status_t r5_admin_set_clock_gmt(bool gmt);
 class AdminLockBar : public BGroupView {
 public:
 								AdminLockBar();
+	virtual						~AdminLockBar();
 	virtual	void				AttachedToWindow();
+	virtual	void				DetachedFromWindow();
 	virtual	void				MessageReceived(BMessage* message);
+
+			bool				AcceptsInput(BHandler* target) const;
 
 private:
 			void				_Reload();
+			void				_SyncControls();
+			void				_Prune();
+			void				_DisableTree(BView* view);
 
 			BStringView*		fLabel;
 			BButton*			fButton;
 			BMessageRunner*		fRunner;
+			BMessageRunner*		fWatch;
+			BMessageFilter*		fFilter;
+			BList				fForced;
+			bool				fAdmin;
 			bool				fUnlocked;
+			bool				fSyncing;
 };
 
 

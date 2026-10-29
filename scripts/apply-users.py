@@ -90,6 +90,22 @@ def install_lock(folder: str) -> None:
         print(f"copied {name} -> {dest}")
 
 
+def retarget_lock(path: pathlib.Path, current: str, desired: str, original: str, tag: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if desired in text:
+        print(f"already {path.name} ({tag})")
+        return
+    if current in text:
+        path.write_text(text.replace(current, desired, 1), encoding="utf-8")
+        print(f"patched {path.name} ({tag})")
+        return
+    if original in text:
+        path.write_text(text.replace(original, desired, 1), encoding="utf-8")
+        print(f"patched {path.name} ({tag})")
+        return
+    raise SystemExit(f"pattern not found in {path} ({tag})")
+
+
 def patch_locks() -> None:
     install_lock("time")
     install_lock("screen")
@@ -154,15 +170,35 @@ def patch_locks() -> None:
         "	r5_admin_set_clock_gmt(fUseGmtTime);",
         "time gmt",
     )
-    replace_once(
-        HAIKU / "src/preferences/time/TimeWindow.cpp",
-        "	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)\n"
-        "		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, 0)\n"
-        "		.Add(fBaseView)\n",
+    time_current = (
         "	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)\n"
         "		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, 0)\n"
         "		.Add(new AdminLockBar())\n"
-        "		.Add(fBaseView)\n",
+        "		.Add(fBaseView)\n"
+        "		.Add(new BSeparatorView(B_HORIZONTAL))\n"
+        "		.AddGroup(B_HORIZONTAL)\n"
+        "			.Add(fRevertButton)\n"
+        "			.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,\n"
+        "				B_USE_DEFAULT_SPACING, B_USE_WINDOW_SPACING);\n"
+    )
+    time_desired = (
+        "	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)\n"
+        "		.SetInsets(0, B_USE_DEFAULT_SPACING, 0, 0)\n"
+        "		.Add(fBaseView)\n"
+        "		.Add(new BSeparatorView(B_HORIZONTAL))\n"
+        "		.AddGroup(B_HORIZONTAL)\n"
+        "			.Add(fRevertButton)\n"
+        "			.AddGlue()\n"
+        "			.Add(new AdminLockBar())\n"
+        "			.SetInsets(B_USE_WINDOW_SPACING, B_USE_DEFAULT_SPACING,\n"
+        "				B_USE_DEFAULT_SPACING, B_USE_WINDOW_SPACING);\n"
+    )
+    time_original = time_current.replace("\t\t.Add(new AdminLockBar())\n", "", 1)
+    retarget_lock(
+        HAIKU / "src/preferences/time/TimeWindow.cpp",
+        time_current,
+        time_desired,
+        time_original,
         "time lock bar",
     )
 
@@ -177,15 +213,36 @@ def patch_locks() -> None:
         print("patched ScreenWindow.cpp (include AdminLock)")
     else:
         print("already ScreenWindow.cpp (include AdminLock)")
-    replace_once(
-        screen,
-        "	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)\n"
-        "		.AddGroup(B_HORIZONTAL)\n",
+    screen_current = (
         "	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)\n"
         "		.Add(new AdminLockBar())\n"
-        "		.AddGroup(B_HORIZONTAL)\n",
-        "screen lock bar",
+        "		.AddGroup(B_HORIZONTAL)\n"
+        "			.AddGroup(B_VERTICAL, 0, 1)\n"
+        "				.AddStrut(floorf(controlsBox->TopBorderOffset()\n"
+        "					- fScreenBox->TopBorderOffset()))\n"
+        "				.Add(fScreenBox)\n"
+        "				.Add(workspacesView)\n"
+        "				.End()\n"
+        "			.AddGroup(B_VERTICAL, 0, 1)\n"
+        "				.Add(controlsBox, 2)\n"
+        "				.End()\n"
+        "			.End()\n"
+        "		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)\n"
+        "			.Add(fRevertButton)\n"
+        "			.AddGlue()\n"
+        "			.End()\n"
+        "		.SetInsets(B_USE_WINDOW_SPACING);\n"
     )
+    screen_desired = screen_current.replace(
+        "\t\t.Add(new AdminLockBar())\n", "", 1
+    ).replace(
+        "\t\t\t.Add(fRevertButton)\n\t\t\t.AddGlue()\n\t\t\t.End()\n",
+        "\t\t\t.Add(fRevertButton)\n\t\t\t.AddGlue()\n"
+        "\t\t\t.Add(new AdminLockBar())\n\t\t\t.End()\n",
+        1,
+    )
+    screen_original = screen_current.replace("\t\t.Add(new AdminLockBar())\n", "", 1)
+    retarget_lock(screen, screen_current, screen_desired, screen_original, "screen lock bar")
     replace_once(
         screen,
         "void\nScreenWindow::_Apply()\n{\n"
@@ -213,14 +270,39 @@ def patch_locks() -> None:
         print("patched NetworkWindow.cpp (include AdminLock)")
     else:
         print("already NetworkWindow.cpp (include AdminLock)")
-    replace_once(
-        network,
-        "	BLayoutBuilder::Group<>(this, B_VERTICAL)\n"
-        "		.SetInsets(B_USE_WINDOW_SPACING)\n",
+    network_current = (
         "	BLayoutBuilder::Group<>(this, B_VERTICAL)\n"
         "		.SetInsets(B_USE_WINDOW_SPACING)\n"
-        "		.Add(new AdminLockBar())\n",
-        "network lock bar",
+        "		.Add(new AdminLockBar())\n"
+        "\n"
+        "#if ENABLE_PROFILES\n"
+        "		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)\n"
+        "			.Add(profilesMenuField)\n"
+        "			.AddGlue()\n"
+        "		.End()\n"
+        "#endif\n"
+        "		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)\n"
+        "			.Add(scrollView)\n"
+        "			.Add(fAddOnShellView)\n"
+        "		.End()\n"
+        "\n"
+        "		.Add(showReplicantCheckBox)\n"
+        "		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)\n"
+        "			.Add(fRevertButton)\n"
+        "			.AddGlue()\n"
+        "		.End();\n"
+    )
+    network_desired = network_current.replace(
+        "\t\t.Add(new AdminLockBar())\n", "", 1
+    ).replace(
+        "\t\t\t.Add(fRevertButton)\n\t\t\t.AddGlue()\n\t\t.End();\n",
+        "\t\t\t.Add(fRevertButton)\n\t\t\t.AddGlue()\n"
+        "\t\t\t.Add(new AdminLockBar())\n\t\t.End();\n",
+        1,
+    )
+    network_original = network_current.replace("\t\t.Add(new AdminLockBar())\n", "", 1)
+    retarget_lock(
+        network, network_current, network_desired, network_original, "network lock bar"
     )
 
     settings = HAIKU / "src/kits/network/libnetapi/NetworkSettings.cpp"

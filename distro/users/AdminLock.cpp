@@ -9,9 +9,12 @@
 
 #include <Alert.h>
 #include <Button.h>
+#include <Control.h>
 #include <LayoutBuilder.h>
+#include <MessageFilter.h>
 #include <MessageRunner.h>
 #include <Messenger.h>
+#include <ScrollBar.h>
 #include <String.h>
 #include <StringView.h>
 #include <TextControl.h>
@@ -24,6 +27,62 @@
 static const uint32 kMsgPressUnlock = 'r5ap';
 static const uint32 kMsgRefreshLock = 'r5ar';
 static const uint32 kMsgUnlockOk = 'r5ao';
+static const uint32 kMsgWatchLock = 'r5aw';
+
+
+static bool
+is_under(BView* view, BView* ancestor)
+{
+	for (BView* item = view; item != NULL; item = item->Parent()) {
+		if (item == ancestor)
+			return true;
+	}
+	return false;
+}
+
+
+static bool
+tree_has(BView* view, BView* needle)
+{
+	if (view == NULL || needle == NULL)
+		return false;
+	if (view == needle)
+		return true;
+	int32 count = view->CountChildren();
+	for (int32 i = 0; i < count; i++) {
+		if (tree_has(view->ChildAt(i), needle))
+			return true;
+	}
+	return false;
+}
+
+
+class LockInputFilter : public BMessageFilter {
+public:
+	LockInputFilter(AdminLockBar* bar)
+		:
+		BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE),
+		fBar(bar)
+	{
+	}
+
+	virtual filter_result
+	Filter(BMessage* message, BHandler** target)
+	{
+		if (message == NULL || target == NULL)
+			return B_DISPATCH_MESSAGE;
+		uint32 what = message->what;
+		if (what != B_MOUSE_DOWN && what != B_MOUSE_UP && what != B_KEY_DOWN
+			&& what != B_KEY_UP)
+			return B_DISPATCH_MESSAGE;
+		if (fBar->AcceptsInput(*target))
+			return B_DISPATCH_MESSAGE;
+		return B_SKIP_MESSAGE;
+	}
+
+private:
+	AdminLockBar*	fBar;
+};
 
 
 static status_t
@@ -197,16 +256,29 @@ AdminLockBar::AdminLockBar()
 	fLabel(NULL),
 	fButton(NULL),
 	fRunner(NULL),
-	fUnlocked(false)
+	fWatch(NULL),
+	fFilter(NULL),
+	fAdmin(false),
+	fUnlocked(false),
+	fSyncing(false)
 {
 	fLabel = new BStringView("admin-lock", "Locked");
 	fButton = new BButton("admin-unlock", "Unlock...",
 		new BMessage(kMsgPressUnlock));
+	fFilter = new LockInputFilter(this);
 	BLayoutBuilder::Group<>(this)
-		.SetInsets(B_USE_WINDOW_INSETS, 0, B_USE_WINDOW_INSETS, 0)
 		.Add(fLabel)
-		.Add(fButton)
-		.AddGlue();
+		.Add(fButton);
+}
+
+
+AdminLockBar::~AdminLockBar()
+{
+	delete fRunner;
+	delete fWatch;
+	if (Window() != NULL && fFilter != NULL)
+		Window()->RemoveCommonFilter(fFilter);
+	delete fFilter;
 }
 
 
@@ -215,9 +287,42 @@ AdminLockBar::AttachedToWindow()
 {
 	BGroupView::AttachedToWindow();
 	fButton->SetTarget(this);
+	if (fFilter != NULL)
+		Window()->AddCommonFilter(fFilter);
 	_Reload();
 	fRunner = new BMessageRunner(BMessenger(this),
 		new BMessage(kMsgRefreshLock), 10000000);
+	fWatch = new BMessageRunner(BMessenger(this),
+		new BMessage(kMsgWatchLock), 200000);
+}
+
+
+void
+AdminLockBar::DetachedFromWindow()
+{
+	if (fFilter != NULL)
+		Window()->RemoveCommonFilter(fFilter);
+	BGroupView::DetachedFromWindow();
+}
+
+
+bool
+AdminLockBar::AcceptsInput(BHandler* target) const
+{
+	if (fAdmin || fUnlocked)
+		return true;
+
+	BView* view = dynamic_cast<BView*>(target);
+	if (view == NULL || is_under(view, const_cast<AdminLockBar*>(this)))
+		return true;
+
+	for (BView* item = view; item != NULL; item = item->Parent()) {
+		if (dynamic_cast<BScrollBar*>(item) != NULL)
+			return true;
+		if (dynamic_cast<BControl*>(item) != NULL)
+			return false;
+	}
+	return true;
 }
 
 
@@ -235,6 +340,9 @@ AdminLockBar::MessageReceived(BMessage* message)
 		case kMsgRefreshLock:
 			_Reload();
 			break;
+		case kMsgWatchLock:
+			_SyncControls();
+			break;
 		default:
 			BGroupView::MessageReceived(message);
 			break;
@@ -246,17 +354,18 @@ void
 AdminLockBar::_Reload()
 {
 	bool was = fUnlocked;
+	bool wasAdmin = fAdmin;
 	BMessage request(kMsgAdminQuery);
 	BMessage reply;
 	BString error;
-	bool admin = false;
+	fAdmin = false;
 	fUnlocked = false;
 	if (ask_login(request, reply, error) == B_OK) {
-		reply.FindBool("admin", &admin);
+		reply.FindBool("admin", &fAdmin);
 		reply.FindBool("unlocked", &fUnlocked);
 	}
 
-	if (admin) {
+	if (fAdmin) {
 		fLabel->SetText("Administrator");
 		fButton->Hide();
 	} else if (fUnlocked) {
@@ -269,6 +378,71 @@ AdminLockBar::_Reload()
 		fButton->Show();
 	}
 
-	if (was != fUnlocked && Window() != NULL)
+	_SyncControls();
+	if ((was != fUnlocked || wasAdmin != fAdmin) && Window() != NULL)
 		Window()->PostMessage(kMsgAdminLockChanged);
+}
+
+
+void
+AdminLockBar::_Prune()
+{
+	BWindow* window = Window();
+	for (int32 i = fForced.CountItems() - 1; i >= 0; i--) {
+		BView* control = (BView*)fForced.ItemAt(i);
+		bool live = false;
+		if (window != NULL) {
+			int32 count = window->CountChildren();
+			for (int32 child = 0; child < count; child++) {
+				if (tree_has(window->ChildAt(child), control)) {
+					live = true;
+					break;
+				}
+			}
+		}
+		if (!live)
+			fForced.RemoveItem(i);
+	}
+}
+
+
+void
+AdminLockBar::_DisableTree(BView* view)
+{
+	if (view == NULL || is_under(view, this))
+		return;
+
+	BControl* control = dynamic_cast<BControl*>(view);
+	if (control != NULL && dynamic_cast<BScrollBar*>(control) == NULL
+		&& control->IsEnabled() && !fForced.HasItem(control)) {
+		control->SetEnabled(false);
+		fForced.AddItem(control);
+	}
+
+	int32 count = view->CountChildren();
+	for (int32 i = 0; i < count; i++)
+		_DisableTree(view->ChildAt(i));
+}
+
+
+void
+AdminLockBar::_SyncControls()
+{
+	if (fSyncing || Window() == NULL)
+		return;
+
+	fSyncing = true;
+	_Prune();
+	if (fAdmin || fUnlocked) {
+		for (int32 i = 0; i < fForced.CountItems(); i++) {
+			BControl* control = (BControl*)fForced.ItemAt(i);
+			control->SetEnabled(true);
+		}
+		fForced.MakeEmpty();
+	} else {
+		int32 count = Window()->CountChildren();
+		for (int32 i = 0; i < count; i++)
+			_DisableTree(Window()->ChildAt(i));
+	}
+	fSyncing = false;
 }

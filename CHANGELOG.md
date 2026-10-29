@@ -12,7 +12,11 @@ Time's clock and timezone go through Login, because the kernel allows those call
 
 Jam AMD64 2026-10-29 21:44 Europe/Amsterdam: `jam_exit=0` (Login, Users, Time, Screen, Network, app_server, image).
 
-VBox `-ForceConvert` 21:45 Europe/Amsterdam: the VM powered on. Fresh disk, so the first desktop waits on `package_daemon`. The lock itself is not confirmed: no click yet on Network, Screen, Time, or Users as `user` or as a standard account.
+VBox `-ForceConvert` 21:45 Europe/Amsterdam: the VM powered on. Fresh disk, so the first desktop waits on `package_daemon`.
+
+VBox 21:49 Europe/Amsterdam (guest clock 8:49 PM, UTC): Network showed Locked and Unlock at the top left. Add, Apply, and the other controls stayed active. The lock now sits on the bottom right of Network, Screen, Time, and Users. While it is locked, buttons, checkboxes, menus, and text fields in that window are disabled. Scrolling still works.
+
+Jam AMD64 2026-10-29 22:02 Europe/Amsterdam: `jam_exit=0` (Users, Time, Screen, Network, image). Not confirmed on a boot of this build yet.
 
 ### Sign in as that person (build 10008)
 
