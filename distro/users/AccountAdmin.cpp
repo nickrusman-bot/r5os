@@ -431,6 +431,17 @@ chown_tree(const char* path, uid_t uid, gid_t gid, dev_t homeDevice)
 }
 
 
+static void
+adopt_trash(uid_t uid, gid_t gid)
+{
+	struct stat st;
+	if (lstat("/boot/trash", &st) != 0 || !S_ISDIR(st.st_mode))
+		return;
+	lchown("/boot/trash", uid, gid);
+	chmod("/boot/trash", 0700);
+}
+
+
 static status_t
 find_first_home_admin(BString& name, uid_t& uid, gid_t& gid)
 {
@@ -474,6 +485,7 @@ migrate_admin_off_root()
 		return status;
 	if (uid != 0) {
 		ensure_system_root();
+		adopt_trash(uid, gid);
 		return B_OK;
 	}
 
@@ -527,6 +539,7 @@ migrate_admin_off_root()
 	add_to_group("wheel", name.String(), error);
 
 	chown_tree(kHome, newUid, newGid, homeStat.st_dev);
+	adopt_trash(newUid, newGid);
 	lock_private_homes();
 	return B_OK;
 }
@@ -555,6 +568,7 @@ write_desktop_session()
 		return errno;
 	chmod(kSessionPath, 0600);
 	chown(kSessionPath, 0, 0);
+	adopt_trash(uid, gid);
 	return B_OK;
 }
 

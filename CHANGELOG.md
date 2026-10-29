@@ -40,7 +40,11 @@ VBox 17:14 Europe/Amsterdam (guest clock 4:09 PM, UTC): Terminal `id` is **`uid=
 
 VBox 17:16: `/tmp/r5-session.log` shows Tracker team 256 and Deskbar team 258 at uid 1001, then NetworkStatus/AirPlay/clip, `sign-in done: No error`. Deskbar was missing ProcessController, PowerStatus, and the volume replicant: those are installed by `first-login` as uid 0 (`default_deskbar_items.sh`), and `BDeskbar::AddItem` does not land in a uid-1001 Deskbar. Login now starts ProcessController `-deskbar`, PowerStatus `--deskbar`, and `desklink --add-volume` through `r5-desktop` after Deskbar is up.
 
-Jam AMD64 2026-10-29 17:21 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Tray replicants after Sign in not confirmed yet.
+Jam AMD64 2026-10-29 17:21 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox 17:24 Europe/Amsterdam: tray replicants looked right. `/boot/home` listed `config`, `Desktop`, `mail`, `users` (correct first-home layout; Documents/Pictures are not created for that account). Trash opened as `/boot/trash` (Haiku’s trash path). Log out did not return to Sign in: `StopTarget("desktop")` ran while Tracker/Deskbar were not launch_daemon teams, then **launch_daemon user** crashed. ProcessController showed **Your setting file could not be saved (Initialization failed)** on that teardown. Debugger attached to that uid-0 daemon and had no windows on the uid-1001 Deskbar. Logout now quits Tracker/Deskbar first, shows Sign in, then StopTarget. `/boot/trash` is chown’d to the session user so Tracker can treat it as trash.
+
+Jam AMD64 2026-10-29 17:30 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Log out after uid-1001 Sign in not confirmed yet.
 
 Isolation of extra homes is only true if `ls /boot/home/users/<name>` is permission denied.
 

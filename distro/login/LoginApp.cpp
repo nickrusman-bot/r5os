@@ -310,11 +310,13 @@ LoginApp::HandleAdmin(BMessage* message)
 void
 LoginApp::Logout()
 {
+	r5_session_log("logout");
 	_QuitUserApps();
-	BLaunchRoster().StopTarget("desktop");
 	_WaitGone("application/x-vnd.Be-TRAK");
 	_WaitGone("application/x-vnd.Be-TSKB");
 	_ShowLogin();
+	BLaunchRoster().StopTarget("desktop");
+	r5_session_log("logout done");
 }
 
 
