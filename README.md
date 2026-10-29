@@ -4,7 +4,7 @@ Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nod
 
 This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
 
-Current tree: **R5OS 2026.1-dev Build 10005** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
+Current tree: **R5OS 2026.1-dev Build 10006** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
 ## What is in the image now
 
@@ -17,7 +17,7 @@ User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG
 - **Users & Accounts** in Preferences: list, add, disable, delete. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`.
 - **Sign-in screen** before Tracker/Deskbar. **Log out** from the Deskbar leaf returns to Sign in. Same session after password; not separate desktops.
 
-Not done: home isolation, per-user settings. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
+Home folders of extra accounts are private (`0700`). The first account is user id 0, so it can still read them. Not done: per-user settings, a non-zero uid for the first account. Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
 
 ## Layout
 

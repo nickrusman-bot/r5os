@@ -22,6 +22,8 @@
 #include <user_group.h>
 #include <util/KMessage.h>
 
+#include "HomeLock.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -232,6 +234,7 @@ create_home(const char* home, uid_t uid, gid_t gid)
 	mkdir(kUsersRoot, 0755);
 	if (mkdir(home, 0700) != 0 && errno != EEXIST)
 		return errno;
+	chmod(home, 0700);
 	if (chown(home, uid, gid) != 0)
 		return errno;
 
@@ -242,14 +245,17 @@ create_home(const char* home, uid_t uid, gid_t gid)
 	for (int32 i = 0; kFolders[i] != NULL; i++) {
 		BString path;
 		path.SetToFormat("%s/%s", home, kFolders[i]);
-		mkdir(path.String(), 0755);
+		mkdir(path.String(), 0700);
+		chmod(path.String(), 0700);
 		chown(path.String(), uid, gid);
 	}
 
 	BString settings;
 	settings.SetToFormat("%s/config/settings", home);
-	mkdir(settings.String(), 0755);
+	mkdir(settings.String(), 0700);
+	chmod(settings.String(), 0700);
 	chown(settings.String(), uid, gid);
+	lock_private_homes();
 	return B_OK;
 }
 
@@ -471,9 +477,10 @@ public:
 		SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 		SetInsets(0, 0, 0, 0);
 		SetText("New people get user id 1000 or higher and a folder under "
-			"/boot/home/users. They still share this desktop. An empty "
-			"password is allowed.");
-		SetExplicitMinSize(BSize(280, 48));
+			"/boot/home/users. Those folders are private to that account. "
+			"They still share this desktop. An empty password is allowed. "
+			"The first account is user id 0, so it can still read the others.");
+		SetExplicitMinSize(BSize(280, 72));
 		SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 72));
 		SetExplicitPreferredSize(BSize(420, 56));
 	}
@@ -738,6 +745,7 @@ public:
 	virtual void
 	ReadyToRun()
 	{
+		lock_private_homes();
 		(new UsersWindow())->Show();
 	}
 };
