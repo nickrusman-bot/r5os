@@ -54,7 +54,9 @@ VBox 17:43 Europe/Amsterdam (guest clock 4:43 PM, UTC): Documents, Downloads, Mu
 
 Log out no longer talks to the launch daemon. It quits Tracker, Deskbar, and the session tray apps, then shows Sign in (`kill_team` if quit is ignored). Sign in does not call `Target("desktop")`. Jobs inside `target desktop` no longer use `on initial_volumes_mounted`, so that uid-0 daemon does not start Tracker beside `r5-desktop`. The Debugger team window is shown as soon as it exists (`Hide()` before the first `Show()` left the show level at 1, which Deskbar skips). `user-bootscript`, `dstcheck`, and `first-login` in that target do not run. Not a second account. Not StartSession.
 
-Jam AMD64 2026-10-29 18:10 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. Log out back to Sign in, and a Debugger window after choosing Debug, are not confirmed on this image yet.
+Jam AMD64 2026-10-29 18:10 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started.
+
+VBox 18:14 Europe/Amsterdam (guest clock 5:14 PM, UTC): **Log out** returned to Sign in. No ProcessController **Damned** / Initialization failed. No **launch_daemon user** crash dialog. **Restart** came back to the desktop. Debugger opened a **Teams** window (kernel_team, launch_daemon, Login, Tracker, Deskbar, Debugger; Deskbar listed Debugger with that window, not “No windows”). Team list also has **launch_daemon root** (autologin `StartSession` after migrate names uid 0 `root`). Attaching from a crash dialog was not in this shot (there was no crash). Extra-home isolation still untested.
 
 Isolation of extra homes is only true if `ls /boot/home/users/<name>` is permission denied.
 
