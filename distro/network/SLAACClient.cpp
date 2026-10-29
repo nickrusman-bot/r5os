@@ -44,6 +44,7 @@ SLAACClient::SLAACClient(BMessenger target, const char* device)
 	fHaveDefaultRoute(false)
 {
 	memset(fMAC, 0, sizeof(fMAC));
+	memset(&fDefaultGateway, 0, sizeof(fDefaultGateway));
 
 	BNetworkAddress link;
 	BNetworkInterface interface(device);
@@ -254,6 +255,7 @@ SLAACClient::_ApplyDefaultRoute(const sockaddr_in6& from, uint32 ifIndex)
 			strerror(routeStatus));
 		return routeStatus;
 	}
+	fDefaultGateway = gatewayAddr;
 	syslog(LOG_INFO, "slaac %s: default route via %s%%%" B_PRIu32 "\n",
 		Device(), _ToString(gatewayAddr.sin6_addr).String(),
 		gatewayAddr.sin6_scope_id);
@@ -404,6 +406,10 @@ SLAACClient::_ApplyAdvert(const uint8* buffer, ssize_t bytes,
 
 	syslog(LOG_INFO, "slaac %s: %s via %s\n", Device(), globalText.String(),
 		_ToString(from.sin6_addr).String());
+	// SIOCADDRT binds ::/0 to FirstForFamily (fe80). Re-add after the ULA
+	// exists so the default route's interface_address is the ULA.
+	if (fHaveDefaultRoute && fDefaultGateway.sin6_family == AF_INET6)
+		_ApplyDefaultRoute(fDefaultGateway, ifIndex);
 	return B_OK;
 }
 

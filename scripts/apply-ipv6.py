@@ -1078,6 +1078,403 @@ ipv6_send_routed_data(net_protocol* _protocol, struct net_route* route,
         "IPv6 use ULA source off-link",
         optional=True,
     )
+    replace_once(
+        path,
+        """	ipv6_prefer_nonlocal_source(interface, source, destination);
+
+	buffer->msg_flags &= ~(MSG_BCAST | MSG_MCAST);
+""",
+        """	if (sDatalinkModule->is_local_address(sDomain, (sockaddr*)&destination,
+			NULL, NULL))
+		source.sin6_addr = destination.sin6_addr;
+	else
+		ipv6_prefer_nonlocal_source(interface, source, destination);
+
+	buffer->msg_flags &= ~(MSG_BCAST | MSG_MCAST);
+""",
+        "IPv6 self dest as source",
+        optional=True,
+    )
+
+
+def patch_ipv6_find_route_default_last() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "stack" / "routes.cpp"
+    )
+    replace_once(
+        path,
+        """#include <net/if_dl.h>
+#include <net/route.h>
+""",
+        """#include <net/if_dl.h>
+#include <net/route.h>
+#include <netinet6/in6.h>
+""",
+        "routes.cpp in6.h",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """	RouteList::Iterator iterator = domain->routes.GetIterator();
+	net_route_private* candidate = NULL;
+
+	TRACE("test address %s for routes...\\n",
+		AddressString(domain, address).Data());
+
+	// TODO: alternate equal default routes
+
+	while (iterator.HasNext()) {
+		net_route_private* route = iterator.Next();
+
+		if (route->mask) {
+			sockaddr_storage maskedAddress;
+			domain->address_module->mask_address(address, route->mask,
+				(sockaddr*)&maskedAddress);
+			if (!domain->address_module->equal_addresses(
+					(sockaddr*)&maskedAddress, route->destination))
+				continue;
+		} else if (!domain->address_module->equal_addresses(address,
+				route->destination))
+			continue;
+
+		// neglect routes that point to devices that have no link
+		if ((route->interface_address->interface->device->flags & IFF_LINK)
+				== 0) {
+			if (candidate == NULL) {
+				TRACE("  found candidate: %s, flags %lx\\n", AddressString(
+					domain, route->destination).Data(), route->flags);
+				candidate = route;
+			}
+			continue;
+		}
+
+		TRACE("  found route: %s, flags %lx\\n",
+			AddressString(domain, route->destination).Data(), route->flags);
+
+		return route;
+	}
+
+	return candidate;
+""",
+        """	RouteList::Iterator iterator = domain->routes.GetIterator();
+	net_route_private* candidate = NULL;
+	net_route_private* defaultRoute = NULL;
+
+	TRACE("test address %s for routes...\\n",
+		AddressString(domain, address).Data());
+
+	// TODO: alternate equal default routes
+
+	while (iterator.HasNext()) {
+		net_route_private* route = iterator.Next();
+
+		bool matched = false;
+		if (route->mask) {
+			sockaddr_storage maskedAddress;
+			if (domain->address_module->mask_address(address, route->mask,
+					(sockaddr*)&maskedAddress) == B_OK
+				&& domain->address_module->equal_addresses(
+					(sockaddr*)&maskedAddress, route->destination))
+				matched = true;
+			else if (domain->address_module->equal_masked_addresses(address,
+					route->destination, route->mask))
+				matched = true;
+		} else if (domain->address_module->equal_addresses(address,
+				route->destination))
+			matched = true;
+
+		if (!matched)
+			continue;
+
+		if ((route->flags & RTF_DEFAULT) != 0) {
+			if (defaultRoute == NULL)
+				defaultRoute = route;
+			continue;
+		}
+
+		// neglect routes that point to devices that have no link
+		if ((route->interface_address->interface->device->flags & IFF_LINK)
+				== 0) {
+			if (candidate == NULL) {
+				TRACE("  found candidate: %s, flags %lx\\n", AddressString(
+					domain, route->destination).Data(), route->flags);
+				candidate = route;
+			}
+			continue;
+		}
+
+		TRACE("  found route: %s, flags %lx\\n",
+			AddressString(domain, route->destination).Data(), route->flags);
+
+		return route;
+	}
+
+	if (candidate != NULL)
+		return candidate;
+	if (defaultRoute != NULL
+		&& (defaultRoute->interface_address->interface->device->flags
+			& IFF_LINK) == 0) {
+		if (candidate == NULL)
+			return defaultRoute;
+	} else if (defaultRoute != NULL)
+		return defaultRoute;
+	return candidate;
+""",
+        "IPv6 find_route default last",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """			InterfaceAddress* address
+				= interface->FirstForFamily(domain->family);
+
+			route.mtu = entry.mtu;
+""",
+        """			InterfaceAddress* address
+				= interface->FirstForFamily(domain->family);
+			if (domain->family == AF_INET6 && address != NULL) {
+				size_t count = interface->CountAddresses();
+				for (size_t i = 0; i < count; i++) {
+					InterfaceAddress* candidate = interface->AddressAt(i);
+					if (candidate == NULL)
+						continue;
+					if (candidate->local != NULL
+						&& candidate->local->sa_family == AF_INET6) {
+						const sockaddr_in6* local
+							= (const sockaddr_in6*)candidate->local;
+						if (!IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+							&& local->sin6_addr.s6_addr[0] != 0) {
+							address->ReleaseReference();
+							address = candidate;
+							break;
+						}
+					}
+					candidate->ReleaseReference();
+				}
+			}
+
+			route.mtu = entry.mtu;
+""",
+        "IPv6 default route on ULA",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """						if (!IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+							&& !IN6_IS_ADDR_LOOPBACK(&local->sin6_addr)
+							&& !IN6_IS_ADDR_UNSPECIFIED(&local->sin6_addr)
+							&& !IN6_IS_ADDR_MULTICAST(&local->sin6_addr)) {
+""",
+        """						if (!IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+							&& local->sin6_addr.s6_addr[0] != 0) {
+""",
+        "IPv6 default route no in6addr",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """	if (route->interface_address != NULL
+		&& route->interface_address->local != NULL) {
+		status = domain->address_module->update_to(source,
+			route->interface_address->local);
+	}
+
+	if (status != B_OK)
+		put_route_internal(domain, route);
+	else
+		*_route = route;
+""",
+        """	if (route->interface_address != NULL
+		&& route->interface_address->local != NULL) {
+		status = domain->address_module->update_to(source,
+			route->interface_address->local);
+	}
+
+	InterfaceAddress* localDest = get_interface_address(buffer->destination);
+	if (status == B_OK && localDest != NULL && localDest->local != NULL) {
+		uint16 port = domain->address_module->get_port(source);
+		status = domain->address_module->set_to(source, localDest->local);
+		if (status == B_OK)
+			domain->address_module->set_port(source, port);
+		localDest->ReleaseReference();
+	} else if (localDest != NULL)
+		localDest->ReleaseReference();
+
+	if (status != B_OK)
+		put_route_internal(domain, route);
+	else
+		*_route = route;
+""",
+        "local dest as IPv6 source",
+        optional=True,
+    )
+
+
+def patch_ipv6_local_loopback() -> None:
+    path = HAIKU / "src" / "add-ons" / "kernel" / "network" / "stack" / "datalink.cpp"
+    replace_once(
+        path,
+        """static status_t
+datalink_send_routed_data(struct net_route* route, net_buffer* buffer)
+{
+""",
+        """static bool datalink_is_local_address(net_domain* domain,
+	const struct sockaddr* address, net_interface_address** _interfaceAddress,
+	uint32* _matchedType);
+
+
+static status_t
+datalink_send_routed_data(struct net_route* route, net_buffer* buffer)
+{
+""",
+        "forward datalink_is_local_address",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """	if ((route->flags & RTF_LOCAL) != 0) {
+		TRACE("  local route\\n");
+""",
+        """	if ((route->flags & RTF_LOCAL) != 0
+		|| datalink_is_local_address(address->domain, buffer->destination,
+			NULL, NULL)) {
+		TRACE("  local route\\n");
+""",
+        "loopback local IPv6 dest",
+        optional=True,
+    )
+
+
+def patch_udp_ipv6_source() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols"
+        / "udp" / "udp.cpp"
+    )
+    replace_once(
+        path,
+        """#include <netinet/in.h>
+#include <netinet/ip.h>
+""",
+        """#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet6/in6.h>
+""",
+        "udp.cpp in6.h",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """		if (routeToDestination) {
+			// stay bound to current local port, if any.
+			uint16 port = endpoint->LocalAddress().Port();
+			status = endpoint->LocalAddress().SetTo(
+				routeToDestination->interface_address->local);
+			endpoint->LocalAddress().SetPort(port);
+			gDatalinkModule->put_route(fDomain, routeToDestination);
+			if (status < B_OK)
+				return status;
+		}
+""",
+        """		if (routeToDestination) {
+			// stay bound to current local port, if any.
+			uint16 port = endpoint->LocalAddress().Port();
+			status = endpoint->LocalAddress().SetTo(
+				routeToDestination->interface_address->local);
+			endpoint->LocalAddress().SetPort(port);
+			if (status == B_OK
+				&& gDatalinkModule->is_local_address(fDomain, address,
+					NULL, NULL)) {
+				endpoint->LocalAddress().SetTo(address);
+				endpoint->LocalAddress().SetPort(port);
+			} else if (status == B_OK && address->sa_family == AF_INET6) {
+				const sockaddr_in6* dest6 = (const sockaddr_in6*)address;
+				const sockaddr_in6* src6
+					= (const sockaddr_in6*)*endpoint->LocalAddress();
+				if (src6 != NULL && IN6_IS_ADDR_LINKLOCAL(&src6->sin6_addr)
+					&& !IN6_IS_ADDR_LINKLOCAL(&dest6->sin6_addr)
+					&& !IN6_IS_ADDR_MC_LINKLOCAL(&dest6->sin6_addr)
+					&& routeToDestination->interface_address != NULL) {
+					net_interface* interface
+						= routeToDestination->interface_address->interface;
+					net_interface_address* cursor = NULL;
+					while (gDatalinkModule->get_next_interface_address(
+							interface, &cursor)) {
+						if (cursor->local == NULL
+							|| cursor->local->sa_family != AF_INET6)
+							continue;
+						const sockaddr_in6* local
+							= (const sockaddr_in6*)cursor->local;
+						if (IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+							|| IN6_IS_ADDR_MULTICAST(&local->sin6_addr)
+							|| local->sin6_addr.s6_addr[0] == 0)
+							continue;
+						endpoint->LocalAddress().SetTo(cursor->local);
+						endpoint->LocalAddress().SetPort(port);
+						gDatalinkModule->put_interface_address(cursor);
+						break;
+					}
+				}
+			}
+			gDatalinkModule->put_route(fDomain, routeToDestination);
+			if (status < B_OK)
+				return status;
+		}
+""",
+        "UDP IPv6 ULA source",
+        optional=True,
+    )
+    replace_once(
+        path,
+        """						if (IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+							|| IN6_IS_ADDR_LOOPBACK(&local->sin6_addr)
+							|| IN6_IS_ADDR_UNSPECIFIED(&local->sin6_addr)
+							|| IN6_IS_ADDR_MULTICAST(&local->sin6_addr))
+							continue;
+""",
+        """						if (IN6_IS_ADDR_LINKLOCAL(&local->sin6_addr)
+							|| IN6_IS_ADDR_MULTICAST(&local->sin6_addr)
+							|| local->sin6_addr.s6_addr[0] == 0)
+							continue;
+""",
+        "UDP source no in6addr",
+        optional=True,
+    )
+
+
+def patch_ipv6_copy_sa_len() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols"
+        / "ipv6" / "ipv6_address.cpp"
+    )
+    replace_once(
+        path,
+        """		*to = (sockaddr *)malloc(sizeof(sockaddr_in6));
+		if (*to == NULL)
+			return B_NO_MEMORY;
+
+		memcpy(*to, from, sizeof(sockaddr_in6));
+
+		if (mask != NULL)
+			ipv6_mask_adress_inplace(*to, mask);
+""",
+        """		*to = (sockaddr *)malloc(sizeof(sockaddr_in6));
+		if (*to == NULL)
+			return B_NO_MEMORY;
+
+		memset(*to, 0, sizeof(sockaddr_in6));
+		size_t copyLen = from->sa_len;
+		if (copyLen > sizeof(sockaddr_in6))
+			copyLen = sizeof(sockaddr_in6);
+		memcpy(*to, from, copyLen);
+		(*to)->sa_len = sizeof(sockaddr_in6);
+		(*to)->sa_family = AF_INET6;
+
+		if (mask != NULL)
+			ipv6_mask_adress_inplace(*to, mask);
+""",
+        "IPv6 copy canonical sa_len",
+        optional=True,
+    )
 
 
 def main() -> int:
@@ -1093,6 +1490,10 @@ def main() -> int:
     patch_ipv6_route_lookup()
     patch_ipv6_default_route_specificity()
     patch_kernel_multicast_route()
+    patch_ipv6_find_route_default_last()
+    patch_ipv6_local_loopback()
+    patch_udp_ipv6_source()
+    patch_ipv6_copy_sa_len()
     return 0
 
 

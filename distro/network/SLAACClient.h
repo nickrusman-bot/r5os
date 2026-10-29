@@ -42,6 +42,7 @@ private:
 			uint8				fMAC[6];
 			bool				fHaveMAC;
 			bool				fHaveDefaultRoute;
+			sockaddr_in6		fDefaultGateway;
 };
 
 
