@@ -5,7 +5,7 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 ## Klaar
 
 - [x] **Versioning**  
-  Publiek: **R5OS YYYY.N** (`2026.1`, `2026.2`, …; nieuw jaar → `.1`). Tussen builds: **`YYYY.N-dev`**. Bron: `distro/VERSION` (nu `2026.1-dev`). Buildnummer: `distro/BUILD` (nu `10001`). Jam: `HAIKU_REVISION=r5-<VERSION>`. AboutSystem toont **R5OS 2026.1-dev Build 10001**, geen Haiku-`hrev`. What's new-tab: `distro/WHATSNEW`.
+  Publiek: **R5OS YYYY.N** (`2026.1`, `2026.2`, …; nieuw jaar → `.1`). Tussen builds: **`YYYY.N-dev`**. Bron: `distro/VERSION` (nu `2026.1-dev`). Buildnummer: `distro/BUILD` (nu `10010`). Jam: `HAIKU_REVISION=r5-<VERSION>`. AboutSystem toont **R5OS 2026.1-dev Build 10010**, geen Haiku-`hrev`. What's new-tab: `distro/WHATSNEW`.
 
 - [x] **Eerste UI-naam**  
   FirstBoot Welcome/Try/Install, Deskbar **About R5OS**, About-disclaimer, volume-label in overlay (`HAIKU_IMAGE_LABEL`). About-logo: `distro/artwork/r5-os-logo.png`.
@@ -13,7 +13,32 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 - [x] **About-versie**  
   AboutSystem toont **R5OS** plus `distro/VERSION` en `distro/BUILD` (niet de git-hash). Jam-revisiebestand wordt door `apply-overlay.sh` overschreven. What's new staat naast Credits.
 
+- [x] **Multi-user (kern, t/m build 10010)**  
+  Users & Accounts (lijst/add/disable/delete). Sign in, Log out, `Log out <naam>`. Administrator `user` is uid ≥ 1000, home `/boot/home`. Standaardaccount onder `/boot/home/users/<naam>`, eigen Trash en MIME-db, gele mappen. Eén scherm. Slot op Network, Screen, Time, Users (rechtsonder, knoppen grijs tot unlock). Autologin blijft uid 0; Restart moet Sign in halen via writable `root`-home. Plan: `docs/MULTIUSER.md`. **Niet** `StartSession` voor de aangemelde persoon (tweede `app_server`). **Niet** prefs verbergen per rol.
+
 ## Open
+
+- [ ] **Multi-user: afronden**  
+  Kern zit erin (build 10010). Volgorde, niet alles in één patch. Details: `docs/MULTIUSER.md`.
+
+  **Eerst bevestigen**
+  - Herstart ná de eerste Sign in (migrate) komt weer op Sign in, niet de splash.
+  - Log out → Sign in als iemand anders; slot weer dicht na Log out.
+
+  **Daarna, in deze volgorde**
+  1. Wachtwoord wijzigen in Users & Accounts (eigen wachtwoord; administrator mag dat van een ander).
+  2. Zelfde slot op Printers, Repositories, VirtualMemory; settings naar `B_SYSTEM_SETTINGS` (niet per-user laten staan).
+  3. Lock screen: sessie blijft, alleen het scherm op slot.
+  4. Guest-account en Public/Shared-map, pas als gewone homes privé blijven.
+
+  **Later / niet tijdens deze lijn**
+  - Eén Preferences-venster (R5 Hub).
+  - WebPositive-defaults uit `webpositive.hpkg` (nu nog `/boot/home`).
+  - Image-`passwd`: `user` al uid ≥ 1000, geen migrate bij eerste Sign in.
+  - Add-account-dialoog uitlijnen.
+  - Overlays in native bron.
+
+  **Expres niet:** `StartSession` van de aangemelde persoon; prefs verbergen per rol; fast user switching zonder uitloggen tot er één scherm blijft.
 
 - [ ] **Hardware: HP Envy (convertible) — Ryzen 5 5625U + Radeon `15e7`**  
   Referentiemachine voor AMD64, gfx, touch en tablet-mode. Doel: APU **bruikbaar** (niet alleen VESA): panel/eDP, native resolutie, HDMI/DP, backlight, geen KDL, audio, daarna power/sleep. GPU 2D/3D staat apart. Exacte Envy-SKU later in syslog vastleggen.
