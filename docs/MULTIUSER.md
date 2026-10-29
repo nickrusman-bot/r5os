@@ -151,5 +151,6 @@ Checked in the jammed AMD64 tree (2026-10-29):
 | R5OS AirPlay log | now `B_USER_LOG_DIRECTORY` | was `/boot/home/airplay_deskbar.log` |
 | Joysticks preflet | `JOYSTICKFILESETTINGS` | yes — leftover, not this desktop path |
 | Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
+| Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
 
-Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Not VBox-tested as a second desktop.
+Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Jam AMD64 2026-10-29 14:42 Europe/Amsterdam compiled the AirPlay log change (`jam_exit=0`). Not VBox-tested as a second desktop.

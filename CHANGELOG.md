@@ -8,6 +8,8 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 Appearance, Backgrounds, Deskbar, Tracker, and app_server desktop settings already call `find_directory(B_USER_* )`. For uid 0 that still maps to `/boot/home` (`get_user_home_path`). Extra accounts would get their own `config/settings` only after a real session switch. The AirPlay deskbar log no longer writes `/boot/home/airplay_deskbar.log`. Joysticks still hardcodes a home path. Not a second desktop.
 
+Jam AMD64 2026-10-29 14:42 Europe/Amsterdam: `jam_exit=0` after overlay apply (`haiku.hpkg` rebuilt). Compile only. Not VBox-tested as a second desktop.
+
 ### Private home folders (build 10006)
 
 `/boot/home` is `0711` so other accounts can reach `/boot/home/users/<name>` but not list the first account’s files. Names directly under `/boot/home` except `users` are `0700` (directories) or `0600` (files). Each extra home is `0700`. Login applies this before Sign in; creating an account does too.

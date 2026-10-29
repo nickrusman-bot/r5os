@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/home-perms		Build 10006: Login, Log out, home modes 0700. Same session, not StartSession. Uid 0 user still reads other homes.
+8940	in-progress	cursor/prefs-audit		Settings audit: Appearance/Backgrounds/Deskbar/Tracker/app_server already find_directory. Uid 0 still /boot/home. AirPlay log uses B_USER_LOG_DIRECTORY. Joysticks leftover. Not StartSession.
 8944	open			
 8948	open			
 8956	open			
