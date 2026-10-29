@@ -37,6 +37,7 @@ private:
 	void			_EnableDesktopJobs();
 	void			_HideLogin();
 	void			_ShowLogin();
+	void			_OpenLoginWindow();
 	void			_QuitUserApps();
 	void			_WaitGone(const char* signature);
 

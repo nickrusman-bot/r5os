@@ -125,8 +125,7 @@ LoginApp::ReadyToRun()
 
 	fDesktopWindow = new DesktopWindow(screen.Frame(), false);
 	fDesktopWindow->Show();
-	fLoginWindow = new LoginWindow(BRect(0, 0, 360, 320));
-	fLoginWindow->Show();
+	_OpenLoginWindow();
 }
 
 
@@ -283,16 +282,24 @@ LoginApp::_ShowLogin()
 	if (fDesktopWindow != NULL && fDesktopWindow->Lock()) {
 		if (fDesktopWindow->IsHidden())
 			fDesktopWindow->Show();
-		fDesktopWindow->Activate();
 		fDesktopWindow->Unlock();
 	}
-	if (fLoginWindow != NULL && fLoginWindow->Lock()) {
-		if (fLoginWindow->IsHidden())
-			fLoginWindow->Show();
-		fLoginWindow->PrepareForSignIn();
-		fLoginWindow->Activate();
-		fLoginWindow->Unlock();
+	_OpenLoginWindow();
+}
+
+
+void
+LoginApp::_OpenLoginWindow()
+{
+	if (fLoginWindow != NULL) {
+		BWindow* old = fLoginWindow;
+		fLoginWindow = NULL;
+		if (old->Lock())
+			old->Quit();
 	}
+
+	fLoginWindow = new LoginWindow(BRect(0, 0, 360, 320));
+	fLoginWindow->Show();
 }
 
 
