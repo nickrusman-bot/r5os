@@ -45,4 +45,6 @@ Outbound test (there is no `ping6` command):
 ping -6 -c 3 ipv6.google.com
 ```
 
-The source must be the ULA (`fdae:…`), not `fe80::`. `ping -6 -S fdae:… ipv6.google.com` forces the source if needed.
+The source must be the ULA (`fdae:…`), not `fe80::`. `ping -I` needs `IPV6_PKTINFO` (not in Haiku); use `fe80:…%2` instead.
+
+Ping to `ipv6.google.com` will fail until the router offers a public `2xxx:` address. A ULA is only for the LAN. After the alias-route fix, `ping -6 -c 3 fdae:…` (own address) should show replies, and `route` should list that host with `HL`.

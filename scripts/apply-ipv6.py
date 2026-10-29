@@ -827,6 +827,43 @@ def patch_datalink_device_route() -> None:
     )
 
 
+def patch_alias_local_routes() -> None:
+    path = (
+        HAIKU / "src" / "add-ons" / "kernel" / "network" / "stack"
+        / "interfaces.cpp"
+    )
+    replace_once(
+        path,
+        """	if (status == B_OK)
+		notify_interface_changed(interface);
+	else
+		delete address;
+
+	return status;
+}
+
+
+status_t
+""",
+        """	if (status == B_OK) {
+		// SIOCAIFADDR / ADD_ALIAS used to skip this; IPv6 SLAAC then had
+		// no RTF_LOCAL host route, so ping to the ULA went off-link.
+		address->AddDefaultRoutes(SIOCSIFADDR);
+		notify_interface_changed(interface);
+	} else
+		delete address;
+
+	return status;
+}
+
+
+status_t
+""",
+        "alias local IPv6 routes",
+        optional=True,
+    )
+
+
 def patch_kernel_multicast_route() -> None:
     path = HAIKU / "src" / "add-ons" / "kernel" / "network" / "protocols" / "ipv6" / "ipv6.cpp"
     replace_once(
@@ -985,6 +1022,7 @@ def main() -> int:
     patch_prefs()
     patch_kernel_multicast_if()
     patch_datalink_device_route()
+    patch_alias_local_routes()
     patch_kernel_multicast_route()
     return 0
 
