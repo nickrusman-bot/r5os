@@ -49,6 +49,7 @@ def copy_sources() -> None:
         "THIRD_PARTY.md",
     ):
         shutil.copy2(SRC / name, dest / name)
+        (dest / name).touch()
         print(f"copied {name} -> {dest}")
     for name in ("alac.c", "alac.h", "aes.c", "aes.h"):
         shutil.copy2(THIRD / name, dest / name)
