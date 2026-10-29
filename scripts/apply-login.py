@@ -43,6 +43,7 @@ def copy_sources() -> None:
         "LoginWindow.h",
         "R5Desktop.cpp",
         "SessionLog.h",
+        "TrayApp.cpp",
         "main.cpp",
     ):
         shutil.copy2(SRC / name, dest / name)
@@ -242,6 +243,13 @@ def patch_image() -> None:
         "SYSTEM_APPS += Login ;\n"
         "SYSTEM_APPS += r5-desktop ;\n",
         "r5-desktop SYSTEM_APPS",
+    )
+    replace_once(
+        regular,
+        "SYSTEM_APPS += r5-desktop ;\n",
+        "SYSTEM_APPS += r5-desktop ;\n"
+        "SYSTEM_APPS += r5-tray ;\n",
+        "r5-tray SYSTEM_APPS",
     )
 
 

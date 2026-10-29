@@ -23,3 +23,8 @@ Application r5-desktop :
 	R5Desktop.cpp
 	: [ TargetLibstdc++ ]
 ;
+
+Application r5-tray :
+	TrayApp.cpp
+	: be [ TargetLibstdc++ ]
+;

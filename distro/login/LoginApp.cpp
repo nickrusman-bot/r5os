@@ -261,12 +261,7 @@ LoginApp::TryLogin(BMessage* message)
 				if (status == B_OK)
 					_EnableDesktopJobs();
 				if (status == B_OK) {
-					_LaunchSessionApp("/system/apps/NetworkStatus",
-						"--deskbar");
-					_LaunchSessionApp("/system/apps/ProcessController",
-						"-deskbar");
-					_LaunchSessionApp("/system/apps/PowerStatus",
-						"--deskbar");
+					_LaunchSessionApp("/system/apps/r5-tray");
 					_LaunchSessionApp("/system/bin/desklink",
 						"--add-volume");
 					_LaunchSessionApp("/system/servers/airplay_deskbar");
@@ -311,11 +306,12 @@ void
 LoginApp::Logout()
 {
 	r5_session_log("logout");
+	_EnableDesktopJobs();
 	_QuitUserApps();
+	_WaitGone("application/x-vnd.Haiku-ProcessController");
 	_WaitGone("application/x-vnd.Be-TRAK");
 	_WaitGone("application/x-vnd.Be-TSKB");
 	_ShowLogin();
-	BLaunchRoster().StopTarget("desktop");
 	r5_session_log("logout done");
 }
 
@@ -502,12 +498,19 @@ LoginApp::_QuitUserApps()
 status_t
 LoginApp::_WaitGone(const char* signature)
 {
-	const bigtime_t deadline = system_time() + 8000000LL;
-	while (be_roster->IsRunning(signature) && system_time() < deadline) {
-		team_id team = be_roster->TeamFor(signature);
-		if (team >= 0)
-			BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+	if (!be_roster->IsRunning(signature))
+		return B_OK;
+
+	team_id team = be_roster->TeamFor(signature);
+	if (team >= 0)
+		BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
+
+	const bigtime_t deadline = system_time() + 3000000LL;
+	while (be_roster->IsRunning(signature) && system_time() < deadline)
 		snooze(100000);
+	if (be_roster->IsRunning(signature)) {
+		r5_session_log("still running %s", signature);
+		return B_BUSY;
 	}
-	return be_roster->IsRunning(signature) ? B_BUSY : B_OK;
+	return B_OK;
 }

@@ -442,6 +442,32 @@ adopt_trash(uid_t uid, gid_t gid)
 }
 
 
+static void
+ensure_person_dirs(uid_t uid, gid_t gid)
+{
+	static const char* kRelative[] = {
+		"Desktop",
+		"Documents",
+		"Downloads",
+		"Music",
+		"Pictures",
+		"Videos",
+		"mail",
+		"config",
+		"config/settings",
+		"config/settings/deskbar",
+		NULL
+	};
+	for (int32 i = 0; kRelative[i] != NULL; i++) {
+		BString path;
+		path.SetToFormat("%s/%s", kHome, kRelative[i]);
+		mkdir(path.String(), 0700);
+		chmod(path.String(), 0700);
+		lchown(path.String(), uid, gid);
+	}
+}
+
+
 static status_t
 find_first_home_admin(BString& name, uid_t& uid, gid_t& gid)
 {
@@ -485,6 +511,7 @@ migrate_admin_off_root()
 		return status;
 	if (uid != 0) {
 		ensure_system_root();
+		ensure_person_dirs(uid, gid);
 		adopt_trash(uid, gid);
 		return B_OK;
 	}
@@ -539,6 +566,7 @@ migrate_admin_off_root()
 	add_to_group("wheel", name.String(), error);
 
 	chown_tree(kHome, newUid, newGid, homeStat.st_dev);
+	ensure_person_dirs(newUid, newGid);
 	adopt_trash(newUid, newGid);
 	lock_private_homes();
 	return B_OK;

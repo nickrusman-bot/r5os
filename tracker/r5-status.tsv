@@ -720,7 +720,7 @@ id	r5_status	branch	commit	notes
 8914	open			
 8925	open			
 8934	open			
-8940	in-progress	cursor/uid0-plan		Build 10007: VBox id=1001, tray ok. Logout crashed user launch_daemon. Quit Tracker/Deskbar before StopTarget. Not StartSession.
+8940	in-progress	cursor/uid0-plan		Build 10007: VBox id=1001. Damned was ProcessController window save. r5-tray AddItem; no StopTarget on logout. Not StartSession.
 8944	open			
 8948	open			
 8956	open			
