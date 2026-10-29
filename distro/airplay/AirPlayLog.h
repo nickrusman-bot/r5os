@@ -1,6 +1,10 @@
 #ifndef R5_AIRPLAY_LOG_H
 #define R5_AIRPLAY_LOG_H
 
+#include <FindDirectory.h>
+#include <Path.h>
+
+#include <limits.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
@@ -17,7 +21,16 @@ r5_airplay_log(const char* who, const char* fmt, ...)
 
 	fprintf(stderr, "%s: %s\n", who, msg);
 
-	FILE* file = fopen("/boot/home/airplay_deskbar.log", "a");
+	char logPath[PATH_MAX];
+	logPath[0] = '\0';
+	BPath dir;
+	if (find_directory(B_USER_LOG_DIRECTORY, &dir, true) == B_OK
+		&& dir.Path() != NULL) {
+		snprintf(logPath, sizeof(logPath), "%s/airplay_deskbar.log",
+			dir.Path());
+	}
+
+	FILE* file = logPath[0] != '\0' ? fopen(logPath, "a") : NULL;
 	if (file == NULL)
 		file = fopen("/tmp/airplay_deskbar.log", "a");
 	if (file != NULL) {

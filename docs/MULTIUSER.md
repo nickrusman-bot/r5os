@@ -12,7 +12,7 @@ Architecture and order of work. Not a claim that login or isolation ships yet.
 - Graphical **Login** is on the boot path (build 10004): `data/launch/user` `run { login }` starts `/system/apps/Login` instead of `desktop`. Password check uses `verify_password`. Success starts `target desktop` in the same session (`BLaunchRoster().Target("desktop")`). Login stays running (hidden). **Log out** (build 10005) is Deskbar → Login: quit session apps, `StopTarget("desktop")`, show Sign in. `StartSession` for a different account is not wired (would start a second app_server). **Home modes** (build 10006): extra homes `0700`; `/boot/home` is `0711` with private children. Uid 0 `user` still reads them.
 - Default desktop user is often **UID 0** on Haiku images. GUI restrictions would not be security. New accounts must not be UID 0.
 - `app_server` still has multi-user gaps (Haiku #17357, #10642).
-- Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Many apps already use `find_directory`. Hardcoded `/boot/home` is the bug to fix when found.
+- Personal vs system: `B_USER_SETTINGS_DIRECTORY` (`~/config/settings`) vs `B_SYSTEM_SETTINGS_DIRECTORY`. Appearance, Backgrounds, Deskbar, Tracker, and app_server `DesktopSettings` already use `find_directory`. That call still returns `/boot/home/…` for **uid 0** (`get_user_home_path` skips `getpwuid` and uses `kUserDirectory`). Extra people (uid ≥ 1000) would get `$HOME/config/settings` **if** they had their own session. Sign in does not switch uid yet.
 - Packages: system-wide in `/boot/system`. Per-user config in `~/config`. Do not invent a second package format.
 
 ### Chosen home layout
@@ -86,7 +86,7 @@ Do not treat Haiku `hrev` as the product version.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
-6. Per-user settings audit (`find_directory`).
+6. **Settings audit:** Appearance / Backgrounds / Deskbar / Tracker / app_server already `find_directory`. Uid 0 still maps that to `/boot/home`. AirPlay deskbar log no longer hardcodes `/boot/home`. Leftover: Joysticks preflet path; `StartSession`.
 7. Lock screen; then guest/Public.
 8. Absorb kernel/UI overlays into a real in-tree fork.
 
@@ -130,4 +130,26 @@ After Sign in, in Terminal:
 3. `su nicky -c 'ls /boot/home/users/nicky'` — that home is readable by `nicky`.
 4. As `user` (uid 0), `ls /boot/home/users/nicky` still works.
 
-VBox 2026-10-29 14:30 Europe/Amsterdam: 1–3 confirmed (`nicky`). Test 4 was not captured.
+VBox 2026-10-29 14:30 Europe/Amsterdam: 1–4 confirmed (`nicky`; uid 0 `user` still listed that home).
+
+## Settings audit (Appearance, Deskbar, Tracker, background)
+
+Haiku `find_directory(B_USER_* )` resolves `$h` via `get_user_home_path`:
+
+- **uid ≠ 0:** `getpwuid_r` → `pw_dir` (e.g. `/boot/home/users/nicky/config/settings`).
+- **uid 0:** always `kUserDirectory` (`/boot/home`). Launch_daemon/registrar must not call `getpwuid_r`.
+
+Checked in the jammed AMD64 tree (2026-10-29):
+
+| Surface | Path API | Hardcoded `/boot/home`? |
+|---|---|---|
+| Appearance | `B_USER_SETTINGS_DIRECTORY` | no |
+| Backgrounds | `B_USER_SETTINGS_DIRECTORY`, `B_DESKTOP_DIRECTORY` | no |
+| Deskbar | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DESKBAR_DIRECTORY` | no |
+| Tracker | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DIRECTORY` (cwd) | comments/examples only |
+| app_server colours/fonts | `DesktopSettings` / `DecorManager` `B_USER_SETTINGS_DIRECTORY` | unused `#define DECORATORS_DIR` still hardcodes a home add-on path |
+| R5OS AirPlay log | now `B_USER_LOG_DIRECTORY` | was `/boot/home/airplay_deskbar.log` |
+| Joysticks preflet | `JOYSTICKFILESETTINGS` | yes — leftover, not this desktop path |
+| Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
+
+Until `StartSession` (or `user` is not uid 0), changing Appearance still writes the first home. Not VBox-tested as a second desktop.
