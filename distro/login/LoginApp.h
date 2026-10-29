@@ -43,7 +43,7 @@ private:
 	void			_ShowLogin();
 	void			_OpenLoginWindow();
 	void			_QuitUserApps();
-	void			_WaitGone(const char* signature);
+	status_t		_WaitGone(const char* signature);
 
 	DesktopWindow*	fDesktopWindow;
 	LoginWindow*	fLoginWindow;

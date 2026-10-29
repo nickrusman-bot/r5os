@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 
 extern char** environ;
@@ -96,11 +97,25 @@ keep_team(const app_info& info, team_id self)
 }
 
 
+static const char* kSessionJobs[] = {
+	"x-vnd.Be-TRAK",
+	"x-vnd.Be-TSKB",
+	"x-vnd.R5OS-NetworkStatus",
+	"x-vnd.R5OS-airplay-tray",
+	"x-vnd.R5OS-vbox-clip",
+	NULL
+};
+
+
 static bool
 is_session_job(const char* name)
 {
 	if (name == NULL)
 		return false;
+	for (int32 i = 0; kSessionJobs[i] != NULL; i++) {
+		if (strcmp(name, kSessionJobs[i]) == 0)
+			return true;
+	}
 	return strstr(name, "Be-TRAK") != NULL
 		|| strstr(name, "Be-TSKB") != NULL
 		|| strstr(name, "NetworkStatus") != NULL
@@ -232,6 +247,10 @@ LoginApp::TryLogin(BMessage* message)
 				if (status == B_OK)
 					_EnableDesktopJobs();
 				if (status == B_OK)
+					status = _WaitGone("application/x-vnd.Be-TRAK");
+				if (status == B_OK)
+					status = _WaitGone("application/x-vnd.Be-TSKB");
+				if (status == B_OK)
 					status = _LaunchSessionApp("/system/Tracker");
 				if (status == B_OK)
 					status = _LaunchSessionApp("/system/Deskbar");
@@ -307,16 +326,24 @@ LoginApp::ValidateLogin(const char* login, const char* password)
 void
 LoginApp::_EnableDesktopJobs()
 {
-	BStringList jobs;
 	BLaunchRoster roster;
-	if (roster.GetJobs("desktop", jobs) != B_OK)
+	for (int32 i = 0; kSessionJobs[i] != NULL; i++) {
+		roster.SetEnabled(kSessionJobs[i], false);
+		roster.Stop(kSessionJobs[i], true);
+	}
+
+	BStringList jobs;
+	if (roster.GetJobs("desktop", jobs) != B_OK) {
+		syslog(LOG_WARNING, "Login: GetJobs(desktop) failed; "
+			"session jobs stopped by name");
 		return;
+	}
 
 	for (int32 i = 0; i < jobs.CountStrings(); i++) {
 		const char* name = jobs.StringAt(i);
 		if (is_session_job(name)) {
 			roster.SetEnabled(name, false);
-			roster.Stop(name);
+			roster.Stop(name, true);
 		} else
 			roster.SetEnabled(name, true);
 	}
@@ -338,6 +365,13 @@ LoginApp::_LaunchSessionApp(const char* program, const char* argument)
 	if (thread < B_OK)
 		return thread;
 	resume_thread(thread);
+
+	status_t result = B_ERROR;
+	wait_for_thread(thread, &result);
+	if (result != B_OK) {
+		syslog(LOG_ERR, "Login: r5-desktop %s: %s", program, strerror(result));
+		return result < B_OK ? result : B_ERROR;
+	}
 	return B_OK;
 }
 
@@ -422,10 +456,15 @@ LoginApp::_QuitUserApps()
 }
 
 
-void
+status_t
 LoginApp::_WaitGone(const char* signature)
 {
 	const bigtime_t deadline = system_time() + 8000000LL;
-	while (be_roster->IsRunning(signature) && system_time() < deadline)
+	while (be_roster->IsRunning(signature) && system_time() < deadline) {
+		team_id team = be_roster->TeamFor(signature);
+		if (team >= 0)
+			BMessenger(NULL, team).SendMessage(B_QUIT_REQUESTED);
 		snooze(100000);
+	}
+	return be_roster->IsRunning(signature) ? B_BUSY : B_OK;
 }
