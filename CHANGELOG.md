@@ -62,6 +62,8 @@ VBox after that Sign in: `ls /boot/home/users/nick` as the administrator is **Pe
 
 The image no longer runs `x-vnd.Haiku-autologin` (`StartSession` of uid 0 spawned `launch_daemon root`). After Deskbar is up, Login starts `dstcheck`, `~/config/settings/boot/UserBootscript` if that file exists, and first-login `PostInstallScript` if `~/config/settings/first_login` exists. `default_deskbar_items.sh` does not launch ProcessController `-deskbar` (that was Damned). Volume and tray replicants stay `r5-tray` / `desklink`. Not StartSession.
 
+Jam AMD64 2026-10-29 18:26 Europe/Amsterdam: `jam_exit=0`. VBox `-ForceConvert` started. No `launch_daemon root` after Sign in is not confirmed yet.
+
 ### First administrator off uid 0 (plan)
 
 Documented in `docs/MULTIUSER.md` and `AGENTS.md`. Product people: administrator `user` at `/boot/home`, optional standard users under `/boot/home/users/<name>`. Test names such as `nicky` are VBox fixtures, not image accounts. Next code: unused uid ≥ 1000 (not sshd 1000), `chown` of the first home, desktop jobs as that uid, Users & Accounts via an admin helper. No new overlays. Not `StartSession`. Not implemented yet.
