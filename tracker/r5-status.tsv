@@ -624,9 +624,9 @@ id	r5_status	branch	commit	notes
 8297	open			
 8308	open			
 8313	open			
-8316	in-progress	cursor/ipv6-finish		VBox LAN: fe80 plus SLAAC ULA. Default IPv6 route now uses RA gateway scope_id. Outbound ping/wget not run.
-8317	in-progress	cursor/ipv6-finish		ULA assigned after DAD. Default route via fe80%ifindex. Dual-stack resolv.conf merge. No GUA/DHCPv6-server LAN. Apps outbound not tested.
-8319	in-progress	cursor/ipv6-finish		DAD fail-closed; syslog dad unique. Host packet-helper tests pass. No pcap of NS/NA on the wire.
+8316	in-progress	cursor/ipv6-finish		VBox LAN 2026-10-29: fe80 + SLAAC ULA, scoped default route, ping -6 own ULA 3/3 0% loss. Google IPv6 not confirmed (ULA not GUA).
+8317	in-progress	cursor/ipv6-finish		SLAAC ULA after DAD. Default via fe80%ifindex bound to ULA. Dual-stack resolv.conf. No GUA/DHCPv6-server LAN. ping -6 own ULA 3/3 VBox. Internet AAAA not retested.
+8319	in-progress	cursor/ipv6-finish		DAD fail-closed; syslog dad unique. ULA used for ping after DAD. No pcap of NS/NA on the wire.
 8321	open			
 8337	open			
 8339	open			
