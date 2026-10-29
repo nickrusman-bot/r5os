@@ -59,7 +59,7 @@ If a test cannot run, say which one and why.
 
 R5OS is an independent Haiku **fork**. `origin` is the product. `upstream` is fetch-only. Do not push to Haiku remotes or open PRs against Haiku.
 
-OS behavior belongs in **native source** under `distro/` (copied into the Haiku tree at apply time) or, later, in an in-tree `haiku/` checkout. Do **not** add new Python overlays whose purpose is to implement a feature as a string patch of Haiku C++. New `apply-*.py` scripts are allowed only as **build tools**: copy files, Jam `SubInclude`, launch jobs, idempotent hooks. Fail loudly if a required pattern is missing.
+OS behavior belongs in **native source** under `distro/` (copied into the Haiku tree at apply time) or, later, in an in-tree `haiku/` checkout. Do **not** add new overlays. Do **not** add Python whose purpose is a string patch of Haiku C++. Existing `apply-*.py` may only **copy** `distro/` files, Jam `SubInclude`, launch jobs, or other idempotent hooks. Fail loudly if a required pattern is missing. New features go in `distro/users`, `distro/login`, … — not `replace_once`.
 
 `replace_once` matching a short substring can insert **duplicates**. After apply, grep for doubled `SYSTEM_SERVERS`, `SYSTEM_PREFERENCES`, launch jobs, and includes.
 
@@ -71,11 +71,13 @@ Inventory and migration order: `docs/MULTIUSER.md`.
 
 ## Multi-user
 
-First interactive session is still the historic account (`HAIKU_ROOT_USER_NAME = user`, home `/boot/home`, often uid 0). Sign in gates Tracker/Deskbar; Log out returns to Sign in on the same session. Extra homes are mode `0700`. Uid 0 still reads them. Do not claim a per-user desktop, or that `user` cannot read other homes, until that is implemented **and** tested.
+Product accounts: one **administrator** (login name `user`, home `/boot/home`) and optional **standard** people under `/boot/home/users/<name>`. Names like `nicky` in tests are fixtures from Users & Accounts, not image users. System logins (`sshd`, `ftp`, `nobody`) are not people.
 
-Keep `/boot/home` as the first account’s home (Haiku apps and `find_directory`). Additional accounts go under `/boot/home/users/<name>`. Do not hardcode home paths in apps; use `find_directory` / POSIX `getpwuid`.
+First interactive session is still that administrator, often uid 0 until migration. Sign in gates Tracker/Deskbar; Log out returns to Sign in on the same session. Extra homes are mode `0700`. Uid 0 still reads them. Do not claim a per-user desktop, or that the administrator cannot read other homes, until that is implemented **and** tested.
 
-One graphical session at a time until fast user switching exists. Do not run the whole desktop as root to make admin UI easy. Haiku already has `src/apps/login` (`BLaunchRoster().StartSession`) and `src/bin/multiuser` (`useradd`, `passwd`); reuse them. Ticket #8940 is the login-screen tracker item.
+Keep `/boot/home` as the administrator’s home (Haiku apps and `find_directory`). Do not hardcode home paths in apps; use `find_directory` / POSIX `getpwuid`.
+
+One graphical session at a time until fast user switching exists. Do not run the whole desktop as root to make admin UI easy. Privileged work (useradd) through a checked helper. Haiku already has `src/apps/login` (`BLaunchRoster().StartSession`) and `src/bin/multiuser` (`useradd`, `passwd`); reuse them. Ticket #8940 is the login-screen tracker item.
 
 Password material must not appear in logs, process argv, or What’s new text.
 

@@ -4,6 +4,10 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### First administrator off uid 0 (plan)
+
+Documented in `docs/MULTIUSER.md` and `AGENTS.md`. Product people: administrator `user` at `/boot/home`, optional standard users under `/boot/home/users/<name>`. Test names such as `nicky` are VBox fixtures, not image accounts. Next code: unused uid ≥ 1000 (not sshd 1000), `chown` of the first home, desktop jobs as that uid, Users & Accounts via an admin helper. No new overlays. Not `StartSession`. Not implemented yet.
+
 ### Joysticks on the image
 
 Deskbar → Preferences includes Joysticks (`SYSTEM_PREFERENCES`). Settings dir is `find_directory(B_USER_SETTINGS_DIRECTORY)/joysticks`. Without a game port the preflet should still open.

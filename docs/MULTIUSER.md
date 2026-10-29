@@ -35,6 +35,68 @@ Admin vs standard: POSIX groups (not only a checkbox). Privileged work through a
 
 Detect actual layout. Typical live disk: one `user` and `/boot/home` already full of files. Map that identity to the first administrator. Back up before chown/move. Fresh install: first-boot create-admin is a later step. If the layout is unknown, refuse destructive changes.
 
+## Who the people are
+
+The image has **one administrator**: login name `user`, gecos R5OS, home `/boot/home`. That is who should work at the desktop after Sign in.
+
+A **standard user** is optional: created in Users & Accounts, uid ≥ 1000, home `/boot/home/users/<name>`, group `users`, not `admin`. They should be able to work on the system **after** `StartSession`. Until then they exist in `passwd` and have a private folder; Sign in as them still opens the administrator’s desktop.
+
+`nicky` / `nicky2` / `nicky3` were accounts added on VBox disks while testing Add/Delete. They are not in the jammed image and not a product role. Tests may create a standard user with any valid name.
+
+`sshd` (uid 1000), `ftp`, `nobody` stay hidden. Do not reuse uid 1000 for `user`.
+
+No new overlays for this work. Changes live in `distro/users` and `distro/login` (copy-in). No `replace_once` on libroot unless the uid-0 `get_user_home_path` skip can stay as-is (it must: launch_daemon and registrar).
+
+## First administrator off uid 0 (plan)
+
+**Goal:** Tracker/Deskbar run as the administrator, not root. Home stays `/boot/home`. Mode `0700` on extra homes then applies to the person at the desktop.
+
+**Not this step:** `StartSession`, second `app_server`, hiding Network/Screen/Time, renaming `user`, moving home to `/boot/home/users/user`.
+
+### What stays uid 0
+
+Kernel, `launch_daemon`, registrar, net_server, package_daemon, and Login **until** the desktop starts. `get_user_home_path` still short-circuits uid 0 to `kUserDirectory` so those daemons do not call `getpwuid_r`.
+
+### Identity after migration
+
+| | Now | After this step |
+|---|---|---|
+| Login name | `user` | `user` |
+| Role | administrator | administrator (`admin` / `wheel`) |
+| Home | `/boot/home` | `/boot/home` (do not move) |
+| uid | 0 | first **unused** uid ≥ 1000 (not `sshd`’s 1000, not an existing person) |
+| gid | 0 | real group (`users` plus `admin`) |
+
+On a disk that already has a standard user at 1001, `user` becomes e.g. 1002. Collision is worse than a gap in the number space.
+
+Do not `chown` `/boot/home/users/<other>`.
+
+### Both halves
+
+**A. `passwd` + `chown` of `/boot/home` (except other people’s folders).** Alone this does nothing: Tracker stays euid 0.
+
+**B. Desktop jobs run as `user`’s new uid** after a valid password, around `Target("desktop")`. Login may stay uid 0 so Log out and Sign in still work.
+
+Sign in as a standard user still starts **this** administrator desktop until `StartSession`. Isolation test: that desktop cannot `ls` the standard user’s folder.
+
+### Users & Accounts
+
+Add/Delete/Disable currently spawn `useradd` only if `geteuid()==0`. After the drop that fails. Use registrar / `user_group` (shadow already does) or a small helper that only `admin` may call. Preflet: member of `admin`, not euid 0. Last-admin check stays. The old “uid 0 cannot be deleted” rule becomes “last administrator cannot be deleted”.
+
+### Fresh image vs existing disk
+
+1. Jam image: `user` is already uid ≥ 1000 in image `passwd`.
+2. Existing disk: once, if `user` is still uid 0, pick a free uid, update `passwd`/`group`, `chown`, stop. Unknown layout: refuse. If uid is already ≥ 1000, do nothing.
+
+### Tests (call it isolation only if 1–2 pass on VBox)
+
+1. Sign in as `user`: `id` is not uid 0; `$HOME` is `/boot/home`.
+2. If a standard user exists: `ls /boot/home/users/<name>` as that session is permission denied; `su <name>` can list that home; `su <name> -c 'ls /boot/home/Desktop'` is denied.
+3. Sign in as the standard user still opens the administrator desktop (until `StartSession`).
+4. Administrator can still add a standard user (helper).
+5. Log out, Sign in again. launch_daemon still running.
+6. Fresh image and a disk that still had uid 0 `user`.
+
 ## Overlay inventory
 
 `scripts/apply-*.py` plus `scripts/apply-overlay.sh`. Python here is a **checkout installer**, not the OS feature.
@@ -86,9 +148,11 @@ Do not treat Haiku `hrev` as the product version.
 3. **Build 10004:** Login on the boot path; `target desktop` after password. Same session. Layout: centered person, password, power at the bottom.
 4. **Build 10005:** Logout: Deskbar Log out, stop desktop launch jobs, then Sign in. Same session.
 5. **Build 10006:** home modes. `/boot/home` is `0711`; private names under it are `0700`/`0600`; `/boot/home/users/<name>` is `0700`. Uid 0 `user` still reads everything. Same desktop session.
-6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (copy at apply time, not a string patch). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time). Uid 0 still maps user dirs to `/boot/home`. `StartSession` still later.
-7. Lock screen; then guest/Public.
-8. Absorb kernel/UI overlays into a real in-tree fork.
+6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (apply copies files). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time).
+7. **First administrator off uid 0** (next). Proposal below. Not `StartSession`.
+8. **`StartSession`:** Sign in as a standard user is that uid and home. One graphical session.
+9. Lock screen; then guest/Public.
+10. Absorb leftover kernel/UI string overlays into native source; do not add new ones.
 
 ## Tests for this step
 
