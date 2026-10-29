@@ -31,6 +31,9 @@ def copy_whatsnew() -> None:
     src = ROOT / "distro" / "WHATSNEW"
     dst = ABOUT / "r5_whatsnew.txt"
     shutil.copy2(src, dst)
+    rdef = ABOUT / "AboutSystem.rdef"
+    if rdef.is_file():
+        rdef.touch()
     print(f"copied WHATSNEW -> {dst}")
 
 
@@ -315,9 +318,53 @@ AboutView::_CreateCreditsView()
     )
 
 
+def patch_jam() -> None:
+    jam = ABOUT / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    search = (
+        "SEARCH on r5_whatsnew.txt = [ FDirName $(HAIKU_TOP) "
+        "src apps aboutsystem ] ;\n"
+    )
+    depend = "Depends AboutSystem : r5_whatsnew.txt ;\n"
+    if search in text:
+        print("already Jamfile (whatsnew jam depend)")
+        return
+    if depend in text:
+        jam.write_text(text.replace(depend, search + depend, 1), encoding="utf-8")
+        print("patched Jamfile (whatsnew jam search)")
+        return
+    replace_once(
+        jam,
+        """Application AboutSystem :
+	AboutSystem.cpp
+	HyperTextActions.cpp
+	HyperTextView.cpp
+	Utilities.cpp
+	: [ TargetLibstdc++ ] be translation localestub
+	: AboutSystem.rdef
+;
+""",
+        """Application AboutSystem :
+	AboutSystem.cpp
+	HyperTextActions.cpp
+	HyperTextView.cpp
+	Utilities.cpp
+	: [ TargetLibstdc++ ] be translation localestub
+	: AboutSystem.rdef
+;
+
+SEARCH on r5_whatsnew.txt = [ FDirName $(HAIKU_TOP) src apps aboutsystem ] ;
+Depends AboutSystem : r5_whatsnew.txt ;
+""",
+        "whatsnew jam depend",
+        optional=True,
+    )
+
+
 def main() -> int:
     copy_whatsnew()
     patch_rdef()
+    patch_jam()
     patch_cpp()
     return 0
 

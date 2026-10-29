@@ -55,13 +55,29 @@ Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is no
 
 If a test cannot run, say which one and why.
 
-## Overlays
+## Overlays and native source
 
-`distro/` + `scripts/apply-*.py` patch the Haiku tree. Scripts must be idempotent. Fail loudly if a required pattern is missing.
+R5OS is an independent Haiku **fork**. `origin` is the product. `upstream` is fetch-only. Do not push to Haiku remotes or open PRs against Haiku.
 
-`replace_once` matching a short substring can insert **duplicates**. After apply, grep for doubled `SYSTEM_SERVERS`, launch jobs, and includes.
+OS behavior belongs in **native source** under `distro/` (copied into the Haiku tree at apply time) or, later, in an in-tree `haiku/` checkout. Do **not** add new Python overlays whose purpose is to implement a feature as a string patch of Haiku C++. New `apply-*.py` scripts are allowed only as **build tools**: copy files, Jam `SubInclude`, launch jobs, idempotent hooks. Fail loudly if a required pattern is missing.
+
+`replace_once` matching a short substring can insert **duplicates**. After apply, grep for doubled `SYSTEM_SERVERS`, `SYSTEM_PREFERENCES`, launch jobs, and includes.
 
 Hook new `apply-*.py` into `scripts/apply-overlay.sh`. Keep upstream imports distinct from R5OS-only changes. Temporary overlays must not become silent architecture.
+
+To retire an overlay: land the native replacement, jam, boot, compare behavior, then remove the old patch. Do not delete overlays wholesale. Keep Python for jam/image/tracker/tests.
+
+Inventory and migration order: `docs/MULTIUSER.md`.
+
+## Multi-user
+
+First interactive session is still the historic single desktop (`HAIKU_ROOT_USER_NAME = user`, home `/boot/home`). Do not claim login, isolation, or per-user settings until those are implemented **and** tested.
+
+Keep `/boot/home` as the first account’s home (Haiku apps and `find_directory`). Additional accounts go under `/boot/home/users/<name>`. Do not hardcode home paths in apps; use `find_directory` / POSIX `getpwuid`.
+
+One graphical session at a time until fast user switching exists. Do not run the whole desktop as root to make admin UI easy. Haiku already has `src/apps/login` (`BLaunchRoster().StartSession`) and `src/bin/multiuser` (`useradd`, `passwd`); reuse them. Ticket #8940 is the login-screen tracker item.
+
+Password material must not appear in logs, process argv, or What’s new text.
 
 ## launch_daemon and Deskbar
 
@@ -83,9 +99,15 @@ After a task, report **Veranderd / Getest / Onbewezen / Documentatie**. Tracker 
 
 ## Versioning
 
-Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`. Integer **build** in `distro/BUILD` (starts at 10001). About shows `R5OS YYYY.N-dev Build 10001`. Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh`), not the build number. Do not use Haiku `hrev` as the distro version.
+Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`.
 
-Bump `distro/BUILD` when adding a **What's new** section (`distro/WHATSNEW`). Do not bump on every jam. Headings: `R5OS <VERSION> Build <N> - Title`. Newest build first.
+Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `R5OS YYYY.N-dev Build N` from `r5_os_version.h` generated at apply/jam (`R5_OS_VERSION`, `R5_OS_BUILD`). Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
+
+Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh --revision`), not the build number. Do not use Haiku `hrev` as the distro version. Keep upstream hrev only where it is still needed for debugging.
+
+Bump `distro/BUILD` by **exactly one** when adding a **What's new** section (`distro/WHATSNEW`). Do not bump on every jam. Headings: `R5OS <VERSION> Build <N> - Title`. Newest build first. Preserve older build sections; do not reassign history.
+
+About must keep version+build visible while What’s new is selected. What’s new is for users (no tickets, hashes, filenames). `CHANGELOG.md` is technical. They must not contradict each other. Do not advertise planned work as shipping.
 
 ## Code style
 

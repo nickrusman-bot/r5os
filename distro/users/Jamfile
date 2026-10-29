@@ -1,0 +1,13 @@
+SubDir HAIKU_TOP src preferences users ;
+
+UsePrivateSystemHeaders ;
+UsePrivateHeaders app ;
+UsePrivateHeaders kernel ;
+UsePrivateHeaders libroot ;
+UsePrivateHeaders shared ;
+
+Application Users :
+	Users.cpp
+	: be [ TargetLibstdc++ ]
+	: Users.rdef
+;
