@@ -886,6 +886,10 @@ static status_t
 create_account(const char* name, const char* real, const char* password,
 	bool admin, BString& error)
 {
+	if (password == NULL || password[0] == '\0') {
+		error = "Type a password.";
+		return B_BAD_VALUE;
+	}
 	if (!valid_username(name)) {
 		error = "Use a lowercase username of letters, digits, underscore "
 			"or hyphen.";
@@ -931,25 +935,14 @@ create_account(const char* name, const char* real, const char* password,
 
 	create_home(home.String(), pwd->pw_uid, pwd->pw_gid);
 
-	if (password == NULL || password[0] == '\0') {
-		char* delArgv[] = {
-			const_cast<char*>("/bin/passwd"),
-			const_cast<char*>("-d"),
-			const_cast<char*>(name),
-			NULL
-		};
-		if (run_argv(delArgv, error) != B_OK)
-			return B_ERROR;
-	} else {
-		char* encrypted = crypt(password, NULL);
-		if (encrypted == NULL) {
-			error = "Could not encrypt the password.";
-			return B_ERROR;
-		}
-		if (set_shadow_password(name, encrypted) != B_OK) {
-			error = "The account exists, but the password was not set.";
-			return B_ERROR;
-		}
+	char* encrypted = crypt(password, NULL);
+	if (encrypted == NULL) {
+		error = "Could not encrypt the password.";
+		return B_ERROR;
+	}
+	if (set_shadow_password(name, encrypted) != B_OK) {
+		error = "The account exists, but the password was not set.";
+		return B_ERROR;
 	}
 
 	if (admin && add_to_group(kAdminGroupName, name, error) != B_OK) {
@@ -1012,6 +1005,27 @@ set_disabled(const char* name, bool disable, BString& error)
 }
 
 
+static bool
+is_signed_in_name(const char* name)
+{
+	if (name == NULL || name[0] == '\0')
+		return false;
+	FILE* file = fopen(kSessionPath, "r");
+	if (file == NULL)
+		return false;
+	char line[64];
+	if (fgets(line, sizeof(line), file) == NULL) {
+		fclose(file);
+		return false;
+	}
+	fclose(file);
+	size_t length = strlen(line);
+	while (length > 0 && (line[length - 1] == '\n' || line[length - 1] == '\r'))
+		line[--length] = '\0';
+	return strcmp(line, name) == 0;
+}
+
+
 static status_t
 delete_account(const char* name, bool deleteFiles, BString& error)
 {
@@ -1024,7 +1038,8 @@ delete_account(const char* name, bool deleteFiles, BString& error)
 		error = "The original administrator account cannot be deleted.";
 		return B_NOT_ALLOWED;
 	}
-	if (pwd->pw_uid == getuid()) {
+	// Login is uid 0. The person at the screen is the session file, not getuid().
+	if (is_signed_in_name(name)) {
 		error = "You cannot delete the account that is signed in.";
 		return B_NOT_ALLOWED;
 	}
@@ -1052,7 +1067,11 @@ delete_account(const char* name, bool deleteFiles, BString& error)
 			const_cast<char*>(home.String()),
 			NULL
 		};
-		run_argv(rmArgv, error);
+		if (run_argv(rmArgv, error) != B_OK) {
+			error = "The account was removed, but its files could not be "
+				"deleted.";
+			return B_ERROR;
+		}
 	}
 	return B_OK;
 }
@@ -1067,6 +1086,16 @@ static const int32 kMaxAdminGrants = 8;
 static admin_grant sGrants[kMaxAdminGrants];
 static const char* kGrantPath = "/boot/system/settings/r5-machine-unlock";
 static const char* kNetworkSettings = "/boot/system/settings/network";
+static const char* kMachinePrinters = "/boot/system/settings/printers";
+static const char* kUserPrinters = "/boot/home/config/settings/printers";
+static const char* kSwapSettings =
+	"/boot/system/settings/kernel/drivers/virtual_memory";
+static const char* kUserSwapSettings =
+	"/boot/home/config/settings/kernel/drivers/virtual_memory";
+static const char* kRepoSettings = "/boot/system/settings/Repositories_settings";
+static const char* kUserRepoSettings =
+	"/boot/home/config/settings/Repositories_settings";
+static const char* kPackageRepos = "/boot/system/settings/package-repositories";
 
 
 static void
@@ -1208,6 +1237,88 @@ clear_admin_grants()
 }
 
 
+static bool
+directory_has_entries(const char* path)
+{
+	DIR* folder = opendir(path);
+	if (folder == NULL)
+		return false;
+	bool any = false;
+	while (struct dirent* entry = readdir(folder)) {
+		if (strcmp(entry->d_name, ".") != 0
+			&& strcmp(entry->d_name, "..") != 0) {
+			any = true;
+			break;
+		}
+	}
+	closedir(folder);
+	return any;
+}
+
+
+static void
+copy_tree_if_empty(const char* from, const char* to)
+{
+	if (directory_has_entries(to) || !directory_has_entries(from))
+		return;
+	DIR* folder = opendir(from);
+	if (folder == NULL)
+		return;
+	while (struct dirent* entry = readdir(folder)) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		BString source;
+		BString dest;
+		source.SetToFormat("%s/%s", from, entry->d_name);
+		dest.SetToFormat("%s/%s", to, entry->d_name);
+		BString ignored;
+		char* argv[] = {
+			const_cast<char*>("/bin/cp"),
+			const_cast<char*>("-R"),
+			const_cast<char*>(source.String()),
+			const_cast<char*>(dest.String()),
+			NULL
+		};
+		run_argv(argv, ignored);
+	}
+	closedir(folder);
+}
+
+
+static void
+copy_file_if_missing(const char* from, const char* to)
+{
+	if (access(to, F_OK) == 0 || access(from, F_OK) != 0)
+		return;
+	FILE* in = fopen(from, "r");
+	if (in == NULL)
+		return;
+	FILE* out = fopen(to, "w");
+	if (out == NULL) {
+		fclose(in);
+		return;
+	}
+	char buffer[4096];
+	size_t got = 0;
+	while ((got = fread(buffer, 1, sizeof(buffer), in)) > 0) {
+		if (fwrite(buffer, 1, got, out) != got)
+			break;
+	}
+	fclose(out);
+	fclose(in);
+}
+
+
+static void
+share_file(const char* path, mode_t mode, gid_t gid)
+{
+	if (access(path, F_OK) != 0)
+		return;
+	chown(path, 0, gid);
+	chmod(path, mode);
+}
+
+
 void
 refresh_machine_settings_access()
 {
@@ -1215,14 +1326,40 @@ refresh_machine_settings_access()
 	ensure_admin_group(error);
 	struct group* admin = getgrnam(kAdminGroupName);
 	gid_t gid = admin != NULL ? admin->gr_gid : 0;
+	bool open = any_grant();
+	mode_t dirMode = open ? 0777 : 0775;
+	mode_t fileMode = open ? 0666 : 0664;
+
 	mkdir(kNetworkSettings, 0755);
 	// An administrator is in group admin and can write. A granted standard
 	// account is not, so those few minutes use a world-writable directory.
 	// One person is at this screen.
-	if (any_grant())
-		chmod_settings_tree(kNetworkSettings, 0777, 0666, gid);
-	else
-		chmod_settings_tree(kNetworkSettings, 0775, 0664, gid);
+	chmod_settings_tree(kNetworkSettings, dirMode, fileMode, gid);
+
+	mkdir(kMachinePrinters, 0755);
+	copy_tree_if_empty(kUserPrinters, kMachinePrinters);
+	chmod_settings_tree(kMachinePrinters, dirMode, fileMode, gid);
+
+	mkdir("/boot/system/settings/kernel", 0755);
+	mkdir("/boot/system/settings/kernel/drivers", 0755);
+	chown("/boot/system/settings/kernel", 0, gid);
+	chown("/boot/system/settings/kernel/drivers", 0, gid);
+	chmod("/boot/system/settings/kernel", 0755);
+	chmod("/boot/system/settings/kernel/drivers", 0755);
+	copy_file_if_missing(kUserSwapSettings, kSwapSettings);
+	if (access(kSwapSettings, F_OK) != 0) {
+		FILE* created = fopen(kSwapSettings, "w");
+		if (created != NULL)
+			fclose(created);
+	}
+	share_file(kSwapSettings, fileMode, gid);
+
+	copy_file_if_missing(kUserRepoSettings, kRepoSettings);
+	share_file(kRepoSettings, fileMode, gid);
+
+	mkdir(kPackageRepos, 0755);
+	chmod_settings_tree(kPackageRepos, dirMode, fileMode, gid);
+
 	write_grant_file();
 }
 

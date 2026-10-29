@@ -4,7 +4,7 @@ Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nod
 
 This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
 
-Current tree: **R5OS 2026.1-dev Build 10011** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
+Current tree: **R5OS 2026.1-dev Build 10012** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
 ## What is in the image now
 
@@ -14,7 +14,8 @@ User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG
 - Dark appearance, desktop/Deskbar layout fixes.
 - Wi-Fi join/remember, IPv6 SLAAC/DAD on a home LAN, AirPrint/IPP add, AirPlay 1 to speakers (not AirPlay 2 pairing).
 - Shutdown no longer waits forever on IPv6 SLAAC or the VirtualBox COM1 clipboard helper.
-- **Users & Accounts** opens on your own card (picture, name, username, email, password). Other people stay hidden until an administrator unlocks the list. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`, now a normal user id (1000 or higher), not 0. Sign in still shows everyone who can sign in.
+- **Users & Accounts** opens on your own card (picture, name, username, email, password). Other people stay hidden until an administrator unlocks the list. A new account needs a password. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`, now a normal user id (1000 or higher), not 0. Sign in still shows everyone who can sign in.
+- **Printers, Repositories, and VirtualMemory** stay visible. An administrator changes them. Another account uses the lock at the bottom right. Printer queues and swap are for the computer.
 - **Sign-in screen** before Tracker/Deskbar. The leaf menu says **Log out** and the account name, then returns to Sign in. Restart and a cold boot also return to Sign in. After a valid password, Tracker and Deskbar run as that account: a standard person uses `/boot/home/users/<name>`, their own Trash, and their own MIME database. Folder icons (including the leaf menu) are the same yellow folders for everyone. There is still **one screen**.
 - **Locked machine settings.** Preferences are not hidden by role. Network, Screen, Time, and Users stay in the list. An administrator changes them immediately. A standard account looks, then unlocks the bottom-right lock with an administrator name and password (checked by Sign in, uid 0). That lasts a few minutes and is per window. Personal prefs (Appearance, Backgrounds, …) stay with the signed-in person.
 

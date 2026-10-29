@@ -526,6 +526,12 @@ public:
 		const char* name = fName->Text();
 		BString password(fPassword->Text());
 		BString repeat(fRepeat->Text());
+		if (password.Length() == 0) {
+			wipe_string(password);
+			wipe_string(repeat);
+			show_error("Type a password.");
+			return;
+		}
 		if (password != repeat) {
 			wipe_string(password);
 			wipe_string(repeat);

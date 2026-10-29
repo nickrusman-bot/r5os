@@ -106,10 +106,106 @@ def retarget_lock(path: pathlib.Path, current: str, desired: str, original: str,
     raise SystemExit(f"pattern not found in {path} ({tag})")
 
 
+def patch_machine_paths() -> None:
+    replace_once(
+        HAIKU / "src/system/libroot/os/find_directory.cpp",
+        "\tchar *returnedPath, int32 _pathLength)\n"
+        "{\n"
+        "\tif (_pathLength <= 0)\n",
+        "\tchar *returnedPath, int32 _pathLength)\n"
+        "{\n"
+        "\tif (which == B_USER_PRINTERS_DIRECTORY) {\n"
+        "\t\t// Queues belong to the computer. Every account shares this folder.\n"
+        "\t\tstatic const char kMachinePrinters[] =\n"
+        "\t\t\t\"/boot/system/settings/printers\";\n"
+        "\t\tif (_pathLength < (int32)sizeof(kMachinePrinters))\n"
+        "\t\t\treturn E2BIG;\n"
+        "\t\tstrlcpy(returnedPath, kMachinePrinters, _pathLength);\n"
+        "\t\tif (createIt) {\n"
+        "\t\t\tstruct stat printerStat;\n"
+        "\t\t\tif (stat(returnedPath, &printerStat) < 0) {\n"
+        "\t\t\t\tstatus_t created = create_path(returnedPath, 0755);\n"
+        "\t\t\t\tif (created != B_OK)\n"
+        "\t\t\t\t\treturn created;\n"
+        "\t\t\t}\n"
+        "\t\t}\n"
+        "\t\treturn B_OK;\n"
+        "\t}\n"
+        "\tif (_pathLength <= 0)\n",
+        "machine printers directory",
+    )
+    replace_once(
+        HAIKU / "src/system/libroot/os/driver_settings.cpp",
+        "\t// open the settings from the standardized location\n"
+        "\tif (driverName[0] != '/') {\n"
+        "\t\tchar path[B_FILE_NAME_LENGTH + 64];\n"
+        "\n"
+        "#ifdef _BOOT_MODE\n"
+        "\t\tstrcpy(path, kUserSettingsDirectory);\n"
+        "#else\n"
+        "\t\t// TODO: use B_SYSTEM_SETTINGS_DIRECTORY instead!\n"
+        "\t\tif (__find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,\n"
+        "\t\t\t\tsizeof(path)) == B_OK)\n"
+        "#endif\n"
+        "\t\t{\n"
+        "\t\t\tstrlcat(path, SETTINGS_DIRECTORY, sizeof(path));\n"
+        "\t\t\tstrlcat(path, driverName, sizeof(path));\n"
+        "\t\t}\n"
+        "\n"
+        "\t\tfile = open(path, O_RDONLY);\n",
+        "\t// open the settings from the standardized location\n"
+        "\tif (driverName[0] != '/') {\n"
+        "\t\tchar path[B_FILE_NAME_LENGTH + 64];\n"
+        "\t\tfile = -1;\n"
+        "\t\tif (strcmp(driverName, \"virtual_memory\") == 0) {\n"
+        "\t\t\tfile = open(\n"
+        "\t\t\t\t\"/boot/system/settings/kernel/drivers/virtual_memory\",\n"
+        "\t\t\t\tO_RDONLY);\n"
+        "\t\t}\n"
+        "\t\tif (file < 0) {\n"
+        "#ifdef _BOOT_MODE\n"
+        "\t\tstrcpy(path, kUserSettingsDirectory);\n"
+        "#else\n"
+        "\t\t// Other driver settings still follow the user directory.\n"
+        "\t\tif (__find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,\n"
+        "\t\t\t\tsizeof(path)) == B_OK)\n"
+        "#endif\n"
+        "\t\t{\n"
+        "\t\t\tstrlcat(path, SETTINGS_DIRECTORY, sizeof(path));\n"
+        "\t\t\tstrlcat(path, driverName, sizeof(path));\n"
+        "\t\t}\n"
+        "\n"
+        "\t\tfile = open(path, O_RDONLY);\n"
+        "\t\t}\n",
+        "virtual memory system file",
+    )
+    replace_once(
+        HAIKU / "src/preferences/virtualmemory/Settings.cpp",
+        "Settings::WriteSwapSettings()\n"
+        "{\n"
+        "\tBPath path;\n"
+        "\tif (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)\n",
+        "Settings::WriteSwapSettings()\n"
+        "{\n"
+        "\tBPath path;\n"
+        "\tif (find_directory(B_SYSTEM_SETTINGS_DIRECTORY, &path) != B_OK)\n",
+        "virtual memory write path",
+    )
+    replace_once(
+        HAIKU / "src/preferences/repositories/RepositoriesSettings.cpp",
+        "\tstatus_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &fFilePath);\n",
+        "\tstatus_t status = find_directory(B_SYSTEM_SETTINGS_DIRECTORY, &fFilePath);\n",
+        "repositories settings path",
+    )
+
+
 def patch_locks() -> None:
     install_lock("time")
     install_lock("screen")
     install_lock("network")
+    install_lock("printers")
+    install_lock("repositories")
+    install_lock("virtualmemory")
 
     replace_once(
         HAIKU / "src/preferences/time/Jamfile",
@@ -420,11 +516,92 @@ r5_screen_change_allowed(team_id team)
         "screen mode lock",
     )
 
+    replace_once(
+        HAIKU / "src/preferences/printers/Jamfile",
+        "\tGlobals.cpp\n\t:\n\tbe\n",
+        "\tGlobals.cpp\n\tAdminLock.cpp\n\t:\n\tbe\n",
+        "printers AdminLock",
+    )
+    replace_once(
+        HAIKU / "src/preferences/printers/PrintersWindow.cpp",
+        '#include "PrintersWindow.h"\n',
+        '#include "PrintersWindow.h"\n\n#include "AdminLock.h"\n',
+        "printers include",
+    )
+    replace_once(
+        HAIKU / "src/preferences/printers/PrintersWindow.cpp",
+        "\t\t.Add(fJobsBox);\n",
+        "\t\t.Add(fJobsBox)\n"
+        "\t\t.AddGroup(B_HORIZONTAL)\n"
+        "\t\t\t.AddGlue()\n"
+        "\t\t\t.Add(new AdminLockBar())\n"
+        "\t\t.End();\n",
+        "printers lock bar",
+    )
+
+    replace_once(
+        HAIKU / "src/preferences/repositories/Jamfile",
+        "\tTaskTimer.cpp\n"
+        "\t: be package libcolumnlistview.a [ TargetLibstdc++ ] localestub\n",
+        "\tTaskTimer.cpp\n"
+        "\tAdminLock.cpp\n"
+        "\t: be package libcolumnlistview.a [ TargetLibstdc++ ] localestub\n",
+        "repositories AdminLock",
+    )
+    replace_once(
+        HAIKU / "src/preferences/repositories/RepositoriesWindow.cpp",
+        '#include "RepositoriesWindow.h"\n',
+        '#include "RepositoriesWindow.h"\n\n#include "AdminLock.h"\n',
+        "repositories include",
+    )
+    replace_once(
+        HAIKU / "src/preferences/repositories/RepositoriesWindow.cpp",
+        "\tBLayoutBuilder::Group<>(this, B_VERTICAL).Add(fView).End();\n",
+        "\tBLayoutBuilder::Group<>(this, B_VERTICAL)\n"
+        "\t\t.Add(fView)\n"
+        "\t\t.AddGroup(B_HORIZONTAL)\n"
+        "\t\t\t.SetInsets(B_USE_WINDOW_SPACING, 0, B_USE_WINDOW_SPACING,\n"
+        "\t\t\t\tB_USE_WINDOW_SPACING)\n"
+        "\t\t\t.AddGlue()\n"
+        "\t\t\t.Add(new AdminLockBar())\n"
+        "\t\t.End()\n"
+        "\t.End();\n",
+        "repositories lock bar",
+    )
+
+    replace_once(
+        HAIKU / "src/preferences/virtualmemory/Jamfile",
+        "\tSettings.cpp\n"
+        "\t$(DRIVER_SETTINGS)\n",
+        "\tSettings.cpp\n"
+        "\tAdminLock.cpp\n"
+        "\t$(DRIVER_SETTINGS)\n",
+        "virtualmemory AdminLock",
+    )
+    replace_once(
+        HAIKU / "src/preferences/virtualmemory/SettingsWindow.cpp",
+        '#include "SettingsWindow.h"\n',
+        '#include "SettingsWindow.h"\n\n#include "AdminLock.h"\n',
+        "virtualmemory include",
+    )
+    replace_once(
+        HAIKU / "src/preferences/virtualmemory/SettingsWindow.cpp",
+        "\t\t\t.Add(fRevertButton)\n"
+        "\t\t\t.AddGlue()\n"
+        "\t\t.End();\n",
+        "\t\t\t.Add(fRevertButton)\n"
+        "\t\t\t.AddGlue()\n"
+        "\t\t\t.Add(new AdminLockBar())\n"
+        "\t\t.End();\n",
+        "virtualmemory lock bar",
+    )
+
 
 def main() -> int:
     copy_sources()
     patch_jams()
     patch_locks()
+    patch_machine_paths()
     return 0
 
 

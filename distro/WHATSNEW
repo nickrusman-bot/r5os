@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10012 - Shared machine settings
+Printers, Repositories, and VirtualMemory stay in Preferences for everyone. An administrator can change them. Another account uses the lock at the bottom right. Printer queues and swap belong to the computer. A new account needs a password. The account that is signed in cannot be removed. Adding an account no longer shows an error after it has succeeded.
+
 R5OS 2026.1-dev Build 10011 - Your account
 Users & Accounts opens on your own card: picture, name, username, email, and password. Other people stay hidden until an administrator unlocks the list. Sign in still shows everyone who can sign in.
 
