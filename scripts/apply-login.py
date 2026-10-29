@@ -163,6 +163,46 @@ def disarm_desktop_target() -> None:
     print(f"desktop jobs: removed {count} initial_volumes_mounted")
 
 
+def patch_session_home() -> None:
+    """autologin StartSession(getpwuid(0)). After migrate that name is root
+    with home /boot/system (packagefs). The user launch_daemon then never
+    paints Sign in and the boot splash stays."""
+    daemon = HAIKU / "src" / "servers" / "launch" / "LaunchDaemon.cpp"
+    replace_once(
+        daemon,
+        "#include <unistd.h>\n",
+        "#include <unistd.h>\n"
+        "#include <string.h>\n"
+        "#include <sys/stat.h>\n",
+        "launch_daemon root home includes",
+    )
+    replace_once(
+        daemon,
+        "	if (passwd->pw_dir != NULL && passwd->pw_dir[0] != '\\0') {\n"
+        "		setenv(\"HOME\", passwd->pw_dir, true);\n"
+        "\n"
+        "		if (chdir(passwd->pw_dir) != 0) {\n"
+        "			debug_printf(\"Could not switch to home dir %s: %s\\n\",\n"
+        "				passwd->pw_dir, strerror(errno));\n",
+        "	const char* home = passwd->pw_dir;\n"
+        "	char rootHome[] = \"/boot/system/var/root\";\n"
+        "	if (user == 0 && (home == NULL || home[0] == '\\0'\n"
+        "			|| strcmp(home, \"/boot/system\") == 0\n"
+        "			|| access(home, W_OK) != 0)) {\n"
+        "		mkdir(\"/boot/system/var\", 0755);\n"
+        "		mkdir(rootHome, 0700);\n"
+        "		home = rootHome;\n"
+        "	}\n"
+        "	if (home != NULL && home[0] != '\\0') {\n"
+        "		setenv(\"HOME\", home, true);\n"
+        "\n"
+        "		if (chdir(home) != 0) {\n"
+        "			debug_printf(\"Could not switch to home dir %s: %s\\n\",\n"
+        "				home, strerror(errno));\n",
+        "launch_daemon root writable home",
+    )
+
+
 def patch_first_boot() -> None:
     replace_once(
         HAIKU / "src" / "apps" / "firstbootprompt" / "BootPrompt.cpp",
@@ -182,20 +222,35 @@ def patch_deskbar() -> None:
     )
     replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
-        "	AddSeparatorItem();\n"
-        "\n"
-        "	BMenu* shutdownMenu = new BMenu(B_TRANSLATE(\"Shutdown\" B_UTF8_ELLIPSIS));\n",
-        "	AddSeparatorItem();\n"
-        "\n"
+        "#include <Locale.h>\n",
+        "#include <Locale.h>\n"
+        "#include <pwd.h>\n"
+        "#include <unistd.h>\n",
+        "Deskbar logout pwd include",
+    )
+    logout_plain = (
         "	item = new BMenuItem(B_TRANSLATE(\"Log out\"),\n"
         "		new BMessage(kLogoutSession));\n"
-        "	item->SetEnabled(!dragging);\n"
-        "	item->SetTarget(be_app);\n"
-        "	AddItem(item);\n"
-        "\n"
-        "	BMenu* shutdownMenu = new BMenu(B_TRANSLATE(\"Shutdown\" B_UTF8_ELLIPSIS));\n",
-        "Deskbar Log out item",
     )
+    logout_named = (
+        "	BString logoutLabel(B_TRANSLATE(\"Log out\"));\n"
+        "	struct passwd* sessionUser = getpwuid(getuid());\n"
+        "	if (sessionUser != NULL && sessionUser->pw_name != NULL\n"
+        "		&& sessionUser->pw_name[0] != '\\0') {\n"
+        "		logoutLabel << ' ' << sessionUser->pw_name;\n"
+        "	}\n"
+        "	item = new BMenuItem(logoutLabel.String(),\n"
+        "		new BMessage(kLogoutSession));\n"
+    )
+    menu = HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp"
+    text = menu.read_text(encoding="utf-8")
+    if logout_named in text:
+        print("already DeskbarMenu.cpp (Deskbar Log out item)")
+    elif logout_plain in text:
+        menu.write_text(text.replace(logout_plain, logout_named, 1), encoding="utf-8")
+        print("patched DeskbarMenu.cpp (Deskbar Log out item)")
+    else:
+        raise SystemExit("pattern not found in DeskbarMenu.cpp (Deskbar Log out item)")
     replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
         "				case kRebootSystem:\n"
@@ -334,6 +389,7 @@ def patch_session_paths() -> None:
 def main() -> int:
     copy_sources()
     patch_launch()
+    patch_session_home()
     patch_first_boot()
     patch_deskbar()
     patch_installer()

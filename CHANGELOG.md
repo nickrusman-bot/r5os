@@ -4,6 +4,14 @@ Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 
 ## 2026-10-29 (Europe/Amsterdam)
 
+### Log out name and Sign in after Restart (build 10010)
+
+The Deskbar leaf item is `Log out <name>` for the signed-in account.
+
+After the first Sign in, uid 0 is locked `root` with home `/boot/system`. `autologin` still `StartSession`s that uid-0 name (Login must stay uid 0). `/boot/system` is packagefs, so the user `launch_daemon` could not take the screen and Restart/Reset stayed on the boot splash. The session daemon now uses `/boot/system/var/root` when uid 0 has no writable home. Still not `StartSession` of the signed-in person.
+
+Jam AMD64 2026-10-29 22:20 Europe/Amsterdam: `jam_exit=0` (launch_daemon, Deskbar, Login, image). Not confirmed on a boot after Restart yet.
+
 ### Locked machine settings (build 10009)
 
 Network, Screen, Time, and Users & Accounts stay visible. An administrator (group `admin`, or the `/boot/home` account) changes them immediately. A standard account sees the same window with a lock. Unlock sends that administrator's name and password to Login, which is still uid 0. The preference app itself stays the signed-in user. The grant lasts 5 minutes and is dropped on Log out. It applies to that preference app only.
