@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Licensing policy
+
+`docs/LICENSING.md` is the multi-license policy. New R5OS-owned files default to GPL-3.0-or-later when R5OS can license the whole file. Haiku headers stay as they are. GPL-2.0-only is not relicensed to GPL-3.0 and is not combined with GPL-3.0 in one work. `THIRD_PARTY_NOTICES.md` lists what has actually been identified. `LICENSES/` has the unmodified GPL-3.0 and MIT texts. The Haiku tree has not been audited file by file. About credits, REUSE lint, and a release SBOM are not built. VirtualBox 7.2.22 Haiku additions are GPL-3.0-only and are not in git or the image. Userspace may ship later as separate GPL-3.0 programs. Kernel modules stay out pending review of how far GPL-3.0 reaches into the kernel. `README.md` points at the policy, the notices, and `LICENSES/`.
+
 ### Boot loader no longer waits forever for a missing CPU
 
 The BIOS boot loader’s `smp_boot_other_cpus()` waited, with no timeout, until the next CPU’s trampoline cleared a stack word. On this VirtualBox VM that wait often never finished, so the kernel never started and the splash icons stayed gray. Delivery-status waits had the same problem. Each CPU now gets three attempts. A delivery bit that stays set is reported and the startup sequence continues. If a CPU still does not answer within about a second, the loader sets `num_cpus` to the CPUs that did start and enters the kernel. Later CPUs are not started, so the kernel does not wait on a hole in the CPU list. The waits use a bounded `pause` loop. They do not call `spin()`, because that BIOS wait can fail to return. The source copy is `distro/boot/bios_ia32/smp.cpp`, installed by `scripts/apply-kernel-bugs.py`.

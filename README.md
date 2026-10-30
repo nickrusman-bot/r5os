@@ -4,6 +4,8 @@ Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nod
 
 This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
 
+R5OS is **multi-license**, not an MIT-only tree. Haiku files keep their original license and copyright. New files that R5OS owns default to GPL-3.0-or-later when R5OS can license that whole file. Policy: `docs/LICENSING.md`. Identified components: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`. The Haiku tree has not been audited file by file. About does not yet have a Credits & Licenses view. VirtualBox 7.2.22 Guest Additions are GPL-3.0-only; they are not in this git tree and not in the image. Their kernel modules stay out until how far GPL-3.0 reaches into the kernel is reviewed.
+
 Current tree: **R5OS 2026.1-dev Build 10013** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
 ## What is in the image now
@@ -26,7 +28,9 @@ Home folders of extra accounts are private (`0700`). `user` is in group `admin` 
 | Path | Role |
 |---|---|
 | `distro/` | Overlay: version, What’s new, Jam profile, branding, extra apps (Users, Wi-Fi, AirPlay, …) |
-| `docs/` | Roadmap, multi-user, IPv6, VirtualBox |
+| `docs/` | Roadmap, multi-user, IPv6, VirtualBox, licensing (`docs/LICENSING.md`) |
+| `LICENSES/` | Unmodified license texts (SPDX filenames) |
+| `THIRD_PARTY_NOTICES.md` | Components that have actually been identified |
 | `tracker/` | Open Haiku tickets and whether R5OS already fixed them |
 | `scripts/` | Clone, overlay, jam, QEMU/VBox, ticket sync |
 | `haiku/` | R5OS fork of the OS sources (`r5` branch; not in *this* git) |
