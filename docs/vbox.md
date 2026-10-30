@@ -1,5 +1,7 @@
 # VirtualBox and USB (LAN tests)
 
+Plan for Guest Additions: `docs/VBOX-GUEST.md`.
+
 Haiku/R5OS has **no VirtualBox Guest Additions**. Expect:
 
 - no `vboxsf` shared folders
