@@ -159,6 +159,8 @@ The additions are GPL-3.0-only. That matches the default direction for new R5OS 
 
 Userspace `VBoxService`, `VBoxTray`, and `VBoxControl` are separate programs. Shipping them next to the rest of R5OS is aggregation if they are not linked into Haiku applications. A binary image that includes them must ship this GPL-3.0 text and the corresponding 7.2.22 source, including our build fixes.
 
-Kernel modules (`vboxguest`, `vboxdev`, `vboxsf`, `vboxvideo`, and the accelerant) link into Haiku. MIT code may be combined with GPL-3.0, and the GPL-3.0 conditions apply to that combination. A separate module does not answer how far that combination reaches into the kernel. Those modules stay out of the image until that scope is reviewed. The userspace clipboard can proceed without waiting on that kernel question.
+Kernel modules (`vboxguest`, `vboxdev`, `vboxsf`, `vboxvideo`, and the accelerant) load into the kernel and call kernel exports. MIT allows that kernel to be distributed in a GPL-3.0 combination. An image that contains one of these modules ships under GPL-3.0-only for the combination: the GPL-3.0 text and the corresponding 7.2.22 source, including the build fixes. Haiku's copyright lines and MIT notices stay on the Haiku files. Those files are not relicensed, and the modules are not pasted into them.
+
+The combined work is the kernel image that loads the module. `vboxguest` and `vboxdev` may be shipped on that basis. `vboxsf`, `vboxvideo`, the mouse filter, and the accelerant use the same license shape and stay out of the image until their own tests pass. The userspace clipboard can proceed on its own.
 
 Nothing from this tarball is in git or in the current image. The COM1 clipboard is unchanged.
