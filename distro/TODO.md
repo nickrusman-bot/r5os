@@ -23,9 +23,11 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 
   VBox 2026-10-29 22:26 Europe/Amsterdam: Restart na de eerste Sign in kwam weer op Sign in. Log out, daarna Sign in als iemand anders; het slot was weer dicht.
 
+  VBox 2026-10-29 23:25 Europe/Amsterdam: eigen kaart en de mensenlijst. Add maakte de gebruiker en toonde daarna "Sign in did not answer."
+
   **Daarna, in deze volgorde**
-  1. Wachtwoord en profielkaart (build 10011, nog niet op een boot gezien): eigen kaart met foto, naam, e-mail, wachtwoord. Lijst alleen na Unlock. Sign in toont wel iedereen.
-  2. Zelfde slot op Printers, Repositories, VirtualMemory; settings naar `B_SYSTEM_SETTINGS` (niet per-user laten staan).
+  1. Wachtwoord en profielkaart (build 10011): gezien op die boot. Add-succes antwoordt `error` 0 in build 10012. Image gejamd 2026-10-29 23:48 Europe/Amsterdam; nog niet gezien in VBox.
+  2. Slot op Printers, Repositories, VirtualMemory, en die gegevens op de machine (build 10012, zelfde image, nog niet gezien in VBox). Nieuwe accounts hebben een wachtwoord. Verwijderen weigert de aangemelde persoon via het sessiebestand. Een mislukte `rm` wordt gemeld.
   3. Lock screen: sessie blijft, alleen het scherm op slot.
   4. Guest-account en Public/Shared-map, pas als gewone homes privé blijven.
 
@@ -86,6 +88,9 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
   Volgorde: (1) I2C-HID digitizer op deze Envy, (2) contacten/IDs in `input_server`, (3) Interface Kit: tap, sleep, pinch, rotate, (4) tablet-mode (hinge + rotatie + dock-toetsenbord), (5) Deskbar/Tracker/OSK zonder muis. Telefoon-UI blijft onder Later.
 
 ## Later / lang
+
+- [ ] **Ronder venster**  
+  Plan: `docs/LOOK.md`. Huidige tab-geel houden, hoeken ronder, daarna knoppen, velden, Deskbar-padding, schaduw als laatste. Niet tijdens multi-user.
 
 - [ ] **Accelerated graphics: 2D en 3D**  
   Bewust langetermijn. Haiku: CPU-desktop + Mesa **llvmpipe/lavapipe**. Doel op de 5625U (`1002:15e7`): hardware-2D, daarna hardware-3D (Gallium/Mesa). Volgorde: modeset Barcelo → accelerant-2D → GPU-buffer → Mesa i.p.v. llvmpipe ([#9919](https://dev.haiku-os.org/ticket/9919)).

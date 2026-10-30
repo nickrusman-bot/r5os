@@ -331,17 +331,17 @@ Deskbar shows the same Preferences list to everyone (build 10009). Nothing is hi
 | Network | yes | interfaces, DHCP, IPv6 — `net_server` | not `find_directory` in the preflet |
 | Screen | yes | resolution / workspace of the display | window frame in `B_USER_SETTINGS`; mode is app_server |
 | Time | yes | clock and timezone for the machine | also writes some `B_USER_SETTINGS` (NTP UI) |
-| Printers | yes | queues on this host | `B_USER_PRINTERS_DIRECTORY` (odd for shared printers) |
-| Repositories | yes | pkgman sources | system settings + a user file |
-| VirtualMemory | power user | swap is the machine | settings file is `B_USER_SETTINGS` (wrong place) |
+| Printers | yes | queues on this host | build 10012: `B_USER_PRINTERS_DIRECTORY` is `/boot/system/settings/printers` for every account. Window position stays personal |
+| Repositories | yes | pkgman sources | build 10012: list file and `package-repositories` are under `B_SYSTEM_SETTINGS`. Lock on the window |
+| VirtualMemory | power user | swap is the machine | build 10012: `virtual_memory` is `/boot/system/settings/kernel/drivers/virtual_memory`. The kernel still falls back to the old user file if that one is missing. Window position stays personal |
 
 **Admin only:**
 
 | Preflet | Visible today | Decision |
 |---|---|---|
-| Users | yes, in Preferences | list is visible to everyone; Add, Disable, and Delete need the lock |
+| Users | yes, in Preferences | own card until Unlock; Add, Disable, and Delete need the lock |
 
-**Not this pass:** one combined Preferences window; move VirtualMemory/Printers onto `B_SYSTEM_SETTINGS`; rebuild `webpositive.hpkg`.
+**Not this pass:** one combined Preferences window; rebuild `webpositive.hpkg`. Printers, Repositories, and VirtualMemory are locked and machine-wide as of build 10012.
 
 VBox 2026-10-29 22:04 Europe/Amsterdam (guest 9:04 PM, UTC): as `nick` (uid 1002), Network stayed locked with the gray buttons at the bottom right. Users unlocked for a few minutes in the same session. The grant is per preference window. Screen and Time at 22:06: Locked, Revert/Apply gray.
 
