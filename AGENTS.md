@@ -20,6 +20,16 @@ R5OS may add APIs, services, and desktop features without upstream approval. Do 
 
 If a break is required: document why, what it hits, and the migration path.
 
+## Licensing
+
+Full policy, inventory, and the VirtualBox 7.2.22 assessment: `docs/LICENSING.md`. User-facing list: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`.
+
+R5OS is multi-license. New R5OS-owned files default to `GPL-3.0-or-later` with an SPDX header, when R5OS has the rights to that whole file. Haiku files keep their original license and copyright. Do not replace an MIT header with GPL. Do not relicense GPL-2.0-only code as GPL-3.0. Do not combine GPL-2.0-only with GPL-3.0 in one work. A separate kernel module does not by itself make GPL code independent of the kernel.
+
+Do not assume the Haiku tree is all MIT. Do not drop a suitable driver only to keep a single license. Do not rewrite license headers in bulk. The file-by-file audit, REUSE lint, and About credits view are not done.
+
+Before adding a component, report project, SPDX license (`-only` or `-or-later`), copyright, integration, source-offer duties, and combination questions. Uncertain kernel integration stays out of the image until reviewed. Credit shipped third-party code from `THIRD_PARTY_NOTICES.md` (AirPlay detail: `distro/airplay/THIRD_PARTY.md`). Do not invent copyright holders.
+
 ## AI
 
 Use AI to read code, patch, port, test, review races/overflows, and write changelog/tracker files. Generated code is not automatically correct. Verify against source, build, and boot. Prefer small diffs. No drive-by refactors.
@@ -89,7 +99,7 @@ Password material must not appear in logs, process argv, or What’s new text.
 
 ## Networking claims
 
-Do not claim AirPlay 2 pairing/PTP, mirroring, or LAN discovery unless implemented and tested on a real network. Credit third-party code (license + AboutSystem / `THIRD_PARTY.md`).
+Do not claim AirPlay 2 pairing/PTP, mirroring, or LAN discovery unless implemented and tested on a real network. Credit third-party code (license + AboutSystem / `THIRD_PARTY_NOTICES.md` / `docs/LICENSING.md`).
 
 ## Tracker and changelog
 
