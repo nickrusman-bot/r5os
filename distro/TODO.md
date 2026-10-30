@@ -25,18 +25,21 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 
   VBox 2026-10-29 23:25 Europe/Amsterdam: eigen kaart en de mensenlijst. Add maakte de gebruiker en toonde daarna "Sign in did not answer."
 
-  **Daarna, in deze volgorde**
-  1. Wachtwoord en profielkaart (build 10011): gezien op die boot. Add-succes antwoordt `error` 0 in build 10012. Image gejamd 2026-10-29 23:48 Europe/Amsterdam; nog niet gezien in VBox.
-  2. Slot op Printers, Repositories, VirtualMemory, en die gegevens op de machine (build 10012, zelfde image, nog niet gezien in VBox). Nieuwe accounts hebben een wachtwoord. Verwijderen weigert de aangemelde persoon via het sessiebestand. Een mislukte `rm` wordt gemeld.
-  3. Lock screen: sessie blijft, alleen het scherm op slot.
-  4. Guest-account en Public/Shared-map, pas als gewone homes privé blijven.
+  VBox 2026-10-30 Europe/Amsterdam: build 10012 bevestigd (slot op Printers, Repositories, VirtualMemory; machine-paden; verplicht wachtwoord; Add-succes).
 
-  **Later / niet tijdens deze lijn**
-  - Eén Preferences-venster (R5 Hub).
-  - WebPositive-defaults uit `webpositive.hpkg` (nu nog `/boot/home`).
-  - Image-`passwd`: `user` al uid ≥ 1000, geen migrate bij eerste Sign in.
-  - Add-account-dialoog uitlijnen.
-  - Overlays in native bron.
+  Live lijst: GitHub [#63](https://github.com/nickrusman-bot/r5os/issues/63).
+
+  **Nu**
+  1. Lock screen: [#64](https://github.com/nickrusman-bot/r5os/issues/64). Build 10013: Ctrl+Shift+L of het bladmenu dekt de sessie af. Apps blijven. Unlock is het wachtwoord van de aangemelde persoon. Nog niet gezien in VBox.
+  2. Guest + Public/Shared: [#65](https://github.com/nickrusman-bot/r5os/issues/65).
+
+  **Later / niet tijdens lock screen**
+  - Eén Preferences-venster (R5 Hub): [#66](https://github.com/nickrusman-bot/r5os/issues/66).
+  - WebPositive-defaults uit `webpositive.hpkg`: [#67](https://github.com/nickrusman-bot/r5os/issues/67).
+  - Image-`passwd`: `user` al uid ≥ 1000: [#68](https://github.com/nickrusman-bot/r5os/issues/68).
+  - Add-account-dialoog uitlijnen: [#69](https://github.com/nickrusman-bot/r5os/issues/69).
+  - Overlays in native bron: [#70](https://github.com/nickrusman-bot/r5os/issues/70).
+  - Sign-in-layout: [#71](https://github.com/nickrusman-bot/r5os/issues/71).
 
   **Expres niet:** `StartSession` van de aangemelde persoon; prefs verbergen per rol; fast user switching zonder uitloggen tot er één scherm blijft.
 
@@ -88,6 +91,9 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
   Volgorde: (1) I2C-HID digitizer op deze Envy, (2) contacten/IDs in `input_server`, (3) Interface Kit: tap, sleep, pinch, rotate, (4) tablet-mode (hinge + rotatie + dock-toetsenbord), (5) Deskbar/Tracker/OSK zonder muis. Telefoon-UI blijft onder Later.
 
 ## Later / lang
+
+- [ ] **Mixxx (DJ, side quest)**  
+  GitHub [#55](https://github.com/nickrusman-bot/r5os/issues/55). Plan: `docs/MIXXX.md`. Niet in de image. Eerst HaikuPorts 2.5.4 op AMD64, daarna speakers, class-compliant MIDI, UAC1 2ch. UAC2/cue/HID/vinyl later. Niet tijdens multi-user.
 
 - [ ] **Ronder venster**  
   Plan: `docs/LOOK.md`. Huidige tab-geel houden, hoeken ronder, daarna knoppen, velden, Deskbar-padding, schaduw als laatste. Niet tijdens multi-user.

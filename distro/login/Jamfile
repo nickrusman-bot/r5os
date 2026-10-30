@@ -11,6 +11,7 @@ Application Login :
 	AccountAdmin.cpp
 	DesktopWindow.cpp
 	HomeLock.cpp
+	LockWindow.cpp
 	LoginApp.cpp
 	LoginWindow.cpp
 	LoginView.cpp

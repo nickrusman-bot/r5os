@@ -35,6 +35,8 @@ def copy_sources() -> None:
         "DesktopWindow.h",
         "Jamfile",
         "Login.rdef",
+        "LockWindow.cpp",
+        "LockWindow.h",
         "LoginApp.cpp",
         "LoginApp.h",
         "LoginView.cpp",
@@ -60,6 +62,13 @@ def copy_sources() -> None:
         shutil.copy2(users / name, dest / name)
         (dest / name).touch()
         print(f"copied {name} -> {dest}")
+
+    filt = HAIKU / "src" / "add-ons" / "input_server" / "filters" / "r5_lock"
+    filt.mkdir(parents=True, exist_ok=True)
+    for name in ("LockScreenFilter.cpp", "LockScreenFilter.h", "Jamfile"):
+        shutil.copy2(SRC / "filter" / name, filt / name)
+        (filt / name).touch()
+        print(f"copied {name} -> {filt}")
 
 
 def patch_launch() -> None:
@@ -221,6 +230,13 @@ def patch_deskbar() -> None:
         "Deskbar logout message",
     )
     replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "BarSettings.h",
+        "const uint32 kLogoutSession = 'lout';\n",
+        "const uint32 kLogoutSession = 'lout';\n"
+        "const uint32 kLockSession = 'lokc';\n",
+        "Deskbar lock message",
+    )
+    replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
         "#include <Locale.h>\n",
         "#include <Locale.h>\n"
@@ -263,6 +279,13 @@ def patch_deskbar() -> None:
         "Deskbar Log out target",
     )
     replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
+        "				case kLogoutSession:\n",
+        "				case kLogoutSession:\n"
+        "				case kLockSession:\n",
+        "Deskbar Lock screen target",
+    )
+    replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "BarApp.cpp",
         "#include <Roster.h>\n",
         "#include <LaunchRoster.h>\n"
@@ -298,6 +321,43 @@ def patch_deskbar() -> None:
         "			run_be_about();\n"
         "			break;\n",
         "Deskbar Log out handler",
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "BarApp.cpp",
+        "		case kLogoutSession:\n"
+        "		{\n"
+        "			BAlert* alert = new BAlert(\"Log out\",\n",
+        "		case kLockSession:\n"
+        "		{\n"
+        "			BMessenger login(\"application/x-vnd.Haiku-Login\");\n"
+        "			if (login.IsValid())\n"
+        "				login.SendMessage(kLockSession);\n"
+        "			break;\n"
+        "		}\n"
+        "\n"
+        "		case kLogoutSession:\n"
+        "		{\n"
+        "			BAlert* alert = new BAlert(\"Log out\",\n",
+        "Deskbar Lock screen handler",
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
+        "	BString logoutLabel(B_TRANSLATE(\"Log out\"));\n",
+        "	item = new BMenuItem(B_TRANSLATE(\"Lock screen\"),\n"
+        "		new BMessage(kLockSession));\n"
+        "	item->SetEnabled(!dragging);\n"
+        "	item->SetTarget(be_app);\n"
+        "	AddItem(item);\n"
+        "\n"
+        "	BString logoutLabel(B_TRANSLATE(\"Log out\"));\n",
+        "Deskbar Lock screen item",
+    )
+    replace_once(
+        HAIKU / "src" / "add-ons" / "input_server" / "filters" / "Jamfile",
+        "SubInclude HAIKU_TOP src add-ons input_server filters padblocker ;\n",
+        "SubInclude HAIKU_TOP src add-ons input_server filters padblocker ;\n"
+        "SubInclude HAIKU_TOP src add-ons input_server filters r5_lock ;\n",
+        "r5_lock input filter",
     )
 
 

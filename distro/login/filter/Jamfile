@@ -1,0 +1,6 @@
+SubDir HAIKU_TOP src add-ons input_server filters r5_lock ;
+
+Addon r5_lock
+	: LockScreenFilter.cpp
+	: be input_server [ TargetLibstdc++ ] [ TargetLibsupc++ ]
+	;

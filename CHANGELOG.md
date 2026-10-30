@@ -1,12 +1,22 @@
 # R5OS changelog (lokaal)
 
+### Lock screen (build 10013)
+
+Ctrl+Shift+L, or Deskbar → Lock screen, covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.
+
+Ctrl+Alt is already “minimize all”, so the chord is Ctrl+Shift+L. The input filter is `r5_lock`. A menu shortcut was not set: Deskbar shortcuts always add the command key, and command+control is that minimize-all filter.
+
+Jam AMD64 2026-10-30 09:33 Europe/Amsterdam: `jam_exit=0` (Login, Deskbar, `r5_lock`, image). Not yet seen in VBox.
+
 ### Machine settings and account checks (build 10012)
 
 Printers, Repositories, and VirtualMemory use the same bottom-right lock as Network. Printer queues resolve to `/boot/system/settings/printers` for every account (`B_USER_PRINTERS_DIRECTORY`). An existing queue folder under `/boot/home/config/settings/printers` is copied once when the system folder is empty. Swap settings are written to `/boot/system/settings/kernel/drivers/virtual_memory`. The kernel reads that file and, if it is missing, the old per-account file. The repository list file moves to system settings. `package-repositories` is group `admin`, and world-writable only while a grant is open, same as network settings. Window positions for Printers and VirtualMemory stay in the signed-in account's settings.
 
 A new account requires a password. Login refuses to delete the name in the session file (Login itself is uid 0, so `getuid()` did not mean the person at the screen). If `rm` of `/boot/home/users/<name>` fails, the reply says the account is gone and the files are not. Add, Disable, and Delete already send `error` 0 on success; that fix is in this image together with the checks above.
 
-Jam AMD64 2026-10-29 23:48 Europe/Amsterdam: `jam_exit=0` (Login, Users, Printers, Repositories, VirtualMemory, kernel, libroot, image). Not yet seen in VBox.
+Jam AMD64 2026-10-29 23:48 Europe/Amsterdam: `jam_exit=0` (Login, Users, Printers, Repositories, VirtualMemory, kernel, libroot, image).
+
+VBox 2026-10-30 Europe/Amsterdam: build 10012 confirmed on the running image.
 
 Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 

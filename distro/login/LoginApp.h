@@ -15,12 +15,15 @@ const uint32 kHaltAction = 'halt';
 const uint32 kRebootAction = 'rebo';
 const uint32 kSuspendAction = 'susp';
 const uint32 kLogoutAction = 'lout';
+const uint32 kLockAction = 'lokc';
+const uint32 kUnlockAction = 'unlk';
 const uint32 kLoginBad = 'lgba';
 const uint32 kLoginOk = 'lgok';
 
 
 class LoginWindow;
 class DesktopWindow;
+class LockWindow;
 
 
 class LoginApp : public BApplication {
@@ -34,6 +37,9 @@ public:
 private:
 	void			TryLogin(BMessage* message);
 	void			Logout();
+	void			Lock();
+	void			Unlock(BMessage* message);
+	void			_CloseLock();
 	void			HandleAdmin(BMessage* message);
 	status_t		ValidateLogin(const char* login, const char* password);
 	void			_EnableDesktopJobs();
@@ -54,6 +60,7 @@ private:
 
 	DesktopWindow*	fDesktopWindow;
 	LoginWindow*	fLoginWindow;
+	LockWindow*		fLockWindow;
 	bool			fEditShelfMode;
 };
 

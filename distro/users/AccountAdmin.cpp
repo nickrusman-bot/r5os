@@ -1005,24 +1005,37 @@ set_disabled(const char* name, bool disable, BString& error)
 }
 
 
-static bool
-is_signed_in_name(const char* name)
+status_t
+signed_in_name(BString& name)
 {
-	if (name == NULL || name[0] == '\0')
-		return false;
+	name = "";
 	FILE* file = fopen(kSessionPath, "r");
 	if (file == NULL)
-		return false;
+		return B_ENTRY_NOT_FOUND;
 	char line[64];
 	if (fgets(line, sizeof(line), file) == NULL) {
 		fclose(file);
-		return false;
+		return B_ENTRY_NOT_FOUND;
 	}
 	fclose(file);
 	size_t length = strlen(line);
-	while (length > 0 && (line[length - 1] == '\n' || line[length - 1] == '\r'))
+	while (length > 0 && (line[length - 1] == '\n' || line[length - 1] == '\r'
+			|| line[length - 1] == ' '))
 		line[--length] = '\0';
-	return strcmp(line, name) == 0;
+	if (line[0] == '\0')
+		return B_ENTRY_NOT_FOUND;
+	name = line;
+	return B_OK;
+}
+
+
+static bool
+is_signed_in_name(const char* name)
+{
+	BString session;
+	if (name == NULL || signed_in_name(session) != B_OK)
+		return false;
+	return session == name;
 }
 
 

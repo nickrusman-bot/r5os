@@ -99,6 +99,8 @@ Keep `tracker/STATUS.md` current. After any ticket-status change, run `python3 s
 
 After a task, report **Veranderd / Getest / Onbewezen / Documentatie**. Tracker edits: `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Code, changelog, and tracker must not contradict each other.
 
+GitHub issues on `origin` are the live remaining-work list. Multi-user: [#63](https://github.com/nickrusman-bot/r5os/issues/63). Mixxx: [#55](https://github.com/nickrusman-bot/r5os/issues/55). When a change lands: comment on the matching issue with build, limits, and how/where it was tested; close it if that request is done. If only part shipped, comment and leave it open. Do not mark CHANGELOG/STATUS done while the GitHub issue stays open, or the reverse.
+
 ## Versioning
 
 Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`.
