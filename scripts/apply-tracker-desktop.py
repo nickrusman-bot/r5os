@@ -351,6 +351,120 @@ BPoseView::RemoveVolumePoses()
         "Haiku #19084 resize line",
     )
 
+    desk = HAIKU / "src/kits/tracker/DeskWindow.cpp"
+    replace_once(
+        desk,
+        """#include <fcntl.h>
+#include <unistd.h>
+""",
+        """#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+""",
+        "desktop log includes",
+    )
+    replace_once(
+        desk,
+        """BDeskWindow::BDeskWindow(LockingList<BWindow>* windowList, uint32 openFlags)
+""",
+        """static void
+desk_log(const char* text)
+{
+	int fd = open("/dev/dprintf", O_WRONLY | O_CLOEXEC);
+	if (fd < 0 || text == NULL)
+		return;
+	write(fd, text, strlen(text));
+	close(fd);
+}
+
+
+BDeskWindow::BDeskWindow(LockingList<BWindow>* windowList, uint32 openFlags)
+""",
+        "desktop failure log",
+    )
+    replace_once(
+        desk,
+        """	// create pose view
+	BDirectory deskDir;
+	if (FSGetDeskDir(&deskDir) == B_OK) {
+		BEntry entry;
+		deskDir.GetEntry(&entry);
+		Model* model = new Model(&entry, true);
+		if (model->InitCheck() == B_OK)
+			CreatePoseView(model);
+		else
+			delete model;
+	}
+}
+
+
+BDeskWindow::~BDeskWindow()
+{
+	SaveDesktopPoseLocations();
+""",
+        """	// create pose view
+	BDirectory deskDir;
+	status_t deskStatus = FSGetDeskDir(&deskDir);
+	if (deskStatus == B_OK) {
+		BEntry entry;
+		status_t entryStatus = deskDir.GetEntry(&entry);
+		if (entryStatus == B_OK) {
+			Model* model = new Model(&entry, true);
+			if (model->InitCheck() == B_OK)
+				CreatePoseView(model);
+			else {
+				char line[160];
+				snprintf(line, sizeof(line),
+					"Tracker: desktop model: %s\\n",
+					strerror(model->InitCheck()));
+				desk_log(line);
+				delete model;
+			}
+		} else {
+			char line[160];
+			snprintf(line, sizeof(line),
+				"Tracker: desktop entry: %s\\n", strerror(entryStatus));
+			desk_log(line);
+		}
+	} else {
+		char line[160];
+		snprintf(line, sizeof(line),
+			"Tracker: desktop directory: %s\\n", strerror(deskStatus));
+		desk_log(line);
+	}
+}
+
+
+BDeskWindow::~BDeskWindow()
+{
+	if (PoseView() == NULL) {
+		stop_watching(this);
+		return;
+	}
+
+	SaveDesktopPoseLocations();
+""",
+        "null desktop pose view",
+    )
+    replace_once(
+        desk,
+        """	_inherited::Init();
+
+	entry_ref ref;
+""",
+        """	_inherited::Init();
+
+	// PoseView() is null when the desktop directory did not open.
+	// BShelf then calls AddFilter on that null view.
+	if (PoseView() == NULL)
+		return;
+
+	entry_ref ref;
+""",
+        "do not shelf a missing desktop",
+    )
+
     count = HAIKU / "src/kits/tracker/CountView.cpp"
     replace_once(
         count,

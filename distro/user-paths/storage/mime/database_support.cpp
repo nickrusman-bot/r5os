@@ -23,7 +23,6 @@
 
 #include <mime/DatabaseLocation.h>
 
-#include <pwd.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -107,6 +106,53 @@ static DatabaseLocation* sDefaultDatabaseLocation = NULL;
 static BString sDefaultDatabaseLocationKey;
 
 
+static bool
+home_directory_for_name(const char* name, BString& home)
+{
+	// Read the file directly. getpwnam() asks the registrar, and the
+	// registrar calls this while it is still inside ReadyToRun().
+	FILE* file = fopen("/etc/passwd", "r");
+	if (file == NULL)
+		return false;
+
+	char line[512];
+	bool found = false;
+	while (fgets(line, sizeof(line), file) != NULL) {
+		char* fields[7];
+		char* cursor = line;
+		int count = 0;
+		while (count < 7) {
+			fields[count++] = cursor;
+			char* colon = strchr(cursor, ':');
+			if (colon == NULL)
+				break;
+			*colon = '\0';
+			cursor = colon + 1;
+		}
+		if (count < 6 || strcmp(fields[0], name) != 0)
+			continue;
+		if (strcmp(fields[2], "0") == 0)
+			break;
+
+		char* directory = fields[5];
+		size_t length = strlen(directory);
+		while (length > 0 && (directory[length - 1] == '\n'
+			|| directory[length - 1] == '\r'
+			|| directory[length - 1] == ' ')) {
+			directory[--length] = '\0';
+		}
+		if (directory[0] == '\0')
+			break;
+		home = directory;
+		found = true;
+		break;
+	}
+
+	fclose(file);
+	return found;
+}
+
+
 static BString
 mime_user_settings_path()
 {
@@ -124,11 +170,10 @@ mime_user_settings_path()
 					|| name[length - 1] == ' ')) {
 					name[--length] = '\0';
 				}
-				struct passwd* pwd = length > 0 ? getpwnam(name) : NULL;
-				if (pwd != NULL && pwd->pw_uid != 0 && pwd->pw_dir != NULL
-					&& pwd->pw_dir[0] != '\0') {
+				BString home;
+				if (length > 0 && home_directory_for_name(name, home)) {
 					BString path;
-					path.SetToFormat("%s/config/settings", pwd->pw_dir);
+					path.SetToFormat("%s/config/settings", home.String());
 					fclose(file);
 					return path;
 				}

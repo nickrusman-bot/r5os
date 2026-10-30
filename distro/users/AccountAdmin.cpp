@@ -66,7 +66,8 @@ is_listed_account(const struct passwd* pwd)
 		return false;
 	if (strcmp(pwd->pw_name, "sshd") == 0
 		|| strcmp(pwd->pw_name, "ftp") == 0
-		|| strcmp(pwd->pw_name, "nobody") == 0)
+		|| strcmp(pwd->pw_name, "nobody") == 0
+		|| strcmp(pwd->pw_name, "root") == 0)
 		return false;
 
 	const char* home = pwd->pw_dir;
@@ -404,14 +405,41 @@ delete_unix_user(const char* name)
 static status_t
 ensure_system_root()
 {
-	if (getpwuid(0) != NULL)
-		return B_OK;
-	if (getpwnam(kSystemRootName) != NULL)
-		return B_NAME_IN_USE;
 	mkdir("/boot/system/var", 0755);
 	mkdir("/boot/system/var/root", 0700);
-	return add_unix_user(kSystemRootName, 0, 0, "/boot/system/var/root",
-		"/bin/sh", "System", "!");
+
+	struct passwd* root = getpwuid(0);
+	if (root == NULL) {
+		if (getpwnam(kSystemRootName) != NULL)
+			return B_NAME_IN_USE;
+		return add_unix_user(kSystemRootName, 0, 0, "/boot/system/var/root",
+			"/bin/sh", "System", "!");
+	}
+	if (root->pw_name == NULL
+		|| strcmp(root->pw_name, kSystemRootName) != 0)
+		return B_OK;
+
+	char name[64];
+	if (snprintf(name, sizeof(name), "%s", root->pw_name) >= (int)sizeof(name))
+		return B_NAME_TOO_LONG;
+	BString home(root->pw_dir != NULL ? root->pw_dir : "");
+	bool disabled = is_disabled_user(name);
+	if (home == "/boot/system/var/root" && disabled)
+		return B_OK;
+
+	// A test disk can leave root with the person's home. Sign in would
+	// then list it. Keep the system account locked and out of /boot/home.
+	BPrivate::KMessage message(BPrivate::B_REG_UPDATE_USER);
+	if (message.AddInt32("uid", 0) != B_OK
+		|| message.AddString("name", name) != B_OK
+		|| message.AddString("home", "/boot/system/var/root") != B_OK
+		|| message.AddString("password", "x") != B_OK
+		|| message.AddString("shadow password", "!") != B_OK
+		|| message.AddInt32("last changed", (int32)time(NULL)) != B_OK)
+		return B_NO_MEMORY;
+
+	BPrivate::KMessage reply;
+	return BPrivate::send_authentication_request_to_registrar(message, reply);
 }
 
 
@@ -734,6 +762,14 @@ migrate_admin_off_root()
 		return status;
 	if (uid != 0) {
 		ensure_system_root();
+		// The account was already moved off uid 0, but this disk can still
+		// have /boot/home owned by uid 0. Tracker then cannot open Desktop
+		// after lock_private_homes() makes that folder mode 0700.
+		struct stat homeStat;
+		if (lstat(kHome, &homeStat) == 0 && S_ISDIR(homeStat.st_mode)
+			&& homeStat.st_uid == 0) {
+			chown_tree(kHome, uid, gid, homeStat.st_dev);
+		}
 		ensure_person_dirs(uid, gid);
 		adopt_trash(uid, gid);
 		return B_OK;

@@ -139,7 +139,9 @@ def patch_autologin() -> None:
 def copy_first_login_script() -> None:
     dest = HAIKU / "data" / "system" / "boot" / "first_login" / "default_deskbar_items.sh"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(SRC / "default_deskbar_items.sh", dest)
+    text = (SRC / "default_deskbar_items.sh").read_text(encoding="utf-8")
+    dest.write_text(text.replace("\r\n", "\n").replace("\r", "\n"),
+        encoding="utf-8", newline="\n")
     dest.touch()
     print(f"copied default_deskbar_items.sh -> {dest}")
 
