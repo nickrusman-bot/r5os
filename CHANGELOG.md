@@ -6,7 +6,11 @@ Ctrl+Shift+L, or Deskbar → Lock screen, covers the session. Tracker and Deskba
 
 Ctrl+Alt is already “minimize all”, so the chord is Ctrl+Shift+L. The input filter is `r5_lock`. A menu shortcut was not set: Deskbar shortcuts always add the command key, and command+control is that minimize-all filter.
 
-Jam AMD64 2026-10-30 09:33 Europe/Amsterdam: `jam_exit=0` (Login, Deskbar, `r5_lock`, image). Not yet seen in VBox.
+Jam AMD64 2026-10-30 09:33 Europe/Amsterdam: `jam_exit=0` (Login, Deskbar, `r5_lock`, image).
+
+VBox 2026-10-30 09:37 Europe/Amsterdam (guest 08:34, UTC): the cover, password, Unlock, Log out, Restart, and Shut down were on screen. The panel had no title tab. Ctrl+Shift+L did nothing. Control turns the `bytes` field into a control character, so the filter never saw the letter L. It now uses `raw_char`. The panel is a titled window, same look as Sign in, on the blue cover.
+
+Jam AMD64 2026-10-30 09:43 Europe/Amsterdam: `jam_exit=0` (Login, `r5_lock`, image). Not yet seen after that fix.
 
 ### Machine settings and account checks (build 10012)
 

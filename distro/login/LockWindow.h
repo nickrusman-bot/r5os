@@ -11,11 +11,14 @@
 
 class LockWindow : public BWindow {
 public:
-							LockWindow(BRect frame, const char* name);
+							LockWindow(const char* name);
 	virtual					~LockWindow();
 
 	virtual	bool			QuitRequested();
 	virtual	void			ScreenChanged(BRect frame, color_space mode);
+
+private:
+			BWindow*		fCover;
 };
 
 

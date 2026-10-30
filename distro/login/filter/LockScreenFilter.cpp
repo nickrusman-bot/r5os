@@ -35,14 +35,26 @@ LockScreenFilter::LockScreenFilter()
 
 
 static bool
+is_l_key(BMessage* message)
+{
+	// Control rewrites "bytes" to a control character. raw_char stays L.
+	int32 raw = 0;
+	if (message->FindInt32("raw_char", &raw) == B_OK
+		&& (raw == 'l' || raw == 'L'))
+		return true;
+
+	const char* bytes = NULL;
+	if (message->FindString("bytes", &bytes) == B_OK && bytes != NULL
+		&& (bytes[0] == 'l' || bytes[0] == 'L') && bytes[1] == '\0')
+		return true;
+	return false;
+}
+
+
+static bool
 is_lock_chord(BMessage* message)
 {
-	const char* bytes = NULL;
-	if (message->FindString("bytes", &bytes) != B_OK || bytes == NULL)
-		return false;
-	if (bytes[0] != 'l' && bytes[0] != 'L')
-		return false;
-	if (bytes[1] != '\0')
+	if (!is_l_key(message))
 		return false;
 
 	int32 modifiers = 0;
@@ -62,7 +74,7 @@ LockScreenFilter::Filter(BMessage* message, BList* _list)
 
 	switch (message->what) {
 		case B_KEY_UP:
-			if (is_lock_chord(message))
+			if (is_l_key(message))
 				fDown = false;
 			break;
 		case B_KEY_DOWN:

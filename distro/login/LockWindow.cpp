@@ -9,7 +9,6 @@
 
 #include <Button.h>
 #include <Font.h>
-#include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <Screen.h>
 #include <StringView.h>
@@ -54,15 +53,7 @@ LockView::LockView(const char* name)
 	fRebootButton(NULL),
 	fHaltButton(NULL)
 {
-	BScreen screen;
-	SetViewColor(screen.DesktopColor());
-
-	BStringView* title = new BStringView("title", "Locked");
-	BFont titleFont(be_bold_font);
-	titleFont.SetSize(be_plain_font->Size() * 1.6f);
-	title->SetFont(&titleFont);
-	title->SetAlignment(B_ALIGN_CENTER);
-	title->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 
 	fNameView = new BStringView("name", name != NULL ? name : "");
 	BFont nameFont(be_bold_font);
@@ -93,26 +84,16 @@ LockView::LockView(const char* name)
 	fHaltButton = new BButton("halt", "Shut down",
 		new BMessage(kHaltAction));
 
-	BGroupView* card = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
-	card->SetName("card");
-	BLayoutBuilder::Group<>(card)
-		.Add(title)
+	SetExplicitMinSize(BSize(280, B_SIZE_UNSET));
+	SetExplicitMaxSize(BSize(320, B_SIZE_UNSET));
+
+	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
+		.SetInsets(B_USE_WINDOW_INSETS)
 		.Add(fNameView)
 		.Add(hint)
 		.Add(fPasswordControl)
 		.Add(fUnlockButton)
-		.Add(fInfoView);
-	card->SetExplicitMaxSize(BSize(280, B_SIZE_UNSET));
-
-	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
-		.SetInsets(B_USE_WINDOW_INSETS)
-		.AddGlue()
-		.AddGroup(B_HORIZONTAL)
-			.AddGlue()
-			.Add(card)
-			.AddGlue()
-		.End()
-		.AddGlue()
+		.Add(fInfoView)
 		.AddGroup(B_HORIZONTAL)
 			.Add(fClockView)
 			.AddGlue()
@@ -200,23 +181,75 @@ LockView::_EnablePassword(bool enable)
 }
 
 
-LockWindow::LockWindow(BRect frame, const char* name)
+class LockCover : public BWindow {
+public:
+							LockCover(BRect frame);
+	virtual	bool			QuitRequested();
+	virtual	void			ScreenChanged(BRect frame, color_space mode);
+};
+
+
+LockCover::LockCover(BRect frame)
 	:
-	BWindow(frame, "Locked", B_NO_BORDER_WINDOW_LOOK,
-		B_MODAL_ALL_WINDOW_FEEL,
+	BWindow(frame, "Lock cover", B_NO_BORDER_WINDOW_LOOK,
+		B_FLOATING_ALL_WINDOW_FEEL,
 		B_NOT_MOVABLE | B_NOT_CLOSABLE | B_NOT_ZOOMABLE
 			| B_NOT_MINIMIZABLE | B_NOT_RESIZABLE
 			| B_ASYNCHRONOUS_CONTROLS,
 		B_ALL_WORKSPACES)
 {
+	BView* view = new BView(Bounds(), "cover", B_FOLLOW_ALL, 0);
+	BScreen screen;
+	view->SetViewColor(screen.DesktopColor());
+	AddChild(view);
+}
+
+
+bool
+LockCover::QuitRequested()
+{
+	return false;
+}
+
+
+void
+LockCover::ScreenChanged(BRect frame, color_space mode)
+{
+	BWindow::ScreenChanged(frame, mode);
+	MoveTo(frame.LeftTop());
+	ResizeTo(frame.Width(), frame.Height());
+}
+
+
+LockWindow::LockWindow(const char* name)
+	:
+	BWindow(BRect(0, 0, 360, 240), "Locked", B_TITLED_WINDOW_LOOK,
+		B_MODAL_ALL_WINDOW_FEEL,
+		B_NOT_CLOSABLE | B_NOT_ZOOMABLE | B_NOT_MINIMIZABLE
+			| B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS
+			| B_ASYNCHRONOUS_CONTROLS,
+		B_ALL_WORKSPACES),
+	fCover(NULL)
+{
+	BScreen screen;
+	fCover = new LockCover(screen.Frame());
+	fCover->Show();
+
 	BLayoutBuilder::Group<>(this, B_VERTICAL, 0)
 		.Add(new LockView(name));
 	SetPulseRate(1000000LL);
+	CenterOnScreen();
 }
 
 
 LockWindow::~LockWindow()
 {
+	if (fCover == NULL)
+		return;
+	BWindow* cover = fCover;
+	fCover = NULL;
+	if (cover->Lock())
+		cover->Quit();
 }
 
 
@@ -231,6 +264,5 @@ void
 LockWindow::ScreenChanged(BRect frame, color_space mode)
 {
 	BWindow::ScreenChanged(frame, mode);
-	MoveTo(frame.LeftTop());
-	ResizeTo(frame.Width(), frame.Height());
+	CenterOnScreen();
 }

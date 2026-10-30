@@ -313,8 +313,7 @@ LoginApp::Lock()
 	// Walked away: a preference grant must not stay open behind the lock.
 	clear_admin_grants();
 	r5_session_log("lock %s", name.String());
-	BScreen screen;
-	fLockWindow = new LockWindow(screen.Frame(), name.String());
+	fLockWindow = new LockWindow(name.String());
 	fLockWindow->Show();
 }
 
