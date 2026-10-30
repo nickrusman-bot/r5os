@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Boot loader no longer waits forever for a missing CPU
+
+The BIOS boot loader’s `smp_boot_other_cpus()` waited, with no timeout, until the next CPU’s trampoline cleared a stack word. On this VirtualBox VM that wait often never finished, so the kernel never started and the splash icons stayed gray. Delivery-status waits had the same problem. Each CPU now gets three attempts. A delivery bit that stays set is reported and the startup sequence continues. If a CPU still does not answer within about a second, the loader sets `num_cpus` to the CPUs that did start and enters the kernel. Later CPUs are not started, so the kernel does not wait on a hole in the CPU list. The waits use a bounded `pause` loop. They do not call `spin()`, because that BIOS wait can fail to return. The source copy is `distro/boot/bios_ia32/smp.cpp`, installed by `scripts/apply-kernel-bugs.py`.
+
+Jam AMD64 2026-10-30 13:16 Europe/Amsterdam: `jam_exit=0`. Cold start of that image (`generated/r5-os-smpfix.vdi`, not the daily VDI) at 13:18 Europe/Amsterdam: serial shows `smp: booting 1 other cpu`, then the kernel, `CPU 1`, and `scheduler_init: found 2 logical cpus`. The same boot reached the first-login script and then the boot loader started again (`vesa_uninit`). A second pass in that same run again entered the kernel with CPU 1. No `did not start` line, so the give-up path was not hit. The screen was not watched. The VM was put back on `generated/r5-os.vdi`, which still has the old loader. COM1 is the pipe again.
+
 ### Lock screen (build 10013)
 
 Deskbar → Lock screen covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.

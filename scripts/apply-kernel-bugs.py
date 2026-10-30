@@ -167,7 +167,23 @@ def patch_tsc_div0() -> None:
     )
 
 
+def install_smp_boot() -> None:
+    src = pathlib.Path(__file__).resolve().parents[1] / "distro/boot/bios_ia32/smp.cpp"
+    dst = HAIKU / "src/system/boot/platform/bios_ia32/smp.cpp"
+    if not src.is_file():
+        raise SystemExit(f"missing {src}")
+    if not dst.parent.is_dir():
+        raise SystemExit(f"missing {dst.parent}")
+    data = src.read_bytes().replace(b"\r\n", b"\n")
+    if dst.is_file() and dst.read_bytes().replace(b"\r\n", b"\n") == data:
+        print(f"already {dst.name} (smp boot timeout)")
+        return
+    dst.write_bytes(data)
+    print(f"copied {dst} (smp boot timeout)")
+
+
 def main() -> int:
+    install_smp_boot()
     patch_tsc_div0()
     return 0
 
