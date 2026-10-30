@@ -2,9 +2,9 @@
 
 ### Lock screen (build 10013)
 
-Ctrl+Alt+L, or Deskbar → Lock screen, covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.
+Deskbar → Lock screen covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.
 
-The input filter is `r5_lock`. A menu shortcut was not set: Deskbar shortcuts always add the command key.
+A keyboard shortcut was tried and then dropped. Ctrl+Shift+L is taken by Windows before VirtualBox sees it. Ctrl+Alt+L did not arrive either, including from the VirtualBox soft keyboard. The `r5_lock` input filter is no longer built. The shortcut is [#72](https://github.com/nickrusman-bot/r5os/issues/72). A menu shortcut was not set: Deskbar shortcuts always add the command key.
 
 Jam AMD64 2026-10-30 09:33 Europe/Amsterdam: `jam_exit=0` (Login, Deskbar, `r5_lock`, image).
 
@@ -14,7 +14,9 @@ Jam AMD64 2026-10-30 09:43 Europe/Amsterdam: `jam_exit=0` (Login, `r5_lock`, ima
 
 VBox 2026-10-30 09:45 Europe/Amsterdam (guest 08:44, UTC): the title tab is right. Ctrl+Shift+L still did nothing. On Windows that chord switches the keyboard layout before VirtualBox sees it. The filter now also accepts Ctrl+Alt+L (Alt is the Haiku command key). Ctrl+Shift+L stays for a machine that is not behind the Windows shortcut.
 
-Jam AMD64 2026-10-30 09:54 Europe/Amsterdam: `jam_exit=0` (the `r5_lock` filter was rebuilt on its own, then the image). Not yet seen after the Ctrl+Alt+L change.
+Jam AMD64 2026-10-30 09:54 Europe/Amsterdam: `jam_exit=0` (the `r5_lock` filter was rebuilt on its own, then the image).
+
+VBox 2026-10-30 09:58 Europe/Amsterdam: Ctrl+Alt+L still did nothing, including from the VirtualBox soft keyboard. The chord is out of the source. Lock screen stays the leaf menu item. `apply-login.py` no longer builds `r5_lock`. Not jammed or booted after that drop. The image from 09:54 Europe/Amsterdam still contains the filter; it does not lock the screen because the chord never arrives.
 
 ### Machine settings and account checks (build 10012)
 

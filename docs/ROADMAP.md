@@ -8,7 +8,7 @@ R5OS modernizes a Haiku-based desktop without waiting on upstream schedules. Com
 
 Order is impact, not ticket number.
 
-1. **Multi-user** — real accounts, login/logout, per-user settings. Plan: `docs/MULTIUSER.md`. Remaining work: [#63](https://github.com/nickrusman-bot/r5os/issues/63) (lock screen [#64](https://github.com/nickrusman-bot/r5os/issues/64) is build 10013, not yet seen; next open product item is guest [#65](https://github.com/nickrusman-bot/r5os/issues/65)). Do not skip isolation or treat a list of names as “done”.
+1. **Multi-user** — real accounts, login/logout, per-user settings. Plan: `docs/MULTIUSER.md`. Remaining work: [#63](https://github.com/nickrusman-bot/r5os/issues/63) (lock screen [#64](https://github.com/nickrusman-bot/r5os/issues/64) is build 10013, seen in VBox 2026-10-30; the shortcut is [#72](https://github.com/nickrusman-bot/r5os/issues/72); next open product item is guest [#65](https://github.com/nickrusman-bot/r5os/issues/65)). Do not skip isolation or treat a list of names as “done”.
 2. **Hardware on the Ryzen 5 5625U** — Wi-Fi, GPU, backlight, sleep/resume, HiDPI without breaking layout.
 3. **Browser** — a current WebKit/Qt browser in the image. WebPositive is the weak daily app.
 4. **Network** — remaining items after Wi-Fi join/remember/tray:

@@ -30,7 +30,7 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
   Live lijst: GitHub [#63](https://github.com/nickrusman-bot/r5os/issues/63).
 
   **Nu**
-  1. Lock screen: [#64](https://github.com/nickrusman-bot/r5os/issues/64). Build 10013: Ctrl+Alt+L of het bladmenu dekt de sessie af. Ctrl+Shift+L komt in VirtualBox op Windows niet aan (toetsenbordwissel). Apps blijven. Unlock is het wachtwoord van de aangemelde persoon. Nog niet gezien in VBox.
+  1. Lock screen: [#64](https://github.com/nickrusman-bot/r5os/issues/64). Build 10013, bladmenu, gezien 2026-10-30 09:45 Europe/Amsterdam (titel-tab). Sneltoets is [#72](https://github.com/nickrusman-bot/r5os/issues/72).
   2. Guest + Public/Shared: [#65](https://github.com/nickrusman-bot/r5os/issues/65).
 
   **Later / niet tijdens lock screen**

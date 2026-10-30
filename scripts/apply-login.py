@@ -63,13 +63,6 @@ def copy_sources() -> None:
         (dest / name).touch()
         print(f"copied {name} -> {dest}")
 
-    filt = HAIKU / "src" / "add-ons" / "input_server" / "filters" / "r5_lock"
-    filt.mkdir(parents=True, exist_ok=True)
-    for name in ("LockScreenFilter.cpp", "LockScreenFilter.h", "Jamfile"):
-        shutil.copy2(SRC / "filter" / name, filt / name)
-        (filt / name).touch()
-        print(f"copied {name} -> {filt}")
-
 
 def patch_launch() -> None:
     replace_once(
@@ -352,13 +345,14 @@ def patch_deskbar() -> None:
         "	BString logoutLabel(B_TRANSLATE(\"Log out\"));\n",
         "Deskbar Lock screen item",
     )
-    replace_once(
-        HAIKU / "src" / "add-ons" / "input_server" / "filters" / "Jamfile",
-        "SubInclude HAIKU_TOP src add-ons input_server filters padblocker ;\n",
-        "SubInclude HAIKU_TOP src add-ons input_server filters padblocker ;\n"
-        "SubInclude HAIKU_TOP src add-ons input_server filters r5_lock ;\n",
-        "r5_lock input filter",
-    )
+    jam = HAIKU / "src" / "add-ons" / "input_server" / "filters" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src add-ons input_server filters r5_lock ;\n"
+    if line not in text:
+        print("already Jamfile (no r5_lock)")
+    else:
+        jam.write_text(text.replace(line, ""), encoding="utf-8")
+        print("patched Jamfile (drop r5_lock)")
 
 
 def patch_installer() -> None:

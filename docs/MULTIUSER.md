@@ -25,7 +25,7 @@ Session home must come from `passwd` + `find_directory`, not copied path strings
 
 ### Login and sessions (later)
 
-Reuse `src/apps/login`. One graphical session at a time. Logout must tear down Tracker/Deskbar/user jobs (`data/launch/user`) so the next login does not inherit processes or `~/`. Remaining product work is GitHub [#63](https://github.com/nickrusman-bot/r5os/issues/63): lock screen [#64](https://github.com/nickrusman-bot/r5os/issues/64), then guest/Public [#65](https://github.com/nickrusman-bot/r5os/issues/65).
+Reuse `src/apps/login`. One graphical session at a time. Logout must tear down Tracker/Deskbar/user jobs (`data/launch/user`) so the next login does not inherit processes or `~/`. Remaining product work is GitHub [#63](https://github.com/nickrusman-bot/r5os/issues/63): lock screen [#64](https://github.com/nickrusman-bot/r5os/issues/64) is the leaf menu (build 10013), then guest/Public [#65](https://github.com/nickrusman-bot/r5os/issues/65).
 
 Layout target for that screen: Windows 11-like arrangement (centered person, name, password under it, power at the bottom). Haiku widgets, not a Windows chrome clone.
 
@@ -151,7 +151,7 @@ Do not treat Haiku `hrev` as the product version.
 6. **Settings audit:** desktop prefs plus bundled apps. MidiPlayer, Joysticks, and PoorMan use `find_directory` via native copies in `distro/user-paths` (apply copies files). Preflet split accepted 2026-10-29: personal vs machine (Network/Screen/Time).
 7. **First administrator off uid 0** (build 10007). Runtime `passwd` + `chown`; Tracker/Deskbar via `/system/apps/r5-desktop` (`load_image`, then the helper exits). Not launch wraps. Not `StartSession`.
 8. **Session follows Sign in** (build 10008). The password that worked is the desktop uid and home. Not `BLaunchRoster::StartSession`. One screen.
-9. Lock screen ([#64](https://github.com/nickrusman-bot/r5os/issues/64), build 10013): Ctrl+Alt+L or the leaf menu. Ctrl+Shift+L does not arrive in a VirtualBox guest on Windows. Same session, no `StartSession`. Unlock is that person's password. Log out on the lock screen returns to Sign in. Not yet seen in VBox. Then guest/Public ([#65](https://github.com/nickrusman-bot/r5os/issues/65)). Tracker: [#63](https://github.com/nickrusman-bot/r5os/issues/63).
+9. Lock screen ([#64](https://github.com/nickrusman-bot/r5os/issues/64), build 10013): leaf menu. Same session, no `StartSession`. Unlock is that person's password. Log out on the lock screen returns to Sign in. VBox 2026-10-30 09:45 Europe/Amsterdam: title tab confirmed. A keyboard shortcut is [#72](https://github.com/nickrusman-bot/r5os/issues/72). Then guest/Public ([#65](https://github.com/nickrusman-bot/r5os/issues/65)). Tracker: [#63](https://github.com/nickrusman-bot/r5os/issues/63).
 10. Absorb leftover kernel/UI string overlays into native source ([#70](https://github.com/nickrusman-bot/r5os/issues/70)); do not add new ones.
 
 ## Tests for this step
