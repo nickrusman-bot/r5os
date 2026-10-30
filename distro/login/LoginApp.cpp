@@ -9,6 +9,7 @@
 #include "AccountAdmin.h"
 #include "DesktopWindow.h"
 #include "HomeLock.h"
+#include "LockWindow.h"
 #include "LoginWindow.h"
 #include "SessionLog.h"
 
@@ -104,6 +105,7 @@ LoginApp::LoginApp()
 	BApplication(kLoginAppSig),
 	fDesktopWindow(NULL),
 	fLoginWindow(NULL),
+	fLockWindow(NULL),
 	fEditShelfMode(false)
 {
 }
@@ -166,6 +168,12 @@ LoginApp::MessageReceived(BMessage* message)
 			break;
 		case kLogoutAction:
 			Logout();
+			break;
+		case kLockAction:
+			Lock();
+			break;
+		case kUnlockAction:
+			Unlock(message);
 			break;
 		case kRebootAction:
 			reboot = true;
@@ -288,11 +296,70 @@ LoginApp::HandleAdmin(BMessage* message)
 
 
 void
+LoginApp::Lock()
+{
+	BString name;
+	if (signed_in_name(name) != B_OK)
+		return;
+
+	if (fLockWindow != NULL) {
+		if (fLockWindow->Lock()) {
+			fLockWindow->Activate(true);
+			fLockWindow->Unlock();
+		}
+		return;
+	}
+
+	// Walked away: a preference grant must not stay open behind the lock.
+	clear_admin_grants();
+	r5_session_log("lock %s", name.String());
+	fLockWindow = new LockWindow(name.String());
+	fLockWindow->Show();
+}
+
+
+void
+LoginApp::Unlock(BMessage* message)
+{
+	BString name;
+	const char* password = message->GetString("password");
+	status_t status = signed_in_name(name);
+	if (status == B_OK)
+		status = ValidateLogin(name.String(), password);
+
+	BMessage reply(status == B_OK ? kLoginOk : kLoginBad);
+	if (status != B_OK)
+		reply.AddString("text", "That password is not right.");
+	message->SendReply(&reply);
+	if (status != B_OK)
+		return;
+
+	// Same session. Do not launch Tracker again and do not clear the
+	// session file.
+	r5_session_log("unlock %s", name.String());
+	_CloseLock();
+}
+
+
+void
+LoginApp::_CloseLock()
+{
+	if (fLockWindow == NULL)
+		return;
+	BWindow* window = fLockWindow;
+	fLockWindow = NULL;
+	if (window->Lock())
+		window->Quit();
+}
+
+
+void
 LoginApp::Logout()
 {
 	// Do not call the launch daemon. Stop/SetEnabled/GetJobs wait for a
 	// reply; launch_daemon user is the team in the crash dialog, and while
 	// it sits in the debugger that reply never comes.
+	_CloseLock();
 	r5_session_log("logout");
 	clear_admin_grants();
 	clear_desktop_session();

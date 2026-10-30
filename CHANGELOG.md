@@ -1,12 +1,32 @@
 # R5OS changelog (lokaal)
 
+### Lock screen (build 10013)
+
+Deskbar → Lock screen covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.
+
+A keyboard shortcut was tried and then dropped. Ctrl+Shift+L is taken by Windows before VirtualBox sees it. Ctrl+Alt+L did not arrive either, including from the VirtualBox soft keyboard. The `r5_lock` input filter is no longer built. The shortcut is [#72](https://github.com/nickrusman-bot/r5os/issues/72). A menu shortcut was not set: Deskbar shortcuts always add the command key.
+
+Jam AMD64 2026-10-30 09:33 Europe/Amsterdam: `jam_exit=0` (Login, Deskbar, `r5_lock`, image).
+
+VBox 2026-10-30 09:37 Europe/Amsterdam (guest 08:34, UTC): the cover, password, Unlock, Log out, Restart, and Shut down were on screen. The panel had no title tab. Ctrl+Shift+L did nothing. Control turns the `bytes` field into a control character, so the filter never saw the letter L. It now uses `raw_char`. The panel is a titled window, same look as Sign in, on the blue cover.
+
+Jam AMD64 2026-10-30 09:43 Europe/Amsterdam: `jam_exit=0` (Login, `r5_lock`, image).
+
+VBox 2026-10-30 09:45 Europe/Amsterdam (guest 08:44, UTC): the title tab is right. Ctrl+Shift+L still did nothing. On Windows that chord switches the keyboard layout before VirtualBox sees it. The filter now also accepts Ctrl+Alt+L (Alt is the Haiku command key). Ctrl+Shift+L stays for a machine that is not behind the Windows shortcut.
+
+Jam AMD64 2026-10-30 09:54 Europe/Amsterdam: `jam_exit=0` (the `r5_lock` filter was rebuilt on its own, then the image).
+
+VBox 2026-10-30 09:58 Europe/Amsterdam: Ctrl+Alt+L still did nothing, including from the VirtualBox soft keyboard. The chord is out of the source. Lock screen stays the leaf menu item. `apply-login.py` no longer builds `r5_lock`. Not jammed or booted after that drop. The image from 09:54 Europe/Amsterdam still contains the filter; it does not lock the screen because the chord never arrives.
+
 ### Machine settings and account checks (build 10012)
 
 Printers, Repositories, and VirtualMemory use the same bottom-right lock as Network. Printer queues resolve to `/boot/system/settings/printers` for every account (`B_USER_PRINTERS_DIRECTORY`). An existing queue folder under `/boot/home/config/settings/printers` is copied once when the system folder is empty. Swap settings are written to `/boot/system/settings/kernel/drivers/virtual_memory`. The kernel reads that file and, if it is missing, the old per-account file. The repository list file moves to system settings. `package-repositories` is group `admin`, and world-writable only while a grant is open, same as network settings. Window positions for Printers and VirtualMemory stay in the signed-in account's settings.
 
 A new account requires a password. Login refuses to delete the name in the session file (Login itself is uid 0, so `getuid()` did not mean the person at the screen). If `rm` of `/boot/home/users/<name>` fails, the reply says the account is gone and the files are not. Add, Disable, and Delete already send `error` 0 on success; that fix is in this image together with the checks above.
 
-Jam AMD64 2026-10-29 23:48 Europe/Amsterdam: `jam_exit=0` (Login, Users, Printers, Repositories, VirtualMemory, kernel, libroot, image). Not yet seen in VBox.
+Jam AMD64 2026-10-29 23:48 Europe/Amsterdam: `jam_exit=0` (Login, Users, Printers, Repositories, VirtualMemory, kernel, libroot, image).
+
+VBox 2026-10-30 Europe/Amsterdam: build 10012 confirmed on the running image.
 
 Bijhouden in deze overlay-repo. Geen Haiku-hrev. Nieuwste eerst.
 

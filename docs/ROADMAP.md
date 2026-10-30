@@ -8,7 +8,7 @@ R5OS modernizes a Haiku-based desktop without waiting on upstream schedules. Com
 
 Order is impact, not ticket number.
 
-1. **Multi-user** — real accounts, login/logout, per-user settings. Plan: `docs/MULTIUSER.md`. Do not skip isolation or treat a list of names as “done”.
+1. **Multi-user** — real accounts, login/logout, per-user settings. Plan: `docs/MULTIUSER.md`. Remaining work: [#63](https://github.com/nickrusman-bot/r5os/issues/63) (lock screen [#64](https://github.com/nickrusman-bot/r5os/issues/64) is build 10013, seen in VBox 2026-10-30; the shortcut is [#72](https://github.com/nickrusman-bot/r5os/issues/72); next open product item is guest [#65](https://github.com/nickrusman-bot/r5os/issues/65)). Do not skip isolation or treat a list of names as “done”.
 2. **Hardware on the Ryzen 5 5625U** — Wi-Fi, GPU, backlight, sleep/resume, HiDPI without breaking layout.
 3. **Browser** — a current WebKit/Qt browser in the image. WebPositive is the weak daily app.
 4. **Network** — remaining items after Wi-Fi join/remember/tray:
@@ -20,7 +20,7 @@ Order is impact, not ticket number.
    6. WireGuard
    7. LAN tests: VirtualBox bridged (no Guest Additions) or QEMU bridged/tap (usernet is not a LAN)
 5. **Dark mode** through system apps and Deskbar (Haiku #18970).
-6. **Polish** — notifications, screenshot, emoji/fonts, image clipboard.
+6. **Polish** — notifications, screenshot, emoji/fonts, image clipboard. Rounder windows and Deskbar: `docs/LOOK.md` (not while multi-user is open).
 
 Zeroconf, AirPrint, AirPlay 1, and the NetworkStatus tray are started; they are not “done” until hardware/LAN tests exist.
 
@@ -39,7 +39,7 @@ Do not start these during an unrelated bugfix.
 
 ## Graphics and media
 
-Investigate GPU acceleration, compositing, and Vulkan **without** destabilizing `app_server`. Improve audio, streaming, and device interop. Incremental replacements only.
+Investigate GPU acceleration, compositing, and Vulkan **without** destabilizing `app_server`. Improve audio, streaming, and device interop. Incremental replacements only. Mixxx is a side quest ([#55](https://github.com/nickrusman-bot/r5os/issues/55), `docs/MIXXX.md`), not an image app and not while multi-user is open.
 
 ## Architectures
 

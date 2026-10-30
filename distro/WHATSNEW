@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10013 - Lock screen
+Lock screen in the leaf menu covers the screen. The lock window has the same title tab as Sign in. Your apps stay open. Type your own password to continue. Log out on that screen returns to Sign in. A preference window that was unlocked locks again.
+
 R5OS 2026.1-dev Build 10012 - Shared machine settings
 Printers, Repositories, and VirtualMemory stay in Preferences for everyone. An administrator can change them. Another account uses the lock at the bottom right. Printer queues and swap belong to the computer. A new account needs a password. The account that is signed in cannot be removed. Adding an account no longer shows an error after it has succeeded.
 
