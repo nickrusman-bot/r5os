@@ -28,7 +28,8 @@ is_listed_account(const struct passwd* pwd)
 		return false;
 	if (strcmp(pwd->pw_name, "sshd") == 0
 		|| strcmp(pwd->pw_name, "ftp") == 0
-		|| strcmp(pwd->pw_name, "nobody") == 0)
+		|| strcmp(pwd->pw_name, "nobody") == 0
+		|| strcmp(pwd->pw_name, "root") == 0)
 		return false;
 	if (pwd->pw_shell != NULL
 		&& (strcmp(pwd->pw_shell, "false") == 0
