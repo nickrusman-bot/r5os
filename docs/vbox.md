@@ -28,6 +28,8 @@ IDE syslog `invalid target lun 2`–`7` / `target device not present` is the emp
 
 Use this for IPv6 SLAAC, mDNS, AirPlay speakers, and SMB on the home LAN. QEMU usernet cannot.
 
+A cold start with two CPUs can sit on the boot splash with every icon still gray. 2026-10-30 12:51 Europe/Amsterdam, normal VDI, no reset, two minutes: serial stopped at `kernel entry at …`, the boot loader line just before `smp_boot_other_cpus()`. That wait used to have no timeout. The loader now retries each CPU three times and, if it still does not answer, enters the kernel with the CPUs that started. That change is in `distro/boot/bios_ia32/smp.cpp`. Jam and a cold start of the new image on 2026-10-30 13:18 Europe/Amsterdam entered the kernel with both CPUs. The daily VDI was not replaced, so it still has the old loader. The rocket icon is a later stop, after the kernel is already running.
+
 ## USB stick (Ryzen 5 5625U)
 
 `r5-os.image` is a raw disk. In **Rufus**, choose the image, **DD mode**, pick the stick. The stick is wiped. Size must be ≥ the image (~1.2 GB). Boot the 5625U from USB.
