@@ -1,5 +1,5 @@
 /*
- * Ctrl+Shift+L asks Login to cover the screen. The session stays.
+ * Ctrl+Alt+L asks Login to cover the screen. The session stays.
  */
 #ifndef R5_LOCK_SCREEN_FILTER_H
 #define R5_LOCK_SCREEN_FILTER_H

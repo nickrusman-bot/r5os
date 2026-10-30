@@ -1,8 +1,9 @@
 /*
- * Ctrl+Shift+L asks Login to cover the screen. The session stays.
+ * Ctrl+Alt+L asks Login to cover the screen. The session stays.
  *
- * Ctrl+Alt is already "minimize all" in the stock filter, so this chord
- * does not use Alt.
+ * Ctrl+Shift is the Windows shortcut that switches keyboard layout, so a
+ * VirtualBox guest on Windows never sees it. Ctrl+Alt+L does arrive.
+ * Ctrl+Shift+L is still accepted for a machine that is not behind that shortcut.
  */
 
 
@@ -63,7 +64,9 @@ is_lock_chord(BMessage* message)
 
 	int32 held = modifiers & (B_COMMAND_KEY | B_CONTROL_KEY | B_OPTION_KEY
 		| B_MENU_KEY | B_SHIFT_KEY);
-	return held == (B_CONTROL_KEY | B_SHIFT_KEY);
+	// Alt is the command key on the Haiku keymap.
+	return held == (B_CONTROL_KEY | B_COMMAND_KEY)
+		|| held == (B_CONTROL_KEY | B_SHIFT_KEY);
 }
 
 

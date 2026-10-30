@@ -2,15 +2,19 @@
 
 ### Lock screen (build 10013)
 
-Ctrl+Shift+L, or Deskbar → Lock screen, covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.
+Ctrl+Alt+L, or Deskbar → Lock screen, covers the session. Tracker and Deskbar stay running. Login does not call `StartSession` and does not clear the session file. Unlock checks the password of the name in the session file. Log out on that screen is the existing log-out path (apps quit, Sign in returns). An open preference grant is cleared, so those windows lock again while the screen is locked.
 
-Ctrl+Alt is already “minimize all”, so the chord is Ctrl+Shift+L. The input filter is `r5_lock`. A menu shortcut was not set: Deskbar shortcuts always add the command key, and command+control is that minimize-all filter.
+The input filter is `r5_lock`. A menu shortcut was not set: Deskbar shortcuts always add the command key.
 
 Jam AMD64 2026-10-30 09:33 Europe/Amsterdam: `jam_exit=0` (Login, Deskbar, `r5_lock`, image).
 
 VBox 2026-10-30 09:37 Europe/Amsterdam (guest 08:34, UTC): the cover, password, Unlock, Log out, Restart, and Shut down were on screen. The panel had no title tab. Ctrl+Shift+L did nothing. Control turns the `bytes` field into a control character, so the filter never saw the letter L. It now uses `raw_char`. The panel is a titled window, same look as Sign in, on the blue cover.
 
-Jam AMD64 2026-10-30 09:43 Europe/Amsterdam: `jam_exit=0` (Login, `r5_lock`, image). Not yet seen after that fix.
+Jam AMD64 2026-10-30 09:43 Europe/Amsterdam: `jam_exit=0` (Login, `r5_lock`, image).
+
+VBox 2026-10-30 09:45 Europe/Amsterdam (guest 08:44, UTC): the title tab is right. Ctrl+Shift+L still did nothing. On Windows that chord switches the keyboard layout before VirtualBox sees it. The filter now also accepts Ctrl+Alt+L (Alt is the Haiku command key). Ctrl+Shift+L stays for a machine that is not behind the Windows shortcut.
+
+Jam AMD64 2026-10-30 09:54 Europe/Amsterdam: `jam_exit=0` (the `r5_lock` filter was rebuilt on its own, then the image). Not yet seen after the Ctrl+Alt+L change.
 
 ### Machine settings and account checks (build 10012)
 

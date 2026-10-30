@@ -62,7 +62,7 @@ LockView::LockView(const char* name)
 	fNameView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
 	BStringView* hint = new BStringView("hint",
-		"Ctrl+Shift+L locks. Your apps stay open.");
+		"Ctrl+Alt+L locks. Your apps stay open.");
 	hint->SetAlignment(B_ALIGN_CENTER);
 	hint->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
