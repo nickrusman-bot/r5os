@@ -20,4 +20,13 @@ rm -f "$HAIKU/generated.x86_64/build/last-built-revision"
 
 cd "$HAIKU/generated.x86_64"
 jam -q @r5-raw
-echo jam_exit=$?
+jam_exit=$?
+echo jam_exit=$jam_exit
+if [[ "$jam_exit" -eq 0 ]]; then
+	if ! "$WIN/scripts/install-mesa-packages.sh"; then
+		echo mesa_exit=1
+		exit 1
+	fi
+	echo mesa_exit=0
+fi
+exit "$jam_exit"

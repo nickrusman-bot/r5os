@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10018 - OpenGL
+OpenGL drawing uses Mesa 25. A demo such as GLTeapot still draws on the processor, not on the graphics chip. The older Mesa 22 package is no longer on this disk.
+
 R5OS 2026.1-dev Build 10017 - License links
 The Licenses tab uses the same green headings as What's new. It links to the license pages, and lists the same components as Credits, including their license text.
 

@@ -11,6 +11,11 @@ Classic AirPlay audio follows Shairport by James Laird and Mike Brady, under the
 https://github.com/mikebrady/shairport-sync
 https://github.com/kokke/tiny-AES-c
 
+OpenGL
+OpenGL drawing uses Mesa 25 on the processor. The OpenGL library is libglvnd. Mesa and libglvnd are MIT. The Vulkan loader and the LLVM library it needs are Apache-2.0. This is not the graphics chip.
+https://www.mesa3d.org
+https://gitlab.freedesktop.org/glvnd/libglvnd
+
 VirtualBox
 When this system is installed for VirtualBox, the guest software is GNU GPL version 3 only. The license and the matching source are stored with the other license texts. The text clipboard over the serial port is separate from that guest software.
 https://www.virtualbox.org
