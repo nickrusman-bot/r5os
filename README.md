@@ -6,7 +6,7 @@ This is **not** the official Haiku distribution and **not** BeOS. See `distro/DI
 
 R5OS is **multi-license**, not an MIT-only tree. Haiku files keep their original license and copyright. New files that R5OS owns default to GPL-3.0-or-later when R5OS can license that whole file. Policy: `docs/LICENSING.md`. Identified components: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`. The Haiku tree has not been audited file by file. About does not yet have a Credits & Licenses view. VirtualBox 7.2.22 Guest Additions are GPL-3.0-only; they are not in this git tree and not in the image. Their kernel modules stay out until how far GPL-3.0 reaches into the kernel is reviewed.
 
-Current tree: **R5OS 2026.1-dev Build 10013** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
+Current tree: **R5OS 2026.1-dev Build 10018** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string and a What’s new tab (`distro/WHATSNEW`).
 
 ## What is in the image now
 

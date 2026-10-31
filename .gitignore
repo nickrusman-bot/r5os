@@ -8,6 +8,9 @@
 *.iso
 *.mmc
 *.hpkg
+!distro/packages/
+!distro/packages/**
+!distro/packages/**/*.hpkg
 .DS_Store
 Thumbs.db
 /query.csv
