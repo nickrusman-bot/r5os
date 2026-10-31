@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10014 - VirtualBox guest
+On VirtualBox, the desktop can follow the window size. A shared folder can be mounted when the host offers one. This build includes GNU GPL version 3 code: the VirtualBox guest software. The license and the matching source are stored on this disk with the other license texts.
+
 R5OS 2026.1-dev Build 10013 - Lock screen
 Lock screen in the leaf menu covers the screen. The lock window has the same title tab as Sign in. Your apps stay open. Type your own password to continue. Log out on that screen returns to Sign in. A preference window that was unlocked locks again.
 

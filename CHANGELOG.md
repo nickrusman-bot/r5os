@@ -1,5 +1,23 @@
 # R5OS changelog (lokaal)
 
+### Daily image installs the VirtualBox guest additions
+
+2026-10-31 11:49 Europe/Amsterdam. The daily raw image `generated.x86_64/r5-os.image` was jammed again (`jam -q @r5-raw`, exit 0) after build **10014**. `bfs_shell` on that image lists the guest files and the source. Free space afterwards is 368.0 MB of 1.2 GB. `generated/r5-os.vdi` was not replaced.
+
+At 12:00 the throwaway VM was powered off and its disk was swapped for a fixed VDI of that image (`generated/r5-os-vboxid.vdi`, same UUID as before). The previous throwaway disk is `generated/r5-os-vboxid-before-daily.vdi`. Around 12:04 the user said this boot works. The window resize did not follow. The host share `r5share` was still defined on that VM and was not mounted; this image has no automount job. No panic line was in `generated/vbox-daily.log` through the USB driver. First-boot processing of 129 packages is in that log. Tracker on a share was not tried.
+
+Installed under `/boot/system/non-packaged`:
+
+- `add-ons/kernel/generic/vboxguest` (274024 bytes) and `add-ons/kernel/drivers/dev/misc/vboxguest` (20976 bytes, the device stub built as `vboxdev`)
+- `add-ons/kernel/file_systems/vboxsf` (55256), `add-ons/kernel/drivers/dev/graphics/vboxvideo` (34424), `add-ons/accelerants/vboxvideo.accelerant` (43632)
+- `bin/VBoxService`, `bin/VBoxTray`, `bin/VBoxControl`
+
+`data/licenses/virtualbox/` has the unmodified GNU GPL version 3 (`COPYING`, 35147 bytes), `VirtualBox-7.2.22.tar.bz2` (257289481 bytes, sha256 `440a2b3eeb46e7e992961b70ef24f43e95b3c99fa2ab30aac20b963ef9e91ad7`), `virtualbox-7.2.22-r5os.patch`, the build scripts, and `SOURCE.txt`. The same GPL text is also the packaged `GNU GPL v3` file. About R5OS states that this build includes GNU GPL version 3 code and names that directory. The What's new text for build 10014 is in the About binary. The user launch file in `haiku.hpkg` starts `VBoxService` and `VBoxTray`. It does not mount a share.
+
+The mouse filter is not installed. VirtualBox clipboard mode and drag-and-drop stay off in the product script. The clipboard R5OS starts is still the serial one. The binaries and the tarball are not in git. `scripts/apply-vbox-guest.py` stops if the local build or the tarball is missing.
+
+A first jam in this same run deleted the previous `r5-os.image`. Jam was started without `PWD`, so the image script names stayed relative and dash could not source them. The second jam was a login shell, `PWD` was set, and it wrote the image above. The one shell copy remains the throwaway result from earlier today. Tracker was not opened on a share. QEMU was not used for this image.
+
 ### Throwaway shared folder reads and writes one small file
 
 2026-10-31 10:54 Europe/Amsterdam, headless, throwaway `generated/r5-os-vboxid.vdi`, UART `generated/vbox-sf6.log`. The machine mapping `r5share` is `generated/vbox-share`. A launch job ran `mount -t vboxsf -p r5share /boot/home/vbox-share` after boot. Haiku's `mount` passes the share name with `-p`; a bare extra argument is the device, and this file system rejects a device. Serial shows `vboxsf: connected`, `vboxsf: inited successfully`, and `publish_vnode(): 0`, then an open of `/from-host.txt`. Guest property `R5Sf` is `host=R5OS-SF-HOST` at 09:54:23Z. That matches the 12-byte host file `from-host.txt`. The host directory then also had `from-guest.txt`, 11 bytes: `from-guest` plus the newline from `echo`. No panic line in that log. Tracker was not opened on the share. Unicode names, a large file, unmount, and a host disconnect were not tried. Not the daily image. The binaries are not in git.

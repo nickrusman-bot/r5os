@@ -361,11 +361,57 @@ Depends AboutSystem : r5_whatsnew.txt ;
     )
 
 
+def patch_gpl_credit() -> None:
+    path = ABOUT / "AboutSystem.cpp"
+    replace_once(
+        path,
+        """		"Project.\\n\\n"));
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
+#endif
+	fCreditsView->Insert("Haiku\\n");
+""",
+        """		"Project.\\n\\n"
+		"This build includes GNU GPL version 3 code: VirtualBox Guest "
+		"Additions 7.2.22. The license is GPL version 3 only. The license "
+		"text and the matching source are at "
+		"/boot/system/non-packaged/data/licenses/virtualbox.\\n\\n"));
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
+#endif
+	fCreditsView->Insert("Haiku\\n");
+""",
+        "About GPL paragraph",
+    )
+    replace_once(
+        path,
+        """	// GNU copyrights
+	AddCopyrightEntry("The GNU Project",
+""",
+        """	// VirtualBox guest additions are GPL-3.0-only. kGPLv3 opens the
+	// license text already shipped under data/licenses.
+	AddCopyrightEntry("VirtualBox Guest Additions",
+		B_TRANSLATE("Guest Additions 7.2.22, included in this build. "
+		"The license is the GNU General Public License, version 3, only. "
+		"Some runtime files also offer the CDDL; this build uses the GPL "
+		"version 3 terms. The license text and the matching source, "
+		"including the R5OS build fixes, are at "
+		"/boot/system/non-packaged/data/licenses/virtualbox.\\n"),
+		StringVector(kGPLv3, NULL),
+		StringVector(),
+		"https://www.virtualbox.org/");
+
+	// GNU copyrights
+	AddCopyrightEntry("The GNU Project",
+""",
+        "About VirtualBox GPL entry",
+    )
+
+
 def main() -> int:
     copy_whatsnew()
     patch_rdef()
     patch_jam()
     patch_cpp()
+    patch_gpl_credit()
     return 0
 
 
