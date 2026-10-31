@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10015 - Window size and shared folders
+The disk has more free space. On VirtualBox, the desktop follows the window when you resize it. A folder the host shares shows up on the Desktop as VBox Share. On another computer those stay off.
+
 R5OS 2026.1-dev Build 10014 - VirtualBox guest
 On VirtualBox, the desktop can follow the window size. A shared folder can be mounted when the host offers one. This build includes GNU GPL version 3 code: the VirtualBox guest software. The license and the matching source are stored on this disk with the other license texts.
 
