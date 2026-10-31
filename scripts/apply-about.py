@@ -31,6 +31,10 @@ def copy_whatsnew() -> None:
     src = ROOT / "distro" / "WHATSNEW"
     dst = ABOUT / "r5_whatsnew.txt"
     shutil.copy2(src, dst)
+    licenses = ROOT / "distro" / "about" / "licenses.txt"
+    license_dst = ABOUT / "r5_licenses.txt"
+    shutil.copy2(licenses, license_dst)
+    print(f"copied licenses -> {license_dst}")
     rdef = ABOUT / "AboutSystem.rdef"
     if rdef.is_file():
         rdef.touch()
@@ -52,6 +56,14 @@ def patch_rdef() -> None:
         'resource(3, "r5_whatsnew") \'CSTR\' import "r5_whatsnew.txt";\n',
         'resource(3, "r5_whatsnew") #\'CSTR\' import "r5_whatsnew.txt";\n',
         "whatsnew cstr type",
+        optional=True,
+    )
+    replace_once(
+        ABOUT / "AboutSystem.rdef",
+        'resource(3, "r5_whatsnew") #\'CSTR\' import "r5_whatsnew.txt";\n',
+        'resource(3, "r5_whatsnew") #\'CSTR\' import "r5_whatsnew.txt";\n'
+        'resource(4, "r5_licenses") #\'CSTR\' import "r5_licenses.txt";\n',
+        "licenses resource",
         optional=True,
     )
 
@@ -316,6 +328,103 @@ AboutView::_CreateCreditsView()
         "CreateInfoTabs",
         optional=True,
     )
+    replace_once(
+        path,
+        "			void			_FillWhatsNew();\n",
+        "			void			_FillWhatsNew();\n"
+        "			void			_FillLicenses();\n",
+        "AboutView license method",
+        optional=True,
+    )
+    replace_once(
+        path,
+        "			HyperTextView*	fWhatsNewView;\n"
+        "			BTabView*		fTabView;\n",
+        "			HyperTextView*	fWhatsNewView;\n"
+        "			HyperTextView*	fLicensesView;\n"
+        "			BTabView*		fTabView;\n",
+        "AboutView license member",
+        optional=True,
+    )
+    replace_once(
+        path,
+        "	fWhatsNewView(NULL),\n"
+        "	fTabView(NULL),\n",
+        "	fWhatsNewView(NULL),\n"
+        "	fLicensesView(NULL),\n"
+        "	fTabView(NULL),\n",
+        "AboutView license init",
+        optional=True,
+    )
+    replace_once(
+        path,
+        "	fTabView->AddTab(newsScroller);\n"
+        "	fTabView->TabAt(1)->SetLabel(B_TRANSLATE(\"What's new\"));\n"
+        "	return fTabView;\n",
+        "	fTabView->AddTab(newsScroller);\n"
+        "	fTabView->TabAt(1)->SetLabel(B_TRANSLATE(\"What's new\"));\n"
+        "\n"
+        "	fLicensesView = new HyperTextView(\"licenses\");\n"
+        "	fLicensesView->SetFlags(fLicensesView->Flags() | B_FRAME_EVENTS);\n"
+        "	fLicensesView->SetStylable(true);\n"
+        "	fLicensesView->MakeEditable(false);\n"
+        "	fLicensesView->SetWordWrap(true);\n"
+        "	fLicensesView->SetInsets(5, 5, 5, 5);\n"
+        "	fLicensesView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);\n"
+        "	_FillLicenses();\n"
+        "\n"
+        "	BScrollView* licenseScroller = new BScrollView(\"licenseScroller\",\n"
+        "		fLicensesView, B_WILL_DRAW | B_FRAME_EVENTS, false, true,\n"
+        "		B_PLAIN_BORDER);\n"
+        "	fTabView->AddTab(licenseScroller);\n"
+        "	fTabView->TabAt(2)->SetLabel(B_TRANSLATE(\"Licenses\"));\n"
+        "	return fTabView;\n",
+        "AboutView licenses tab",
+        optional=True,
+    )
+    replace_once(
+        path,
+        "		start = end + 1;\n"
+        "	}\n"
+        "}\n"
+        "\n"
+        "\n"
+        "CropView*\n"
+        "AboutView::_CreateCreditsView()\n",
+        "		start = end + 1;\n"
+        "	}\n"
+        "}\n"
+        "\n"
+        "\n"
+        "void\n"
+        "AboutView::_FillLicenses()\n"
+        "{\n"
+        "	BString text;\n"
+        "	BResources* resources = BApplication::AppResources();\n"
+        "	if (resources != NULL) {\n"
+        "		size_t size = 0;\n"
+        "		const void* data = resources->LoadResource(B_STRING_TYPE,\n"
+        "			\"r5_licenses\", &size);\n"
+        "		if (data != NULL && size > 0)\n"
+        "			text.SetTo(static_cast<const char*>(data), (int32)size);\n"
+        "	}\n"
+        "	if (text.Length() > 0 && text[text.Length() - 1] == '\\0')\n"
+        "		text.Truncate(text.Length() - 1);\n"
+        "	if (text.IsEmpty())\n"
+        "		text = B_TRANSLATE(\"No license notes in this build.\");\n"
+        "\n"
+        "	fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);\n"
+        "	fLicensesView->Insert(text);\n"
+        "	if (text.Length() == 0 || text[text.Length() - 1] != '\\n')\n"
+        "		fLicensesView->Insert(\"\\n\");\n"
+        "}\n"
+        "\n"
+        "\n"
+        "CropView*\n"
+        "AboutView::_CreateCreditsView()\n",
+        "AboutView fill licenses",
+        optional=True,
+    )
 
 
 def patch_jam() -> None:
@@ -326,6 +435,24 @@ def patch_jam() -> None:
         "src apps aboutsystem ] ;\n"
     )
     depend = "Depends AboutSystem : r5_whatsnew.txt ;\n"
+    license_search = (
+        "SEARCH on r5_licenses.txt = [ FDirName $(HAIKU_TOP) "
+        "src apps aboutsystem ] ;\n"
+    )
+    license_depend = "Depends AboutSystem : r5_licenses.txt ;\n"
+    if license_search not in text and "r5_whatsnew.txt" in text:
+        jam.write_text(
+            text.replace(
+                depend,
+                depend + license_search + license_depend,
+                1,
+            ),
+            encoding="utf-8",
+        )
+        print("patched Jamfile (licenses jam depend)")
+        text = jam.read_text(encoding="utf-8")
+    elif license_search in text:
+        print("already Jamfile (licenses jam depend)")
     if search in text:
         print("already Jamfile (whatsnew jam depend)")
         return
@@ -363,13 +490,9 @@ Depends AboutSystem : r5_whatsnew.txt ;
 
 def patch_gpl_credit() -> None:
     path = ABOUT / "AboutSystem.cpp"
+    # License text lives on the Licenses tab. Credits keeps a short name.
     replace_once(
         path,
-        """		"Project.\\n\\n"));
-	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
-#endif
-	fCreditsView->Insert("Haiku\\n");
-""",
         """		"Project.\\n\\n"
 		"This build includes GNU GPL version 3 code: VirtualBox Guest "
 		"Additions 7.2.22. The license is GPL version 3 only. The license "
@@ -379,30 +502,29 @@ def patch_gpl_credit() -> None:
 #endif
 	fCreditsView->Insert("Haiku\\n");
 """,
-        "About GPL paragraph",
+        """		"Project.\\n\\n"));
+	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
+#endif
+	fCreditsView->Insert("Haiku\\n");
+""",
+        "About move GPL paragraph off credits",
+        optional=True,
     )
     replace_once(
         path,
-        """	// GNU copyrights
-	AddCopyrightEntry("The GNU Project",
-""",
-        """	// VirtualBox guest additions are GPL-3.0-only. kGPLv3 opens the
-	// license text already shipped under data/licenses.
-	AddCopyrightEntry("VirtualBox Guest Additions",
+        """	AddCopyrightEntry("VirtualBox Guest Additions",
 		B_TRANSLATE("Guest Additions 7.2.22, included in this build. "
 		"The license is the GNU General Public License, version 3, only. "
 		"Some runtime files also offer the CDDL; this build uses the GPL "
 		"version 3 terms. The license text and the matching source, "
 		"including the R5OS build fixes, are at "
 		"/boot/system/non-packaged/data/licenses/virtualbox.\\n"),
-		StringVector(kGPLv3, NULL),
-		StringVector(),
-		"https://www.virtualbox.org/");
-
-	// GNU copyrights
-	AddCopyrightEntry("The GNU Project",
 """,
-        "About VirtualBox GPL entry",
+        """	AddCopyrightEntry("VirtualBox Guest Additions",
+		B_TRANSLATE("Guest software included with this build.\\n"),
+""",
+        "About shorten VirtualBox credit",
+        optional=True,
     )
 
 

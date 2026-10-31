@@ -1,0 +1,13 @@
+R5OS
+Programs written for R5OS are GPL-3.0-or-later when the whole file is ours. The license text is on this disk with the other license texts.
+
+Haiku
+R5OS is based on Haiku. It is not the Haiku project. Haiku's own copyright and license stay on Haiku's files. Much of Haiku is MIT. The tree is not all MIT. Those files are not relicensed.
+
+AirPlay
+Classic AirPlay audio follows Shairport by James Laird and Mike Brady, under the MIT license. The ALAC decoder is by David Hammerton, MIT. AES is tiny-AES-c, which is Unlicense. RSA uses OpenSSL 3. AirPlay 2 pairing is not included.
+
+VirtualBox
+When this system is installed for VirtualBox, the guest software is GNU GPL version 3 only. The license and the matching source are stored with the other license texts. The text clipboard over the serial port is separate from that guest software.
+
+Credits names the people and the projects. This page is only the licenses.
