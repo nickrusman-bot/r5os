@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### OpenGL apps compile against libglvnd, not Mesa 22
+
+`scripts/pin-mesa-packages.sh` runs before jam. It replaces the HaikuPorts pin `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` with libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel` 25.3.6, Lavapipe, the LLVM 21 runtime, and the Vulkan loader. `mesa_devel` carries the Mesa 25 headers and libglvnd's `libGL.so` (the real file, not a symlink into a Mesa 22 base package). Haiku's `GLView.h` and `GLRenderer.h` from the old devel package are copied unchanged.
+
+The image solver no longer sees Mesa 22. `scripts/pin-mesa-packages.sh` builds `download/r5-haikuports.repo` from the HaikuPorts catalog with those four Mesa 22 packages removed, and `download/r5-opengl.repo` for the R5OS packages (a different vendor, so they cannot share one catalog). `distro/UserBuildConfig` points the image at those files and installs the packages. A solver check with `glu` and `haiku.hpkg` asked for `libglvnd-1.7.0-1`, not Mesa 22. `jam -q @r5-raw` then exited 0 and updated 1230 targets. It extracted `mesa-25.3.6-1` and relinked GLTeapot. `develop/lib/libGL.so.1.0.0` in that tree is 954288 bytes, the libglvnd file. The image check printed `mesa_packages_ok`: libglvnd, Mesa 25, `mesa_devel`, Lavapipe, the LLVM 21 runtime, and the Vulkan loader, and no Mesa 22 package. This image was not booted. No new build number.
+
 ### About on the Mesa image still showed Build 10017
 
 The version line in About was already Build 10018. What's new was still the Build 10017 license text. `scripts/jam-r5-raw.sh` wrote `r5_os_version.h` and did not copy `distro/WHATSNEW`. The What's new resource is rebuilt when `AboutSystem.rdef` is newer than the last resource compile, not when only the text file changes. The script now copies What's new and touches that rdef before jam. No new build number: this is the Build 10018 section that was already in `distro/WHATSNEW`.
