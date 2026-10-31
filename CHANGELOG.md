@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Read AMD P-states and Intel HWP without writing them
+
+2026-10-31 about 16:00 Europe/Amsterdam. The kernel prints a read-only CPU snapshot and publishes it at `/dev/misc/r5_pstate`. Nothing in this change writes an MSR. On AMD and Hygon, if the hardware P-state bit is set, it reads the current P-state and P-state table. Family 17h and 19h use the same 200 MHz × fid / did formula and the same divisor checks as the existing TSC path. If the CPPC bit is set, it also reads the CPPC capability, enable, request, and status registers. On Intel, if HWP is enumerated, it reads the capabilities and the enable register, and the request register only when HWP is already enabled. If the hypervisor bit is set, it prints that line and does not read those MSRs, so a missing register cannot panic QEMU.
+
+`/system/bin/r5_pstate_log` starts when the boot volume is mounted. It reads the device, burns the CPU for one second, reads again, and writes `/boot/home/r5-cpu.txt`. It also looks for a FAT partition under `/dev/disk`, mounts it, writes `r5-cpu.txt` there, and unmounts. A raw image has no FAT partition. An anyboot image does, on the EFI system partition, which Windows can open from the USB stick.
+
+The first image build left `r5_pstate_log` out of the package: the bin list in `build/jam/images/definitions/minimum` is explicit. A second apply also duplicated the Jamfile and launch hooks, because the inserted text still contained the search text. The script now stops when a marker is already present. The boot below used the image after both fixes.
+
+QEMU was TCG with `-cpu qemu64`. This shell could not open `/dev/kvm` (permission denied). Serial showed `publish misc/r5_pstate status 0`, vendor amd, family `0xf`, model `0x6b`, name `QEMU Virtual CPU version 2.5+`, TSC about 2297152544 Hz, and `hypervisor bit set, hardware MSRs not read`. There was no panic. After shutdown, `bfs_shell` read `/boot/home/r5-cpu.txt` with both samples and `FAT: no FAT partition found under /dev/disk`. The Ryzen 5 5625U was not booted. No P-state was written.
+
+`jam -q @r5-anyboot` then exited 0 and wrote `generated.x86_64/r5-os-anyboot.iso` (2.1G, 16:03 Europe/Amsterdam). `fdisk` shows a 2G BeFS partition and a 2.8M EFI partition (type `ef`). That ISO was not booted.
+
 ### Licenses tab uses What's new headings and Haiku's component list
 
 Build 10017. Section titles on the Licenses tab are green and bold, like What's new. Lines that are only a web address are links. After that summary, the tab lists the same components Credits already lists (libprint and the rest), with the same license-file and site links. Credits itself is unchanged. The first compile failed because this Haiku `BString` has no `Contains`; the heading test uses `FindFirst(".")`. AMD64 jam then finished with exit 0 (1105 targets). The tab was not opened from here.
