@@ -145,7 +145,7 @@ Not a file-by-file audit. Read the header of the component you touch. Haiku itse
 | Component | In this git tree? | License as documented | Notes |
 |---|---|---|---|
 | AirPlay receiver pieces | yes, `distro/airplay` | MIT (Shairport, ALAC), Unlicense (tiny-AES-c), OpenSSL 3 from HaikuPorts | Detail: `distro/airplay/THIRD_PARTY.md`. Unlicense and Apache-2.0 texts are not in `LICENSES/` yet |
-| VirtualBox 7.2.22 Haiku Guest Additions | no | GPL-3.0-only (`COPYING` and the Haiku additions makefile). Some IPRT files are GPL-3.0-only OR CDDL-1.0. The HaikuPorts 6.1.26 recipe’s GPL-2.0 plus CDDL is an older recipe | Cross-built 2026-10-30 outside the repo (`kmk` exit 0, ELF64 AMD64). Not in the image. Userspace programs and kernel modules are assessed separately below |
+| VirtualBox 7.2.22 Haiku Guest Additions | patch only, `distro/vbox-guest` | GPL-3.0-only (`COPYING` and the Haiku additions makefile). Some IPRT files are GPL-3.0-only OR CDDL-1.0. The HaikuPorts 6.1.26 recipe’s GPL-2.0 plus CDDL is an older recipe | The Oracle tarball is not in git. Build fixes are `distro/vbox-guest/virtualbox-7.2.22-r5os.patch`. Binaries are not in git and not in the image |
 | Mesa 22.0.5 | build package only | Mesa is MIT; this package was not re-audited file by file | Not a claim that the guest ships Vulkan |
 | Linux DRM / `amdgpu` | no | GPL (kernel) | Not imported |
 
@@ -153,7 +153,7 @@ Add a row when a component is introduced. Update the row when its license or int
 
 ### VirtualBox 7.2.22, assessed against this policy
 
-Source: Oracle VirtualBox 7.2.22, built from the Haiku guest additions in that tarball. Not from HaikuPorts 6.1.26.
+Source: Oracle VirtualBox 7.2.22, built from the Haiku guest additions in that tarball, plus `distro/vbox-guest/virtualbox-7.2.22-r5os.patch`. Not from HaikuPorts 6.1.26. The tarball itself is not in git. How to build: `distro/vbox-guest/README.md`.
 
 The additions are GPL-3.0-only. That matches the default direction for new R5OS code. It is not MIT, and it must not be pasted into MIT sources or relicensed. Files that say GPL-3.0-only OR CDDL-1.0 can be used under the GPL-3.0-only choice; the CDDL terms are then not the ones we take.
 
@@ -161,6 +161,6 @@ Userspace `VBoxService`, `VBoxTray`, and `VBoxControl` are separate programs. Sh
 
 Kernel modules (`vboxguest`, `vboxdev`, `vboxsf`, `vboxvideo`, and the accelerant) load into the kernel and call kernel exports. MIT allows that kernel to be distributed in a GPL-3.0 combination. An image that contains one of these modules ships under GPL-3.0-only for the combination: the unmodified GNU GPL version 3 in `LICENSES/GPL-3.0-or-later.txt`, and the corresponding 7.2.22 source, including the build fixes. The “or later” grant on that filename is not added to the VirtualBox sources. Haiku's copyright lines and MIT notices stay on the Haiku files. Those files are not relicensed, and the modules are not pasted into them.
 
-The combined work is the kernel image that loads the module. `vboxguest` and `vboxdev` may be shipped on that basis. `vboxsf`, `vboxvideo`, the mouse filter, and the accelerant use the same license shape and stay out of the image until their own tests pass. The userspace clipboard can proceed on its own.
+The combined work is the kernel image that loads the module. `vboxguest` and `vboxdev` may be shipped on that basis. On the throwaway disk, `vboxvideo` painted the desktop and followed one host size hint, and `vboxsf` copied one small file each way from a shell. Tracker was not opened on the share. Those modules, the mouse filter, and the accelerant stay out of the product image until an image that contains them also ships the GPL-3.0 text and the 7.2.22 source plus this patch. The userspace clipboard can proceed on its own. The shipped clipboard is still COM1.
 
-Nothing from this tarball is in git or in the current image. The COM1 clipboard is unchanged.
+The binaries are not in git or in the current image. The build fixes are.

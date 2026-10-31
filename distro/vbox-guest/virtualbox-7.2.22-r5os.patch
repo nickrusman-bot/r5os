@@ -1,0 +1,1439 @@
+--- a/Config.kmk	2026-10-31 11:14:19.929987440 +0100
++++ b/Config.kmk	2026-10-31 11:12:15.536380865 +0100
+@@ -6353,8 +6353,15 @@
+   TEMPLATE_VBoxR0Drv_DEFS             += RT_WITHOUT_PRAGMA_ONCE
+  endif
+  TEMPLATE_VBoxR0Drv_INCS               = $(VBOX_HAIKU_SYS_INCS)
++ # R5OS cross builds override these on the kmk command line.
++ # Native Haiku keeps the /boot and /system defaults.
++ R5OS_HAIKU_DEVELOP_LIB ?= /boot/system/develop/lib
++ R5OS_HAIKU_ICONV_INC ?=
++ R5OS_HAIKU_ICONV_LIB ?= iconv
++ R5OS_HAIKU_INPUT_SERVER ?= /system/servers/input_server
++ R5OS_HAIKU_APP_SERVER ?= /system/servers/app_server
+  #TODO: sort this out
+- TEMPLATE_VBoxR0Drv_LDFLAGS            = -shared $(VBOX_GCC_NO_UNDEFINED_R0) -dc -dy -lroot -rpath-link /boot/system/develop/lib/x86 --no-add-needed /boot/system/develop/lib/_KERNEL_ --no-add-needed /boot/system/develop/lib/haiku_version_glue.o
++ TEMPLATE_VBoxR0Drv_LDFLAGS            = -shared $(VBOX_GCC_NO_UNDEFINED_R0) -dc -dy -L$(R5OS_HAIKU_DEVELOP_LIB) -lroot -rpath-link $(R5OS_HAIKU_DEVELOP_LIB) --no-add-needed $(R5OS_HAIKU_DEVELOP_LIB)/_KERNEL_ --no-add-needed $(R5OS_HAIKU_DEVELOP_LIB)/haiku_version_glue.o
+  TEMPLATE_VBoxR0Drv_CFLAGS             = -fno-PIC \
+  	$(VBOX_GCC_WARN) -Wstrict-prototypes $(VBOX_GCC_Wno-pointer-sign) -Wno-sign-compare \
+  	$(VBOX_GCC_fno-stack-protector) $(VBOX_GCC_R0_OPT) $(VBOX_GCC_R0_FP) -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration
+@@ -6362,13 +6369,13 @@
+  TEMPLATE_VBoxR0Drv_CFLAGS.x86         = -m32 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow
+  TEMPLATE_VBoxR0Drv_CFLAGS.amd64       = -m64 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow \
+  	-fno-reorder-blocks -ffreestanding -fno-asynchronous-unwind-tables -funit-at-a-time \
+- 	-Wno-sign-compare
++ 	-Wno-sign-compare -fPIC
+  TEMPLATE_VBoxR0Drv_CXXFLAGS          = -fno-PIC -Wpointer-arith \
+  	-Wshadow -Wuninitialized -Wunused-function -Wunused-label -Wunused-value -Wunused-variable \
+  	-Wformat \
+  	-O2 -nodefaultlibs -fno-omit-frame-pointer -fno-strict-aliasing -fno-common -fno-exceptions -fno-rtti
+  TEMPLATE_VBoxR0Drv_CXXFLAGS.x86      = $(TEMPLATE_VBoxR0Drv_CFLAGS.x86) -fno-exceptions -fno-rtti
+- TEMPLATE_VBoxR0Drv_CXXFLAGS.amd64    = $(TEMPLATE_VBoxR0Drv_CFLAGS.amd64) -fno-exceptions -fno-rtti
++ TEMPLATE_VBoxR0Drv_CXXFLAGS.amd64    = $(TEMPLATE_VBoxR0Drv_CFLAGS.amd64) -fno-exceptions -fno-rtti -fPIC -fno-use-cxa-atexit
+ endif # Haiku
+ 
+ ifdef VBOX_WITH_VBOXDRV
+@@ -6655,15 +6662,16 @@
+    TEMPLATE_VBoxR3Exe_CXXFLAGS := $(filter-out -pedantic,$(TEMPLATE_VBoxR3Exe_CXXFLAGS)) -fdollars-in-identifiers # annoying gcc option precedence.
+   endif
+  else ifeq ($(KBUILD_TARGET),haiku)
+-  TEMPLATE_VBoxR3Exe_TOOL              = GXX3
+-  TEMPLATE_VBoxR3Exe_POST_CMDS         = $(VBOX_HAIKU_XRES_SETVER_CMDS)
+-  TEMPLATE_VBoxR3Exe_LATE_LIBS         = network iconv stdc++ supc++
+-  TEMPLATE_VBoxR3Exe_LIBPATH          += \
+-  	/boot/common/lib
+-  # Haiku uses PIC by default...
+-  TEMPLATE_VBoxR3Exe_CFLAGS           += -fno-pic
+-  TEMPLATE_VBoxR3Exe_CXXFLAGS         += -fno-pic
+-  TEMPLATE_VBoxR3Exe_LDFLAGS          += -fno-pic
++  # R5OS cross: host gcc stays on BldProg; guest code uses the Haiku compiler.
++  TEMPLATE_VBoxR3Exe_TOOL              = GXX3PLAIN
++  TEMPLATE_VBoxR3Exe_POST_CMDS         =
++  ifneq ($(R5OS_HAIKU_ICONV_INC),)
++   TEMPLATE_VBoxR3Exe_INCS            += $(R5OS_HAIKU_ICONV_INC)
++  endif
++  TEMPLATE_VBoxR3Exe_LATE_LIBS         = network $(R5OS_HAIKU_ICONV_LIB) stdc++ supc++
++  # -std=c++11 hides Haiku BSD declarations such as h_errno.
++  TEMPLATE_VBoxR3Exe_DEFS             += _DEFAULT_SOURCE
++  # Haiku amd64 binaries are position-independent. -fno-pic cannot be linked.
+  else if1of ($(KBUILD_TARGET), freebsd openbsd)
+   TEMPLATE_VBoxR3Exe_TOOL              = GXX3
+   TEMPLATE_VBoxR3Exe_LATE_LIBS         = pthread
+--- a/src/VBox/Additions/common/VBoxGuest/VBoxDev-haiku.c	2026-10-31 11:14:02.922221927 +0100
++++ b/src/VBox/Additions/common/VBoxGuest/VBoxDev-haiku.c	2026-10-30 15:50:53.374218818 +0100
+@@ -74,6 +74,7 @@
+ #include <Drivers.h>
+ #include <KernelExport.h>
+ #include <PCI.h>
++#include <unistd.h>
+ 
+ #include "VBoxGuest-haiku.h"
+ #include "VBoxGuestInternal.h"
+@@ -108,13 +109,20 @@
+ {
+     int rc;
+     PVBOXGUESTSESSION pSession;
++    uint32_t fRequestor;
+ 
+     LogFlow((DRIVER_NAME ":vgdrvHaikuOpen\n"));
+ 
+     /*
+-     * Create a new session.
++     * Create a new session. Guest property writes are refused unless the
++     * opener is marked root or user; USERMODE alone is not enough.
+      */
+-    rc = VGDrvCommonCreateUserSession(&g_DevExt, VMMDEV_REQUESTOR_USERMODE, &pSession);
++    fRequestor = VMMDEV_REQUESTOR_USERMODE | VMMDEV_REQUESTOR_TRUST_NOT_GIVEN;
++    if (geteuid() == 0)
++        fRequestor |= VMMDEV_REQUESTOR_USR_ROOT;
++    else
++        fRequestor |= VMMDEV_REQUESTOR_USR_USER;
++    rc = VGDrvCommonCreateUserSession(&g_DevExt, fRequestor, &pSession);
+     if (RT_SUCCESS(rc))
+     {
+         Log((DRIVER_NAME ":vgdrvHaikuOpen success: g_DevExt=%p pSession=%p rc=%d pid=%d\n",&g_DevExt, pSession, rc,(int)RTProcSelf()));
+@@ -254,8 +262,8 @@
+     /*
+      * Process the IOCtl.
+      */
+-    size_t cbDataReturned;
+-    rc = VGDrvCommonIoCtl(op, &g_DevExt, pSession, pvBuf, len, &cbDataReturned);
++    size_t cbDataReturned = len;
++    rc = VGDrvCommonIoCtl(op, &g_DevExt, pSession, (PVBGLREQHDR)pvBuf, len);
+     if (RT_SUCCESS(rc))
+     {
+         rc = 0;
+--- a/src/VBox/Additions/common/VBoxGuest/VBoxGuest-haiku-stubs.c	2026-10-31 11:14:02.922367113 +0100
++++ b/src/VBox/Additions/common/VBoxGuest/VBoxGuest-haiku-stubs.c	2026-10-30 15:22:34.198482864 +0100
+@@ -357,17 +357,28 @@
+ {
+     return g_VBoxGuest->_RTLogRelGetDefaultInstance();
+ }
+-RTDECL(PRTLOGGER) RTLogRelGetDefaultInstance(uint32_t fFlags, uint32_t iGroup)
++RTDECL(PRTLOGGER) RTLogRelGetDefaultInstanceEx(uint32_t fFlagsAndGroup)
+ {
+-    return g_VBoxGuest->_RTLogRelGetDefaultInstanceEx(fFlags, iGroup);
++    return g_VBoxGuest->_RTLogRelGetDefaultInstanceEx(fFlagsAndGroup);
++}
++RTDECL(void) RTLogLoggerEx(PRTLOGGER pLogger, unsigned fFlags, unsigned iGroup,
++    const char *pszFormat, ...)
++{
++    /* The driver is linked before the vboxguest module is loaded, so this
++     * cannot be an import. Logging stays in the module.
++     */
++    (void)pLogger;
++    (void)fFlags;
++    (void)iGroup;
++    (void)pszFormat;
+ }
+ RTDECL(int) RTErrConvertToErrno(int iErr)
+ {
+     return g_VBoxGuest->_RTErrConvertToErrno(iErr);
+ }
+-int VGDrvCommonIoCtl(unsigned iFunction, PVBOXGUESTDEVEXT pDevExt, PVBOXGUESTSESSION pSession, void *pvData, size_t cbData, size_t *pcbDataReturned)
++int VGDrvCommonIoCtl(uintptr_t iFunction, PVBOXGUESTDEVEXT pDevExt, PVBOXGUESTSESSION pSession, PVBGLREQHDR pReqHdr, size_t cbReq)
+ {
+-    return g_VBoxGuest->_VGDrvCommonIoCtl(iFunction, pDevExt, pSession, pvData, cbData, pcbDataReturned);
++    return g_VBoxGuest->_VGDrvCommonIoCtl(iFunction, pDevExt, pSession, pReqHdr, cbReq);
+ }
+ int VGDrvCommonCreateUserSession(PVBOXGUESTDEVEXT pDevExt, uint32_t fRequestor, PVBOXGUESTSESSION *ppSession)
+ {
+@@ -389,6 +400,11 @@
+ {
+     return g_VBoxGuest->_VBoxGuestIDCCall(pvSession, iCmd, pvData, cbData, pcbDataReturned);
+ }
++
++int VBOXCALL VBoxGuestIDC(void *pvSession, uintptr_t uReq, PVBGLREQHDR pReqHdr, size_t cbReq)
++{
++    return g_VBoxGuest->_VBoxGuestIDC(pvSession, uReq, pReqHdr, cbReq);
++}
+ RTDECL(void) RTAssertMsg1Weak(const char *pszExpr, unsigned uLine, const char *pszFile, const char *pszFunction)
+ {
+     g_VBoxGuest->_RTAssertMsg1Weak(pszExpr, uLine, pszFile, pszFunction);
+--- a/src/VBox/Additions/common/VBoxGuest/VBoxGuest-haiku.c	2026-10-31 11:14:02.922552956 +0100
++++ b/src/VBox/Additions/common/VBoxGuest/VBoxGuest-haiku.c	2026-10-30 16:33:45.719003695 +0100
+@@ -78,6 +78,7 @@
+ 
+ #include "VBoxGuest-haiku.h"
+ #include "VBoxGuestInternal.h"
++#include <iprt/err.h>
+ #include <VBox/log.h>
+ #include <iprt/assert.h>
+ #include <iprt/initterm.h>
+@@ -124,6 +125,11 @@
+ /** PCI Bus Manager Module */
+ static pci_module_info *gPCI;
+ 
++void *VBoxGuestIDCOpen(uint32_t *pu32Version);
++int   VBoxGuestIDCClose(void *pvSession);
++int   VBoxGuestIDCCall(void *pvSession, unsigned iCmd, void *pvData, size_t cbData, size_t *pcbDataReturned);
++int VBOXCALL VBoxGuestIDC(void *pvSession, uintptr_t uReq, PVBGLREQHDR pReqHdr, size_t cbReq);
++
+ static struct vboxguest_module_info g_VBoxGuest =
+ {
+     {
+@@ -226,7 +232,8 @@
+     RTHeapOffsetAlloc,
+     RTHeapSimpleAlloc,
+     RTHeapOffsetFree,
+-    RTHeapSimpleFree
++    RTHeapSimpleFree,
++    VBoxGuestIDC
+ };
+ 
+ #if 0
+@@ -325,9 +332,16 @@
+  */
+ static int32 vgdrvHaikuISR(void *pvState)
+ {
++    bool fOurIRQ;
++
+     LogFlow((MODULE_NAME ":vgdrvHaikuISR pvState=%p\n", pvState));
+ 
+-    bool fOurIRQ = VGDrvCommonISR(&g_DevExt);
++    /*
++     * Haiku panics if a handler returns with interrupts enabled. The common
++     * ISR may restore a saved interrupt state that was enabled.
++     */
++    fOurIRQ = VGDrvCommonISR(&g_DevExt);
++    disable_interrupts();
+     if (fOurIRQ)
+         return B_HANDLED_INTERRUPT;
+     return B_UNHANDLED_INTERRUPT;
+@@ -585,5 +599,64 @@
+ };
+ 
+ /* Common code that depend on g_DevExt. */
+-#include "VBoxGuestIDC-unix.c.h"
++
++/**
++ * IDC entry used by the ring-0 client library (VBoxGuestR0LibIdc-unix.cpp).
++ * Same contract as the FreeBSD guest driver.
++ */
++int VBOXCALL VBoxGuestIDC(void *pvSession, uintptr_t uReq, PVBGLREQHDR pReqHdr, size_t cbReq)
++{
++    int rc;
++    if (   RT_VALID_PTR(pReqHdr)
++        && cbReq >= sizeof(*pReqHdr))
++    {
++        PVBOXGUESTSESSION pSession = (PVBOXGUESTSESSION)pvSession;
++        if (pSession)
++        {
++            if (   RT_VALID_PTR(pSession)
++                && pSession->pDevExt == &g_DevExt)
++                rc = VGDrvCommonIoCtl(uReq, &g_DevExt, pSession, pReqHdr, cbReq);
++            else
++                rc = VERR_INVALID_HANDLE;
++        }
++        else if (uReq == VBGL_IOCTL_IDC_CONNECT)
++        {
++            rc = VGDrvCommonCreateKernelSession(&g_DevExt, &pSession);
++            if (RT_SUCCESS(rc))
++            {
++                rc = VGDrvCommonIoCtl(uReq, &g_DevExt, pSession, pReqHdr, cbReq);
++                if (RT_FAILURE(rc))
++                    VGDrvCommonCloseSession(&g_DevExt, pSession);
++            }
++        }
++        else
++            rc = VERR_INVALID_HANDLE;
++    }
++    else
++        rc = VERR_INVALID_POINTER;
++    return rc;
++}
++
++void *VBoxGuestIDCOpen(uint32_t *pu32Version)
++{
++    PVBOXGUESTSESSION pSession = NULL;
++    int rc = VGDrvCommonCreateKernelSession(&g_DevExt, &pSession);
++    if (RT_FAILURE(rc))
++        return NULL;
++    if (pu32Version)
++        *pu32Version = VBGL_IOC_VERSION;
++    return pSession;
++}
++
++int VBoxGuestIDCClose(void *pvSession)
++{
++    VGDrvCommonCloseSession(&g_DevExt, (PVBOXGUESTSESSION)pvSession);
++    return VINF_SUCCESS;
++}
++
++int VBoxGuestIDCCall(void *pvSession, unsigned iCmd, void *pvData, size_t cbData, size_t *pcbDataReturned)
++{
++    RT_NOREF(pcbDataReturned);
++    return VGDrvCommonIoCtl(iCmd, &g_DevExt, (PVBOXGUESTSESSION)pvSession, (PVBGLREQHDR)pvData, cbData);
++}
+ 
+--- a/src/VBox/Additions/common/VBoxGuest/VBoxGuest-haiku.h	2026-10-31 11:14:02.919923200 +0100
++++ b/src/VBox/Additions/common/VBoxGuest/VBoxGuest-haiku.h	2026-10-30 11:41:58.410044118 +0100
+@@ -204,8 +204,8 @@
+     PRTLOGGER(*_RTLogRelGetDefaultInstance)(void);
+     PRTLOGGER(*_RTLogRelGetDefaultInstanceEx)(uint32_t fFlagsAndGroup);
+     int (*_RTErrConvertToErrno)(int iErr);
+-    int (*_VGDrvCommonIoCtl)(unsigned iFunction, PVBOXGUESTDEVEXT pDevExt, PVBOXGUESTSESSION pSession,
+-                             void *pvData, size_t cbData, size_t *pcbDataReturned);
++    int (*_VGDrvCommonIoCtl)(uintptr_t iFunction, PVBOXGUESTDEVEXT pDevExt, PVBOXGUESTSESSION pSession,
++                             PVBGLREQHDR pReqHdr, size_t cbReq);
+     int (*_VGDrvCommonCreateUserSession)(PVBOXGUESTDEVEXT pDevExt, uint32_t fRequestor, PVBOXGUESTSESSION *ppSession);
+     void (*_VGDrvCommonCloseSession)(PVBOXGUESTDEVEXT pDevExt, PVBOXGUESTSESSION pSession);
+     void* (*_VBoxGuestIDCOpen)(uint32_t *pu32Version);
+@@ -230,6 +230,7 @@
+     void* (*_RTHeapSimpleAlloc)(RTHEAPSIMPLE Heap, size_t cb, size_t cbAlignment);
+     void (*_RTHeapOffsetFree)(RTHEAPOFFSET hHeap, void *pv);
+     void (*_RTHeapSimpleFree)(RTHEAPSIMPLE Heap, void *pv);
++    int (*_VBoxGuestIDC)(void *pvSession, uintptr_t uReq, PVBGLREQHDR pReqHdr, size_t cbReq);
+ };
+ 
+ 
+--- a/src/VBox/Additions/common/VBoxGuest/lib/VBoxGuestR3Lib.cpp	2026-10-31 11:14:02.918968026 +0100
++++ b/src/VBox/Additions/common/VBoxGuest/lib/VBoxGuestR3Lib.cpp	2026-10-30 15:46:44.350818560 +0100
+@@ -286,6 +286,7 @@
+ #else
+ 
+     /* The default implementation. (linux, solaris, freebsd, netbsd, haiku) */
++    /* Haiku passes the request size separately; see vbglR3DoIOCtlRaw. */
+     RTFILE File;
+     int rc = RTFileOpen(&File, pszDeviceName, RTFILE_O_READWRITE | RTFILE_O_OPEN | RTFILE_O_DENY_NONE);
+     if (RT_FAILURE(rc))
+@@ -459,6 +460,19 @@
+     }
+     return VERR_INVALID_HANDLE;
+ 
++#elif defined(RT_OS_HAIKU)
++    /* Haiku's ioctl() takes the buffer size as a fourth argument. The
++     * three-argument call leaves that size as stack garbage, and the driver
++     * then rejects the request.
++     */
++    if (g_File != NIL_RTFILE)
++    {
++        if (RT_LIKELY(ioctl((int)(intptr_t)g_File, uFunction, pHdr, cbReq) >= 0))
++            return VINF_SUCCESS;
++        return RTErrConvertFromErrno(errno);
++    }
++    return VERR_INVALID_HANDLE;
++
+ #else
+     if (g_File != NIL_RTFILE)
+     {
+--- a/src/VBox/Additions/haiku/Makefile.kmk	2026-10-31 11:14:02.933128474 +0100
++++ b/src/VBox/Additions/haiku/Makefile.kmk	2026-10-30 10:29:07.100328501 +0100
+@@ -57,8 +57,9 @@
+ SUB_DEPTH = ../../../..
+ include	$(KBUILD_PATH)/subheader.kmk
+ 
+-ifneq ($(KBUILD_HOST),haiku)
+- $(error "The Haiku guest additions installer can only be built on Haiku!")
++# R5OS cross build: host is Linux, target is Haiku. Oracle requires KBUILD_HOST=haiku.
++ifneq ($(KBUILD_TARGET),haiku)
++ $(error "The Haiku guest additions are only built when KBUILD_TARGET=haiku")
+ endif
+ 
+ #
+--- a/src/VBox/Additions/haiku/SharedFolders/kernel_cpp.h	2026-10-31 11:14:02.929069362 +0100
++++ b/src/VBox/Additions/haiku/SharedFolders/kernel_cpp.h	2026-10-30 11:38:47.664048216 +0100
+@@ -58,7 +58,7 @@
+ 
+ 
+ inline void *
+-operator new(size_t size) throw (std::bad_alloc)
++operator new(size_t size)
+ {
+         // we don't actually throw any exceptions, but we have to
+         // keep the prototype as specified in <new>, or else GCC 3
+@@ -68,49 +68,49 @@
+ 
+ 
+ inline void *
+-operator new[](size_t size) throw (std::bad_alloc)
++operator new[](size_t size)
+ {
+         return malloc(size);
+ }
+ 
+ 
+ inline void *
+-operator new(size_t size, const std::nothrow_t &) throw ()
++operator new(size_t size, const std::nothrow_t &)
+ {
+         return malloc(size);
+ }
+ 
+ 
+ inline void *
+-operator new[](size_t size, const std::nothrow_t &) throw ()
++operator new[](size_t size, const std::nothrow_t &)
+ {
+         return malloc(size);
+ }
+ 
+ 
+ inline void *
+-operator new(size_t size, const mynothrow_t &) throw ()
++operator new(size_t size, const mynothrow_t &)
+ {
+         return malloc(size);
+ }
+ 
+ 
+ inline void *
+-operator new[](size_t size, const mynothrow_t &) throw ()
++operator new[](size_t size, const mynothrow_t &)
+ {
+         return malloc(size);
+ }
+ 
+ 
+ inline void
+-operator delete(void *ptr) throw ()
++operator delete(void *ptr)
+ {
+         free(ptr);
+ }
+ 
+ 
+ inline void
+-operator delete[](void *ptr) throw ()
++operator delete[](void *ptr)
+ {
+         free(ptr);
+ }
+--- a/src/VBox/Additions/haiku/SharedFolders/lock.h	2026-10-31 11:14:02.928910521 +0100
++++ b/src/VBox/Additions/haiku/SharedFolders/lock.h	2026-10-31 10:24:59.712484966 +0100
+@@ -50,11 +50,11 @@
+ typedef struct mutex {
+         const char*                             name;
+         struct mutex_waiter*    waiters;
++        spinlock                                lock;
+ #if KDEBUG
+         thread_id                               holder;
+ #else
+         int32                                   count;
+-        uint16                                  ignore_unlock_count;
+ #endif
+         uint8                                   flags;
+ } mutex;
+@@ -161,6 +161,9 @@
+         // name is *not* cloned nor freed in mutex_destroy()
+ extern void mutex_init_etc(mutex* lock, const char* name, uint32 flags);
+ extern void mutex_destroy(mutex* lock);
++/* The running kernel exports these. Its private _mutex_lock is not exported. */
++extern status_t mutex_lock(mutex* lock);
++extern void mutex_unlock(mutex* lock);
+ extern status_t mutex_switch_lock(mutex* from, mutex* to);
+         // Unlocks "from" and locks "to" such that unlocking and starting to wait
+         // for the lock is atomically. I.e. if "from" guards the object "to" belongs
+@@ -192,7 +195,7 @@
+ #if KDEBUG_RW_LOCK_DEBUG
+         return rw_lock_write_lock(lock);
+ #else
+-        int32 oldCount = atomic_add(&lock->count, 1);
++        int32 oldCount = atomic_add((int32 *)&lock->count, 1);
+         if (oldCount >= RW_LOCK_WRITER_COUNT_BASE)
+                 return _rw_lock_read_lock(lock);
+         return B_OK;
+@@ -207,7 +210,7 @@
+ #if KDEBUG_RW_LOCK_DEBUG
+         return mutex_lock_with_timeout(lock, timeoutFlags, timeout);
+ #else
+-        int32 oldCount = atomic_add(&lock->count, 1);
++        int32 oldCount = atomic_add((int32 *)&lock->count, 1);
+         if (oldCount >= RW_LOCK_WRITER_COUNT_BASE)
+                 return _rw_lock_read_lock_with_timeout(lock, timeoutFlags, timeout);
+         return B_OK;
+@@ -221,7 +224,7 @@
+ #if KDEBUG_RW_LOCK_DEBUG
+         rw_lock_write_unlock(lock);
+ #else
+-        int32 oldCount = atomic_add(&lock->count, -1);
++        int32 oldCount = atomic_add((int32 *)&lock->count, -1);
+         if (oldCount >= RW_LOCK_WRITER_COUNT_BASE)
+                 _rw_lock_read_unlock(lock, false);
+ #endif
+@@ -236,25 +239,12 @@
+ 
+ 
+ static inline status_t
+-mutex_lock(mutex* lock)
+-{
+-#if KDEBUG
+-        return _mutex_lock(lock, false);
+-#else
+-        if (atomic_add(&lock->count, -1) < 0)
+-                return _mutex_lock(lock, false);
+-        return B_OK;
+-#endif
+-}
+-
+-
+-static inline status_t
+ mutex_lock_threads_locked(mutex* lock)
+ {
+ #if KDEBUG
+         return _mutex_lock(lock, true);
+ #else
+-        if (atomic_add(&lock->count, -1) < 0)
++        if (atomic_add((int32 *)&lock->count, -1) < 0)
+                 return _mutex_lock(lock, true);
+         return B_OK;
+ #endif
+@@ -280,23 +270,13 @@
+ #if KDEBUG
+         return _mutex_lock_with_timeout(lock, timeoutFlags, timeout);
+ #else
+-        if (atomic_add(&lock->count, -1) < 0)
++        if (atomic_add((int32 *)&lock->count, -1) < 0)
+                 return _mutex_lock_with_timeout(lock, timeoutFlags, timeout);
+         return B_OK;
+ #endif
+ }
+ 
+ 
+-static inline void
+-mutex_unlock(mutex* lock)
+-{
+-#if !KDEBUG
+-        if (atomic_add(&lock->count, 1) < -1)
+-#endif
+-                _mutex_unlock(lock, false);
+-}
+-
+-
+ static inline void
+ mutex_transfer_lock(mutex* lock, thread_id thread)
+ {
+--- a/src/VBox/Additions/haiku/SharedFolders/vboxsf.c	2026-10-31 11:14:02.928677308 +0100
++++ b/src/VBox/Additions/haiku/SharedFolders/vboxsf.c	2026-10-31 10:41:15.948477012 +0100
+@@ -54,75 +54,79 @@
+  */
+ 
+ #include "vboxsf.h"
++#include <iprt/err.h>
++#include <string.h>
+ 
+ #define MODULE_NAME     "file_systems/vboxsf"
+ #define FS_NAME         "vboxsf"
+ #define FS_PRETTY_NAME  "VirtualBox Shared Folders"
+ 
++/*
++ * Haiku resolves add-on imports only from the kernel. RTStrCopy is exported
++ * by the vboxguest module, which this file system does not link.
++ */
++RTDECL(int) RTStrCopy(char *pszDst, size_t cbDst, const char *pszSrc)
++{
++    size_t cchSrc = strlen(pszSrc);
++    if (cbDst > cchSrc)
++    {
++        memcpy(pszDst, pszSrc, cchSrc + 1);
++        return VINF_SUCCESS;
++    }
++    if (cbDst != 0)
++    {
++        memcpy(pszDst, pszSrc, cbDst - 1);
++        pszDst[cbDst - 1] = '\0';
++    }
++    return VERR_BUFFER_OVERFLOW;
++}
++
+ VBGLSFCLIENT g_clientHandle;
+ static fs_volume_ops vboxsf_volume_ops;
+ static fs_vnode_ops vboxsf_vnode_ops;
+ 
+-status_t init_module(void)
+-{
+-#if 0
+-    /** @todo enable this soon */
+-    int rc = get_module(VBOXGUEST_MODULE_NAME, (module_info **)&g_VBoxGuest);
+-    if (RT_LIKELY(rc == B_OK)
+-    {
+-        rc = VbglR0SfInit();
+-        if (RT_SUCCESS(rc))
+-        {
+-            rc = VbglR0SfConnect(&g_clientHandle);
+-            if (RT_SUCCESS(rc))
+-            {
+-                rc = VbglR0SfSetUtf8(&g_clientHandle);
+-                if (RT_SUCCESS(rc))
+-                {
+-                    rc = VbglR0SfSetSymlinks(&g_clientHandle);
+-                    if (RT_FAILURE(rc))
+-                        LogRel((FS_NAME ": Warning! VbglR0SfSetSymlinks failed (rc=%d) - symlink will appear as copies.\n", rc));
+-
+-                    mutex_init(&g_vnodeCacheLock, "vboxsf vnode cache lock");
+-                    Log((FS_NAME ": init_module succeeded.\n");
+-                    return B_OK;
+-                }
+-                else
+-                    LogRel((FS_NAME ": VbglR0SfSetUtf8 failed. rc=%d\n", rc));
+-            }
+-            else
+-                LogRel((FS_NAME ": VbglR0SfConnect failed. rc=%d\n", rc));
+-        }
+-        else
+-            LogRel((FS_NAME ": VbglR0SfInit failed. rc=%d\n", rc));
+-    }
+-    else
+-        LogRel((FS_NAME ": get_module failed for '%s'. rc=%d\n", VBOXGUEST_MODULE_NAME, rc));
++/*
++ * The kernel walks file system modules before the vboxguest device exists.
++ * An HGCM connect from init_module waits forever on that device and stops
++ * the rest of the boot. Connect on the first mount instead.
++ */
++static bool s_connected = false;
+ 
+-    return B_ERROR;
+-#endif
++static status_t vboxsf_connect(void)
++{
++    if (s_connected)
++        return B_OK;
+ 
+     if (get_module(VBOXGUEST_MODULE_NAME, (module_info **)&g_VBoxGuest) != B_OK)
+     {
+         dprintf("get_module(%s) failed\n", VBOXGUEST_MODULE_NAME);
+         return B_ERROR;
+     }
++    dprintf(FS_NAME ": guest module loaded\n");
+ 
+     if (RT_FAILURE(VbglR0SfInit()))
+     {
+         dprintf("VbglR0SfInit failed\n");
++        put_module(VBOXGUEST_MODULE_NAME);
+         return B_ERROR;
+     }
++    dprintf(FS_NAME ": sf init ok\n");
+ 
+     if (RT_FAILURE(VbglR0SfConnect(&g_clientHandle)))
+     {
+         dprintf("VbglR0SfConnect failed\n");
++        VbglR0SfTerm();
++        put_module(VBOXGUEST_MODULE_NAME);
+         return B_ERROR;
+     }
++    dprintf(FS_NAME ": connected\n");
+ 
+     if (RT_FAILURE(VbglR0SfSetUtf8(&g_clientHandle)))
+     {
+         dprintf("VbglR0SfSetUtf8 failed\n");
++        VbglR0SfDisconnect(&g_clientHandle);
++        VbglR0SfTerm();
++        put_module(VBOXGUEST_MODULE_NAME);
+         return B_ERROR;
+     }
+ 
+@@ -131,16 +135,28 @@
+         dprintf("warning: VbglR0SfSetSymlinks failed (old vbox?) - symlinks will appear as copies\n");
+     }
+ 
+-    mutex_init(&g_vnodeCacheLock, "vboxsf vnode cache lock");
+-
++    s_connected = true;
+     dprintf(FS_NAME ": inited successfully\n");
+     return B_OK;
+ }
+ 
++status_t init_module(void)
++{
++    mutex_init(&g_vnodeCacheLock, "vboxsf vnode cache lock");
++    dprintf(FS_NAME ": module ready\n");
++    return B_OK;
++}
++
+ void uninit_module(void)
+ {
++    if (s_connected)
++    {
++        VbglR0SfDisconnect(&g_clientHandle);
++        VbglR0SfTerm();
++        put_module(VBOXGUEST_MODULE_NAME);
++        s_connected = false;
++    }
+     mutex_destroy(&g_vnodeCacheLock);
+-    put_module(VBOXGUEST_MODULE_NAME);
+ }
+ 
+ 
+@@ -232,6 +248,10 @@
+ 
+     dprintf(FS_NAME ": mount(%s)\n", args);
+ 
++    status_t connectStatus = vboxsf_connect();
++    if (connectStatus != B_OK)
++        return connectStatus;
++
+     PSHFLSTRING sharename = make_shflstring(args);
+ 
+     vboxsf_volume* vbsfvolume = malloc(sizeof(vboxsf_volume));
+--- a/src/VBox/Additions/haiku/SharedFolders/vnode_cache.cpp	2026-10-31 11:14:02.928402736 +0100
++++ b/src/VBox/Additions/haiku/SharedFolders/vnode_cache.cpp	2026-10-30 11:38:47.663723412 +0100
+@@ -87,7 +87,7 @@
+ mutex g_vnodeCacheLock;
+ 
+ 
+-extern "C" status_t vboxsf_new_vnode(PVBSFMAP map, PSHFLSTRING path, PSHFLSTRING name, vboxsf_vnode** p)
++extern "C" status_t vboxsf_new_vnode(PVBGLSFMAP map, PSHFLSTRING path, PSHFLSTRING name, vboxsf_vnode** p)
+ {
+     vboxsf_vnode* vn = (vboxsf_vnode*)malloc(sizeof(vboxsf_vnode));
+     if (vn == NULL)
+--- a/src/VBox/Additions/haiku/VBoxMouse/Makefile.kmk	2026-10-31 11:14:02.927957151 +0100
++++ b/src/VBox/Additions/haiku/VBoxMouse/Makefile.kmk	2026-10-31 11:12:12.904381872 +0100
+@@ -74,7 +74,7 @@
+ 	device \
+ 	$(VBOX_LIB_IPRT_GUEST_R3) \
+ 	$(VBOX_LIB_VBGL_R3) \
+-	/system/servers/input_server
++	$(R5OS_HAIKU_INPUT_SERVER)
+ 
+ PROGRAMS += VBoxMouseFilter
+ VBoxMouseFilter_TEMPLATE = VBoxGuestR3Exe
+--- a/src/VBox/Additions/haiku/VBoxTray/Makefile.kmk	2026-10-31 11:14:02.933015049 +0100
++++ b/src/VBox/Additions/haiku/VBoxTray/Makefile.kmk	2026-10-30 17:52:30.986627063 +0100
+@@ -62,7 +62,10 @@
+ 
+ PROGRAMS += VBoxTray
+ VBoxTray_TEMPLATE = VBoxGuestR3Exe
+-VBoxTray_DEFS     = VBOX_WITH_HGCM LOG_TO_BACKDOOR
++# libbe dynamic_casts this BApplication on quit. -fno-rtti leaves no
++# typeinfo, so _WindowQuitLoop dies with a segment violation.
++VBoxTray_CXXFLAGS = -frtti
++VBoxTray_DEFS     = VBOX_WITH_HGCM VBOX_WITH_SHARED_CLIPBOARD LOG_TO_BACKDOOR
+ VBoxTray_DEFS    += LOG_ENABLED
+ VBoxTray_INCS     = ../include
+ VBoxTray_SOURCES  = \
+--- a/src/VBox/Additions/haiku/VBoxTray/VBoxClipboard.cpp	2026-10-31 11:14:02.932283529 +0100
++++ b/src/VBox/Additions/haiku/VBoxTray/VBoxClipboard.cpp	2026-10-30 20:05:05.474059600 +0100
+@@ -71,6 +71,13 @@
+ #include "VBoxClipboard.h"
+ #include <VBoxGuestInternal.h>
+ 
++#include <stdio.h>
++
++#include <iprt/err.h>
++#include <iprt/string.h>
++#include <iprt/utf16.h>
++
++static void clip_log(const char *text);
+ #include <iprt/mem.h>
+ #include <VBox/GuestHost/clipboard-helper.h>
+ #include <VBox/HostServices/VBoxClipboardSvc.h>
+@@ -265,7 +272,7 @@
+             if (formats & VBOX_SHCL_FMT_UNICODETEXT)
+             {
+                 const char *text;
+-                int32 textLen;
++                ssize_t textLen;
+                 if (clip->FindData("text/plain", B_MIME_TYPE, (const void **)&text, &textLen) == B_OK)
+                 {
+                     // usually doesn't include the \0 so be safe
+@@ -279,7 +286,11 @@
+                         uint32_t cb = (RTUtf16Len(pwsz) + 1) * sizeof(RTUTF16);
+ 
+                         rc = VbglR3ClipboardWriteData(fClientId, VBOX_SHCL_FMT_UNICODETEXT, pwsz, cb);
+-                        //printf("VbglR3ClipboardWriteData: %d\n", rc);
++                        {
++                            char buf[64];
++                            snprintf(buf, sizeof(buf), "write %d\n", rc);
++                            clip_log(buf);
++                        }
+                         RTUtf16Free(pwsz);
+                     }
+                 }
+@@ -324,7 +335,7 @@
+         {
+             printf("B_CLIPBOARD_CHANGED\n");
+             const void *data;
+-            int32 dataLen;
++            ssize_t dataLen;
+             if (!be_clipboard->Lock())
+                 break;
+ 
+@@ -335,22 +346,29 @@
+                 break;
+             }
+ 
+-            bool fromVBox;
+-            if (clip->FindBool("FromVirtualBoxHost", &fromVBox) == B_OK && fromVBox)
++            bool fromVBox = false;
++            bool hasText;
++            bool hasBitmap;
++            clip->FindBool("FromVirtualBoxHost", &fromVBox);
++            hasText = clip->FindData("text/plain", B_MIME_TYPE, &data, &dataLen) == B_OK;
++            hasBitmap = clip->HasMessage("image/bitmap")
++                || clip->HasMessage("image/x-be-bitmap");
++            /*
++             * formats is sticky. A clear must report zero, including when the
++             * previous contents came from the host. Non-empty host contents
++             * are not sent back.
++             */
++            if (fromVBox && (hasText || hasBitmap))
+             {
+-                // It already comes from the host, discard.
+                 be_clipboard->Unlock();
+                 break;
+             }
+ 
+-            if (clip->FindData("text/plain", B_MIME_TYPE, &data, &dataLen) == B_OK)
++            formats = 0;
++            if (hasText)
+                 formats |= VBOX_SHCL_FMT_UNICODETEXT;
+-
+-            if (   clip->HasMessage("image/bitmap")
+-                || clip->HasMessage("image/x-be-bitmap"))
+-            {
++            if (hasBitmap)
+                 formats |= VBOX_SHCL_FMT_BITMAP;
+-            }
+ 
+             be_clipboard->Unlock();
+ 
+@@ -375,59 +393,91 @@
+ }
+ 
+ 
++static void clip_log(const char *text)
++{
++    FILE *f = fopen("/boot/home/vbox-tray.log", "a");
++    if (!f)
++        return;
++    fputs(text, f);
++    fflush(f);
++    fclose(f);
++}
++
++
+ status_t VBoxShClService::_ServiceThread()
+ {
+-    printf("VBoxShClService::%s()\n", __FUNCTION__);
++    int interrupts = 0;
++    clip_log("thread\n");
+ 
+-    /* The thread waits for incoming messages from the host. */
++    /* Answer host reads here. Posting them and waiting again left the
++     * host read hanging until it timed out. An interrupted wait is not fatal. */
+     for (;;)
+     {
+-        uint32_t u32Msg;
+-        uint32_t u32Formats;
++        uint32_t u32Msg = 0;
++        uint32_t u32Formats = 0;
+         int rc = VbglR3ClipboardGetHostMsgOld(fClientId, &u32Msg, &u32Formats);
++        if (rc == VERR_INTERRUPTED)
++        {
++            /*
++             * The ring-0 call already sent HGCMCancel2. That completes the
++             * host message. MSG_CANCEL would complete it again and the host
++             * asserts in HGCMThread::MsgComplete. The next wait returns
++             * VERR_RESOURCE_BUSY while the service still marks a wait pending,
++             * so cancel is still required for that case only.
++             */
++            VBGLIOCHGCMCALL hdr;
++            char buf[64];
++            if (interrupts < 8)
++            {
++                interrupts++;
++                snprintf(buf, sizeof(buf), "wait %d\n", rc);
++                clip_log(buf);
++            }
++            RT_ZERO(hdr);
++            VBGL_HGCM_HDR_INIT(&hdr, fClientId, VBOX_SHCL_GUEST_FN_MSG_CANCEL, 0);
++            VbglR3HGCMCall(&hdr, sizeof(hdr));
++            snooze(100000);
++            continue;
++        }
++        if (rc == VERR_TRY_AGAIN)
++        {
++            snooze(100000);
++            continue;
++        }
+         if (RT_SUCCESS(rc))
+         {
++            char buf[80];
++            snprintf(buf, sizeof(buf), "msg %u formats %u\n", u32Msg, u32Formats);
++            clip_log(buf);
+             switch (u32Msg)
+             {
+                 case VBOX_SHCL_HOST_MSG_FORMATS_REPORT:
+-                {
+-                    /*
+-                     * The host has announced available clipboard formats. Forward
+-                     * the information to the handler.
+-                     */
+-                    LogRelFlowFunc(("VBOX_SHCL_HOST_MSG_REPORT_FORMATS u32Formats=%x\n", u32Formats));
+-                    BMessage msg(VBOX_GUEST_CLIPBOARD_HOST_MSG_FORMATS);
+-                    msg.AddInt32("Formats", (uint32)u32Formats);
+-                    Looper()->PostMessage(&msg, this);
+-                    break;
+-                }
+-
+                 case VBOX_SHCL_HOST_MSG_READ_DATA:
+                 {
+-                    /* The host needs data in the specified format. */
+-                    LogRelFlowFunc(("VBOX_SHCL_HOST_MSG_READ_DATA u32Formats=%x\n", u32Formats));
+-                    BMessage msg(VBOX_GUEST_CLIPBOARD_HOST_MSG_READ_DATA);
++                    uint32 what = u32Msg == VBOX_SHCL_HOST_MSG_FORMATS_REPORT
++                        ? VBOX_GUEST_CLIPBOARD_HOST_MSG_FORMATS
++                        : VBOX_GUEST_CLIPBOARD_HOST_MSG_READ_DATA;
++                    BMessage msg(what);
+                     msg.AddInt32("Formats", (uint32)u32Formats);
+-                    Looper()->PostMessage(&msg, this);
++                    MessageReceived(&msg);
+                     break;
+                 }
+ 
+                 case VBOX_SHCL_HOST_MSG_QUIT:
+-                {
+-                    /* The host is terminating. */
+-                    LogRelFlowFunc(("VBOX_SHCL_HOST_MSG_QUIT\n"));
+                     fExiting = true;
+-                    return VERR_INTERRUPTED;
+-                }
++                    break;
+ 
+                 default:
+-                    Log(("VBoxShClService::%s: Unsupported message from host! Message = %u\n", __FUNCTION__, u32Msg));
++                    break;
+             }
+         }
+         else
++        {
++            char buf[64];
++            snprintf(buf, sizeof(buf), "stop %d\n", rc);
++            clip_log(buf);
+             fExiting = true;
+-
+-        LogRelFlow(("processed host event rc = %d\n", rc));
++        }
+ 
+         if (fExiting)
+             break;
+--- a/src/VBox/Additions/haiku/VBoxTray/VBoxDisplay.cpp	2026-10-31 11:14:02.932695161 +0100
++++ b/src/VBox/Additions/haiku/VBoxTray/VBoxDisplay.cpp	2026-10-31 09:56:50.472546508 +0100
+@@ -123,9 +123,21 @@
+ }
+ 
+ 
++static void
++display_log(const char *line)
++{
++    FILE *log = fopen("/boot/home/vbox-tray.log", "a");
++    if (log == NULL)
++        return;
++    fprintf(log, "%s\n", line);
++    fclose(log);
++}
++
++
+ status_t VBoxDisplayService::_ServiceThread()
+ {
+     LogFlow(("VBoxDisplayService::_ServiceThread"));
++    display_log("display thread");
+ 
+     VbglR3CtlFilterMask(VMMDEV_EVENT_DISPLAY_CHANGE_REQUEST, 0);
+     VbglR3SetGuestCaps(VMMDEV_GUEST_SUPPORTS_GRAPHICS, 0);
+@@ -143,7 +155,8 @@
+             int rc2 = VbglR3GetDisplayChangeRequest(&cx, &cy, &cBits, &iDisplay, NULL, NULL, NULL, NULL, true);
+             LogFlow(("rc2=%d screen %d size changed (%d, %d, %d)\n", rc2, iDisplay, cx, cy, cBits));
+ 
+-            if (RT_SUCCESS(rc2))
++            char line[96];
++            if (RT_SUCCESS(rc2) && cx >= 320 && cy >= 200)
+             {
+                 display_mode mode;
+                 fScreen.GetMode(&mode);
+@@ -152,18 +165,19 @@
+ 
+                 mode.timing.h_display = cx;
+                 mode.timing.v_display = cy;
++                mode.timing.h_total = cx;
++                mode.timing.v_total = cy;
+                 mode.space            = get_color_space_for_depth(cBits);
+                 mode.virtual_width    = cx;
+                 mode.virtual_height   = cy;
+ 
+-                /*= {
+-                    {0, cx, 0, 0, cBits * cx / 8, cy, 0, 0, cBits * cy / 8, 0},
+-                    get_color_space_for_depth(cBits),
+-                    cx, cy, 0, 0, 0
+-                };*/
+-
+-                fScreen.SetMode(&mode, false);
++                status_t setStatus = fScreen.SetMode(&mode, false);
++                snprintf(line, sizeof(line), "display %u x %u bits %u set %ld",
++                         cx, cy, cBits, (long)setStatus);
+             }
++            else
++                snprintf(line, sizeof(line), "display request rc2 %d %u x %u", rc2, cx, cy);
++            display_log(line);
+         }
+         else
+             fExiting = true;
+--- a/src/VBox/Additions/haiku/VBoxTray/VBoxGuestApplication.cpp	2026-10-31 11:14:02.932536960 +0100
++++ b/src/VBox/Additions/haiku/VBoxTray/VBoxGuestApplication.cpp	2026-10-31 09:56:44.580547882 +0100
+@@ -61,14 +61,16 @@
+ #include <iprt/log.h>
+ 
+ #include <errno.h>
++#include <stdio.h>
++#include <OS.h>
+ #include <Alert.h>
+ #include <Debug.h>
+ #include <Invoker.h>
+ #include <String.h>
+ 
+ #include "VBoxClipboard.h"
++#include "VBoxDisplay.h"
+ #include "VBoxGuestApplication.h"
+-#include "VBoxGuestDeskbarView.h"
+ 
+ VBoxGuestApplication::VBoxGuestApplication()
+      : BApplication(VBOX_GUEST_APP_SIG)
+@@ -83,11 +85,45 @@
+ 
+ void VBoxGuestApplication::ReadyToRun()
+ {
++    FILE *log = fopen("/boot/home/vbox-tray.log", "a");
++    int rc;
+     status_t err;
+ 
+-    err = VBoxGuestDeskbarView::AddToDeskbar();
+-    LogFlow(("VBoxGuestDeskbarView::ReadyToRun: AddToDeskbar returned 0x%08lx\n", err));
+-    exit(0);
++    /*
++     * Clipboard and display stay in this process. The Deskbar replicant
++     * is not loaded; that would pull this program into Deskbar.
++     */
++    if (log)
++        fprintf(log, "tray start\n");
++    snooze(8000000);
++
++    rc = RTR3InitDll(RTR3INIT_FLAGS_UNOBTRUSIVE);
++    if (RT_SUCCESS(rc))
++        rc = VbglR3Init();
++    if (RT_FAILURE(rc))
++    {
++        if (log)
++        {
++            fprintf(log, "init %d\n", rc);
++            fclose(log);
++        }
++        return;
++    }
++
++    VBoxShClService *service = new VBoxShClService();
++    AddHandler(service);
++    err = service->Connect();
++    if (log)
++        fprintf(log, "connect %ld\n", (long)err);
++
++    VBoxDisplayService *display = new VBoxDisplayService();
++    AddHandler(display);
++    display->Start();
++    if (log)
++    {
++        fprintf(log, "display start\n");
++        fclose(log);
++    }
+ }
+ 
+ 
+--- a/src/VBox/Additions/haiku/VBoxTray/VBoxTray.rdef	2026-10-31 11:14:02.932834345 +0100
++++ b/src/VBox/Additions/haiku/VBoxTray/VBoxTray.rdef	2026-10-30 20:15:20.377448161 +0100
+@@ -57,7 +57,7 @@
+ 
+ resource(1, "BEOS:APP_SIG") #'MIMS' VBOX_GUEST_APP_SIG;
+ 
+-resource app_flags B_SINGLE_LAUNCH;
++resource app_flags B_SINGLE_LAUNCH | B_BACKGROUND_APP;
+ 
+ /* This is done for all binaries with VBOX_HAIKU_XRES_SETVER_CMDS
+ resource app_version {
+--- a/src/VBox/Additions/haiku/VBoxVideo/accelerant/Makefile.kmk	2026-10-31 11:14:02.931489310 +0100
++++ b/src/VBox/Additions/haiku/VBoxVideo/accelerant/Makefile.kmk	2026-10-31 11:12:12.904381872 +0100
+@@ -65,11 +65,15 @@
+ vboxvideo.accelerant_SOURCES  = \
+ 	accelerant.cpp
+ 
++# Linked as a guest executable, so the unused-section pass drops
++# get_accelerant_hook. app_server loads that symbol by name.
++vboxvideo.accelerant_LDFLAGS += -Wl,--export-dynamic -Wl,-u,get_accelerant_hook
++
+ vboxvideo.accelerant_LIBS     = \
+ 	be device \
+ 	$(VBOX_LIB_IPRT_GUEST_R3_SHARED) \
+ 	$(VBOX_LIB_VBGL_R3) \
+-	/system/servers/app_server
++	$(R5OS_HAIKU_APP_SERVER)
+ 
+ include	$(KBUILD_PATH)/subfooter.kmk
+ 
+--- a/src/VBox/Additions/haiku/VBoxVideo/accelerant/accelerant.cpp	2026-10-31 11:14:02.931295703 +0100
++++ b/src/VBox/Additions/haiku/VBoxVideo/accelerant/accelerant.cpp	2026-10-30 20:55:33.983431968 +0100
+@@ -74,11 +74,11 @@
+ /** @todo r=ramshankar: get rid of this and replace with IPRT logging. */
+ #define TRACE(x...) do { \
+     FILE* logfile = fopen("/var/log/vboxvideo.accelerant.log", "a"); \
+-    fprintf(logfile, x); \
+-    fflush(logfile); \
+-    fsync(fileno(logfile)); \
+-    fclose(logfile); \
+-    sync(); \
++    if (logfile != NULL) { \
++        fprintf(logfile, x); \
++        fflush(logfile); \
++        fclose(logfile); \
++    } \
+      } while(0)
+ 
+ class AreaCloner
+@@ -115,7 +115,7 @@
+         area_id fArea;
+ };
+ 
+-extern "C"
++extern "C" __attribute__((visibility("default")))
+ void* get_accelerant_hook(uint32 feature, void *data)
+ {
+     TRACE("%s\n", __FUNCTION__);
+--- a/src/VBox/Additions/haiku/VBoxVideo/driver/driver.cpp	2026-10-31 11:14:02.931804519 +0100
++++ b/src/VBox/Additions/haiku/VBoxVideo/driver/driver.cpp	2026-10-30 20:34:01.483986843 +0100
+@@ -174,18 +174,40 @@
+ {
+     LogFlowFunc(("init_hardware\n"));
+ 
+-    status_t err = get_module(VBOXGUEST_MODULE_NAME, (module_info **)&g_VBoxGuest);
+-    if (err == B_OK)
++    status_t err = get_module(B_PCI_MODULE_NAME, (module_info **)&gPCI);
++    if (err != B_OK)
+     {
+-        err = get_module(B_PCI_MODULE_NAME, (module_info **)&gPCI);
+-        if (err == B_OK)
+-            return B_OK;
++        LogRel((DRIVER_NAME ":_init_hardware() get_module(%s) failed. err=%08lx\n", B_PCI_MODULE_NAME, err));
++        return B_ERROR;
++    }
+ 
+-        LogRel((DRIVER_NAME ":_init_hardware() get_module(%s) failed. err=%08lx\n", B_PCI_MODULE_NAME));
++    /* Do not load when the display device is absent. VESA keeps the desktop. */
++    pci_info info;
++    bool found = false;
++    for (uint32 pciIndex = 0; gPCI->get_nth_pci_info(pciIndex, &info) == B_OK; pciIndex++)
++    {
++        if (info.vendor_id == VENDOR_ID && info.device_id == DEVICE_ID)
++        {
++            found = true;
++            break;
++        }
++    }
++    if (!found)
++    {
++        put_module(B_PCI_MODULE_NAME);
++        gPCI = NULL;
++        return B_ERROR;
+     }
+-    else
++
++    err = get_module(VBOXGUEST_MODULE_NAME, (module_info **)&g_VBoxGuest);
++    if (err != B_OK)
++    {
+         LogRel((DRIVER_NAME ":_init_hardware() get_module(%s) failed. err=%08lx\n", VBOXGUEST_MODULE_NAME, err));
+-    return B_ERROR;
++        put_module(B_PCI_MODULE_NAME);
++        gPCI = NULL;
++        return B_ERROR;
++    }
++    return B_OK;
+ }
+ 
+ 
+@@ -206,14 +228,18 @@
+                     gDeviceInfo.pciInfo.bus, gDeviceInfo.pciInfo.device, gDeviceInfo.pciInfo.function);
+             TRACE("found device %s\n", gDeviceInfo.name);
+ 
+-            gCanHasDevice = true;
+             gDeviceInfo.openCount = 0;
+ 
+             size_t sharedSize = (sizeof(SharedInfo) + 7) & ~7;
+             gDeviceInfo.sharedArea = create_area("vboxvideo shared info",
+                                                  (void **)&gDeviceInfo.sharedInfo, B_ANY_KERNEL_ADDRESS,
+                                                  ROUND_TO_PAGE_SIZE(sharedSize), B_FULL_LOCK,
+-                                                 B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_USER_CLONEABLE_AREA);
++                                                 B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA);
++            if (gDeviceInfo.sharedArea < B_OK)
++            {
++                TRACE("create_area failed %ld\n", (long)gDeviceInfo.sharedArea);
++                break;
++            }
+ 
+             uint16_t width, height, vwidth, bpp, flags;
+             VBoxVideoGetModeRegisters(&width, &height, &vwidth, &bpp, &flags);
+@@ -242,8 +268,17 @@
+                                                       (phys_addr_t)gDeviceInfo.pciInfo.u.h0.base_registers[0],
+                                                       gDeviceInfo.pciInfo.u.h0.base_register_sizes[0], B_ANY_KERNEL_BLOCK_ADDRESS,
+                                                       B_READ_AREA | B_WRITE_AREA, &(gDeviceInfo.sharedInfo->framebuffer));
++            if (gDeviceInfo.sharedInfo->framebufferArea < B_OK)
++            {
++                TRACE("map framebuffer failed %ld\n", (long)gDeviceInfo.sharedInfo->framebufferArea);
++                delete_area(gDeviceInfo.sharedArea);
++                gDeviceInfo.sharedArea = -1;
++                gDeviceInfo.sharedInfo = NULL;
++                break;
++            }
+             vm_set_area_memory_type(gDeviceInfo.sharedInfo->framebufferArea,
+-                                    (phys_addr_t)gDeviceInfo.pciInfo.u.h0.base_registers[0], B_MTR_WC);
++                                    (phys_addr_t)gDeviceInfo.pciInfo.u.h0.base_registers[0], B_WRITE_COMBINING_MEMORY);
++            gCanHasDevice = true;
+             break;
+         }
+ 
+@@ -289,6 +324,7 @@
+ 
+     /** @todo init device! */
+ 
++    gDeviceInfo.openCount++;
+     *cookie = (void *)&gDeviceInfo;
+     return B_OK;
+ }
+@@ -297,7 +333,8 @@
+ status_t device_close(void *dev)
+ {
+     LogFlowFunc(("device_close\n"));
+-    return B_ERROR;
++    (void)dev;
++    return B_OK;
+ }
+ 
+ 
+--- a/src/VBox/Runtime/Makefile.kmk	2026-10-31 11:14:19.530218399 +0100
++++ b/src/VBox/Runtime/Makefile.kmk	2026-10-30 10:48:23.486924215 +0100
+@@ -1854,7 +1854,7 @@
+ 	r3/posix/tls-posix.cpp \
+ 	r3/posix/utf8-posix.cpp
+ RuntimeBaseR3_SOURCES.haiku.x86   += common/string/memrchr.asm
+-RuntimeBaseR3_SOURCES.haiku.amd64 += common/string/memrchr.asm
++RuntimeBaseR3_SOURCES.haiku.amd64 += common/string/memrchr.asm common/string/mempcpy.asm
+ 
+ ## PORTME: Porters add their selection of platform specific files for Ring-3 here.
+ 
+--- a/src/VBox/Runtime/common/dvm/dvm.cpp	2026-10-31 11:14:18.791897224 +0100
++++ b/src/VBox/Runtime/common/dvm/dvm.cpp	2026-10-30 10:50:41.358392252 +0100
+@@ -805,7 +805,8 @@
+    || defined(RT_OS_NETBSD) \
+    || defined(RT_OS_SOLARIS) \
+    || defined(RT_OS_DARWIN) \
+-   || defined(RT_OS_OS2) /*whatever*/
++   || defined(RT_OS_OS2) \
++   || defined(RT_OS_HAIKU) /*whatever*/
+ /* Darwing and freebsd matches the linux algo. Solaris matches linux algo partially, at least, in the part we use. */
+         enmIndex = RTDVMVOLIDX_LINUX;
+ #else
+--- a/src/VBox/Runtime/r0drv/haiku/memobj-r0drv-haiku.c	2026-10-31 11:14:18.883417068 +0100
++++ b/src/VBox/Runtime/r0drv/haiku/memobj-r0drv-haiku.c	2026-10-30 16:12:31.708192295 +0100
+@@ -62,6 +62,10 @@
+     RTR0MEMOBJINTERNAL  Core;
+     /** Area identifier */
+     area_id             AreaId;
++    /** team_id passed to lock_memory_etc. unlock must repeat it. */
++    team_id             LockTeam;
++    /** flags passed to lock_memory_etc. unlock must repeat them. */
++    uint32              fLockFlags;
+ } RTR0MEMOBJHAIKU, *PRTR0MEMOBJHAIKU;
+ 
+ 
+@@ -131,12 +135,9 @@
+ 
+         case RTR0MEMOBJTYPE_LOCK:
+         {
+-            team_id team = B_SYSTEM_TEAM;
+-
+-            if (pMemHaiku->Core.u.Lock.R0Process != NIL_RTR0PROCESS)
+-                team = ((team_id)pMemHaiku->Core.u.Lock.R0Process);
+-
+-            rc = unlock_memory_etc(team, pMemHaiku->Core.pv, pMemHaiku->Core.cb, B_READ_DEVICE);
++            /* Same team and flags as lock_memory_etc. A mismatch leaks wires. */
++            rc = unlock_memory_etc(pMemHaiku->LockTeam, pMemHaiku->Core.pv, pMemHaiku->Core.cb,
++                                   pMemHaiku->fLockFlags);
+             AssertMsg(rc == B_OK, ("%#x", rc));
+             break;
+         }
+@@ -343,6 +344,8 @@
+ 
+     if (R0Process != NIL_RTR0PROCESS)
+         TeamId = (team_id)R0Process;
++    pMemHaiku->LockTeam = TeamId;
++    pMemHaiku->fLockFlags = (uint32)fFlags;
+     int rc = lock_memory_etc(TeamId, pvStart, cb, fFlags);
+     if (rc == B_OK)
+     {
+@@ -359,8 +362,20 @@
+ int rtR0MemObjNativeLockUser(PPRTR0MEMOBJINTERNAL ppMem, RTR3PTR R3Ptr, size_t cb, uint32_t fAccess, uint32_t fFlags,
+                              RTR0PROCESS R0Process, const char *pszTag)
+ {
++    int fLock = 0;
++    RTR0PROCESS Process = R0Process;
++
+     RT_NOREF(fFlags);
+-    return rtR0MemObjNativeLockInMap(ppMem, (void *)R3Ptr, cb, fAccess, fFlags, R0Process, B_READ_DEVICE, pszTag);
++    /*
++     * NIL is the current user team. Looking the address up in B_SYSTEM_TEAM
++     * misses the area. B_READ_DEVICE demands a writable mapping, and a
++     * read-only guest string (rodata) then fails with B_PERMISSION_DENIED.
++     */
++    if (Process == NIL_RTR0PROCESS)
++        Process = (RTR0PROCESS)B_CURRENT_TEAM;
++    if (fAccess & RTMEM_PROT_WRITE)
++        fLock = B_READ_DEVICE;
++    return rtR0MemObjNativeLockInMap(ppMem, (void *)R3Ptr, cb, fAccess, Process, fLock, pszTag);
+ }
+ 
+ 
+@@ -626,12 +641,10 @@
+     {
+         case RTR0MEMOBJTYPE_LOCK:
+         {
+-            team_id        TeamId = B_SYSTEM_TEAM;
++            team_id        TeamId = pMemHaiku->LockTeam;
+             physical_entry aPhysMap[2];
+             int32          cPhysMap = 2;    /** @todo r=ramshankar: why not use RT_ELEMENTS? */
+ 
+-            if (pMemHaiku->Core.u.Lock.R0Process != NIL_RTR0PROCESS)
+-                TeamId = (team_id)pMemHaiku->Core.u.Lock.R0Process;
+             void *pb = pMemHaiku->Core.pv + (iPage << PAGE_SHIFT);
+ 
+             rc = get_memory_map_etc(TeamId, pb, B_PAGE_SIZE, aPhysMap, &cPhysMap);
+--- a/src/VBox/Runtime/r0drv/haiku/semeventmulti-r0drv-haiku.c	2026-10-31 11:14:18.883683825 +0100
++++ b/src/VBox/Runtime/r0drv/haiku/semeventmulti-r0drv-haiku.c	2026-10-30 19:50:39.782457766 +0100
+@@ -87,15 +87,16 @@
+     pThis->u32Magic  = RTSEMEVENTMULTI_MAGIC;
+     pThis->cRefs     = 1;
+     pThis->SemId     = create_sem(0, "IPRT Semaphore Event Multi");
+-    if (pThis->SemId < B_OK)
++    if (pThis->SemId >= B_OK)
+     {
+         set_sem_owner(pThis->SemId, B_SYSTEM_TEAM);
+         *phEventMultiSem = pThis;
+         return VINF_SUCCESS;
+     }
+ 
++    status_t status = pThis->SemId;
+     RTMemFree(pThis);
+-    return VERR_TOO_MANY_SEMAPHORES;  /** @todo r=ramshankar: use RTErrConvertFromHaikuKernReturn */
++    return RTErrConvertFromHaikuKernReturn(status);
+ }
+ 
+ 
+--- a/src/VBox/Runtime/r0drv/haiku/semmutex-r0drv-haiku.c	2026-10-31 11:14:18.883901569 +0100
++++ b/src/VBox/Runtime/r0drv/haiku/semmutex-r0drv-haiku.c	2026-10-31 10:50:18.636420245 +0100
+@@ -83,16 +83,18 @@
+         return VERR_NO_MEMORY;
+ 
+     pThis->u32Magic = RTSEMMUTEX_MAGIC;
+-    pThis->SemId = create_sem(0, "IPRT Mutex Semaphore");
+-    if (pThis->SemId < B_OK)
++    pThis->SemId = create_sem(1, "IPRT Mutex Semaphore");
++    if (pThis->SemId >= B_OK)
+     {
++        set_sem_owner(pThis->SemId, B_SYSTEM_TEAM);
+         pThis->OwnerId = -1;
+         pThis->cRecursion = 0;
+         *phMutexSem = pThis;
+         return VINF_SUCCESS;
+     }
++    status_t status = pThis->SemId;
+     RTMemFree(pThis);
+-    return VERR_TOO_MANY_SEMAPHORES;    /** @todo r=ramshankar: use RTErrConvertFromHaikuKernReturn */
++    return RTErrConvertFromHaikuKernReturn(status);
+ }
+ 
+ 
+@@ -134,7 +136,7 @@
+ 
+     if (pThis->OwnerId == find_thread(NULL))
+     {
+-        pThis->OwnerId++;
++        pThis->cRecursion++;
+         return VINF_SUCCESS;
+     }
+ 
+@@ -224,7 +226,7 @@
+ 
+     if (--pThis->cRecursion == 0)
+     {
+-        pThis->OwnerId == -1;
++        pThis->OwnerId = -1;
+         release_sem(pThis->SemId);
+     }
+ 
+--- a/src/VBox/Runtime/r0drv/haiku/spinlock-r0drv-haiku.c	2026-10-31 11:14:18.882104485 +0100
++++ b/src/VBox/Runtime/r0drv/haiku/spinlock-r0drv-haiku.c	2026-10-30 19:50:40.054457748 +0100
+@@ -130,9 +130,20 @@
+     AssertPtr(pSpinlockInt);
+     Assert(pSpinlockInt->u32Magic == RTSPINLOCK_MAGIC);
+ 
+-    /* Haiku cannot take spinlocks without disabling interrupts. Ignore our spinlock creation flags. */
+-    pSpinlockInt->fIntSaved = disable_interrupts();
++    /*
++     * Haiku cannot take spinlocks without disabling interrupts. Ignore our
++     * spinlock creation flags.
++     *
++     * Save the previous state in a local, then store it only after this CPU
++     * owns the lock. The other CPU's ISR also takes these locks, and
++     * disable_interrupts() there returns 0. Writing fIntSaved before
++     * acquire_spinlock let that 0 replace the holder's saved state, so
++     * release restored interrupts as disabled and the next malloc panicked
++     * in _mutex_lock.
++     */
++    cpu_status fIntSaved = disable_interrupts();
+     acquire_spinlock(&pSpinlockInt->hSpinLock);
++    pSpinlockInt->fIntSaved = fIntSaved;
+ }
+ 
+ 
+@@ -142,7 +153,8 @@
+     AssertPtr(pSpinlockInt);
+     Assert(pSpinlockInt->u32Magic == RTSPINLOCK_MAGIC);
+ 
++    cpu_status fIntSaved = pSpinlockInt->fIntSaved;
+     release_spinlock(&pSpinlockInt->hSpinLock);
+-    restore_interrupts(pSpinlockInt->fIntSaved);
++    restore_interrupts(fIntSaved);
+ }
+ 
+--- a/src/VBox/Runtime/r0drv/haiku/the-haiku-kernel.h	2026-10-31 11:14:18.881877774 +0100
++++ b/src/VBox/Runtime/r0drv/haiku/the-haiku-kernel.h	2026-10-30 11:09:24.971225581 +0100
+@@ -53,6 +53,11 @@
+ #include <iprt/err.h>
+ #include <iprt/types.h>
+ 
++/* Haiku spells the page size PAGESIZE. IPRT uses PAGE_SIZE. */
++#ifndef PAGE_SIZE
++# define PAGE_SIZE PAGESIZE
++#endif
++
+ RT_C_DECLS_BEGIN
+ 
+ /* headers/private/kernel/smp.h */
+--- a/src/VBox/Runtime/r3/posix/serialport-posix.cpp	2026-10-31 11:14:18.537995469 +0100
++++ b/src/VBox/Runtime/r3/posix/serialport-posix.cpp	2026-10-30 11:05:03.019288237 +0100
+@@ -420,6 +420,13 @@
+     else
+         pCfg->uBaudRate = pThis->uBaudRateCust;
+ 
++#if defined(RT_OS_HAIKU)
++    /* CS5, CS6 and CS7 are all zero. Only CS8 is distinct. */
++    if ((pTermios->c_cflag & CSIZE) == CS8)
++        pCfg->enmDataBitCount = RTSERIALPORTDATABITS_8BITS;
++    else
++        pCfg->enmDataBitCount = RTSERIALPORTDATABITS_7BITS;
++#else
+     switch (pTermios->c_cflag & CSIZE)
+     {
+         case CS5:
+@@ -440,6 +447,7 @@
+             pCfg->enmDataBitCount = RTSERIALPORTDATABITS_INVALID;
+             rc = RT_FAILURE(rc) ? rc : VERR_INVALID_PARAMETER;
+     }
++#endif
+ 
+     /* Convert parity. */
+     if (pTermios->c_cflag & PARENB)

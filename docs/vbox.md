@@ -2,11 +2,11 @@
 
 Plan for Guest Additions: `docs/VBOX-GUEST.md`.
 
-Haiku/R5OS has **no VirtualBox Guest Additions**. Expect:
+The product image has **no VirtualBox Guest Additions** installed. The 7.2.22 source fix and the build are `distro/vbox-guest/`. On the daily image, expect:
 
 - no `vboxsf` shared folders
 - no automatic guest resolution
-- no VirtualBox drag-and-drop (that protocol is Guest Additions)
+- no VirtualBox drag-and-drop (that protocol is Guest Additions; GitHub issue 89)
 
 **Text clipboard** is a COM1 named-pipe bridge (`r5_vbox_clip` in the guest, `scripts/vbox-clipboard-host.ps1` on Windows). It is not Devices → Shared Clipboard. Unicode text only, ~256 KB. `-NoClip` skips the host helper.
 
