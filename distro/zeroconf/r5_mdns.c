@@ -1,4 +1,9 @@
-/* R5OS: IPv4 mDNS lookup and DNS-SD browse (Haiku #1042). */
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * IPv4 mDNS lookup and DNS-SD browse (Haiku #1042).
+ */
 
 #include <arpa/inet.h>
 #include <ctype.h>

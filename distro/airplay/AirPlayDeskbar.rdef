@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 resource app_signature "application/x-vnd.R5OS-airplay-tray";
 
 resource app_flags B_SINGLE_LAUNCH | B_BACKGROUND_APP;

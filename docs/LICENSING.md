@@ -144,12 +144,33 @@ Not a file-by-file audit. Read the header of the component you touch. Haiku itse
 
 | Component | In this git tree? | License as documented | Notes |
 |---|---|---|---|
-| AirPlay receiver pieces | yes, `distro/airplay` | MIT (Shairport, ALAC), Unlicense (tiny-AES-c), OpenSSL 3 from HaikuPorts | Detail: `distro/airplay/THIRD_PARTY.md`. Unlicense and Apache-2.0 texts are not in `LICENSES/` yet |
+| AirPlay receiver pieces | yes, `distro/airplay` | MIT (Shairport, ALAC), Unlicense (tiny-AES-c), OpenSSL 3 from HaikuPorts. `AirPlayDeskbar` is a separate GPL-3.0-or-later program | Detail: `distro/airplay/THIRD_PARTY.md`. Unlicense text: `LICENSES/Unlicense.txt`. Apache-2.0 text is not in `LICENSES/` yet |
 | VirtualBox 7.2.22 Haiku Guest Additions | patch in `distro/vbox-guest`; tarball and binaries copied onto the image at apply time, not stored in git | GPL-3.0-only (`COPYING` and the Haiku additions makefile). Some IPRT files are GPL-3.0-only OR CDDL-1.0. The HaikuPorts 6.1.26 recipe’s GPL-2.0 plus CDDL is an older recipe | The image ships `COPYING` (the unmodified GNU GPL version 3), `VirtualBox-7.2.22.tar.bz2`, and `virtualbox-7.2.22-r5os.patch` under `/boot/system/non-packaged/data/licenses/virtualbox`. Apply stops if that tarball or the built ELFs are missing |
 | Mesa 22.0.5 | build package only | Mesa is MIT; this package was not re-audited file by file | Not a claim that the guest ships Vulkan |
 | Linux DRM / `amdgpu` | no | GPL (kernel) | Not imported |
 
 Add a row when a component is introduced. Update the row when its license or integration changes.
+
+### R5OS files in `distro/`
+
+Checked file by file on 2026-10-31. A header was added only where the file is one work we can name. Haiku copies keep the copyright and license already in the file. R5OS edits that run through those functions were not wrapped in SPDX snippets and were not relicensed.
+
+| Path | SPDX | Why |
+|---|---|---|
+| `distro/login/LockWindow.*`, `R5Desktop.cpp`, `SessionLog.h`, `TrayApp.cpp`, `default_deskbar_items.sh` | GPL-3.0-or-later | New R5OS files. They link into Login. The other Login sources stay MIT (François Revol, 2008). The Login binary is one combined work; the MIT notices stay on those files |
+| `distro/login/Login*.cpp`, `Login*.h`, `DesktopWindow.*`, `main.cpp`, `Login.rdef` | MIT, unchanged | Haiku Login |
+| `distro/users/` | GPL-3.0-or-later | New Users & Accounts preference |
+| `distro/network/` | GPL-3.0-or-later | New IPv6 and Wi-Fi code. Four headers had said “Copyright 2026, R5OS” and MIT. That was R5OS’s own grant; those files are now GPL-3.0-or-later. They are compiled into `net_server`. Haiku’s `net_server` files stay MIT. The linked server is one combined work |
+| `distro/print/airprint/` | GPL-3.0-or-later | New print add-on, loaded by the print server |
+| `distro/vboxclip/` | GPL-3.0-or-later | Separate COM1 clipboard program |
+| `distro/zeroconf/` | GPL-3.0-or-later | New mDNS code |
+| `distro/airplay/` except `AirPlayDeskbar.cpp`, `AirPlayDeskbar.rdef`, and `third_party/` | MIT | RAOP flow follows Shairport. Not relicensed to GPL |
+| `distro/airplay/AirPlayDeskbar.cpp`, `AirPlayDeskbar.rdef` | GPL-3.0-or-later | Separate Deskbar program. It includes the MIT AirPlay headers |
+| `distro/airplay/third_party/alac.*` | MIT | David Hammerton, 2005. The permission text in `alac.c` stays |
+| `distro/airplay/third_party/aes.*` | Unlicense | kokke tiny-AES-c |
+| `distro/app_server/`, `distro/boot/`, `distro/debugger/`, `distro/user-paths/` | unchanged | Haiku files. Headers were not rewritten |
+
+`scripts/` is R5OS build tooling and still has no SPDX headers. This was not a pass over the Haiku tree, the packages, or the image.
 
 ### VirtualBox 7.2.22, assessed against this policy
 

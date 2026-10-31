@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * Drop to the account named in the session file and start the job as a
  * new team. Exec would keep the team name r5-desktop in Deskbar.
  * The helper then exits. Do not wrap launch_daemon jobs with this

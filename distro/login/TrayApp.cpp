@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * Install Deskbar replicants as the signed-in user.
  * ProcessController -deskbar also opens a window; quitting that window
  * tries to save settings and shows "Damned!" when the folder is missing.

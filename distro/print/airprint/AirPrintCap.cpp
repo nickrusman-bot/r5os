@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 #include "AirPrintCap.h"
 
 #define TO72DPI(a)	((a) * 72.0f / 300.0f)

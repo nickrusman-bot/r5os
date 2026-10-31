@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 #ifndef R5_WIFI_WINDOW_H
 #define R5_WIFI_WINDOW_H
 

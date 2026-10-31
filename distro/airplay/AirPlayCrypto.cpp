@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: MIT
  * AirPlay 1 RSA/AES helpers.
  *
  * AES-128-CBC: tiny-AES-c by kokke (Unlicense / public domain).
