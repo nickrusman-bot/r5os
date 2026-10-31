@@ -182,9 +182,122 @@ def install_smp_boot() -> None:
     print(f"copied {dst} (smp boot timeout)")
 
 
+def insert_once(path: pathlib.Path, old: str, new: str, marker: str, tag: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    if marker in text:
+        print(f"already {path.name} ({tag})")
+        return
+    if old not in text:
+        raise SystemExit(f"pattern not found in {path} ({tag})")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    print(f"patched {path} ({tag})")
+
+
+def install_file(src: pathlib.Path, dst: pathlib.Path, tag: str) -> None:
+    if not src.is_file():
+        raise SystemExit(f"missing {src}")
+    if not dst.parent.is_dir():
+        raise SystemExit(f"missing {dst.parent}")
+    data = src.read_bytes().replace(b"\r\n", b"\n")
+    if dst.is_file() and dst.read_bytes().replace(b"\r\n", b"\n") == data:
+        print(f"already {dst.name} ({tag})")
+        return
+    dst.write_bytes(data)
+    print(f"copied {dst} ({tag})")
+
+
+def install_pstate() -> None:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    install_file(
+        root / "distro/kernel/x86/r5_pstate.cpp",
+        HAIKU / "src/system/kernel/arch/x86/r5_pstate.cpp",
+        "cpu readout",
+    )
+    install_file(
+        root / "distro/kernel/x86/r5_pstate.h",
+        HAIKU / "src/system/kernel/arch/x86/r5_pstate.h",
+        "cpu readout",
+    )
+    install_file(
+        root / "distro/cpu/r5_pstate_log.cpp",
+        HAIKU / "src/bin/r5_pstate_log.cpp",
+        "cpu log",
+    )
+
+    insert_once(
+        HAIKU / "src/system/kernel/arch/x86/Jamfile",
+        "\tarch_timer.cpp\n",
+        "\tr5_pstate.cpp\n\tarch_timer.cpp\n",
+        "\tr5_pstate.cpp\n",
+        "kernel Jamfile",
+    )
+    insert_once(
+        HAIKU / "src/system/kernel/arch/x86/arch_cpu.cpp",
+        "#include <arch/x86/timer.h>\n",
+        "#include <arch/x86/timer.h>\n\n#include \"r5_pstate.h\"\n",
+        '#include "r5_pstate.h"\n',
+        "cpu publish include",
+    )
+    insert_once(
+        HAIKU / "src/system/kernel/arch/x86/arch_cpu.cpp",
+        """	elf_add_memory_image_symbol(image, "commpage_thread_exit",
+		threadExitPosition, threadExitLen, B_SYMBOL_TYPE_TEXT);
+
+	return B_OK;
+""",
+        """	elf_add_memory_image_symbol(image, "commpage_thread_exit",
+		threadExitPosition, threadExitLen, B_SYMBOL_TYPE_TEXT);
+
+	r5_pstate_publish();
+	return B_OK;
+""",
+        "r5_pstate_publish();",
+        "cpu publish call",
+    )
+    insert_once(
+        HAIKU / "src/bin/Jamfile",
+        "\tsystem_time.cpp\n",
+        "\tsystem_time.cpp\n\tr5_pstate_log.cpp\n",
+        "\tr5_pstate_log.cpp\n",
+        "bin Jamfile",
+    )
+    insert_once(
+        HAIKU / "build/jam/images/definitions/minimum",
+        "\tsystem_time\n",
+        "\tsystem_time\n\tr5_pstate_log\n",
+        "\tr5_pstate_log\n",
+        "image bins",
+    )
+    insert_once(
+        HAIKU / "data/launch/system",
+        """service x-vnd.Haiku-SystemLogger {
+	launch /system/servers/syslog_daemon
+	port logger {
+		capacity 256
+	}
+}
+""",
+        """service x-vnd.Haiku-SystemLogger {
+	launch /system/servers/syslog_daemon
+	port logger {
+		capacity 256
+	}
+}
+
+job x-vnd.R5OS-cpu-log {
+	launch /system/bin/r5_pstate_log
+	on initial_volumes_mounted
+}
+""",
+        "job x-vnd.R5OS-cpu-log",
+        "cpu log job",
+    )
+
+
 def main() -> int:
     install_smp_boot()
     patch_tsc_div0()
+    install_pstate()
     return 0
 
 
