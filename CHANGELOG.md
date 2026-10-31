@@ -11,6 +11,11 @@ The first image build left `r5_pstate_log` out of the package: the bin list in `
 QEMU was TCG with `-cpu qemu64`. This shell could not open `/dev/kvm` (permission denied). Serial showed `publish misc/r5_pstate status 0`, vendor amd, family `0xf`, model `0x6b`, name `QEMU Virtual CPU version 2.5+`, TSC about 2297152544 Hz, and `hypervisor bit set, hardware MSRs not read`. There was no panic. After shutdown, `bfs_shell` read `/boot/home/r5-cpu.txt` with both samples and `FAT: no FAT partition found under /dev/disk`. The Ryzen 5 5625U was not booted. No P-state was written.
 
 `jam -q @r5-anyboot` then exited 0 and wrote `generated.x86_64/r5-os-anyboot.iso` (2.1G, 16:03 Europe/Amsterdam). `fdisk` shows a 2G BeFS partition and a 2.8M EFI partition (type `ef`). That ISO was not booted.
+### Mesa 25 replaces Mesa 22 on the daily image
+
+Build 10018. The jam pin still downloads Mesa 22.0.5 so OpenGL apps can compile. `scripts/install-mesa-packages.sh`, run at the end of `scripts/jam-r5-raw.sh`, then removes `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` from `r5-os.image` and adds the hpkgs in `distro/packages/x86_64`: libglvnd 1.7.0 (`libGL.so.1`), Mesa 25.3.6 (`libEGL_mesa.so.0` plus `50_mesa.json` with `./libEGL_mesa.so.0`), Lavapipe, a private LLVM 21.1.8 runtime that provides only `lib:libllvm_21` (so it does not clash with `llvm12_libs` on `liblto` / `libremarks`), and the HaikuPorts Vulkan loader 1.4.367.
+
+QEMU test image before this jam, TCG, one CPU, GTK, no KVM (this user is not in group `kvm`). `/boot/home/mesa-test.txt`: `renderer=llvmpipe (LLVM 21.1.8, 128 bits)`, `vendor=Mesa`, `version=4.5 (Compatibility Profile) Mesa 25.3.6`. The probe locked, swapped, unlocked, and exited. An earlier boot of that same image showed GLTeapot with a drawn teapot, and Get Info on `libGL.so.1` showed package 1.7.0-1. The regular image was still Mesa 22 at that point. Lavapipe was not the library that probe loaded. The 5625U was not used.
 
 ### Licenses tab uses What's new headings and Haiku's component list
 

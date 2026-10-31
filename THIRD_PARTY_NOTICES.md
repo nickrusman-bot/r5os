@@ -33,9 +33,18 @@ Oracle VirtualBox 7.2.22 Haiku additions. License: GPL-3.0-only. Some IPRT files
 
 The “or later” name on `LICENSES/GPL-3.0-or-later.txt` is the grant for new R5OS code. It is not added to the VirtualBox sources. Haiku’s MIT notices stay on the Haiku files. See `docs/LICENSING.md` and `distro/vbox-guest/README.md`.
 
-### Mesa 22.0.5
+### OpenGL stack on the image
 
-Present as a Haiku build package. Upstream Mesa is MIT. This package has not been audited file by file. The guest image is not claimed to ship Vulkan.
+Location: `distro/packages/x86_64`. Copied onto the image after jam. Mesa 22.0.5 is removed from that image.
+
+| Piece | Project | License |
+|---|---|---|
+| `libglvnd` 1.7.0 (`libGL.so.1`) | NVIDIA, 2013 | MIT |
+| Mesa 25.3.6 llvmpipe (`libEGL_mesa.so.0`) and Lavapipe | Brian Paul and others | MIT |
+| `libLLVM.so.21.1` only | University of Illinois at Urbana-Champaign, 2003-2025 | Apache-2.0 with LLVM exception |
+| Vulkan loader 1.4.367 | The Khronos Group Inc. | Apache-2.0 |
+
+The LLVM license text shipped inside the runtime package is `LICENSES/Apache-2.0-with-LLVM-exception.txt`. These packages were not audited file by file. This is CPU drawing, not the graphics chip.
 
 ## Not included
 
