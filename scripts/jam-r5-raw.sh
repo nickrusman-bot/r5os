@@ -18,6 +18,11 @@ printf '%s\n' \
 	'#endif' > "$HAIKU/headers/private/system/r5_os_version.h"
 rm -f "$HAIKU/generated.x86_64/build/last-built-revision"
 
+# About bakes What's new into a resource. The resource rule follows
+# AboutSystem.rdef, not the text file, so touch the rdef after the copy.
+sed 's/\r$//' "$WIN/distro/WHATSNEW" > "$HAIKU/src/apps/aboutsystem/r5_whatsnew.txt"
+touch "$HAIKU/src/apps/aboutsystem/AboutSystem.rdef"
+
 cd "$HAIKU/generated.x86_64"
 jam -q @r5-raw
 jam_exit=$?
