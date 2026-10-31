@@ -907,9 +907,9 @@
  
          if (fExiting)
              break;
---- a/src/VBox/Additions/haiku/VBoxTray/VBoxDisplay.cpp	2026-10-31 11:14:02.932695161 +0100
-+++ b/src/VBox/Additions/haiku/VBoxTray/VBoxDisplay.cpp	2026-10-31 09:56:50.472546508 +0100
-@@ -123,9 +123,21 @@
+--- a/src/VBox/Additions/haiku/VBoxTray/VBoxDisplay.cpp
++++ b/src/VBox/Additions/haiku/VBoxTray/VBoxDisplay.cpp
+@@ -123,12 +123,75 @@
  }
  
  
@@ -924,33 +924,90 @@
 +}
 +
 +
++static void
++apply_display_request(BScreen &screen)
++{
++    uint32_t cx = 0;
++    uint32_t cy = 0;
++    uint32_t cBits = 0;
++    uint32_t iDisplay = 0;
++    int rc2 = VbglR3GetDisplayChangeRequest(&cx, &cy, &cBits, &iDisplay,
++                                            NULL, NULL, NULL, NULL, true);
++    char line[96];
++    if (RT_FAILURE(rc2) || cx < 320 || cy < 200)
++    {
++        snprintf(line, sizeof(line), "display request rc2 %d %u x %u", rc2, cx, cy);
++        display_log(line);
++        return;
++    }
++
++    display_mode mode;
++    screen.GetMode(&mode);
++    if (cBits == 0)
++        cBits = get_depth_for_color_space(mode.space);
++    if (mode.timing.h_display == cx && mode.timing.v_display == cy)
++    {
++        snprintf(line, sizeof(line), "display %u x %u already", cx, cy);
++        display_log(line);
++        return;
++    }
++
++    mode.timing.h_display = cx;
++    mode.timing.v_display = cy;
++    mode.timing.h_total = cx;
++    mode.timing.v_total = cy;
++    mode.space = get_color_space_for_depth(cBits);
++    mode.virtual_width = cx;
++    mode.virtual_height = cy;
++
++    status_t setStatus = screen.SetMode(&mode, false);
++    snprintf(line, sizeof(line), "display %u x %u bits %u set %ld",
++             cx, cy, cBits, (long)setStatus);
++    display_log(line);
++}
++
++
  status_t VBoxDisplayService::_ServiceThread()
  {
      LogFlow(("VBoxDisplayService::_ServiceThread"));
 +    display_log("display thread");
  
      VbglR3CtlFilterMask(VMMDEV_EVENT_DISPLAY_CHANGE_REQUEST, 0);
-     VbglR3SetGuestCaps(VMMDEV_GUEST_SUPPORTS_GRAPHICS, 0);
-@@ -143,7 +155,8 @@
-             int rc2 = VbglR3GetDisplayChangeRequest(&cx, &cy, &cBits, &iDisplay, NULL, NULL, NULL, NULL, true);
-             LogFlow(("rc2=%d screen %d size changed (%d, %d, %d)\n", rc2, iDisplay, cx, cy, cBits));
+-    VbglR3SetGuestCaps(VMMDEV_GUEST_SUPPORTS_GRAPHICS, 0);
++    int caps = VbglR3SetGuestCaps(VMMDEV_GUEST_SUPPORTS_GRAPHICS, 0);
++    char line[64];
++    snprintf(line, sizeof(line), "caps %d", caps);
++    display_log(line);
++
++    /* The host does not resend a hint just because the capability flipped.
++     * Apply whatever it already asked for, then wait for the next one. */
++    apply_display_request(fScreen);
++
+     for (;;)
+     {
+         uint32_t events;
+@@ -138,33 +201,7 @@
+             continue;
  
+         if (RT_SUCCESS(rc))
+-        {
+-            uint32_t cx, cy, cBits, iDisplay;
+-            int rc2 = VbglR3GetDisplayChangeRequest(&cx, &cy, &cBits, &iDisplay, NULL, NULL, NULL, NULL, true);
+-            LogFlow(("rc2=%d screen %d size changed (%d, %d, %d)\n", rc2, iDisplay, cx, cy, cBits));
+-
 -            if (RT_SUCCESS(rc2))
-+            char line[96];
-+            if (RT_SUCCESS(rc2) && cx >= 320 && cy >= 200)
-             {
-                 display_mode mode;
-                 fScreen.GetMode(&mode);
-@@ -152,18 +165,19 @@
- 
-                 mode.timing.h_display = cx;
-                 mode.timing.v_display = cy;
-+                mode.timing.h_total = cx;
-+                mode.timing.v_total = cy;
-                 mode.space            = get_color_space_for_depth(cBits);
-                 mode.virtual_width    = cx;
-                 mode.virtual_height   = cy;
- 
+-            {
+-                display_mode mode;
+-                fScreen.GetMode(&mode);
+-                if (cBits == 0)
+-                    cBits = get_depth_for_color_space(mode.space);
+-
+-                mode.timing.h_display = cx;
+-                mode.timing.v_display = cy;
+-                mode.space            = get_color_space_for_depth(cBits);
+-                mode.virtual_width    = cx;
+-                mode.virtual_height   = cy;
+-
 -                /*= {
 -                    {0, cx, 0, 0, cBits * cx / 8, cy, 0, 0, cBits * cy / 8, 0},
 -                    get_color_space_for_depth(cBits),
@@ -958,18 +1015,14 @@
 -                };*/
 -
 -                fScreen.SetMode(&mode, false);
-+                status_t setStatus = fScreen.SetMode(&mode, false);
-+                snprintf(line, sizeof(line), "display %u x %u bits %u set %ld",
-+                         cx, cy, cBits, (long)setStatus);
-             }
-+            else
-+                snprintf(line, sizeof(line), "display request rc2 %d %u x %u", rc2, cx, cy);
-+            display_log(line);
-         }
+-            }
+-        }
++            apply_display_request(fScreen);
          else
              fExiting = true;
---- a/src/VBox/Additions/haiku/VBoxTray/VBoxGuestApplication.cpp	2026-10-31 11:14:02.932536960 +0100
-+++ b/src/VBox/Additions/haiku/VBoxTray/VBoxGuestApplication.cpp	2026-10-31 09:56:44.580547882 +0100
+ 
+--- a/src/VBox/Additions/haiku/VBoxTray/VBoxGuestApplication.cpp
++++ b/src/VBox/Additions/haiku/VBoxTray/VBoxGuestApplication.cpp
 @@ -61,14 +61,16 @@
  #include <iprt/log.h>
  
@@ -988,7 +1041,7 @@
  
  VBoxGuestApplication::VBoxGuestApplication()
       : BApplication(VBOX_GUEST_APP_SIG)
-@@ -83,11 +85,45 @@
+@@ -83,11 +85,58 @@
  
  void VBoxGuestApplication::ReadyToRun()
  {
@@ -1002,14 +1055,27 @@
 +    /*
 +     * Clipboard and display stay in this process. The Deskbar replicant
 +     * is not loaded; that would pull this program into Deskbar.
++     * Sign in starts this after the desktop exists, so the guest device
++     * is already there. Retry the open anyway: one miss used to return
++     * before the display thread advertised graphics support.
 +     */
 +    if (log)
 +        fprintf(log, "tray start\n");
-+    snooze(8000000);
 +
 +    rc = RTR3InitDll(RTR3INIT_FLAGS_UNOBTRUSIVE);
-+    if (RT_SUCCESS(rc))
-+        rc = VbglR3Init();
++    for (int attempt = 0; attempt < 8 && RT_SUCCESS(rc); attempt++)
++    {
++        int guest = VbglR3Init();
++        if (RT_SUCCESS(guest))
++        {
++            rc = guest;
++            break;
++        }
++        rc = guest;
++        if (log)
++            fprintf(log, "init %d attempt %d\n", guest, attempt);
++        snooze(500000);
++    }
 +    if (RT_FAILURE(rc))
 +    {
 +        if (log)

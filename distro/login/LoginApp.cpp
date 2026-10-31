@@ -28,6 +28,7 @@
 #include <image.h>
 #include <pwd.h>
 #include <shadow.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,6 +70,33 @@ keep_team(const app_info& info, team_id self)
 	if (path.InitCheck() == B_OK && path.Path() != NULL
 		&& strstr(path.Path(), "/servers/") != NULL)
 		return true;
+	return false;
+}
+
+
+static void
+stop_team_named(const char* needle)
+{
+	int32 cookie = 0;
+	team_info info;
+	while (get_next_team_info(&cookie, &info) == B_OK) {
+		if (strstr(info.args, needle) == NULL)
+			continue;
+		send_signal(info.team, SIGTERM);
+		r5_session_log("signal %s team %d", needle, (int)info.team);
+	}
+}
+
+
+static bool
+team_named(const char* needle)
+{
+	int32 cookie = 0;
+	team_info info;
+	while (get_next_team_info(&cookie, &info) == B_OK) {
+		if (strstr(info.args, needle) != NULL)
+			return true;
+	}
 	return false;
 }
 
@@ -258,6 +286,7 @@ LoginApp::TryLogin(BMessage* message)
 						"--add-volume");
 					_LaunchSessionApp("/system/servers/airplay_deskbar");
 					_LaunchSessionApp("/system/servers/r5_vbox_clip");
+					_StartVirtualBoxGuest();
 					_LaunchSessionHooks();
 				}
 				r5_session_log("sign-in done: %s", strerror(status));
@@ -368,6 +397,8 @@ LoginApp::Logout()
 	_WaitGone("application/x-vnd.Haiku-NetworkStatus");
 	_WaitGone("application/x-vnd.R5OS-airplay-tray");
 	_WaitGone("application/x-vnd.R5OS-vbox-clip");
+	_WaitGone("application/x-vnd.Oracle-VBoxGuest");
+	stop_team_named("VBoxService");
 	_WaitGone("application/x-vnd.Be-TRAK");
 	_WaitGone("application/x-vnd.Be-TSKB");
 	_ShowLogin();
@@ -454,6 +485,45 @@ LoginApp::_LaunchSessionApp(const char* program, const char* argument,
 	}
 	r5_session_log("r5-desktop %s ok", program);
 	return B_OK;
+}
+
+
+void
+LoginApp::_StartVirtualBoxGuest()
+{
+	// The desktop target in launch_daemon is not enabled. Sign in starts
+	// these itself, and only when the guest device is there. QEMU and real
+	// hardware have no /dev/misc/vboxguest, so this returns without mounting.
+	if (access("/dev/misc/vboxguest", F_OK) != 0)
+		return;
+
+	if (!team_named("VBoxService")) {
+		_LaunchSessionApp("/system/non-packaged/bin/VBoxService",
+			"-f", "--disable-memballoon", "--timesync-no-set-start");
+	}
+
+	BPath home;
+	if (_SessionHome(home) == B_OK) {
+		const char* args[] = {
+			"/bin/sh",
+			"/system/non-packaged/bin/r5-vbox-shares",
+			home.Path(),
+			NULL
+		};
+		r5_session_log("launch r5-vbox-shares %s", home.Path());
+		thread_id thread = load_image(3, args, (const char**)environ);
+		if (thread < B_OK) {
+			r5_session_log("r5-vbox-shares: %s", strerror(thread));
+		} else {
+			resume_thread(thread);
+			status_t result = B_ERROR;
+			wait_for_thread(thread, &result);
+			r5_session_log("r5-vbox-shares: %s", strerror(result));
+		}
+	}
+
+	if (!be_roster->IsRunning("application/x-vnd.Oracle-VBoxGuest"))
+		_LaunchSessionApp("/system/non-packaged/bin/VBoxTray");
 }
 
 

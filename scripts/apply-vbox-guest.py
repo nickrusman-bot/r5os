@@ -115,6 +115,11 @@ def stage_source() -> None:
         shutil.copy2(src, SRC / name)
     readme = ROOT / "distro" / "vbox-guest" / "README.md"
     shutil.copy2(readme, SRC / "README.md")
+    shares = ROOT / "distro" / "vbox-guest" / "r5-vbox-shares.sh"
+    if not shares.is_file():
+        fail(f"missing {shares}")
+    script = shares.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    (SRC / "r5-vbox-shares.sh").write_bytes(script)
 
     digest = sha256(archive)
     notice = f"""VirtualBox Guest Additions 7.2.22 as installed on this R5OS disk.
@@ -146,10 +151,11 @@ Installed on this disk:
 - /boot/system/non-packaged/bin/VBoxService
 - /boot/system/non-packaged/bin/VBoxTray
 - /boot/system/non-packaged/bin/VBoxControl
+- /boot/system/non-packaged/bin/r5-vbox-shares (R5OS script, not part of the VirtualBox source)
 
-To install a modified version, build with those scripts and the R5OS AMD64 cross compiler, copy the files to the same paths, and restart. No extra key is required. Removing vboxvideo leaves the VESA display. Safe mode skips the VirtualBox launch jobs.
+To install a modified version, build with those scripts and the R5OS AMD64 cross compiler, copy the files to the same paths, and restart. No extra key is required. Removing vboxvideo leaves the VESA display.
 
-A host shared folder is not mounted by itself. When VirtualBox offers one, mount it with:
+Sign in mounts each host share when /dev/misc/vboxguest exists. The same check starts VBoxService and VBoxTray. QEMU and real hardware do not have that device, so nothing is mounted. A share can still be mounted by hand:
 mount -t vboxsf -p <share-name> <directory>
 
 The clipboard R5OS starts on its own is the serial clipboard. VirtualBox drag-and-drop is not part of this build.
@@ -185,8 +191,10 @@ local r5VBoxReadme = <r5vbox>README.md ;
 local r5VBoxBuild = <r5vbox>build-vbox-additions.sh ;
 local r5VBoxSetup = <r5vbox>vbox-additions-setup.py ;
 local r5VBoxPkg = <r5vbox>vbox-pkg-config.py ;
+local r5VBoxShares = <r5vbox>r5-vbox-shares.sh ;
 SEARCH on $(r5VBoxTarball) $(r5VBoxPatch) $(r5VBoxCopying) $(r5VBoxNotice)
-	$(r5VBoxReadme) $(r5VBoxBuild) $(r5VBoxSetup) $(r5VBoxPkg) = $(r5VBoxSrc) ;
+	$(r5VBoxReadme) $(r5VBoxBuild) $(r5VBoxSetup) $(r5VBoxPkg)
+	$(r5VBoxShares) = $(r5VBoxSrc) ;
 
 AddDirectoryToHaikuImage system non-packaged add-ons kernel generic ;
 AddDirectoryToHaikuImage system non-packaged add-ons kernel file_systems ;
@@ -209,6 +217,7 @@ AddFilesToHaikuImage system non-packaged add-ons accelerants
 AddFilesToHaikuImage system non-packaged bin : $(r5VBoxTray) : VBoxTray ;
 AddFilesToHaikuImage system non-packaged bin : $(r5VBoxService) : VBoxService ;
 AddFilesToHaikuImage system non-packaged bin : $(r5VBoxControl) : VBoxControl ;
+AddFilesToHaikuImage system non-packaged bin : $(r5VBoxShares) : r5-vbox-shares ;
 
 AddFilesToHaikuImage system non-packaged data licenses virtualbox
 	: $(r5VBoxTarball) : VirtualBox-7.2.22.tar.bz2 ;
@@ -233,7 +242,51 @@ def patch_jam() -> None:
     path = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
     text = path.read_text(encoding="utf-8")
     if JAM_MARK in text:
-        print(f"already {path.name} (vbox guest image)")
+        if "r5-vbox-shares" not in text:
+            old = (
+                "AddFilesToHaikuImage system non-packaged bin "
+                ": $(r5VBoxControl) : VBoxControl ;\n"
+            )
+            new = (
+                old
+                + "AddFilesToHaikuImage system non-packaged bin "
+                + ": $(r5VBoxShares) : r5-vbox-shares ;\n"
+            )
+            search_old = (
+                "\t$(r5VBoxReadme) $(r5VBoxBuild) $(r5VBoxSetup) "
+                "$(r5VBoxPkg) = $(r5VBoxSrc) ;\n"
+            )
+            search_new = (
+                "\t$(r5VBoxReadme) $(r5VBoxBuild) $(r5VBoxSetup) "
+                "$(r5VBoxPkg)\n"
+                "\t$(r5VBoxShares) = $(r5VBoxSrc) ;\n"
+            )
+            local_old = "local r5VBoxPkg = <r5vbox>vbox-pkg-config.py ;\n"
+            local_new = (
+                local_old
+                + "local r5VBoxShares = <r5vbox>r5-vbox-shares.sh ;\n"
+            )
+            if old not in text or search_old not in text or local_old not in text:
+                fail(f"vbox jam block is missing the share-script anchor in {path}")
+            text = text.replace(local_old, local_new, 1)
+            text = text.replace(search_old, search_new, 1)
+            text = text.replace(old, new, 1)
+            path.write_text(text, encoding="utf-8")
+            print(f"patched {path.name} (vbox share script)")
+        else:
+            wrong = (
+                "AddFilesToHaikuImage system bin "
+                ": $(r5VBoxShares) : r5-vbox-shares ;\n"
+            )
+            right = (
+                "AddFilesToHaikuImage system non-packaged bin "
+                ": $(r5VBoxShares) : r5-vbox-shares ;\n"
+            )
+            if wrong in text:
+                path.write_text(text.replace(wrong, right, 1), encoding="utf-8")
+                print(f"patched {path.name} (share script to non-packaged)")
+            else:
+                print(f"already {path.name} (vbox guest image)")
         return
     anchor = "AddFilesToHaikuImage home config settings : $(shortcutsSettingsFile) ;\n"
     if anchor not in text:
@@ -243,41 +296,37 @@ def patch_jam() -> None:
 
 
 def patch_launch() -> None:
+    # Sign in starts VBoxService, VBoxTray, and the share script. The desktop
+    # launch target is not enabled, so jobs placed there never run. Remove
+    # them if an earlier apply added them, so a later target enable cannot
+    # start a second copy.
     path = HAIKU / "data" / "launch" / "user"
     text = path.read_text(encoding="utf-8")
-    if LAUNCH_MARK in text:
-        print(f"already {path.name} (vbox guest jobs)")
-        return
-    anchor = (
-        "\tjob x-vnd.R5OS-vbox-clip {\n"
-        "\t\tlaunch /system/servers/r5_vbox_clip\n"
+    removed = False
+    for block in (
+        "\n\tjob x-vnd.R5OS-vbox-service {\n"
+        "\t\tlaunch /system/non-packaged/bin/VBoxService -f "
+        "--disable-memballoon --timesync-no-set-start\n"
+        "\t\tlegacy\n"
+        "\t\tno_safemode\n"
+        "\t}\n",
+        "\n\tjob x-vnd.R5OS-vbox-tray {\n"
+        "\t\tlaunch /system/non-packaged/bin/VBoxTray\n"
         "\t\trequires x-vnd.Be-TSKB\n"
         "\t\tlegacy\n"
         "\t\tno_safemode\n"
-        "\t}\n"
-    )
-    insert = (
-        anchor
-        + "\n"
-        + "\tjob x-vnd.R5OS-vbox-service {\n"
-        + "\t\tlaunch /system/non-packaged/bin/VBoxService -f --disable-memballoon --timesync-no-set-start\n"
-        + "\t\tlegacy\n"
-        + "\t\tno_safemode\n"
-        + "\t}\n"
-        + "\n"
-        + "\tjob x-vnd.R5OS-vbox-tray {\n"
-        + "\t\tlaunch /system/non-packaged/bin/VBoxTray\n"
-        + "\t\trequires x-vnd.Be-TSKB\n"
-        + "\t\tlegacy\n"
-        + "\t\tno_safemode\n"
-        + "\t}\n"
-    )
-    if anchor not in text:
-        fail(f"pattern not found in {path} (vbox guest jobs)")
-    if text.count(anchor) != 1:
-        fail(f"vbox clip job anchor is not unique in {path}")
-    path.write_text(text.replace(anchor, insert, 1), encoding="utf-8")
-    print(f"patched {path} (vbox guest jobs)")
+        "\t}\n",
+    ):
+        if block in text:
+            text = text.replace(block, "\n", 1)
+            removed = True
+    if removed:
+        path.write_text(text, encoding="utf-8")
+        print(f"patched {path.name} (Login starts the guest)")
+    elif LAUNCH_MARK in text:
+        fail(f"{path} still has {LAUNCH_MARK} in an unexpected shape")
+    else:
+        print(f"already {path.name} (no vbox service job)")
 
 
 def main() -> int:

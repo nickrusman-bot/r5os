@@ -32,7 +32,13 @@ python3 "$ROOT/scripts/vbox-additions-setup.py"
 cd "$R5OS_VBOX_TREE"
 # shellcheck disable=SC1091
 . ./env.sh
-export PATH="$WRAP:$TOOLS:$PATH:$CROSS/bin"
+# Host programs (yasm, xsltproc, the bldRT* tools) must see Linux gcc.
+# The Haiku compiler is selected with TOOL_*_PREFIX, not by putting the
+# cross wrappers ahead of /usr/bin. Those wrappers are named gcc/g++ too.
+export PATH="/usr/bin:$TOOLS:$PATH:$CROSS/bin"
+if [ -d "$R5OS_VBOX_TREE/../host-tools/bin" ]; then
+	export PATH="$R5OS_VBOX_TREE/../host-tools/bin:$PATH"
+fi
 if [ -d "$R5OS_VBOX_TREE/../host-tools/lib" ]; then
 	export LD_LIBRARY_PATH="$R5OS_VBOX_TREE/../host-tools/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi

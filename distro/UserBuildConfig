@@ -15,7 +15,7 @@ switch $(HAIKU_BUILD_PROFILE) {
 		HAIKU_ROOT_USER_REAL_NAME = "R5OS" ;
 		HAIKU_IMAGE_HOST_NAME = r5os ;
 		HAIKU_IMAGE_LABEL = "R5OS" ;
-		HAIKU_IMAGE_SIZE = 1200 ;
+		HAIKU_IMAGE_SIZE = 2048 ;
 
 		AddGroupToHaikuImage party : 101 : user sshd ;
 

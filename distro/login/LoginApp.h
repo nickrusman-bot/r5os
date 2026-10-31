@@ -49,6 +49,7 @@ private:
 						const char* argument3 = NULL,
 						const char* argument4 = NULL);
 	void			_LaunchSessionHooks();
+	void			_StartVirtualBoxGuest();
 	status_t		_SessionHome(BPath& path) const;
 	status_t		_WaitRunning(const char* signature);
 	status_t		_WaitSessionTeam(const char* signature);
