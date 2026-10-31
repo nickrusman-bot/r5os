@@ -207,19 +207,25 @@ LogoView::Draw(BRect updateRect)
     )
     replace_once(
         path,
-        "			HyperTextView*	fCreditsView;\n",
+        "			HyperTextView*	fCreditsView;\n"
+        "\n"
+        "			bigtime_t		fLastActionTime;\n",
         "			HyperTextView*	fCreditsView;\n"
         "			HyperTextView*	fWhatsNewView;\n"
-        "			BTabView*		fTabView;\n",
+        "			BTabView*		fTabView;\n"
+        "\n"
+        "			bigtime_t		fLastActionTime;\n",
         "AboutView tab members",
         optional=True,
     )
     replace_once(
         path,
-        "	fCreditsView(NULL),\n",
+        "	fCreditsView(NULL),\n"
+        "	fLastActionTime(system_time()),\n",
         "	fCreditsView(NULL),\n"
         "	fWhatsNewView(NULL),\n"
-        "	fTabView(NULL),\n",
+        "	fTabView(NULL),\n"
+        "	fLastActionTime(system_time()),\n",
         "AboutView tab init",
         optional=True,
     )
@@ -528,12 +534,178 @@ def patch_gpl_credit() -> None:
     )
 
 
+def patch_license_entries() -> None:
+    """Style license headings, and list Haiku's own components with links."""
+    path = ABOUT / "AboutSystem.cpp"
+    text = path.read_text(encoding="utf-8")
+    marker = "fLicensesView != NULL ? 2 : 1"
+    if marker in text:
+        print("already AboutSystem.cpp (license links)")
+        return
+
+    start = text.find(
+        "void\nAboutView::AddCopyrightEntry(const char* name, const char* text,\n"
+        "\tconst StringVector& licenses, const StringVector& sources,\n"
+        "\tconst char* url)\n{\n"
+    )
+    end = text.find("\n\nvoid\nAboutView::PickRandomHaiku()", start)
+    if start < 0 or end < 0:
+        raise SystemExit("AddCopyrightEntry body not found")
+    body = text[start:end]
+    body = body.replace("fCreditsView->", "view->")
+    wrapped = (
+        "void\nAboutView::AddCopyrightEntry(const char* name, const char* text,\n"
+        "\tconst StringVector& licenses, const StringVector& sources,\n"
+        "\tconst char* url)\n{\n"
+        "\tHyperTextView* views[] = { fCreditsView, fLicensesView };\n"
+        "\tint32 viewCount = fLicensesView != NULL ? 2 : 1;\n"
+        "\tfor (int32 viewIndex = 0; viewIndex < viewCount; viewIndex++) {\n"
+        "\t\tHyperTextView* view = views[viewIndex];\n"
+        "\t\tif (view == NULL)\n"
+        "\t\t\tcontinue;\n"
+    )
+    # Drop the original signature; keep the statements, one extra indent.
+    brace = body.find("{\n")
+    statements = body[brace + 2:]
+    indented = "".join(
+        ("\t" + line if line else line)
+        for line in statements.splitlines(keepends=True)
+    )
+    if not indented.endswith("\t}\n"):
+        # The function closes with a single tabbed brace.
+        pass
+    # The original closing brace is the function's. Pull it inside the loop.
+    if not indented.rstrip().endswith("}"):
+        raise SystemExit("AddCopyrightEntry has no closing brace")
+    close_at = indented.rfind("}")
+    inside = indented[:close_at]
+    wrapped += inside + "\t}\n}\n"
+    text = text[:start] + wrapped + text[end:]
+
+    old_tabs = (
+        "AboutView::_CreateInfoTabs()\n"
+        "{\n"
+        "\tCropView* credits = _CreateCreditsView();\n"
+    )
+    new_tabs = (
+        "AboutView::_CreateInfoTabs()\n"
+        "{\n"
+        "\tfLicensesView = new HyperTextView(\"licenses\");\n"
+        "\tfLicensesView->SetFlags(fLicensesView->Flags() | B_FRAME_EVENTS);\n"
+        "\tfLicensesView->SetStylable(true);\n"
+        "\tfLicensesView->MakeEditable(false);\n"
+        "\tfLicensesView->SetWordWrap(true);\n"
+        "\tfLicensesView->SetInsets(5, 5, 5, 5);\n"
+        "\tfLicensesView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);\n"
+        "\t_FillLicenses();\n"
+        "\n"
+        "\tCropView* credits = _CreateCreditsView();\n"
+    )
+    if old_tabs not in text:
+        raise SystemExit("info tabs order not found")
+    text = text.replace(old_tabs, new_tabs, 1)
+    # The later block still created the view. Drop that second construction.
+    duplicate = (
+        "\tfLicensesView = new HyperTextView(\"licenses\");\n"
+        "\tfLicensesView->SetFlags(fLicensesView->Flags() | B_FRAME_EVENTS);\n"
+        "\tfLicensesView->SetStylable(true);\n"
+        "\tfLicensesView->MakeEditable(false);\n"
+        "\tfLicensesView->SetWordWrap(true);\n"
+        "\tfLicensesView->SetInsets(5, 5, 5, 5);\n"
+        "\tfLicensesView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);\n"
+        "\t_FillLicenses();\n"
+        "\n"
+        "\tBScrollView* licenseScroller = new BScrollView(\"licenseScroller\",\n"
+    )
+    if text.count(duplicate) != 1:
+        raise SystemExit("license view construction count is wrong")
+    text = text.replace(
+        duplicate,
+        "\tBScrollView* licenseScroller = new BScrollView(\"licenseScroller\",\n",
+        1,
+    )
+
+    old_fill = (
+        "void\n"
+        "AboutView::_FillLicenses()\n"
+        "{\n"
+        "\tBString text;\n"
+    )
+    new_fill = '''void
+AboutView::_FillLicenses()
+{
+	BString text;
+	BResources* resources = BApplication::AppResources();
+	if (resources != NULL) {
+		size_t size = 0;
+		const void* data = resources->LoadResource(B_STRING_TYPE,
+			"r5_licenses", &size);
+		if (data != NULL && size > 0)
+			text.SetTo(static_cast<const char*>(data), (int32)size);
+	}
+	if (text.Length() > 0 && text[text.Length() - 1] == '\\0')
+		text.Truncate(text.Length() - 1);
+
+	BFont headingFont(be_bold_font);
+	headingFont.SetSize(headingFont.Size() + 2);
+
+	int32 start = 0;
+	while (start < text.Length()) {
+		int32 end = text.FindFirst('\\n', start);
+		if (end < 0)
+			end = text.Length();
+		BString line;
+		text.CopyInto(line, start, end - start);
+		if (line.StartsWith("http://") || line.StartsWith("https://")) {
+			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
+				&fLinkColor);
+			fLicensesView->InsertHyperText(line, new URLAction(line.String()));
+		} else if (line.Length() > 0 && line.FindFirst(".") < 0) {
+			fLicensesView->SetFontAndColor(&headingFont, B_FONT_ALL,
+				&fHaikuGreenColor);
+			fLicensesView->Insert(line);
+		} else {
+			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
+				&fTextColor);
+			fLicensesView->Insert(line);
+		}
+		fLicensesView->Insert("\\n");
+		if (end >= text.Length())
+			break;
+		start = end + 1;
+	}
+}
+
+
+void
+AboutView::_FillLicensesUnusedAnchor()
+{
+	BString text;
+'''
+    if old_fill not in text:
+        raise SystemExit("FillLicenses not found")
+    text = text.replace(old_fill, new_fill, 1)
+    # Remove the unused anchor function left so the old resource-load stays
+    # deleted. The anchor plus the original loader is now duplicate junk.
+    anchor = text.find("void\nAboutView::_FillLicensesUnusedAnchor()")
+    if anchor < 0:
+        raise SystemExit("anchor missing")
+    # Original function continued until CropView* _CreateCreditsView.
+    crop = text.find("\n\nCropView*\nAboutView::_CreateCreditsView()", anchor)
+    if crop < 0:
+        raise SystemExit("credits view after fill not found")
+    text = text[:anchor] + text[crop + 2:]
+    path.write_text(text, encoding="utf-8")
+    print("patched AboutSystem.cpp (license links)")
+
+
 def main() -> int:
     copy_whatsnew()
     patch_rdef()
     patch_jam()
     patch_cpp()
     patch_gpl_credit()
+    patch_license_entries()
     return 0
 
 

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Licenses tab uses What's new headings and Haiku's component list
+
+Build 10017. Section titles on the Licenses tab are green and bold, like What's new. Lines that are only a web address are links. After that summary, the tab lists the same components Credits already lists (libprint and the rest), with the same license-file and site links. Credits itself is unchanged. The first compile failed because this Haiku `BString` has no `Contains`; the heading test uses `FindFirst(".")`. AMD64 jam then finished with exit 0 (1105 targets). The tab was not opened from here.
+
 ### About has a Licenses tab
 
 Build 10016. About's Credits tab no longer carries the VirtualBox GPL paragraph. That text, plus the R5OS, Haiku, and AirPlay license notes, is a Licenses tab. Credits still names people and projects, including a short VirtualBox line. The tab words are `distro/about/licenses.txt`. AMD64 jam of the SPDX headers (pull request 92) finished with `jam_exit=0` and updated 1310 targets. The Licenses tab itself has not been opened on a booted screen.
