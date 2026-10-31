@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### About has a Licenses tab
+
+Build 10016. About's Credits tab no longer carries the VirtualBox GPL paragraph. That text, plus the R5OS, Haiku, and AirPlay license notes, is a Licenses tab. Credits still names people and projects, including a short VirtualBox line. The tab words are `distro/about/licenses.txt`. AMD64 jam of the SPDX headers (pull request 92) finished with `jam_exit=0` and updated 1310 targets. The Licenses tab itself has not been opened on a booted screen.
+
 ### SPDX headers on R5OS-owned source
 
 Files that R5OS wrote as a whole now carry `SPDX-FileCopyrightText: 2026 R5OS Contributors` and `SPDX-License-Identifier: GPL-3.0-or-later`. That covers the new Login pieces (lock screen, session helper, tray), Users & Accounts, the IPv6 and Wi-Fi code, AirPrint, the COM1 clipboard, mDNS, and the AirPlay Deskbar program. Four IPv6 headers had said MIT under a 2026 R5OS copyright. That grant is now GPL-3.0-or-later.
