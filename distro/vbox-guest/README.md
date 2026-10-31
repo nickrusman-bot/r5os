@@ -1,6 +1,6 @@
 # VirtualBox 7.2.22 Haiku guest additions
 
-The product image does not contain these binaries. A throwaway VirtualBox disk has run the display, a host resize, and one shared-folder copy. Build notes for that disk are in `docs/VBOX-GUEST.md`.
+The daily image installs these binaries, the GNU GPL version 3 text, the 7.2.22 source tarball, and this patch. `scripts/apply-vbox-guest.py` copies them at apply time and stops if the local build or the tarball is missing. The binaries and the tarball are not stored in git. A throwaway VirtualBox disk has run the display, a host resize, and one shared-folder copy. Build notes for that disk are in `docs/VBOX-GUEST.md`. The daily image itself has to be booted before that same result is claimed for it.
 
 Oracle VirtualBox 7.2.22 is **GPL-3.0-only**. Some IPRT files are GPL-3.0-only OR CDDL-1.0; this tree takes the GPL-3.0-only choice. The Haiku copyright lines in the additions stay as they are. Do not paste this code into an MIT file. An image that contains `vboxguest`, `vboxdev`, `vboxsf`, `vboxvideo`, the accelerant, `VBoxService`, `VBoxTray`, or `VBoxControl` also ships `LICENSES/GPL-3.0-or-later.txt` and the 7.2.22 source plus the patch in this directory. The “or later” name on that license file is for new R5OS code. It is not added to the VirtualBox sources. See `docs/LICENSING.md`.
 
@@ -41,16 +41,17 @@ python3 /path/to/r5os/scripts/vbox-additions-setup.py
 
 Outputs, under `$R5OS_VBOX_TREE/out/haiku.amd64/release/bin/additions/`:
 
-| File | Guest path on a throwaway disk |
+| File | Guest path |
 |---|---|
 | `vboxguest` | `/boot/system/non-packaged/add-ons/kernel/generic/vboxguest` |
+| `vboxdev` | `/boot/system/non-packaged/add-ons/kernel/drivers/dev/misc/vboxguest` |
 | `vboxsf` | `/boot/system/non-packaged/add-ons/kernel/file_systems/vboxsf` |
 | `vboxvideo` | `/boot/system/non-packaged/add-ons/kernel/drivers/dev/graphics/vboxvideo` |
 | `vboxvideo.accelerant` | `/boot/system/non-packaged/add-ons/accelerants/vboxvideo.accelerant` |
 | `VBoxTray`, `VBoxService`, `VBoxControl` | `/boot/system/non-packaged/bin/` |
 
-`drivers/dev/misc/vboxguest` is a small IDC stub. Do not replace it with the large `vboxguest` module.
-
 `kmk` does not attach `VBoxTray`'s resources. The build script runs Haiku `xres -o` so Deskbar sees `B_BACKGROUND_APP`.
 
-These files are not copied into `generated/r5-os.vdi` by the product script. QEMU and a real machine have no VirtualBox guest device; the same jobs then fail the open and do not mount a share.
+`vboxdev` is the small device stub. It is installed under the name `vboxguest` in `drivers/dev/misc`. Do not replace that stub with the large generic module.
+
+The license text, the tarball, the patch, and the build scripts are installed at `/boot/system/non-packaged/data/licenses/virtualbox`. The image does not mount a host share by itself. QEMU and a real machine have no VirtualBox guest device; the same jobs then fail the open and do not mount a share. The product script still leaves VirtualBox clipboard mode and drag-and-drop disabled. The serial clipboard stays the one R5OS starts.

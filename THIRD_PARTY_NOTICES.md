@@ -27,9 +27,9 @@ The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense and Apa
 
 ### VirtualBox Guest Additions 7.2.22
 
-Oracle VirtualBox 7.2.22 Haiku additions. License: GPL-3.0-only. Some IPRT files are GPL-3.0-only OR CDDL-1.0; we take the GPL-3.0-only choice. The Oracle tarball is not in git. The R5OS build fixes are `distro/vbox-guest/virtualbox-7.2.22-r5os.patch`. The binaries are not in git and not in the current R5OS image. They are not MIT.
+Oracle VirtualBox 7.2.22 Haiku additions. License: GPL-3.0-only. Some IPRT files are GPL-3.0-only OR CDDL-1.0; we take the GPL-3.0-only choice. The Oracle tarball is not in git. The R5OS build fixes are `distro/vbox-guest/virtualbox-7.2.22-r5os.patch`. The binaries are not in git. The daily image installs them, plus the unmodified GNU GPL version 3 and that source, at `/boot/system/non-packaged/data/licenses/virtualbox`. They are not MIT.
 
-An image that contains `vboxguest`, `vboxdev`, `vboxsf`, `vboxvideo`, `VBoxService`, `VBoxTray`, or `VBoxControl` ships the unmodified GNU GPL version 3 in `LICENSES/GPL-3.0-or-later.txt`, plus the corresponding 7.2.22 source, including that patch. The “or later” name on that file is the grant for new R5OS code. It is not added to the VirtualBox sources. Haiku’s MIT notices stay on the Haiku files. See `docs/LICENSING.md` and `distro/vbox-guest/README.md`.
+The “or later” name on `LICENSES/GPL-3.0-or-later.txt` is the grant for new R5OS code. It is not added to the VirtualBox sources. Haiku’s MIT notices stay on the Haiku files. See `docs/LICENSING.md` and `distro/vbox-guest/README.md`.
 
 ### Mesa 22.0.5
 

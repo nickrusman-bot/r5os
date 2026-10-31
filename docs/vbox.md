@@ -2,11 +2,11 @@
 
 Plan for Guest Additions: `docs/VBOX-GUEST.md`.
 
-The product image has **no VirtualBox Guest Additions** installed. The 7.2.22 source fix and the build are `distro/vbox-guest/`. On the daily image, expect:
+The daily image installs the 7.2.22 guest additions (`distro/vbox-guest/`, copied at apply time). On that image:
 
-- no `vboxsf` shared folders
-- no automatic guest resolution
-- no VirtualBox drag-and-drop (that protocol is Guest Additions; GitHub issue 89)
+- `vboxsf` is present. A share is mounted only when the host offers one and someone mounts it. The product script does not add a share.
+- the guest display can follow the VirtualBox window. VESA stays the fallback when the VirtualBox display device is absent.
+- no VirtualBox drag-and-drop (that protocol is not built for Haiku in 7.2.22; GitHub issue 89)
 
 **Text clipboard** is a COM1 named-pipe bridge (`r5_vbox_clip` in the guest, `scripts/vbox-clipboard-host.ps1` on Windows). It is not Devices → Shared Clipboard. Unicode text only, ~256 KB. `-NoClip` skips the host helper.
 
