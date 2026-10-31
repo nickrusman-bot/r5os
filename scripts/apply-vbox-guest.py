@@ -155,7 +155,7 @@ Installed on this disk:
 
 To install a modified version, build with those scripts and the R5OS AMD64 cross compiler, copy the files to the same paths, and restart. No extra key is required. Removing vboxvideo leaves the VESA display.
 
-Sign in mounts each host share when /dev/misc/vboxguest exists. The same check starts VBoxService and VBoxTray. QEMU and real hardware do not have that device, so nothing is mounted. A share can still be mounted by hand:
+Sign in mounts each host share when /dev/misc/vboxguest exists. The Desktop folder is named VBox Share. VirtualBox does not allow a space in the share name, so that label is not the host share's name. The same check starts VBoxService and VBoxTray. QEMU and real hardware do not have that device, so nothing is mounted. A share can still be mounted by hand:
 mount -t vboxsf -p <share-name> <directory>
 
 The clipboard R5OS starts on its own is the serial clipboard. VirtualBox drag-and-drop is not part of this build.

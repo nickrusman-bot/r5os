@@ -503,8 +503,31 @@
  static inline void
  mutex_transfer_lock(mutex* lock, thread_id thread)
  {
---- a/src/VBox/Additions/haiku/SharedFolders/vboxsf.c	2026-10-31 11:14:02.928677308 +0100
-+++ b/src/VBox/Additions/haiku/SharedFolders/vboxsf.c	2026-10-31 10:41:15.948477012 +0100
+--- a/src/VBox/Additions/haiku/SharedFolders/vboxsf.h
++++ b/src/VBox/Additions/haiku/SharedFolders/vboxsf.h
+@@ -81,6 +81,7 @@
+     PSHFLSTRING name;
+     PSHFLSTRING path;
+     ino_t vnode;
++    ino_t parent;
+     struct vboxsf_vnode* next;
+ } vboxsf_vnode;
+ 
+--- a/src/VBox/Additions/haiku/SharedFolders/Makefile.kmk
++++ b/src/VBox/Additions/haiku/SharedFolders/Makefile.kmk
+@@ -71,6 +71,10 @@
+ # The DEBUG_HASH* stuff is for CONFIG_DYNAMIC_DEBUG-enabled kernels
+ #
+ vboxsf_TEMPLATE        = VBoxGuestR0Drv
++# Match the vboxsf layout that already loads: SysV hash, no GNU_RELRO, and
++# .rodata inside the executable segment. A read-only PT_LOAD is skipped, and
++# a GNU hash alone is not enough for this kernel.
++vboxsf_LDFLAGS         = -z noseparate-code -z norelro --hash-style=sysv
+ vboxsf_DEFS            = \
+ 	MODULE IN_RT_R0 VBOXGUEST VBOX_WITH_HGCM \
+ 	KBUILD_MODNAME=KBUILD_STR\(vboxsf\) \
+--- a/src/VBox/Additions/haiku/SharedFolders/vboxsf.c
++++ b/src/VBox/Additions/haiku/SharedFolders/vboxsf.c
 @@ -54,75 +54,79 @@
   */
  
@@ -665,8 +688,100 @@
      PSHFLSTRING sharename = make_shflstring(args);
  
      vboxsf_volume* vbsfvolume = malloc(sizeof(vboxsf_volume));
---- a/src/VBox/Additions/haiku/SharedFolders/vnode_cache.cpp	2026-10-31 11:14:02.928402736 +0100
-+++ b/src/VBox/Additions/haiku/SharedFolders/vnode_cache.cpp	2026-10-30 11:38:47.663723412 +0100
+@@ -251,7 +271,12 @@
+         }
+ 
+         status_t rs = vboxsf_new_vnode(&vbsfvolume->map, name, name, &root_vnode);
+-        dprintf(FS_NAME ": allocated %p (path=%p name=%p)\n", root_vnode, root_vnode->path, root_vnode->name);
++        if (rs == B_OK)
++        {
++            dprintf(FS_NAME ": allocated %p (path=%p name=%p)\n", root_vnode, root_vnode->path, root_vnode->name);
++            vbsfvolume->rootid = root_vnode->vnode;
++            root_vnode->parent = root_vnode->vnode;
++        }
+ 
+         if (rs != B_OK)
+         {
+@@ -410,8 +435,34 @@
+         return B_NO_MEMORY;
+     }
+ 
++    /* The host rejects "." and ".." as VERR_INVALID_NAME (-104). */
++    if (strcmp(name1->String.utf8, ".") == 0 || strcmp(name1->String.utf8, "..") == 0)
++    {
++        ino_t id = vnode->vnode;
++        if (strcmp(name1->String.utf8, "..") == 0 && vnode->parent != 0)
++            id = vnode->parent;
++        buffer->d_dev = 0;
++        buffer->d_pdev = 0;
++        buffer->d_ino = id;
++        buffer->d_pino = vnode->vnode;
++        buffer->d_reclen = sizeof(struct dirent) + name1->u16Length;
++        strncpy(buffer->d_name, name1->String.utf8, NAME_MAX);
++        free(name1);
++        size_t size = offsetof(SHFLDIRINFO, name.String) + cookie->buffer->name.u16Size;
++        cookie->buffer = ((void*)cookie->buffer + size);
++        cookie->index++;
++        if (cookie->index >= cookie->num_files)
++        {
++            free(cookie->buffer_start);
++            cookie->buffer_start = cookie->buffer = NULL;
++        }
++        return B_OK;
++    }
++
+     vboxsf_vnode* new_vnode;
+     int rv = vboxsf_new_vnode(&volume->map, build_path(vnode, name1->String.utf8), name1, &new_vnode);
++    if (rv == B_OK)
++        new_vnode->parent = vnode->vnode;
+     if (rv != B_OK)
+     {
+         dprintf(FS_NAME ": vboxsf_new_vnode() failed\n");
+@@ -506,7 +557,7 @@
+     info->free_blocks  = volume_info.ullAvailableAllocationBytes / info->block_size;
+     info->total_nodes  = LONGLONG_MAX;
+     info->free_nodes   = LONGLONG_MAX;
+-    strcpy(info->volume_name, "VBox share");
++    strcpy(info->volume_name, "VBox Share");
+     return B_OK;
+ }
+ 
+@@ -515,6 +566,25 @@
+ {
+     dprintf(FS_NAME ": lookup %s\n", name);
+     vboxsf_volume* volume = _volume->private_volume;
++    vboxsf_vnode* dir_node = dir->private_node;
++
++    /* Host shared-folder paths reject "." and ".." (VERR_INVALID_NAME, -104).
++     * "." is this directory. ".." is the parent, or this directory at the root;
++     * the VFS walks out of the mount from the root vnode.
++     */
++    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
++    {
++        ino_t id = dir_node->vnode;
++        if (strcmp(name, "..") == 0 && dir_node->parent != 0)
++            id = dir_node->parent;
++        void* cookie = NULL;
++        status_t status = get_vnode(_volume, id, &cookie);
++        if (status != B_OK)
++            return status;
++        *_id = id;
++        return B_OK;
++    }
++
+     SHFLCREATEPARMS params;
+ 
+     RT_ZERO(params);
+@@ -537,6 +607,7 @@
+             status_t rv = vboxsf_new_vnode(&volume->map, path, path, &vn);
+             if (rv == B_OK)
+             {
++                vn->parent = dir_node->vnode;
+                 *_id = vn->vnode;
+                 rv = publish_vnode(_volume, vn->vnode, vn, &vboxsf_vnode_ops, mode_from_fmode(params.Info.Attr.fMode), 0);
+             }
+--- a/src/VBox/Additions/haiku/SharedFolders/vnode_cache.cpp
++++ b/src/VBox/Additions/haiku/SharedFolders/vnode_cache.cpp
 @@ -87,7 +87,7 @@
  mutex g_vnodeCacheLock;
  
@@ -676,6 +791,14 @@
  {
      vboxsf_vnode* vn = (vboxsf_vnode*)malloc(sizeof(vboxsf_vnode));
      if (vn == NULL)
+@@ -114,6 +114,7 @@
+     }
+ 
+     vn->vnode = g_nextVnid++;
++    vn->parent = 0;
+     *p = vn;
+     dprintf("vboxsf: allocated %p (path=%p name=%p)\n", vn, vn->path, vn->name);
+     status_t rv = g_cache.Insert(vn);
 --- a/src/VBox/Additions/haiku/VBoxMouse/Makefile.kmk	2026-10-31 11:14:02.927957151 +0100
 +++ b/src/VBox/Additions/haiku/VBoxMouse/Makefile.kmk	2026-10-31 11:12:12.904381872 +0100
 @@ -74,7 +74,7 @@

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The Desktop share is named VBox Share
+
+2026-10-31 about 14:25 Europe/Amsterdam. Build **10015**, GUI VM, UART `generated/vbox-daily.log`. VirtualBox rejects a space in a share name, so the host mapping stays `r5share`. Sign-in mounts it at `/boot/home/Desktop/VBox Share`. Serial shows `mounted r5share /boot/home/Desktop/VBox Share`, `vboxsf: mount(r5share)`, and `publish_vnode(): 0`. The guest opened the existing `from-host.txt`. There is no `VbglR0SfCreate: -104` and no panic line. The Desktop icon was not watched from here.
+
+`-104` is `VERR_INVALID_NAME`. The driver was sending `.` and `..` to the host. Those names now stay in the driver: `.` is the directory itself, and `..` is its parent. At the share root the VFS walks out to the Desktop.
+
+A relink of `vboxsf` first produced a read-only `PT_LOAD` and a GNU hash. The kernel did not load that file (`General system error`, and `Bad data` when the segment base was `0x400000`). The module that loads uses `-z noseparate-code -z norelro --hash-style=sysv`: SysV hash, `.rodata` in the executable segment, same shape as the module from the 13:14 boot. `generated/r5-os.vdi` was not replaced. QEMU was not used. Unicode names, a large new file, unmount, and a host disconnect were not tried.
+
 ### Daily image follows the VirtualBox window and mounts host shares
 
 2026-10-31 13:14 Europe/Amsterdam. Build **10015**. `HAIKU_IMAGE_SIZE` is 2048. `jam -q @r5-raw` exited 0 and wrote `generated.x86_64/r5-os.image` at 2147483648 bytes. `bfs_shell` reports 1.2G free of 2.0G (622564 blocks of 2048), volume name R5OS. `generated/r5-os.vdi` was not replaced.
