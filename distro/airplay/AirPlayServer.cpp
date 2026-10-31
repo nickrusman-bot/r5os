@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: MIT
  * R5OS AirPlay receiver: classic RAOP (AirPlay 1) audio plus AirPlay 2
  * advertisement/info. Pair-Setup/PTP of full AirPlay 2 is not implemented.
  *

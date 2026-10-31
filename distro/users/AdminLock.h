@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * Lock for machine settings. The preference app stays the signed-in user.
  * Sign in (uid 0) checks an administrator password and applies the change.
  */

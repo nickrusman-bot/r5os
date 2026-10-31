@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: MIT
+ */
 #include "AirPlayPlayer.h"
 #include "AirPlayCrypto.h"
 

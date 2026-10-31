@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * R5OS account helper. Login stays uid 0 and applies passwd changes.
  */
 #ifndef R5_ACCOUNT_ADMIN_H

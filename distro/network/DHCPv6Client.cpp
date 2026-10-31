@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * DHCPv6 (RFC 8415) for IA_NA and DNS (RFC 3646).
  */
 

@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * R5OS: advertise hostname.local (A/AAAA) and AirPlay/RAOP over mDNS
  * on IPv4 (224.0.0.251) and IPv6 (ff02::fb).
  */

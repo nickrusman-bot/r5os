@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: kokke and tiny-AES-c contributors
+ * SPDX-License-Identifier: Unlicense
+ */
 #ifndef _AES_H_
 #define _AES_H_
 

@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * Text clipboard between Haiku and the VirtualBox host over COM1.
  * Not Guest Additions: no vboxsf, no auto-resize, no VBox drag-and-drop.
  */

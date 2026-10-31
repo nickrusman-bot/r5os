@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * R5OS account helper. Login (uid 0) migrates the first home off root
  * and applies Users & Accounts changes for an administrator sender.
  */

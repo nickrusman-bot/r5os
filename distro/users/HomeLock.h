@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * R5OS home modes. Other accounts must not read private files.
  */
 #ifndef R5_HOME_LOCK_H

@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * IPv6 SLAAC for net_server (RFC 4861/4862) with DAD (Haiku #8319).
  */
 

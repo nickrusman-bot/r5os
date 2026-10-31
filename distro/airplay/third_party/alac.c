@@ -1,6 +1,8 @@
 /*
  * ALAC (Apple Lossless Audio Codec) decoder
  * Copyright (c) 2005 David Hammerton
+ * SPDX-FileCopyrightText: 2005 David Hammerton
+ * SPDX-License-Identifier: MIT
  * All rights reserved.
  *
  * This is the actual decoder.

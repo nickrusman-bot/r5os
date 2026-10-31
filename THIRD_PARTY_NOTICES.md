@@ -21,7 +21,9 @@ Location: `distro/airplay`.
 
 Copyright, URLs, and what was not copied (AirPlay 2 pairing, NQPTP, FairPlay) are in `distro/airplay/THIRD_PARTY.md`.
 
-The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense and Apache-2.0 texts are not in `LICENSES/` yet.
+The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is `LICENSES/Unlicense.txt`. The Apache-2.0 text is not in `LICENSES/` yet.
+
+R5OS-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
 
 ## Built outside this repository, not in the image
 

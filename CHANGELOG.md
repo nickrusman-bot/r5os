@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### SPDX headers on R5OS-owned source
+
+Files that R5OS wrote as a whole now carry `SPDX-FileCopyrightText: 2026 R5OS Contributors` and `SPDX-License-Identifier: GPL-3.0-or-later`. That covers the new Login pieces (lock screen, session helper, tray), Users & Accounts, the IPv6 and Wi-Fi code, AirPrint, the COM1 clipboard, mDNS, and the AirPlay Deskbar program. Four IPv6 headers had said MIT under a 2026 R5OS copyright. That grant is now GPL-3.0-or-later.
+
+Haiku files copied under `distro/` keep their original copyright and license. Edits inside those files were not retagged. The AirPlay RAOP server stays MIT because the flow follows Shairport. ALAC stays MIT (David Hammerton). tiny-AES-c is tagged Unlicense, and the text is `LICENSES/Unlicense.txt`. `scripts/` still has no SPDX headers. No image was rebuilt for this.
+
 ### The Desktop share is named VBox Share
 
 2026-10-31 about 14:25 Europe/Amsterdam. Build **10015**, GUI VM, UART `generated/vbox-daily.log`. VirtualBox rejects a space in a share name, so the host mapping stays `r5share`. Sign-in mounts it at `/boot/home/Desktop/VBox Share`. Serial shows `mounted r5share /boot/home/Desktop/VBox Share`, `vboxsf: mount(r5share)`, and `publish_vnode(): 0`. The guest opened the existing `from-host.txt`. There is no `VbglR0SfCreate: -104` and no panic line. The Desktop icon was not watched from here.

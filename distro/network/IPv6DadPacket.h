@@ -1,6 +1,6 @@
 /*
- * Copyright 2026, R5OS.
- * Distributed under the terms of the MIT License.
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * RFC 4861 / 4862 helpers for DAD Neighbor Solicitation (header-only).
  */

@@ -1,4 +1,8 @@
 /*
+ * SPDX-FileCopyrightText: kokke and tiny-AES-c contributors
+ * SPDX-License-Identifier: Unlicense
+ */
+/*
 
 This is an implementation of the AES algorithm, specifically ECB, CTR and CBC mode.
 Block size can be chosen in aes.h - available choices are AES128, AES192, AES256.

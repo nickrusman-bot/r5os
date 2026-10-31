@@ -1,3 +1,7 @@
+/*
+ * SPDX-FileCopyrightText: 2005 David Hammerton
+ * SPDX-License-Identifier: MIT
+ */
 #ifndef __ALAC__DECOMP_H
 #define __ALAC__DECOMP_H
 
