@@ -26,6 +26,22 @@ switch $(HAIKU_BUILD_PROFILE) {
 			pe
 			vision
 			wpa_supplicant
+			libglvnd
+			mesa
+			mesa_devel
+			mesa_lavapipe
+			llvm21_runtime
+			vulkan_loader
 			;
+
+		# The downloaded HaikuPorts catalog still lists Mesa 22. The image
+		# solver uses these files instead, written by scripts/pin-mesa-packages.sh.
+		local r5Download = [ FDirName $(HAIKU_OUTPUT_DIR) download ] ;
+		HAIKU_REPOSITORY_CACHE_FILE on <repository>HaikuPorts
+			= [ FDirName $(r5Download) r5-haikuports.repo ] ;
+		local r5OpenGL = r5opengl ;
+		HAIKU_REPOSITORIES += $(r5OpenGL:G=repository) ;
+		HAIKU_REPOSITORY_CACHE_FILE on $(r5OpenGL:G=repository)
+			= [ FDirName $(r5Download) r5-opengl.repo ] ;
 	}
 }

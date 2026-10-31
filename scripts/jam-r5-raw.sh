@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
 HAIKU=/home/nickr/r5os/haiku
-WIN=/mnt/c/Users/nickr/Projects/R5OS
+WIN="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH=/usr/bin:/bin:/home/nickr/bin:$PATH
+
+"$WIN/scripts/pin-mesa-packages.sh"
 
 ver="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/VERSION" | head -1 | tr -d '\r' | tr -d '[:space:]')"
 build="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/BUILD" | head -1 | tr -d '\r' | tr -d '[:space:]')"
