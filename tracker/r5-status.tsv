@@ -1115,7 +1115,7 @@ id	r5_status	branch	commit	notes
 11600	open			
 11619	open			
 11621	open			
-11625	open			
+11625	fixed			BBox label keeps the full line inside the view (apply-ui-bugs.py)
 11626	open			
 11635	open			
 11657	open			
@@ -3058,7 +3058,7 @@ id	r5_status	branch	commit	notes
 18507	open			
 18514	fixed			Tighter icon-mode grid
 18515	open			
-18518	open			
+18518	fixed			BBox baseline no longer sits above the view (apply-ui-bugs.py)
 18519	open			
 18523	open			
 18526	open			
@@ -3179,7 +3179,7 @@ id	r5_status	branch	commit	notes
 18806	open			
 18808	open			
 18810	open			
-18813	open			
+18813	fixed			Separator title uses ascent, descent, and leading (apply-ui-bugs.py)
 18814	open			
 18816	open			
 18818	open			
@@ -3523,8 +3523,8 @@ id	r5_status	branch	commit	notes
 19625	open			
 19626	open			
 19628	open			
-19629	open			
-19630	open			
+19629	fixed			Flat button hover follows the parent low color (apply-darkmode.py)
+19630	fixed			Scrollbar arrow buttons use the control color (apply-darkmode.py)
 19632	open			
 19634	open			
 19637	open			
@@ -3888,7 +3888,7 @@ id	r5_status	branch	commit	notes
 20369	open			
 20370	open			
 20371	open			
-20372	open			
+20372	fixed			Plain BTextView follows document text color; styled runs unchanged (apply-darkmode.py)
 20373	open			
 20375	open			
 20380	open			
@@ -3914,7 +3914,7 @@ id	r5_status	branch	commit	notes
 20414	open			
 20415	open			
 20416	open			
-20418	open			
+20418	fixed			BButton SetViewColor is the face color (apply-darkmode.py)
 20419	fixed			Keep Arrange by on the Desktop menu; lazily create it so DeskWindow context menu does not SIGSEGV
 20422	open			
 20423	open			
