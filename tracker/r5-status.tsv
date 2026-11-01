@@ -444,7 +444,7 @@ id	r5_status	branch	commit	notes
 6852	open			
 6856	open			
 6864	open			
-6873	open			
+6873	fixed			Scrollbar arrows stay off when the whole range is already visible
 6875	open			
 6882	open			
 6883	open			
@@ -1125,7 +1125,7 @@ id	r5_status	branch	commit	notes
 11682	open			
 11706	open			
 11724	open			
-11735	open			
+11735	fixed			SetText() no longer sends the modification message; typing still does
 11744	open			
 11750	open			
 11759	open			
@@ -1520,7 +1520,7 @@ id	r5_status	branch	commit	notes
 13671	open			
 13672	open			
 13678	open			
-13680	open			
+13680	fixed			A second click on the same slider value still sends the message
 13687	open			
 13690	open			
 13691	open			
@@ -3115,7 +3115,7 @@ id	r5_status	branch	commit	notes
 18642	open			
 18643	fixed			Team list uses B_MENU_SELECTED_BACKGROUND_COLOR
 18644	open			
-18648	open			
+18648	fixed			An option that is not in the menu does not change the current value
 18649	open			
 18650	open			
 18655	open			

@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### Text control, slider, scrollbar, and option popup
+
+Four Interface Kit bugs, applied by `scripts/apply-ui-bugs.py`. Not on the daily image. Not booted. VirtualBox was left on build 10022.
+
+`BTextControl::SetText()` always went through the private text view, and that view sent the modification message for every insert and delete. Programmatic `SetText()` now suppresses that message. Typing still sends it (#11735).
+
+`BSlider` sent its message only when the thumb moved. A click on the bar or the thumb now sends the message even when the value stays the same. A click in the padding still does nothing. The modification message is still only sent when the value changes (#13680).
+
+Scrollbar arrows stayed enabled when the thumb already covered the whole range. They stay off when the minimum is below the maximum and the proportion is at least 0 and below 1. Proportion 0 is still the non-proportional mode, so those arrows keep working (#6873).
+
+`BOptionPopUp::SetValue()` stored a value that was not one of the options, so the control value and the marked item disagreed. An unknown value is now ignored. A menu that is not created yet still stores the value (#18648).
+
+`jam -q '<libbe!x86_64>interface_kit.o'` on 1 Nov 2026 at 18:06 Europe/Amsterdam updated `OptionPopUp.o`, `ListView.o`, and `interface_kit.o` and exited 0. The text-input objects were linked into `interface_kit.o` in an earlier run the same evening, after a duplicated declaration in the header was removed. That run updated `TextControl.o`, `TextInput.o`, `ListView.o`, and `interface_kit.o` and exited 0. `ScrollBar.o` and `Slider.o` were already compiled. `libbe.so` was not relinked. Not booted.
+
 ### Well-known folder names and icon labels
 
 Two Tracker bugs, applied by `scripts/apply-tracker-desktop.py`. Not on the daily image. Not booted.
