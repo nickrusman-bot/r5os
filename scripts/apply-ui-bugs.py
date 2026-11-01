@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Apply easy UI bugfixes: #11138 #18057 #16838 #16471 #16116 #15690 #1006."""
+"""Apply easy UI bugfixes: #11138 #18057 #16838 #16471 #16116 #15690 #1006
+#11625 #18518 #18813."""
 from __future__ import annotations
 
 import pathlib
@@ -121,12 +122,20 @@ def patch_scrollview() -> None:
 
 def patch_listview() -> None:
     path = HAIKU / "src/kits/interface/ListView.cpp"
-    replace_once(
-        path,
-        "#include <Window.h>\n",
-        "#include <Region.h>\n#include <Window.h>\n",
-        "Region include",
-    )
+    text = path.read_text(encoding="utf-8")
+    include = "#include <Region.h>\n"
+    while text.count(include) > 1:
+        text = text.replace(include, "", 1)
+        print(f"collapsed duplicate in {path.name}")
+    if include not in text:
+        old = "#include <Window.h>\n"
+        if old not in text:
+            raise SystemExit(f"pattern not found in {path} (Region include)")
+        text = text.replace(old, include + old, 1)
+        print(f"patched {path} (Region include)")
+    else:
+        print(f"already {path.name} (Region include)")
+    path.write_text(text, encoding="utf-8")
     old = """	item->DrawItem(this, itemRect, complete);
 }"""
     new = """	BRegion clip(itemRect);
@@ -443,8 +452,75 @@ BackgroundsView::_RestoreRevertSnapshot()
     print(f"patched {cpp} (Haiku #1006 impl)")
 
 
+def patch_label_clip() -> None:
+    box = HAIKU / "src/kits/interface/Box.cpp"
+    replace_once(
+        box,
+        """		fLayoutData->label_box.Set(6.0f, 0, 14.0f + StringWidth(fLabel),
+			ceilf(fontHeight.ascent));
+		labelHeight = ceilf(fontHeight.ascent + fontHeight.descent) + 1;
+""",
+        """		// Full line, including leading, so a large font is not clipped
+		// against the top of the view (Haiku #11625 #18518).
+		labelHeight = ceilf(fontHeight.ascent + fontHeight.descent
+			+ fontHeight.leading);
+		fLayoutData->label_box.Set(6.0f, 0, 14.0f + StringWidth(fLabel),
+			labelHeight);
+""",
+        "Haiku #11625 #18518",
+    )
+    replace_once(
+        box,
+        """		// offset label up by 1/6 the font height
+		float lineHeight = fontHeight.ascent + fontHeight.descent;
+		float yOffset = roundf(lineHeight / 6.0f);
+
+		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
+		DrawString(fLabel, BPoint(10.0f, fontHeight.ascent - yOffset));
+""",
+        """		// Baseline at the ascent. A negative offset draws above y=0 and
+		// the view clips the top of the glyphs (Haiku #11625 #18518).
+		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
+		DrawString(fLabel, BPoint(10.0f, ceilf(fontHeight.ascent)));
+""",
+        "Haiku #11625 draw",
+    )
+
+    sep = HAIKU / "src/kits/interface/SeparatorView.cpp"
+    replace_once(
+        sep,
+        """		height = ceilf(fontHeight.ascent) + ceilf(fontHeight.descent);
+""",
+        """		height = ceilf(fontHeight.ascent + fontHeight.descent
+			+ fontHeight.leading);
+""",
+        "Haiku #18813 height",
+    )
+    replace_once(
+        sep,
+        """		if (fOrientation == B_HORIZONTAL) {
+			DrawString(fLabel.String(), BPoint(labelBounds.left,
+				labelBounds.top + ceilf(fontHeight.ascent)));
+		} else {
+""",
+        """		float textHeight = ceilf(fontHeight.ascent + fontHeight.descent
+			+ fontHeight.leading);
+		float spare = labelBounds.Height() + 1.0f - textHeight;
+		float textTop = labelBounds.top;
+		if (spare > 0.0f)
+			textTop += floorf(spare / 2.0f);
+		if (fOrientation == B_HORIZONTAL) {
+			DrawString(fLabel.String(), BPoint(labelBounds.left,
+				textTop + ceilf(fontHeight.ascent)));
+		} else {
+""",
+        "Haiku #18813 baseline",
+    )
+
+
 def main() -> int:
     patch_alert()
+    patch_label_clip()
     patch_scrollview()
     patch_listview()
     patch_desktop_selection()

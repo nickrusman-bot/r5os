@@ -4,21 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3869 |
+| open | 3866 |
 | in-progress | 8 |
-| fixed | 59 |
+| fixed | 62 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 open/bezig).
+Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2526 |
+| bug | 2523 |
 | enhancement | 1291 |
 | task | 60 |
 
@@ -26,7 +26,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3581 |
+| normal | 3578 |
 | low | 259 |
 | high | 35 |
 | critical | 1 |
@@ -36,8 +36,8 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3074 |
-| R1 | 427 |
+| Unscheduled | 3072 |
+| R1 | 426 |
 | R1.1 | 305 |
 | — | 29 |
 | R1/beta7 | 26 |
@@ -48,7 +48,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | Component | Aantal |
 |---|---|
 | Applications/Tracker | 206 |
-| Kits/Interface Kit | 164 |
+| Kits/Interface Kit | 161 |
 | Servers/app_server | 161 |
 | System/Kernel | 153 |
 | Applications/WebPositive | 132 |
@@ -109,6 +109,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#10208](https://dev.haiku-os.org/ticket/10208) | new | Partitioning Systems | Drivesetup creating partition size errors |  |
 | [#11138](https://dev.haiku-os.org/ticket/11138) | assigned | Kits/Interface Kit | Alert _text field archived but never instantiated (easy) |  |
 | [#11397](https://dev.haiku-os.org/ticket/11397) | assigned | Applications/Deskbar | Deskbar seems that doesn't follow color scheme based on "Appearance" colors |  |
+| [#11625](https://dev.haiku-os.org/ticket/11625) | assigned | Kits/Interface Kit | BBox with layout cuts title at big font sizes |  |
 | [#12884](https://dev.haiku-os.org/ticket/12884) | new | User Interface | Deskbar forgets settings |  |
 | [#13754](https://dev.haiku-os.org/ticket/13754) | new | Servers/input_server | Mouse + keyboard input non-functional after install |  |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
@@ -133,7 +134,9 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#18300](https://dev.haiku-os.org/ticket/18300) | new | User Interface | Application menus at screen border |  |
 | [#18411](https://dev.haiku-os.org/ticket/18411) | new | Applications/Deskbar | PowerStatus replicant is cut off |  |
 | [#18514](https://dev.haiku-os.org/ticket/18514) | new | Applications/Tracker | bug: [Tracker] Icon view does not get laid out nicely |  |
+| [#18518](https://dev.haiku-os.org/ticket/18518) | new | Kits/Interface Kit | Font ascender height is cut off |  |
 | [#18643](https://dev.haiku-os.org/ticket/18643) | new | Applications/Deskbar | Deskbar: use B_MENU_SELECTED_BACKGROUND_COLOR in running apps list |  |
+| [#18813](https://dev.haiku-os.org/ticket/18813) | new | Kits/Interface Kit | Section title font X-height cut off |  |
 | [#19070](https://dev.haiku-os.org/ticket/19070) | new | Applications/Tracker | [Tracker] UI: Fixed black/gray status colours when copying |  |
 | [#19084](https://dev.haiku-os.org/ticket/19084) | new | Applications/Tracker | render glitch when resizing table columns in tracker |  |
 | [#19704](https://dev.haiku-os.org/ticket/19704) | new | Applications/Deskbar | White bar when Auto-hide in horizontal mode on the top. |  |
@@ -229,5 +232,5 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3789 meer in r5-status.tsv* | |
+| … | | | *3786 meer in r5-status.tsv* | |
 
