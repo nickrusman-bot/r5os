@@ -1,5 +1,53 @@
 # R5OS changelog (lokaal)
 
+### User confirmed the Deskbar clock and Prullenbak
+
+On the 20:58 Europe/Amsterdam image the user selected Dutch (Netherlands) and 24-hour. The Locale preview read 20:01 and the Deskbar clock read 20:01. VBox Share sat beside Trash, not on it. With Nederlands above English, the Trash icon read Prullenbak. Home stayed “home”. QuickTour and VBox Share stayed those names. The Locale window that was already open kept the title “Locale”.
+
+That is the path that worked. Keep it. The preview and the Deskbar clock both call `BTimeFormat` on the formatting country. The country change is broadcast even when `Locale settings` is not written, and `ApplySettings()` puts that message on top of `Refresh()`. The clock pulse does not reload the file. A language change calls `ForceUnloadCatalog()` and rebuilds menus and icon titles. A mounted volume does not restore a saved icon position.
+
+Two earlier disks did not do this. The 19:05 image coerced the pattern generator and the clock stayed “6:07 PM”. The 19:34 image reloaded `Locale settings` on each pulse and the clock stayed “6:54 PM”, because a missing file makes `Refresh()` put en_US back. Do not draw the clock from `BDateTimeFormat` again, and do not `Refresh()` from the pulse.
+
+After Nederlands was moved above English the same boot showed “8:01 PM”, and a minute later “8:02 PM”. The language message does not carry the formatting country. `Refresh()` runs first and can replace the live Dutch conventions with a file that does not have them yet. That flip is not changed on this disk. VirtualBox was left running. It is [#4045](https://github.com/nickrusman-bot/r5os/issues/4045).
+
+The same menu was only partly Dutch. Strings in `nl.catkeys` no longer match the Deskbar source (`Show replicants handle`, `About R5OS`, `Shut down…`, `%appname% preferences…`, Lock screen, Log out, Show desktop). Mount is still “Betrek”. That catalog update is [#4044](https://github.com/nickrusman-bot/r5os/issues/4044). Neither is on this disk.
+
+### Locale broadcast on the build 10023 image
+
+`jam -q @r5-raw` on 1 Nov 2026 at 20:58 Europe/Amsterdam exited 0 and updated 7865 targets. `haiku.hpkg` was created at 20:57 and the raw image at 20:58. Deskbar (20:42), `libtracker.so` (20:42), and `libbe.so` (20:38) are the binaries from the locale compile and are older than that package, so this image contains them. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+### Locale changes still did not reach Deskbar
+
+The image packed at 19:34 Europe/Amsterdam contained the country-locale pattern and the settings-file pulse. The user booted that disk and, with Dutch (Netherlands) and the 24-hour choice selected, the Deskbar clock still read “6:54 PM” while the Locale preview read 18:51. Moving Nederlands above English did not change menus. Restarting Tracker for translated folder names did not change icon titles, and VBox Share landed on Trash again.
+
+The preview formats from the preflet’s own roster. Deskbar and Tracker only notice a `B_LOCALE_CHANGED` message, and that message was sent only after the settings file was saved. A failed save left the preview updated and every other program on en_US. `Refresh()` then reads the file and, when the file is missing or old, puts en_US back. The clock pulse did that too.
+
+A locale change is now broadcast even when the save fails, and `~/config/settings` is created when the file is written. `BLocaleRoster::ApplySettings()` applies the message after `Refresh()`, so the message wins over a stale file. The Deskbar clock uses `BTimeFormat`, the same call as the preview, instead of the date-time pattern generator. It no longer reloads the settings file on each pulse. Deskbar and Tracker call `ForceUnloadCatalog()` on the locale message. A language change rebuilds Tracker menus and the Deskbar menu, and icon titles are read again. Trash can become Prullenbak from the Dutch catalog. The Dutch catalog still translates the home folder as “home”. QuickTour and VBox Share have no catalog names. The open Locale window keeps the labels it was opened with. A saved icon position on a mounted volume is ignored, so VBox Share is placed in a free cell instead of on Trash.
+
+`jam -q libbe.so` then `jam -q libtracker.so Deskbar` on 1 Nov 2026 exited 0. `libbe.so`, `libtracker.so`, and Deskbar were relinked. The image section above packs those binaries. About stays build 10023.
+
+### Deskbar still showed AM/PM
+
+The image from 19:05 Europe/Amsterdam still drew “6:07 PM” while the Locale preview showed 18:07. The user had Dutch formatting, the 24-hour choice, and Nederlands as the preferred language. The preview is redrawn from the formatting country. The Deskbar pattern generator used the preferred language’s locale, and it can put AM/PM back into an English pattern. `k` was also rewritten to `K`, which is a 0–11 hour, so 18:00 can draw as 6. The clock rebuilt that pattern only when the locale message reached the view.
+
+The generator now uses the formatting country, unless month and day names are taken from the preferred language. A 24-hour choice rewrites `h`, `K`, and `k` to `H` and drops the day-period marker. Each clock pulse reloads `Locale settings` when that file’s time changes, then rebuilds the pattern. `jam -q libbe.so Deskbar` exited 0 and updated 11 targets, including `FormattingConventions.o`, `DateTimeFormat.o`, `libbe.so`, `TimeView.o`, and Deskbar. `jam -q @r5-raw` on 1 Nov 2026 at 19:34 Europe/Amsterdam exited 0 and updated 1720 targets. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+Menus and folder names still come from the catalog loaded at program start. The Locale checkbox for folder names says Deskbar and Tracker need a restart.
+
+### Build 10023 image with the 24-hour clock
+
+`jam -q @r5-raw` on 1 Nov 2026 at 19:05 Europe/Amsterdam exited 0 and updated 2294 targets. `libbe.so` was linked again and packed into the system package. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+### Deskbar clock kept AM/PM
+
+The Locale examples followed the 24-hour choice. Deskbar did not. Those examples call `GetTimeFormat()`, which runs `CoerceFormatForClock()`. Deskbar stores the ICU pattern from `BDateTimeFormat::SetDateTimeFormat()` as an explicit format, and an explicit format is not coerced later. For an English locale the pattern generator can keep AM/PM after the skeleton asked for 24-hour (`k`). The clock therefore stayed “5:27 PM” while the preflet preview showed 17:27.
+
+`Use24HourClock()` also returned the unset explicit flag once the cache was already filled, so a remembered 24-hour choice could read as off. It now returns that cached or explicit choice. `CoerceFormatForClock()` is public, and `SetDateTimeFormat()` coerces the generated pattern before storing it. Applied by `scripts/apply-ui-bugs.py`.
+
+`jam -q libbe.so` on 1 Nov 2026 at 18:48 Europe/Amsterdam updated 32 targets, including `FormattingConventions.o`, `DateTimeFormat.o`, and the `libbe.so` link, and exited 0. That library was not on the build 10023 disk that was running then. VirtualBox was not restarted for that compile. The image section above packs this library.
+
+Menus, the Locale window’s own labels, and folders already open stay in the language that program loaded at start. The translation catalog is loaded once. A program started after the language change loads the new catalog. Folder names also stay English while “Translate application and folder names” is off. Tracker does not rebuild those names on the locale message.
+
 ### Build 10023 daily
 
 What's new for the four Interface Kit controls, and for the well-known folder names and icon labels, is build 10023. `jam -q @r5-raw` on 1 Nov 2026 at 18:14 Europe/Amsterdam exited 0 and updated 1727 targets. `libbe.so` and `libtracker.so` were relinked. About was relinked and contains Build 10023. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. Not booted in this record. The first VirtualBox start reused the build 10022 disk: the guest had been writing that disk, so its timestamp was newer than the image. `scripts/run-vbox-r5.ps1` now stores the raw image time in `generated/r5-os.built` and does not trust the timestamp of a disk that was running. A second start converted this image and powered the VM on at 18:18 Europe/Amsterdam. The desktop was not seen. The first boot of this disk can sit in `package_daemon`.
