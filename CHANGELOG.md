@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Settings host and one Appearance module
+
+Settings is a new preference window: a sidebar, a search field, home cards, and one content area. Pages come from modules. The first native module is Appearance. It stores `large_sample` in `~/config/settings/r5-settings/appearance` and does not rewrite the Haiku Appearance file. Colors and fonts, Deskbar, wallpaper, display, sound, keyboard, mouse, Bluetooth, printers, network, and Users & Accounts stay their existing programs; Settings only launches them.
+
+The module API is version 1 (`distro/settings/SettingsModule.h`, `distro/settings/ModuleAPI.md`). Add-ons export `settings_api_version` and `instantiate_settings_module`. A different version is not loaded. An administrator page uses `r5_admin_change_allowed` and cannot be saved while that is false. `jam -q Settings settings_appearance` on 1 Nov 2026 at 22:32 Europe/Amsterdam exited 0 and linked both targets. About stays build 10023. Not booted. VirtualBox was left as it was. The desktop was not seen.
+
 ### Build 10023 daily
 
 What's new for the four Interface Kit controls, and for the well-known folder names and icon labels, is build 10023. `jam -q @r5-raw` on 1 Nov 2026 at 18:14 Europe/Amsterdam exited 0 and updated 1727 targets. `libbe.so` and `libtracker.so` were relinked. About was relinked and contains Build 10023. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. Not booted from here during the jam. The first VirtualBox start reused the build 10022 disk: the guest had been writing that disk, so its timestamp was newer than the image. `scripts/run-vbox-r5.ps1` now stores the raw image time in `generated/r5-os.built` and does not trust the timestamp of a disk that was running. A second start converted this image and powered the VM on at 18:18 Europe/Amsterdam. The user showed About on that desktop at 18:23 Europe/Amsterdam: Build 10023, session up 5 minutes 43 seconds. The user confirmed the text box, the slider, the scrollbar arrows, the option menu, the translated folder names, and the full icon labels on that session.

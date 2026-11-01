@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+SubDir HAIKU_TOP src preferences settings ;
+
+Application Settings :
+	SettingsApp.cpp
+	SettingsWindow.cpp
+	SettingsManager.cpp
+	SettingsStorage.cpp
+	SettingsHost.cpp
+	HomeView.cpp
+	LegacyPages.cpp
+	AdminLock.cpp
+	: be [ TargetLibstdc++ ]
+	: Settings.rdef
+	;
+
+Addon settings_appearance :
+	AppearanceModule.cpp
+	: be [ TargetLibstdc++ ]
+	;
