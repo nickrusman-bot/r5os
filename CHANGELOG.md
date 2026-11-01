@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Build 10021 daily
+
+What's new for the list, Find, and clock fixes is build 10021. `jam -q @r5-raw` on 1 Nov 2026 at 17:11 Europe/Amsterdam exited 0 and updated 1256 targets. About was relinked after What's new was copied. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. The pin script did not run for this jam because the launch copy was not executable. The image still used the Mesa 25 repository files already on disk. Not booted in this record. VirtualBox is started from this image afterwards.
+
 ### Tracker keys, Find title, and Deskbar replicant label
 
 Three more desktop fixes, applied by `scripts/apply-tracker-desktop.py`. Not on the daily image. Not booted.
