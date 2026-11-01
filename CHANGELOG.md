@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Deskbar still showed AM/PM
+
+The image from 19:05 Europe/Amsterdam still drew “6:07 PM” while the Locale preview showed 18:07. The user had Dutch formatting, the 24-hour choice, and Nederlands as the preferred language. The preview is redrawn from the formatting country. The Deskbar pattern generator used the preferred language’s locale, and it can put AM/PM back into an English pattern. `k` was also rewritten to `K`, which is a 0–11 hour, so 18:00 can draw as 6. The clock rebuilt that pattern only when the locale message reached the view.
+
+The generator now uses the formatting country, unless month and day names are taken from the preferred language. A 24-hour choice rewrites `h`, `K`, and `k` to `H` and drops the day-period marker. Each clock pulse reloads `Locale settings` when that file’s time changes, then rebuilds the pattern. `jam -q libbe.so Deskbar` exited 0 and updated 11 targets, including `FormattingConventions.o`, `DateTimeFormat.o`, `libbe.so`, `TimeView.o`, and Deskbar. `jam -q @r5-raw` on 1 Nov 2026 at 19:34 Europe/Amsterdam exited 0 and updated 1720 targets. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+Menus and folder names still come from the catalog loaded at program start. The Locale checkbox for folder names says Deskbar and Tracker need a restart.
+
 ### Build 10023 image with the 24-hour clock
 
 `jam -q @r5-raw` on 1 Nov 2026 at 19:05 Europe/Amsterdam exited 0 and updated 2294 targets. `libbe.so` was linked again and packed into the system package. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.

@@ -835,13 +835,24 @@ def patch_locale_clock() -> None:
     date_time = HAIKU / "src/kits/locale/DateTimeFormat.cpp"
     replace_once(
         date_time,
-        """	BString buffer;
-	BStringByteSink stringConverter(&buffer);
-	pattern.toUTF8(stringConverter);
-
-	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+        """	UErrorCode error = U_ZERO_ERROR;
+	DateTimePatternGenerator* generator
+		= DateTimePatternGenerator::createInstance(
+			*BLanguage::Private(&fLanguage).ICULocale(), error);
 """,
-        """	BString buffer;
+        """	UErrorCode error = U_ZERO_ERROR;
+	// Month names follow the preferred language only when that checkbox is
+	// on. The hour cycle follows the formatting country otherwise, so a
+	// Dutch country does not keep an English AM/PM pattern.
+	Locale* icuLocale = fConventions.UseStringsFromPreferredLanguage()
+		? BLanguage::Private(&fLanguage).ICULocale()
+		: BFormattingConventions::Private(&fConventions).ICULocale();
+	DateTimePatternGenerator* generator
+		= DateTimePatternGenerator::createInstance(*icuLocale, error);
+""",
+        "deskbar clock locale",
+    )
+    coerced = """	BString buffer;
 	BStringByteSink stringConverter(&buffer);
 	pattern.toUTF8(stringConverter);
 
@@ -850,8 +861,139 @@ def patch_locale_clock() -> None:
 	fConventions.CoerceFormatForClock(buffer);
 
 	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+"""
+    original = """	BString buffer;
+	BStringByteSink stringConverter(&buffer);
+	pattern.toUTF8(stringConverter);
+
+	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+"""
+    text = date_time.read_text(encoding="utf-8")
+    if coerced in text:
+        print(f"already {date_time.name} (deskbar clock pattern)")
+    elif original in text:
+        date_time.write_text(text.replace(original, coerced, 1), encoding="utf-8")
+        print(f"patched {date_time} (deskbar clock pattern)")
+    else:
+        raise SystemExit(f"pattern not found in {date_time} (deskbar clock pattern)")
+    replace_once(
+        conventions,
+        """			case 'h':
+				if (!inQuote)
+					*previousPos = 'H';
+				break;
+			case 'k':
+				if (!inQuote)
+					*previousPos = 'K';
+				break;
+			case 'a':
+				if (!inQuote) {
 """,
-        "deskbar clock pattern",
+        """			case 'h':
+			case 'K':
+			case 'k':
+				// H is 0-23. K is 0-11 and k is 1-24; both must become H or
+				// 18:00 still draws as 6.
+				if (!inQuote)
+					*previousPos = 'H';
+				break;
+			case 'a':
+			case 'b':
+			case 'B':
+				if (!inQuote) {
+""",
+        "24-hour pattern letters",
+    )
+    replace_once(
+        conventions,
+        """	if (use24HourClock != CLOCK_HOURS_UNSET) {
+		// adjust to 12/24-hour clock as requested
+		bool localeUses24HourClock = !FormatUsesAmPm(outFormat);
+		if (localeUses24HourClock) {
+			if (use24HourClock == CLOCK_HOURS_12)
+				CoerceFormatTo12HourClock(outFormat);
+		} else {
+			if (use24HourClock == CLOCK_HOURS_24)
+				CoerceFormatTo24HourClock(outFormat);
+		}
+	}
+""",
+        """	if (use24HourClock == CLOCK_HOURS_24) {
+		// Also rewrite a 12-hour pattern that has no AM/PM marker.
+		CoerceFormatTo24HourClock(outFormat);
+	} else if (use24HourClock == CLOCK_HOURS_12
+		&& !FormatUsesAmPm(outFormat)) {
+		CoerceFormatTo12HourClock(outFormat);
+	}
+""",
+        "24-hour coerce always",
+    )
+
+    time_view = HAIKU / "src/apps/deskbar/TimeView.cpp"
+    replace_once(
+        time_view,
+        """#include <Locale.h>
+#include <MenuItem.h>
+""",
+        """#include <FindDirectory.h>
+#include <FormattingConventions.h>
+#include <Locale.h>
+#include <LocaleRoster.h>
+#include <MenuItem.h>
+#include <Path.h>
+""",
+        "deskbar clock headers",
+    )
+    replace_once(
+        time_view,
+        """#include <string.h>
+""",
+        """#include <string.h>
+#include <sys/stat.h>
+""",
+        "deskbar clock stat",
+    )
+    replace_once(
+        time_view,
+        """void
+TTimeView::Pulse()
+{
+	time_t curTime = time(NULL);
+""",
+        """void
+TTimeView::Pulse()
+{
+	// The locale broadcast refreshes the roster, then posts to the clock.
+	// If that post is missed the clock keeps the pattern from boot.
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+		path.Append("Locale settings");
+
+		struct stat st;
+		static time_t sMtime = 0;
+		bool changed = false;
+		if (stat(path.Path(), &st) == 0 && st.st_mtime != sMtime) {
+			sMtime = st.st_mtime;
+			BLocaleRoster::Default()->Refresh();
+			changed = true;
+		}
+
+		BFormattingConventions conventions;
+		if (BLocale::Default()->GetFormattingConventions(&conventions) == B_OK) {
+			static bool sSaw24 = false;
+			static BString sSawID;
+			bool use24 = conventions.Use24HourClock();
+			if (changed || use24 != sSaw24 || sSawID != conventions.ID()) {
+				sSaw24 = use24;
+				sSawID = conventions.ID();
+				UpdateTimeFormat();
+			}
+		}
+	}
+
+	time_t curTime = time(NULL);
+""",
+        "deskbar clock reload",
     )
 
 
