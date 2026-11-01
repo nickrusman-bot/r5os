@@ -32,6 +32,8 @@ SOURCES = (
     "SettingsStorage.h",
     "SettingsWindow.cpp",
     "SettingsWindow.h",
+    "WallpaperModule.cpp",
+    "WallpaperModule.h",
 )
 
 
@@ -58,6 +60,16 @@ def copy_fonts() -> None:
     ):
         shutil.copy2(src / name, dest / name)
         print(f"copied font {name}")
+    ui = HAIKU / "data" / "system" / "data" / "fonts" / "ttfonts"
+    ui.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "manrope-regular.ttf",
+        "manrope-bold.ttf",
+        "OFL.txt",
+        "FONTLOG.txt",
+    ):
+        shutil.copy2(src / name, ui / name)
+        print(f"copied ui font {name}")
 
 
 def copy_sources() -> None:
@@ -124,6 +136,17 @@ def patch_jams() -> None:
         "local settingsFonts = [ Glob $(settingsFontDir) : *.ttf *.txt ] ;\n"
         "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n",
         "settings fonts",
+    )
+    replace_once(
+        HAIKU / "build" / "jam" / "packages" / "Haiku",
+        "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n",
+        "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n"
+        "\n"
+        "local uiFontDir = [ FDirName $(HAIKU_TOP) data system data fonts "
+        "ttfonts ] ;\n"
+        "local uiFonts = [ Glob $(uiFontDir) : manrope-*.ttf *.txt ] ;\n"
+        "AddFilesToPackage data fonts ttfonts : $(uiFonts) ;\n",
+        "ui fonts",
     )
 
 

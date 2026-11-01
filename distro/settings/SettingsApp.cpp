@@ -6,6 +6,7 @@
 
 #include "LegacyPages.h"
 #include "SettingsManager.h"
+#include "WallpaperModule.h"
 #include "SettingsStorage.h"
 #include "SettingsWindow.h"
 
@@ -31,6 +32,7 @@ SettingsApp::SettingsApp()
 	fWindow(NULL)
 {
 	register_legacy_pages(fManager);
+	register_wallpaper_page(fManager);
 }
 
 

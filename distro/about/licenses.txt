@@ -21,7 +21,7 @@ When this system is installed for VirtualBox, the guest software is GNU GPL vers
 https://www.virtualbox.org
 
 Manrope
-Settings draws its own text in Manrope, designed by Mikhail Sharanda. The font stays under the SIL Open Font License 1.1. The rest of the desktop still uses the system font.
+The desktop font is Manrope, designed by Mikhail Sharanda. It stays under the SIL Open Font License 1.1. Terminal keeps a monospace font.
 https://github.com/googlefonts/manrope
 
 Components

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Manrope is the UI font, and Wallpaper is a Settings page
+
+The plain and bold system fonts are Manrope Regular and Bold when no font settings have been saved. The fixed font stays Noto Sans Mono, so Terminal is unchanged. Noto Sans is the fallback if Manrope is missing. The files are the unmodified static fonts, also installed in `data/fonts/ttfonts`. `distro/app_server/ServerConfig.h` is copied over the Haiku header. It keeps the Haiku MIT notice.
+
+Wallpaper is a page in Settings instead of a button that only opens Backgrounds. Save writes `be:bgndimginfo` on the Desktop folder, the same attribute Backgrounds writes, and sends `B_RESTORE_BACKGROUND_IMAGE` to Tracker. That one picture is used on every workspace. A saved per-workspace list is replaced. Desktop color, a different picture per workspace, and folder backgrounds stay in the existing Backgrounds program, opened from "More wallpaper options".
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 23:41 Europe/Amsterdam exited 0 and updated 1170 targets. The package check printed `mesa_packages_ok`. `app_server` contains the string Manrope. `haiku.hpkg` has `data/fonts/ttfonts/manrope-regular.ttf` and `manrope-bold.ttf`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023. A home folder that already saved a font still uses that saved font.
+
 ### Settings categories are cards, and Settings uses Manrope
 
 A category page repeated its summary under the title and stacked a button for each page. The summary stays in the title. Personalization, System, Devices, Network, and Accounts use the same cards as Home, with the existing preference icon on the left. Home is the first button on the bottom row, before Back, Revert, and Save. Search stays under the list.

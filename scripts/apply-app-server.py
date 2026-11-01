@@ -16,6 +16,10 @@ def main() -> int:
     shutil.copy2(SRC / "AppServer.cpp", dest)
     dest.touch()
     print(f"copied AppServer.cpp -> {dest}")
+    config = HAIKU / "src" / "servers" / "app" / "ServerConfig.h"
+    shutil.copy2(SRC / "ServerConfig.h", config)
+    config.touch()
+    print(f"copied ServerConfig.h -> {config}")
     return 0
 
 

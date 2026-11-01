@@ -8,7 +8,9 @@ One Settings window for R5OS. Existing preference programs stay separate and kee
 
 The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Home sits with Back, Revert, and Save.
 
-Settings loads Manrope Regular and Bold from `/boot/system/data/settings/fonts` for its own views. If a file is missing, that face stays the system font. The desktop font is not changed. The page title is the bold face, eight points above the bold system size.
+Manrope Regular and Bold are the default plain and bold fonts when no font settings are saved. The fixed font stays Noto Sans Mono. The files are installed in `data/fonts/ttfonts`. Settings still selects Manrope for its own window, and falls back to the system font if that family is missing. The page title is the bold face, eight points above the bold system size.
+
+Wallpaper writes `be:bgndimginfo` on the Desktop folder, the same attribute as Backgrounds, then asks Tracker to restore the picture. Save replaces every workspace with that one picture. Desktop color, a different picture per workspace, and folder backgrounds stay in the existing Backgrounds program, opened from the page.
 
 Search compares the module name, description, keywords, and category label.
 

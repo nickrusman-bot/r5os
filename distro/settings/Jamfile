@@ -11,8 +11,9 @@ Application Settings :
 	HomeView.cpp
 	SettingsFont.cpp
 	LegacyPages.cpp
+	WallpaperModule.cpp
 	AdminLock.cpp
-	: be [ TargetLibstdc++ ]
+	: be tracker [ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

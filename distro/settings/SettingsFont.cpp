@@ -49,14 +49,18 @@ ensure_fonts()
 	sPlain = new BFont(be_plain_font);
 	sBold = new BFont(be_bold_font);
 
-	if (load_face(*sPlain, "manrope-regular.ttf") == B_OK)
+	if (sPlain->SetFamilyAndStyle("Manrope", "Regular") == B_OK)
+		sPlain->SetSize(plainSize);
+	else if (load_face(*sPlain, "manrope-regular.ttf") == B_OK)
 		sPlain->SetSize(plainSize);
 	else {
 		*sPlain = *be_plain_font;
 		syslog(LOG_ERR, "settings: Manrope Regular was not loaded\n");
 	}
 
-	if (load_face(*sBold, "manrope-bold.ttf") == B_OK)
+	if (sBold->SetFamilyAndStyle("Manrope", "Bold") == B_OK)
+		sBold->SetSize(boldSize);
+	else if (load_face(*sBold, "manrope-bold.ttf") == B_OK)
 		sBold->SetSize(boldSize);
 	else {
 		*sBold = *be_bold_font;
