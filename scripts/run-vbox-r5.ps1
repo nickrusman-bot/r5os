@@ -76,6 +76,14 @@ Write-Host "  Text clipboard: COM1 pipe (not Guest Additions)."
 Write-Host "  Disk: Intel IDE  NIC: Intel PRO/1000 (ipro1000)  Net: bridged"
 Write-Host "  raw: $raw"
 
+# Powering the VM off rewrites the VDI timestamp. Remember the old
+# time first, or a freshly built raw image looks older than the disk.
+$vdiEpochBefore = $null
+if (Test-Path $vdi) {
+	$vdiItem = Get-Item $vdi
+	$vdiEpochBefore = [DateTimeOffset]::new($vdiItem.LastWriteTimeUtc).ToUnixTimeSeconds()
+}
+
 $running = & $vbox list runningvms
 if ($running -match "`"$VmName`"") {
 	Write-Host "Stopping $VmName ..."
@@ -92,10 +100,9 @@ if ($exists) {
 # \\wsl.localhost LastWriteTime is often stale. Use the Linux mtime.
 $rawEpoch = wsl -e bash -lc "stat -c %Y /home/nickr/r5os/haiku/generated.x86_64/r5-os.image"
 $reuse = $false
-if (-not $ForceConvert -and (Test-Path $vdi) -and $rawEpoch -match '^\d+$') {
+if (-not $ForceConvert -and (Test-Path $vdi) -and $rawEpoch -match '^\d+$' -and $vdiEpochBefore -ne $null) {
 	$vdiItem = Get-Item $vdi
-	$vdiEpoch = [DateTimeOffset]::new($vdiItem.LastWriteTimeUtc).ToUnixTimeSeconds()
-	if ($vdiItem.Length -gt 0 -and $vdiEpoch -ge [int64]$rawEpoch) {
+	if ($vdiItem.Length -gt 0 -and $vdiEpochBefore -ge [int64]$rawEpoch) {
 		$reuse = $true
 	}
 }
