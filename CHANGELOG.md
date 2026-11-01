@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Desktop icon no longer freezes Tracker
+
+VBox Share is a directory on the Desktop with another filesystem mounted on it. Placement gave up by putting a late icon on the first grid cell, which was already taken, so the share sat on top of another icon. Dragging it then saved the icon position with `WriteAttr` on that mount. That call blocks, the Desktop window thread stops, and folders no longer open.
+
+`scripts/apply-tracker-desktop.py` now keeps scanning for a free cell instead of dropping the icon on the first one, and stops after 400 cells. Saving positions skips a mount point (`stat` device differs from the parent) and clears the save flag, so Tracker does not open that filesystem to write the attribute. The icon still moves until the next boot. `jam -q libtracker.so` updated 35 targets and exited 0. Not booted.
+
 ### Tracker and Deskbar batch
 
 Thirty open Tracker and Deskbar bugs, applied by `scripts/tracker-deskbar-more.diff` from `scripts/apply-tracker-desktop.py`. No new overlay script. The patch is against the r5 Haiku tree after the existing overlays. It does not replace those overlays.
