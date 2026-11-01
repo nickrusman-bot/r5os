@@ -21,6 +21,19 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     print(f"patched {path} ({tag})")
 
 
+def replace_if_missing(path: pathlib.Path, old: str, new: str, tag: str,
+        marker: str) -> None:
+    """Skip when marker is already present.
+
+    replace_once applies again when `new` still contains `old`.
+    """
+    text = path.read_text(encoding="utf-8")
+    if marker in text:
+        print(f"already {path.name} ({tag})")
+        return
+    replace_once(path, old, new, tag)
+
+
 def patch_alert() -> None:
     path = HAIKU / "src/kits/interface/Alert.cpp"
     old = """BAlert::BAlert(BMessage* data)
@@ -929,38 +942,307 @@ def patch_locale_clock() -> None:
         "24-hour coerce always",
     )
 
-    time_view = HAIKU / "src/apps/deskbar/TimeView.cpp"
+    patch_locale_broadcast()
+    patch_clock_display()
+
+
+def patch_locale_broadcast() -> None:
+    """Other programs must see a locale change even when the settings file
+    cannot be written. The preflet preview uses its own roster."""
+    header = HAIKU / "headers/private/locale/LocaleRosterData.h"
     replace_once(
-        time_view,
-        """#include <Locale.h>
-#include <MenuItem.h>
+        header,
+        """			status_t			SetFilesystemTranslationPreferred(
+									bool preferred);
+private:
 """,
-        """#include <FindDirectory.h>
-#include <FormattingConventions.h>
-#include <Locale.h>
-#include <LocaleRoster.h>
-#include <MenuItem.h>
-#include <Path.h>
+        """			status_t			SetFilesystemTranslationPreferred(
+									bool preferred);
+			status_t			ApplyUpdatedSettings(const BMessage* message);
+
+private:
 """,
-        "deskbar clock headers",
+        "apply locale message",
     )
-    replace_once(
-        time_view,
-        """#include <string.h>
+    public = HAIKU / "headers/os/locale/LocaleRoster.h"
+    replace_if_missing(
+        public,
+        """			status_t			Refresh();
+									// Refresh the internal data from the
+									// settings file(s)
 """,
-        """#include <string.h>
-#include <sys/stat.h>
+        """			status_t			Refresh();
+									// Refresh the internal data from the
+									// settings file(s)
+
+			status_t			ApplySettings(const BMessage* message);
+									// Apply one B_LOCALE_CHANGED message on
+									// top of the settings file. A field that
+									// is not in the message is left as it was.
 """,
-        "deskbar clock stat",
+        "public locale apply",
+        "Apply one B_LOCALE_CHANGED message",
     )
-    replace_once(
-        time_view,
-        """void
-TTimeView::Pulse()
+    roster = HAIKU / "src/kits/locale/LocaleRoster.cpp"
+    replace_if_missing(
+        roster,
+        """status_t
+BLocaleRoster::Refresh()
 {
-	time_t curTime = time(NULL);
+	return fData->Refresh();
+}
 """,
-        """void
+        """status_t
+BLocaleRoster::Refresh()
+{
+	return fData->Refresh();
+}
+
+
+status_t
+BLocaleRoster::ApplySettings(const BMessage* message)
+{
+	return fData->ApplyUpdatedSettings(message);
+}
+""",
+        "roster apply settings",
+        "BLocaleRoster::ApplySettings",
+    )
+
+    data = HAIKU / "src/kits/locale/LocaleRosterData.cpp"
+    live = """	// The preflet examples update from this process. Deskbar and Tracker
+	// only hear the broadcast, so a failed save must not hide the change.
+"""
+    replace_once(
+        data,
+        """	status = _SetDefaultFormattingConventions(newFormattingConventions);
+
+	if (status == B_OK)
+		status = _SaveLocaleSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultFormattingConventionsToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	status = _SetDefaultFormattingConventions(newFormattingConventions);
+
+	if (status == B_OK) {
+""" + live + """		_SaveLocaleSettings();
+
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultFormattingConventionsToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        "broadcast formatting",
+    )
+    replace_once(
+        data,
+        """	status = _SetDefaultTimeZone(newZone);
+
+	if (status == B_OK)
+		status = _SaveTimeSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultTimeZoneToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	status = _SetDefaultTimeZone(newZone);
+
+	if (status == B_OK) {
+""" + live + """		_SaveTimeSettings();
+
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultTimeZoneToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        "broadcast time zone",
+    )
+    replace_once(
+        data,
+        """	status = _SetPreferredLanguages(languages);
+
+	if (status == B_OK)
+		status = _SaveLocaleSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddPreferredLanguagesToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	status = _SetPreferredLanguages(languages);
+
+	if (status == B_OK) {
+""" + live + """		_SaveLocaleSettings();
+
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddPreferredLanguagesToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        "broadcast languages",
+    )
+    replace_once(
+        data,
+        """	_SetFilesystemTranslationPreferred(preferred);
+
+	status_t status = _SaveLocaleSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddFilesystemTranslationPreferenceToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	_SetFilesystemTranslationPreferred(preferred);
+
+""" + live + """	_SaveLocaleSettings();
+
+	BMessage updateMessage(B_LOCALE_CHANGED);
+	status_t status = _AddFilesystemTranslationPreferenceToMessage(
+		&updateMessage);
+	if (status == B_OK)
+		status = be_roster->Broadcast(&updateMessage);
+""",
+        "broadcast folder names",
+    )
+    replace_once(
+        data,
+        """	if (status == B_OK)
+		status = find_directory(B_USER_SETTINGS_DIRECTORY, &path);
+
+	BFile file;
+	if (status == B_OK) {
+		path.Append("Locale settings");
+""",
+        """	if (status == B_OK) {
+		// Create ~/config/settings when the first locale change is saved.
+		status = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);
+	}
+
+	BFile file;
+	if (status == B_OK) {
+		path.Append("Locale settings");
+""",
+        "create locale settings directory",
+    )
+    replace_if_missing(
+        data,
+        """status_t
+LocaleRosterData::_LoadLocaleSettings()
+""",
+        """status_t
+LocaleRosterData::ApplyUpdatedSettings(const BMessage* message)
+{
+	if (message == NULL)
+		return B_BAD_VALUE;
+
+	BAutolock lock(fLock);
+	if (!lock.IsLocked())
+		return B_ERROR;
+
+	// Refresh() already loaded the file. Fields in this message win, so a
+	// country or language change is visible when that file was not updated.
+	BString conventionsID;
+	if (message->FindString("conventions", &conventionsID) == B_OK) {
+		BFormattingConventions conventions(message);
+		_SetDefaultFormattingConventions(conventions);
+	}
+
+	if (message->HasString("language"))
+		_SetPreferredLanguages(message);
+
+	bool preferred;
+	if (message->FindBool("filesys", &preferred) == B_OK)
+		_SetFilesystemTranslationPreferred(preferred);
+
+	return B_OK;
+}
+
+
+status_t
+LocaleRosterData::_LoadLocaleSettings()
+""",
+        "apply locale message body",
+        "LocaleRosterData::ApplyUpdatedSettings",
+    )
+
+    bar = HAIKU / "src/apps/deskbar/BarApp.cpp"
+    replace_if_missing(
+        bar,
+        """#include "BarApp.h"
+""",
+        """#include "BarApp.h"
+
+#include "DeskbarMenu.h"
+
+
+namespace BPrivate {
+	void ForceUnloadCatalog();
+}
+""",
+        "deskbar menu include",
+        '#include "DeskbarMenu.h"',
+    )
+    replace_once(
+        bar,
+        """		case B_LOCALE_CHANGED:
+		{
+			BLocaleRoster::Default()->Refresh();
+
+			bool localize;
+			if (message->FindBool("filesys", &localize) == B_OK)
+				gLocalizedNamePreferred = localize;
+		}
+""",
+        """		case B_LOCALE_CHANGED:
+		{
+			// The file may still be the previous locale. Apply the message
+			// after Refresh() so that copy does not win.
+			BLocaleRoster::Default()->Refresh();
+			BLocaleRoster::Default()->ApplySettings(message);
+			BPrivate::ForceUnloadCatalog();
+			gLocalizedNamePreferred
+				= BLocaleRoster::Default()->IsFilesystemTranslationPreferred();
+
+			if (message->HasString("language") && fBarWindow != NULL
+				&& fBarWindow->Lock()) {
+				TDeskbarMenu* menu = fBarWindow->DeskbarMenu();
+				if (menu != NULL && menu->LockLooper()) {
+					menu->ForceRebuild();
+					menu->UnlockLooper();
+				}
+				fBarWindow->Unlock();
+			}
+		}
+""",
+        "deskbar applies locale message",
+    )
+
+
+def patch_clock_display() -> None:
+    """Draw the Deskbar clock with BTimeFormat, the same call as the preview."""
+    time_view = HAIKU / "src/apps/deskbar/TimeView.cpp"
+    text = time_view.read_text(encoding="utf-8")
+    marker = "The clock uses the same short time pattern as the Locale preflet."
+    if marker in text:
+        print(f"already {time_view.name} (clock display)")
+        return
+
+    old_pulse_v2 = """void
 TTimeView::Pulse()
 {
 	// The locale broadcast refreshes the roster, then posts to the clock.
@@ -992,9 +1274,117 @@ TTimeView::Pulse()
 	}
 
 	time_t curTime = time(NULL);
-""",
-        "deskbar clock reload",
-    )
+"""
+    old_pulse_v1 = """void
+TTimeView::Pulse()
+{
+	time_t curTime = time(NULL);
+"""
+    new_pulse = """void
+TTimeView::Pulse()
+{
+	// The clock uses the same short time pattern as the Locale preflet.
+	// Reloading the settings file here would put en_US back when that
+	// file was not written yet.
+	BFormattingConventions conventions;
+	if (BLocale::Default()->GetFormattingConventions(&conventions) == B_OK) {
+		static bool sSaw24 = false;
+		static BString sSawID;
+		static bool sReady = false;
+		bool use24 = conventions.Use24HourClock();
+		if (!sReady || use24 != sSaw24 || sSawID != conventions.ID()) {
+			sReady = true;
+			sSaw24 = use24;
+			sSawID = conventions.ID();
+			UpdateTimeFormat();
+		}
+	}
+
+	time_t curTime = time(NULL);
+"""
+    if old_pulse_v2 in text:
+        text = text.replace(old_pulse_v2, new_pulse, 1)
+    elif old_pulse_v1 in text:
+        text = text.replace(old_pulse_v1, new_pulse, 1)
+    else:
+        raise SystemExit(f"pulse not found in {time_view}")
+
+    old_get = """void
+TTimeView::GetCurrentTime()
+{
+	fTimeFormat->Format(fCurrentTimeStr, sizeof(fCurrentTimeStr), fCurrentTime,
+		B_SHORT_DATE_FORMAT, B_SHORT_TIME_FORMAT);
+}
+"""
+    new_get = """void
+TTimeView::GetCurrentTime()
+{
+	// BTimeFormat reads the formatting country's own pattern. The
+	// date-time pattern generator can keep an English AM/PM skeleton.
+	BTimeFormatStyle style = B_SHORT_TIME_FORMAT;
+	if (fShowTimeZone)
+		style = B_FULL_TIME_FORMAT;
+	else if (fShowSeconds)
+		style = B_MEDIUM_TIME_FORMAT;
+
+	BString formatted;
+	BTimeFormat timeFormat;
+	if (timeFormat.Format(formatted, fCurrentTime, style) == B_OK
+		&& formatted.Length() > 0) {
+		strlcpy(fCurrentTimeStr, formatted.String(), sizeof(fCurrentTimeStr));
+	}
+}
+"""
+    if old_get not in text:
+        raise SystemExit(f"GetCurrentTime not found in {time_view}")
+    text = text.replace(old_get, new_get, 1)
+
+    old_includes = """#include <string.h>
+#include <sys/stat.h>
+
+#include <String.h>
+
+#include <Application.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <FindDirectory.h>
+#include <FormattingConventions.h>
+#include <Locale.h>
+#include <LocaleRoster.h>
+#include <MenuItem.h>
+#include <Path.h>
+"""
+    fresh_includes = """#include <string.h>
+
+#include <String.h>
+
+#include <Application.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <Locale.h>
+#include <MenuItem.h>
+"""
+    new_includes = """#include <string.h>
+
+#include <String.h>
+
+#include <Application.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <FormattingConventions.h>
+#include <Locale.h>
+#include <MenuItem.h>
+#include <TimeFormat.h>
+"""
+    if old_includes in text:
+        text = text.replace(old_includes, new_includes, 1)
+    elif fresh_includes in text:
+        text = text.replace(fresh_includes, new_includes, 1)
+    elif "#include <TimeFormat.h>" not in text:
+        raise SystemExit(f"includes not found in {time_view}")
+
+    time_view.write_text(text, encoding="utf-8", newline="\n")
+    print(f"patched {time_view} (clock display)")
 
 
 def main() -> int:

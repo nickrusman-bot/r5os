@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Locale changes still did not reach Deskbar
+
+The image packed at 19:34 Europe/Amsterdam contained the country-locale pattern and the settings-file pulse. The user booted that disk and, with Dutch (Netherlands) and the 24-hour choice selected, the Deskbar clock still read “6:54 PM” while the Locale preview read 18:51. Moving Nederlands above English did not change menus. Restarting Tracker for translated folder names did not change icon titles, and VBox Share landed on Trash again.
+
+The preview formats from the preflet’s own roster. Deskbar and Tracker only notice a `B_LOCALE_CHANGED` message, and that message was sent only after the settings file was saved. A failed save left the preview updated and every other program on en_US. `Refresh()` then reads the file and, when the file is missing or old, puts en_US back. The clock pulse did that too.
+
+A locale change is now broadcast even when the save fails, and `~/config/settings` is created when the file is written. `BLocaleRoster::ApplySettings()` applies the message after `Refresh()`, so the message wins over a stale file. The Deskbar clock uses `BTimeFormat`, the same call as the preview, instead of the date-time pattern generator. It no longer reloads the settings file on each pulse. Deskbar and Tracker call `ForceUnloadCatalog()` on the locale message. A language change rebuilds Tracker menus and the Deskbar menu, and icon titles are read again. Trash can become Prullenbak from the Dutch catalog. The Dutch catalog still translates the home folder as “home”. QuickTour and VBox Share have no catalog names. The open Locale window keeps the labels it was opened with. A saved icon position on a mounted volume is ignored, so VBox Share is placed in a free cell instead of on Trash.
+
+`jam -q libbe.so` then `jam -q libtracker.so Deskbar` on 1 Nov 2026 exited 0. `libbe.so`, `libtracker.so`, and Deskbar were relinked. This is not on a disk yet. About stays build 10023.
+
 ### Deskbar still showed AM/PM
 
 The image from 19:05 Europe/Amsterdam still drew “6:07 PM” while the Locale preview showed 18:07. The user had Dutch formatting, the 24-hour choice, and Nederlands as the preferred language. The preview is redrawn from the formatting country. The Deskbar pattern generator used the preferred language’s locale, and it can put AM/PM back into an English pattern. `k` was also rewritten to `K`, which is a 0–11 hour, so 18:00 can draw as 6. The clock rebuilt that pattern only when the locale message reached the view.

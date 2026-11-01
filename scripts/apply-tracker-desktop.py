@@ -1350,7 +1350,328 @@ Model::CacheLocalizedName()
 """,
         "Haiku #15444 icon name width",
     )
+    patch_locale_names()
     return 0
+
+
+def patch_locale_names() -> None:
+    """Reload catalogs and icon titles when the preferred language changes,
+    and do not restore a saved position for a mounted volume."""
+    model_h = HAIKU / "src/kits/tracker/Model.h"
+    replace_once(
+        model_h,
+        """	bool HasLocalizedName() const;
+
+private:
+""",
+        """	bool HasLocalizedName() const;
+	void ResetLocalizedName();
+
+private:
+""",
+        "reset localized name",
+    )
+    model = HAIKU / "src/kits/tracker/Model.cpp"
+    replace_once(
+        model,
+        """			fHasLocalizedName = _WellKnownLocalizedName(NodeRef(),
+				fLocalizedName);
+		}
+	}
+}
+
+
+void
+Model::FinishSettingUpType()
+""",
+        """			fHasLocalizedName = _WellKnownLocalizedName(NodeRef(),
+				fLocalizedName);
+		}
+	}
+}
+
+
+void
+Model::ResetLocalizedName()
+{
+	fLocalizedNameIsCached = false;
+	fHasLocalizedName = false;
+	fLocalizedName.Truncate(0);
+	if (gLocalizedNamePreferred && IsNodeOpen())
+		CacheLocalizedName();
+}
+
+
+void
+Model::FinishSettingUpType()
+""",
+        "reset localized name body",
+    )
+
+    widgets_h = HAIKU / "src/kits/tracker/WidgetAttributeText.h"
+    replace_once(
+        widgets_h,
+        """	void SetDirty(bool);
+
+protected:
+""",
+        """	void SetDirty(bool);
+	virtual void ReloadValue() { SetDirty(true); }
+
+protected:
+""",
+        "reload attribute text",
+    )
+    replace_once(
+        widgets_h,
+        """class StringAttributeText : public WidgetAttributeText {
+public:
+	StringAttributeText(const Model*, const BColumn*);
+""",
+        """class StringAttributeText : public WidgetAttributeText {
+public:
+	StringAttributeText(const Model*, const BColumn*);
+
+	virtual void ReloadValue();
+""",
+        "reload string attribute",
+    )
+    widgets = HAIKU / "src/kits/tracker/WidgetAttributeText.cpp"
+    replace_once(
+        widgets,
+        """void
+WidgetAttributeText::SetDirty(bool value)
+{
+	fDirty = value;
+}
+
+
+// #pragma mark - StringAttributeText
+""",
+        """void
+WidgetAttributeText::SetDirty(bool value)
+{
+	fDirty = value;
+}
+
+
+// #pragma mark - StringAttributeText
+
+
+void
+StringAttributeText::ReloadValue()
+{
+	fValueDirty = true;
+	SetDirty(true);
+}
+""",
+        "reload string attribute body",
+    )
+
+    text_h = HAIKU / "src/kits/tracker/TextWidget.h"
+    replace_once(
+        text_h,
+        """	const char* Text(const BPoseView* view) const;
+		// returns the untruncated version of the text
+""",
+        """	const char* Text(const BPoseView* view) const;
+		// returns the untruncated version of the text
+	void ReloadText();
+""",
+        "text widget reload",
+    )
+    replace_once(
+        text_h,
+        """inline uint32
+BTextWidget::AttrHash() const
+{
+	return fAttrHash;
+}
+""",
+        """inline uint32
+BTextWidget::AttrHash() const
+{
+	return fAttrHash;
+}
+
+
+inline void
+BTextWidget::ReloadText()
+{
+	if (fText != NULL)
+		fText->ReloadValue();
+}
+""",
+        "text widget reload body",
+    )
+
+    pose_h = HAIKU / "src/kits/tracker/Pose.h"
+    replace_once(
+        pose_h,
+        """	void UpdateIcon(BPoint poseLoc, BPoseView*);
+""",
+        """	void UpdateIcon(BPoint poseLoc, BPoseView*);
+	void ReloadLabels();
+""",
+        "pose reload labels",
+    )
+    pose = HAIKU / "src/kits/tracker/Pose.cpp"
+    replace_once(
+        pose,
+        """void
+BPose::DrawToggleSwitch(BRect, BPoseView*)
+{
+}
+""",
+        """void
+BPose::DrawToggleSwitch(BRect, BPoseView*)
+{
+}
+
+
+void
+BPose::ReloadLabels()
+{
+	int32 count = fWidgetList.CountItems();
+	for (int32 index = 0; index < count; index++) {
+		BTextWidget* widget = fWidgetList.ItemAt(index);
+		if (widget != NULL)
+			widget->ReloadText();
+	}
+}
+""",
+        "pose reload labels body",
+    )
+
+    pose_view = HAIKU / "src/kits/tracker/PoseView.cpp"
+    replace_once(
+        pose_view,
+        """		|| poseInfo->fLocation.y > kSanePoseLocation) {
+		// location values not realistic, probably screwed up, force reset
+		poseInfo->fInitedDirectory = -1LL;
+	}
+}
+""",
+        """		|| poseInfo->fLocation.y > kSanePoseLocation) {
+		// location values not realistic, probably screwed up, force reset
+		poseInfo->fInitedDirectory = -1LL;
+	}
+
+	// A position saved on the mounted volume is ignored. VBox Share
+	// otherwise comes back on top of Trash when Tracker starts again.
+	if (_IsMountPoint(model))
+		poseInfo->fInitedDirectory = -1LL;
+}
+""",
+        "ignore a saved mount-point position",
+    )
+
+    tracker = HAIKU / "src/kits/tracker/Tracker.cpp"
+    replace_once(
+        tracker,
+        """#include "Tracker.h"
+""",
+        """#include "Tracker.h"
+
+
+namespace BPrivate {
+	void ForceUnloadCatalog();
+}
+""",
+        "tracker catalog reload",
+    )
+    replace_once(
+        tracker,
+        """		case B_LOCALE_CHANGED:
+		{
+			BLocaleRoster::Default()->Refresh();
+			bool localize;
+			if (message->FindBool("filesys", &localize) == B_OK)
+				gLocalizedNamePreferred = localize;
+			break;
+		}
+""",
+        """		case B_LOCALE_CHANGED:
+		{
+			// Apply the message after the file. A missing file must not
+			// put English back on top of the language the user just chose.
+			BLocaleRoster::Default()->Refresh();
+			BLocaleRoster::Default()->ApplySettings(message);
+			BPrivate::ForceUnloadCatalog();
+			gLocalizedNamePreferred
+				= BLocaleRoster::Default()->IsFilesystemTranslationPreferred();
+
+			bool languageChanged = message->HasString("language");
+			AutoLock<WindowList> lock(&fWindowList);
+			int32 count = fWindowList.CountItems();
+			for (int32 index = 0; index < count; index++) {
+				BContainerWindow* window = dynamic_cast<BContainerWindow*>(
+					fWindowList.ItemAt(index));
+				if (window == NULL)
+					continue;
+
+				AutoLock<BWindow> windowLock(window);
+				if (!windowLock.IsLocked())
+					continue;
+
+				window->LocaleChanged(languageChanged);
+			}
+			break;
+		}
+""",
+        "tracker applies locale message",
+    )
+
+    container_h = HAIKU / "src/kits/tracker/ContainerWindow.h"
+    replace_once(
+        container_h,
+        """	virtual void MenusEnded();
+""",
+        """	virtual void MenusEnded();
+	void LocaleChanged(bool languageChanged);
+""",
+        "locale changed declaration",
+    )
+    container = HAIKU / "src/kits/tracker/ContainerWindow.cpp"
+    replace_once(
+        container,
+        """	AddWindowContextMenu(fWindowContextMenu);
+}
+
+
+void
+BContainerWindow::Init(const BMessage* message)
+""",
+        """	AddWindowContextMenu(fWindowContextMenu);
+}
+
+
+void
+BContainerWindow::LocaleChanged(bool languageChanged)
+{
+	// The caller holds the window lock. RepopulateMenus() is protected.
+	BPoseView* poseView = PoseView();
+	if (poseView != NULL) {
+		int32 poseCount = poseView->CountItems();
+		for (int32 poseIndex = 0; poseIndex < poseCount; poseIndex++) {
+			BPose* pose = poseView->PoseAtIndex(poseIndex);
+			if (pose == NULL || pose->TargetModel() == NULL)
+				continue;
+			pose->TargetModel()->ResetLocalizedName();
+			pose->ReloadLabels();
+		}
+		poseView->Invalidate();
+	}
+	if (languageChanged && ShouldAddMenus())
+		RepopulateMenus();
+}
+
+
+void
+BContainerWindow::Init(const BMessage* message)
+""",
+        "locale changed rebuilds menus",
+    )
 
 
 if __name__ == "__main__":
