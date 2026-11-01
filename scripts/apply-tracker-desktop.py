@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Tracker desktop/list overlay: #2372 #2864 #3291 #8246 #20363 #20419
-#19070 #16678 #17901 #18060 #18514 #19084."""
+#19070 #16678 #17901 #18060 #18514 #19084.
+Also applies scripts/tracker-deskbar-more.diff (#5338 #16185 #11176 #18667
+#7328 #16359 #15975 #15910 #13431 #16144 #16853 #9216 #20261 #16643 #19546
+#11495 #11029 #16726 #11402 #8551 #19520 #8772 #19661 #19663 #12335 #19573
+#8544 #8543 #9383 #19433 #12859)."""
 from __future__ import annotations
 
 import pathlib
+import subprocess
 import sys
 
 HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/haiku")
@@ -20,7 +25,30 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     print(f"patched {path} ({tag})")
 
 
+def apply_more_diff() -> None:
+    """Deskbar and Tracker fixes kept as one patch against the r5 tree."""
+    marker = HAIKU / "src/kits/tracker/StatusWindow.cpp"
+    if marker.is_file() and "Haiku #5338" in marker.read_text(
+            encoding="utf-8", errors="replace"):
+        print("already tracker-deskbar-more.diff")
+        return
+    diff = pathlib.Path(__file__).resolve().parent / "tracker-deskbar-more.diff"
+    payload = diff.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    result = subprocess.run(
+        ["patch", "-p1", "--forward", "--batch"],
+        input=payload,
+        cwd=HAIKU,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        out = result.stdout.decode("utf-8", "replace")
+        err = result.stderr.decode("utf-8", "replace")
+        raise SystemExit(f"tracker-deskbar-more.diff failed\n{out}\n{err}")
+    print("patched tracker-deskbar-more.diff")
+
+
 def main() -> int:
+    apply_more_diff()
     pose = HAIKU / "src/kits/tracker/PoseView.cpp"
     replace_once(
         pose,
@@ -485,6 +513,220 @@ BDeskWindow::~BDeskWindow()
 	be_control_look->DrawBorder(this, bounds, updateRect,
 """,
         "Haiku #17901 count fill",
+    )
+    open_with = HAIKU / "src/kits/tracker/OpenWithWindow.cpp"
+    replace_once(
+        open_with,
+        "#include <Path.h>\n",
+        "#include <FindDirectory.h>\n#include <Path.h>\n",
+        "Haiku #12859 find directory",
+    )
+    replace_once(
+        open_with,
+        """\t\tapp_info trackerInfo;
+		if (*appModel->EntryRef() != trackerInfo.ref) {
+			// this is an inactive copy of the Tracker, remove it
+""",
+        """\t\tapp_info trackerInfo;
+		// The comparison used to read an uninitialized app_info.
+		if (be_roster->GetActiveAppInfo(&trackerInfo) != B_OK
+			|| *appModel->EntryRef() != trackerInfo.ref) {
+			// this is an inactive copy of the Tracker, remove it
+""",
+        "Haiku #12859 running Tracker",
+    )
+    replace_once(
+        open_with,
+        """	if (FSInTrashDir(appModel->EntryRef()))
+		return false;
+
+	if (ShowAllApplications()) {
+""",
+        """	if (FSInTrashDir(appModel->EntryRef()))
+		return false;
+
+	// Tracker add-ons are for the Add-ons menu, not Open With.
+	if (_InTrackerAddOns(appModel->EntryRef()))
+		return false;
+
+	if (ShowAllApplications()) {
+""",
+        "Haiku #12859 add-ons",
+    )
+    replace_once(
+        open_with,
+        """bool
+SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
+""",
+        """static bool
+_InTrackerAddOns(const entry_ref* ref)
+{
+	BPath path;
+	if (ref == NULL || BEntry(ref).GetPath(&path) != B_OK || path.Path() == NULL)
+		return false;
+
+	const directory_which places[] = {
+		B_SYSTEM_ADDONS_DIRECTORY,
+		B_USER_ADDONS_DIRECTORY,
+		B_SYSTEM_NONPACKAGED_ADDONS_DIRECTORY,
+		B_USER_NONPACKAGED_ADDONS_DIRECTORY
+	};
+	BString full(path.Path());
+	for (uint32 index = 0; index < sizeof(places) / sizeof(places[0]); index++) {
+		BPath addons;
+		if (find_directory(places[index], &addons) != B_OK)
+			continue;
+		if (addons.Append("Tracker") != B_OK)
+			continue;
+		BString prefix(addons.Path());
+		prefix << '/';
+		if (full.StartsWith(prefix))
+			return true;
+	}
+	return false;
+}
+
+
+bool
+SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
+""",
+        "Haiku #12859 helper",
+    )
+
+    pose_h = HAIKU / "src/kits/tracker/Pose.h"
+    replace_once(
+        pose_h,
+        """	bool NeedsSaveLocation() const;
+	void SetSaveLocation();
+""",
+        """	bool NeedsSaveLocation() const;
+	void SetSaveLocation();
+	void ClearSaveLocation();
+""",
+        "mount point clear save",
+    )
+    replace_once(
+        pose_h,
+        """inline void
+BPose::SetSaveLocation()
+{
+	fNeedsSaveLocation = true;
+}
+""",
+        """inline void
+BPose::SetSaveLocation()
+{
+	fNeedsSaveLocation = true;
+}
+
+
+inline void
+BPose::ClearSaveLocation()
+{
+	fNeedsSaveLocation = false;
+}
+""",
+        "mount point clear save impl",
+    )
+    replace_once(
+        pose,
+        """		if (checkValidLocation && !rect.Intersects(viewBounds)) {
+			// Do not pile leftovers at 0,0 (Haiku #2864 #8246 #20363).
+			fHintLocation = PinToGrid(
+				BPoint(fOffset.x + 8, fOffset.y + 8), fGrid, fOffset);
+			pose->SetLocation(fHintLocation, this);
+			rect = pose->CalcRect(this);
+			break;
+		}
+""",
+        """		if (checkValidLocation && !rect.Intersects(viewBounds)) {
+			// The scan left the screen. Do not drop the icon on the
+			// first cell: that cell is usually already taken, so a late
+			// icon such as VBox Share lands on top of another one.
+			fHintLocation = PinToGrid(
+				BPoint(fOffset.x + 8, fOffset.y + 8), fGrid, fOffset);
+			pose->SetLocation(fHintLocation, this);
+			rect = pose->CalcRect(this);
+			rect.InsetBy(-3, 0);
+			for (int32 guard = 0; guard < 400
+				&& SlotOccupied(rect, viewBounds); guard++) {
+				NextSlot(pose, rect, viewBounds);
+				if (!rect.Intersects(viewBounds))
+					break;
+			}
+			break;
+		}
+		if (++slots >= 400)
+			break;
+""",
+        "do not stack a late desktop icon",
+    )
+    replace_once(
+        pose,
+        """	// find an empty slot to put pose into
+	while (SlotOccupied(rect, viewBounds)
+""",
+        """	// find an empty slot to put pose into
+	int32 slots = 0;
+	while (SlotOccupied(rect, viewBounds)
+""",
+        "desktop place slot cap",
+    )
+    replace_once(
+        pose,
+        """void
+BPoseView::SavePoseLocations(BRect* frameIfDesktop)
+""",
+        """static bool
+_IsMountPoint(const Model* model)
+{
+	// The directory's device differs from its parent's when another
+	// filesystem is mounted there (VBox Share). stat is enough; do not
+	// open the node for attributes.
+	if (model == NULL || model->EntryRef() == NULL)
+		return false;
+
+	BEntry entry(model->EntryRef());
+	BNode node(&entry);
+	node_ref self;
+	if (node.GetNodeRef(&self) != B_OK)
+		return false;
+
+	BEntry parent;
+	if (entry.GetParent(&parent) != B_OK)
+		return false;
+
+	BNode parentNode(&parent);
+	node_ref parentRef;
+	if (parentNode.GetNodeRef(&parentRef) != B_OK)
+		return false;
+
+	return self.device != parentRef.device;
+}
+
+
+void
+BPoseView::SavePoseLocations(BRect* frameIfDesktop)
+""",
+        "mount point helper",
+    )
+    replace_once(
+        pose,
+        """		if (pose->NeedsSaveLocation() && pose->HasLocation()) {
+			Model* model = pose->TargetModel();
+			poseInfo.fInvisible = false;
+""",
+        """		if (pose->NeedsSaveLocation() && pose->HasLocation()) {
+			Model* model = pose->TargetModel();
+			if (_IsMountPoint(model)) {
+				// Writing the icon position into the mounted filesystem
+				// blocks Tracker. The icon still moves until the next boot.
+				pose->ClearSaveLocation();
+				continue;
+			}
+			poseInfo.fInvisible = false;
+""",
+        "do not save a mount-point icon",
     )
     return 0
 

@@ -305,7 +305,7 @@ id	r5_status	branch	commit	notes
 5286	open			
 5301	open			
 5335	open			
-5338	open			
+5338	fixed			Status window keeps a long file name inside the buffer
 5342	open			
 5343	open			
 5394	open			
@@ -494,7 +494,7 @@ id	r5_status	branch	commit	notes
 7314	open			
 7322	open			
 7325	open			
-7328	open			
+7328	fixed			Empty recent menu stays on screen
 7340	open			
 7353	open			
 7361	open			
@@ -651,11 +651,11 @@ id	r5_status	branch	commit	notes
 8524	open			
 8535	open			
 8542	open			
-8543	open			
-8544	open			
+8543	fixed			Get Info path tip stays on this workspace
+8544	fixed			Get Info icon follows identify
 8549	open			
 8550	open			
-8551	open			
+8551	fixed			Open With relation no longer edits the MIME type
 8554	open			
 8558	open			
 8560	open			
@@ -696,7 +696,7 @@ id	r5_status	branch	commit	notes
 8754	open			
 8758	open			
 8765	open			
-8772	open			
+8772	fixed			Open With frame is restored after layout
 8779	open			
 8788	open			
 8789	open			
@@ -769,7 +769,7 @@ id	r5_status	branch	commit	notes
 9209	open			
 9210	open			
 9211	open			
-9216	open			
+9216	fixed			Escape clears the selection
 9222	open			
 9242	open			
 9246	open			
@@ -796,7 +796,7 @@ id	r5_status	branch	commit	notes
 9361	open			
 9374	open			
 9382	open			
-9383	open			
+9383	fixed			Get Info says when an item cannot be renamed
 9384	open			
 9385	open			
 9386	open			
@@ -1022,7 +1022,7 @@ id	r5_status	branch	commit	notes
 11009	open			
 11019	open			
 11028	open			
-11029	open			
+11029	fixed			Opening the parent keeps that folder selected
 11030	open			
 11031	open			
 11032	open			
@@ -1042,7 +1042,7 @@ id	r5_status	branch	commit	notes
 11141	open			
 11163	open			
 11166	open			
-11176	open			
+11176	fixed			Copy finish time no longer falls back to 13 Dec 1901
 11183	open			
 11190	open			
 11194	open			
@@ -1078,7 +1078,7 @@ id	r5_status	branch	commit	notes
 11396	open			
 11397	fixed			Deskbar B_COLORS_UPDATED + clock fill uses menu colors
 11399	open			
-11402	open			
+11402	fixed			Find attributes follow a most-used type
 11403	open			
 11408	open			
 11417	open			
@@ -1094,7 +1094,7 @@ id	r5_status	branch	commit	notes
 11473	open			
 11485	open			
 11486	open			
-11495	open			
+11495	fixed			Add-ons menu refreshes when opened
 11500	open			
 11510	open			
 11511	open			
@@ -1222,7 +1222,7 @@ id	r5_status	branch	commit	notes
 12309	open			
 12310	open			
 12313	open			
-12335	open			
+12335	fixed			Replace question uses the locale date
 12342	open			
 12362	open			
 12366	open			
@@ -1445,7 +1445,7 @@ id	r5_status	branch	commit	notes
 13416	open			
 13423	open			
 13430	open			
-13431	open			
+13431	fixed			Menus keep a margin from the screen edge
 13433	open			
 13434	open			
 13441	open			
@@ -2085,7 +2085,7 @@ id	r5_status	branch	commit	notes
 15900	open			
 15901	open			
 15906	open			
-15910	open			
+15910	fixed			Deskbar scroll arrow stays on the bottom edge
 15911	open			
 15917	open			
 15918	open			
@@ -2116,7 +2116,7 @@ id	r5_status	branch	commit	notes
 15967	open			
 15968	open			
 15972	open			
-15975	open			
+15975	fixed			Vertical Deskbar keeps room for one icon row
 15981	open			
 15987	open			
 15989	open			
@@ -2182,7 +2182,7 @@ id	r5_status	branch	commit	notes
 16140	open			
 16141	open			
 16142	open			
-16144	open			
+16144	fixed			Escape closes the open menu
 16148	open			
 16151	open			
 16153	open			
@@ -2195,7 +2195,7 @@ id	r5_status	branch	commit	notes
 16171	open			
 16181	open			
 16183	open			
-16185	open			
+16185	fixed			Status window grows with the font
 16187	open			
 16192	open			
 16194	open			
@@ -2269,7 +2269,7 @@ id	r5_status	branch	commit	notes
 16355	open			
 16356	open			
 16358	open			
-16359	open			
+16359	fixed			Auto-raise stays up after a workspace change
 16360	open			
 16376	open			
 16379	open			
@@ -2367,7 +2367,7 @@ id	r5_status	branch	commit	notes
 16637	open			
 16639	open			
 16641	open			
-16643	open			
+16643	fixed			Showing a file scrolls after the range is updated
 16645	open			
 16646	open			
 16648	open			
@@ -2391,7 +2391,7 @@ id	r5_status	branch	commit	notes
 16716	open			
 16718	open			
 16719	open			
-16726	open			
+16726	fixed			Item count no longer takes the scrollbar width
 16727	open			
 16733	open			
 16735	open			
@@ -2434,7 +2434,7 @@ id	r5_status	branch	commit	notes
 16845	open			
 16847	open			
 16848	open			
-16853	open			
+16853	fixed			List rows are tall enough for the date
 16858	open			
 16860	open			
 16862	open			
@@ -3122,7 +3122,7 @@ id	r5_status	branch	commit	notes
 18659	open			
 18663	open			
 18664	open			
-18667	open			
+18667	fixed			Shut down menu uses the same words as the question
 18668	open			
 18669	open			
 18674	open			
@@ -3430,7 +3430,7 @@ id	r5_status	branch	commit	notes
 19423	open			
 19427	open			
 19430	open			
-19433	open			
+19433	fixed			Get Info can be resized
 19434	open			
 19437	open			
 19440	open			
@@ -3480,7 +3480,7 @@ id	r5_status	branch	commit	notes
 19515	open			
 19518	open			
 19519	open			
-19520	open			
+19520	fixed			Open With remembers its frame
 19522	open			
 19527	open			
 19529	open			
@@ -3489,13 +3489,13 @@ id	r5_status	branch	commit	notes
 19538	open			
 19543	open			
 19544	open			
-19546	open			
+19546	fixed			Find starts in the open folder
 19548	open			
 19564	open			
 19565	open			
 19567	open			
 19568	open			
-19573	open			
+19573	fixed			Volume space bar invalidates the whole pose
 19578	open			
 19579	open			
 19582	open			
@@ -3533,8 +3533,8 @@ id	r5_status	branch	commit	notes
 19651	open			
 19654	open			
 19655	open			
-19661	open			
-19663	open			
+19661	fixed			Editing a rating in a narrow column does not crash
+19663	fixed			A time attribute is not stored when the date cannot be read
 19664	open			
 19665	open			
 19669	open			
@@ -3812,7 +3812,7 @@ id	r5_status	branch	commit	notes
 20254	open			
 20259	open			
 20260	open			
-20261	open			
+20261	fixed			List re-sorts after a stat change with no field mask
 20262	open			
 20264	open			
 20265	open			

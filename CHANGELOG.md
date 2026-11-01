@@ -1,5 +1,21 @@
 # R5OS changelog (lokaal)
 
+### Desktop icon no longer freezes Tracker
+
+VBox Share is a directory on the Desktop with another filesystem mounted on it. Placement gave up by putting a late icon on the first grid cell, which was already taken, so the share sat on top of another icon. Dragging it then saved the icon position with `WriteAttr` on that mount. That call blocks, the Desktop window thread stops, and folders no longer open.
+
+`scripts/apply-tracker-desktop.py` now keeps scanning for a free cell instead of dropping the icon on the first one, and stops after 400 cells. Saving positions skips a mount point (`stat` device differs from the parent) and clears the save flag, so Tracker does not open that filesystem to write the attribute. The icon still moves until the next boot. `jam -q libtracker.so` updated 35 targets and exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 15:14 Europe/Amsterdam exited 0 and updated 1256 targets. The package check printed `mesa_packages_ok` and no Mesa 22. Not booted. The VirtualBox session that is already running is still the previous disk.
+
+### Tracker and Deskbar batch
+
+Thirty open Tracker and Deskbar bugs, applied by `scripts/tracker-deskbar-more.diff` from `scripts/apply-tracker-desktop.py`. No new overlay script. The patch is against the r5 Haiku tree after the existing overlays. It does not replace those overlays.
+
+Tracker: the copy status buffer terminated a long name with the character `0` (#5338) and the window width ignored the font (#16185). A non-finite finish estimate became 13 Dec 1901 (#11176). Escape clears the selection when it is not clearing a cut or type-ahead (#9216). List rows use the font's ascent, descent, and leading (#16853). A stat change with no field mask still re-sorts (#20261). Scrolling a just-shown file updates the scroll range first (#16643). Single-window Open parent selects the folder you left (#11029). Find starts in the open folder (#19546). The Add-ons menu is rebuilt when the menu bar opens (#11495). The item count no longer uses the scrollbar's minimum width (#16726). Find's most-used type still fills the attribute row (#11402). Open With no longer writes into the MIME type string (#8551) and restores its frame after layout, in 12-point units (#19520, #8772). A narrow rating column and a date `parsedate` cannot read no longer crash or store year 1901 (#19661, #19663). The replace question uses `BDateTimeFormat` (#12335). The volume space bar invalidates the whole pose (#19573). Get Info refreshes the icon after identify (#8544), keeps the path tip on the current workspace (#8543), can be resized (#19433), and says when a name cannot be changed (#9383).
+
+Deskbar: the leaf menu says Shut down and Restart, matching the question (#18667). An empty Recent menu gets a disabled item instead of a huge frame (#7328). Auto-raise is applied again when the workspace changes (#16359). A vertical Deskbar's minimum height includes one icon row (#15975). The lower scroll arrow is moved back to the visible edge (#15910). Menus stay 4px inside the screen (#13431). Escape always quits menu tracking (#16144).
+
+`jam -q libtracker.so` and `jam -q '<libbe!x86_64>interface_kit.o'` compiled the Tracker objects and `Menu.o`, then linked `libbe.so` (the unknown target name `deskbar` made that command exit 1 after those links). `jam -q Deskbar` then updated 18 targets and exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 12:02 Europe/Amsterdam exited 0 and updated 1724 targets. The image is `generated.x86_64/r5-os.image`, 2 GiB. About was relinked after `r5_whatsnew.txt` was copied, and `r5_os_version.h` says build 10019. The package check printed `mesa_packages_ok` (libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, LLVM 21 runtime, Vulkan loader) and no Mesa 22 package. Not booted. Not tested on a LAN. The VirtualBox session started earlier is still the previous disk.
+
 ### Deskbar closes the other menu bar before opening one
 
 No commit on `upstream/master` (fetched 1 Nov 2026) names #20099. The leaf menu and the running-apps list are two `BMenuBar`s in one window. Each one installed the window’s menu semaphore and left the other menu tracking.
