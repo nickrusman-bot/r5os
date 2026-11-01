@@ -8,7 +8,9 @@ That is the path that worked. Keep it. The preview and the Deskbar clock both ca
 
 Two earlier disks did not do this. The 19:05 image coerced the pattern generator and the clock stayed “6:07 PM”. The 19:34 image reloaded `Locale settings` on each pulse and the clock stayed “6:54 PM”, because a missing file makes `Refresh()` put en_US back. Do not draw the clock from `BDateTimeFormat` again, and do not `Refresh()` from the pulse.
 
-After Nederlands was moved above English the same boot showed “8:01 PM”. The language message does not carry the formatting country. `Refresh()` runs first and can replace the live Dutch conventions with a file that does not have them yet. That flip is not changed on this disk. VirtualBox was left running.
+After Nederlands was moved above English the same boot showed “8:01 PM”, and a minute later “8:02 PM”. The language message does not carry the formatting country. `Refresh()` runs first and can replace the live Dutch conventions with a file that does not have them yet. That flip is not changed on this disk. VirtualBox was left running. It is [#4045](https://github.com/nickrusman-bot/r5os/issues/4045).
+
+The same menu was only partly Dutch. Strings in `nl.catkeys` no longer match the Deskbar source (`Show replicants handle`, `About R5OS`, `Shut down…`, `%appname% preferences…`, Lock screen, Log out, Show desktop). Mount is still “Betrek”. That catalog update is [#4044](https://github.com/nickrusman-bot/r5os/issues/4044). Neither is on this disk.
 
 ### Locale broadcast on the build 10023 image
 
