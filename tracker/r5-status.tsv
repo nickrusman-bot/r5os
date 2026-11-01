@@ -187,7 +187,7 @@ id	r5_status	branch	commit	notes
 4095	open			
 4122	open			
 4135	open			
-4154	open			
+4154	fixed			A second Find renames the query file from the current text so the result window title changes
 4165	open			
 4167	open			
 4178	open			
@@ -535,7 +535,7 @@ id	r5_status	branch	commit	notes
 7617	open			
 7627	open			
 7633	open			
-7644	open			
+7644	fixed			The leaf menu says Show replicants handle
 7645	open			
 7650	open			
 7658	open			
@@ -898,7 +898,7 @@ id	r5_status	branch	commit	notes
 9964	open			
 9970	open			
 9973	open			
-9974	open			
+9974	fixed			Ctrl+Up and Ctrl+Down follow Home and End. Command+Up stays Open parent
 9976	open			
 9979	open			
 9984	open			
@@ -1311,7 +1311,7 @@ id	r5_status	branch	commit	notes
 12837	open			
 12850	open			
 12851	open			
-12859	open			
+12859	fixed			Open With skips Tracker add-ons and initializes app_info before comparing the running Tracker
 12862	open			
 12865	open			
 12867	open			
@@ -1755,7 +1755,7 @@ id	r5_status	branch	commit	notes
 14841	open			
 14843	open			
 14844	open			
-14846	fixed			Clock preferred width includes weekday margins
+14846	fixed			Clock preferred width includes weekday margins. A vertical clock wider than the bar is shortened with an ellipsis instead of shifted off the left edge
 14849	open			
 14850	open			
 14851	open			
@@ -1771,7 +1771,7 @@ id	r5_status	branch	commit	notes
 14880	open			
 14886	open			
 14889	open			
-14900	open			
+14900	fixed			Shift-click cycles the secondary sort ascending, descending, then off. The reversed secondary order is not written into the view-state attribute
 14902	open			
 14903	open			
 14905	open			
@@ -2476,7 +2476,7 @@ id	r5_status	branch	commit	notes
 16960	open			
 16962	open			
 16967	open			
-16968	open			
+16968	fixed			Command+A in the single-window location field selects the path
 16972	open			
 16974	open			
 16978	open			

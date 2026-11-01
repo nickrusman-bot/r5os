@@ -22,3 +22,15 @@ python3 scripts/tracker-report.py
 ```
 
 Elke R5-statuswijziging moet `STATUS.md` opnieuw genereren (`tracker-report.py`) en die file meenemen in dezelfde commit/PR.
+
+## GitHub is de lijst
+
+Open Trac-tickets staan als GitHub-issues met label `haiku`. De koppeling zit in `tracker/github.tsv` en in de issue-tekst als `<!-- haiku-ticket:ID -->`. What's new blijft gewone taal. Het issue krijgt de opmerking bij welke build het zit.
+
+```bash
+python3 scripts/tracker-import.py ~/Downloads/query.csv
+python3 scripts/sync-github-issues.py
+python3 scripts/tracker-report.py
+```
+
+De sync maakt ontbrekende issues. Een ticket dat op `origin/main` al `fixed` is, wordt gesloten met een comment die de notitie uit `r5-status.tsv` citeert. Een gesloten GitHub-issue gaat niet weer open omdat Trac het nog noemt. Verdwijnt een ticket uit de Trac-snapshot, dan komt er één comment en blijft het hier open. Draai dit opnieuw na een nieuwe CSV.

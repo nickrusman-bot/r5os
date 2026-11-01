@@ -1,3 +1,12 @@
+R5OS 2026.1-dev Build 10021 - Lists and Find
+Shift-click a column heading to add a second sort. Click it again for the other direction, and once more to turn it off. A normal click sorts by that column only.
+
+Command+A in the path field selects the path. Ctrl+Up and Ctrl+Down go to the first or last item.
+
+A new search names the result window after what you typed. Open With no longer offers Tracker add-ons.
+
+A vertical Deskbar clock stays on the bar when the bar is narrow. The leaf menu item is Show replicants handle.
+
 R5OS 2026.1-dev Build 10020 - Desktop icons
 A shared folder on the Desktop no longer covers another icon. Moving that icon no longer freezes the Desktop, so folders open again.
 
