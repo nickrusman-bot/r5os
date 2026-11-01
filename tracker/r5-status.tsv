@@ -1919,7 +1919,7 @@ id	r5_status	branch	commit	notes
 15437	open			
 15439	open			
 15443	open			
-15444	open			
+15444	fixed			Icon view refits a name that was truncated to the list column
 15445	open			
 15448	open			
 15456	open			
@@ -1941,7 +1941,7 @@ id	r5_status	branch	commit	notes
 15519	open			
 15521	open			
 15524	open			
-15527	open			
+15527	fixed			system, home, apps, preferences, develop, and config use the catalog name when SYS:NAME is missing
 15529	open			
 15533	open			
 15535	open			

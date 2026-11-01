@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Well-known folder names and icon labels
+
+Two Tracker bugs, applied by `scripts/apply-tracker-desktop.py`. Not on the daily image. Not booted.
+
+`system`, `home`, `apps`, `preferences`, `develop`, and `config` have catalog strings, but Tracker only showed them when the folder carried a `SYS:NAME` attribute. If that attribute is missing, the name now comes from the same catalog context (#15527). Other folders are unchanged (#10200 stays open).
+
+A name fitted to the list column stayed truncated after switching to icon view. Icon view refits when the stored width is still the column width (#15444).
+
+`jam -q libtracker.so` on 1 Nov 2026 at 17:37 Europe/Amsterdam updated 3 targets (`Model.o`, `WidgetAttributeText.o`, and the library link) and exited 0. Not booted. VirtualBox was left on build 10022.
+
 ### Leaf menu scroll arrows
 
 The leaf menu on build 10021 drew an up arrow and a down arrow while the items still fit, with empty desktop below the menu. `BMenu::_CalcFrame` insets the screen by 4px so a menu border stays on screen (#13431). That same rectangle decided scrolling. The leaf menu starts at the top of the screen, which is above the inset, so scrolling turned on and `AttachScrollers()` added the arrows.
