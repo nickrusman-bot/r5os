@@ -1,7 +1,9 @@
 # Boot r5-os.image in VirtualBox on the LAN (bridged Intel PRO/1000).
-# Haiku has no VirtualBox Guest Additions in this tree:
-# no vboxsf, no auto-resize, no VBox drag-and-drop.
+# The daily image has the 7.2.22 guest modules. This script does not enable
+# VirtualBox clipboard mode or drag-and-drop, and it does not add a share.
 # Text clipboard uses COM1 (named pipe), not Devices > Shared Clipboard.
+# A bridged Wi-Fi adapter can leave VirtualBox in POWERING_OFF after the guest
+# has entered ACPI S5. scripts/vbox-poweroff-watch.ps1 ends that process.
 #
 # Usage:
 #   powershell -File scripts/run-vbox-r5.ps1
@@ -63,6 +65,23 @@ function Get-BridgeName([string]$vbox, [string]$preferred) {
 	return $names[0]
 }
 
+function Stop-R5VmProcess([string]$name) {
+	Get-CimInstance Win32_Process -Filter "Name = 'VirtualBoxVM.exe'" -ErrorAction SilentlyContinue |
+		Where-Object { $_.CommandLine -and ($_.CommandLine -like "*--comment $name*" -or $_.CommandLine -like "*startvm $name*") } |
+		ForEach-Object {
+			Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+		}
+}
+
+function Stop-VmForRestart([string]$vbox, [string]$name) {
+	$proc = Start-Process -FilePath $vbox -ArgumentList @("controlvm", $name, "poweroff") -PassThru -WindowStyle Hidden
+	if (-not $proc.WaitForExit(20000)) {
+		Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+		Stop-R5VmProcess $name
+		Start-Sleep -Seconds 2
+	}
+}
+
 $vbox = Find-VBoxManage
 $raw = Get-RawImagePath
 $outDir = Join-Path $PSScriptRoot "..\generated"
@@ -71,16 +90,15 @@ $vdi = Join-Path (Resolve-Path $outDir) "r5-os.vdi"
 $localRaw = Join-Path (Resolve-Path $outDir) "r5-os.img"
 
 Write-Host "R5OS VirtualBox"
-Write-Host "  No vboxsf, no auto-resize, no VBox drag-and-drop."
-Write-Host "  Text clipboard: COM1 pipe (not Guest Additions)."
+Write-Host "  Guest modules are on the image. This script adds no share."
+Write-Host "  Text clipboard: COM1 pipe (not Devices > Shared Clipboard)."
 Write-Host "  Disk: Intel IDE  NIC: Intel PRO/1000 (ipro1000)  Net: bridged"
 Write-Host "  raw: $raw"
 
 $running = & $vbox list runningvms
 if ($running -match "`"$VmName`"") {
 	Write-Host "Stopping $VmName ..."
-	& $vbox controlvm $VmName poweroff | Out-Null
-	Start-Sleep -Seconds 2
+	Stop-VmForRestart $vbox $VmName
 }
 
 $all = & $vbox list vms
@@ -175,5 +193,17 @@ if (-not $NoClip) {
 	) | Out-Null
 	Write-Host "  clipboard host: \\.\pipe\R5OS-clip"
 }
+
+Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+	Where-Object { $_.CommandLine -like "*vbox-poweroff-watch.ps1*" } |
+	ForEach-Object {
+		Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+	}
+$watch = Join-Path $PSScriptRoot "vbox-poweroff-watch.ps1"
+Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -ArgumentList @(
+	"-NoProfile", "-ExecutionPolicy", "Bypass",
+	"-File", $watch, "-VmName", $VmName
+) | Out-Null
+Write-Host "  power-off watch: end VirtualBox if it stays up after ACPI S5"
 
 Write-Host "LAN IPv6/mDNS can work here. QEMU usernet cannot."

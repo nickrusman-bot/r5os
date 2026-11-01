@@ -10,7 +10,7 @@ The daily image installs the 7.2.22 guest additions (`distro/vbox-guest/`, copie
 
 **Text clipboard** is a COM1 named-pipe bridge (`r5_vbox_clip` in the guest, `scripts/vbox-clipboard-host.ps1` on Windows). It is not Devices → Shared Clipboard. Unicode text only, ~256 KB. `-NoClip` skips the host helper.
 
-The guest uses ordinary PC devices: IDE disk, Intel PRO/1000 (`ipro1000`), VESA/VBoxVGA, USB tablet. VBox clipboard-mode and drag-and-drop stay off.
+The guest uses ordinary PC devices: IDE disk, Intel PRO/1000 (`ipro1000`), VESA/VBoxVGA, USB tablet. VBox clipboard-mode and drag-and-drop stay off. A bridged Wi-Fi adapter can leave the VirtualBox window open after the guest has entered ACPI S5. `scripts/vbox-poweroff-watch.ps1` ends that process 20 seconds later. That path was not run.
 
 ## VirtualBox (Windows)
 
