@@ -9,6 +9,13 @@ A `BBox` label used to shift its baseline up by one sixth of the line height, wh
 The same script used to insert another `#include <Region.h>` into `ListView.cpp` on every apply, because the new text still contained the old `#include <Window.h>` line. A second apply now leaves a single include.
 
 `jam -q '<libbe!x86_64>interface_kit.o'` compiled `Box.o`, `SeparatorView.o`, and `ListView.o` (47 targets updated, exit 0). Not booted.
+### Control colors for flat buttons, scrollbar arrows, and plain text
+
+Haiku’s June 2025 control-color rework (`91bed92`, “use B_CONTROL_BACKGROUND_COLOR”) is already in this tree. Nothing newer on `upstream/master` (fetched 1 Nov 2026) names #19629, #19630, #20418, or #20372. Gerrit 11871 for #20372 was abandoned. The leftovers are applied from `scripts/apply-darkmode.py`.
+
+Scrollbar arrow buttons use `B_CONTROL_BACKGROUND_COLOR` and `B_CONTROL_TEXT_COLOR`. The trough stays the panel color (#19630). A flat `BButton` takes its parent’s low color, so hover does not jump to the control gray (#19629). `SetViewColor()` still clears the UI color; that face is now the button color, with black or white text when the control text would have no contrast (#20418). High and low color changes inside an overridden `Draw` stay ignored, which is what LibLayout in Wonderbrush relies on. A non-stylable `BTextView` updates its single run when the document text color changes (#20372). Styled runs are unchanged: a run does not record which UI color it came from.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` from `generated.x86_64` updated 47 targets and exited 0, including `Button.o`, `ScrollBar.o`, and `TextView.o`. Not booted. R5OS sign-in, lock, and Users buttons do not call `SetViewColor()` on the button, so they keep the system control color.
 
 ### GLTeapot draws on the VirtualBox daily
 

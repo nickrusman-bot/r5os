@@ -28,7 +28,7 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 |---|---|
 | normal | 3578 |
 | low | 259 |
-| high | 35 |
+| high | 34 |
 | critical | 1 |
 | blocker | 1 |
 
@@ -38,6 +38,8 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 |---|---|
 | Unscheduled | 3072 |
 | R1 | 426 |
+| Unscheduled | 3070 |
+| R1 | 427 |
 | R1.1 | 305 |
 | — | 29 |
 | R1/beta7 | 26 |
@@ -50,6 +52,7 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | Applications/Tracker | 206 |
 | Kits/Interface Kit | 161 |
 | Servers/app_server | 161 |
+| Kits/Interface Kit | 160 |
 | System/Kernel | 153 |
 | Applications/WebPositive | 132 |
 | Kits/Web Kit | 126 |
@@ -139,13 +142,17 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | [#18813](https://dev.haiku-os.org/ticket/18813) | new | Kits/Interface Kit | Section title font X-height cut off |  |
 | [#19070](https://dev.haiku-os.org/ticket/19070) | new | Applications/Tracker | [Tracker] UI: Fixed black/gray status colours when copying |  |
 | [#19084](https://dev.haiku-os.org/ticket/19084) | new | Applications/Tracker | render glitch when resizing table columns in tracker |  |
+| [#19629](https://dev.haiku-os.org/ticket/19629) | new | Kits/Interface Kit | Flat Buttons use wrong Colors |  |
+| [#19630](https://dev.haiku-os.org/ticket/19630) | new | Kits/Interface Kit | Scrollbar color issues |  |
 | [#19704](https://dev.haiku-os.org/ticket/19704) | new | Applications/Deskbar | White bar when Auto-hide in horizontal mode on the top. |  |
 | [#19836](https://dev.haiku-os.org/ticket/19836) | new | - General | BeControlLook buttons have too little contrast since BButton color updates [easy] |  |
 | [#20008](https://dev.haiku-os.org/ticket/20008) | new | Kits/Interface Kit | BTabView: Darkmode issue (easy) |  |
 | [#20009](https://dev.haiku-os.org/ticket/20009) | new | Kits/Interface Kit | BScrollbar dark mode issue (easy) |  |
 | [#20314](https://dev.haiku-os.org/ticket/20314) | reopened | Applications/Deskbar | Deskbar: volume Icon can no longer mute |  |
 | [#20363](https://dev.haiku-os.org/ticket/20363) | new | Applications/Tracker | Icon placement incorrect when creating file near bottom of the desktop. |  |
+| [#20372](https://dev.haiku-os.org/ticket/20372) | assigned | Kits/Interface Kit | BTextView text color doesn't automatically adjust on UI colors changed |  |
 | [#20400](https://dev.haiku-os.org/ticket/20400) | new | System/Kernel | Division by zero in early boot |  |
+| [#20418](https://dev.haiku-os.org/ticket/20418) | new | Kits/Interface Kit | BButton custom color |  |
 | [#20419](https://dev.haiku-os.org/ticket/20419) | new | Applications/Tracker | No "Arrange by" menu on Desktop |  |
 
 ## Nog open (eerste 80)
@@ -233,4 +240,5 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
 | … | | | *3786 meer in r5-status.tsv* | |
+| … | | | *3785 meer in r5-status.tsv* | |
 
