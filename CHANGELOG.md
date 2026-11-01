@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Control colors for flat buttons, scrollbar arrows, and plain text
+
+Haiku’s June 2025 control-color rework (`91bed92`, “use B_CONTROL_BACKGROUND_COLOR”) is already in this tree. Nothing newer on `upstream/master` (fetched 1 Nov 2026) names #19629, #19630, #20418, or #20372. Gerrit 11871 for #20372 was abandoned. The leftovers are applied from `scripts/apply-darkmode.py`.
+
+Scrollbar arrow buttons use `B_CONTROL_BACKGROUND_COLOR` and `B_CONTROL_TEXT_COLOR`. The trough stays the panel color (#19630). A flat `BButton` takes its parent’s low color, so hover does not jump to the control gray (#19629). `SetViewColor()` still clears the UI color; that face is now the button color, with black or white text when the control text would have no contrast (#20418). High and low color changes inside an overridden `Draw` stay ignored, which is what LibLayout in Wonderbrush relies on. A non-stylable `BTextView` updates its single run when the document text color changes (#20372). Styled runs are unchanged: a run does not record which UI color it came from.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` from `generated.x86_64` updated 47 targets and exited 0, including `Button.o`, `ScrollBar.o`, and `TextView.o`. Not booted. R5OS sign-in, lock, and Users buttons do not call `SetViewColor()` on the button, so they keep the system control color.
+
 ### GLTeapot draws on the VirtualBox daily
 
 2026-11-01 about 9:21 Europe/Amsterdam. The guest clock read 8:21 because the VM uses UTC. The user opened GLTeapot on the daily VirtualBox session. The window showed a red teapot and 387 FPS. That disk is the Mesa 25 / libglvnd image. No renderer string was captured on that boot. The 5625U was not the machine.
