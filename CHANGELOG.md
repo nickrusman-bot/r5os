@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### vulkaninfo is packed, not run
+
+The next Mesa step is software Vulkan, not the 5625U GPU. Lavapipe is already on the image. `vulkaninfo` from Vulkan-Tools 1.4.367 (Apache-2.0; Khronos, Valve, LunarG, RasterGrid) was cross-compiled with the Haiku g++ on 1 Nov 2026 at 21:19 Europe/Amsterdam and packed as `vulkan_tools`. It links `libstdc++.so.6` and `libroot.so` and loads `libvulkan` at run time. `scripts/build-vulkaninfo.sh` writes `distro/packages/x86_64/vulkan_tools-1.4.367-1-x86_64.hpkg`. The image package list names `vulkan_tools`. That package is not on a disk yet. VirtualBox was left on the locale image. `vulkaninfo` has not printed Lavapipe. This is not GPU acceleration.
+
 ### User confirmed the Deskbar clock and Prullenbak
 
 On the 20:58 Europe/Amsterdam image the user selected Dutch (Netherlands) and 24-hour. The Locale preview read 20:01 and the Deskbar clock read 20:01. VBox Share sat beside Trash, not on it. With Nederlands above English, the Trash icon read Prullenbak. Home stayed “home”. QuickTour and VBox Share stayed those names. The Locale window that was already open kept the title “Locale”.

@@ -27,7 +27,8 @@ for name in \
 	mesa_devel-25.3.6-1-x86_64.hpkg \
 	mesa_lavapipe-25.3.6-1-x86_64.hpkg \
 	llvm21_runtime-21.1.8-1-x86_64.hpkg \
-	vulkan_loader-1.4.367-1-x86_64.hpkg
+	vulkan_loader-1.4.367-1-x86_64.hpkg \
+	vulkan_tools-1.4.367-1-x86_64.hpkg
 do
 	if ! printf '%s\n' "$out" | grep -q "$name"; then
 		echo "missing $name" >&2

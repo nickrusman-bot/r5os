@@ -18,6 +18,7 @@ needed=(
 	mesa_devel-25.3.6-1-x86_64.hpkg
 	mesa_lavapipe-25.3.6-1-x86_64.hpkg
 	vulkan_loader-1.4.367-1-x86_64.hpkg
+	vulkan_tools-1.4.367-1-x86_64.hpkg
 )
 mkdir -p "$DL"
 for name in "${needed[@]}"; do
