@@ -1,8 +1,12 @@
 # R5OS changelog (lokaal)
 
+### Build 10023 daily
+
+What's new for the four Interface Kit controls, and for the well-known folder names and icon labels, is build 10023. `jam -q @r5-raw` on 1 Nov 2026 at 18:14 Europe/Amsterdam exited 0 and updated 1727 targets. `libbe.so` and `libtracker.so` were relinked. About was relinked and contains Build 10023. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. Not booted in this record. VirtualBox is started from this image afterwards.
+
 ### Text control, slider, scrollbar, and option popup
 
-Four Interface Kit bugs, applied by `scripts/apply-ui-bugs.py`. Not on the daily image. Not booted. VirtualBox was left on build 10022.
+Four Interface Kit bugs, applied by `scripts/apply-ui-bugs.py`. They are on the build 10023 image. The object compile below was not a boot. VirtualBox was still on build 10022 then.
 
 `BTextControl::SetText()` always went through the private text view, and that view sent the modification message for every insert and delete. Programmatic `SetText()` now suppresses that message. Typing still sends it (#11735).
 
@@ -16,7 +20,7 @@ Scrollbar arrows stayed enabled when the thumb already covered the whole range. 
 
 ### Well-known folder names and icon labels
 
-Two Tracker bugs, applied by `scripts/apply-tracker-desktop.py`. Not on the daily image. Not booted.
+Two Tracker bugs, applied by `scripts/apply-tracker-desktop.py`. They are on the build 10023 image. The `libtracker.so` compile below was not a boot.
 
 `system`, `home`, `apps`, `preferences`, `develop`, and `config` have catalog strings, but Tracker only showed them when the folder carried a `SYS:NAME` attribute. If that attribute is missing, the name now comes from the same catalog context (#15527). Other folders are unchanged (#10200 stays open).
 
