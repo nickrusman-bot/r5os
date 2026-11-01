@@ -1,28 +1,35 @@
-R5OS
-Programs written for R5OS are GPL-3.0-or-later when the whole file is ours. The license text is on this disk with the other license texts.
-https://www.gnu.org/licenses/gpl-3.0.html
+# R5 Operating System
+Original R5 code.
 
-Haiku
-R5OS is based on Haiku. It is not the Haiku project. Haiku's own copyright and license stay on Haiku's files. Much of Haiku is MIT. The tree is not all MIT. Those files are not relicensed.
-https://www.haiku-os.org
+License: GPL-3.0-or-later
+Source: https://www.gnu.org/licenses/gpl-3.0.html
 
-AirPlay
-Classic AirPlay audio follows Shairport by James Laird and Mike Brady, under the MIT license. The ALAC decoder is by David Hammerton, MIT. AES is tiny-AES-c, which is Unlicense. RSA uses OpenSSL 3. AirPlay 2 pairing is not included.
-https://github.com/mikebrady/shairport-sync
-https://github.com/kokke/tiny-AES-c
+# Haiku
+Based on Haiku. Original files retain their respective licenses.
 
-OpenGL
-OpenGL drawing uses Mesa 25 on the processor. The OpenGL library is libglvnd. Mesa and libglvnd are MIT. The Vulkan loader and the LLVM library it needs are Apache-2.0. This is not the graphics chip.
-https://www.mesa3d.org
-https://gitlab.freedesktop.org/glvnd/libglvnd
+License: Various (primarily MIT)
+Source: https://www.haiku-os.org
 
-VirtualBox
-When this system is installed for VirtualBox, the guest software is GNU GPL version 3 only. The license and the matching source are stored with the other license texts. The text clipboard over the serial port is separate from that guest software.
-https://www.virtualbox.org
+# AirPlay
+Audio support using Shairport, ALAC, tiny-AES-c and OpenSSL.
 
-Manrope
-The desktop font is Manrope, designed by Mikhail Sharanda. It stays under the SIL Open Font License 1.1. Terminal keeps a monospace font.
-https://github.com/googlefonts/manrope
+License: MIT, Unlicense, Apache-2.0
+Source: https://github.com/mikebrady/shairport-sync
 
-Components
-These are the parts Haiku already credits, with the license text and the project site.
+# OpenGL
+OpenGL support using Mesa 25 and libglvnd.
+
+License: MIT, Apache-2.0
+Source: https://www.mesa3d.org
+
+# VirtualBox
+VirtualBox Guest Additions.
+
+License: GPL-3.0-only
+Source: https://www.virtualbox.org
+
+# Manrope
+Interface typeface designed by Mikhail Sharanda.
+
+License: OFL-1.1
+Source: https://github.com/googlefonts/manrope

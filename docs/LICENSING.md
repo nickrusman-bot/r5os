@@ -131,7 +131,17 @@ Add a text when a covered file needs it. Do not edit the official wording. A roo
 
 For a public image, check what the image actually contains. Where the license requires it, ship the license text, copyright notices, and the corresponding source for that exact build, including scripts needed to build it. GPL-3.0 also has installation-information duties for user products. Publishing this git repository is not automatically enough. The source offer has to match the binaries people received.
 
-About has a Licenses tab beside Credits and What's new. The words on that tab are `distro/about/licenses.txt`, a short reading of this inventory: R5OS's own files, Haiku's licenses, AirPlay, and the VirtualBox guest software. It is not a second list of every package, and it is not the file-by-file audit. Credits still names people and projects. System information stays on the logo page. The tab has not been checked on a booted screen.
+About has a Licenses tab beside Credits and What's new. The words on that tab are `distro/about/licenses.txt`. Each part is one block, and a new part uses the same block:
+
+```
+# Name
+One short sentence.
+
+License: SPDX-ID
+Source: https://example.com
+```
+
+A line that starts with `# ` is the heading. `Source: ` is followed by one URL. This is the list for that tab, not a second copy of every package, and it is not the file-by-file audit. Credits still names people and projects. System information stays on the logo page. The window title stays About R5OS. The tab has not been checked on a booted screen.
 
 ## Checks we have not wired up
 

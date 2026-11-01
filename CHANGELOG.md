@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### About licenses use one block per component
+
+The Licenses tab text is `distro/about/licenses.txt`. Each component is a heading (`# Name`), one sentence, a `License:` line, and a `Source:` URL. About draws the heading in the bold face and makes the URL after `Source: ` a link. The window title stays About R5OS. Not rebuilt into an image in this change, and not checked on a booted screen.
+
 ### Manrope is the UI font, and Wallpaper is a Settings page
 
 The plain and bold system fonts are Manrope Regular and Bold when no font settings have been saved. The fixed font stays Noto Sans Mono, so Terminal is unchanged. Noto Sans is the fallback if Manrope is missing. The files are the unmodified static fonts, also installed in `data/fonts/ttfonts`. `distro/app_server/ServerConfig.h` is copied over the Haiku header. It keeps the Haiku MIT notice.
