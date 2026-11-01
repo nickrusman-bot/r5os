@@ -45,11 +45,15 @@ new = (
     "\tmesa_devel-25.3.6-1\n"
     "\tmesa_lavapipe-25.3.6-1\n"
     "\tvulkan_loader-1.4.367-1\n"
+    "\tvulkan_tools-1.4.367-1\n"
 )
 if old in text:
     text = text.replace(old, new, 1)
-elif new not in text:
-    sys.exit("mesa pin block not found")
+elif "\tvulkan_tools-1.4.367-1\n" not in text:
+    anchor = "\tvulkan_loader-1.4.367-1\n"
+    if anchor not in text:
+        sys.exit("mesa pin block not found")
+    text = text.replace(anchor, anchor + "\tvulkan_tools-1.4.367-1\n", 1)
 if "mesa-22.0.5-3" in text or "mesa_swpipe-22" in text:
     sys.exit("mesa 22 still in the pin")
 path.write_text(text, encoding="utf-8")
