@@ -32,6 +32,7 @@ switch $(HAIKU_BUILD_PROFILE) {
 			mesa_lavapipe
 			llvm21_runtime
 			vulkan_loader
+			vulkan_tools
 			;
 
 		# The downloaded HaikuPorts catalog still lists Mesa 22. The image

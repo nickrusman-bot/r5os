@@ -1,5 +1,31 @@
 # R5OS changelog (lokaal)
 
+### Shader-cache error is gone on the 21:48 disk
+
+On the image packed at 21:48 Europe/Amsterdam the user reported that the Mesa shader-cache permission line no longer appears. That disk is the one where `r5-desktop` creates `/boot/home/config/cache` for the session uid before it drops privileges. This session did not run `vulkaninfo` again and did not see the desktop. The device is still llvmpipe on the CPU. About stays build 10023.
+
+### Session user can create the Mesa shader cache
+
+`vulkaninfo` printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)`. The image creates `/boot/home/config/cache` as root, mode 0755. `r5-desktop` then drops to the session uid, which is not 0, so Mesa cannot create a directory there. Before that drop, `r5-desktop` now creates the cache directory from the account’s home, gives it to that uid and gid, and sets mode 0700. `jam -q r5-desktop` on 1 Nov 2026 at 21:46 Europe/Amsterdam exited 0 and linked `r5-desktop`. `jam -q @r5-raw` at 21:48 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains that `r5-desktop` (21:46). About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run again. The first boot of this disk can sit in `package_daemon`, and the desktop icons can stay missing until a guest restart.
+
+### vulkaninfo named llvmpipe
+
+On the 21:36 Europe/Amsterdam image the user ran `vulkaninfo --summary` in Terminal. Vulkan instance version 1.4.367. GPU0 was `PHYSICAL_DEVICE_TYPE_CPU`, device name `llvmpipe (LLVM 21.1.8, 256 bits)`, driver `llvmpipe`, driver info `Mesa 25.3.6 (LLVM 21.1.8)`, driver ID `DRIVER_ID_MESA_LLVMPIPE`, apiVersion 1.4.328, driverVersion 25.3.6. That is Lavapipe reporting the software renderer. The word Lavapipe is not the device name. Mesa also printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)--disabling.` The desktop icons were missing on the first boot of this disk. A guest restart made them visible. This session did not see that desktop. This is not the 5625U GPU.
+
+vkcube and the Vulkan-Tools mock ICD are not part of this result. vkcube draws into a window system this image does not have. The mock ICD is a fake driver for loader tests. The loader already opened Lavapipe.
+
+### Image with vulkaninfo
+
+`jam -q @r5-raw` on 1 Nov 2026 at 21:36 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`, including `vulkan_tools` and the Lavapipe package whose manifest is under `add-ons`. The first jam of this package exited 0 but did not install `vulkan_tools`: the name was missing from the HaikuPorts pin, so jam said the package was not available. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run. The first boot of this disk can sit in `package_daemon`.
+
+### Lavapipe manifest moved to add-ons
+
+The Haiku Vulkan loader searches `vulkan/icd.d` under the add-ons directories (`find_paths` with `B_FIND_PATH_ADD_ONS_DIRECTORY`). `libvulkan.so.1.4.367` contains the relative path `vulkan/icd.d`. The Lavapipe manifest was in `data/vulkan/icd.d`, which that search does not read. `mesa_lavapipe` now ships `add-ons/vulkan/icd.d/lvp_icd.json`. The library path inside the file is still `/boot/system/lib/libvulkan_lvp.so`. Not on a disk yet. `vulkaninfo` has still not been run.
+
+### vulkaninfo is packed, not run
+
+The next Mesa step is software Vulkan, not the 5625U GPU. Lavapipe is already on the image. `vulkaninfo` from Vulkan-Tools 1.4.367 (Apache-2.0; Khronos, Valve, LunarG, RasterGrid) was cross-compiled with the Haiku g++ on 1 Nov 2026 at 21:19 Europe/Amsterdam and packed as `vulkan_tools`. It links `libstdc++.so.6` and `libroot.so` and loads `libvulkan` at run time. `scripts/build-vulkaninfo.sh` writes `distro/packages/x86_64/vulkan_tools-1.4.367-1-x86_64.hpkg`. The image package list names `vulkan_tools`. That package is not on a disk yet. VirtualBox was left on the locale image. `vulkaninfo` has not printed Lavapipe. This is not GPU acceleration.
+
 ### User confirmed the Deskbar clock and Prullenbak
 
 On the 20:58 Europe/Amsterdam image the user selected Dutch (Netherlands) and 24-hour. The Locale preview read 20:01 and the Deskbar clock read 20:01. VBox Share sat beside Trash, not on it. With Nederlands above English, the Trash icon read Prullenbak. Home stayed “home”. QuickTour and VBox Share stayed those names. The Locale window that was already open kept the title “Locale”.
