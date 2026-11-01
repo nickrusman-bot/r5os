@@ -4,9 +4,7 @@
 
 2026-11-01 about 9:21 Europe/Amsterdam. The guest clock read 8:21 because the VM uses UTC. The user opened GLTeapot on the daily VirtualBox session. The window showed a red teapot and 387 FPS. That disk is the Mesa 25 / libglvnd image. No renderer string was captured on that boot. The 5625U was not the machine.
 
-The same session reached ACPI S5 (`ACPI: Entering S5 power state` in `VBox.log`, about 88 seconds after power on) and VirtualBox stayed in `POWERING_OFF` with no `POWERED_OFF`. The window froze on “Shutting down...”. The NIC is bridged to the MediaTek MT7921. The process was ended from the host.
-
-`scripts/vbox-poweroff-watch.ps1` now starts with the VM. Twenty seconds after that S5 line, if the VM is still running, it ends that VirtualBoxVM process. `controlvm poweroff` at the start of `scripts/run-vbox-r5.ps1` also gives up after 20 seconds and ends the process, so a stuck window does not block the next start. This was not run.
+The same session reached ACPI S5 (`ACPI: Entering S5 power state` in `VBox.log`, about 88 seconds after power on) and VirtualBox stayed in `POWERING_OFF` with no `POWERED_OFF`. The window froze on “Shutting down...”. The NIC is bridged to the MediaTek MT7921. The process was ended from the host. The guest had already requested power off, so this is not an R5OS shutdown path to patch with a host script.
 
 `docs/GRAPHICS.md` is the GPU plan for this image. `docs/LOOK.md` is the window-chrome plan. `docs/KERNEL.md` is the CPU audit. Those files had only existed on the local `cursor/graphics-plan` checkout, whose `distro/BUILD` was still 10013. The source edits in that checkout already match `main`.
 
