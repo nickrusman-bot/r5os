@@ -304,16 +304,23 @@ SettingsWindow::MessageReceived(BMessage* message)
 			delete static_cast<SettingsPlace*>(
 				fHistory.RemoveItem(fHistory.CountItems() - 1));
 			SettingsPlace* place = static_cast<SettingsPlace*>(
-				fHistory.LastItem());
-			delete static_cast<SettingsPlace*>(
 				fHistory.RemoveItem(fHistory.CountItems() - 1));
-			if (place->category)
-				_ShowCategory(place->id.String());
-			else if (place->id == "home")
+			if (place == NULL) {
+				_ShowHome();
+				break;
+			}
+			// Copy first. _ShowHome() stores a new place, and the old
+			// one is freed once here. Freeing LastItem() and then
+			// `place` was the double free on Back.
+			bool category = place->category;
+			BString id(place->id);
+			delete place;
+			if (category)
+				_ShowCategory(id.String());
+			else if (id == "home")
 				_ShowHome();
 			else
-				_ShowModule(place->id.String());
-			delete place;
+				_ShowModule(id.String());
 			break;
 		}
 		case kMsgSave:

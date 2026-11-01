@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Back in Settings freed the previous page twice
+
+Clicking Back stopped Settings in the debugger: `double free` in `BWindow::_task_looper`. The previous page was taken off the stack with `LastItem()`, freed by `RemoveItem()`, and then freed again. It is freed once now. The home page from the 22:53 image is the one the user called good. `jam -q @r5-raw` on 1 Nov 2026 at 22:59 Europe/Amsterdam exited 0 and updated 1145 targets. The package check printed `mesa_packages_ok`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
+
 ### Settings window layout from the first boot
 
 The first Settings window was too narrow, and the sidebar grew when a page had a short label, so the list changed width between Home and a page. The list now sits directly under the title tab, at a fixed width, with search underneath. The loose “Settings” label and the breadcrumb are gone. Back sits with Revert and Save. Home cards draw the category’s existing preference icon on the left. The window opens at 1100×680.
