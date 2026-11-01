@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### User confirmed the Deskbar clock and Prullenbak
+
+On the 20:58 Europe/Amsterdam image the user selected Dutch (Netherlands) and 24-hour. The Locale preview read 20:01 and the Deskbar clock read 20:01. VBox Share sat beside Trash, not on it. With Nederlands above English, the Trash icon read Prullenbak. Home stayed “home”. QuickTour and VBox Share stayed those names. The Locale window that was already open kept the title “Locale”.
+
+That is the path that worked. Keep it. The preview and the Deskbar clock both call `BTimeFormat` on the formatting country. The country change is broadcast even when `Locale settings` is not written, and `ApplySettings()` puts that message on top of `Refresh()`. The clock pulse does not reload the file. A language change calls `ForceUnloadCatalog()` and rebuilds menus and icon titles. A mounted volume does not restore a saved icon position.
+
+Two earlier disks did not do this. The 19:05 image coerced the pattern generator and the clock stayed “6:07 PM”. The 19:34 image reloaded `Locale settings` on each pulse and the clock stayed “6:54 PM”, because a missing file makes `Refresh()` put en_US back. Do not draw the clock from `BDateTimeFormat` again, and do not `Refresh()` from the pulse.
+
+After Nederlands was moved above English the same boot showed “8:01 PM”. The language message does not carry the formatting country. `Refresh()` runs first and can replace the live Dutch conventions with a file that does not have them yet. That flip is not changed on this disk. VirtualBox was left running.
+
 ### Locale broadcast on the build 10023 image
 
 `jam -q @r5-raw` on 1 Nov 2026 at 20:58 Europe/Amsterdam exited 0 and updated 7865 targets. `haiku.hpkg` was created at 20:57 and the raw image at 20:58. Deskbar (20:42), `libtracker.so` (20:42), and `libbe.so` (20:38) are the binaries from the locale compile and are older than that package, so this image contains them. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.

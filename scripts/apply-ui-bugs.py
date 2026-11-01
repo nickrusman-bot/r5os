@@ -948,7 +948,14 @@ def patch_locale_clock() -> None:
 
 def patch_locale_broadcast() -> None:
     """Other programs must see a locale change even when the settings file
-    cannot be written. The preflet preview uses its own roster."""
+    cannot be written. The preflet preview uses its own roster.
+
+    Confirmed on the 20:58 image: Dutch (Netherlands) made the Deskbar
+    clock 20:01, matching the preview. Do not gate the broadcast on
+    _SaveLocaleSettings(). A later language message has no conventions
+    field; Refresh() before ApplySettings can put a stale file back and
+    the clock returns to AM/PM. That part is still open.
+    """
     header = HAIKU / "headers/private/locale/LocaleRosterData.h"
     replace_once(
         header,
@@ -1234,7 +1241,13 @@ namespace BPrivate {
 
 
 def patch_clock_display() -> None:
-    """Draw the Deskbar clock with BTimeFormat, the same call as the preview."""
+    """Draw the Deskbar clock with BTimeFormat, the same call as the preview.
+
+    Confirmed: Dutch (Netherlands) showed 20:01 in Deskbar. The pattern
+    generator kept AM/PM on the 19:05 and 19:34 images. Do not go back to
+    BDateTimeFormat for the drawn string, and do not Refresh() the
+    settings file from Pulse().
+    """
     time_view = HAIKU / "src/apps/deskbar/TimeView.cpp"
     text = time_view.read_text(encoding="utf-8")
     marker = "The clock uses the same short time pattern as the Locale preflet."
