@@ -1,3 +1,10 @@
+R5OS 2026.1-dev Build 10024 - Wallpaper
+Settings opens on cards. Wallpaper shows a preview, the picture, where it sits, the icon label outline, and the desktop color. Save can use the current workspace, every workspace, or a folder. Backgrounds is still its own program.
+
+The interface uses Manrope, unless a font was already chosen.
+
+About names this computer AMD64.
+
 R5OS 2026.1-dev Build 10023 - Controls
 A program filling in a text box no longer counts as typing. Clicking a slider again still sends its message when the value stays the same. A scrollbar that already shows everything keeps its arrows off. An option that is not in the menu leaves the current choice as it is.
 

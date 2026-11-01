@@ -10,7 +10,7 @@ The sidebar and the home cards are filled from the module list. Category names f
 
 Manrope Regular and Bold are the default plain and bold fonts when no font settings are saved. The fixed font stays Noto Sans Mono. The files are installed in `data/fonts/ttfonts`. Settings still selects Manrope for its own window, and falls back to the system font if that family is missing. The page title is the bold face, eight points above the bold system size.
 
-Wallpaper writes `be:bgndimginfo` on the Desktop folder, the same attribute as Backgrounds, then asks Tracker to restore the picture. Save replaces every workspace with that one picture. Desktop color, a different picture per workspace, and folder backgrounds stay in the existing Backgrounds program, opened from the page.
+Wallpaper is the Backgrounds window, rewritten as this page. It writes `be:bgndimginfo` on the Desktop folder, or on a folder, then asks Tracker to restore the picture. Save can keep the other workspaces, replace every workspace, or change a folder. The desktop color is `BScreen::SetDesktopColor`. The separate Backgrounds program stays on the disk and is not a page in this window.
 
 Search compares the module name, description, keywords, and category label.
 
@@ -28,7 +28,7 @@ Appearance (`settings_appearance`) is the first native module. It stores `large_
 
 ## Legacy programs
 
-`LegacyPages.cpp` is a table of programs that already exist: Appearance, Deskbar, Backgrounds, Screen, Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse.
+`LegacyPages.cpp` is a table of programs that already exist: Appearance, Deskbar, Screen, Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Backgrounds stays installed and is not in this table.
 
 Adding a row there is how an old preference shows up before it is rewritten. A new native page does not need a row and does not need a change to the window.
 

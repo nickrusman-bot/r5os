@@ -198,6 +198,22 @@ LogoView::Draw(BRect updateRect)
     )
     replace_once(
         path,
+        '\tabiVersion << " (" << B_HAIKU_ABI_NAME << ")";\n',
+        """\t// Package ABI stays x86_64. About shows the name used for the target.
+	const char* archName = B_HAIKU_ABI_NAME;
+	if (strcmp(archName, "x86_64") == 0)
+		archName = "AMD64";
+	else if (strcmp(archName, "aarch64") == 0)
+		archName = "ARM64";
+	else if (strcmp(archName, "riscv64") == 0)
+		archName = "RISC-V 64";
+	abiVersion << " (" << archName << ")";
+""",
+        "About architecture name",
+        optional=True,
+    )
+    replace_once(
+        path,
         "			CropView*		_CreateCreditsView();\n",
         "			CropView*		_CreateCreditsView();\n"
         "			BView*			_CreateInfoTabs();\n"

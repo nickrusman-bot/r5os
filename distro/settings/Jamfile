@@ -13,7 +13,7 @@ Application Settings :
 	LegacyPages.cpp
 	WallpaperModule.cpp
 	AdminLock.cpp
-	: be tracker [ TargetLibstdc++ ]
+	: be tracker translation [ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

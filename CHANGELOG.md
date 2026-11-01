@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### About names this computer AMD64, and Wallpaper is the Backgrounds page
+
+About still reads the short ABI name from `libbe.so` (Walter on this disk) and puts the target in parentheses. `x86_64` is shown as AMD64. The package ABI is still `x86_64`. The source maps `aarch64` to ARM64 and `riscv64` to RISC-V 64. This image is the AMD64 build, so those two names are not in the About binary.
+
+`distro/BUILD` is 10024. What's new is the section that was missing for Settings, Manrope, and this Wallpaper page. The disk the user had open was still build 10023.
+
+Wallpaper in Settings is that page rewritten to the Backgrounds layout: a preview, the workspace menu (current, all, the default folder, another folder, and recent folders), the image menu, Manual / Center / Scale to fit / Tile, the icon-label outline, and the color cells. Save writes `be:bgndimginfo`. On the desktop it also sets the desktop color. Tracker is told to restore the picture. The current workspace keeps the other workspace records. All workspaces replaces that list with one record. Center and Scale to fit apply to the desktop. The Backgrounds program is still installed and is not a button on this page. Revert and Apply are the Settings buttons. Dragging the preview in Manual updates X and Y.
+
+On the 23:41 image the user again saw no desktop icons, and only on the first boot. This session did not see that desktop. A first boot can sit in `package_daemon`, and the icons can stay missing until a guest restart.
+
+`jam -q Settings` exited 0. `jam -q AboutSystem` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 00:23 Europe/Amsterdam exited 0 and updated 1137 targets. `install-mesa-packages.sh` did not start from that jam script because its shebang is CRLF; the same check run afterwards printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. `haiku.hpkg` contains this `Settings` and the existing `Backgrounds`. The About binary contains `AMD64` and `Build 10024`. VirtualBox is started from this image afterwards. The desktop was not seen from here.
+
 ### About licenses use one block per component
 
 The Licenses tab text is `distro/about/licenses.txt`. Each component is a heading (`# Name`), one sentence, a `License:` line, and a `Source:` URL. About draws the heading in the bold face and makes the URL after `Source: ` a link. The window title stays About R5OS. Not rebuilt into an image in this change, and not checked on a booted screen.
