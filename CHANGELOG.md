@@ -124,6 +124,18 @@ The version line in About was already Build 10018. What's new was still the Buil
 
 The daily `haiku.hpkg` was rebuilt (`jam -q haiku.hpkg`, exit 0) and replaced on `r5-os.image`. The AboutSystem inside it contains `R5OS 2026.1-dev Build 10018 - OpenGL`. Mesa 25 and libglvnd stayed on that image. VirtualBox was pointed at the updated disk. The About window was not opened from here.
 
+### Read AMD P-states and Intel HWP without writing them
+
+2026-10-31 about 16:00 Europe/Amsterdam. The kernel prints a read-only CPU snapshot and publishes it at `/dev/misc/r5_pstate`. Nothing in this change writes an MSR. On AMD and Hygon, if the hardware P-state bit is set, it reads the current P-state and P-state table. Family 17h and 19h use the same 200 MHz × fid / did formula and the same divisor checks as the existing TSC path. If the CPPC bit is set, it also reads the CPPC capability, enable, request, and status registers. On Intel, if HWP is enumerated, it reads the capabilities and the enable register, and the request register only when HWP is already enabled. If the hypervisor bit is set, it prints that line and does not read those MSRs, so a missing register cannot panic QEMU.
+
+`/system/bin/r5_pstate_log` starts when the boot volume is mounted. It reads the device, burns the CPU for one second, reads again, and writes `/boot/home/r5-cpu.txt`. It also looks for a FAT partition under `/dev/disk`, mounts it, writes `r5-cpu.txt` there, and unmounts. A raw image has no FAT partition. An anyboot image does, on the EFI system partition, which Windows can open from the USB stick.
+
+The first image build left `r5_pstate_log` out of the package: the bin list in `build/jam/images/definitions/minimum` is explicit. A second apply also duplicated the Jamfile and launch hooks, because the inserted text still contained the search text. The script now stops when a marker is already present. The boot below used the image after both fixes.
+
+QEMU was TCG with `-cpu qemu64`. This shell could not open `/dev/kvm` (permission denied). Serial showed `publish misc/r5_pstate status 0`, vendor amd, family `0xf`, model `0x6b`, name `QEMU Virtual CPU version 2.5+`, TSC about 2297152544 Hz, and `hypervisor bit set, hardware MSRs not read`. There was no panic. After shutdown, `bfs_shell` read `/boot/home/r5-cpu.txt` with both samples and `FAT: no FAT partition found under /dev/disk`. The Ryzen 5 5625U was not booted. No P-state was written.
+
+`jam -q @r5-anyboot` then exited 0 and wrote `generated.x86_64/r5-os-anyboot.iso` (2.1G, 16:03 Europe/Amsterdam). `fdisk` shows a 2G BeFS partition and a 2.8M EFI partition (type `ef`). That ISO was not booted.
+
 ### Mesa 25 replaces Mesa 22 on the daily image
 
 Build 10018. The jam pin still downloads Mesa 22.0.5 so OpenGL apps can compile. `scripts/install-mesa-packages.sh`, run at the end of `scripts/jam-r5-raw.sh`, then removes `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` from `r5-os.image` and adds the hpkgs in `distro/packages/x86_64`: libglvnd 1.7.0 (`libGL.so.1`), Mesa 25.3.6 (`libEGL_mesa.so.0` plus `50_mesa.json` with `./libEGL_mesa.so.0`), Lavapipe, a private LLVM 21.1.8 runtime that provides only `lib:libllvm_21` (so it does not clash with `llvm12_libs` on `liblto` / `libremarks`), and the HaikuPorts Vulkan loader 1.4.367.
