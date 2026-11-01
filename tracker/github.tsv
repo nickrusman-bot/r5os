@@ -187,7 +187,7 @@ id	number	state
 4095	287	open
 4122	289	open
 4135	288	open
-4154	290	open
+4154	290	closed
 4165	291	open
 4167	292	open
 4178	294	open
@@ -535,7 +535,7 @@ id	number	state
 7617	635	open
 7627	636	open
 7633	639	open
-7644	637	open
+7644	637	closed
 7645	638	open
 7650	640	open
 7658	643	open
@@ -898,7 +898,7 @@ id	number	state
 9964	1000	open
 9970	998	open
 9973	999	open
-9974	1001	open
+9974	1001	closed
 9976	1003	open
 9979	1002	open
 9984	1005	open
@@ -1311,7 +1311,7 @@ id	number	state
 12837	1411	open
 12850	1412	open
 12851	1414	open
-12859	1415	open
+12859	1415	closed
 12862	1413	open
 12865	1416	open
 12867	1417	open
@@ -1771,7 +1771,7 @@ id	number	state
 14880	1873	open
 14886	1871	open
 14889	1872	open
-14900	1874	open
+14900	1874	closed
 14902	1875	open
 14903	1876	open
 14905	1878	open
@@ -1919,7 +1919,7 @@ id	number	state
 15437	2019	open
 15439	2020	open
 15443	2021	open
-15444	2022	open
+15444	2022	closed
 15445	2026	open
 15448	2023	open
 15456	2027	open
@@ -1941,7 +1941,7 @@ id	number	state
 15519	2042	open
 15521	2041	open
 15524	2043	open
-15527	2044	open
+15527	2044	closed
 15529	2046	open
 15533	2045	open
 15535	2047	open
@@ -2476,7 +2476,7 @@ id	number	state
 16960	2578	open
 16962	2576	open
 16967	2579	open
-16968	2581	open
+16968	2581	closed
 16972	2580	open
 16974	2582	open
 16978	2583	open
