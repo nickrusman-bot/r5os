@@ -187,7 +187,7 @@ id	r5_status	branch	commit	notes
 4095	open			
 4122	open			
 4135	open			
-4154	open			
+4154	fixed			A second Find renames the query file from the current text so the result window title changes
 4165	open			
 4167	open			
 4178	open			
@@ -535,7 +535,7 @@ id	r5_status	branch	commit	notes
 7617	open			
 7627	open			
 7633	open			
-7644	open			
+7644	fixed			The leaf menu says Show replicants handle
 7645	open			
 7650	open			
 7658	open			
@@ -898,7 +898,7 @@ id	r5_status	branch	commit	notes
 9964	open			
 9970	open			
 9973	open			
-9974	open			
+9974	fixed			Ctrl+Up and Ctrl+Down follow Home and End. Command+Up stays Open parent
 9976	open			
 9979	open			
 9984	open			

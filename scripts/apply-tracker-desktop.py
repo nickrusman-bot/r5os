@@ -4,7 +4,8 @@
 Also applies scripts/tracker-deskbar-more.diff (#5338 #16185 #11176 #18667
 #7328 #16359 #15975 #15910 #13431 #16144 #16853 #9216 #20261 #16643 #19546
 #11495 #11029 #16726 #11402 #8551 #19520 #8772 #19661 #19663 #12335 #19573
-#8544 #8543 #9383 #19433 #12859 #14900 #16968 #14846)."""
+#8544 #8543 #9383 #19433 #12859 #14900 #16968 #14846 #9974 #4154
+#7644)."""
 from __future__ import annotations
 
 import pathlib
@@ -1160,6 +1161,78 @@ LocationSelectAllFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 	// shortened in Draw() instead of being shifted off the left edge.
 }""",
         "Haiku #14846 stop left shift",
+    )
+
+    replace_once(
+        pose,
+        """		case B_LEFT_ARROW:
+		case B_RIGHT_ARROW:
+		case B_UP_ARROW:
+		case B_DOWN_ARROW:
+		{
+			int32 index;
+			BPose* pose = FindNearbyPose(key, &index);
+""",
+        """		case B_LEFT_ARROW:
+		case B_RIGHT_ARROW:
+		case B_UP_ARROW:
+		case B_DOWN_ARROW:
+		{
+			// Ctrl+Up/Down matches Home/End on a keyboard without those
+			// keys. Command+Up stays Open parent (Haiku #9974).
+			if ((key == B_UP_ARROW || key == B_DOWN_ARROW)
+				&& (modifiers() & (B_CONTROL_KEY | B_COMMAND_KEY
+					| B_SHIFT_KEY | B_OPTION_KEY)) == B_CONTROL_KEY) {
+				if (ViewMode() == kListMode) {
+					int32 count = CurrentPoseList()->CountItems();
+					if (count > 0) {
+						MoveOrChangePoseSelection(key == B_UP_ARROW
+							? 0 : count - 1);
+					}
+				} else
+					ScrollView(key == B_UP_ARROW ? B_HOME : B_END);
+				break;
+			}
+
+			int32 index;
+			BPose* pose = FindNearbyPose(key, &index);
+""",
+        "Haiku #9974 ctrl up down",
+    )
+
+    find_panel = HAIKU / "src/kits/tracker/FindPanel.cpp"
+    replace_once(
+        find_panel,
+        """		if (userSpecifiedName != NULL && !fEditTemplateOnly) {
+			// change the name of the old query per users request
+			fRef.set_name(userSpecifiedName);
+			entry.SetTo(&fRef);
+		}
+""",
+        """		if (!fEditTemplateOnly) {
+			// A second Find used to keep the first file name, so the
+			// result window title never followed the new text (Haiku #4154).
+			if (userSpecifiedName != NULL)
+				fRef.set_name(userSpecifiedName);
+			else if (find) {
+				BString name;
+				GetDefaultName(name);
+				if (name.Length() > 0)
+					fRef.set_name(name.String());
+			}
+			entry.SetTo(&fRef);
+			entry.Remove();
+		}
+""",
+        "Haiku #4154 find title",
+    )
+
+    deskbar_menu = HAIKU / "src/apps/deskbar/DeskbarMenu.cpp"
+    replace_once(
+        deskbar_menu,
+        'B_TRANSLATE("Show replicants")',
+        'B_TRANSLATE("Show replicants handle")',
+        "Haiku #7644 replicants handle",
     )
     return 0
 

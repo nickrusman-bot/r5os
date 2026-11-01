@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Tracker keys, Find title, and Deskbar replicant label
+
+Three more desktop fixes, applied by `scripts/apply-tracker-desktop.py`. Not on the daily image. Not booted.
+
+Ctrl+Up and Ctrl+Down in a Tracker window follow Home and End. In list view that selects the first or last item. In icon view it scrolls to the top or bottom. Command+Up is still Open parent (#9974).
+
+Find used to keep the first query file name, so a second search left the result window on the old title. The file is renamed from the current name, formula, or attribute line before the result opens again (#4154). A name typed by the user is left as it is. `UserSpecifiedName()` still returns nothing, so that path is unused.
+
+The Deskbar menu item is “Show replicants handle” (#7644).
+
+`jam -q libtracker.so` on 1 Nov 2026 at 15:58 Europe/Amsterdam updated 3 targets (`FindPanel.o`, `PoseView.o`, and the library link). `jam -q Deskbar` updated 2 targets (`DeskbarMenu.o` and the Deskbar link). Both printed `updated` and the jam process exited 0. Not booted.
+
 ### Tracker sort, location field, and Deskbar clock
 
 Three more Tracker and Deskbar bugs, still applied by `scripts/apply-tracker-desktop.py` (`replace_once` on the existing tree). No new overlay script. Not on the daily image. Not booted.
