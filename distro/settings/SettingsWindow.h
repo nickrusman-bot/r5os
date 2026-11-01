@@ -49,8 +49,8 @@ private:
 			void				_ShowModule(const char* moduleId);
 			bool				_ConfirmLeave();
 			void				_Remember(const char* id, bool category);
-			void				_SetHeader(const char* crumb,
-									const char* title, const char* description);
+			void				_SetHeader(const char* title,
+									const char* description);
 			void				_UpdateActions();
 			BView*				_ModuleView(SettingsModule* module);
 			BView*				_CategoryView(const char* categoryId,
@@ -66,7 +66,6 @@ private:
 			SettingsContext*	fContext;
 			BTextControl*		fSearch;
 			BListView*			fList;
-			BStringView*		fCrumb;
 			BStringView*		fTitle;
 			BStringView*		fDescription;
 			BCardLayout*		fCards;

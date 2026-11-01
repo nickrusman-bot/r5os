@@ -8,11 +8,14 @@
 
 #include "SettingsMessages.h"
 
+#include <Bitmap.h>
 #include <Control.h>
 #include <ControlLook.h>
+#include <Font.h>
 #include <GroupLayout.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
+#include <Mime.h>
 #include <String.h>
 #include <StringView.h>
 #include <Window.h>
@@ -23,7 +26,9 @@
 class CategoryCard : public BControl {
 public:
 								CategoryCard(const char* categoryId,
-									const char* name, const char* summary);
+									const char* name, const char* summary,
+									const char* iconSignature);
+	virtual						~CategoryCard();
 	virtual	void				Draw(BRect update);
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				MouseUp(BPoint where);
@@ -32,19 +37,36 @@ public:
 private:
 			BString				fName;
 			BString				fSummary;
+			BBitmap*			fIcon;
 };
 
 
 CategoryCard::CategoryCard(const char* categoryId, const char* name,
-	const char* summary)
+	const char* summary, const char* iconSignature)
 	:
 	BControl(name, NULL, new BMessage(kMsgOpenCategory), B_WILL_DRAW),
 	fName(name),
-	fSummary(summary)
+	fSummary(summary),
+	fIcon(NULL)
 {
 	Message()->AddString("category", categoryId);
-	SetExplicitMinSize(BSize(220, 84));
-	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 84));
+	SetExplicitMinSize(BSize(300, 88));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 88));
+	if (iconSignature != NULL && iconSignature[0] != '\0') {
+		BRect bounds(BPoint(0, 0),
+			be_control_look->ComposeIconSize(B_LARGE_ICON));
+		fIcon = new BBitmap(bounds, B_RGBA32);
+		if (BMimeType(iconSignature).GetIcon(fIcon, B_LARGE_ICON) != B_OK) {
+			delete fIcon;
+			fIcon = NULL;
+		}
+	}
+}
+
+
+CategoryCard::~CategoryCard()
+{
+	delete fIcon;
 }
 
 
@@ -62,18 +84,36 @@ CategoryCard::Draw(BRect update)
 		flags);
 	be_control_look->DrawButtonBackground(this, rect, update, base, flags);
 
+	float textLeft = rect.left + 12;
+	if (fIcon != NULL) {
+		BPoint where(rect.left + 10,
+			rect.top + (rect.Height() - fIcon->Bounds().Height()) / 2);
+		SetDrawingMode(B_OP_ALPHA);
+		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+		DrawBitmap(fIcon, where);
+		SetDrawingMode(B_OP_COPY);
+		textLeft = where.x + fIcon->Bounds().Width() + 12;
+	}
+	float textWidth = rect.right - textLeft - 8;
+	if (textWidth < 20)
+		textWidth = 20;
+
 	font_height height;
 	be_bold_font->GetHeight(&height);
-	float top = rect.top + 12 + height.ascent;
+	float top = rect.top + 16 + height.ascent;
 	SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
 	SetFont(be_bold_font);
-	DrawString(fName.String(), BPoint(rect.left + 12, top));
+	BString name(fName);
+	be_bold_font->TruncateString(&name, B_TRUNCATE_END, textWidth);
+	DrawString(name.String(), BPoint(textLeft, top));
 
 	SetFont(be_plain_font);
 	be_plain_font->GetHeight(&height);
 	SetHighColor(tint_color(ui_color(B_PANEL_TEXT_COLOR), 0.7f));
-	DrawString(fSummary.String(),
-		BPoint(rect.left + 12, top + height.ascent + height.descent + 6));
+	BString summary(fSummary);
+	be_plain_font->TruncateString(&summary, B_TRUNCATE_END, textWidth);
+	DrawString(summary.String(),
+		BPoint(textLeft, top + height.ascent + height.descent + 6));
 }
 
 
@@ -98,9 +138,9 @@ void
 CategoryCard::GetPreferredSize(float* width, float* height)
 {
 	if (width != NULL)
-		*width = 240;
+		*width = 360;
 	if (height != NULL)
-		*height = 84;
+		*height = 88;
 }
 
 
@@ -124,7 +164,7 @@ HomeView::HomeView(const SettingsHomeItem* items, int32 count)
 		count = 16;
 	for (int32 i = 0; i < count; i++) {
 		CategoryCard* card = new CategoryCard(items[i].id, items[i].name,
-			items[i].summary);
+			items[i].summary, items[i].iconSignature);
 		fCards[fCount++] = card;
 		if ((i % 2) == 0)
 			left->AddChild(card);

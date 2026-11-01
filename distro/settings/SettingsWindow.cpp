@@ -33,16 +33,22 @@ struct SettingsCategory {
 	const char* id;
 	const char* name;
 	const char* summary;
+	const char* iconSignature;
 };
 
 
 static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
-		"Appearance, the desktop, and wallpaper." },
-	{ "system", "System", "Display and sound." },
-	{ "devices", "Devices", "Keyboard, mouse, Bluetooth, and printers." },
-	{ "network", "Network", "How this computer joins the network." },
-	{ "accounts", "Accounts", "People who can sign in." }
+		"Appearance, the desktop, and wallpaper.",
+		"application/x-vnd.Haiku-Appearance" },
+	{ "system", "System", "Display and sound.",
+		"application/x-vnd.Haiku-Screen" },
+	{ "devices", "Devices", "Keyboard, mouse, Bluetooth, and printers.",
+		"application/x-vnd.Haiku-Input" },
+	{ "network", "Network", "How this computer joins the network.",
+		"application/x-vnd.Haiku-Network" },
+	{ "accounts", "Accounts", "People who can sign in.",
+		"application/x-vnd.R5OS-Users" }
 };
 
 
@@ -112,7 +118,6 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fContext(NULL),
 	fSearch(NULL),
 	fList(NULL),
-	fCrumb(NULL),
 	fTitle(NULL),
 	fDescription(NULL),
 	fCards(NULL),
@@ -133,7 +138,6 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true);
 
 	fBack = new BButton("back", "Back", new BMessage(kMsgGoBack));
-	fCrumb = new BStringView("crumb", "Settings");
 	fTitle = new BStringView("title", "Settings");
 	fDescription = new BStringView("description",
 		"One place for the computer's settings.");
@@ -149,30 +153,32 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
 	fSave = new BButton("save", "Save", new BMessage(kMsgSave));
 
+	// Fixed width. A flexible sidebar grows when the page's preferred
+	// width shrinks, which is the jump between Home and a page.
+	const float sidebarWidth = 248;
+	scroll->SetExplicitMinSize(BSize(sidebarWidth - 16, 160));
+	scroll->SetExplicitMaxSize(BSize(sidebarWidth - 16, B_SIZE_UNLIMITED));
 	BGroupView* sidebar = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
-	sidebar->SetExplicitMinSize(BSize(200, B_SIZE_UNSET));
-	sidebar->SetExplicitMaxSize(BSize(260, B_SIZE_UNLIMITED));
+	sidebar->SetExplicitMinSize(BSize(sidebarWidth, B_SIZE_UNSET));
+	sidebar->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
 	BLayoutBuilder::Group<>(sidebar)
-		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(new BStringView("brand", "Settings"))
+		.SetInsets(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING,
+			B_USE_SMALL_SPACING, B_USE_WINDOW_SPACING)
+		.Add(scroll, 1)
 		.Add(fSearch)
-		.Add(new BButton("home", "Home", new BMessage(kMsgOpenHome)))
-		.Add(scroll);
+		.Add(new BButton("home", "Home", new BMessage(kMsgOpenHome)));
 
+	fDeck->SetExplicitMinSize(BSize(760, 280));
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
-		.Add(sidebar)
-		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
+		.Add(sidebar, 0)
+		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1)
 			.SetInsets(B_USE_WINDOW_SPACING)
-			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-				.Add(fBack)
-				.Add(fCrumb)
-				.AddGlue()
-			.End()
 			.Add(fTitle)
 			.Add(fDescription)
 			.Add(fDeck)
 			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 				.AddGlue()
+				.Add(fBack)
 				.Add(fRevert)
 				.Add(fSave)
 			.End()
@@ -181,7 +187,8 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
 	fSave->SetEnabled(false);
-	ResizeTo(820, 560);
+	SetSizeLimits(980, 4096, 560, 4096);
+	ResizeTo(1100, 680);
 	CenterOnScreen();
 }
 
@@ -228,12 +235,14 @@ SettingsWindow::ModulesLoaded()
 		items[count].id = kCategories[i].id;
 		items[count].name = kCategories[i].name;
 		items[count].summary = kCategories[i].summary;
+		items[count].iconSignature = kCategories[i].iconSignature;
 		count++;
 	}
 	if (count == 0) {
 		items[0].id = "";
 		items[0].name = "No pages";
 		items[0].summary = "No settings modules were found.";
+		items[0].iconSignature = NULL;
 		count = 1;
 	}
 	fCards->AddView(new HomeView(items, count));
@@ -381,8 +390,7 @@ SettingsWindow::_ShowHome()
 {
 	fCurrent = NULL;
 	fCards->SetVisibleItem((int32)0);
-	_SetHeader("Settings", "Settings",
-		"One place for the computer's settings.");
+	_SetHeader("Settings", "One place for the computer's settings.");
 	_Remember("home", false);
 	_SelectSidebar(NULL);
 	_UpdateActions();
@@ -406,10 +414,7 @@ SettingsWindow::_ShowCategory(const char* categoryId)
 	int32 index = fCards->IndexOfView(existing);
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
-	BString crumb("Settings  /  ");
-	crumb << _CategoryName(categoryId);
-	_SetHeader(crumb.String(), _CategoryName(categoryId),
-		_CategorySummary(categoryId));
+	_SetHeader(_CategoryName(categoryId), _CategorySummary(categoryId));
 	_Remember(categoryId, true);
 	_SelectSidebar(NULL);
 	_UpdateActions();
@@ -429,9 +434,7 @@ SettingsWindow::_ShowModule(const char* moduleId)
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
 	fCurrent = module;
-	BString crumb("Settings  /  ");
-	crumb << _CategoryName(module->Category()) << "  /  " << module->Name();
-	_SetHeader(crumb.String(), module->Name(), module->Description());
+	_SetHeader(module->Name(), module->Description());
 	_Remember(module->Identifier(), false);
 	_SelectSidebar(module->Identifier());
 	_UpdateActions();
@@ -472,10 +475,8 @@ SettingsWindow::_Remember(const char* id, bool category)
 
 
 void
-SettingsWindow::_SetHeader(const char* crumb, const char* title,
-	const char* description)
+SettingsWindow::_SetHeader(const char* title, const char* description)
 {
-	fCrumb->SetText(crumb != NULL ? crumb : "");
 	fTitle->SetText(title != NULL ? title : "");
 	fDescription->SetText(description != NULL ? description : "");
 }

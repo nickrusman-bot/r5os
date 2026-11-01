@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Settings window layout from the first boot
+
+The first Settings window was too narrow, and the sidebar grew when a page had a short label, so the list changed width between Home and a page. The list now sits directly under the title tab, at a fixed width, with search underneath. The loose “Settings” label and the breadcrumb are gone. Back sits with Revert and Save. Home cards draw the category’s existing preference icon on the left. The window opens at 1100×680.
+
+Appearance’s checkbox invoked the window, so the mark changed and Save stayed disabled. The checkbox and the legacy Open button now invoke their own page. Save enables after the sample-size mark changes.
+
+`jam -q Settings settings_appearance` then `jam -q @r5-raw` on 1 Nov 2026 at 22:53 Europe/Amsterdam exited 0. The image update was 1133 targets. The package check printed `mesa_packages_ok`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
+
 ### Settings host and one Appearance module
 
 Settings is a new preference window: a sidebar, a search field, home cards, and one content area. Pages come from modules. The first native module is Appearance. It stores `large_sample` in `~/config/settings/r5-settings/appearance` and does not rewrite the Haiku Appearance file. Colors and fonts, Deskbar, wallpaper, display, sound, keyboard, mouse, Bluetooth, printers, network, and Users & Accounts stay their existing programs; Settings only launches them.

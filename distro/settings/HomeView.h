@@ -16,6 +16,7 @@ struct SettingsHomeItem {
 	const char* id;
 	const char* name;
 	const char* summary;
+	const char* iconSignature;
 };
 
 

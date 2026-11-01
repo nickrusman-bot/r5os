@@ -13,6 +13,7 @@
 
 #include <Alert.h>
 #include <Button.h>
+#include <Control.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <String.h>
@@ -64,6 +65,7 @@ class LegacyPage : public BGroupView {
 public:
 								LegacyPage(LegacyModule* module,
 									SettingsContext* context);
+	virtual	void				AttachedToWindow();
 	virtual	void				MessageReceived(BMessage* message);
 
 private:
@@ -81,15 +83,26 @@ LegacyPage::LegacyPage(LegacyModule* module, SettingsContext* context)
 	fModule(module),
 	fContext(context)
 {
-	BString text(module->Description());
-	text << " This still opens the existing program. Its settings file is left where it is.";
-	BStringView* body = new BStringView("legacy", text.String());
+	BStringView* body = new BStringView("legacy",
+		"Opens the existing program in its own window.");
 	body->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	BButton* open = new BButton("open", "Open", new BMessage(kMsgOpenLegacy));
 	BLayoutBuilder::Group<>(this)
 		.Add(body)
 		.Add(open)
 		.AddGlue();
+}
+
+
+void
+LegacyPage::AttachedToWindow()
+{
+	BGroupView::AttachedToWindow();
+	for (int32 i = 0; i < CountChildren(); i++) {
+		BControl* control = dynamic_cast<BControl*>(ChildAt(i));
+		if (control != NULL)
+			control->SetTarget(this);
+	}
 }
 
 

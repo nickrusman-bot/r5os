@@ -35,6 +35,7 @@ public:
 								AppearanceView(AppearanceModule* module,
 									SettingsContext* context);
 	virtual						~AppearanceView();
+	virtual	void				AttachedToWindow();
 	virtual	void				MessageReceived(BMessage* message);
 			void				Apply(bool large);
 
@@ -109,6 +110,20 @@ AppearanceView::~AppearanceView()
 {
 	if (fModule != NULL)
 		fModule->ClearView(this);
+}
+
+
+void
+AppearanceView::AttachedToWindow()
+{
+	BGroupView::AttachedToWindow();
+	// A control invokes its target. The default target is the window,
+	// so the checkbox changed on screen and Save never heard it.
+	for (int32 i = 0; i < CountChildren(); i++) {
+		BControl* control = dynamic_cast<BControl*>(ChildAt(i));
+		if (control != NULL)
+			control->SetTarget(this);
+	}
 }
 
 
