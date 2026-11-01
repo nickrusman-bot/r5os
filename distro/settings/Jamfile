@@ -9,6 +9,7 @@ Application Settings :
 	SettingsStorage.cpp
 	SettingsHost.cpp
 	HomeView.cpp
+	SettingsFont.cpp
 	LegacyPages.cpp
 	AdminLock.cpp
 	: be [ TargetLibstdc++ ]

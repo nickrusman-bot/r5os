@@ -17,13 +17,15 @@ struct SettingsHomeItem {
 	const char* name;
 	const char* summary;
 	const char* iconSignature;
+	uint32		command;
+	const char* field;
 };
 
 
 class HomeView : public BGroupView {
 public:
 								HomeView(const SettingsHomeItem* items,
-									int32 count);
+									int32 count, const char* intro);
 	virtual						~HomeView();
 
 private:

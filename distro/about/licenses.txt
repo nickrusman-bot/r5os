@@ -20,5 +20,9 @@ VirtualBox
 When this system is installed for VirtualBox, the guest software is GNU GPL version 3 only. The license and the matching source are stored with the other license texts. The text clipboard over the serial port is separate from that guest software.
 https://www.virtualbox.org
 
+Manrope
+Settings draws its own text in Manrope, designed by Mikhail Sharanda. The font stays under the SIL Open Font License 1.1. The rest of the desktop still uses the system font.
+https://github.com/googlefonts/manrope
+
 Components
 These are the parts Haiku already credits, with the license text and the project site.

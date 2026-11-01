@@ -6,7 +6,7 @@
 
 #include "HomeView.h"
 
-#include "SettingsMessages.h"
+#include "SettingsFont.h"
 
 #include <Bitmap.h>
 #include <Control.h>
@@ -25,9 +25,10 @@
 
 class CategoryCard : public BControl {
 public:
-								CategoryCard(const char* categoryId,
-									const char* name, const char* summary,
-									const char* iconSignature);
+								CategoryCard(const char* name,
+									const char* summary,
+									const char* iconSignature,
+									BMessage* message);
 	virtual						~CategoryCard();
 	virtual	void				Draw(BRect update);
 	virtual	void				MouseDown(BPoint where);
@@ -41,15 +42,14 @@ private:
 };
 
 
-CategoryCard::CategoryCard(const char* categoryId, const char* name,
-	const char* summary, const char* iconSignature)
+CategoryCard::CategoryCard(const char* name, const char* summary,
+	const char* iconSignature, BMessage* message)
 	:
-	BControl(name, NULL, new BMessage(kMsgOpenCategory), B_WILL_DRAW),
+	BControl(name, NULL, message, B_WILL_DRAW),
 	fName(name),
 	fSummary(summary),
 	fIcon(NULL)
 {
-	Message()->AddString("category", categoryId);
 	SetExplicitMinSize(BSize(300, 88));
 	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 88));
 	if (iconSignature != NULL && iconSignature[0] != '\0') {
@@ -98,20 +98,22 @@ CategoryCard::Draw(BRect update)
 	if (textWidth < 20)
 		textWidth = 20;
 
+	const BFont* bold = r5_settings_bold_font();
+	const BFont* plain = r5_settings_plain_font();
 	font_height height;
-	be_bold_font->GetHeight(&height);
+	bold->GetHeight(&height);
 	float top = rect.top + 16 + height.ascent;
 	SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
-	SetFont(be_bold_font);
+	SetFont(bold);
 	BString name(fName);
-	be_bold_font->TruncateString(&name, B_TRUNCATE_END, textWidth);
+	bold->TruncateString(&name, B_TRUNCATE_END, textWidth);
 	DrawString(name.String(), BPoint(textLeft, top));
 
-	SetFont(be_plain_font);
-	be_plain_font->GetHeight(&height);
+	SetFont(plain);
+	plain->GetHeight(&height);
 	SetHighColor(tint_color(ui_color(B_PANEL_TEXT_COLOR), 0.7f));
 	BString summary(fSummary);
-	be_plain_font->TruncateString(&summary, B_TRUNCATE_END, textWidth);
+	plain->TruncateString(&summary, B_TRUNCATE_END, textWidth);
 	DrawString(summary.String(),
 		BPoint(textLeft, top + height.ascent + height.descent + 6));
 }
@@ -144,15 +146,19 @@ CategoryCard::GetPreferredSize(float* width, float* height)
 }
 
 
-HomeView::HomeView(const SettingsHomeItem* items, int32 count)
+HomeView::HomeView(const SettingsHomeItem* items, int32 count,
+	const char* introText)
 	:
 	BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING),
 	fCount(0)
 {
 	memset(fCards, 0, sizeof(fCards));
-	BStringView* intro = new BStringView("intro",
-		"Choose a category. Existing preference programs open in their own window.");
-	intro->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	BStringView* intro = NULL;
+	if (introText != NULL && introText[0] != '\0') {
+		intro = new BStringView("intro", introText);
+		intro->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+		intro->SetFont(r5_settings_plain_font());
+	}
 
 	BGroupView* grid = new BGroupView(B_HORIZONTAL, B_USE_DEFAULT_SPACING);
 	BGroupLayout* row = grid->GroupLayout();
@@ -163,8 +169,11 @@ HomeView::HomeView(const SettingsHomeItem* items, int32 count)
 	if (count > 16)
 		count = 16;
 	for (int32 i = 0; i < count; i++) {
-		CategoryCard* card = new CategoryCard(items[i].id, items[i].name,
-			items[i].summary, items[i].iconSignature);
+		BMessage* message = new BMessage(items[i].command);
+		if (items[i].field != NULL)
+			message->AddString(items[i].field, items[i].id);
+		CategoryCard* card = new CategoryCard(items[i].name, items[i].summary,
+			items[i].iconSignature, message);
 		fCards[fCount++] = card;
 		if ((i % 2) == 0)
 			left->AddChild(card);
@@ -176,10 +185,17 @@ HomeView::HomeView(const SettingsHomeItem* items, int32 count)
 	grid->AddChild(left);
 	grid->AddChild(right);
 
-	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
-		.Add(intro)
-		.Add(grid)
-		.AddGlue();
+	if (intro != NULL) {
+		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
+			.Add(intro)
+			.Add(grid)
+			.AddGlue();
+	} else {
+		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
+			.Add(grid)
+			.AddGlue();
+	}
+	r5_settings_apply_plain(this);
 }
 
 

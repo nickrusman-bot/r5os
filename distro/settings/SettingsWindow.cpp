@@ -7,6 +7,7 @@
 #include "SettingsWindow.h"
 
 #include "HomeView.h"
+#include "SettingsFont.h"
 #include "SettingsHost.h"
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
@@ -24,6 +25,7 @@
 #include <StringItem.h>
 #include <StringView.h>
 #include <TextControl.h>
+#include <TextView.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -89,12 +91,12 @@ NavItem::DrawItem(BView* owner, BRect frame, bool complete)
 	if (complete)
 		owner->FillRect(frame, B_SOLID_LOW);
 	owner->SetHighColor(ui_color(B_LIST_ITEM_TEXT_COLOR));
-	owner->SetFont(be_bold_font);
+	owner->SetFont(r5_settings_bold_font());
 	font_height height;
-	be_bold_font->GetHeight(&height);
+	r5_settings_bold_font()->GetHeight(&height);
 	owner->DrawString(Text(),
 		BPoint(frame.left + 8, frame.bottom - height.descent - 2));
-	owner->SetFont(be_plain_font);
+	owner->SetFont(r5_settings_plain_font());
 }
 
 
@@ -122,6 +124,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fDescription(NULL),
 	fCards(NULL),
 	fDeck(NULL),
+	fHome(NULL),
 	fBack(NULL),
 	fRevert(NULL),
 	fSave(NULL),
@@ -137,13 +140,12 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fList->SetSelectionMessage(new BMessage(kMsgOpenPage));
 	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true);
 
+	fHome = new BButton("home", "Home", new BMessage(kMsgOpenHome));
 	fBack = new BButton("back", "Back", new BMessage(kMsgGoBack));
 	fTitle = new BStringView("title", "Settings");
 	fDescription = new BStringView("description",
 		"One place for the computer's settings.");
-	BFont titleFont(be_bold_font);
-	titleFont.SetSize(be_bold_font->Size() + 4);
-	fTitle->SetFont(&titleFont);
+	fTitle->SetFont(r5_settings_title_font());
 
 	fDeck = new BView("deck", 0);
 	fCards = new BCardLayout();
@@ -165,8 +167,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 		.SetInsets(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING,
 			B_USE_SMALL_SPACING, B_USE_WINDOW_SPACING)
 		.Add(scroll, 1)
-		.Add(fSearch)
-		.Add(new BButton("home", "Home", new BMessage(kMsgOpenHome)));
+		.Add(fSearch);
 
 	fDeck->SetExplicitMinSize(BSize(760, 280));
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
@@ -178,11 +179,17 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 			.Add(fDeck)
 			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
 				.AddGlue()
+				.Add(fHome)
 				.Add(fBack)
 				.Add(fRevert)
 				.Add(fSave)
 			.End()
 		.End();
+	for (int32 i = 0; i < CountChildren(); i++)
+		r5_settings_apply_plain(ChildAt(i));
+	fTitle->SetFont(r5_settings_title_font());
+	if (fSearch->TextView() != NULL)
+		fSearch->TextView()->SetFontAndColor(r5_settings_plain_font());
 
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
@@ -236,6 +243,8 @@ SettingsWindow::ModulesLoaded()
 		items[count].name = kCategories[i].name;
 		items[count].summary = kCategories[i].summary;
 		items[count].iconSignature = kCategories[i].iconSignature;
+		items[count].command = kMsgOpenCategory;
+		items[count].field = "category";
 		count++;
 	}
 	if (count == 0) {
@@ -243,9 +252,12 @@ SettingsWindow::ModulesLoaded()
 		items[0].name = "No pages";
 		items[0].summary = "No settings modules were found.";
 		items[0].iconSignature = NULL;
+		items[0].command = kMsgOpenCategory;
+		items[0].field = "category";
 		count = 1;
 	}
-	fCards->AddView(new HomeView(items, count));
+	fCards->AddView(new HomeView(items, count,
+		"Choose a category. Existing preference programs open in their own window."));
 	_BuildSidebar();
 	_ShowHome();
 }
@@ -515,8 +527,40 @@ SettingsWindow::_ModuleView(SettingsModule* module)
 			"This page could not be opened.");
 	}
 	view->SetName(name.String());
+	r5_settings_apply_plain(view);
 	fCards->AddView(view);
 	return view;
+}
+
+
+static const char*
+module_icon(const char* moduleId)
+{
+	struct IconRow {
+		const char* id;
+		const char* signature;
+	};
+	static const IconRow rows[] = {
+		{ "appearance", "application/x-vnd.Haiku-Appearance" },
+		{ "colors", "application/x-vnd.Haiku-Appearance" },
+		{ "deskbar", "application/x-vnd.Haiku-DeskbarPreferences" },
+		{ "wallpaper", "application/x-vnd.Haiku-Backgrounds" },
+		{ "display", "application/x-vnd.Haiku-Screen" },
+		{ "sound", "application/x-vnd.Haiku-Sounds" },
+		{ "keyboard", "application/x-vnd.Haiku-Keymap" },
+		{ "mouse", "application/x-vnd.Haiku-Input" },
+		{ "bluetooth", "application/x-vnd.Haiku-BluetoothPrefs" },
+		{ "printers", "application/x-vnd.Be-PRNT" },
+		{ "network", "application/x-vnd.Haiku-Network" },
+		{ "accounts", "application/x-vnd.R5OS-Users" }
+	};
+	if (moduleId == NULL)
+		return NULL;
+	for (uint32 i = 0; i < sizeof(rows) / sizeof(rows[0]); i++) {
+		if (strcmp(rows[i].id, moduleId) == 0)
+			return rows[i].signature;
+	}
+	return NULL;
 }
 
 
@@ -524,21 +568,21 @@ BView*
 SettingsWindow::_CategoryView(const char* categoryId, const char* name)
 {
 	(void)name;
-	BGroupView* group = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-	BStringView* summary = new BStringView("summary",
-		_CategorySummary(categoryId));
-	group->AddChild(summary);
-	for (int32 i = 0; i < fManager->Count(); i++) {
+	SettingsHomeItem items[16];
+	int32 count = 0;
+	for (int32 i = 0; i < fManager->Count() && count < 16; i++) {
 		SettingsModule* module = fManager->ModuleAt(i);
 		if (module == NULL || strcmp(module->Category(), categoryId) != 0)
 			continue;
-		BMessage* message = new BMessage(kMsgOpenPage);
-		message->AddString("module", module->Identifier());
-		group->AddChild(new BButton(module->Identifier(), module->Name(),
-			message));
+		items[count].id = module->Identifier();
+		items[count].name = module->Name();
+		items[count].summary = module->Description();
+		items[count].iconSignature = module_icon(module->Identifier());
+		items[count].command = kMsgOpenPage;
+		items[count].field = "module";
+		count++;
 	}
-	group->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
-	return group;
+	return new HomeView(items, count, NULL);
 }
 
 

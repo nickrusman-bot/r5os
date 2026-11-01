@@ -6,7 +6,9 @@ One Settings window for R5OS. Existing preference programs stay separate and kee
 
 `Settings` is a single-launch preference (`application/x-vnd.R5OS-Settings`). The window is a sidebar, a search field, and one content deck (`BCardLayout`). Changing page does not create a new window.
 
-The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. A module with another category id is still shown.
+The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Home sits with Back, Revert, and Save.
+
+Settings loads Manrope Regular and Bold from `/boot/system/data/settings/fonts` for its own views. If a file is missing, that face stays the system font. The desktop font is not changed. The page title is the bold face, eight points above the bold system size.
 
 Search compares the module name, description, keywords, and category label.
 
@@ -36,4 +38,4 @@ New R5OS values are `BMessage` files under `~/config/settings/r5-settings/<modul
 
 ## Not in this foundation
 
-Power, storage, sharing, sign-in options, permissions, installed applications, and default applications have no page yet. Wi-Fi stays inside the existing Network preferences. Catalogs are not wired, so the strings are English. The window has not been booted.
+Power, storage, sharing, sign-in options, permissions, installed applications, and default applications have no page yet. Wi-Fi stays inside the existing Network preferences. Catalogs are not wired, so the strings are English.

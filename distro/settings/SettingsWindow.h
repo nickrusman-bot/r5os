@@ -70,6 +70,7 @@ private:
 			BStringView*		fDescription;
 			BCardLayout*		fCards;
 			BView*				fDeck;
+			BButton*			fHome;
 			BButton*			fBack;
 			BButton*			fRevert;
 			BButton*			fSave;

@@ -20,6 +20,8 @@ SOURCES = (
     "LegacyPages.h",
     "Settings.rdef",
     "SettingsApp.cpp",
+    "SettingsFont.cpp",
+    "SettingsFont.h",
     "SettingsHost.cpp",
     "SettingsHost.h",
     "SettingsManager.cpp",
@@ -42,6 +44,20 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
         raise SystemExit(f"pattern not found in {path} ({tag})")
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
     print(f"patched {path.name} ({tag})")
+
+
+def copy_fonts() -> None:
+    src = ROOT / "distro" / "fonts" / "manrope"
+    dest = HAIKU / "data" / "system" / "data" / "settings" / "fonts"
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "manrope-regular.ttf",
+        "manrope-bold.ttf",
+        "OFL.txt",
+        "FONTLOG.txt",
+    ):
+        shutil.copy2(src / name, dest / name)
+        print(f"copied font {name}")
 
 
 def copy_sources() -> None:
@@ -98,12 +114,24 @@ def patch_jams() -> None:
         "AddFilesToPackage add-ons Settings : $(SYSTEM_ADD_ONS_SETTINGS) ;\n",
         "settings addon package",
     )
+    replace_once(
+        HAIKU / "build" / "jam" / "packages" / "Haiku",
+        "AddFilesToPackage data fonts psfonts : $(psFonts) ;\n",
+        "AddFilesToPackage data fonts psfonts : $(psFonts) ;\n"
+        "\n"
+        "local settingsFontDir = [ FDirName $(HAIKU_TOP) data system data "
+        "settings fonts ] ;\n"
+        "local settingsFonts = [ Glob $(settingsFontDir) : *.ttf *.txt ] ;\n"
+        "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n",
+        "settings fonts",
+    )
 
 
 def main() -> None:
     if not HAIKU.is_dir():
         raise SystemExit(f"haiku tree not found: {HAIKU}")
     copy_sources()
+    copy_fonts()
     patch_jams()
 
 

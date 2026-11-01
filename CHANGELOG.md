@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Settings categories are cards, and Settings uses Manrope
+
+A category page repeated its summary under the title and stacked a button for each page. The summary stays in the title. Personalization, System, Devices, Network, and Accounts use the same cards as Home, with the existing preference icon on the left. Home is the first button on the bottom row, before Back, Revert, and Save. Search stays under the list.
+
+The page title is Manrope Bold, eight points above the bold system size. Every other label in Settings uses Manrope Regular or Bold. The files are the unmodified static fonts, loaded with `BFont::LoadFont` from `/boot/system/data/settings/fonts`. If a file does not load, that face stays the system font. The desktop font is not changed. The license is OFL-1.1. Copyright 2018 The Manrope Project Authors. Designed by Mikhail Sharanda. No Reserved Font Name is declared, and the files are not modified.
+
+`jam -q Settings settings_appearance` exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 23:24 Europe/Amsterdam exited 0 and updated 1134 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains `Settings`, `settings_appearance`, and `data/settings/fonts` (`manrope-regular.ttf`, `manrope-bold.ttf`, `OFL.txt`, `FONTLOG.txt`). VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
+
 ### Back in Settings freed the previous page twice
 
 Clicking Back stopped Settings in the debugger: `double free` in `BWindow::_task_looper`. The previous page was taken off the stack with `LastItem()`, freed by `RemoveItem()`, and then freed again. It is freed once now. The home page from the 22:53 image is the one the user called good. `jam -q @r5-raw` on 1 Nov 2026 at 22:59 Europe/Amsterdam exited 0 and updated 1145 targets. The package check printed `mesa_packages_ok`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
