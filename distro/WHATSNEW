@@ -1,3 +1,28 @@
+R5OS 2026.1-dev Build 10023 - Controls
+A program filling in a text box no longer counts as typing. Clicking a slider again still sends its message when the value stays the same. A scrollbar that already shows everything keeps its arrows off. An option that is not in the menu leaves the current choice as it is.
+
+Home, system, apps, preferences, develop, and config use their translated names when the folder has no stored name. In icon view a shortened name is shown in full again.
+
+R5OS 2026.1-dev Build 10022 - Leaf menu
+The leaf menu no longer shows an up arrow and a down arrow when the whole menu fits on the screen.
+
+R5OS 2026.1-dev Build 10021 - Lists and Find
+Shift-click a column heading to add a second sort. Click it again for the other direction, and once more to turn it off. A normal click sorts by that column only.
+
+Command+A in the path field selects the path. Ctrl+Up and Ctrl+Down go to the first or last item.
+
+A new search names the result window after what you typed. Open With no longer offers Tracker add-ons.
+
+A vertical Deskbar clock stays on the bar when the bar is narrow. The leaf menu item is Show replicants handle.
+
+R5OS 2026.1-dev Build 10020 - Desktop icons
+A shared folder on the Desktop no longer covers another icon. Moving that icon no longer freezes the Desktop, so folders open again.
+
+R5OS 2026.1-dev Build 10019 - Tracker and Deskbar
+Tracker keeps a long name inside the copy window, and that window grows with the font. The finish time no longer shows a date in 1901. Escape clears a selection. Opening the parent folder keeps that folder selected. Find starts in the folder you have open. Get Info can be resized, and it says so when an item cannot be renamed. Open With remembers its size.
+
+The leaf menu says Shut down, with the same words as the question. An empty Recent menu stays on the screen. Escape closes an open menu. A vertical Deskbar does not shrink below one icon row.
+
 R5OS 2026.1-dev Build 10018 - OpenGL
 OpenGL drawing uses Mesa 25. A demo such as GLTeapot still draws on the processor, not on the graphics chip. The older Mesa 22 package is no longer on this disk.
 

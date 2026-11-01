@@ -1,5 +1,129 @@
 # R5OS changelog (lokaal)
 
+### Build 10023 daily
+
+What's new for the four Interface Kit controls, and for the well-known folder names and icon labels, is build 10023. `jam -q @r5-raw` on 1 Nov 2026 at 18:14 Europe/Amsterdam exited 0 and updated 1727 targets. `libbe.so` and `libtracker.so` were relinked. About was relinked and contains Build 10023. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. Not booted in this record. The first VirtualBox start reused the build 10022 disk: the guest had been writing that disk, so its timestamp was newer than the image. `scripts/run-vbox-r5.ps1` now stores the raw image time in `generated/r5-os.built` and does not trust the timestamp of a disk that was running. A second start converted this image and powered the VM on at 18:18 Europe/Amsterdam. The desktop was not seen. The first boot of this disk can sit in `package_daemon`.
+
+### Text control, slider, scrollbar, and option popup
+
+Four Interface Kit bugs, applied by `scripts/apply-ui-bugs.py`. They are on the build 10023 image. The object compile below was not a boot. VirtualBox was still on build 10022 then.
+
+`BTextControl::SetText()` always went through the private text view, and that view sent the modification message for every insert and delete. Programmatic `SetText()` now suppresses that message. Typing still sends it (#11735).
+
+`BSlider` sent its message only when the thumb moved. A click on the bar or the thumb now sends the message even when the value stays the same. A click in the padding still does nothing. The modification message is still only sent when the value changes (#13680).
+
+Scrollbar arrows stayed enabled when the thumb already covered the whole range. They stay off when the minimum is below the maximum and the proportion is at least 0 and below 1. Proportion 0 is still the non-proportional mode, so those arrows keep working (#6873).
+
+`BOptionPopUp::SetValue()` stored a value that was not one of the options, so the control value and the marked item disagreed. An unknown value is now ignored. A menu that is not created yet still stores the value (#18648).
+
+`jam -q '<libbe!x86_64>interface_kit.o'` on 1 Nov 2026 at 18:06 Europe/Amsterdam updated `OptionPopUp.o`, `ListView.o`, and `interface_kit.o` and exited 0. The text-input objects were linked into `interface_kit.o` in an earlier run the same evening, after a duplicated declaration in the header was removed. That run updated `TextControl.o`, `TextInput.o`, `ListView.o`, and `interface_kit.o` and exited 0. `ScrollBar.o` and `Slider.o` were already compiled. `libbe.so` was not relinked. Not booted.
+
+### Well-known folder names and icon labels
+
+Two Tracker bugs, applied by `scripts/apply-tracker-desktop.py`. They are on the build 10023 image. The `libtracker.so` compile below was not a boot.
+
+`system`, `home`, `apps`, `preferences`, `develop`, and `config` have catalog strings, but Tracker only showed them when the folder carried a `SYS:NAME` attribute. If that attribute is missing, the name now comes from the same catalog context (#15527). Other folders are unchanged (#10200 stays open).
+
+A name fitted to the list column stayed truncated after switching to icon view. Icon view refits when the stored width is still the column width (#15444).
+
+`jam -q libtracker.so` on 1 Nov 2026 at 17:37 Europe/Amsterdam updated 3 targets (`Model.o`, `WidgetAttributeText.o`, and the library link) and exited 0. Not booted. VirtualBox was left on build 10022.
+
+### Leaf menu scroll arrows
+
+The leaf menu on build 10021 drew an up arrow and a down arrow while the items still fit, with empty desktop below the menu. `BMenu::_CalcFrame` insets the screen by 4px so a menu border stays on screen (#13431). That same rectangle decided scrolling. The leaf menu starts at the top of the screen, which is above the inset, so scrolling turned on and `AttachScrollers()` added the arrows.
+
+Scrolling now uses the real screen. The 4px margin is still used when placing a menu that would hang off an edge. `jam -q '<libbe!x86_64>interface_kit.o'` on 1 Nov 2026 at 17:22 Europe/Amsterdam updated 2 targets (`Menu.o` and `interface_kit.o`) and exited 0. `jam -q @r5-raw` at 17:25 Europe/Amsterdam exited 0 and updated 1725 targets. `libbe.so` was relinked. About is build 10022. The package check printed `mesa_packages_ok` and no Mesa 22. The 10021 session was still running when this image was built. The first restart compared the disk time after power-off, so VirtualBox booted that old disk again. `scripts/run-vbox-r5.ps1` now keeps the time from before power-off. A forced convert wrote the 10022 image and the VM started at 17:27 Europe/Amsterdam. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`. Do not Reset.
+
+### Build 10021 daily
+
+What's new for the list, Find, and clock fixes is build 10021. `jam -q @r5-raw` on 1 Nov 2026 at 17:11 Europe/Amsterdam exited 0 and updated 1256 targets. About was relinked after What's new was copied. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. The pin script did not run for this jam because the launch copy was not executable. The image still used the Mesa 25 repository files already on disk. Not booted in this record. VirtualBox is started from this image afterwards.
+
+### Tracker keys, Find title, and Deskbar replicant label
+
+Three more desktop fixes, applied by `scripts/apply-tracker-desktop.py`. Not on the daily image. Not booted.
+
+Ctrl+Up and Ctrl+Down in a Tracker window follow Home and End. In list view that selects the first or last item. In icon view it scrolls to the top or bottom. Command+Up is still Open parent (#9974).
+
+Find used to keep the first query file name, so a second search left the result window on the old title. The file is renamed from the current name, formula, or attribute line before the result opens again (#4154). A name typed by the user is left as it is. `UserSpecifiedName()` still returns nothing, so that path is unused.
+
+The Deskbar menu item is “Show replicants handle” (#7644).
+
+`jam -q libtracker.so` on 1 Nov 2026 at 15:58 Europe/Amsterdam updated 3 targets (`FindPanel.o`, `PoseView.o`, and the library link). `jam -q Deskbar` updated 2 targets (`DeskbarMenu.o` and the Deskbar link). Both printed `updated` and the jam process exited 0. Not booted.
+
+### Tracker sort, location field, and Deskbar clock
+
+Three more Tracker and Deskbar bugs, still applied by `scripts/apply-tracker-desktop.py` (`replace_once` on the existing tree). No new overlay script. Not on the daily image. Not booted.
+
+Shift-click on a list column header now cycles the secondary sort: ascending, descending, then off. A plain click clears the secondary sort. The header triangle for that column follows its own direction. The reversed secondary order is kept for the open window and is not written into the folder view-state attribute, which has only one reverse flag (#14900).
+
+Command+A in the single-window location field selects the path. A window filter runs before the Window menu shortcut, and only when that text view has focus, so Select all in the menu still selects the files (#16968).
+
+A vertical Deskbar clock that is wider than the bar no longer slides the string off the left edge. Draw shortens it with an ellipsis: the weekday stays when it is shown, otherwise the clock digits stay (#14846). The earlier preferred-width margin did not stop a cut first letter.
+
+Open With drops Tracker add-ons and no longer compares the running Tracker against an uninitialized `app_info` (#12859). That was already in `libtracker.so` from the earlier compile. This jam rebuilt that library, so the same binary has #12859 as well.
+
+`jam -q libtracker.so` on 1 Nov 2026 at 15:22 Europe/Amsterdam updated 36 targets and exited 0. `jam -q Deskbar` updated 2 targets (`TimeView.o` and the Deskbar link) and exited 0. Not booted. The VirtualBox session that is already running was not restarted.
+
+### Desktop icon no longer freezes Tracker
+
+VBox Share is a directory on the Desktop with another filesystem mounted on it. Placement gave up by putting a late icon on the first grid cell, which was already taken, so the share sat on top of another icon. Dragging it then saved the icon position with `WriteAttr` on that mount. That call blocks, the Desktop window thread stops, and folders no longer open.
+
+`scripts/apply-tracker-desktop.py` now keeps scanning for a free cell instead of dropping the icon on the first one, and stops after 400 cells. Saving positions skips a mount point (`stat` device differs from the parent) and clears the save flag, so Tracker does not open that filesystem to write the attribute. The icon still moves until the next boot. `jam -q libtracker.so` updated 35 targets and exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 15:14 Europe/Amsterdam exited 0 and updated 1256 targets. The package check printed `mesa_packages_ok` and no Mesa 22. Not booted. The VirtualBox session that is already running is still the previous disk.
+
+### Tracker and Deskbar batch
+
+Thirty open Tracker and Deskbar bugs, applied by `scripts/tracker-deskbar-more.diff` from `scripts/apply-tracker-desktop.py`. No new overlay script. The patch is against the r5 Haiku tree after the existing overlays. It does not replace those overlays.
+
+Tracker: the copy status buffer terminated a long name with the character `0` (#5338) and the window width ignored the font (#16185). A non-finite finish estimate became 13 Dec 1901 (#11176). Escape clears the selection when it is not clearing a cut or type-ahead (#9216). List rows use the font's ascent, descent, and leading (#16853). A stat change with no field mask still re-sorts (#20261). Scrolling a just-shown file updates the scroll range first (#16643). Single-window Open parent selects the folder you left (#11029). Find starts in the open folder (#19546). The Add-ons menu is rebuilt when the menu bar opens (#11495). The item count no longer uses the scrollbar's minimum width (#16726). Find's most-used type still fills the attribute row (#11402). Open With no longer writes into the MIME type string (#8551) and restores its frame after layout, in 12-point units (#19520, #8772). A narrow rating column and a date `parsedate` cannot read no longer crash or store year 1901 (#19661, #19663). The replace question uses `BDateTimeFormat` (#12335). The volume space bar invalidates the whole pose (#19573). Get Info refreshes the icon after identify (#8544), keeps the path tip on the current workspace (#8543), can be resized (#19433), and says when a name cannot be changed (#9383).
+
+Deskbar: the leaf menu says Shut down and Restart, matching the question (#18667). An empty Recent menu gets a disabled item instead of a huge frame (#7328). Auto-raise is applied again when the workspace changes (#16359). A vertical Deskbar's minimum height includes one icon row (#15975). The lower scroll arrow is moved back to the visible edge (#15910). Menus stay 4px inside the screen (#13431). Escape always quits menu tracking (#16144).
+
+`jam -q libtracker.so` and `jam -q '<libbe!x86_64>interface_kit.o'` compiled the Tracker objects and `Menu.o`, then linked `libbe.so` (the unknown target name `deskbar` made that command exit 1 after those links). `jam -q Deskbar` then updated 18 targets and exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 12:02 Europe/Amsterdam exited 0 and updated 1724 targets. The image is `generated.x86_64/r5-os.image`, 2 GiB. About was relinked after `r5_whatsnew.txt` was copied, and `r5_os_version.h` says build 10019. The package check printed `mesa_packages_ok` (libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, LLVM 21 runtime, Vulkan loader) and no Mesa 22 package. Not booted. Not tested on a LAN. The VirtualBox session started earlier is still the previous disk.
+
+### Deskbar closes the other menu bar before opening one
+
+No commit on `upstream/master` (fetched 1 Nov 2026) names #20099. The leaf menu and the running-apps list are two `BMenuBar`s in one window. Each one installed the window’s menu semaphore and left the other menu tracking.
+
+`scripts/apply-deskbar-bugs.py` now stops the other menu bar before `StartMenuBar` tracks, and waits outside the window lock so that tracking thread can exit. When a menu finishes, it clears the window semaphore only if that semaphore is still its own. A popup does the same, so an older popup thread does not wipe a menu bar that started later.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` compiled `MenuBar.o`, `PopUpMenu.o`, and `Window.o` (47 targets updated, exit 0). Not booted. The other open Deskbar tickets (crashes, layout, enhancements) are not in this change.
+### Large fonts no longer clip box and separator labels
+
+No commit on `upstream/master` (fetched 1 Nov 2026) names #11625, #18518, or #18813. `scripts/apply-ui-bugs.py` changes the label metrics.
+
+A `BBox` label used to shift its baseline up by one sixth of the line height, which drew the top of the glyphs above y=0. The label box is now the full line, including leading, and the baseline sits on the ascent (#11625, #18518). A `BSeparatorView` section title uses that same line height and is centered in the label band when the view is taller (#18813).
+
+The same script used to insert another `#include <Region.h>` into `ListView.cpp` on every apply, because the new text still contained the old `#include <Window.h>` line. A second apply now leaves a single include.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` compiled `Box.o`, `SeparatorView.o`, and `ListView.o` (47 targets updated, exit 0). Not booted.
+### Control colors for flat buttons, scrollbar arrows, and plain text
+
+Haiku’s June 2025 control-color rework (`91bed92`, “use B_CONTROL_BACKGROUND_COLOR”) is already in this tree. Nothing newer on `upstream/master` (fetched 1 Nov 2026) names #19629, #19630, #20418, or #20372. Gerrit 11871 for #20372 was abandoned. The leftovers are applied from `scripts/apply-darkmode.py`.
+
+Scrollbar arrow buttons use `B_CONTROL_BACKGROUND_COLOR` and `B_CONTROL_TEXT_COLOR`. The trough stays the panel color (#19630). A flat `BButton` takes its parent’s low color, so hover does not jump to the control gray (#19629). `SetViewColor()` still clears the UI color; that face is now the button color, with black or white text when the control text would have no contrast (#20418). High and low color changes inside an overridden `Draw` stay ignored, which is what LibLayout in Wonderbrush relies on. A non-stylable `BTextView` updates its single run when the document text color changes (#20372). Styled runs are unchanged: a run does not record which UI color it came from.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` from `generated.x86_64` updated 47 targets and exited 0, including `Button.o`, `ScrollBar.o`, and `TextView.o`. Not booted. R5OS sign-in, lock, and Users buttons do not call `SetViewColor()` on the button, so they keep the system control color.
+
+### GLTeapot draws on the VirtualBox daily
+
+2026-11-01 about 9:21 Europe/Amsterdam. The guest clock read 8:21 because the VM uses UTC. The user opened GLTeapot on the daily VirtualBox session. The window showed a red teapot and 387 FPS. That disk is the Mesa 25 / libglvnd image. No renderer string was captured on that boot. The 5625U was not the machine.
+
+The same session reached ACPI S5 (`ACPI: Entering S5 power state` in `VBox.log`, about 88 seconds after power on) and VirtualBox stayed in `POWERING_OFF` with no `POWERED_OFF`. The window froze on “Shutting down...”. The NIC is bridged to the MediaTek MT7921. The process was ended from the host. That hang is not fixed here.
+
+`docs/GRAPHICS.md` is the GPU plan for this image. `docs/LOOK.md` is the window-chrome plan. `docs/KERNEL.md` is the CPU audit. Those files had only existed on the local `cursor/graphics-plan` checkout, whose `distro/BUILD` was still 10013. The source edits in that checkout already match `main`.
+
+### OpenGL apps compile against libglvnd, not Mesa 22
+
+`scripts/pin-mesa-packages.sh` runs before jam. It replaces the HaikuPorts pin `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` with libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel` 25.3.6, Lavapipe, the LLVM 21 runtime, and the Vulkan loader. `mesa_devel` carries the Mesa 25 headers and libglvnd's `libGL.so` (the real file, not a symlink into a Mesa 22 base package). Haiku's `GLView.h` and `GLRenderer.h` from the old devel package are copied unchanged.
+
+The image solver no longer sees Mesa 22. `scripts/pin-mesa-packages.sh` builds `download/r5-haikuports.repo` from the HaikuPorts catalog with those four Mesa 22 packages removed, and `download/r5-opengl.repo` for the R5OS packages (a different vendor, so they cannot share one catalog). `distro/UserBuildConfig` points the image at those files and installs the packages. A solver check with `glu` and `haiku.hpkg` asked for `libglvnd-1.7.0-1`, not Mesa 22. `jam -q @r5-raw` then exited 0 and updated 1230 targets. It extracted `mesa-25.3.6-1` and relinked GLTeapot. `develop/lib/libGL.so.1.0.0` in that tree is 954288 bytes, the libglvnd file. The image check printed `mesa_packages_ok`: libglvnd, Mesa 25, `mesa_devel`, Lavapipe, the LLVM 21 runtime, and the Vulkan loader, and no Mesa 22 package. That jam itself was not booted. The VirtualBox sitting is the section above. No new build number.
+
+### About on the Mesa image still showed Build 10017
+
+The version line in About was already Build 10018. What's new was still the Build 10017 license text. `scripts/jam-r5-raw.sh` wrote `r5_os_version.h` and did not copy `distro/WHATSNEW`. The What's new resource is rebuilt when `AboutSystem.rdef` is newer than the last resource compile, not when only the text file changes. The script now copies What's new and touches that rdef before jam. No new build number: this is the Build 10018 section that was already in `distro/WHATSNEW`.
+
+The daily `haiku.hpkg` was rebuilt (`jam -q haiku.hpkg`, exit 0) and replaced on `r5-os.image`. The AboutSystem inside it contains `R5OS 2026.1-dev Build 10018 - OpenGL`. Mesa 25 and libglvnd stayed on that image. VirtualBox was pointed at the updated disk. The About window was not opened from here.
+
 ### Read AMD P-states and Intel HWP without writing them
 
 2026-10-31 about 16:00 Europe/Amsterdam. The kernel prints a read-only CPU snapshot and publishes it at `/dev/misc/r5_pstate`. Nothing in this change writes an MSR. On AMD and Hygon, if the hardware P-state bit is set, it reads the current P-state and P-state table. Family 17h and 19h use the same 200 MHz × fid / did formula and the same divisor checks as the existing TSC path. If the CPPC bit is set, it also reads the CPPC capability, enable, request, and status registers. On Intel, if HWP is enumerated, it reads the capabilities and the enable register, and the request register only when HWP is already enabled. If the hypervisor bit is set, it prints that line and does not read those MSRs, so a missing register cannot panic QEMU.
@@ -11,6 +135,7 @@ The first image build left `r5_pstate_log` out of the package: the bin list in `
 QEMU was TCG with `-cpu qemu64`. This shell could not open `/dev/kvm` (permission denied). Serial showed `publish misc/r5_pstate status 0`, vendor amd, family `0xf`, model `0x6b`, name `QEMU Virtual CPU version 2.5+`, TSC about 2297152544 Hz, and `hypervisor bit set, hardware MSRs not read`. There was no panic. After shutdown, `bfs_shell` read `/boot/home/r5-cpu.txt` with both samples and `FAT: no FAT partition found under /dev/disk`. The Ryzen 5 5625U was not booted. No P-state was written.
 
 `jam -q @r5-anyboot` then exited 0 and wrote `generated.x86_64/r5-os-anyboot.iso` (2.1G, 16:03 Europe/Amsterdam). `fdisk` shows a 2G BeFS partition and a 2.8M EFI partition (type `ef`). That ISO was not booted.
+
 ### Mesa 25 replaces Mesa 22 on the daily image
 
 Build 10018. The jam pin still downloads Mesa 22.0.5 so OpenGL apps can compile. `scripts/install-mesa-packages.sh`, run at the end of `scripts/jam-r5-raw.sh`, then removes `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` from `r5-os.image` and adds the hpkgs in `distro/packages/x86_64`: libglvnd 1.7.0 (`libGL.so.1`), Mesa 25.3.6 (`libEGL_mesa.so.0` plus `50_mesa.json` with `./libEGL_mesa.so.0`), Lavapipe, a private LLVM 21.1.8 runtime that provides only `lib:libllvm_21` (so it does not clash with `llvm12_libs` on `liblto` / `libremarks`), and the HaikuPorts Vulkan loader 1.4.367.

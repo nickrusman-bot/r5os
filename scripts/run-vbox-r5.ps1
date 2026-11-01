@@ -76,8 +76,20 @@ Write-Host "  Text clipboard: COM1 pipe (not Guest Additions)."
 Write-Host "  Disk: Intel IDE  NIC: Intel PRO/1000 (ipro1000)  Net: bridged"
 Write-Host "  raw: $raw"
 
+# A running guest rewrites the VDI the whole time, and powering it
+# off does too. Neither time says which raw image was converted.
+# generated/r5-os.built stores that raw mtime. It is gitignored.
+$builtStamp = Join-Path (Resolve-Path $outDir) "r5-os.built"
+$vdiEpochBefore = $null
+if (Test-Path $vdi) {
+	$vdiItem = Get-Item $vdi
+	$vdiEpochBefore = [DateTimeOffset]::new($vdiItem.LastWriteTimeUtc).ToUnixTimeSeconds()
+}
+
+$wasRunning = $false
 $running = & $vbox list runningvms
 if ($running -match "`"$VmName`"") {
+	$wasRunning = $true
 	Write-Host "Stopping $VmName ..."
 	& $vbox controlvm $VmName poweroff | Out-Null
 	Start-Sleep -Seconds 2
@@ -91,12 +103,23 @@ if ($exists) {
 
 # \\wsl.localhost LastWriteTime is often stale. Use the Linux mtime.
 $rawEpoch = wsl -e bash -lc "stat -c %Y /home/nickr/r5os/haiku/generated.x86_64/r5-os.image"
+$builtEpoch = $null
+if (Test-Path $builtStamp) {
+	$builtText = (Get-Content -Raw $builtStamp).Trim()
+	if ($builtText -match '^\d+$') {
+		$builtEpoch = [int64]$builtText
+	}
+}
 $reuse = $false
 if (-not $ForceConvert -and (Test-Path $vdi) -and $rawEpoch -match '^\d+$') {
 	$vdiItem = Get-Item $vdi
-	$vdiEpoch = [DateTimeOffset]::new($vdiItem.LastWriteTimeUtc).ToUnixTimeSeconds()
-	if ($vdiItem.Length -gt 0 -and $vdiEpoch -ge [int64]$rawEpoch) {
-		$reuse = $true
+	if ($vdiItem.Length -gt 0) {
+		if ($builtEpoch -ne $null) {
+			$reuse = $builtEpoch -ge [int64]$rawEpoch
+		} elseif (-not $wasRunning -and $vdiEpochBefore -ne $null) {
+			# No stamp yet, and the disk was not being written by a guest.
+			$reuse = $vdiEpochBefore -ge [int64]$rawEpoch
+		}
 	}
 }
 
@@ -118,6 +141,7 @@ if ($reuse) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "convertfromraw failed"
 	}
+	Set-Content -Path $builtStamp -Value $rawEpoch.Trim() -NoNewline
 	Start-Sleep -Seconds 2
 	Write-Host "  new VDI: first boot runs package_daemon for every package."
 	Write-Host "  That often takes several minutes. Wait for the desktop."

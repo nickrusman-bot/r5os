@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Apply easy UI bugfixes: #11138 #18057 #16838 #16471 #16116 #15690 #1006."""
+"""Apply easy UI bugfixes: #11138 #18057 #16838 #16471 #16116 #15690 #1006
+#11625 #18518 #18813 #11735 #13680 #6873 #18648."""
 from __future__ import annotations
 
 import pathlib
@@ -121,12 +122,20 @@ def patch_scrollview() -> None:
 
 def patch_listview() -> None:
     path = HAIKU / "src/kits/interface/ListView.cpp"
-    replace_once(
-        path,
-        "#include <Window.h>\n",
-        "#include <Region.h>\n#include <Window.h>\n",
-        "Region include",
-    )
+    text = path.read_text(encoding="utf-8")
+    include = "#include <Region.h>\n"
+    while text.count(include) > 1:
+        text = text.replace(include, "", 1)
+        print(f"collapsed duplicate in {path.name}")
+    if include not in text:
+        old = "#include <Window.h>\n"
+        if old not in text:
+            raise SystemExit(f"pattern not found in {path} (Region include)")
+        text = text.replace(old, include + old, 1)
+        print(f"patched {path} (Region include)")
+    else:
+        print(f"already {path.name} (Region include)")
+    path.write_text(text, encoding="utf-8")
     old = """	item->DrawItem(this, itemRect, complete);
 }"""
     new = """	BRegion clip(itemRect);
@@ -443,14 +452,353 @@ BackgroundsView::_RestoreRevertSnapshot()
     print(f"patched {cpp} (Haiku #1006 impl)")
 
 
+def patch_label_clip() -> None:
+    box = HAIKU / "src/kits/interface/Box.cpp"
+    replace_once(
+        box,
+        """		fLayoutData->label_box.Set(6.0f, 0, 14.0f + StringWidth(fLabel),
+			ceilf(fontHeight.ascent));
+		labelHeight = ceilf(fontHeight.ascent + fontHeight.descent) + 1;
+""",
+        """		// Full line, including leading, so a large font is not clipped
+		// against the top of the view (Haiku #11625 #18518).
+		labelHeight = ceilf(fontHeight.ascent + fontHeight.descent
+			+ fontHeight.leading);
+		fLayoutData->label_box.Set(6.0f, 0, 14.0f + StringWidth(fLabel),
+			labelHeight);
+""",
+        "Haiku #11625 #18518",
+    )
+    replace_once(
+        box,
+        """		// offset label up by 1/6 the font height
+		float lineHeight = fontHeight.ascent + fontHeight.descent;
+		float yOffset = roundf(lineHeight / 6.0f);
+
+		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
+		DrawString(fLabel, BPoint(10.0f, fontHeight.ascent - yOffset));
+""",
+        """		// Baseline at the ascent. A negative offset draws above y=0 and
+		// the view clips the top of the glyphs (Haiku #11625 #18518).
+		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
+		DrawString(fLabel, BPoint(10.0f, ceilf(fontHeight.ascent)));
+""",
+        "Haiku #11625 draw",
+    )
+
+    sep = HAIKU / "src/kits/interface/SeparatorView.cpp"
+    replace_once(
+        sep,
+        """		height = ceilf(fontHeight.ascent) + ceilf(fontHeight.descent);
+""",
+        """		height = ceilf(fontHeight.ascent + fontHeight.descent
+			+ fontHeight.leading);
+""",
+        "Haiku #18813 height",
+    )
+    replace_once(
+        sep,
+        """		if (fOrientation == B_HORIZONTAL) {
+			DrawString(fLabel.String(), BPoint(labelBounds.left,
+				labelBounds.top + ceilf(fontHeight.ascent)));
+		} else {
+""",
+        """		float textHeight = ceilf(fontHeight.ascent + fontHeight.descent
+			+ fontHeight.leading);
+		float spare = labelBounds.Height() + 1.0f - textHeight;
+		float textTop = labelBounds.top;
+		if (spare > 0.0f)
+			textTop += floorf(spare / 2.0f);
+		if (fOrientation == B_HORIZONTAL) {
+			DrawString(fLabel.String(), BPoint(labelBounds.left,
+				textTop + ceilf(fontHeight.ascent)));
+		} else {
+""",
+        "Haiku #18813 baseline",
+    )
+
+
+def patch_small_controls() -> None:
+    text_input_h = HAIKU / "src/kits/interface/TextInput.h"
+    replace_once(
+        text_input_h,
+        """		void			SetInitialText();
+
+virtual	void			Paste(BClipboard *clipboard);
+""",
+        """		void			SetInitialText();
+		void			SetText(const char* text,
+							const text_run_array* runs = NULL);
+
+virtual	void			Paste(BClipboard *clipboard);
+""",
+        "Haiku #11735 set text decl",
+    )
+    replace_once(
+        text_input_h,
+        """		bool			fInMouseDown;
+};
+""",
+        """		bool			fInMouseDown;
+		bool			fSuppressModification;
+};
+""",
+        "Haiku #11735 suppress field",
+    )
+
+    text_input = HAIKU / "src/kits/interface/TextInput.cpp"
+    replace_once(
+        text_input,
+        """	BTextView(frame, "_input_", textRect, resizeMask, flags),
+	fPreviousText(NULL),
+	fInMouseDown(false)
+""",
+        """	BTextView(frame, "_input_", textRect, resizeMask, flags),
+	fPreviousText(NULL),
+	fInMouseDown(false),
+	fSuppressModification(false)
+""",
+        "Haiku #11735 init frame",
+    )
+    replace_once(
+        text_input,
+        """	BTextView(archive),
+	fPreviousText(NULL),
+	fInMouseDown(false)
+""",
+        """	BTextView(archive),
+	fPreviousText(NULL),
+	fInMouseDown(false),
+	fSuppressModification(false)
+""",
+        "Haiku #11735 init archive",
+    )
+    replace_once(
+        text_input,
+        """void
+_BTextInput_::SetInitialText()
+{
+	free(fPreviousText);
+	fPreviousText = NULL;
+
+	if (Text() != NULL)
+		fPreviousText = strdup(Text());
+}
+
+
+void
+_BTextInput_::Paste(BClipboard* clipboard)
+""",
+        """void
+_BTextInput_::SetInitialText()
+{
+	free(fPreviousText);
+	fPreviousText = NULL;
+
+	if (Text() != NULL)
+		fPreviousText = strdup(Text());
+}
+
+
+void
+_BTextInput_::SetText(const char* text, const text_run_array* runs)
+{
+	// Programmatic text must not look like the user typed it
+	// (Haiku #11735).
+	fSuppressModification = true;
+	BTextView::SetText(text, runs);
+	fSuppressModification = false;
+}
+
+
+void
+_BTextInput_::Paste(BClipboard* clipboard)
+""",
+        "Haiku #11735 set text",
+    )
+    replace_once(
+        text_input,
+        """	TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
+		B_CONTROL_MODIFIED);
+}
+
+
+void
+_BTextInput_::DeleteText(int32 fromOffset, int32 toOffset)
+{
+	BTextView::DeleteText(fromOffset, toOffset);
+
+	TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
+		B_CONTROL_MODIFIED);
+}
+""",
+        """	if (!fSuppressModification) {
+		TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
+			B_CONTROL_MODIFIED);
+	}
+}
+
+
+void
+_BTextInput_::DeleteText(int32 fromOffset, int32 toOffset)
+{
+	BTextView::DeleteText(fromOffset, toOffset);
+
+	if (!fSuppressModification) {
+		TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
+			B_CONTROL_MODIFIED);
+	}
+}
+""",
+        "Haiku #11735 skip notify",
+    )
+
+    slider = HAIKU / "src/kits/interface/Slider.cpp"
+    replace_once(
+        slider,
+        """	if (!IsEnabled())
+		return;
+
+	if (BarFrame().Contains(point) || ThumbFrame().Contains(point))
+		fInitialLocation = _Location();
+""",
+        """	if (!IsEnabled())
+		return;
+
+	// A click in the padding is not a slider click.
+	if (!BarFrame().Contains(point) && !ThumbFrame().Contains(point))
+		return;
+
+	fInitialLocation = _Location();
+""",
+        "Haiku #13680 click on bar",
+    )
+    replace_once(
+        slider,
+        """			}
+		}
+		if (_Location() != fInitialLocation)
+			Invoke();
+	}
+}
+""",
+        """			}
+		}
+		// A second click on the same value still sends the message
+		// (Haiku #13680).
+		Invoke();
+	}
+}
+""",
+        "Haiku #13680 sync invoke",
+    )
+    replace_once(
+        slider,
+        """	if (IsTracking()) {
+		if (_Location() != fInitialLocation)
+			Invoke();
+
+		SetTracking(false);
+""",
+        """	if (IsTracking()) {
+		// A second click on the same value still sends the message
+		// (Haiku #13680).
+		Invoke();
+
+		SetTracking(false);
+""",
+        "Haiku #13680 async invoke",
+    )
+
+    scroll_bar = HAIKU / "src/kits/interface/ScrollBar.cpp"
+    replace_once(
+        scroll_bar,
+        """	bool upEnabled = fValue > fMin;
+""",
+        """	// A bar that already shows everything keeps its arrows off
+	// (Haiku #6873). Proportion 0 is the non-proportional mode.
+	bool canScroll = fMin < fMax && fProportion >= 0.0f
+		&& fProportion < 1.0f;
+	bool upEnabled = canScroll && fValue > fMin;
+""",
+        "Haiku #6873 up arrow",
+    )
+    replace_once(
+        scroll_bar,
+        """	bool downEnabled = fValue < fMax;
+""",
+        """	bool downEnabled = canScroll && fValue < fMax;
+""",
+        "Haiku #6873 down arrow",
+    )
+
+
+    option_pop_up = HAIKU / "src/kits/interface/OptionPopUp.cpp"
+    replace_once(
+        option_pop_up,
+        """void
+BOptionPopUp::SetValue(int32 value)
+{
+	BControl::SetValue(value);
+	BMenu* menu = fMenuField->Menu();
+	if (menu == NULL)
+		return;
+
+	int32 numItems = menu->CountItems();
+	for (int32 i = 0; i < numItems; i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (item && item->Message()) {
+			int32 itemValue;
+			item->Message()->FindInt32("be:value", &itemValue);
+			if (itemValue == value) {
+				item->SetMarked(true);
+				break;
+			}
+		}
+	}
+}
+""",
+        """void
+BOptionPopUp::SetValue(int32 value)
+{
+	BMenu* menu = fMenuField->Menu();
+	if (menu == NULL) {
+		BControl::SetValue(value);
+		return;
+	}
+
+	int32 numItems = menu->CountItems();
+	for (int32 i = 0; i < numItems; i++) {
+		BMenuItem* item = menu->ItemAt(i);
+		if (item == NULL || item->Message() == NULL)
+			continue;
+
+		int32 itemValue;
+		if (item->Message()->FindInt32("be:value", &itemValue) != B_OK)
+			continue;
+		if (itemValue != value)
+			continue;
+
+		item->SetMarked(true);
+		BControl::SetValue(value);
+		return;
+	}
+}
+""",
+        "Haiku #18648 unknown value",
+    )
+
+
 def main() -> int:
     patch_alert()
+    patch_label_clip()
     patch_scrollview()
     patch_listview()
     patch_desktop_selection()
     patch_desktop_icon_size()
     patch_softwareupdater()
     patch_backgrounds()
+    patch_small_controls()
     return 0
 
 

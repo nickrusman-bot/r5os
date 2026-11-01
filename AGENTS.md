@@ -109,7 +109,7 @@ Keep `tracker/STATUS.md` current. After any ticket-status change, run `python3 s
 
 After a task, report **Veranderd / Getest / Onbewezen / Documentatie**. Tracker edits: `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Code, changelog, and tracker must not contradict each other.
 
-GitHub issues on `origin` are the live remaining-work list. Multi-user: [#63](https://github.com/nickrusman-bot/r5os/issues/63). Mixxx: [#55](https://github.com/nickrusman-bot/r5os/issues/55). When a change lands: comment on the matching issue with build, limits, and how/where it was tested; close it if that request is done. If only part shipped, comment and leave it open. Do not mark CHANGELOG/STATUS done while the GitHub issue stays open, or the reverse.
+GitHub issues on `origin` are the lead, including open Haiku Trac tickets. Those are labeled `haiku` and mapped in `tracker/github.tsv` (`<!-- haiku-ticket:ID -->` in the body). Multi-user: [#63](https://github.com/nickrusman-bot/r5os/issues/63). Mixxx: [#55](https://github.com/nickrusman-bot/r5os/issues/55). After a new Trac CSV: `scripts/tracker-import.py`, then `scripts/sync-github-issues.py`. The sync creates missing issues and closes ones already `fixed` on `origin/main`, with a comment that quotes the status note. It does not reopen a closed issue because Trac still lists it. When a change lands: comment on the matching issue with build, limits, and how/where it was tested; close it if that request is done. If only part shipped, comment and leave it open. Do not mark CHANGELOG/STATUS done while the GitHub issue stays open, or the reverse. What's new stays user language. The build link belongs on the GitHub issue.
 
 ## Versioning
 

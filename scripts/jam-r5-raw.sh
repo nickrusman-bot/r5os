@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -uo pipefail
 HAIKU=/home/nickr/r5os/haiku
-WIN=/mnt/c/Users/nickr/Projects/R5OS
+WIN="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH=/usr/bin:/bin:/home/nickr/bin:$PATH
+
+"$WIN/scripts/pin-mesa-packages.sh"
 
 ver="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/VERSION" | head -1 | tr -d '\r' | tr -d '[:space:]')"
 build="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/BUILD" | head -1 | tr -d '\r' | tr -d '[:space:]')"
@@ -17,6 +19,11 @@ printf '%s\n' \
 	"#define R5_OS_BUILD ${build}" \
 	'#endif' > "$HAIKU/headers/private/system/r5_os_version.h"
 rm -f "$HAIKU/generated.x86_64/build/last-built-revision"
+
+# About bakes What's new into a resource. The resource rule follows
+# AboutSystem.rdef, not the text file, so touch the rdef after the copy.
+sed 's/\r$//' "$WIN/distro/WHATSNEW" > "$HAIKU/src/apps/aboutsystem/r5_whatsnew.txt"
+touch "$HAIKU/src/apps/aboutsystem/AboutSystem.rdef"
 
 cd "$HAIKU/generated.x86_64"
 jam -q @r5-raw

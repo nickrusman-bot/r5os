@@ -1,0 +1,650 @@
+diff --git a/src/apps/deskbar/BarView.h b/src/apps/deskbar/BarView.h
+index 1cf1ccd4b6..ee8fa144b0 100644
+--- a/src/apps/deskbar/BarView.h
++++ b/src/apps/deskbar/BarView.h
+@@ -100,6 +100,7 @@ public:
+ 								bool aSync = false);
+ 
+ 			void			RaiseDeskbar(bool raise);
++			bool			IsRaised() const { return fIsRaised; }
+ 			void			HideDeskbar(bool hide);
+ 
+ 	// window placement methods
+diff --git a/src/apps/deskbar/BarWindow.cpp b/src/apps/deskbar/BarWindow.cpp
+index 6e4b30fae3..10361526fe 100644
+--- a/src/apps/deskbar/BarWindow.cpp
++++ b/src/apps/deskbar/BarWindow.cpp
+@@ -300,6 +300,12 @@ TBarWindow::WorkspaceActivated(int32 workspace, bool active)
+ {
+ 	BWindow::WorkspaceActivated(workspace, active);
+ 
++	if (active && fBarApp->Settings()->autoRaise
++		&& !fBarApp->Settings()->alwaysOnTop && fBarView->IsRaised()) {
++		// Keep the raised state when the workspace changes (Haiku #16359).
++		fBarView->RaiseDeskbar(true);
++	}
++
+ 	if (active && !(fBarView->ExpandoState() && fBarView->Vertical()))
+ 		fBarView->UpdatePlacement();
+ 	else {
+@@ -696,7 +702,9 @@ TBarWindow::SetSizeLimits()
+ 		float maxWidth;
+ 
+ 		if (fBarView->Vertical()) {
+-			minHeight = fBarView->TabHeight() - 1;
++			// Leave room for the leaf and one icon row (Haiku #15975).
++			minHeight = fBarView->TabHeight()
++				+ be_control_look->ComposeIconSize(kMinimumIconSize).Height();
+ 			maxHeight = B_SIZE_UNLIMITED;
+ 			minWidth = gMinimumWindowWidth;
+ 			maxWidth = gMaximumWindowWidth;
+diff --git a/src/apps/deskbar/DeskbarMenu.cpp b/src/apps/deskbar/DeskbarMenu.cpp
+index ef20d10f9a..60ca07b351 100644
+--- a/src/apps/deskbar/DeskbarMenu.cpp
++++ b/src/apps/deskbar/DeskbarMenu.cpp
+@@ -41,6 +41,8 @@ All rights reserved.
+ #include <Catalog.h>
+ #include <Dragger.h>
+ #include <Locale.h>
++#include <pwd.h>
++#include <unistd.h>
+ #include <Menu.h>
+ #include <MenuItem.h>
+ #include <Roster.h>
+@@ -118,7 +120,7 @@ TDeskbarMenu::DetachedFromWindow()
+ 	if (fBarView != NULL) {
+ 		BLooper* looper = fBarView->Looper();
+ 		if (looper != NULL && looper->Lock()) {
+-			fBarView->DragStop();
++			fBarView->DragStop(true);
+ 			looper->Unlock();
+ 		}
+ 	}
+@@ -299,14 +301,33 @@ B_TRANSLATE_MARK_VOID("About R5OS")
+ 
+ 	AddSeparatorItem();
+ 
+-	BMenu* shutdownMenu = new BMenu(B_TRANSLATE("Shutdown" B_UTF8_ELLIPSIS));
++	item = new BMenuItem(B_TRANSLATE("Lock screen"),
++		new BMessage(kLockSession));
++	item->SetEnabled(!dragging);
++	item->SetTarget(be_app);
++	AddItem(item);
+ 
+-	item = new BMenuItem(B_TRANSLATE("Power off"),
++	BString logoutLabel(B_TRANSLATE("Log out"));
++	struct passwd* sessionUser = getpwuid(getuid());
++	if (sessionUser != NULL && sessionUser->pw_name != NULL
++		&& sessionUser->pw_name[0] != '\0') {
++		logoutLabel << ' ' << sessionUser->pw_name;
++	}
++	item = new BMenuItem(logoutLabel.String(),
++		new BMessage(kLogoutSession));
++	item->SetEnabled(!dragging);
++	item->SetTarget(be_app);
++	AddItem(item);
++
++	// Same words as the shutdown question (Haiku #18667).
++	BMenu* shutdownMenu = new BMenu(B_TRANSLATE("Shut down" B_UTF8_ELLIPSIS));
++
++	item = new BMenuItem(B_TRANSLATE("Shut down"),
+ 		new BMessage(kShutdownSystem));
+ 	item->SetEnabled(!dragging);
+ 	shutdownMenu->AddItem(item);
+ 
+-	item = new BMenuItem(B_TRANSLATE("Restart system"),
++	item = new BMenuItem(B_TRANSLATE("Restart"),
+ 		new BMessage(kRebootSystem));
+ 	item->SetEnabled(!dragging);
+ 	shutdownMenu->AddItem(item);
+@@ -387,6 +408,8 @@ TDeskbarMenu::ResetTargets()
+ 				case kRebootSystem:
+ 				case kSuspendSystem:
+ 				case kShutdownSystem:
++				case kLogoutSession:
++				case kLockSession:
+ 				case kRealignReplicants:
+ 				case kShowHideTime:
+ 				case kShowSeconds:
+@@ -626,6 +649,13 @@ TRecentsMenu::DoneBuildingItemList()
+ 	// and this list does not need to be sorted
+ 	// BNavMenu::DoneBuildingItemList();
+ 
++	if (CountItems() == 0) {
++		// An empty menu kept a huge frame and ran off the screen (Haiku #7328).
++		BMenuItem* empty = new BMenuItem(B_TRANSLATE("(empty)"), NULL);
++		empty->SetEnabled(false);
++		AddItem(empty);
++	}
++
+ 	if (CountItems() > 0)
+ 		SetTargetForItems(Target());
+ }
+diff --git a/src/apps/deskbar/InlineScrollView.cpp b/src/apps/deskbar/InlineScrollView.cpp
+index 27cbafbac2..8e80c43b10 100644
+--- a/src/apps/deskbar/InlineScrollView.cpp
++++ b/src/apps/deskbar/InlineScrollView.cpp
+@@ -462,6 +462,20 @@ TInlineScrollView::AttachScrollers()
+ 
+ 			fScrollValue = fScrollLimit;
+ 		}
++
++		// Keep the end arrow on the visible edge after a resize (Haiku #15910).
++		if (fEndScrollArrow != NULL) {
++			BPoint arrowTop = fEndScrollArrow->Frame().LeftTop();
++			fTarget->ConvertToParent(&arrowTop);
++			float desiredTop = fOrientation == B_VERTICAL
++				? frame.bottom - kScrollerDimension + 1
++				: frame.top;
++			float desiredLeft = fOrientation == B_VERTICAL
++				? frame.left
++				: frame.right - kScrollerDimension + 1;
++			fEndScrollArrow->MoveBy(desiredLeft - arrowTop.x,
++				desiredTop - arrowTop.y);
++		}
+ 		return;
+ 	}
+ 
+diff --git a/src/kits/interface/Menu.cpp b/src/kits/interface/Menu.cpp
+index aa0d415250..4f86c4e7bb 100644
+--- a/src/kits/interface/Menu.cpp
++++ b/src/kits/interface/Menu.cpp
+@@ -622,14 +622,10 @@ BMenu::KeyDown(const char* bytes, int32 numBytes)
+ 			break;
+ 
+ 		case B_ESCAPE:
++			// Always leave the open menu. Forwarding Escape used to leave
++			// the Deskbar menu up (Haiku #16144).
+ 			_SelectItem(NULL);
+-			if (fState == MENU_STATE_CLOSED
+-				&& dynamic_cast<BMenuBar*>(Supermenu())) {
+-				// Keyboard may show menu without tracking it
+-				BMessenger messenger(Supermenu());
+-				messenger.SendMessage(Window()->CurrentMessage());
+-			} else
+-				_QuitTracking(false);
++			_QuitTracking(false);
+ 			break;
+ 
+ 		default:
+@@ -2817,6 +2813,10 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
+ 
+ 	BScreen screen(Window());
+ 	BRect screenFrame = screen.Frame();
++	// Keep the border on screen when the menu opens from the Deskbar
++	// (Haiku #13431).
++	if (screenFrame.Width() > 16 && screenFrame.Height() > 16)
++		screenFrame.InsetBy(4, 4);
+ 
+ 	BMenu* superMenu = Supermenu();
+ 	BMenuItem* superItem = Superitem();
+diff --git a/src/kits/tracker/ContainerWindow.cpp b/src/kits/tracker/ContainerWindow.cpp
+index cece5460ee..9a7e9bf602 100644
+--- a/src/kits/tracker/ContainerWindow.cpp
++++ b/src/kits/tracker/ContainerWindow.cpp
+@@ -874,6 +874,9 @@ BContainerWindow::InitLayout()
+ 			// no upper border.
+ 			size.height -= 1;
+ 		}
++		// The scrollbar's minimum width was forcing this view, and the
++		// window, to grow (Haiku #16726).
++		size.width = 32;
+ 		PoseView()->CountView()->SetExplicitMinSize(size);
+ 	}
+ }
+@@ -1495,8 +1498,13 @@ BContainerWindow::MessageReceived(BMessage* message)
+ 			break;
+ 
+ 		case kFindButton:
+-			(new FindWindow())->Show();
++		{
++			// Start in this folder (Haiku #19546).
++			const entry_ref* here = TargetModel() != NULL
++				? TargetModel()->EntryRef() : NULL;
++			(new FindWindow(here))->Show();
+ 			break;
++		}
+ 
+ 		case kEditFavorites:
+ 		{
+@@ -1543,8 +1551,18 @@ BContainerWindow::MessageReceived(BMessage* message)
+ 
+ 				be_app->PostMessage(message);
+ 			} else {
++				node_ref childNode;
++				bool selectChild = TargetModel() != NULL;
++				if (selectChild)
++					childNode = *TargetModel()->NodeRef();
++
+ 				SwitchDirectory(&ref);
+ 
++				// Keep the folder we just left selected (Haiku #11029).
++				TTracker* tracker = dynamic_cast<TTracker*>(be_app);
++				if (selectChild && tracker != NULL)
++					tracker->SelectChildInParentSoon(&ref, &childNode);
++
+ 				if (Navigator() != NULL) {
+ 					// update Navigation bar
+ 					int32 action = message->GetInt32("action", kActionSet);
+@@ -1946,6 +1964,9 @@ BContainerWindow::MenusBeginning()
+ 
+ 	if (fWindowMenu != NULL)
+ 		UpdateMenu(fWindowMenu, kWindowMenuContext);
++
++	// Pick up add-ons copied in while this window was open (Haiku #11495).
++	BuildAddOnsMenu(fMenuBar);
+ }
+ 
+ 
+diff --git a/src/kits/tracker/FSUtils.cpp b/src/kits/tracker/FSUtils.cpp
+index b5c4ca50a1..671b5f53d8 100644
+--- a/src/kits/tracker/FSUtils.cpp
++++ b/src/kits/tracker/FSUtils.cpp
+@@ -57,6 +57,7 @@ respective holders. All rights reserved.
+ #include <Directory.h>
+ #include <Entry.h>
+ #include <FindDirectory.h>
++#include <DateTimeFormat.h>
+ #include <Locale.h>
+ #include <LocaleRoster.h>
+ #include <NodeInfo.h>
+@@ -2185,16 +2186,14 @@ PreFlightNameCheck(BObjectList<entry_ref, true>* srcList, const BDirectory* dest
+ void
+ FileStatToString(StatStruct* stat, char* buffer, int32 length)
+ {
+-	tm timeData;
+-	localtime_r(&stat->st_mtime, &timeData);
+-
+ 	BString size;
+ 	static BStringFormat format(
+ 		B_TRANSLATE("{0, plural, one{# byte} other{# bytes}}"));
+ 	format.Format(size, stat->st_size);
+-	uint32 pos = snprintf(buffer, length, "\n\t(%s ", size.String());
+-
+-	strftime(buffer + pos, length - pos, "%b %d %Y, %I:%M:%S %p)", &timeData);
++	BString when;
++	BDateTimeFormat().Format(when, stat->st_mtime,
++		B_MEDIUM_DATE_FORMAT, B_MEDIUM_TIME_FORMAT);
++	snprintf(buffer, length, "\n\t(%s %s)", size.String(), when.String());
+ }
+ 
+ 
+diff --git a/src/kits/tracker/FindPanel.cpp b/src/kits/tracker/FindPanel.cpp
+index 96d8e701fa..c62a540777 100644
+--- a/src/kits/tracker/FindPanel.cpp
++++ b/src/kits/tracker/FindPanel.cpp
+@@ -2239,9 +2239,12 @@ FindPanel::CurrentMimeType(const char** type) const
+ 	// search for marked item in the list
+ 	BMenuItem* item = MimeTypeMenu()->FindMarked();
+ 
++	BMenuItem* mostUsed = NULL;
+ 	if (item != NULL && MimeTypeMenu()->IndexOf(item) != 0
+ 		&& item->Submenu() == NULL) {
+-		// if it's one of the most used items, ignore it
++		// Prefer the same type in the tree, but keep the most-used item
++		// when that is the only mark (Haiku #11402).
++		mostUsed = item;
+ 		item = NULL;
+ 	}
+ 
+@@ -2253,6 +2256,9 @@ FindPanel::CurrentMimeType(const char** type) const
+ 		}
+ 	}
+ 
++	if (item == NULL)
++		item = mostUsed;
++
+ 	if (type != NULL && item != NULL) {
+ 		BMessage* message = item->Message();
+ 		if (message == NULL)
+diff --git a/src/kits/tracker/OpenWithWindow.cpp b/src/kits/tracker/OpenWithWindow.cpp
+index 691c293916..185ae67a6a 100644
+--- a/src/kits/tracker/OpenWithWindow.cpp
++++ b/src/kits/tracker/OpenWithWindow.cpp
+@@ -443,13 +443,15 @@ OpenWithContainerWindow::RestoreState()
+ 	if (DefaultStateSourceNode(kDefaultOpenWithTemplate, &defaultingNode,
+ 			false)) {
+ 		AttributeStreamFileNode streamNodeSource(&defaultingNode);
+-		RestoreWindowState(&streamNodeSource);
+ 		fPoseView->Init(&streamNodeSource);
++		InitLayout();
++		// Layout used to wipe the saved frame (Haiku #19520 #8772).
++		RestoreWindowState(&streamNodeSource);
+ 	} else {
+-		RestoreWindowState(NULL);
+ 		fPoseView->Init(NULL);
++		InitLayout();
++		RestoreWindowState(NULL);
+ 	}
+-	InitLayout();
+ }
+ 
+ 
+@@ -470,6 +472,12 @@ OpenWithContainerWindow::RestoreWindowState(AttributeStreamNode* node)
+ 	BRect frame(Frame());
+ 	if (node->Read(rectAttributeName, 0, B_RECT_TYPE, sizeof(BRect), &frame)
+ 			== sizeof(BRect)) {
++		// Saved frames are in 12pt units, same as other Tracker windows.
++		const float scalingFactor = be_plain_font->Size() / 12.0f;
++		frame.left *= scalingFactor;
++		frame.top *= scalingFactor;
++		frame.right *= scalingFactor;
++		frame.bottom *= scalingFactor;
+ 		MoveTo(frame.LeftTop());
+ 		ResizeTo(frame.Width(), frame.Height());
+ 	}
+@@ -1645,16 +1653,13 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
+ 				mimeType.SetTo(model.MimeType());
+ 				// status_t result = mimeType.GetSupertype(&mimeType);
+ 
+-				char* type = (char*)mimeType.Type();
+-				char* tmp = strchr(type, '/');
+-				if (tmp != NULL)
+-					*tmp = '\0';
+-
+-				//PRINT(("getting supertype for %s, result %s, got %s\n",
+-				//	model.MimeType(), strerror(result), mimeType.Type()));
++				// Do not write into the MIME type buffer (Haiku #8551).
++				BMimeType superType;
++				mimeType.GetSupertype(&superType);
++				const char* superName = superType.Type();
+ 				description->SetTo(B_TRANSLATE("Handles any %type"));
+-				//*description += mimeType.Type();
+-				description->ReplaceFirst("%type", type);
++				description->ReplaceFirst("%type",
++					superName != NULL ? superName : "");
+ 				return;
+ 			}
+ 
+diff --git a/src/kits/tracker/Pose.cpp b/src/kits/tracker/Pose.cpp
+index d2f2fd7e7f..343a3260d2 100644
+--- a/src/kits/tracker/Pose.cpp
++++ b/src/kits/tracker/Pose.cpp
+@@ -333,13 +333,9 @@ BPose::UpdateIcon(BPoint poseLoc, BPoseView* poseView)
+ {
+ 	IconCache::sIconCache->IconChanged(ResolvedModel());
+ 
+-	BRect rect;
+-	if (poseView->ViewMode() == kListMode)
+-		rect = _ListIconRect(poseView, poseLoc);
+-	else
+-		rect = _IconRect(poseView, poseLoc);
+-
+-	poseView->Invalidate(rect);
++	// The free-space bar is drawn with the icon. Invalidating only the
++	// icon bitmap left the bar stale (Haiku #19573).
++	poseView->Invalidate(CalcRect(poseLoc, poseView));
+ }
+ 
+ 
+diff --git a/src/kits/tracker/PoseView.cpp b/src/kits/tracker/PoseView.cpp
+index d3de22fbc3..dd87e2b4d4 100644
+--- a/src/kits/tracker/PoseView.cpp
++++ b/src/kits/tracker/PoseView.cpp
+@@ -283,6 +283,13 @@ BPoseView::BPoseView(Model* model, uint32 viewMode)
+ 	fTransparentSelection(TrackerSettings().TransparentSelection()),
+ 	fWaitingForRefs(false)
+ {
++	font_height listHeight;
++	be_plain_font->GetHeight(&listHeight);
++	fListElemHeight = ceilf(listHeight.ascent + listHeight.descent
++		+ listHeight.leading);
++	if (fListElemHeight < 1)
++		fListElemHeight = 1;
++
+ 	fViewState->SetViewMode(viewMode);
+ 	fFilterStrings.AddItem(new BString());
+ }
+@@ -1008,6 +1015,15 @@ BPoseView::AttachedToWindow()
+ {
+ 	AdoptSystemColors();
+ 
++	// Row height must cover the whole glyph or the date column overlaps
++	// (Haiku #16853).
++	font_height listHeight;
++	GetFontHeight(&listHeight);
++	fListElemHeight = ceilf(listHeight.ascent + listHeight.descent
++		+ listHeight.leading);
++	if (fListElemHeight < 1)
++		fListElemHeight = 1;
++
+ 	AddFilter(new ShortcutFilter(B_RETURN, B_OPTION_KEY, kOpenSelection, this));
+ 		// add Option-Return as a shortcut filter because AddShortcut
+ 		// doesn't allow us to have shortcuts without Command yet
+@@ -2414,11 +2430,18 @@ BPoseView::MessageReceived(BMessage* message)
+ 			break;
+ 
+ 		case B_CANCEL:
+-			if (FSClipboardHasRefs())
++		{
++			// Escape clears the cut and filtering, and otherwise the
++			// selection (Haiku #9216).
++			bool hadClipboard = FSClipboardHasRefs();
++			if (hadClipboard)
+ 				FSClipboardClear();
+ 			if (IsTypeAheadFiltering())
+ 				StopTypeAheadFiltering();
++			else if (!hadClipboard)
++				ClearSelection();
+ 			break;
++		}
+ 
+ 		case kCancelSelectionToClipboard:
+ 		{
+@@ -4129,8 +4152,12 @@ BPoseView::ScrollIntoView(BRect poseRect)
+ 	else if (poseRect.bottom > Bounds().bottom)
+ 		newPos.y += poseRect.bottom - Bounds().bottom;
+ 
+-	if (newPos != oldPos)
++	if (newPos != oldPos) {
++		// The range can still be the old folder when the pose just appeared
++		// (Haiku #16643).
++		UpdateScrollRange();
+ 		SetScrollBarsTo(newPos);
++	}
+ }
+ 
+ 
+@@ -6057,8 +6084,12 @@ BPoseView::AttributeChanged(const BMessage* message)
+ 				_CheckPoseSortOrder(CurrentPoseList(), pose, poseListIndex);
+ 		} else {
+ 			int32 fields;
+-			if (message->FindInt32("fields", &fields) != B_OK)
++			if (message->FindInt32("fields", &fields) != B_OK) {
++				// StyledEdit's stat notice sometimes omits the field mask.
++				// Still re-sort (Haiku #20261).
++				_CheckPoseSortOrder(CurrentPoseList(), pose, poseListIndex);
+ 				continue;
++			}
+ 
+ 			for (int i = sizeof(sAttrColumnMap) / sizeof(attr_column_relation); i--;) {
+ 				uint32 attrHash = sAttrColumnMap[i].attrHash;
+diff --git a/src/kits/tracker/StatusWindow.cpp b/src/kits/tracker/StatusWindow.cpp
+index 5768c14d3c..0a409a59d5 100644
+--- a/src/kits/tracker/StatusWindow.cpp
++++ b/src/kits/tracker/StatusWindow.cpp
+@@ -207,6 +207,11 @@ BStatusWindow::BStatusWindow()
+ 	fRetainDesktopFocus(false)
+ {
+ 	SetSizeLimits(0, 100000, 0, 100000);
++	// Wide enough for a long file name at a large font (Haiku #5338 #16185).
++	float scale = be_plain_font->Size() / 12.0f;
++	if (scale < 1.0f)
++		scale = 1.0f;
++	ResizeTo(ceilf(Frame().Width() * scale), Frame().Height());
+ 	fMouseDownFilter = new BStatusMouseFilter();
+ 	AddCommonFilter(fMouseDownFilter);
+ 
+@@ -238,7 +243,10 @@ BStatusWindow::CreateStatusItem(thread_id thread, StatusWindowState type)
+ 		sShowSpeed = true;
+ 		sLastEstimatedFinishSpeedToggleTime = system_time();
+ 	}
+-	rect.bottom = rect.top + kDefaultStatusViewHeight - 1;
++	float rowScale = be_plain_font->Size() / 12.0f;
++	if (rowScale < 1.0f)
++		rowScale = 1.0f;
++	rect.bottom = rect.top + kDefaultStatusViewHeight * rowScale - 1;
+ 
+ 	BStatusView* view = new BStatusView(rect, thread, type);
+ 	// the BStatusView will resize itself if needed in its constructor
+@@ -800,8 +808,10 @@ BStatusView::_TimeStatusString(float availableSpace, float* _width)
+ 	time_t now = (time_t)real_time_clock();
+ 
+ 	BString string;
+-	if (secondsRemaining < 0 || (sizeof(time_t) == 4
+-		&& now + secondsRemaining > INT32_MAX)) {
++	// NaN and a huge estimate used to become 13 Dec 1901 (Haiku #11176).
++	if (!(secondsRemaining >= 0)
++		|| secondsRemaining > 60.0 * 60.0 * 24.0 * 365.0 * 10.0
++		|| (sizeof(time_t) == 4 && now + secondsRemaining > INT32_MAX)) {
+ 		string = B_TRANSLATE("Finish: after several years");
+ 	} else {
+ 		char timeText[32];
+@@ -988,8 +998,9 @@ BStatusView::UpdateStatus(const char* curItem, off_t itemSize, bool optional)
+ 	} else if (curItem != NULL) {
+ 		// stash away the name of the item we are currently processing
+ 		// so we can show it when the time comes
+-		strncpy(fPendingStatusString, curItem, 127);
+-		fPendingStatusString[127] = '0';
++		// The old terminator was the character '0', so a long name ran off
++		// the end of the buffer (Haiku #5338).
++		strlcpy(fPendingStatusString, curItem, sizeof(fPendingStatusString));
+ 	} else
+ 		SetToolTip((const char*)NULL);
+ }
+diff --git a/src/kits/tracker/WidgetAttributeText.cpp b/src/kits/tracker/WidgetAttributeText.cpp
+index 443092a752..a27daed5d6 100644
+--- a/src/kits/tracker/WidgetAttributeText.cpp
++++ b/src/kits/tracker/WidgetAttributeText.cpp
+@@ -132,6 +132,16 @@ TruncStringBase(BString* outString, const char* inString, int32 length,
+ 	// for max speed and flexibility
+ 
+ 	// a standard ellipsis inserting fitting algorithm
++	if (view == NULL) {
++		*outString = inString != NULL ? inString : "";
++		return 0;
++	}
++	if (width < 1.0f) {
++		// A very narrow rating column used to crash here (Haiku #19661).
++		outString->Truncate(0);
++		return 0;
++	}
++
+ 	if (view->StringWidth(inString, length) <= width)
+ 		*outString = inString;
+ 	else {
+@@ -1694,9 +1704,26 @@ GenericAttributeText::CommitEditedTextFlavor(BTextView* textView)
+ 
+ 			switch (type) {
+ 				case B_TIME_TYPE:
+-					tmp.time_tt = parsedate(textView->Text(), time(0));
++				{
++					const char* text = textView->Text();
++					time_t parsed = parsedate(text, time(0));
++					if (parsed == (time_t)-1) {
++						// A failed parse used to be stored and shown as
++						// 13 Dec 1901 (Haiku #19663).
++						if (fFullValueText == text)
++							return true;
++						BAlert* alert = new BAlert("",
++							B_TRANSLATE("Sorry, that is not a recognized date."),
++							B_TRANSLATE("Cancel"),
++							0, 0, B_WIDTH_AS_USUAL, B_STOP_ALERT);
++						alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
++						alert->Go();
++						return false;
++					}
++					tmp.time_tt = parsed;
+ 					scalarSize = sizeof(time_t);
+ 					break;
++				}
+ 
+ 				// do some size independent conversion on builtin types
+ 				case B_OFF_T_TYPE:
+diff --git a/src/kits/tracker/infowindow/GeneralInfoView.cpp b/src/kits/tracker/infowindow/GeneralInfoView.cpp
+index 343b817e46..d0e96501ff 100644
+--- a/src/kits/tracker/infowindow/GeneralInfoView.cpp
++++ b/src/kits/tracker/infowindow/GeneralInfoView.cpp
+@@ -43,6 +43,7 @@ All rights reserved.
+ #include <ControlLook.h>
+ #include <Locale.h>
+ #include <NodeMonitor.h>
++#include <OS.h>
+ #include <PopUpMenu.h>
+ #include <Region.h>
+ #include <Roster.h>
+@@ -144,6 +145,9 @@ OpenToolTipWindow(BScreen& screen, BRect rect, const char* name,
+ 	trackingView->SetTarget(target);
+ 	window->AddChild(trackingView);
+ 
++	// Stay on this workspace (Haiku #8543).
++	window->SetWorkspaces(1UL << current_workspace());
++
+ 	window->Sync();
+ 	window->Show();
+ 
+@@ -471,15 +475,19 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
+ 			const char* attrName;
+ 			if (message->FindString("attr", &attrName) == B_OK) {
+ 				if (strcmp(attrName, kAttrLargeIcon) == 0
++					|| strcmp(attrName, kAttrMiniIcon) == 0
+ 					|| strcmp(attrName, kAttrIcon) == 0) {
+ 					IconCache::sIconCache->IconChanged(model->ResolveIfLink());
+ 					Invalidate();
+ 				} else if (strcmp(attrName, kAttrMIMEType) == 0) {
++					// Identify updates the type. Refresh the icon too
++					// (Haiku #8544).
+ 					if (model->OpenNode() == B_OK) {
+ 						model->AttrChanged(attrName);
+ 						InitStrings(model);
+ 						model->CloseNode();
+ 					}
++					IconCache::sIconCache->IconChanged(model->ResolveIfLink());
+ 					Invalidate();
+ 				}
+ 			}
+diff --git a/src/kits/tracker/infowindow/HeaderView.cpp b/src/kits/tracker/infowindow/HeaderView.cpp
+index b4a62da084..7ea73e104d 100644
+--- a/src/kits/tracker/infowindow/HeaderView.cpp
++++ b/src/kits/tracker/infowindow/HeaderView.cpp
+@@ -225,6 +225,16 @@ HeaderView::FinishEditingTitle(bool commit)
+ 	size_t length = (size_t)fTitleEditView->TextLength();
+ 
+ 	status_t result = EditModelName(fModel, name, length);
++	if (result == B_NOT_ALLOWED) {
++		// Renaming the system folder from Get Info used to fail silently
++		// (Haiku #9383).
++		BAlert* alert = new BAlert("",
++			B_TRANSLATE("This item cannot be renamed."),
++			B_TRANSLATE("OK"), NULL, NULL,
++			B_WIDTH_AS_USUAL, B_WARNING_ALERT);
++		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
++		alert->Go();
++	}
+ 	bool reopen = (result == B_NAME_TOO_LONG || result == B_NAME_IN_USE);
+ 
+ 	if (result == B_OK) {
+diff --git a/src/kits/tracker/infowindow/InfoWindow.cpp b/src/kits/tracker/infowindow/InfoWindow.cpp
+index 71ca3b5813..c7a7b79991 100644
+--- a/src/kits/tracker/infowindow/InfoWindow.cpp
++++ b/src/kits/tracker/infowindow/InfoWindow.cpp
+@@ -93,7 +93,7 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
+ 	:
+ 	BWindow(BInfoWindow::InfoWindowRect(),
+ 		"InfoWindow", B_TITLED_WINDOW,
+-		B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS,
++		B_NOT_ZOOMABLE,
+ 		B_CURRENT_WORKSPACE),
+ 	fModel(model),
+ 	fStopCalc(false),
+@@ -107,6 +107,10 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
+ 	SetPulseRate(1000000);
+ 		// we use pulse to check freebytes on volume
+ 
++	// B_AUTO_UPDATE_SIZE_LIMITS locked the frame to the preferred size,
++	// so the border looked resizable and was not (Haiku #19433).
++	SetSizeLimits(280, 32000, 220, 32000);
++
+ 	TTracker::WatchNode(model->NodeRef(), B_WATCH_ALL | B_WATCH_MOUNT, this);
+ 
+ 	// window list is Locked by Tracker around this constructor
