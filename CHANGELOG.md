@@ -2,7 +2,7 @@
 
 ### Session user can create the Mesa shader cache
 
-`vulkaninfo` printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)`. The image creates `/boot/home/config/cache` as root, mode 0755. `r5-desktop` then drops to the session uid, which is not 0, so Mesa cannot create a directory there. Before that drop, `r5-desktop` now creates the cache directory from the account’s home, gives it to that uid and gid, and sets mode 0700. Not on a disk yet. Not run.
+`vulkaninfo` printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)`. The image creates `/boot/home/config/cache` as root, mode 0755. `r5-desktop` then drops to the session uid, which is not 0, so Mesa cannot create a directory there. Before that drop, `r5-desktop` now creates the cache directory from the account’s home, gives it to that uid and gid, and sets mode 0700. `jam -q r5-desktop` on 1 Nov 2026 at 21:46 Europe/Amsterdam exited 0 and linked `r5-desktop`. `jam -q @r5-raw` at 21:48 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains that `r5-desktop` (21:46). About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run again. The first boot of this disk can sit in `package_daemon`, and the desktop icons can stay missing until a guest restart.
 
 ### vulkaninfo named llvmpipe
 
