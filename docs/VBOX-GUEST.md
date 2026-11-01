@@ -1,6 +1,6 @@
 # VirtualBox guest integration
 
-Architecture and order of work. How to boot the current VM stays in `docs/vbox.md`. Native GPU and Vulkan are separate from this guest path. A virtual display is not a physical GPU driver.
+Architecture and order of work. How to boot the current VM stays in `docs/vbox.md`. Native GPU and Vulkan stay in `docs/GRAPHICS.md`. A virtual display is not a physical GPU driver.
 
 The daily image installs the 7.2.22 guest modules, `VBoxService`, `VBoxTray`, and `VBoxControl`. The binaries are not in git. The same image ships the unmodified GNU GPL version 3 and the matching 7.2.22 source, including the build fixes, under `/boot/system/non-packaged/data/licenses/virtualbox`. Haiku MIT notices stay. The COM1 clipboard remains the clipboard R5OS starts. The VM script still leaves VirtualBox clipboard mode and drag-and-drop disabled, and it does not define a shared folder. The throwaway boots below are the runs that showed resize and the shell copy. Around 12:04 Europe/Amsterdam the user booted the daily image in the same GUI VM and said it works. Window resize did not follow on that boot. The share was not mounted. Build 10015, booted in that GUI about 13:14 Europe/Amsterdam, is the image where sign-in starts the guest tools. The host log changed the framebuffer from 1024×768 to 1160×775, and the serial log mounted `r5share` on `/boot/home/Desktop/r5share`. The picture was not watched on that boot.
 

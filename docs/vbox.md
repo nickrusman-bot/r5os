@@ -1,6 +1,6 @@
 # VirtualBox and USB (LAN tests)
 
-Plan for Guest Additions: `docs/VBOX-GUEST.md`.
+Plan for Guest Additions: `docs/VBOX-GUEST.md`. Native GPU and Vulkan: `docs/GRAPHICS.md`.
 
 The daily image installs the 7.2.22 guest additions (`distro/vbox-guest/`, copied at apply time). On that image:
 

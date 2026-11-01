@@ -1,5 +1,25 @@
 # R5OS changelog (lokaal)
 
+### GLTeapot draws on the VirtualBox daily
+
+2026-11-01 about 9:21 Europe/Amsterdam. The guest clock read 8:21 because the VM uses UTC. The user opened GLTeapot on the daily VirtualBox session. The window showed a red teapot and 387 FPS. That disk is the Mesa 25 / libglvnd image. No renderer string was captured on that boot. The 5625U was not the machine.
+
+The same session reached ACPI S5 (`ACPI: Entering S5 power state` in `VBox.log`, about 88 seconds after power on) and VirtualBox stayed in `POWERING_OFF` with no `POWERED_OFF`. The window froze on “Shutting down...”. The NIC is bridged to the MediaTek MT7921. The process was ended from the host. That hang is not fixed here.
+
+`docs/GRAPHICS.md` is the GPU plan for this image. `docs/LOOK.md` is the window-chrome plan. `docs/KERNEL.md` is the CPU audit. Those files had only existed on the local `cursor/graphics-plan` checkout, whose `distro/BUILD` was still 10013. The source edits in that checkout already match `main`.
+
+### OpenGL apps compile against libglvnd, not Mesa 22
+
+`scripts/pin-mesa-packages.sh` runs before jam. It replaces the HaikuPorts pin `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` with libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel` 25.3.6, Lavapipe, the LLVM 21 runtime, and the Vulkan loader. `mesa_devel` carries the Mesa 25 headers and libglvnd's `libGL.so` (the real file, not a symlink into a Mesa 22 base package). Haiku's `GLView.h` and `GLRenderer.h` from the old devel package are copied unchanged.
+
+The image solver no longer sees Mesa 22. `scripts/pin-mesa-packages.sh` builds `download/r5-haikuports.repo` from the HaikuPorts catalog with those four Mesa 22 packages removed, and `download/r5-opengl.repo` for the R5OS packages (a different vendor, so they cannot share one catalog). `distro/UserBuildConfig` points the image at those files and installs the packages. A solver check with `glu` and `haiku.hpkg` asked for `libglvnd-1.7.0-1`, not Mesa 22. `jam -q @r5-raw` then exited 0 and updated 1230 targets. It extracted `mesa-25.3.6-1` and relinked GLTeapot. `develop/lib/libGL.so.1.0.0` in that tree is 954288 bytes, the libglvnd file. The image check printed `mesa_packages_ok`: libglvnd, Mesa 25, `mesa_devel`, Lavapipe, the LLVM 21 runtime, and the Vulkan loader, and no Mesa 22 package. That jam itself was not booted. The VirtualBox sitting is the section above. No new build number.
+
+### About on the Mesa image still showed Build 10017
+
+The version line in About was already Build 10018. What's new was still the Build 10017 license text. `scripts/jam-r5-raw.sh` wrote `r5_os_version.h` and did not copy `distro/WHATSNEW`. The What's new resource is rebuilt when `AboutSystem.rdef` is newer than the last resource compile, not when only the text file changes. The script now copies What's new and touches that rdef before jam. No new build number: this is the Build 10018 section that was already in `distro/WHATSNEW`.
+
+The daily `haiku.hpkg` was rebuilt (`jam -q haiku.hpkg`, exit 0) and replaced on `r5-os.image`. The AboutSystem inside it contains `R5OS 2026.1-dev Build 10018 - OpenGL`. Mesa 25 and libglvnd stayed on that image. VirtualBox was pointed at the updated disk. The About window was not opened from here.
+
 ### Mesa 25 replaces Mesa 22 on the daily image
 
 Build 10018. The jam pin still downloads Mesa 22.0.5 so OpenGL apps can compile. `scripts/install-mesa-packages.sh`, run at the end of `scripts/jam-r5-raw.sh`, then removes `mesa-22.0.5-3`, `mesa_devel-22.0.5-3`, and `mesa_swpipe-22.0.5-3` from `r5-os.image` and adds the hpkgs in `distro/packages/x86_64`: libglvnd 1.7.0 (`libGL.so.1`), Mesa 25.3.6 (`libEGL_mesa.so.0` plus `50_mesa.json` with `./libEGL_mesa.so.0`), Lavapipe, a private LLVM 21.1.8 runtime that provides only `lib:libllvm_21` (so it does not clash with `llvm12_libs` on `liblto` / `libremarks`), and the HaikuPorts Vulkan loader 1.4.367.
