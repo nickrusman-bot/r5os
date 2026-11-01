@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <syslog.h>
 #include <unistd.h>
 
@@ -60,6 +61,30 @@ read_session_name(char* name, size_t nameSize)
 }
 
 
+static void
+ensure_user_cache(const struct passwd* pwd)
+{
+	if (pwd->pw_dir == NULL || pwd->pw_dir[0] == '\0')
+		return;
+
+	char path[B_PATH_NAME_LENGTH];
+	int written = snprintf(path, sizeof(path), "%s/config/cache", pwd->pw_dir);
+	if (written <= 0 || (size_t)written >= sizeof(path))
+		return;
+
+	// The image creates this directory as root, mode 0755. Mesa then
+	// cannot create mesa_shader_cache for the session user.
+	if (mkdir(path, 0700) != 0 && errno != EEXIST) {
+		r5_session_log("cache mkdir %s: %s", path, strerror(errno));
+		return;
+	}
+	if (chown(path, pwd->pw_uid, pwd->pw_gid) != 0)
+		r5_session_log("cache chown %s: %s", path, strerror(errno));
+	if (chmod(path, 0700) != 0)
+		r5_session_log("cache chmod %s: %s", path, strerror(errno));
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -93,6 +118,8 @@ main(int argc, char** argv)
 	setenv("LOGNAME", pwd->pw_name, 1);
 	if (pwd->pw_shell != NULL && pwd->pw_shell[0] != '\0')
 		setenv("SHELL", pwd->pw_shell, 1);
+
+	ensure_user_cache(pwd);
 
 	if (setresgid(pwd->pw_gid, pwd->pw_gid, pwd->pw_gid) != 0) {
 		r5_session_log("setresgid: %s", strerror(errno));
