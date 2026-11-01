@@ -4,21 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3825 |
+| open | 3823 |
 | in-progress | 8 |
-| fixed | 103 |
+| fixed | 105 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 open/bezig).
+Nog open in R5OS: **2483** bugs, **1288** enhancements, rest overig (van 3831 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2485 |
+| bug | 2483 |
 | enhancement | 1288 |
 | task | 60 |
 
@@ -26,7 +26,7 @@ Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3539 |
+| normal | 3537 |
 | low | 258 |
 | high | 34 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3043 |
+| Unscheduled | 3041 |
 | R1 | 420 |
 | R1.1 | 299 |
 | — | 29 |
@@ -47,7 +47,7 @@ Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 op
 
 | Component | Aantal |
 |---|---|
-| Applications/Tracker | 179 |
+| Applications/Tracker | 177 |
 | Servers/app_server | 161 |
 | Kits/Interface Kit | 157 |
 | System/Kernel | 153 |
@@ -133,6 +133,8 @@ Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 op
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
 | [#14900](https://dev.haiku-os.org/ticket/14900) | new | Applications/Tracker | Revert secondary sort order when shift-click |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
+| [#15444](https://dev.haiku-os.org/ticket/15444) | new | Applications/Tracker | [tracker] List view name size column directly affects icon mode |  |
+| [#15527](https://dev.haiku-os.org/ticket/15527) | new | Applications/Tracker | 'system' directory is available as a translateable string, but it does not apply |  |
 | [#15541](https://dev.haiku-os.org/ticket/15541) | new | User Interface | Text colour in Tracker (and a few more places) is not changeable |  |
 | [#15690](https://dev.haiku-os.org/ticket/15690) | new | Applications/SoftwareUpdater | [SoftwareUpdater] layout issue (easy) |  |
 | [#15792](https://dev.haiku-os.org/ticket/15792) | assigned | Applications/Deskbar | [Deskbar] mini-mode confused state |  |
@@ -163,9 +165,7 @@ Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 op
 | [#18411](https://dev.haiku-os.org/ticket/18411) | new | Applications/Deskbar | PowerStatus replicant is cut off |  |
 | [#18514](https://dev.haiku-os.org/ticket/18514) | new | Applications/Tracker | bug: [Tracker] Icon view does not get laid out nicely |  |
 | [#18518](https://dev.haiku-os.org/ticket/18518) | new | Kits/Interface Kit | Font ascender height is cut off |  |
-| [#18643](https://dev.haiku-os.org/ticket/18643) | new | Applications/Deskbar | Deskbar: use B_MENU_SELECTED_BACKGROUND_COLOR in running apps list |  |
-| [#18667](https://dev.haiku-os.org/ticket/18667) | assigned | Applications/Deskbar | Deskbar shutdown menu vs. dialog wording is inconsistent |  |
-| … | | | *23 meer in r5-status.tsv* | |
+| … | | | *25 meer in r5-status.tsv* | |
 
 ## Nog open (eerste 80)
 
@@ -251,5 +251,5 @@ Nog open in R5OS: **2485** bugs, **1288** enhancements, rest overig (van 3833 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3745 meer in r5-status.tsv* | |
+| … | | | *3743 meer in r5-status.tsv* | |
 

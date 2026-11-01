@@ -5,7 +5,9 @@ Also applies scripts/tracker-deskbar-more.diff (#5338 #16185 #11176 #18667
 #7328 #16359 #15975 #15910 #13431 #16144 #16853 #9216 #20261 #16643 #19546
 #11495 #11029 #16726 #11402 #8551 #19520 #8772 #19661 #19663 #12335 #19573
 #8544 #8543 #9383 #19433 #12859 #14900 #16968 #14846 #9974 #4154
-#7644). The leaf-menu margin no longer turns on scroll arrows (#13431)."""
+#7644). The leaf-menu margin no longer turns on scroll arrows (#13431).
+Well-known folder names use the catalog when SYS:NAME is missing (#15527).
+Icon names do not keep the list column width (#15444)."""
 from __future__ import annotations
 
 import pathlib
@@ -1249,6 +1251,104 @@ LocationSelectAllFilter(BMessage* message, BHandler**, BMessageFilter* filter)
 			|| fullScreen.bottom < frame.bottom;
 """,
         "Haiku #13431 no false scroll",
+    )
+
+    model = HAIKU / "src/kits/tracker/Model.cpp"
+    replace_once(
+        model,
+        """void
+Model::CacheLocalizedName()
+{
+	if (!fLocalizedNameIsCached) {
+		fLocalizedNameIsCached = true;
+		if (BLocaleRoster::Default()->GetLocalizedFileName(
+				fLocalizedName, fEntryRef, true) == B_OK)
+			fHasLocalizedName = true;
+		else
+			fHasLocalizedName = false;
+	}
+}
+""",
+        """static bool
+_WellKnownLocalizedName(const node_ref* node, BString& name)
+{
+	if (node == NULL)
+		return false;
+
+	const WellKnowEntryList::WellKnownEntry* known
+		= WellKnowEntryList::MatchEntry(node);
+	if (known == NULL)
+		return false;
+
+	const char* context = NULL;
+	switch (known->which) {
+		case B_SYSTEM_DIRECTORY:
+			context = "B_SYSTEM_DIRECTORY";
+			break;
+		case B_APPS_DIRECTORY:
+		case B_BEOS_APPS_DIRECTORY:
+			context = "B_APPS_DIRECTORY";
+			break;
+		case B_SYSTEM_DEVELOP_DIRECTORY:
+			context = "B_SYSTEM_DEVELOP_DIRECTORY";
+			break;
+		case B_PREFERENCES_DIRECTORY:
+		case B_BEOS_PREFERENCES_DIRECTORY:
+			context = "B_PREFERENCES_DIRECTORY";
+			break;
+		case B_USER_DIRECTORY:
+			context = "B_USER_DIRECTORY";
+			break;
+		case B_USER_CONFIG_DIRECTORY:
+			context = "B_USER_CONFIG_DIRECTORY";
+			break;
+		default:
+			return false;
+	}
+
+	const char* translated = B_CATALOG->GetString(known->name.String(),
+		context);
+	if (translated == NULL || translated[0] == '\\0')
+		return false;
+
+	name = translated;
+	return true;
+}
+
+
+void
+Model::CacheLocalizedName()
+{
+	if (!fLocalizedNameIsCached) {
+		fLocalizedNameIsCached = true;
+		if (BLocaleRoster::Default()->GetLocalizedFileName(
+				fLocalizedName, fEntryRef, true) == B_OK)
+			fHasLocalizedName = true;
+		else {
+			// Catalog strings for system, home, and the other
+			// well-known folders apply when SYS:NAME is missing
+			// (Haiku #15527).
+			fHasLocalizedName = _WellKnownLocalizedName(NodeRef(),
+				fLocalizedName);
+		}
+	}
+}
+""",
+        "Haiku #15527 well-known names",
+    )
+
+    widgets = HAIKU / "src/kits/tracker/WidgetAttributeText.cpp"
+    replace_once(
+        widgets,
+        """	bool widthChanged = view->ViewMode() == kListMode ? fColumn->Width() != fOldWidth : false;
+""",
+        """	// Icon mode used to keep the name truncated to the list column
+	// (Haiku #15444). Refit when that column width is still in effect.
+	bool widthChanged = view->ViewMode() == kListMode
+		? fColumn->Width() != fOldWidth
+		: fOldWidth == fColumn->Width();
+""",
+        "Haiku #15444 icon name width",
     )
     return 0
 
