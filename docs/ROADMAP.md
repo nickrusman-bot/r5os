@@ -39,7 +39,7 @@ Do not start these during an unrelated bugfix.
 
 ## Graphics and media
 
-Investigate GPU acceleration, compositing, and Vulkan **without** destabilizing `app_server`. Improve audio, streaming, and device interop. Incremental replacements only. Mixxx is a side quest ([#55](https://github.com/nickrusman-bot/r5os/issues/55), `docs/MIXXX.md`), not an image app and not while multi-user is open.
+GPU and Vulkan stay in `docs/GRAPHICS.md`. The desktop still paints on the CPU. Do not destabilize `app_server`, and do not call VESA, `vboxvideo`, or Lavapipe hardware acceleration. Improve audio, streaming, and device interop. Incremental replacements only. Mixxx is a side quest ([#55](https://github.com/nickrusman-bot/r5os/issues/55), `docs/MIXXX.md`), not an image app and not while multi-user is open.
 
 ## Architectures
 

@@ -1,6 +1,6 @@
 # R5OS desktop style
 
-How preference windows and account cards should look. Haiku controls, panel gray, one reading line per field.
+How preference windows and account cards should look. Haiku controls, panel gray, one reading line per field. Window chrome (round tabs, buttons, Deskbar, shadow) is `docs/LOOK.md`.
 
 ## Forms
 
