@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Apply easy UI bugfixes: #11138 #18057 #16838 #16471 #16116 #15690 #1006
-#11625 #18518 #18813 #11735 #13680 #6873 #18648."""
+#11625 #18518 #18813 #11735 #13680 #6873 #18648. The clock
+also follows the 24-hour choice."""
 from __future__ import annotations
 
 import pathlib
@@ -789,6 +790,71 @@ BOptionPopUp::SetValue(int32 value)
     )
 
 
+def patch_locale_clock() -> None:
+    header = HAIKU / "headers/os/locale/FormattingConventions.h"
+    replace_once(
+        header,
+        """			void				UnsetExplicitUse24HourClock();
+
+	virtual	status_t			Archive(BMessage* archive,
+""",
+        """			void				UnsetExplicitUse24HourClock();
+			void				CoerceFormatForClock(BString& outFormat) const;
+
+	virtual	status_t			Archive(BMessage* archive,
+""",
+        "24-hour coerce public",
+    )
+    replace_once(
+        header,
+        """			U_ICU_NAMESPACE::Locale*		fICULocale;
+			void				CoerceFormatForClock(BString& outFormat) const;
+""",
+        """			U_ICU_NAMESPACE::Locale*		fICULocale;
+""",
+        "24-hour coerce private",
+    )
+
+    conventions = HAIKU / "src/kits/locale/FormattingConventions.cpp"
+    replace_once(
+        conventions,
+        """		return fCachedUse24HourClock == CLOCK_HOURS_24;
+	}
+
+	return fExplicitUse24HourClock == CLOCK_HOURS_24;
+""",
+        """		return fCachedUse24HourClock == CLOCK_HOURS_24;
+	}
+
+	// A cached 12/24 choice must stick when no explicit choice is stored.
+	return use24HourClock == CLOCK_HOURS_24;
+""",
+        "24-hour clock cache",
+    )
+
+    date_time = HAIKU / "src/kits/locale/DateTimeFormat.cpp"
+    replace_once(
+        date_time,
+        """	BString buffer;
+	BStringByteSink stringConverter(&buffer);
+	pattern.toUTF8(stringConverter);
+
+	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+""",
+        """	BString buffer;
+	BStringByteSink stringConverter(&buffer);
+	pattern.toUTF8(stringConverter);
+
+	// The pattern generator can keep AM/PM for an English locale after the
+	// skeleton asked for 24-hour. The preflet examples already coerce.
+	fConventions.CoerceFormatForClock(buffer);
+
+	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+""",
+        "deskbar clock pattern",
+    )
+
+
 def main() -> int:
     patch_alert()
     patch_label_clip()
@@ -799,6 +865,7 @@ def main() -> int:
     patch_softwareupdater()
     patch_backgrounds()
     patch_small_controls()
+    patch_locale_clock()
     return 0
 
 
