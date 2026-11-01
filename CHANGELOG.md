@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### vulkaninfo named llvmpipe
+
+On the 21:36 Europe/Amsterdam image the user ran `vulkaninfo --summary` in Terminal. Vulkan instance version 1.4.367. GPU0 was `PHYSICAL_DEVICE_TYPE_CPU`, device name `llvmpipe (LLVM 21.1.8, 256 bits)`, driver `llvmpipe`, driver info `Mesa 25.3.6 (LLVM 21.1.8)`, driver ID `DRIVER_ID_MESA_LLVMPIPE`, apiVersion 1.4.328, driverVersion 25.3.6. That is Lavapipe reporting the software renderer. The word Lavapipe is not the device name. Mesa also printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)--disabling.` The desktop icons were missing on the first boot of this disk. A guest restart made them visible. This session did not see that desktop. This is not the 5625U GPU.
+
+vkcube and the Vulkan-Tools mock ICD are not part of this result. vkcube draws into a window system this image does not have. The mock ICD is a fake driver for loader tests. The loader already opened Lavapipe.
+
 ### Image with vulkaninfo
 
 `jam -q @r5-raw` on 1 Nov 2026 at 21:36 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`, including `vulkan_tools` and the Lavapipe package whose manifest is under `add-ons`. The first jam of this package exited 0 but did not install `vulkan_tools`: the name was missing from the HaikuPorts pin, so jam said the package was not available. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run. The first boot of this disk can sit in `package_daemon`.

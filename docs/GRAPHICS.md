@@ -59,7 +59,7 @@ QEMU and VirtualBox may test the software path and `virtio_gpu` / VESA / `vboxvi
 
 1. **Name the device.** On the 5625U, record the VGA PCI ID. Confirm whether this tree’s `radeon_hd` table contains it. No driver change before that.
 2. **Picture, software stack unchanged.** If the ID matches, boot the panel with `radeon_hd` (or VESA if it does not). Desktop still painted by `app_server` on the CPU. This is the display milestone, and it is not acceleration.
-3. **Software Vulkan.** Lavapipe is already packaged. Its manifest is `add-ons/vulkan/icd.d/lvp_icd.json`, which is where the Haiku loader looks (`vulkan/icd.d` under add-ons). `vulkaninfo` 1.4.367 is cross-built and packed as `vulkan_tools` (`scripts/build-vulkaninfo.sh`, 1 Nov 2026 21:19 Europe/Amsterdam). It loads `libvulkan` and does not submit to a GPU. `vulkaninfo` must say Lavapipe / llvmpipe. That string has not been captured. The binary is not on the running VirtualBox disk. Keep it as the API test and the fallback.
+3. **Software Vulkan.** Done as a CPU test. Lavapipe’s manifest is `add-ons/vulkan/icd.d/lvp_icd.json`. On 1 Nov 2026 the user ran `vulkaninfo --summary` on the 21:36 VirtualBox image. The device was `PHYSICAL_DEVICE_TYPE_CPU`, name `llvmpipe (LLVM 21.1.8, 256 bits)`, driver `llvmpipe`, driver info `Mesa 25.3.6 (LLVM 21.1.8)`. Lavapipe is the ICD; the device string is llvmpipe, not the word Lavapipe. Keep this as the API test and the fallback. vkcube and the Vulkan-Tools mock ICD are not required for this step.
 4. **One kernel submission path** for the 5625U only: memory, a ring, a fence, and a fault that does not panic the machine. This is the long task. It is not a Linux DRM dump.
 5. **One Vulkan ICD** (RADV or a thin Haiku ICD) whose `vulkaninfo` names that GPU, not Lavapipe. A triangle that stays correct for a while, with the GPU actually busy.
 6. **Present.** The same triangle on the panel, vsync noted, fallback to the software bitmap if init fails.
@@ -78,7 +78,7 @@ No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, op
 | Desktop works | Boot, Tracker, a window. True in VirtualBox. |
 | Software OpenGL | GLTeapot drew on the VirtualBox daily (2026-11-01). A QEMU probe named llvmpipe and Mesa 25.3.6. |
 | Panel driver | 5625U syslog names the PCI ID and a mode. Not done. |
-| Software Vulkan | `vulkaninfo` device string is Lavapipe. The program is packed. It has not been run. |
+| Software Vulkan | User ran `vulkaninfo --summary` on the 21:36 VirtualBox image. Device type CPU, name `llvmpipe (LLVM 21.1.8, 256 bits)`, driver info `Mesa 25.3.6 (LLVM 21.1.8)`. |
 | GPU Vulkan | Device string is the Vega/Cezanne GPU, and a workload moves GPU counters or an equivalent busy signal. Not done. |
 | Accelerated desktop | A measured `app_server` path submits that GPU. Not done. |
 
