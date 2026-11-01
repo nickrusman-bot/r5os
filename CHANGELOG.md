@@ -1,5 +1,12 @@
 # R5OS changelog (lokaal)
 
+### Deskbar closes the other menu bar before opening one
+
+No commit on `upstream/master` (fetched 1 Nov 2026) names #20099. The leaf menu and the running-apps list are two `BMenuBar`s in one window. Each one installed the window’s menu semaphore and left the other menu tracking.
+
+`scripts/apply-deskbar-bugs.py` now stops the other menu bar before `StartMenuBar` tracks, and waits outside the window lock so that tracking thread can exit. When a menu finishes, it clears the window semaphore only if that semaphore is still its own. A popup does the same, so an older popup thread does not wipe a menu bar that started later.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` compiled `MenuBar.o`, `PopUpMenu.o`, and `Window.o` (47 targets updated, exit 0). Not booted. The other open Deskbar tickets (crashes, layout, enhancements) are not in this change.
 ### Large fonts no longer clip box and separator labels
 
 No commit on `upstream/master` (fetched 1 Nov 2026) names #11625, #18518, or #18813. `scripts/apply-ui-bugs.py` changes the label metrics.
