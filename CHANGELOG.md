@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### Tracker sort, location field, and Deskbar clock
+
+Three more Tracker and Deskbar bugs, still applied by `scripts/apply-tracker-desktop.py` (`replace_once` on the existing tree). No new overlay script. Not on the daily image. Not booted.
+
+Shift-click on a list column header now cycles the secondary sort: ascending, descending, then off. A plain click clears the secondary sort. The header triangle for that column follows its own direction. The reversed secondary order is kept for the open window and is not written into the folder view-state attribute, which has only one reverse flag (#14900).
+
+Command+A in the single-window location field selects the path. A window filter runs before the Window menu shortcut, and only when that text view has focus, so Select all in the menu still selects the files (#16968).
+
+A vertical Deskbar clock that is wider than the bar no longer slides the string off the left edge. Draw shortens it with an ellipsis: the weekday stays when it is shown, otherwise the clock digits stay (#14846). The earlier preferred-width margin did not stop a cut first letter.
+
+Open With drops Tracker add-ons and no longer compares the running Tracker against an uninitialized `app_info` (#12859). That was already in `libtracker.so` from the earlier compile. This jam rebuilt that library, so the same binary has #12859 as well.
+
+`jam -q libtracker.so` on 1 Nov 2026 at 15:22 Europe/Amsterdam updated 36 targets and exited 0. `jam -q Deskbar` updated 2 targets (`TimeView.o` and the Deskbar link) and exited 0. Not booted. The VirtualBox session that is already running was not restarted.
+
 ### Desktop icon no longer freezes Tracker
 
 VBox Share is a directory on the Desktop with another filesystem mounted on it. Placement gave up by putting a late icon on the first grid cell, which was already taken, so the share sat on top of another icon. Dragging it then saved the icon position with `WriteAttr` on that mount. That call blocks, the Desktop window thread stops, and folders no longer open.

@@ -4,21 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3831 |
+| open | 3828 |
 | in-progress | 8 |
-| fixed | 97 |
+| fixed | 100 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 open/bezig).
+Nog open in R5OS: **2485** bugs, **1291** enhancements, rest overig (van 3836 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2488 |
+| bug | 2485 |
 | enhancement | 1291 |
 | task | 60 |
 
@@ -26,7 +26,7 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3545 |
+| normal | 3542 |
 | low | 258 |
 | high | 34 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3049 |
+| Unscheduled | 3046 |
 | R1 | 420 |
 | R1.1 | 299 |
 | — | 29 |
@@ -47,7 +47,7 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 
 | Component | Aantal |
 |---|---|
-| Applications/Tracker | 183 |
+| Applications/Tracker | 181 |
 | Servers/app_server | 161 |
 | Kits/Interface Kit | 157 |
 | System/Kernel | 153 |
@@ -123,10 +123,12 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 | [#11495](https://dev.haiku-os.org/ticket/11495) | assigned | Applications/Tracker | The content of submenu "Add-ons" doesn't update automatically |  |
 | [#11625](https://dev.haiku-os.org/ticket/11625) | assigned | Kits/Interface Kit | BBox with layout cuts title at big font sizes |  |
 | [#12335](https://dev.haiku-os.org/ticket/12335) | assigned | Applications/Tracker | Replace dialog doesn't use preferred date/time format |  |
+| [#12859](https://dev.haiku-os.org/ticket/12859) | new | Add-Ons/Tracker | "Mark as read" and "Mark as..." Tracker's addons, mistakenly appear under the "Open With..." context menu. |  |
 | [#12884](https://dev.haiku-os.org/ticket/12884) | new | User Interface | Deskbar forgets settings |  |
 | [#13431](https://dev.haiku-os.org/ticket/13431) | assigned | Applications/Deskbar | Deskbar menu screen edge margin |  |
 | [#13754](https://dev.haiku-os.org/ticket/13754) | new | Servers/input_server | Mouse + keyboard input non-functional after install |  |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
+| [#14900](https://dev.haiku-os.org/ticket/14900) | new | Applications/Tracker | Revert secondary sort order when shift-click |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
 | [#15541](https://dev.haiku-os.org/ticket/15541) | new | User Interface | Text colour in Tracker (and a few more places) is not changeable |  |
 | [#15690](https://dev.haiku-os.org/ticket/15690) | new | Applications/SoftwareUpdater | [SoftwareUpdater] layout issue (easy) |  |
@@ -148,6 +150,7 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 | [#16726](https://dev.haiku-os.org/ticket/16726) | new | Applications/Tracker | Item count view in Tracker windows are now resizing |  |
 | [#16838](https://dev.haiku-os.org/ticket/16838) | new | User Interface | Misaligned entries in BListVIew / Save / Open dialogs |  |
 | [#16853](https://dev.haiku-os.org/ticket/16853) | new | Applications/Tracker | Garbled modified date text on list view |  |
+| [#16968](https://dev.haiku-os.org/ticket/16968) | new | Applications/Tracker | In tracker navigation "bar" you can't select the url with CTRL + A. That will select all the files in that url. |  |
 | [#17377](https://dev.haiku-os.org/ticket/17377) | new | Drivers/Graphics/radeon_hd | radeon_hd crashes in connector_probe() |  |
 | [#17664](https://dev.haiku-os.org/ticket/17664) | new | Drivers/Graphics/radeon_hd | radeon_hd "Cedar": app_server crashes writing to 0MB tiny framebuffer |  |
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
@@ -162,10 +165,7 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 | [#18813](https://dev.haiku-os.org/ticket/18813) | new | Kits/Interface Kit | Section title font X-height cut off |  |
 | [#19070](https://dev.haiku-os.org/ticket/19070) | new | Applications/Tracker | [Tracker] UI: Fixed black/gray status colours when copying |  |
 | [#19084](https://dev.haiku-os.org/ticket/19084) | new | Applications/Tracker | render glitch when resizing table columns in tracker |  |
-| [#19433](https://dev.haiku-os.org/ticket/19433) | new | Applications/Tracker | Tracker "Get Info" window is not really resizable |  |
-| [#19520](https://dev.haiku-os.org/ticket/19520) | new | Applications/Tracker | Open with window does not remember the size and position. |  |
-| [#19546](https://dev.haiku-os.org/ticket/19546) | reopened | Applications/Tracker | Using Find from Tracker should set folder |  |
-| … | | | *17 meer in r5-status.tsv* | |
+| … | | | *20 meer in r5-status.tsv* | |
 
 ## Nog open (eerste 80)
 
@@ -251,5 +251,5 @@ Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3751 meer in r5-status.tsv* | |
+| … | | | *3748 meer in r5-status.tsv* | |
 
