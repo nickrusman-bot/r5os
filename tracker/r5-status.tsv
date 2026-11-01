@@ -3734,7 +3734,7 @@ id	r5_status	branch	commit	notes
 20092	open			
 20094	open			
 20097	open			
-20099	open			
+20099	fixed			One menu bar closes the other before tracking (apply-deskbar-bugs.py)
 20101	open			
 20105	open			
 20106	open			

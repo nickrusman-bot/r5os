@@ -20,6 +20,185 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     print(f"patched {path} ({tag})")
 
 
+def patch_one_open_menu() -> None:
+    """Haiku #20099: two BMenuBars in one window (Deskbar leaf and the
+    running-apps bar) each installed a window semaphore and left the other
+    menu tracking."""
+    header = HAIKU / "headers/os/interface/Window.h"
+    replace_once(
+        header,
+        "\tfriend void _set_menu_sem_(BWindow* w, sem_id sem);\n",
+        "\tfriend void _set_menu_sem_(BWindow* w, sem_id sem);\n"
+        "\tfriend bool _clear_menu_sem_(BWindow* w, sem_id sem);\n",
+        "Haiku #20099 clear sem",
+    )
+    window = HAIKU / "src/kits/interface/Window.cpp"
+    replace_once(
+        window,
+        """void
+_set_menu_sem_(BWindow* window, sem_id sem)
+{
+	if (window != NULL)
+		window->fMenuSem = sem;
+}
+""",
+        """void
+_set_menu_sem_(BWindow* window, sem_id sem)
+{
+	if (window != NULL)
+		window->fMenuSem = sem;
+}
+
+
+bool
+_clear_menu_sem_(BWindow* window, sem_id sem)
+{
+	// Only the menu that installed the semaphore may clear it. A second
+	// menu bar in the same window (Deskbar) would otherwise wipe the new
+	// owner's id when the first tracking thread exits (Haiku #20099).
+	if (window == NULL || window->fMenuSem != sem)
+		return false;
+	window->fMenuSem = B_BAD_SEM_ID;
+	return true;
+}
+""",
+        "Haiku #20099 clear sem impl",
+    )
+
+    menu_bar_h = HAIKU / "headers/os/interface/MenuBar.h"
+    replace_once(
+        menu_bar_h,
+        "class BMenuField;\n",
+        "class BMenuField;\n"
+        "class BList;\n"
+        "class BView;\n",
+        "Haiku #20099 forward",
+    )
+    replace_once(
+        menu_bar_h,
+        """			void				_InitData(menu_layout layout);
+""",
+        """			void				_InitData(menu_layout layout);
+			void				_StopOtherMenuBars(BView* view, BList& stopped);
+""",
+        "Haiku #20099 method",
+    )
+
+    menu_bar = HAIKU / "src/kits/interface/MenuBar.cpp"
+    replace_once(
+        menu_bar,
+        "#include <LayoutUtils.h>\n",
+        "#include <LayoutUtils.h>\n#include <List.h>\n",
+        "Haiku #20099 list include",
+    )
+    replace_once(
+        menu_bar,
+        """	BWindow* window = Window();
+	if (window == NULL)
+		debugger("MenuBar must be added to a window before it can be used.");
+
+	BAutolock lock(window);
+""",
+        """	BWindow* window = Window();
+	if (window == NULL)
+		debugger("MenuBar must be added to a window before it can be used.");
+
+	// Deskbar has two menu bars. Close the other one before this one tracks
+	// (Haiku #20099). The wait is outside the window lock so the tracking
+	// thread can take it and exit.
+	BList stopped;
+	if (window->Lock()) {
+		int32 count = window->CountChildren();
+		for (int32 i = 0; i < count; i++)
+			_StopOtherMenuBars(window->ChildAt(i), stopped);
+		window->Unlock();
+	}
+	for (int32 i = 0; i < stopped.CountItems(); i++) {
+		BMenuBar* bar = static_cast<BMenuBar*>(stopped.ItemAt(i));
+		for (int32 n = 0; n < 50 && bar->fTracking; n++)
+			snooze(2000);
+	}
+
+	BAutolock lock(window);
+""",
+        "Haiku #20099 stop siblings",
+    )
+    replace_once(
+        menu_bar,
+        """		fTracking = false;
+		_set_menu_sem_(window, B_NO_MORE_SEMS);
+		delete_sem(fMenuSem);
+""",
+        """		fTracking = false;
+		_clear_menu_sem_(window, fMenuSem);
+		delete_sem(fMenuSem);
+""",
+        "Haiku #20099 spawn fail",
+    )
+    replace_once(
+        menu_bar,
+        """	_set_menu_sem_(window, B_BAD_SEM_ID);
+	delete_sem(menuBar->fMenuSem);
+	menuBar->fMenuSem = B_BAD_SEM_ID;
+""",
+        """	_clear_menu_sem_(window, menuBar->fMenuSem);
+	delete_sem(menuBar->fMenuSem);
+	menuBar->fMenuSem = B_BAD_SEM_ID;
+""",
+        "Haiku #20099 track end",
+    )
+    replace_once(
+        menu_bar,
+        "void BMenuBar::_ReservedMenuBar1() {}\n",
+        """void
+BMenuBar::_StopOtherMenuBars(BView* view, BList& stopped)
+{
+	if (view == NULL)
+		return;
+
+	if (BMenuBar* bar = dynamic_cast<BMenuBar*>(view)) {
+		if (bar != this && bar->fTracking) {
+			BPrivate::MenuPrivate(bar).QuitTracking(false);
+			stopped.AddItem(bar);
+		}
+	}
+
+	int32 count = view->CountChildren();
+	for (int32 i = 0; i < count; i++)
+		_StopOtherMenuBars(view->ChildAt(i), stopped);
+}
+
+
+void BMenuBar::_ReservedMenuBar1() {}
+""",
+        "Haiku #20099 stop method",
+    )
+
+    popup = HAIKU / "src/kits/interface/PopUpMenu.cpp"
+    replace_once(
+        popup,
+        """		delete_sem(sem);
+		if (async && window != NULL)
+			_set_menu_sem_(window, B_BAD_SEM_ID);
+""",
+        """		if (async && window != NULL)
+			_clear_menu_sem_(window, sem);
+		delete_sem(sem);
+""",
+        "Haiku #20099 popup fail",
+    )
+    replace_once(
+        popup,
+        """	if (data->async && data->window)
+		_set_menu_sem_(data->window, B_BAD_SEM_ID);
+""",
+        """	if (data->async && data->window)
+		_clear_menu_sem_(data->window, data->lock);
+""",
+        "Haiku #20099 popup end",
+    )
+
+
 def main() -> int:
     mixer = HAIKU / "src/bin/desklink/MixerControl.cpp"
     replace_once(
@@ -334,6 +513,7 @@ TBarView::Draw(BRect)
 			break;""",
         "Haiku #11397 app colors",
     )
+    patch_one_open_menu()
     replace_once(
         barApp,
         "\tif (fSettingsFile->InitCheck() == B_OK) {\n",

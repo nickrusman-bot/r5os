@@ -4,21 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3869 |
+| open | 3868 |
 | in-progress | 8 |
-| fixed | 59 |
+| fixed | 60 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 open/bezig).
+Nog open in R5OS: **2525** bugs, **1291** enhancements, rest overig (van 3876 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2526 |
+| bug | 2525 |
 | enhancement | 1291 |
 | task | 60 |
 
@@ -26,7 +26,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3581 |
+| normal | 3580 |
 | low | 259 |
 | high | 35 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3074 |
+| Unscheduled | 3073 |
 | R1 | 427 |
 | R1.1 | 305 |
 | — | 29 |
@@ -60,7 +60,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | Applications/HaikuDepot | 68 |
 | Build System | 64 |
 | Applications/Command Line Tools | 53 |
-| Applications/Deskbar | 51 |
+| Applications/Deskbar | 50 |
 | Applications/Debugger | 45 |
 | System/POSIX | 43 |
 | Kits/Package Kit | 40 |
@@ -140,6 +140,7 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#19836](https://dev.haiku-os.org/ticket/19836) | new | - General | BeControlLook buttons have too little contrast since BButton color updates [easy] |  |
 | [#20008](https://dev.haiku-os.org/ticket/20008) | new | Kits/Interface Kit | BTabView: Darkmode issue (easy) |  |
 | [#20009](https://dev.haiku-os.org/ticket/20009) | new | Kits/Interface Kit | BScrollbar dark mode issue (easy) |  |
+| [#20099](https://dev.haiku-os.org/ticket/20099) | new | Applications/Deskbar | Deskbar allows multiple menus open at the same time |  |
 | [#20314](https://dev.haiku-os.org/ticket/20314) | reopened | Applications/Deskbar | Deskbar: volume Icon can no longer mute |  |
 | [#20363](https://dev.haiku-os.org/ticket/20363) | new | Applications/Tracker | Icon placement incorrect when creating file near bottom of the desktop. |  |
 | [#20400](https://dev.haiku-os.org/ticket/20400) | new | System/Kernel | Division by zero in early boot |  |
@@ -229,5 +230,5 @@ Nog open in R5OS: **2526** bugs, **1291** enhancements, rest overig (van 3877 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3789 meer in r5-status.tsv* | |
+| … | | | *3788 meer in r5-status.tsv* | |
 
