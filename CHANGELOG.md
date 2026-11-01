@@ -1,5 +1,14 @@
 # R5OS changelog (lokaal)
 
+### Large fonts no longer clip box and separator labels
+
+No commit on `upstream/master` (fetched 1 Nov 2026) names #11625, #18518, or #18813. `scripts/apply-ui-bugs.py` changes the label metrics.
+
+A `BBox` label used to shift its baseline up by one sixth of the line height, which drew the top of the glyphs above y=0. The label box is now the full line, including leading, and the baseline sits on the ascent (#11625, #18518). A `BSeparatorView` section title uses that same line height and is centered in the label band when the view is taller (#18813).
+
+The same script used to insert another `#include <Region.h>` into `ListView.cpp` on every apply, because the new text still contained the old `#include <Window.h>` line. A second apply now leaves a single include.
+
+`jam -q '<libbe!x86_64>interface_kit.o'` compiled `Box.o`, `SeparatorView.o`, and `ListView.o` (47 targets updated, exit 0). Not booted.
 ### Control colors for flat buttons, scrollbar arrows, and plain text
 
 Haiku’s June 2025 control-color rework (`91bed92`, “use B_CONTROL_BACKGROUND_COLOR”) is already in this tree. Nothing newer on `upstream/master` (fetched 1 Nov 2026) names #19629, #19630, #20418, or #20372. Gerrit 11871 for #20372 was abandoned. The leftovers are applied from `scripts/apply-darkmode.py`.

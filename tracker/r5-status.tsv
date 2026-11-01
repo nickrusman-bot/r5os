@@ -1115,7 +1115,7 @@ id	r5_status	branch	commit	notes
 11600	open			
 11619	open			
 11621	open			
-11625	open			
+11625	fixed			BBox label keeps the full line inside the view (apply-ui-bugs.py)
 11626	open			
 11635	open			
 11657	open			
@@ -3058,7 +3058,7 @@ id	r5_status	branch	commit	notes
 18507	open			
 18514	fixed			Tighter icon-mode grid
 18515	open			
-18518	open			
+18518	fixed			BBox baseline no longer sits above the view (apply-ui-bugs.py)
 18519	open			
 18523	open			
 18526	open			
@@ -3179,7 +3179,7 @@ id	r5_status	branch	commit	notes
 18806	open			
 18808	open			
 18810	open			
-18813	open			
+18813	fixed			Separator title uses ascent, descent, and leading (apply-ui-bugs.py)
 18814	open			
 18816	open			
 18818	open			
