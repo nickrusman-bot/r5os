@@ -5,7 +5,7 @@ Also applies scripts/tracker-deskbar-more.diff (#5338 #16185 #11176 #18667
 #7328 #16359 #15975 #15910 #13431 #16144 #16853 #9216 #20261 #16643 #19546
 #11495 #11029 #16726 #11402 #8551 #19520 #8772 #19661 #19663 #12335 #19573
 #8544 #8543 #9383 #19433 #12859 #14900 #16968 #14846 #9974 #4154
-#7644)."""
+#7644). The leaf-menu margin no longer turns on scroll arrows (#13431)."""
 from __future__ import annotations
 
 import pathlib
@@ -1233,6 +1233,22 @@ LocationSelectAllFilter(BMessage* message, BHandler**, BMessageFilter* filter)
         'B_TRANSLATE("Show replicants")',
         'B_TRANSLATE("Show replicants handle")',
         "Haiku #7644 replicants handle",
+    )
+
+    menu = HAIKU / "src/kits/interface/Menu.cpp"
+    replace_once(
+        menu,
+        """		*scrollOn = screenFrame.top > frame.top
+			|| screenFrame.bottom < frame.bottom;
+""",
+        """		// The 4px placement margin is not part of this test. A leaf
+		// menu that starts at the top of the screen still fits, so it
+		// does not grow up and down arrows (Haiku #13431).
+		BRect fullScreen = screen.Frame();
+		*scrollOn = fullScreen.top > frame.top
+			|| fullScreen.bottom < frame.bottom;
+""",
+        "Haiku #13431 no false scroll",
     )
     return 0
 

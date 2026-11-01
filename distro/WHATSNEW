@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10022 - Leaf menu
+The leaf menu no longer shows an up arrow and a down arrow when the whole menu fits on the screen.
+
 R5OS 2026.1-dev Build 10021 - Lists and Find
 Shift-click a column heading to add a second sort. Click it again for the other direction, and once more to turn it off. A normal click sorts by that column only.
 

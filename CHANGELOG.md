@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Leaf menu scroll arrows
+
+The leaf menu on build 10021 drew an up arrow and a down arrow while the items still fit, with empty desktop below the menu. `BMenu::_CalcFrame` insets the screen by 4px so a menu border stays on screen (#13431). That same rectangle decided scrolling. The leaf menu starts at the top of the screen, which is above the inset, so scrolling turned on and `AttachScrollers()` added the arrows.
+
+Scrolling now uses the real screen. The 4px margin is still used when placing a menu that would hang off an edge. `jam -q '<libbe!x86_64>interface_kit.o'` on 1 Nov 2026 at 17:20 Europe/Amsterdam updated 2 targets (`Menu.o` and `interface_kit.o`) and exited 0. Not on the 10021 disk the user was looking at.
+
 ### Build 10021 daily
 
 What's new for the list, Find, and clock fixes is build 10021. `jam -q @r5-raw` on 1 Nov 2026 at 17:11 Europe/Amsterdam exited 0 and updated 1256 targets. About was relinked after What's new was copied. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. The pin script did not run for this jam because the launch copy was not executable. The image still used the Mesa 25 repository files already on disk. Not booted in this record. VirtualBox is started from this image afterwards.
