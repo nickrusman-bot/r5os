@@ -4,26 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3868 |
+| open | 3831 |
 | in-progress | 8 |
-| fixed | 60 |
-| open | 3866 |
-| in-progress | 8 |
-| fixed | 62 |
+| fixed | 97 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2525** bugs, **1291** enhancements, rest overig (van 3876 open/bezig).
-Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 open/bezig).
+Nog open in R5OS: **2488** bugs, **1291** enhancements, rest overig (van 3839 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2525 |
-| bug | 2523 |
+| bug | 2488 |
 | enhancement | 1291 |
 | task | 60 |
 
@@ -31,9 +26,8 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3580 |
-| normal | 3578 |
-| low | 259 |
+| normal | 3545 |
+| low | 258 |
 | high | 34 |
 | critical | 1 |
 | blocker | 1 |
@@ -42,12 +36,9 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3073 |
-| Unscheduled | 3072 |
-| R1 | 426 |
-| Unscheduled | 3070 |
-| R1 | 427 |
-| R1.1 | 305 |
+| Unscheduled | 3049 |
+| R1 | 420 |
+| R1.1 | 299 |
 | — | 29 |
 | R1/beta7 | 26 |
 | R2 | 16 |
@@ -56,10 +47,9 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 
 | Component | Aantal |
 |---|---|
-| Applications/Tracker | 206 |
-| Kits/Interface Kit | 161 |
+| Applications/Tracker | 183 |
 | Servers/app_server | 161 |
-| Kits/Interface Kit | 160 |
+| Kits/Interface Kit | 157 |
 | System/Kernel | 153 |
 | Applications/WebPositive | 132 |
 | Kits/Web Kit | 126 |
@@ -70,9 +60,9 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | Applications/HaikuDepot | 68 |
 | Build System | 64 |
 | Applications/Command Line Tools | 53 |
-| Applications/Deskbar | 50 |
 | Applications/Debugger | 45 |
 | System/POSIX | 43 |
+| Applications/Deskbar | 43 |
 | Kits/Package Kit | 40 |
 | Documentation | 38 |
 | System | 37 |
@@ -114,13 +104,27 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | [#4626](https://dev.haiku-os.org/ticket/4626) | new | Applications/Deskbar | Context menu for Deskbar application entries |  |
 | [#4793](https://dev.haiku-os.org/ticket/4793) | new | Applications/Tracker | Selectable/Copyable text in file Info Panels |  |
 | [#5000](https://dev.haiku-os.org/ticket/5000) | assigned | Applications/Deskbar | Additional Deskbar click behaviour |  |
+| [#5338](https://dev.haiku-os.org/ticket/5338) | assigned | Applications/Tracker | Long name not fit in Tracker status window |  |
 | [#5930](https://dev.haiku-os.org/ticket/5930) | assigned | Applications/Tracker | Add "Favorites" to standard Tracker Menu |  |
+| [#7328](https://dev.haiku-os.org/ticket/7328) | assigned | Applications/Deskbar | Deskbar - Empty Recent applications expands outside of screen |  |
 | [#8246](https://dev.haiku-os.org/ticket/8246) | assigned | Applications/Tracker | New folders are created on top of each other on the desktop |  |
+| [#8543](https://dev.haiku-os.org/ticket/8543) | assigned | Applications/Tracker | [Tracker] path tooltip in Info Window appears on all workspaces |  |
+| [#8544](https://dev.haiku-os.org/ticket/8544) | reopened | Applications/Tracker | [Tracker] InfoWindow doesn't update file icon after identification |  |
+| [#8551](https://dev.haiku-os.org/ticket/8551) | assigned | Applications/Tracker | "Open with" shows uppercase words in Relation column |  |
+| [#8772](https://dev.haiku-os.org/ticket/8772) | new | Applications/Tracker | [Tracker] columns move on second OpenWithWindow invocation |  |
+| [#9216](https://dev.haiku-os.org/ticket/9216) | assigned | Applications/Tracker | Clearing selection not possible with keyboard only |  |
+| [#9383](https://dev.haiku-os.org/ticket/9383) | assigned | Applications/Tracker | [Tracker] doesn't show a warning when renaming system folder in InfoWindow |  |
 | [#10208](https://dev.haiku-os.org/ticket/10208) | new | Partitioning Systems | Drivesetup creating partition size errors |  |
+| [#11029](https://dev.haiku-os.org/ticket/11029) | assigned | Applications/Tracker | [Tracker] selection is lost when opening parent directory |  |
 | [#11138](https://dev.haiku-os.org/ticket/11138) | assigned | Kits/Interface Kit | Alert _text field archived but never instantiated (easy) |  |
+| [#11176](https://dev.haiku-os.org/ticket/11176) | reopened | Applications/Tracker | [Tracker] status window displays Dec 13, 1901 as finish time |  |
 | [#11397](https://dev.haiku-os.org/ticket/11397) | assigned | Applications/Deskbar | Deskbar seems that doesn't follow color scheme based on "Appearance" colors |  |
+| [#11402](https://dev.haiku-os.org/ticket/11402) | assigned | Applications/Tracker | Tracker's find panel doesn't update the attribute list when changing file type. |  |
+| [#11495](https://dev.haiku-os.org/ticket/11495) | assigned | Applications/Tracker | The content of submenu "Add-ons" doesn't update automatically |  |
 | [#11625](https://dev.haiku-os.org/ticket/11625) | assigned | Kits/Interface Kit | BBox with layout cuts title at big font sizes |  |
+| [#12335](https://dev.haiku-os.org/ticket/12335) | assigned | Applications/Tracker | Replace dialog doesn't use preferred date/time format |  |
 | [#12884](https://dev.haiku-os.org/ticket/12884) | new | User Interface | Deskbar forgets settings |  |
+| [#13431](https://dev.haiku-os.org/ticket/13431) | assigned | Applications/Deskbar | Deskbar menu screen edge margin |  |
 | [#13754](https://dev.haiku-os.org/ticket/13754) | new | Servers/input_server | Mouse + keyboard input non-functional after install |  |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
@@ -128,14 +132,22 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | [#15690](https://dev.haiku-os.org/ticket/15690) | new | Applications/SoftwareUpdater | [SoftwareUpdater] layout issue (easy) |  |
 | [#15792](https://dev.haiku-os.org/ticket/15792) | assigned | Applications/Deskbar | [Deskbar] mini-mode confused state |  |
 | [#15843](https://dev.haiku-os.org/ticket/15843) | assigned | Applications/Deskbar | [Deskbar] left dotted grip in mini-mode |  |
+| [#15910](https://dev.haiku-os.org/ticket/15910) | new | Applications/Deskbar | Deskbar: bottom scroll arrow is not displayed sometimes |  |
+| [#15975](https://dev.haiku-os.org/ticket/15975) | new | Applications/Deskbar | Sane minimum size for Deskbar |  |
 | [#16116](https://dev.haiku-os.org/ticket/16116) | new | User Interface | Change standard icon size for Desktop to 48x48 |  |
+| [#16144](https://dev.haiku-os.org/ticket/16144) | assigned | Applications/Deskbar | ESC doesn't always close Deskbar menu |  |
+| [#16185](https://dev.haiku-os.org/ticket/16185) | new | Applications/Tracker | [Tracker] Status window is too small with large fonts |  |
 | [#16245](https://dev.haiku-os.org/ticket/16245) | new | Servers/registrar | [Registrar] Add an Interface for Haiku to Detect and Handle Unresponsive Apps |  |
+| [#16359](https://dev.haiku-os.org/ticket/16359) | new | Applications/Deskbar | Deskbar auto-raise status should be the same for every virtual desktop |  |
 | [#16458](https://dev.haiku-os.org/ticket/16458) | new | Applications/Deskbar | Deskbar - Opens in background |  |
 | [#16471](https://dev.haiku-os.org/ticket/16471) | new | User Interface | Selected desktop icon is not distinguishable enough with black background |  |
 | [#16573](https://dev.haiku-os.org/ticket/16573) | assigned | Kits/Package Kit | Un-activated packages after install |  |
 | [#16618](https://dev.haiku-os.org/ticket/16618) | new | User Interface | HaikuControlLook: DrawMenuBarBackground Disabled Flag dont work |  |
+| [#16643](https://dev.haiku-os.org/ticket/16643) | new | Applications/Tracker | Tracker: when requesting to show file in a folder with a lot of files, list is not scrolled to selected file |  |
 | [#16678](https://dev.haiku-os.org/ticket/16678) | assigned | Applications/Tracker | Tracker: use same text color for header |  |
+| [#16726](https://dev.haiku-os.org/ticket/16726) | new | Applications/Tracker | Item count view in Tracker windows are now resizing |  |
 | [#16838](https://dev.haiku-os.org/ticket/16838) | new | User Interface | Misaligned entries in BListVIew / Save / Open dialogs |  |
+| [#16853](https://dev.haiku-os.org/ticket/16853) | new | Applications/Tracker | Garbled modified date text on list view |  |
 | [#17377](https://dev.haiku-os.org/ticket/17377) | new | Drivers/Graphics/radeon_hd | radeon_hd crashes in connector_probe() |  |
 | [#17664](https://dev.haiku-os.org/ticket/17664) | new | Drivers/Graphics/radeon_hd | radeon_hd "Cedar": app_server crashes writing to 0MB tiny framebuffer |  |
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
@@ -146,22 +158,14 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | [#18514](https://dev.haiku-os.org/ticket/18514) | new | Applications/Tracker | bug: [Tracker] Icon view does not get laid out nicely |  |
 | [#18518](https://dev.haiku-os.org/ticket/18518) | new | Kits/Interface Kit | Font ascender height is cut off |  |
 | [#18643](https://dev.haiku-os.org/ticket/18643) | new | Applications/Deskbar | Deskbar: use B_MENU_SELECTED_BACKGROUND_COLOR in running apps list |  |
+| [#18667](https://dev.haiku-os.org/ticket/18667) | assigned | Applications/Deskbar | Deskbar shutdown menu vs. dialog wording is inconsistent |  |
 | [#18813](https://dev.haiku-os.org/ticket/18813) | new | Kits/Interface Kit | Section title font X-height cut off |  |
 | [#19070](https://dev.haiku-os.org/ticket/19070) | new | Applications/Tracker | [Tracker] UI: Fixed black/gray status colours when copying |  |
 | [#19084](https://dev.haiku-os.org/ticket/19084) | new | Applications/Tracker | render glitch when resizing table columns in tracker |  |
-| [#19629](https://dev.haiku-os.org/ticket/19629) | new | Kits/Interface Kit | Flat Buttons use wrong Colors |  |
-| [#19630](https://dev.haiku-os.org/ticket/19630) | new | Kits/Interface Kit | Scrollbar color issues |  |
-| [#19704](https://dev.haiku-os.org/ticket/19704) | new | Applications/Deskbar | White bar when Auto-hide in horizontal mode on the top. |  |
-| [#19836](https://dev.haiku-os.org/ticket/19836) | new | - General | BeControlLook buttons have too little contrast since BButton color updates [easy] |  |
-| [#20008](https://dev.haiku-os.org/ticket/20008) | new | Kits/Interface Kit | BTabView: Darkmode issue (easy) |  |
-| [#20009](https://dev.haiku-os.org/ticket/20009) | new | Kits/Interface Kit | BScrollbar dark mode issue (easy) |  |
-| [#20099](https://dev.haiku-os.org/ticket/20099) | new | Applications/Deskbar | Deskbar allows multiple menus open at the same time |  |
-| [#20314](https://dev.haiku-os.org/ticket/20314) | reopened | Applications/Deskbar | Deskbar: volume Icon can no longer mute |  |
-| [#20363](https://dev.haiku-os.org/ticket/20363) | new | Applications/Tracker | Icon placement incorrect when creating file near bottom of the desktop. |  |
-| [#20372](https://dev.haiku-os.org/ticket/20372) | assigned | Kits/Interface Kit | BTextView text color doesn't automatically adjust on UI colors changed |  |
-| [#20400](https://dev.haiku-os.org/ticket/20400) | new | System/Kernel | Division by zero in early boot |  |
-| [#20418](https://dev.haiku-os.org/ticket/20418) | new | Kits/Interface Kit | BButton custom color |  |
-| [#20419](https://dev.haiku-os.org/ticket/20419) | new | Applications/Tracker | No "Arrange by" menu on Desktop |  |
+| [#19433](https://dev.haiku-os.org/ticket/19433) | new | Applications/Tracker | Tracker "Get Info" window is not really resizable |  |
+| [#19520](https://dev.haiku-os.org/ticket/19520) | new | Applications/Tracker | Open with window does not remember the size and position. |  |
+| [#19546](https://dev.haiku-os.org/ticket/19546) | reopened | Applications/Tracker | Using Find from Tracker should set folder |  |
+| … | | | *17 meer in r5-status.tsv* | |
 
 ## Nog open (eerste 80)
 
@@ -247,7 +251,5 @@ Nog open in R5OS: **2523** bugs, **1291** enhancements, rest overig (van 3874 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3788 meer in r5-status.tsv* | |
-| … | | | *3786 meer in r5-status.tsv* | |
-| … | | | *3785 meer in r5-status.tsv* | |
+| … | | | *3751 meer in r5-status.tsv* | |
 

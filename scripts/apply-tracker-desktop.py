@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Tracker desktop/list overlay: #2372 #2864 #3291 #8246 #20363 #20419
-#19070 #16678 #17901 #18060 #18514 #19084."""
+#19070 #16678 #17901 #18060 #18514 #19084.
+Also applies scripts/tracker-deskbar-more.diff (#5338 #16185 #11176 #18667
+#7328 #16359 #15975 #15910 #13431 #16144 #16853 #9216 #20261 #16643 #19546
+#11495 #11029 #16726 #11402 #8551 #19520 #8772 #19661 #19663 #12335 #19573
+#8544 #8543 #9383 #19433)."""
 from __future__ import annotations
 
 import pathlib
+import subprocess
 import sys
 
 HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/haiku")
@@ -20,7 +25,30 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     print(f"patched {path} ({tag})")
 
 
+def apply_more_diff() -> None:
+    """Deskbar and Tracker fixes kept as one patch against the r5 tree."""
+    marker = HAIKU / "src/kits/tracker/StatusWindow.cpp"
+    if marker.is_file() and "Haiku #5338" in marker.read_text(
+            encoding="utf-8", errors="replace"):
+        print("already tracker-deskbar-more.diff")
+        return
+    diff = pathlib.Path(__file__).resolve().parent / "tracker-deskbar-more.diff"
+    payload = diff.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    result = subprocess.run(
+        ["patch", "-p1", "--forward", "--batch"],
+        input=payload,
+        cwd=HAIKU,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        out = result.stdout.decode("utf-8", "replace")
+        err = result.stderr.decode("utf-8", "replace")
+        raise SystemExit(f"tracker-deskbar-more.diff failed\n{out}\n{err}")
+    print("patched tracker-deskbar-more.diff")
+
+
 def main() -> int:
+    apply_more_diff()
     pose = HAIKU / "src/kits/tracker/PoseView.cpp"
     replace_once(
         pose,

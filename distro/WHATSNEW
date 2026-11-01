@@ -1,3 +1,8 @@
+R5OS 2026.1-dev Build 10019 - Tracker and Deskbar
+Tracker keeps a long name inside the copy window, and that window grows with the font. The finish time no longer shows a date in 1901. Escape clears a selection. Opening the parent folder keeps that folder selected. Find starts in the folder you have open. Get Info can be resized, and it says so when an item cannot be renamed. Open With remembers its size.
+
+The leaf menu says Shut down, with the same words as the question. An empty Recent menu stays on the screen. Escape closes an open menu. A vertical Deskbar does not shrink below one icon row.
+
 R5OS 2026.1-dev Build 10018 - OpenGL
 OpenGL drawing uses Mesa 25. A demo such as GLTeapot still draws on the processor, not on the graphics chip. The older Mesa 22 package is no longer on this disk.
 
