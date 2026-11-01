@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Image with vulkaninfo
+
+`jam -q @r5-raw` on 1 Nov 2026 at 21:36 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`, including `vulkan_tools` and the Lavapipe package whose manifest is under `add-ons`. The first jam of this package exited 0 but did not install `vulkan_tools`: the name was missing from the HaikuPorts pin, so jam said the package was not available. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run. The first boot of this disk can sit in `package_daemon`.
+
 ### Lavapipe manifest moved to add-ons
 
 The Haiku Vulkan loader searches `vulkan/icd.d` under the add-ons directories (`find_paths` with `B_FIND_PATH_ADD_ONS_DIRECTORY`). `libvulkan.so.1.4.367` contains the relative path `vulkan/icd.d`. The Lavapipe manifest was in `data/vulkan/icd.d`, which that search does not read. `mesa_lavapipe` now ships `add-ons/vulkan/icd.d/lvp_icd.json`. The library path inside the file is still `/boot/system/lib/libvulkan_lvp.so`. Not on a disk yet. `vulkaninfo` has still not been run.
