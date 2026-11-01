@@ -1,3 +1,8 @@
+R5OS 2026.1-dev Build 10023 - Controls
+A program filling in a text box no longer counts as typing. Clicking a slider again still sends its message when the value stays the same. A scrollbar that already shows everything keeps its arrows off. An option that is not in the menu leaves the current choice as it is.
+
+Home, system, apps, preferences, develop, and config use their translated names when the folder has no stored name. In icon view a shortened name is shown in full again.
+
 R5OS 2026.1-dev Build 10022 - Leaf menu
 The leaf menu no longer shows an up arrow and a down arrow when the whole menu fits on the screen.
 
