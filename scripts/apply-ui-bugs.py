@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Apply easy UI bugfixes: #11138 #18057 #16838 #16471 #16116 #15690 #1006
-#11625 #18518 #18813 #11735 #13680 #6873 #18648."""
+#11625 #18518 #18813 #11735 #13680 #6873 #18648. The clock
+also follows the 24-hour choice."""
 from __future__ import annotations
 
 import pathlib
@@ -18,6 +19,19 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
         raise SystemExit(f"pattern not found in {path} ({tag})")
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
     print(f"patched {path} ({tag})")
+
+
+def replace_if_missing(path: pathlib.Path, old: str, new: str, tag: str,
+        marker: str) -> None:
+    """Skip when marker is already present.
+
+    replace_once applies again when `new` still contains `old`.
+    """
+    text = path.read_text(encoding="utf-8")
+    if marker in text:
+        print(f"already {path.name} ({tag})")
+        return
+    replace_once(path, old, new, tag)
 
 
 def patch_alert() -> None:
@@ -789,6 +803,603 @@ BOptionPopUp::SetValue(int32 value)
     )
 
 
+def patch_locale_clock() -> None:
+    header = HAIKU / "headers/os/locale/FormattingConventions.h"
+    replace_once(
+        header,
+        """			void				UnsetExplicitUse24HourClock();
+
+	virtual	status_t			Archive(BMessage* archive,
+""",
+        """			void				UnsetExplicitUse24HourClock();
+			void				CoerceFormatForClock(BString& outFormat) const;
+
+	virtual	status_t			Archive(BMessage* archive,
+""",
+        "24-hour coerce public",
+    )
+    replace_once(
+        header,
+        """			U_ICU_NAMESPACE::Locale*		fICULocale;
+			void				CoerceFormatForClock(BString& outFormat) const;
+""",
+        """			U_ICU_NAMESPACE::Locale*		fICULocale;
+""",
+        "24-hour coerce private",
+    )
+
+    conventions = HAIKU / "src/kits/locale/FormattingConventions.cpp"
+    replace_once(
+        conventions,
+        """		return fCachedUse24HourClock == CLOCK_HOURS_24;
+	}
+
+	return fExplicitUse24HourClock == CLOCK_HOURS_24;
+""",
+        """		return fCachedUse24HourClock == CLOCK_HOURS_24;
+	}
+
+	// A cached 12/24 choice must stick when no explicit choice is stored.
+	return use24HourClock == CLOCK_HOURS_24;
+""",
+        "24-hour clock cache",
+    )
+
+    date_time = HAIKU / "src/kits/locale/DateTimeFormat.cpp"
+    replace_once(
+        date_time,
+        """	UErrorCode error = U_ZERO_ERROR;
+	DateTimePatternGenerator* generator
+		= DateTimePatternGenerator::createInstance(
+			*BLanguage::Private(&fLanguage).ICULocale(), error);
+""",
+        """	UErrorCode error = U_ZERO_ERROR;
+	// Month names follow the preferred language only when that checkbox is
+	// on. The hour cycle follows the formatting country otherwise, so a
+	// Dutch country does not keep an English AM/PM pattern.
+	Locale* icuLocale = fConventions.UseStringsFromPreferredLanguage()
+		? BLanguage::Private(&fLanguage).ICULocale()
+		: BFormattingConventions::Private(&fConventions).ICULocale();
+	DateTimePatternGenerator* generator
+		= DateTimePatternGenerator::createInstance(*icuLocale, error);
+""",
+        "deskbar clock locale",
+    )
+    coerced = """	BString buffer;
+	BStringByteSink stringConverter(&buffer);
+	pattern.toUTF8(stringConverter);
+
+	// The pattern generator can keep AM/PM for an English locale after the
+	// skeleton asked for 24-hour. The preflet examples already coerce.
+	fConventions.CoerceFormatForClock(buffer);
+
+	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+"""
+    original = """	BString buffer;
+	BStringByteSink stringConverter(&buffer);
+	pattern.toUTF8(stringConverter);
+
+	fConventions.SetExplicitDateTimeFormat(dateStyle, timeStyle, buffer);
+"""
+    text = date_time.read_text(encoding="utf-8")
+    if coerced in text:
+        print(f"already {date_time.name} (deskbar clock pattern)")
+    elif original in text:
+        date_time.write_text(text.replace(original, coerced, 1), encoding="utf-8")
+        print(f"patched {date_time} (deskbar clock pattern)")
+    else:
+        raise SystemExit(f"pattern not found in {date_time} (deskbar clock pattern)")
+    replace_once(
+        conventions,
+        """			case 'h':
+				if (!inQuote)
+					*previousPos = 'H';
+				break;
+			case 'k':
+				if (!inQuote)
+					*previousPos = 'K';
+				break;
+			case 'a':
+				if (!inQuote) {
+""",
+        """			case 'h':
+			case 'K':
+			case 'k':
+				// H is 0-23. K is 0-11 and k is 1-24; both must become H or
+				// 18:00 still draws as 6.
+				if (!inQuote)
+					*previousPos = 'H';
+				break;
+			case 'a':
+			case 'b':
+			case 'B':
+				if (!inQuote) {
+""",
+        "24-hour pattern letters",
+    )
+    replace_once(
+        conventions,
+        """	if (use24HourClock != CLOCK_HOURS_UNSET) {
+		// adjust to 12/24-hour clock as requested
+		bool localeUses24HourClock = !FormatUsesAmPm(outFormat);
+		if (localeUses24HourClock) {
+			if (use24HourClock == CLOCK_HOURS_12)
+				CoerceFormatTo12HourClock(outFormat);
+		} else {
+			if (use24HourClock == CLOCK_HOURS_24)
+				CoerceFormatTo24HourClock(outFormat);
+		}
+	}
+""",
+        """	if (use24HourClock == CLOCK_HOURS_24) {
+		// Also rewrite a 12-hour pattern that has no AM/PM marker.
+		CoerceFormatTo24HourClock(outFormat);
+	} else if (use24HourClock == CLOCK_HOURS_12
+		&& !FormatUsesAmPm(outFormat)) {
+		CoerceFormatTo12HourClock(outFormat);
+	}
+""",
+        "24-hour coerce always",
+    )
+
+    patch_locale_broadcast()
+    patch_clock_display()
+
+
+def patch_locale_broadcast() -> None:
+    """Other programs must see a locale change even when the settings file
+    cannot be written. The preflet preview uses its own roster.
+
+    Confirmed on the 20:58 image: Dutch (Netherlands) made the Deskbar
+    clock 20:01, matching the preview. Do not gate the broadcast on
+    _SaveLocaleSettings(). A later language message has no conventions
+    field; Refresh() before ApplySettings can put a stale file back and
+    the clock returns to AM/PM. That part is still open.
+    """
+    header = HAIKU / "headers/private/locale/LocaleRosterData.h"
+    replace_once(
+        header,
+        """			status_t			SetFilesystemTranslationPreferred(
+									bool preferred);
+private:
+""",
+        """			status_t			SetFilesystemTranslationPreferred(
+									bool preferred);
+			status_t			ApplyUpdatedSettings(const BMessage* message);
+
+private:
+""",
+        "apply locale message",
+    )
+    public = HAIKU / "headers/os/locale/LocaleRoster.h"
+    replace_if_missing(
+        public,
+        """			status_t			Refresh();
+									// Refresh the internal data from the
+									// settings file(s)
+""",
+        """			status_t			Refresh();
+									// Refresh the internal data from the
+									// settings file(s)
+
+			status_t			ApplySettings(const BMessage* message);
+									// Apply one B_LOCALE_CHANGED message on
+									// top of the settings file. A field that
+									// is not in the message is left as it was.
+""",
+        "public locale apply",
+        "Apply one B_LOCALE_CHANGED message",
+    )
+    roster = HAIKU / "src/kits/locale/LocaleRoster.cpp"
+    replace_if_missing(
+        roster,
+        """status_t
+BLocaleRoster::Refresh()
+{
+	return fData->Refresh();
+}
+""",
+        """status_t
+BLocaleRoster::Refresh()
+{
+	return fData->Refresh();
+}
+
+
+status_t
+BLocaleRoster::ApplySettings(const BMessage* message)
+{
+	return fData->ApplyUpdatedSettings(message);
+}
+""",
+        "roster apply settings",
+        "BLocaleRoster::ApplySettings",
+    )
+
+    data = HAIKU / "src/kits/locale/LocaleRosterData.cpp"
+    live = """	// The preflet examples update from this process. Deskbar and Tracker
+	// only hear the broadcast, so a failed save must not hide the change.
+"""
+    replace_once(
+        data,
+        """	status = _SetDefaultFormattingConventions(newFormattingConventions);
+
+	if (status == B_OK)
+		status = _SaveLocaleSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultFormattingConventionsToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	status = _SetDefaultFormattingConventions(newFormattingConventions);
+
+	if (status == B_OK) {
+""" + live + """		_SaveLocaleSettings();
+
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultFormattingConventionsToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        "broadcast formatting",
+    )
+    replace_once(
+        data,
+        """	status = _SetDefaultTimeZone(newZone);
+
+	if (status == B_OK)
+		status = _SaveTimeSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultTimeZoneToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	status = _SetDefaultTimeZone(newZone);
+
+	if (status == B_OK) {
+""" + live + """		_SaveTimeSettings();
+
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddDefaultTimeZoneToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        "broadcast time zone",
+    )
+    replace_once(
+        data,
+        """	status = _SetPreferredLanguages(languages);
+
+	if (status == B_OK)
+		status = _SaveLocaleSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddPreferredLanguagesToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	status = _SetPreferredLanguages(languages);
+
+	if (status == B_OK) {
+""" + live + """		_SaveLocaleSettings();
+
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddPreferredLanguagesToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        "broadcast languages",
+    )
+    replace_once(
+        data,
+        """	_SetFilesystemTranslationPreferred(preferred);
+
+	status_t status = _SaveLocaleSettings();
+
+	if (status == B_OK) {
+		BMessage updateMessage(B_LOCALE_CHANGED);
+		status = _AddFilesystemTranslationPreferenceToMessage(&updateMessage);
+		if (status == B_OK)
+			status = be_roster->Broadcast(&updateMessage);
+	}
+""",
+        """	_SetFilesystemTranslationPreferred(preferred);
+
+""" + live + """	_SaveLocaleSettings();
+
+	BMessage updateMessage(B_LOCALE_CHANGED);
+	status_t status = _AddFilesystemTranslationPreferenceToMessage(
+		&updateMessage);
+	if (status == B_OK)
+		status = be_roster->Broadcast(&updateMessage);
+""",
+        "broadcast folder names",
+    )
+    replace_once(
+        data,
+        """	if (status == B_OK)
+		status = find_directory(B_USER_SETTINGS_DIRECTORY, &path);
+
+	BFile file;
+	if (status == B_OK) {
+		path.Append("Locale settings");
+""",
+        """	if (status == B_OK) {
+		// Create ~/config/settings when the first locale change is saved.
+		status = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);
+	}
+
+	BFile file;
+	if (status == B_OK) {
+		path.Append("Locale settings");
+""",
+        "create locale settings directory",
+    )
+    replace_if_missing(
+        data,
+        """status_t
+LocaleRosterData::_LoadLocaleSettings()
+""",
+        """status_t
+LocaleRosterData::ApplyUpdatedSettings(const BMessage* message)
+{
+	if (message == NULL)
+		return B_BAD_VALUE;
+
+	BAutolock lock(fLock);
+	if (!lock.IsLocked())
+		return B_ERROR;
+
+	// Refresh() already loaded the file. Fields in this message win, so a
+	// country or language change is visible when that file was not updated.
+	BString conventionsID;
+	if (message->FindString("conventions", &conventionsID) == B_OK) {
+		BFormattingConventions conventions(message);
+		_SetDefaultFormattingConventions(conventions);
+	}
+
+	if (message->HasString("language"))
+		_SetPreferredLanguages(message);
+
+	bool preferred;
+	if (message->FindBool("filesys", &preferred) == B_OK)
+		_SetFilesystemTranslationPreferred(preferred);
+
+	return B_OK;
+}
+
+
+status_t
+LocaleRosterData::_LoadLocaleSettings()
+""",
+        "apply locale message body",
+        "LocaleRosterData::ApplyUpdatedSettings",
+    )
+
+    bar = HAIKU / "src/apps/deskbar/BarApp.cpp"
+    replace_if_missing(
+        bar,
+        """#include "BarApp.h"
+""",
+        """#include "BarApp.h"
+
+#include "DeskbarMenu.h"
+
+
+namespace BPrivate {
+	void ForceUnloadCatalog();
+}
+""",
+        "deskbar menu include",
+        '#include "DeskbarMenu.h"',
+    )
+    replace_once(
+        bar,
+        """		case B_LOCALE_CHANGED:
+		{
+			BLocaleRoster::Default()->Refresh();
+
+			bool localize;
+			if (message->FindBool("filesys", &localize) == B_OK)
+				gLocalizedNamePreferred = localize;
+		}
+""",
+        """		case B_LOCALE_CHANGED:
+		{
+			// The file may still be the previous locale. Apply the message
+			// after Refresh() so that copy does not win.
+			BLocaleRoster::Default()->Refresh();
+			BLocaleRoster::Default()->ApplySettings(message);
+			BPrivate::ForceUnloadCatalog();
+			gLocalizedNamePreferred
+				= BLocaleRoster::Default()->IsFilesystemTranslationPreferred();
+
+			if (message->HasString("language") && fBarWindow != NULL
+				&& fBarWindow->Lock()) {
+				TDeskbarMenu* menu = fBarWindow->DeskbarMenu();
+				if (menu != NULL && menu->LockLooper()) {
+					menu->ForceRebuild();
+					menu->UnlockLooper();
+				}
+				fBarWindow->Unlock();
+			}
+		}
+""",
+        "deskbar applies locale message",
+    )
+
+
+def patch_clock_display() -> None:
+    """Draw the Deskbar clock with BTimeFormat, the same call as the preview.
+
+    Confirmed: Dutch (Netherlands) showed 20:01 in Deskbar. The pattern
+    generator kept AM/PM on the 19:05 and 19:34 images. Do not go back to
+    BDateTimeFormat for the drawn string, and do not Refresh() the
+    settings file from Pulse().
+    """
+    time_view = HAIKU / "src/apps/deskbar/TimeView.cpp"
+    text = time_view.read_text(encoding="utf-8")
+    marker = "The clock uses the same short time pattern as the Locale preflet."
+    if marker in text:
+        print(f"already {time_view.name} (clock display)")
+        return
+
+    old_pulse_v2 = """void
+TTimeView::Pulse()
+{
+	// The locale broadcast refreshes the roster, then posts to the clock.
+	// If that post is missed the clock keeps the pattern from boot.
+	BPath path;
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) == B_OK) {
+		path.Append("Locale settings");
+
+		struct stat st;
+		static time_t sMtime = 0;
+		bool changed = false;
+		if (stat(path.Path(), &st) == 0 && st.st_mtime != sMtime) {
+			sMtime = st.st_mtime;
+			BLocaleRoster::Default()->Refresh();
+			changed = true;
+		}
+
+		BFormattingConventions conventions;
+		if (BLocale::Default()->GetFormattingConventions(&conventions) == B_OK) {
+			static bool sSaw24 = false;
+			static BString sSawID;
+			bool use24 = conventions.Use24HourClock();
+			if (changed || use24 != sSaw24 || sSawID != conventions.ID()) {
+				sSaw24 = use24;
+				sSawID = conventions.ID();
+				UpdateTimeFormat();
+			}
+		}
+	}
+
+	time_t curTime = time(NULL);
+"""
+    old_pulse_v1 = """void
+TTimeView::Pulse()
+{
+	time_t curTime = time(NULL);
+"""
+    new_pulse = """void
+TTimeView::Pulse()
+{
+	// The clock uses the same short time pattern as the Locale preflet.
+	// Reloading the settings file here would put en_US back when that
+	// file was not written yet.
+	BFormattingConventions conventions;
+	if (BLocale::Default()->GetFormattingConventions(&conventions) == B_OK) {
+		static bool sSaw24 = false;
+		static BString sSawID;
+		static bool sReady = false;
+		bool use24 = conventions.Use24HourClock();
+		if (!sReady || use24 != sSaw24 || sSawID != conventions.ID()) {
+			sReady = true;
+			sSaw24 = use24;
+			sSawID = conventions.ID();
+			UpdateTimeFormat();
+		}
+	}
+
+	time_t curTime = time(NULL);
+"""
+    if old_pulse_v2 in text:
+        text = text.replace(old_pulse_v2, new_pulse, 1)
+    elif old_pulse_v1 in text:
+        text = text.replace(old_pulse_v1, new_pulse, 1)
+    else:
+        raise SystemExit(f"pulse not found in {time_view}")
+
+    old_get = """void
+TTimeView::GetCurrentTime()
+{
+	fTimeFormat->Format(fCurrentTimeStr, sizeof(fCurrentTimeStr), fCurrentTime,
+		B_SHORT_DATE_FORMAT, B_SHORT_TIME_FORMAT);
+}
+"""
+    new_get = """void
+TTimeView::GetCurrentTime()
+{
+	// BTimeFormat reads the formatting country's own pattern. The
+	// date-time pattern generator can keep an English AM/PM skeleton.
+	BTimeFormatStyle style = B_SHORT_TIME_FORMAT;
+	if (fShowTimeZone)
+		style = B_FULL_TIME_FORMAT;
+	else if (fShowSeconds)
+		style = B_MEDIUM_TIME_FORMAT;
+
+	BString formatted;
+	BTimeFormat timeFormat;
+	if (timeFormat.Format(formatted, fCurrentTime, style) == B_OK
+		&& formatted.Length() > 0) {
+		strlcpy(fCurrentTimeStr, formatted.String(), sizeof(fCurrentTimeStr));
+	}
+}
+"""
+    if old_get not in text:
+        raise SystemExit(f"GetCurrentTime not found in {time_view}")
+    text = text.replace(old_get, new_get, 1)
+
+    old_includes = """#include <string.h>
+#include <sys/stat.h>
+
+#include <String.h>
+
+#include <Application.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <FindDirectory.h>
+#include <FormattingConventions.h>
+#include <Locale.h>
+#include <LocaleRoster.h>
+#include <MenuItem.h>
+#include <Path.h>
+"""
+    fresh_includes = """#include <string.h>
+
+#include <String.h>
+
+#include <Application.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <Locale.h>
+#include <MenuItem.h>
+"""
+    new_includes = """#include <string.h>
+
+#include <String.h>
+
+#include <Application.h>
+#include <Catalog.h>
+#include <Debug.h>
+#include <FormattingConventions.h>
+#include <Locale.h>
+#include <MenuItem.h>
+#include <TimeFormat.h>
+"""
+    if old_includes in text:
+        text = text.replace(old_includes, new_includes, 1)
+    elif fresh_includes in text:
+        text = text.replace(fresh_includes, new_includes, 1)
+    elif "#include <TimeFormat.h>" not in text:
+        raise SystemExit(f"includes not found in {time_view}")
+
+    time_view.write_text(text, encoding="utf-8", newline="\n")
+    print(f"patched {time_view} (clock display)")
+
+
 def main() -> int:
     patch_alert()
     patch_label_clip()
@@ -799,6 +1410,7 @@ def main() -> int:
     patch_softwareupdater()
     patch_backgrounds()
     patch_small_controls()
+    patch_locale_clock()
     return 0
 
 

@@ -2,7 +2,8 @@
 
 Audit of the AMD64 kernel and boot loader that R5OS actually builds. Source of the limits is the Haiku tree at `/home/nickr/r5os/haiku`, plus the R5OS boot-loader copy `distro/boot/bios_ia32/smp.cpp` installed by `scripts/apply-kernel-bugs.py`. This is source inspection and the boots already recorded in `CHANGELOG.md` and `docs/vbox.md`. It is not a 64-CPU test, a 128-CPU test, or a bare-metal boot of the Ryzen 5 5625U.
 
-No kernel source was changed for this audit.
+No kernel source was changed for this audit. The read-only snapshot
+further down was added later. It does not write a P-state.
 
 ## What already works
 
@@ -134,7 +135,7 @@ Where it belongs: kernel (ACPI SRAT/SLIT, per-node free lists, scheduler domain)
 
 Severity: laptops run at firmware-chosen P-states. No confirmed bug. Not a scalability bug.
 
-Feature bits for Intel HWP are names in the CPUID table only. Nothing outside `arch_cpu.cpp` programs `IA32_PM_ENABLE` or HWP request MSRs. `arch_timer.cpp` reads AMD `MSR_F10H_PSTATEDEF(0)` to estimate TSC frequency. `apply-kernel-bugs.py` `patch_tsc_div0()` guards the CPUID TSC conversion against a zero divisor (Haiku #20400). That is a panic fix in the timer, not a power driver.
+`r5_pstate.cpp` reads AMD hardware P-states and CPPC, and Intel HWP capabilities, when those CPUID bits are set and the hypervisor bit is clear. It does not write an MSR. The write hook on `/dev/misc/r5_pstate` returns `B_NOT_ALLOWED`. Nothing in this tree programs `IA32_PM_ENABLE`. `arch_timer.cpp` reads AMD `MSR_F10H_PSTATEDEF(0)` to estimate TSC frequency. `apply-kernel-bugs.py` `patch_tsc_div0()` guards the CPUID TSC conversion against a zero divisor (Haiku #20400). That is a panic fix in the timer, not a power driver.
 
 Invariant TSC is a named feature bit. C-state policy and a userspace power preference are not in this tree as an R5OS component.
 
@@ -187,6 +188,32 @@ Later modernization, not required for the reference machine:
 
 7. Scheduler input from `hybrid_type` (Intel only; no R5OS machine yet).
 8. SRAT/SLIT and a scheduler domain, for multi-CCD and multi-socket.
-9. HWP or AMD P-state requests, kernel MSRs first, userspace policy after a frequency readout is honest.
+9. HWP or AMD P-state requests. The frequency readout is the snapshot below. Requests are still not written. Safemode must leave the registers alone.
 
 Do not start that work until this report has been reviewed. Do not import a Linux CPU driver to get there.
+
+## Read-only frequency snapshot
+
+This is the readout for GitHub issue 86. It does not change a P-state. The Ryzen 5 5625U has not been booted with it.
+
+`distro/kernel/x86/r5_pstate.cpp` runs from `arch_cpu_init_post_modules()`. It prints the vendor, family, model, brand string, and `gCPUClockSpeed`, then publishes the same text at `/dev/misc/r5_pstate`. Opening that device takes a new sample on the CPU that handles the open. The write hook returns `B_NOT_ALLOWED`.
+
+AMD and Hygon, only when the matching CPUID bit is set:
+
+- Hardware P-state: current index from MSR `0xC0010063`, and definitions `0xC0010064`–`0xC001006B`. Family `0x17` and `0x19` report MHz as `200 * fid / did`, with the same divisor limits as `init_tsc_with_msr()` in `arch_timer.cpp`. Other families print the raw register and `mhz n/a`.
+- CPPC: capability `0xC00102B0`, enable `0xC00102B1`, request `0xC00102B3`, and status `0xC00102B4`.
+
+Intel, only when HWP is enumerated: capabilities `0x771` and enable `0x770`. The request register `0x774` is read only when the enable bit is already 1.
+
+If CPUID says the machine is a hypervisor, none of those MSRs are read. QEMU sets that bit. A guest that is handed the feature bit without the register would otherwise take a general-protection fault on `rdmsr`.
+
+`IA32_APERF` and `IA32_MPERF` are included when that feature bit is set and the hypervisor bit is clear. The kernel already reads those during CPU init.
+
+`/system/bin/r5_pstate_log` is a job on `initial_volumes_mounted`. It waits briefly, reads the device, spends one second in a loop on that thread, reads again, and writes `/boot/home/r5-cpu.txt`. It then searches `/dev/disk` for a FAT boot sector, mounts the smallest FAT32 partition it finds, writes `r5-cpu.txt` on it, and unmounts.
+
+The raw QEMU image has no FAT partition, so that search reports the miss. An anyboot image has the EFI system partition. After a USB boot, Windows can open that partition and read `r5-cpu.txt`. Copy the text into this file before any P-state write is attempted.
+
+QEMU, 2026-10-31 about 16:00 Europe/Amsterdam. TCG, `-cpu qemu64`, `-display none`, serial to a file. `/dev/kvm` was not readable from this shell. The kernel line was `R5 CPU: cpu 1 vendor amd family 0xf model 0x6b name QEMU Virtual CPU version 2.5+`. `tsc_hz` was 2297152544. The next lines were `hypervisor bit set, hardware MSRs not read` and `no msr write`. Publish status was 0. `bfs_shell` then showed both samples in `/boot/home/r5-cpu.txt`, plus `FAT: no FAT partition found under /dev/disk`. No panic. `jam -q @r5-anyboot` exited 0 at 16:03 Europe/Amsterdam and wrote `generated.x86_64/r5-os-anyboot.iso`. `fdisk` shows a 2G BeFS partition and a 2.8M EFI partition, type `ef`. That file was not booted.
+
+Still open: boot the 5625U and record the idle and busy samples. Write one P-state only after that, with safemode leaving the registers alone. Intel HWP on hardware was not executed.
+

@@ -33,6 +33,79 @@ Appearance’s checkbox invoked the window, so the mark changed and Save stayed 
 Settings is a new preference window: a sidebar, a search field, home cards, and one content area. Pages come from modules. The first native module is Appearance. It stores `large_sample` in `~/config/settings/r5-settings/appearance` and does not rewrite the Haiku Appearance file. Colors and fonts, Deskbar, wallpaper, display, sound, keyboard, mouse, Bluetooth, printers, network, and Users & Accounts stay their existing programs; Settings only launches them.
 
 The module API is version 1 (`distro/settings/SettingsModule.h`, `distro/settings/ModuleAPI.md`). Add-ons export `settings_api_version` and `instantiate_settings_module`. A different version is not loaded. An administrator page uses `r5_admin_change_allowed` and cannot be saved while that is false. `jam -q Settings settings_appearance` on 1 Nov 2026 at 22:32 Europe/Amsterdam exited 0 and linked both targets. `jam -q @r5-raw` at 22:36 Europe/Amsterdam exited 0 and updated 1145 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains `Settings` and `settings_appearance`. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`, and the desktop icons can stay missing until a guest restart.
+### Shader-cache error is gone on the 21:48 disk
+
+On the image packed at 21:48 Europe/Amsterdam the user reported that the Mesa shader-cache permission line no longer appears. That disk is the one where `r5-desktop` creates `/boot/home/config/cache` for the session uid before it drops privileges. This session did not run `vulkaninfo` again and did not see the desktop. The device is still llvmpipe on the CPU. About stays build 10023.
+
+### Session user can create the Mesa shader cache
+
+`vulkaninfo` printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)`. The image creates `/boot/home/config/cache` as root, mode 0755. `r5-desktop` then drops to the session uid, which is not 0, so Mesa cannot create a directory there. Before that drop, `r5-desktop` now creates the cache directory from the account’s home, gives it to that uid and gid, and sets mode 0700. `jam -q r5-desktop` on 1 Nov 2026 at 21:46 Europe/Amsterdam exited 0 and linked `r5-desktop`. `jam -q @r5-raw` at 21:48 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains that `r5-desktop` (21:46). About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run again. The first boot of this disk can sit in `package_daemon`, and the desktop icons can stay missing until a guest restart.
+
+### vulkaninfo named llvmpipe
+
+On the 21:36 Europe/Amsterdam image the user ran `vulkaninfo --summary` in Terminal. Vulkan instance version 1.4.367. GPU0 was `PHYSICAL_DEVICE_TYPE_CPU`, device name `llvmpipe (LLVM 21.1.8, 256 bits)`, driver `llvmpipe`, driver info `Mesa 25.3.6 (LLVM 21.1.8)`, driver ID `DRIVER_ID_MESA_LLVMPIPE`, apiVersion 1.4.328, driverVersion 25.3.6. That is Lavapipe reporting the software renderer. The word Lavapipe is not the device name. Mesa also printed `Failed to create /boot/home/config/cache/mesa_shader_cache for shader cache (Permission denied)--disabling.` The desktop icons were missing on the first boot of this disk. A guest restart made them visible. This session did not see that desktop. This is not the 5625U GPU.
+
+vkcube and the Vulkan-Tools mock ICD are not part of this result. vkcube draws into a window system this image does not have. The mock ICD is a fake driver for loader tests. The loader already opened Lavapipe.
+
+### Image with vulkaninfo
+
+`jam -q @r5-raw` on 1 Nov 2026 at 21:36 Europe/Amsterdam exited 0 and updated 1130 targets. The package check printed `mesa_packages_ok`, including `vulkan_tools` and the Lavapipe package whose manifest is under `add-ons`. The first jam of this package exited 0 but did not install `vulkan_tools`: the name was missing from the HaikuPorts pin, so jam said the package was not available. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. `vulkaninfo` has not been run. The first boot of this disk can sit in `package_daemon`.
+
+### Lavapipe manifest moved to add-ons
+
+The Haiku Vulkan loader searches `vulkan/icd.d` under the add-ons directories (`find_paths` with `B_FIND_PATH_ADD_ONS_DIRECTORY`). `libvulkan.so.1.4.367` contains the relative path `vulkan/icd.d`. The Lavapipe manifest was in `data/vulkan/icd.d`, which that search does not read. `mesa_lavapipe` now ships `add-ons/vulkan/icd.d/lvp_icd.json`. The library path inside the file is still `/boot/system/lib/libvulkan_lvp.so`. Not on a disk yet. `vulkaninfo` has still not been run.
+
+### vulkaninfo is packed, not run
+
+The next Mesa step is software Vulkan, not the 5625U GPU. Lavapipe is already on the image. `vulkaninfo` from Vulkan-Tools 1.4.367 (Apache-2.0; Khronos, Valve, LunarG, RasterGrid) was cross-compiled with the Haiku g++ on 1 Nov 2026 at 21:19 Europe/Amsterdam and packed as `vulkan_tools`. It links `libstdc++.so.6` and `libroot.so` and loads `libvulkan` at run time. `scripts/build-vulkaninfo.sh` writes `distro/packages/x86_64/vulkan_tools-1.4.367-1-x86_64.hpkg`. The image package list names `vulkan_tools`. That package is not on a disk yet. VirtualBox was left on the locale image. `vulkaninfo` has not printed Lavapipe. This is not GPU acceleration.
+
+### User confirmed the Deskbar clock and Prullenbak
+
+On the 20:58 Europe/Amsterdam image the user selected Dutch (Netherlands) and 24-hour. The Locale preview read 20:01 and the Deskbar clock read 20:01. VBox Share sat beside Trash, not on it. With Nederlands above English, the Trash icon read Prullenbak. Home stayed “home”. QuickTour and VBox Share stayed those names. The Locale window that was already open kept the title “Locale”.
+
+That is the path that worked. Keep it. The preview and the Deskbar clock both call `BTimeFormat` on the formatting country. The country change is broadcast even when `Locale settings` is not written, and `ApplySettings()` puts that message on top of `Refresh()`. The clock pulse does not reload the file. A language change calls `ForceUnloadCatalog()` and rebuilds menus and icon titles. A mounted volume does not restore a saved icon position.
+
+Two earlier disks did not do this. The 19:05 image coerced the pattern generator and the clock stayed “6:07 PM”. The 19:34 image reloaded `Locale settings` on each pulse and the clock stayed “6:54 PM”, because a missing file makes `Refresh()` put en_US back. Do not draw the clock from `BDateTimeFormat` again, and do not `Refresh()` from the pulse.
+
+After Nederlands was moved above English the same boot showed “8:01 PM”, and a minute later “8:02 PM”. The language message does not carry the formatting country. `Refresh()` runs first and can replace the live Dutch conventions with a file that does not have them yet. That flip is not changed on this disk. VirtualBox was left running. It is [#4045](https://github.com/nickrusman-bot/r5os/issues/4045).
+
+The same menu was only partly Dutch. Strings in `nl.catkeys` no longer match the Deskbar source (`Show replicants handle`, `About R5OS`, `Shut down…`, `%appname% preferences…`, Lock screen, Log out, Show desktop). Mount is still “Betrek”. That catalog update is [#4044](https://github.com/nickrusman-bot/r5os/issues/4044). Neither is on this disk.
+
+### Locale broadcast on the build 10023 image
+
+`jam -q @r5-raw` on 1 Nov 2026 at 20:58 Europe/Amsterdam exited 0 and updated 7865 targets. `haiku.hpkg` was created at 20:57 and the raw image at 20:58. Deskbar (20:42), `libtracker.so` (20:42), and `libbe.so` (20:38) are the binaries from the locale compile and are older than that package, so this image contains them. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+### Locale changes still did not reach Deskbar
+
+The image packed at 19:34 Europe/Amsterdam contained the country-locale pattern and the settings-file pulse. The user booted that disk and, with Dutch (Netherlands) and the 24-hour choice selected, the Deskbar clock still read “6:54 PM” while the Locale preview read 18:51. Moving Nederlands above English did not change menus. Restarting Tracker for translated folder names did not change icon titles, and VBox Share landed on Trash again.
+
+The preview formats from the preflet’s own roster. Deskbar and Tracker only notice a `B_LOCALE_CHANGED` message, and that message was sent only after the settings file was saved. A failed save left the preview updated and every other program on en_US. `Refresh()` then reads the file and, when the file is missing or old, puts en_US back. The clock pulse did that too.
+
+A locale change is now broadcast even when the save fails, and `~/config/settings` is created when the file is written. `BLocaleRoster::ApplySettings()` applies the message after `Refresh()`, so the message wins over a stale file. The Deskbar clock uses `BTimeFormat`, the same call as the preview, instead of the date-time pattern generator. It no longer reloads the settings file on each pulse. Deskbar and Tracker call `ForceUnloadCatalog()` on the locale message. A language change rebuilds Tracker menus and the Deskbar menu, and icon titles are read again. Trash can become Prullenbak from the Dutch catalog. The Dutch catalog still translates the home folder as “home”. QuickTour and VBox Share have no catalog names. The open Locale window keeps the labels it was opened with. A saved icon position on a mounted volume is ignored, so VBox Share is placed in a free cell instead of on Trash.
+
+`jam -q libbe.so` then `jam -q libtracker.so Deskbar` on 1 Nov 2026 exited 0. `libbe.so`, `libtracker.so`, and Deskbar were relinked. The image section above packs those binaries. About stays build 10023.
+
+### Deskbar still showed AM/PM
+
+The image from 19:05 Europe/Amsterdam still drew “6:07 PM” while the Locale preview showed 18:07. The user had Dutch formatting, the 24-hour choice, and Nederlands as the preferred language. The preview is redrawn from the formatting country. The Deskbar pattern generator used the preferred language’s locale, and it can put AM/PM back into an English pattern. `k` was also rewritten to `K`, which is a 0–11 hour, so 18:00 can draw as 6. The clock rebuilt that pattern only when the locale message reached the view.
+
+The generator now uses the formatting country, unless month and day names are taken from the preferred language. A 24-hour choice rewrites `h`, `K`, and `k` to `H` and drops the day-period marker. Each clock pulse reloads `Locale settings` when that file’s time changes, then rebuilds the pattern. `jam -q libbe.so Deskbar` exited 0 and updated 11 targets, including `FormattingConventions.o`, `DateTimeFormat.o`, `libbe.so`, `TimeView.o`, and Deskbar. `jam -q @r5-raw` on 1 Nov 2026 at 19:34 Europe/Amsterdam exited 0 and updated 1720 targets. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+Menus and folder names still come from the catalog loaded at program start. The Locale checkbox for folder names says Deskbar and Tracker need a restart.
+
+### Build 10023 image with the 24-hour clock
+
+`jam -q @r5-raw` on 1 Nov 2026 at 19:05 Europe/Amsterdam exited 0 and updated 2294 targets. `libbe.so` was linked again and packed into the system package. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`.
+
+### Deskbar clock kept AM/PM
+
+The Locale examples followed the 24-hour choice. Deskbar did not. Those examples call `GetTimeFormat()`, which runs `CoerceFormatForClock()`. Deskbar stores the ICU pattern from `BDateTimeFormat::SetDateTimeFormat()` as an explicit format, and an explicit format is not coerced later. For an English locale the pattern generator can keep AM/PM after the skeleton asked for 24-hour (`k`). The clock therefore stayed “5:27 PM” while the preflet preview showed 17:27.
+
+`Use24HourClock()` also returned the unset explicit flag once the cache was already filled, so a remembered 24-hour choice could read as off. It now returns that cached or explicit choice. `CoerceFormatForClock()` is public, and `SetDateTimeFormat()` coerces the generated pattern before storing it. Applied by `scripts/apply-ui-bugs.py`.
+
+`jam -q libbe.so` on 1 Nov 2026 at 18:48 Europe/Amsterdam updated 32 targets, including `FormattingConventions.o`, `DateTimeFormat.o`, and the `libbe.so` link, and exited 0. That library was not on the build 10023 disk that was running then. VirtualBox was not restarted for that compile. The image section above packs this library.
+
+Menus, the Locale window’s own labels, and folders already open stay in the language that program loaded at start. The translation catalog is loaded once. A program started after the language change loads the new catalog. Folder names also stay English while “Translate application and folder names” is off. Tracker does not rebuild those names on the locale message.
 
 ### Build 10023 daily
 
@@ -157,6 +230,18 @@ The image solver no longer sees Mesa 22. `scripts/pin-mesa-packages.sh` builds `
 The version line in About was already Build 10018. What's new was still the Build 10017 license text. `scripts/jam-r5-raw.sh` wrote `r5_os_version.h` and did not copy `distro/WHATSNEW`. The What's new resource is rebuilt when `AboutSystem.rdef` is newer than the last resource compile, not when only the text file changes. The script now copies What's new and touches that rdef before jam. No new build number: this is the Build 10018 section that was already in `distro/WHATSNEW`.
 
 The daily `haiku.hpkg` was rebuilt (`jam -q haiku.hpkg`, exit 0) and replaced on `r5-os.image`. The AboutSystem inside it contains `R5OS 2026.1-dev Build 10018 - OpenGL`. Mesa 25 and libglvnd stayed on that image. VirtualBox was pointed at the updated disk. The About window was not opened from here.
+
+### Read AMD P-states and Intel HWP without writing them
+
+2026-10-31 about 16:00 Europe/Amsterdam. The kernel prints a read-only CPU snapshot and publishes it at `/dev/misc/r5_pstate`. Nothing in this change writes an MSR. On AMD and Hygon, if the hardware P-state bit is set, it reads the current P-state and P-state table. Family 17h and 19h use the same 200 MHz × fid / did formula and the same divisor checks as the existing TSC path. If the CPPC bit is set, it also reads the CPPC capability, enable, request, and status registers. On Intel, if HWP is enumerated, it reads the capabilities and the enable register, and the request register only when HWP is already enabled. If the hypervisor bit is set, it prints that line and does not read those MSRs, so a missing register cannot panic QEMU.
+
+`/system/bin/r5_pstate_log` starts when the boot volume is mounted. It reads the device, burns the CPU for one second, reads again, and writes `/boot/home/r5-cpu.txt`. It also looks for a FAT partition under `/dev/disk`, mounts it, writes `r5-cpu.txt` there, and unmounts. A raw image has no FAT partition. An anyboot image does, on the EFI system partition, which Windows can open from the USB stick.
+
+The first image build left `r5_pstate_log` out of the package: the bin list in `build/jam/images/definitions/minimum` is explicit. A second apply also duplicated the Jamfile and launch hooks, because the inserted text still contained the search text. The script now stops when a marker is already present. The boot below used the image after both fixes.
+
+QEMU was TCG with `-cpu qemu64`. This shell could not open `/dev/kvm` (permission denied). Serial showed `publish misc/r5_pstate status 0`, vendor amd, family `0xf`, model `0x6b`, name `QEMU Virtual CPU version 2.5+`, TSC about 2297152544 Hz, and `hypervisor bit set, hardware MSRs not read`. There was no panic. After shutdown, `bfs_shell` read `/boot/home/r5-cpu.txt` with both samples and `FAT: no FAT partition found under /dev/disk`. The Ryzen 5 5625U was not booted. No P-state was written.
+
+`jam -q @r5-anyboot` then exited 0 and wrote `generated.x86_64/r5-os-anyboot.iso` (2.1G, 16:03 Europe/Amsterdam). `fdisk` shows a 2G BeFS partition and a 2.8M EFI partition (type `ef`). That ISO was not booted.
 
 ### Mesa 25 replaces Mesa 22 on the daily image
 
