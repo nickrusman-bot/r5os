@@ -121,6 +121,7 @@ New R5OS files and other files we deliberately cover follow the [REUSE specifica
 
 - `LICENSES/GPL-3.0-or-later.txt` — GNU GPL version 3. The “or later” is the grant on new R5OS code, not a different document.
 - `LICENSES/MIT.txt` — MIT, used by Haiku and by components already in this tree.
+- `LICENSES/OFL-1.1.txt` — SIL Open Font License 1.1, used by Manrope. The font directory also keeps the upstream `OFL.txt`, which adds the copyright line.
 
 Add a text when a covered file needs it. Do not edit the official wording. A root `LICENSE` file, if one is added later, explains this policy. It does not override per-file notices.
 
@@ -130,7 +131,17 @@ Add a text when a covered file needs it. Do not edit the official wording. A roo
 
 For a public image, check what the image actually contains. Where the license requires it, ship the license text, copyright notices, and the corresponding source for that exact build, including scripts needed to build it. GPL-3.0 also has installation-information duties for user products. Publishing this git repository is not automatically enough. The source offer has to match the binaries people received.
 
-About has a Licenses tab beside Credits and What's new. The words on that tab are `distro/about/licenses.txt`, a short reading of this inventory: R5OS's own files, Haiku's licenses, AirPlay, and the VirtualBox guest software. It is not a second list of every package, and it is not the file-by-file audit. Credits still names people and projects. System information stays on the logo page. The tab has not been checked on a booted screen.
+About has a Licenses tab beside Credits and What's new. The words on that tab are `distro/about/licenses.txt`. Each part is one block, and a new part uses the same block:
+
+```
+# Name
+One short sentence.
+
+License: SPDX-ID
+Source: https://example.com
+```
+
+A line that starts with `# ` is the heading. `Source: ` is followed by one URL. This is the list for that tab, not a second copy of every package, and it is not the file-by-file audit. Credits still names people and projects. System information stays on the logo page. The window title stays About R5OS. The tab has not been checked on a booted screen.
 
 ## Checks we have not wired up
 
@@ -146,6 +157,8 @@ Not a file-by-file audit. Read the header of the component you touch. Haiku itse
 |---|---|---|---|
 | AirPlay receiver pieces | yes, `distro/airplay` | MIT (Shairport, ALAC), Unlicense (tiny-AES-c), OpenSSL 3 from HaikuPorts. `AirPlayDeskbar` is a separate GPL-3.0-or-later program | Detail: `distro/airplay/THIRD_PARTY.md`. Unlicense text: `LICENSES/Unlicense.txt`. Apache-2.0 text is not in `LICENSES/` yet |
 | VirtualBox 7.2.22 Haiku Guest Additions | patch in `distro/vbox-guest`; tarball and binaries copied onto the image at apply time, not stored in git | GPL-3.0-only (`COPYING` and the Haiku additions makefile). Some IPRT files are GPL-3.0-only OR CDDL-1.0. The HaikuPorts 6.1.26 recipe’s GPL-2.0 plus CDDL is an older recipe | The image ships `COPYING` (the unmodified GNU GPL version 3), `VirtualBox-7.2.22.tar.bz2`, and `virtualbox-7.2.22-r5os.patch` under `/boot/system/non-packaged/data/licenses/virtualbox`. Apply stops if that tarball or the built ELFs are missing |
+| libglvnd 1.7.0, Mesa 25.3.6 (llvmpipe and Lavapipe), LLVM 21.1.8 runtime, Vulkan loader 1.4.367 | hpkgs in `distro/packages/x86_64`. `mesa_devel` is libglvnd plus Mesa 25 headers. The image solver uses a catalog with Mesa 22 removed | libglvnd and Mesa: MIT. LLVM: Apache-2.0 with LLVM exception. Vulkan loader: Apache-2.0 (Khronos). Not re-audited file by file | OpenGL apps compile against libglvnd. Mesa 25 is the EGL vendor at run time. Drawing is llvmpipe. Lavapipe is installed and was not what the OpenGL probe loaded. Not a GPU driver |
+| Manrope Regular and Bold | yes, `distro/fonts/manrope`. Unmodified static TTF from `googlefonts/manrope`, plus that project's `OFL.txt` and the published `FONTLOG.txt` | OFL-1.1. Copyright 2018 The Manrope Project Authors. Designed by Mikhail Sharanda, 2018 | Installed in `data/fonts/ttfonts`. Default plain and bold UI fonts when no font settings are saved. Fixed font stays Noto Sans Mono. No Reserved Font Name is declared. The font is not relicensed. `LICENSES/OFL-1.1.txt` is the SPDX text |
 | libglvnd 1.7.0, Mesa 25.3.6 (llvmpipe and Lavapipe), LLVM 21.1.8 runtime, Vulkan loader 1.4.367, vulkaninfo 1.4.367 (`vulkan_tools`) | hpkgs in `distro/packages/x86_64`. `mesa_devel` is libglvnd plus Mesa 25 headers. The image solver uses a catalog with Mesa 22 removed | libglvnd and Mesa: MIT. LLVM: Apache-2.0 with LLVM exception. Vulkan loader and vulkaninfo: Apache-2.0 (Khronos, and for vulkaninfo also Valve, LunarG, RasterGrid). Not re-audited file by file | OpenGL apps compile against libglvnd. Mesa 25 is the EGL vendor at run time. Drawing is llvmpipe. Lavapipe is installed and was not what the OpenGL probe loaded. vulkaninfo is packed and has not been run. Not a GPU driver |
 | Linux DRM / `amdgpu` | no | GPL (kernel) | Not imported |
 

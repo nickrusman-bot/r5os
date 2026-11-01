@@ -1,5 +1,54 @@
 # R5OS changelog (lokaal)
 
+### About names this computer AMD64, and Wallpaper is the Backgrounds page
+
+About still reads the short ABI name from `libbe.so` (Walter on this disk) and puts the target in parentheses. `x86_64` is shown as AMD64. The package ABI is still `x86_64`. The source maps `aarch64` to ARM64 and `riscv64` to RISC-V 64. This image is the AMD64 build, so those two names are not in the About binary.
+
+`distro/BUILD` is 10024. What's new is the section that was missing for Settings, Manrope, and this Wallpaper page. The disk the user had open was still build 10023.
+
+Wallpaper in Settings is that page rewritten to the Backgrounds layout: a preview, the workspace menu (current, all, the default folder, another folder, and recent folders), the image menu, Manual / Center / Scale to fit / Tile, the icon-label outline, and the color cells. Save writes `be:bgndimginfo`. On the desktop it also sets the desktop color. Tracker is told to restore the picture. The current workspace keeps the other workspace records. All workspaces replaces that list with one record. Center and Scale to fit apply to the desktop. The Backgrounds program is still installed and is not a button on this page. Revert and Apply are the Settings buttons. Dragging the preview in Manual updates X and Y.
+
+On the 23:41 image the user again saw no desktop icons, and only on the first boot. This session did not see that desktop. A first boot can sit in `package_daemon`, and the icons can stay missing until a guest restart.
+
+`jam -q Settings` exited 0. `jam -q AboutSystem` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 00:23 Europe/Amsterdam exited 0 and updated 1137 targets. `install-mesa-packages.sh` did not start from that jam script because its shebang is CRLF; the same check run afterwards printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. `haiku.hpkg` contains this `Settings` and the existing `Backgrounds`. The About binary contains `AMD64` and `Build 10024`. VirtualBox is started from this image afterwards. The desktop was not seen from here.
+
+### About licenses use one block per component
+
+The Licenses tab text is `distro/about/licenses.txt`. Each component is a heading (`# Name`), one sentence, a `License:` line, and a `Source:` URL. About draws the heading in the bold face and makes the URL after `Source: ` a link. The window title stays About R5OS. Not rebuilt into an image in this change, and not checked on a booted screen.
+
+### Manrope is the UI font, and Wallpaper is a Settings page
+
+The plain and bold system fonts are Manrope Regular and Bold when no font settings have been saved. The fixed font stays Noto Sans Mono, so Terminal is unchanged. Noto Sans is the fallback if Manrope is missing. The files are the unmodified static fonts, also installed in `data/fonts/ttfonts`. `distro/app_server/ServerConfig.h` is copied over the Haiku header. It keeps the Haiku MIT notice.
+
+Wallpaper is a page in Settings instead of a button that only opens Backgrounds. Save writes `be:bgndimginfo` on the Desktop folder, the same attribute Backgrounds writes, and sends `B_RESTORE_BACKGROUND_IMAGE` to Tracker. That one picture is used on every workspace. A saved per-workspace list is replaced. Desktop color, a different picture per workspace, and folder backgrounds stay in the existing Backgrounds program, opened from "More wallpaper options".
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 23:41 Europe/Amsterdam exited 0 and updated 1170 targets. The package check printed `mesa_packages_ok`. `app_server` contains the string Manrope. `haiku.hpkg` has `data/fonts/ttfonts/manrope-regular.ttf` and `manrope-bold.ttf`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023. A home folder that already saved a font still uses that saved font.
+
+### Settings categories are cards, and Settings uses Manrope
+
+A category page repeated its summary under the title and stacked a button for each page. The summary stays in the title. Personalization, System, Devices, Network, and Accounts use the same cards as Home, with the existing preference icon on the left. Home is the first button on the bottom row, before Back, Revert, and Save. Search stays under the list.
+
+The page title is Manrope Bold, eight points above the bold system size. Every other label in Settings uses Manrope Regular or Bold. The files are the unmodified static fonts, loaded with `BFont::LoadFont` from `/boot/system/data/settings/fonts`. If a file does not load, that face stays the system font. The desktop font is not changed. The license is OFL-1.1. Copyright 2018 The Manrope Project Authors. Designed by Mikhail Sharanda. No Reserved Font Name is declared, and the files are not modified.
+
+`jam -q Settings settings_appearance` exited 0. `jam -q @r5-raw` on 1 Nov 2026 at 23:24 Europe/Amsterdam exited 0 and updated 1134 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains `Settings`, `settings_appearance`, and `data/settings/fonts` (`manrope-regular.ttf`, `manrope-bold.ttf`, `OFL.txt`, `FONTLOG.txt`). VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
+
+### Back in Settings freed the previous page twice
+
+Clicking Back stopped Settings in the debugger: `double free` in `BWindow::_task_looper`. The previous page was taken off the stack with `LastItem()`, freed by `RemoveItem()`, and then freed again. It is freed once now. The home page from the 22:53 image is the one the user called good. `jam -q @r5-raw` on 1 Nov 2026 at 22:59 Europe/Amsterdam exited 0 and updated 1145 targets. The package check printed `mesa_packages_ok`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
+
+### Settings window layout from the first boot
+
+The first Settings window was too narrow, and the sidebar grew when a page had a short label, so the list changed width between Home and a page. The list now sits directly under the title tab, at a fixed width, with search underneath. The loose “Settings” label and the breadcrumb are gone. Back sits with Revert and Save. Home cards draw the category’s existing preference icon on the left. The window opens at 1100×680.
+
+Appearance’s checkbox invoked the window, so the mark changed and Save stayed disabled. The checkbox and the legacy Open button now invoke their own page. Save enables after the sample-size mark changes.
+
+`jam -q Settings settings_appearance` then `jam -q @r5-raw` on 1 Nov 2026 at 22:53 Europe/Amsterdam exited 0. The image update was 1133 targets. The package check printed `mesa_packages_ok`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. About stays build 10023.
+
+### Settings host and one Appearance module
+
+Settings is a new preference window: a sidebar, a search field, home cards, and one content area. Pages come from modules. The first native module is Appearance. It stores `large_sample` in `~/config/settings/r5-settings/appearance` and does not rewrite the Haiku Appearance file. Colors and fonts, Deskbar, wallpaper, display, sound, keyboard, mouse, Bluetooth, printers, network, and Users & Accounts stay their existing programs; Settings only launches them.
+
+The module API is version 1 (`distro/settings/SettingsModule.h`, `distro/settings/ModuleAPI.md`). Add-ons export `settings_api_version` and `instantiate_settings_module`. A different version is not loaded. An administrator page uses `r5_admin_change_allowed` and cannot be saved while that is false. `jam -q Settings settings_appearance` on 1 Nov 2026 at 22:32 Europe/Amsterdam exited 0 and linked both targets. `jam -q @r5-raw` at 22:36 Europe/Amsterdam exited 0 and updated 1145 targets. The package check printed `mesa_packages_ok`. `haiku.hpkg` contains `Settings` and `settings_appearance`. About stays build 10023. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot of this disk can sit in `package_daemon`, and the desktop icons can stay missing until a guest restart.
 ### Shader-cache error is gone on the 21:48 disk
 
 On the image packed at 21:48 Europe/Amsterdam the user reported that the Mesa shader-cache permission line no longer appears. That disk is the one where `r5-desktop` creates `/boot/home/config/cache` for the session uid before it drops privileges. This session did not run `vulkaninfo` again and did not see the desktop. The device is still llvmpipe on the CPU. About stays build 10023.
@@ -76,7 +125,7 @@ Menus, the Locale window’s own labels, and folders already open stay in the la
 
 ### Build 10023 daily
 
-What's new for the four Interface Kit controls, and for the well-known folder names and icon labels, is build 10023. `jam -q @r5-raw` on 1 Nov 2026 at 18:14 Europe/Amsterdam exited 0 and updated 1727 targets. `libbe.so` and `libtracker.so` were relinked. About was relinked and contains Build 10023. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. Not booted in this record. The first VirtualBox start reused the build 10022 disk: the guest had been writing that disk, so its timestamp was newer than the image. `scripts/run-vbox-r5.ps1` now stores the raw image time in `generated/r5-os.built` and does not trust the timestamp of a disk that was running. A second start converted this image and powered the VM on at 18:18 Europe/Amsterdam. The desktop was not seen. The first boot of this disk can sit in `package_daemon`.
+What's new for the four Interface Kit controls, and for the well-known folder names and icon labels, is build 10023. `jam -q @r5-raw` on 1 Nov 2026 at 18:14 Europe/Amsterdam exited 0 and updated 1727 targets. `libbe.so` and `libtracker.so` were relinked. About was relinked and contains Build 10023. The package check printed `mesa_packages_ok`: libglvnd 1.7.0, Mesa 25.3.6, `mesa_devel`, Lavapipe, the LLVM 21.1.8 runtime, and the Vulkan loader. No Mesa 22 package. Not booted from here during the jam. The first VirtualBox start reused the build 10022 disk: the guest had been writing that disk, so its timestamp was newer than the image. `scripts/run-vbox-r5.ps1` now stores the raw image time in `generated/r5-os.built` and does not trust the timestamp of a disk that was running. A second start converted this image and powered the VM on at 18:18 Europe/Amsterdam. The user showed About on that desktop at 18:23 Europe/Amsterdam: Build 10023, session up 5 minutes 43 seconds. The user confirmed the text box, the slider, the scrollbar arrows, the option menu, the translated folder names, and the full icon labels on that session.
 
 ### Text control, slider, scrollbar, and option popup
 

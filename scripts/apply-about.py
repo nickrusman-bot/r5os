@@ -198,6 +198,22 @@ LogoView::Draw(BRect updateRect)
     )
     replace_once(
         path,
+        '\tabiVersion << " (" << B_HAIKU_ABI_NAME << ")";\n',
+        """\t// Package ABI stays x86_64. About shows the name used for the target.
+	const char* archName = B_HAIKU_ABI_NAME;
+	if (strcmp(archName, "x86_64") == 0)
+		archName = "AMD64";
+	else if (strcmp(archName, "aarch64") == 0)
+		archName = "ARM64";
+	else if (strcmp(archName, "riscv64") == 0)
+		archName = "RISC-V 64";
+	abiVersion << " (" << archName << ")";
+""",
+        "About architecture name",
+        optional=True,
+    )
+    replace_once(
+        path,
         "			CropView*		_CreateCreditsView();\n",
         "			CropView*		_CreateCreditsView();\n"
         "			BView*			_CreateInfoTabs();\n"
@@ -251,7 +267,11 @@ LogoView::Draw(BRect updateRect)
         "pause credits scroll",
         optional=True,
     )
-    replace_once(
+    cpp_now = path.read_text(encoding="utf-8")
+    if "AboutView::_CreateInfoTabs()" in cpp_now:
+        print("already AboutSystem.cpp (CreateInfoTabs)")
+    else:
+        replace_once(
         path,
         """CropView*
 AboutView::_CreateCreditsView()
@@ -534,6 +554,61 @@ def patch_gpl_credit() -> None:
     )
 
 
+def patch_license_format() -> None:
+    """Headings are '# Name'. A source line links the URL after 'Source: '."""
+    path = ABOUT / "AboutSystem.cpp"
+    text = path.read_text(encoding="utf-8")
+    if 'line.StartsWith("# ")' in text:
+        print("already AboutSystem.cpp (license format)")
+        return
+    old = (
+        "\t\tif (line.StartsWith(\"http://\") || line.StartsWith(\"https://\")) {\n"
+        "\t\t\tfLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,\n"
+        "\t\t\t\t&fLinkColor);\n"
+        "\t\t\tfLicensesView->InsertHyperText(line, new URLAction(line.String()));\n"
+        "\t\t} else if (line.Length() > 0 && line.FindFirst(\".\") < 0) {\n"
+        "\t\t\tfLicensesView->SetFontAndColor(&headingFont, B_FONT_ALL,\n"
+        "\t\t\t\t&fHaikuGreenColor);\n"
+        "\t\t\tfLicensesView->Insert(line);\n"
+        "\t\t} else {\n"
+        "\t\t\tfLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,\n"
+        "\t\t\t\t&fTextColor);\n"
+        "\t\t\tfLicensesView->Insert(line);\n"
+        "\t\t}\n"
+    )
+    new = (
+        "\t\tif (line.StartsWith(\"# \")) {\n"
+        "\t\t\tline.Remove(0, 2);\n"
+        "\t\t\tfLicensesView->SetFontAndColor(&headingFont, B_FONT_ALL,\n"
+        "\t\t\t\t&fHaikuGreenColor);\n"
+        "\t\t\tfLicensesView->Insert(line);\n"
+        "\t\t} else if (line.StartsWith(\"Source: http://\")\n"
+        "\t\t\t|| line.StartsWith(\"Source: https://\")) {\n"
+        "\t\t\tBString url(line);\n"
+        "\t\t\turl.Remove(0, 8);\n"
+        "\t\t\tfLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,\n"
+        "\t\t\t\t&fTextColor);\n"
+        "\t\t\tfLicensesView->Insert(\"Source: \");\n"
+        "\t\t\tfLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,\n"
+        "\t\t\t\t&fLinkColor);\n"
+        "\t\t\tfLicensesView->InsertHyperText(url.String(),\n"
+        "\t\t\t\tnew URLAction(url.String()));\n"
+        "\t\t} else if (line.StartsWith(\"http://\") || line.StartsWith(\"https://\")) {\n"
+        "\t\t\tfLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,\n"
+        "\t\t\t\t&fLinkColor);\n"
+        "\t\t\tfLicensesView->InsertHyperText(line, new URLAction(line.String()));\n"
+        "\t\t} else {\n"
+        "\t\t\tfLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,\n"
+        "\t\t\t\t&fTextColor);\n"
+        "\t\t\tfLicensesView->Insert(line);\n"
+        "\t\t}\n"
+    )
+    if old not in text:
+        raise SystemExit("license line format not found")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    print("patched AboutSystem.cpp (license format)")
+
+
 def patch_license_entries() -> None:
     """Style license headings, and list Haiku's own components with links."""
     path = ABOUT / "AboutSystem.cpp"
@@ -656,14 +731,26 @@ AboutView::_FillLicenses()
 			end = text.Length();
 		BString line;
 		text.CopyInto(line, start, end - start);
-		if (line.StartsWith("http://") || line.StartsWith("https://")) {
-			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
-				&fLinkColor);
-			fLicensesView->InsertHyperText(line, new URLAction(line.String()));
-		} else if (line.Length() > 0 && line.FindFirst(".") < 0) {
+		if (line.StartsWith("# ")) {
+			line.Remove(0, 2);
 			fLicensesView->SetFontAndColor(&headingFont, B_FONT_ALL,
 				&fHaikuGreenColor);
 			fLicensesView->Insert(line);
+		} else if (line.StartsWith("Source: http://")
+			|| line.StartsWith("Source: https://")) {
+			BString url(line);
+			url.Remove(0, 8);
+			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
+				&fTextColor);
+			fLicensesView->Insert("Source: ");
+			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
+				&fLinkColor);
+			fLicensesView->InsertHyperText(url.String(),
+				new URLAction(url.String()));
+		} else if (line.StartsWith("http://") || line.StartsWith("https://")) {
+			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
+				&fLinkColor);
+			fLicensesView->InsertHyperText(line, new URLAction(line.String()));
 		} else {
 			fLicensesView->SetFontAndColor(be_plain_font, B_FONT_ALL,
 				&fTextColor);
@@ -701,6 +788,7 @@ AboutView::_FillLicensesUnusedAnchor()
 
 def main() -> int:
     copy_whatsnew()
+    patch_license_format()
     patch_rdef()
     patch_jam()
     patch_cpp()
