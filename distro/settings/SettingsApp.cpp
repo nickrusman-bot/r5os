@@ -5,6 +5,7 @@
 
 
 #include "DeskbarModule.h"
+#include "DisplayModule.h"
 #include "InformationModule.h"
 #include "NotificationsModule.h"
 #include "VirtualMemoryModule.h"
@@ -36,6 +37,7 @@ SettingsApp::SettingsApp()
 	fWindow(NULL)
 {
 	register_legacy_pages(fManager);
+	register_display_page(fManager);
 	register_deskbar_page(fManager);
 	register_notifications_page(fManager);
 	register_virtual_memory_page(fManager);

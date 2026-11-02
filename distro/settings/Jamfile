@@ -19,8 +19,9 @@ Application Settings :
 	NotificationsModule.cpp
 	VirtualMemoryModule.cpp
 	InformationModule.cpp
+	DisplayModule.cpp
 	AdminLock.cpp
-	: be tracker translation shared libr5icons.so [ TargetLibstdc++ ]
+	: be tracker translation shared libr5icons.so libr5ui.so [ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

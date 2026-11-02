@@ -9,6 +9,8 @@
 
 #include "DeskbarModule.h"
 
+#include <R5UI.h>
+
 #include "SettingsManager.h"
 #include "SettingsModule.h"
 
@@ -441,14 +443,8 @@ void
 DeskbarPlace::Draw(BRect updateRect)
 {
 	(void)updateRect;
-	BRect outer = _Screen();
-	BRect inner = outer.InsetByCopy(5, 5);
-	SetHighColor(ui_color(B_CONTROL_BORDER_COLOR));
-	FillRoundRect(outer, 4, 4);
-	SetHighColor(ui_color(B_CONTROL_BACKGROUND_COLOR));
-	FillRoundRect(inner, 2, 2);
-	SetHighColor(ui_color(B_CONTROL_BORDER_COLOR));
-	StrokeRoundRect(inner, 2, 2);
+	BRect inner = r5_screen_draw(this, _Screen(),
+		ui_color(B_CONTROL_BACKGROUND_COLOR));
 
 	BRect bar = inner.InsetByCopy(3, 3);
 	float thickness = 8;

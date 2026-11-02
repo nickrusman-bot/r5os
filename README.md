@@ -6,7 +6,7 @@ This is **not** the official Haiku distribution and **not** BeOS. See `distro/DI
 
 R5OS is **multi-license**, not an MIT-only tree. Haiku files keep their original license and copyright. New files that R5OS owns default to GPL-3.0-or-later when R5OS can license that whole file. Policy: `docs/LICENSING.md`. Identified components: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`. The Haiku tree has not been audited file by file. About has What’s new, Credits, and Licenses. VirtualBox 7.2.22 Guest Additions are GPL-3.0-only. The binaries are not in git. The image installs the guest modules, `VBoxService`, `VBoxTray`, and `VBoxControl`, with the GPL-3.0 text and the matching source. Assessment: `docs/LICENSING.md` and `docs/VBOX-GUEST.md`.
 
-Current tree: **R5OS 2026.1-dev Build 10035** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string, What’s new (`distro/WHATSNEW`), Credits, and Licenses.
+Current tree: **R5OS 2026.1-dev Build 10036** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string, What’s new (`distro/WHATSNEW`), Credits, and Licenses.
 
 ## What is in the image now
 
@@ -17,7 +17,7 @@ User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG
 - Wi-Fi join/remember, IPv6 SLAAC/DAD on a home LAN, AirPrint/IPP add, AirPlay 1 to speakers (not AirPlay 2 pairing).
 - Shutdown no longer waits forever on IPv6 SLAAC or the VirtualBox COM1 clipboard helper.
 - **Users & Accounts** opens on your own card (picture, name, username, email, password). Other people stay hidden until an administrator unlocks the list. A new account needs a password. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`, now a normal user id (1000 or higher), not 0. Sign in still shows everyone who can sign in.
-- **Settings** is one window. The list and Search are 200 wide. A home card is at least 280. The window opens at 1030 by 610. A change is applied at once. The bottom row is Back, Home, the lock, Revert, and Defaults. A locked page stays gray until an administrator opens it. Pages include Desktop and Deskbar, Wallpaper, Notifications, and Virtual memory. The separate preference programs stay installed. Frame: `docs/SETTINGS.md`.
+- **Settings** is one window. The list and Search are 200 wide. A home card is at least 280. The window opens at 1030 by 610. A change is applied at once. The bottom row is Back, Home, the lock, Revert, and Defaults. A locked page stays gray until an administrator opens it. Pages include Desktop and Deskbar, Wallpaper, Notifications, Display, and Virtual memory. Display waits for Apply before it changes the picture. The separate preference programs stay installed. Frame: `docs/SETTINGS.md`.
 - **Printers and Repositories** stay visible as their own programs. An administrator changes them. Another account uses that program's lock. Printer queues are for the computer. Swap is the Virtual memory page in Settings. The separate VirtualMemory program stays installed.
 - **Sign-in screen** before Tracker/Deskbar. The leaf menu says **Log out** and the account name, then returns to Sign in. **Lock screen** in the leaf menu covers that same session; apps stay open until you unlock with your password or log out. Restart and a cold boot also return to Sign in. After a valid password, Tracker and Deskbar run as that account: a standard person uses `/boot/home/users/<name>`, their own Trash, and their own MIME database. Folder icons (including the leaf menu) are the same yellow folders for everyone. There is still **one screen**.
 - **Locked machine settings.** Preferences are not hidden by role. Network, Screen, Time, and Users stay in the list. An administrator changes them immediately. A standard account looks, then unlocks with an administrator name and password (checked by Sign in, uid 0). In Settings that lock sits between Home and Revert. The separate programs keep their own lock. That lasts a few minutes. Personal prefs (Appearance, Backgrounds, …) stay with the signed-in person.
@@ -29,6 +29,7 @@ Home folders of extra accounts are private (`0700`). `user` is in group `admin` 
 | Path | Role |
 |---|---|
 | `distro/` | Overlay: version, What’s new, Jam profile, branding, extra apps (Users, Wi-Fi, AirPlay, …) |
+| `distro/ui` | `libr5ui.so`, the shared screen picture (`docs/LIBR5.md`) |
 | `docs/` | Roadmap, multi-user, Settings, IPv6, VirtualBox, licensing (`docs/LICENSING.md`, `docs/SETTINGS.md`) |
 | `LICENSES/` | Unmodified license texts (SPDX filenames) |
 | `THIRD_PARTY_NOTICES.md` | Components that have actually been identified |

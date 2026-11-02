@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10036 - Display
+Settings has a Display page under System. It sets the resolution, the colors, the refresh rate, and the workspaces. Apply keeps the picture. The page stays gray until an administrator opens the lock.
+
 R5OS 2026.1-dev Build 10035 - Narrower Settings
 Settings opens a little narrower, so Revert and Defaults stay on the screen.
 

@@ -8,6 +8,8 @@
 
 #include "NotificationsModule.h"
 
+#include <R5UI.h>
+
 #include "SettingsManager.h"
 #include "SettingsModule.h"
 
@@ -696,17 +698,13 @@ NotificationPlace::Draw(BRect updateRect)
 {
 	(void)updateRect;
 	BRect outer = _Screen();
-	BRect inner = outer.InsetByCopy(5, 5);
-	rgb_color border = ui_color(B_CONTROL_BORDER_COLOR);
 	rgb_color text = ui_color(fEnabled
 		? B_CONTROL_TEXT_COLOR : B_CONTROL_BORDER_COLOR);
-	SetHighColor(border);
-	FillRoundRect(outer, 4, 4);
-	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		B_DARKEN_1_TINT));
-	FillRoundRect(inner, 2, 2);
-	SetHighColor(border);
-	StrokeRoundRect(inner, 2, 2);
+	rgb_color content = fEnabled
+		? tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), B_DARKEN_1_TINT)
+		: ui_color(B_PANEL_BACKGROUND_COLOR);
+	BRect inner = r5_screen_draw(this, outer, content);
+	rgb_color border = ui_color(B_CONTROL_BORDER_COLOR);
 
 	BRect bar = _Bar(inner);
 	SetHighColor(fPosition == kFollowDeskbar ? text : border);

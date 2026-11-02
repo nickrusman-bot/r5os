@@ -39,6 +39,8 @@ SOURCES = (
     "WallpaperModule.h",
     "InformationModule.cpp",
     "InformationModule.h",
+    "DisplayModule.cpp",
+    "DisplayModule.h",
     "DeskbarModule.cpp",
     "DeskbarModule.h",
     "NotificationsModule.cpp",
@@ -192,6 +194,11 @@ def main() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.apply_icons(HAIKU)
+    spec = importlib.util.spec_from_file_location(
+        "apply_r5ui", ROOT / "scripts" / "apply-r5ui.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.apply_r5ui(HAIKU)
 
 
 if __name__ == "__main__":

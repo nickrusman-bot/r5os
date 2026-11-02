@@ -25,12 +25,24 @@ This layout is fixed. Do not move it.
 - `r5-desktop` gives the session user `config/cache` and `config/settings`, including `settings/system`, before it drops uid. The image creates those directories as root, mode 0755.
 - Notifications is a page under System. It writes `~/config/settings/system/notifications` immediately, the file the notification server reads. Where a notification appears is a screen picture: the four corners, or against the Deskbar. The notification server is a system service (uid 0) and must not create that file. The separate Notifications program stays installed. Defaults restores notifications on, a timeout of 10 seconds, a width of 300, and the lower right. It does not clear the application list. Revert restores the whole page, including that list.
 - Search stays under the list. The bottom row is Back, Home, the lock, Revert, and Defaults, in that order. Back, Home, and the lock are icon buttons of the same height as Revert and Defaults. Back and Home call `r5_button_set_icon()` with `R5_ICON_BACK` and `R5_ICON_HOME`. The lock calls `r5_button_set_lock()`. Closed is `R5_ICON_LOCKED` (Haiku `Action_Logout`). Open is `R5_ICON_UNLOCKED` (Haiku `Action_Login`). They do not get the wrench. A page that requires an administrator is gray, and nothing is written, until the lock is open. One unlock covers every such page for the existing grant. An administrator starts unlocked. Lists still scroll.
+- Display is a page under System. It stays gray until an administrator opens the lock. Resolution, colors, and refresh wait for Apply, then ask to keep the picture. After 12 seconds without a choice the previous picture returns. Workspace columns and rows change immediately. Revert restores the mode and the workspace layout from when the page was opened. The separate Screen program stays installed. The screen picture is `r5_screen_draw()` in `libr5ui.so`. Notifications and Desktop and Deskbar use that call.
 - Virtual memory is a page under System. It writes `/boot/system/settings/kernel/drivers/virtual_memory` immediately, the file the kernel reads. A change takes effect on the next start. The separate VirtualMemory program stays installed. Defaults restores swap on, automatic size, and the boot volume. Revert restores the values from when the page was opened.
 - A change is applied immediately. There is no Save button. Revert puts the page back to the values from when it was opened, and applies those. Defaults puts a page back to its factory setup, and applies that. Defaults stays disabled on a page that has no factory setup.
 
 Do not open Tracker’s private resources, and do not read `libtracker.so`, to draw an icon. The public calls are `r5_icon_bitmap()`, `r5_vector_icon_bitmap()`, `r5_file_icon_bitmap()`, and `r5_mime_icon_bitmap()`, plus the matching `r5_button_set_*()` calls that size the button, including `r5_button_set_lock()`. Predefined icons are `R5_ICON_BACK`, `R5_ICON_FORWARD`, `R5_ICON_UP`, `R5_ICON_HOME`, `R5_ICON_UNLOCKED`, and `R5_ICON_LOCKED`. Their numbers stay fixed. A new predefined icon is added at the end of that enum, with the unmodified picture and a line in `docs/ICONS.md`. Any other icon is a vector buffer, a file path, or a MIME type passed to those calls. The library is the shared library `libr5icons.so` from `distro/icons`. The regular image and the minimum image both install it in `/system/lib`. Link `libr5icons.so`. Do not put these calls in `libbe`.
 
-`docs/SETTINGS.md` describes the same frame. `docs/ICONS.md` is the icon contract.
+`docs/SETTINGS.md` describes the same frame. `docs/ICONS.md` is the icon contract. `docs/LIBR5.md` is the shared-library contract.
+
+## LibR5
+
+These libraries sit next to `libbe`. They do not replace it. A Haiku program that links only `libbe` keeps that ABI. Do not add these calls to `libbe`. Do not add a function here only to rename a `libbe` call.
+
+A helper written for R5OS, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is GPL-3.0-or-later. A program that links one of these libraries combines with that license. A program that does not link it is unchanged.
+
+- `libr5icons.so`, header `R5Icons.h`, source `distro/icons`. Icons. `docs/ICONS.md`.
+- `libr5ui.so`, header `R5UI.h`, source `distro/ui`. The screen picture. `docs/LIBR5.md`.
+
+The regular image and the minimum image both install them in `/system/lib`. The soname has no version suffix.
 
 ## Compatibility
 

@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+SubDir HAIKU_TOP src preferences r5ui ;
+
+# Primary arch: the target name is libr5ui.so. That is also the soname.
+# Both images install it through HaikuImageGetSystemLibs.
+SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
+	R5UI.cpp
+	: be [ TargetLibstdc++ ]
+	;

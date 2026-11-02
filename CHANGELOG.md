@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Display page and libr5ui.so
+
+The sidebar item Display opened the separate Screen program. Display is now a page under System. It reads the mode list from `BScreen` and sets a mode with `BScreen::SetMode`, the same call Screen uses. The separate Screen program stays installed. The page requires an administrator. Resolution, colors, and refresh stay on the menus until Apply. Apply asks to keep the picture. A thread restores the previous mode after 12 seconds if neither button was used. Workspace columns and rows call `BPrivate::set_workspaces_layout` immediately. Revert puts back the mode and the workspace layout from when the page was opened. Brightness, combined displays, and the VESA boot file are not on this page.
+
+The screen frame that Notifications and Desktop and Deskbar each drew is now `r5_screen_draw()` and `r5_screen_caption()` in `libr5ui.so`. Those two pages call it. Display uses it for the picture and the dpi line. `libbe` is unchanged. A program that does not link `libr5ui.so` is unchanged. The contract is `docs/LIBR5.md`.
+
+`distro/BUILD` is 10036. `jam -q Settings libr5ui.so` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 18:13 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. About shows build 10036. The image stamp is `2 Nov 2026, 18:13`. VirtualBox is started from this image afterwards. The desktop was not seen from here. Display was not opened from here. The first compile failed because `register_display_page` used `SettingsManager` without including its header. The include was added and the next compile exited 0. A second apply duplicated the `r5icons` and `r5ui` Jam includes. The scripts now look for their own `SubInclude` line, and the extra lines were removed.
+
 ### Settings opens narrower
 
 The list and Search were 248 wide, and a home card was at least 300. On a 1024-wide screen the window opened at 1100, so Defaults sat past the right edge. The list and Search are now 200. A home card is at least 280. The page area's minimum is 740. The window opens at 1030 by 610, and the shortest size is 910 by 560. On a 1024-wide screen the frame is still 6 pixels wider than the display. A first cut used 198 and 290. Those widths were changed to 200 and 280 before this image was looked at.
