@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Audio tickets: time source, hot-plug, packed 24-bit, mixer latency
+
+`BTimeSource` no longer enters the debugger when a performance or real time span is too wide for a float. The scale uses double (Haiku #20307). A finished notification sound deletes its player, which disconnects and releases the mixer (Haiku #16739). Changing a sound-card rate no longer divides by zero in `hmulti_audio` (Haiku #19978). Packed 24-bit samples are written and read as 3 bytes when the channel stride is not a multiple of 4, and `usb_audio` accepts that subframe size again (Haiku #20267).
+
+`multi_audio` watches `/dev/audio/hmulti` and publishes a new device. The add-on server instantiates that physical node and asks the media server to rescan. A dead default output is dropped, and a failed disconnect does not block the next connection (Haiku #12776, #12777).
+
+The system mixer no longer adds every late buffer on top of the last one, up to 150 ms. Its published latency is one buffer plus the current lateness, and a smaller notice gives half of the extra back. The wildcard format is 48 kHz instead of 96 kHz (Haiku #10142, #9438). The resampler is still linear.
+
+Not changed: USB audio KDL and EHCI isochronous locks (#18320, #18842, #18994, #18995, #19472), UAC2 headers, and more than two USB channels. No loopback was measured.
+
+`jam -q` of `libmedia.so`, `media_addon_server`, `usb_audio`, `hmulti_audio.media_addon`, `mixer.media_addon`, and `media_server` exited 0 on 2 Nov 2026 at 23:05 Europe/Amsterdam. `jam -q @r5-raw` on 2 Nov 2026 at 23:09 Europe/Amsterdam exited 0 and updated 1212 targets. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. No loopback was measured. VirtualBox is started from this image afterwards.
+
 ### Fonts and Look and Feel taken from the Appearance preference
 
 The first Settings pages for fonts and look drew only the lower box. The font rows, the decorator, the control look, and the scroll-bar arrows were not on the page. Those modules, and `AppearanceModule.cpp`, are removed. The two pages are built again from the Appearance preference (`FontView`, `FontSelectionView`, `AntialiasingSettingsView`, `LookAndFeelSettingsView`, `FakeScrollBar`, `ColorsView`). Those files keep the Haiku MIT copyright. Antialiasing is a box on Fonts. Colors is a box on Look and Feel. A change still posts the preference's update message to the page, which applies it at once.
