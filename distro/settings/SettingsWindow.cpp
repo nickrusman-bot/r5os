@@ -9,6 +9,7 @@
 #include "HomeView.h"
 #include "SettingsFont.h"
 #include "SettingsHost.h"
+#include "SettingsIcon.h"
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
 #include "SettingsModule.h"
@@ -251,6 +252,7 @@ PageIcon::_Load(BNode& node)
 		delete bitmap;
 		return false;
 	}
+	r5_settings_apply_prefs_overlay(bitmap);
 	fBitmap = bitmap;
 	return true;
 }
@@ -264,9 +266,10 @@ PageIcon::SetSignature(const char* signature)
 		BRect bounds(BPoint(0, 0),
 			be_control_look->ComposeIconSize(B_LARGE_ICON));
 		BBitmap* bitmap = new BBitmap(bounds, B_RGBA32);
-		if (BMimeType(signature).GetIcon(bitmap, B_LARGE_ICON) == B_OK)
+		if (BMimeType(signature).GetIcon(bitmap, B_LARGE_ICON) == B_OK) {
+			r5_settings_apply_prefs_overlay(bitmap);
 			fBitmap = bitmap;
-		else
+		} else
 			delete bitmap;
 	}
 	Invalidate();

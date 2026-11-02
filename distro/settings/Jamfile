@@ -10,6 +10,7 @@ Application Settings :
 	SettingsHost.cpp
 	HomeView.cpp
 	SettingsFont.cpp
+	SettingsIcon.cpp
 	LegacyPages.cpp
 	WallpaperModule.cpp
 	InformationModule.cpp

@@ -17,3 +17,6 @@ resource app_version {
 	short_info = "Settings",
 	long_info = "R5OS settings host. Existing preference programs stay separate."
 };
+
+// Unmodified Haiku MIT icon (data/artwork/icons/Overlay_prefs).
+resource(1, "prefs-overlay") #'VICN' import "overlay-prefs.hvif";

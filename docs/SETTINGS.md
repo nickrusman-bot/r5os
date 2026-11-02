@@ -8,7 +8,7 @@ One Settings window for R5OS. Existing preference programs stay separate and kee
 
 This frame is fixed (`AGENTS.md`). The list starts under the tab and runs down to Search. The title and the subtitle sit beside the list, and that page's icon sits at the right of the title block. The page content is under the subtitle. Search stays under the list. Home, Back, Revert, and Save stay on that bottom row. The window opens at 1100 by 610. The list scrollbar is there only when the items are taller than the list. A category card lights up under the pointer and looks pressed while the mouse button is held down.
 
-A new page adds its icon signature in `module_icon()` in `SettingsWindow.cpp`. Home uses the icon of the Preferences folder. Information uses the About icon.
+A new page adds its icon signature in `module_icon()` in `SettingsWindow.cpp`. Home uses the icon of the Preferences folder. Information uses the About icon. Every one of those icons, and the icons on the home cards, has the Haiku preferences wrench drawn on top. The wrench is the unmodified Haiku file `overlay-prefs.hvif`.
 
 Information is a page under System. It shows the computer and the R5OS version in two boxes. The labels are left-aligned. Copy sits under the rows of its box. There is no device id to show. Storage is the boot volume. The build date is the Europe/Amsterdam time of the image jam.
 

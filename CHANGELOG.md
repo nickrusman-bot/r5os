@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Settings icons wear the preferences wrench
+
+Every icon in Settings, on the page and on the home cards, gets the Haiku preferences wrench drawn on top. The wrench is the unmodified Haiku file `data/artwork/icons/Overlay_prefs`, MIT, copied to `distro/settings/overlay-prefs.hvif` and stored in the Settings resources as `prefs-overlay`. `AGENTS.md` requires that overlay. A page icon is not drawn without it.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 09:29 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 09:29`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### The Settings frame stays put, and each page has an icon
 
 The list, the title block, the icon at the right of that block, and the bottom row (Search, Home, Back, Revert, Save) are fixed. `AGENTS.md` says not to move them. A page only changes the area under the subtitle. Each page loads the icon of its program. Home uses the Preferences folder icon. Information uses the About icon. A page without a signature in `module_icon()` shows an empty slot of the same size.

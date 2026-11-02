@@ -19,6 +19,7 @@ This layout is fixed. Do not move it.
 - The list starts under the yellow tab and runs down to Search.
 - The title and the subtitle sit beside the list.
 - Every page shows its icon at the right of that title block. A new page adds its icon in `module_icon()` in `distro/settings/SettingsWindow.cpp`. Home uses the Preferences folder icon. A category uses the icon already stored for that category.
+- Every settings icon, including the home cards, gets the Haiku preferences wrench on top. That is `r5_settings_apply_prefs_overlay()`. Do not draw a settings icon without it.
 - The page content is the only part that changes. It sits under the subtitle.
 - Search stays under the list. Home, Back, Revert, and Save stay on that same bottom row.
 

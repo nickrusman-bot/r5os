@@ -6,6 +6,8 @@ Readable list for users and release builds. The rules are `docs/LICENSING.md`. T
 
 R5OS is an independent system based on Haiku. Haiku’s own copyright notices and licenses stay on Haiku’s files. Much of Haiku is MIT; the tree is not all MIT. This repository does not relicense it.
 
+The preferences wrench on Settings icons is Haiku’s unmodified `data/artwork/icons/Overlay_prefs`, copied to `distro/settings/overlay-prefs.hvif`. `data/artwork/ReadMe` releases the icons under the MIT license.
+
 ## Identified in this repository
 
 ### AirPlay receiver
