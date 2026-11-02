@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Latency file and mixer gain
+
+Build 10041 created `~/config/settings/kernel/drivers` and still did not create `hda.settings`. The prefs built that path with `BPath` / `create_directory`, which walk a `BEntry`. The directory was left behind and the file was not. The save now uses `find_directory` into a string, `mkdir`, `chmod 0755`, and `open`. A failure alert includes that path and `strerror`. The same text is written to `usb_audio`.
+
+The mixer scaled a stereo gain by the average of the two channels. With both channels at 0 that divides by zero and stores NaN. A slider that starts from silence now sets both channels to the new level. This is the code path behind the mixer-volume crash (Haiku #18981, GitHub #3347). It is not proven to be the whole crash.
+
+`multi_audio` called `BufferExchange` in a loop and ignored an error. A driver that returns at once then uses a whole CPU (Haiku #16057, GitHub #2250). An error now waits 20 ms before the next try. A successful exchange is unchanged.
+
+Hardware-specific "no sound on this laptop" tickets were not changed. Guest syslog was not read.
+
+`jam -q Media mixer.media_addon hmulti_audio.media_addon` exited 0 before the image. `MediaViews.o`, `AudioMixer.o`, `MultiAudioNode.o`, and `libbe.so` linked. `jam -q @r5-raw` on 3 Nov 2026 at 00:48 Europe/Amsterdam exited 0 and updated 1743 targets. `distro/BUILD` is 10042. What's new is "Latency file". The header date is "3 Nov 2026, 00:45". Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 00:50 Europe/Amsterdam. The Latency menu was not opened from here.
+
 ### Media preferences quit double-free
 
 Closing Media after changing a popup (audio output, or the HD Audio sample rate) stopped the program. The debugger showed `bogus pointer (double free)` in `BLooper::SetCommonFilterList`, called from `MediaWindow::~MediaWindow`. `BMenuField::MouseDown` puts a filter on the window. `MouseUp` removes it. Quitting while that menu is still tracking skips `MouseUp`. `~BMenuField` deleted the filter, then `~BLooper` deleted it again. The filter is now removed in `DetachedFromWindow` before the field is deleted.

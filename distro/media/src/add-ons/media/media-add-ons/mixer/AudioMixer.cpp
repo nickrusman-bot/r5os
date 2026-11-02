@@ -1576,6 +1576,23 @@ err:
 }
 
 
+static void
+scale_stereo_gain(float left, float right, float target, float& outLeft,
+	float& outRight)
+{
+	// Both channels at 0 make the old scale divide by zero and store NaN.
+	float master = (left + right) * 0.5f;
+	if (master > 0.00001f) {
+		float factor = target / master;
+		outLeft = left * factor;
+		outRight = right * factor;
+	} else {
+		outLeft = target;
+		outRight = target;
+	}
+}
+
+
 void
 AudioMixer::SetParameterValue(int32 id, bigtime_t when, const void *value,
 	size_t size)
@@ -1654,14 +1671,16 @@ AudioMixer::SetParameterValue(int32 id, bigtime_t when, const void *value,
 			if (fCore->Settings()->UseBalanceControl()
 				&& output->GetOutputChannelCount() == 2 && 1 /*channel mask is stereo */) {
 				// single channel control + balance
+				if (size != sizeof(float))
+					goto err;
 				float l = output->GetOutputChannelGain(0);
 				float r = output->GetOutputChannelGain(1);
-				float m = (l + r) / 2;	// master volume
 				float v = DB_TO_GAIN(static_cast<const float *>(value)[0]);
-				float f = v / m;		// factor for both channels
-				TRACE("gain set l %1.3f, r %1.3f, m %1.3f, v %1.3f, f %1.3f\n",l,r,m,v,f);
-				output->SetOutputChannelGain(0, output->GetOutputChannelGain(0) * f);
-				output->SetOutputChannelGain(1, output->GetOutputChannelGain(1) * f);
+				float outLeft = l;
+				float outRight = r;
+				scale_stereo_gain(l, r, v, outLeft, outRight);
+				output->SetOutputChannelGain(0, outLeft);
+				output->SetOutputChannelGain(1, outRight);
 			} else {
 				// multi channel control
 				if (size == sizeof(float)) {
@@ -1731,14 +1750,16 @@ AudioMixer::SetParameterValue(int32 id, bigtime_t when, const void *value,
 				// Physical input channels
 				if (fCore->Settings()->UseBalanceControl() && input->GetInputChannelCount() == 2 && 1 /*channel mask is stereo */) {
 					// single channel control + balance
+					if (size != sizeof(float))
+						goto err;
 					float l = input->GetInputChannelGain(0);
 					float r = input->GetInputChannelGain(1);
-					float m = (l + r) / 2;	// master volume
 					float v = DB_TO_GAIN(static_cast<const float *>(value)[0]);
-					float f = v / m;		// factor for both channels
-					TRACE("gain set l %1.3f, r %1.3f, m %1.3f, v %1.3f, f %1.3f\n",l,r,m,v,f);
-					input->SetInputChannelGain(0, input->GetInputChannelGain(0) * f);
-					input->SetInputChannelGain(1, input->GetInputChannelGain(1) * f);
+					float outLeft = l;
+					float outRight = r;
+					scale_stereo_gain(l, r, v, outLeft, outRight);
+					input->SetInputChannelGain(0, outLeft);
+					input->SetInputChannelGain(1, outRight);
 				} else {
 					// multi channel control
 					if (size < input->GetInputChannelCount() * sizeof(float))
@@ -1750,14 +1771,16 @@ AudioMixer::SetParameterValue(int32 id, bigtime_t when, const void *value,
 				// Virtual output channels
 				if (fCore->Settings()->UseBalanceControl() && input->GetMixerChannelCount() == 2 && 1 /*channel mask is stereo */) {
 					// single channel control + balance
+					if (size != sizeof(float))
+						goto err;
 					float l = input->GetMixerChannelGain(0);
 					float r = input->GetMixerChannelGain(1);
-					float m = (l + r) / 2;	// master volume
 					float v = DB_TO_GAIN(static_cast<const float *>(value)[0]);
-					float f = v / m;		// factor for both channels
-					TRACE("gain set l %1.3f, r %1.3f, m %1.3f, v %1.3f, f %1.3f\n",l,r,m,v,f);
-					input->SetMixerChannelGain(0, input->GetMixerChannelGain(0) * f);
-					input->SetMixerChannelGain(1, input->GetMixerChannelGain(1) * f);
+					float outLeft = l;
+					float outRight = r;
+					scale_stereo_gain(l, r, v, outLeft, outRight);
+					input->SetMixerChannelGain(0, outLeft);
+					input->SetMixerChannelGain(1, outRight);
 				} else {
 					// multi channel control
 					if (size < input->GetMixerChannelCount() * sizeof(float))

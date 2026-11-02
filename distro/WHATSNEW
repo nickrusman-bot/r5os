@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10042 - Latency file
+The latency choice is written into the sound settings. Restart media services to use it. A volume slider that starts from silence keeps a real level.
+
 R5 2026.1-dev Build 10041 - Media closes
 Closing Media after a sound setting no longer stops the program. The latency choice is saved. Restart media services to use it.
 

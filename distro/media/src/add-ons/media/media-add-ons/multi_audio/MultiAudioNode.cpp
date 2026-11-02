@@ -1782,7 +1782,13 @@ MultiAudioNode::_OutputThread()
 			// make sure the buffers don't change while we're playing with them
 
 		// send buffer
-		fDevice->BufferExchange(&bufferInfo);
+		status_t exchangeStatus = fDevice->BufferExchange(&bufferInfo);
+		if (exchangeStatus != B_OK) {
+			// A driver that returns at once would spin this thread.
+			locker.Unlock();
+			snooze(20000);
+			continue;
+		}
 
 		//PRINT(("MultiAudioNode::RunThread: buffer exchanged\n"));
 		//PRINT(("MultiAudioNode::RunThread: played_real_time: %lld\n", bufferInfo.played_real_time));
