@@ -903,8 +903,10 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 		NULL, fFilter);
 
 	BLayoutBuilder::Group<>(this)
-		.Add(general)
-		.Add(applications)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.Add(general)
+			.Add(applications)
+			.End()
 		.AddGlue();
 
 	if (fModule != NULL)

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Notifications and Wallpaper sit side by side
+
+Enable notifications and Applications were stacked, so Notifications was taller than the area under the subtitle. They now share one row, top aligned, the same way Desktop and Deskbar puts Applications and Menu next to each other. The screen picture stays 200 by 148. The application list keeps a minimum width of 220. Both fit in the 1100-wide window, so that page no longer needs a scrollbar.
+
+Wallpaper already used one row. The preview column was on the left. It is now on the right, and the workspace menu, picture, placement, outline, and color are on the left. The strut that lines the two box borders up still follows the workspace-menu label.
+
+`distro/BUILD` is 10032. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 15:45 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10032. The image stamp is `2 Nov 2026, 15:45`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### Notifications default to the lower right, and Deskbar fits
 
 A missing notification position, and Defaults, use the lower right (`B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT`). Follow Deskbar stays a choice on the screen picture. The server constant `kDefaultNotificationPosition` matches that, so a new file and the old preferences program use the same place.
