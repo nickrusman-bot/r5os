@@ -141,7 +141,7 @@ License: SPDX-ID
 Source: https://example.com
 ```
 
-A line that starts with `# ` is the heading. `Source: ` is followed by one URL. This is the list for that tab, not a second copy of every package, and it is not the file-by-file audit. Credits still names people and projects. System information stays on the logo page. The window title stays About R5OS. The tab has not been checked on a booted screen.
+A line that starts with `# ` is the heading. `Source: ` is followed by one URL. This is the list for that tab, not a second copy of every package, and it is not the file-by-file audit. Credits still names people and projects. System information stays on the logo page. The window title is About R5. The tab has not been checked on a booted screen.
 
 ## Checks we have not wired up
 

@@ -154,7 +154,7 @@ Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`,
 
 Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh --revision`), not the build number. Do not use Haiku `hrev` as the distro version. Keep upstream hrev only where it is still needed for debugging.
 
-Bump `distro/BUILD` by **exactly one** when adding a **What's new** section (`distro/WHATSNEW`). Do not bump on every jam. Headings: `R5OS <VERSION> Build <N> - Title`. Newest build first. Preserve older build sections; do not reassign history.
+Bump `distro/BUILD` by **exactly one** when adding a **What's new** section (`distro/WHATSNEW`). Do not bump on every jam. Headings: `R5 <VERSION> Build <N> - Title`. Newest build first. Preserve older build sections; do not reassign history.
 
 About must keep version+build visible while What’s new is selected. What’s new is for users (no tickets, hashes, filenames). `CHANGELOG.md` is technical. They must not contradict each other. Do not advertise planned work as shipping.
 

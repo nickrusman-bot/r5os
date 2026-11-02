@@ -183,6 +183,20 @@ def install_wallpaper(haiku: pathlib.Path) -> None:
     print(f"patched {desktop} (wallpaper)")
 
 
+def patch_boot_prompt(path: pathlib.Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        'B_TRANSLATE("Welcome to R5OS!")',
+        'B_TRANSLATE("Welcome to R5 Operating System!")',
+    )
+    updated = text.replace("R5OS", "R5")
+    if updated == path.read_text(encoding="utf-8"):
+        print(f"already {path.name} (boot prompt)")
+        return
+    path.write_text(updated, encoding="utf-8")
+    print(f"patched {path.name} (boot prompt)")
+
+
 def main() -> int:
     patch_icons_rdef(HAIKU / "src/apps/deskbar/icons.rdef")
     patch_barmenubar(HAIKU / "src/apps/deskbar/BarMenuBar.cpp")
@@ -198,6 +212,7 @@ def main() -> int:
         "src/apps/firstbootprompt/BootPromptWindow.cpp",
     ):
         rewrite_product_name(HAIKU / rel)
+    patch_boot_prompt(HAIKU / "src/apps/firstbootprompt/BootPromptWindow.cpp")
     install_wallpaper(HAIKU)
     return 0
 

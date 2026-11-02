@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 SubDir HAIKU_TOP src preferences settings ;
 
-UsePrivateHeaders interface shared ;
+UsePrivateHeaders interface shared app ;
 
 Application Settings :
 	SettingsApp.cpp
@@ -25,7 +25,21 @@ Application Settings :
 	: Settings.rdef
 	;
 
-Addon settings_appearance :
-	AppearanceModule.cpp
-	: be shared [ TargetLibstdc++ ]
+Addon settings_fonts :
+	FontsModule.cpp
+	FontView.cpp
+	FontSelectionView.cpp
+	AntialiasingSettingsView.cpp
+	SettingsFont.cpp
+	: be shared localestub [ TargetLibstdc++ ]
+	;
+
+Addon settings_look :
+	LookModule.cpp
+	LookAndFeelSettingsView.cpp
+	FakeScrollBar.cpp
+	ColorsView.cpp
+	Colors.cpp
+	SettingsFont.cpp
+	: be shared localestub [ TargetLibstdc++ ]
 	;

@@ -57,7 +57,7 @@ static const char* module_icon(const char* moduleId);
 
 static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
-		"Appearance, the desktop, wallpaper, and the Deskbar.",
+		"Fonts, look and feel, wallpaper, and the Deskbar.",
 		"application/x-vnd.Haiku-Appearance" },
 	{ "system", "System",
 		"Display, sound, notifications, virtual memory, and this computer.",
@@ -1068,7 +1068,8 @@ module_icon(const char* moduleId)
 		const char* signature;
 	};
 	static const IconRow rows[] = {
-		{ "appearance", "application/x-vnd.Haiku-Appearance" },
+		{ "fonts", "application/x-vnd.Haiku-Appearance" },
+		{ "look", "application/x-vnd.Haiku-Appearance" },
 		{ "deskbar", "application/x-vnd.Haiku-DeskbarPreferences" },
 		{ "wallpaper", "application/x-vnd.Haiku-Backgrounds" },
 		{ "information", "application/x-vnd.Haiku-About" },
