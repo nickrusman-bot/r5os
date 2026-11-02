@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Notifications default to the lower right, and Deskbar fits
+
+A missing notification position, and Defaults, use the lower right (`B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT`). Follow Deskbar stays a choice on the screen picture. The server constant `kDefaultNotificationPosition` matches that, so a new file and the old preferences program use the same place.
+
+Desktop and Deskbar lays Applications and Menu in one row. Window is under that row. The page was taller than the area under the subtitle, so the scrollbar was showing.
+
+`distro/BUILD` is 10031. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 15:34 Europe/Amsterdam exited 0 and updated 1742 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10031. The image stamp is `2 Nov 2026, 15:34`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### The notification example can be saved
 
 Build 10029 still reported `Permission denied` and showed no example. The image creates `/boot/home/config/settings` as root, mode 0755, the same way it creates `config/cache`. The signed-in user cannot create `settings/system` there. The example is sent only after the write succeeds, so the alert was the only result.

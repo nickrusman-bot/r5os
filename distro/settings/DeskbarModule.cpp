@@ -708,8 +708,10 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		B_ALIGN_TOP));
 
 	BLayoutBuilder::Group<>(this)
-		.Add(applications)
-		.Add(menu)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+			.Add(applications)
+			.Add(menu)
+			.End()
 		.Add(window)
 		.AddGlue();
 

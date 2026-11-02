@@ -14,6 +14,7 @@ COPIES = (
     ("PrefletWin.cpp", HAIKU / "src" / "preferences" / "notifications"),
     ("NotificationsView.cpp", HAIKU / "src" / "preferences" / "notifications"),
     ("NotificationWindow.cpp", HAIKU / "src" / "servers" / "notification"),
+    ("Notifications.h", HAIKU / "headers" / "private" / "notification"),
 )
 
 

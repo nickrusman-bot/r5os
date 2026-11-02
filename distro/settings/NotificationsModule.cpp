@@ -61,6 +61,8 @@ static const float kMinimumWidth = 300.0f;
 static const float kMaximumWidth = 1000.0f;
 static const int32 kWidthStep = 50;
 static const int32 kFollowDeskbar = (int32)B_FOLLOW_NONE;
+static const int32 kDefaultPosition
+	= (int32)(B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT);
 static const type_code kAppUsageType = 'ipau';
 
 // Field names shared with the notification server. The file is
@@ -249,7 +251,7 @@ factory_state()
 	state.timeout = kDefaultTimeout;
 	state.width = kDefaultWidth;
 	state.iconSize = B_LARGE_ICON;
-	state.position = kFollowDeskbar;
+	state.position = kDefaultPosition;
 	return state;
 }
 
@@ -286,7 +288,7 @@ general_is_factory(const NotificationState& state)
 	return state.enabled
 		&& state.timeout == kDefaultTimeout
 		&& state.width == kDefaultWidth
-		&& state.position == kFollowDeskbar;
+		&& state.position == kDefaultPosition;
 }
 
 
@@ -441,10 +443,10 @@ load_state(status_t* statusOut)
 	if (store.FindInt32(kIconSizeName, &iconSize) == B_OK)
 		state.iconSize = iconSize;
 
-	int32 position = kFollowDeskbar;
+	int32 position = kDefaultPosition;
 	if (store.FindInt32(kPositionName, &position) != B_OK
 		|| !known_position(position))
-		position = kFollowDeskbar;
+		position = kDefaultPosition;
 	state.position = position;
 
 	type_code type;
@@ -1214,7 +1216,7 @@ NotificationsModule::ApplyDefaults(SettingsContext* context)
 	next.enabled = true;
 	next.timeout = kDefaultTimeout;
 	next.width = kDefaultWidth;
-	next.position = kFollowDeskbar;
+	next.position = kDefaultPosition;
 	status_t status = _Write(next);
 	if (status != B_OK)
 		return status;
