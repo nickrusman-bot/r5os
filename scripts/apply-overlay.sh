@@ -49,7 +49,7 @@ python3 "$ROOT/scripts/apply-branding.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-darkmode.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-ui-bugs.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-kernel-bugs.py" "$ROOT/haiku"
-for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py apply-high-bugs.py apply-qemu-drivers.py apply-desktop-enh.py apply-zeroconf.py apply-airplay.py apply-wifi.py apply-vboxclip.py apply-ipv6.py apply-users.py apply-login.py apply-app-server.py apply-vbox-guest.py apply-about.py apply-user-paths.py apply-debugger.py; do
+for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py apply-high-bugs.py apply-qemu-drivers.py apply-desktop-enh.py apply-zeroconf.py apply-airplay.py apply-wifi.py apply-vboxclip.py apply-ipv6.py apply-users.py apply-settings.py apply-login.py apply-app-server.py apply-vbox-guest.py apply-about.py apply-user-paths.py apply-debugger.py; do
 	if [[ -f "$ROOT/scripts/$patch" ]]; then
 		python3 "$ROOT/scripts/$patch" "$ROOT/haiku"
 	fi
