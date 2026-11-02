@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10040 - Shorter sound buffers
+Media has a Latency choice on Audio settings. Normal keeps the usual buffer. Low latency uses 256 frames. Pro audio uses 128 frames. Restart media services to apply it.
+
 R5 2026.1-dev Build 10039 - Clearer audio
 Sound that does not match the mixer rate stays brighter. High quality follows the curve of the sound instead of a straight line between samples. The usual rate is 48 kHz. A late sound no longer leaves the mixer delayed.
 

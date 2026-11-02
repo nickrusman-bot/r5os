@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Audio latency choice
+
+Media preferences, Audio settings, has a Latency menu. Normal leaves the sound-card buffer alone. Low latency writes 256 frames. Pro audio writes 128 frames. The choice is stored in the user driver settings `kernel/drivers/hda.settings` and `kernel/drivers/usb_audio` (`play_buffer_frames` and `record_buffer_frames`). Restart media services closes the device so the next open picks it up.
+
+HDA already read those keys on open and used them instead of `default_buffer_length_for_rate` (2048 frames at 48 kHz, about 42.7 ms). 256 frames is about 5.3 ms. 128 frames is about 2.7 ms. The buffer count stays 2. syslog prints `hda: sample size … buffer length …` when the stream is set up.
+
+USB audio ignored that file. It now reads the same keys when it lays out isochronous buffers. A 1 ms USB packet does not divide 256 or 128 at 48 kHz, so the driver rounds up to a whole packet (288 or 144 frames). The normal path is unchanged: 2048 samples times two buffers, then rounded to a page. syslog prints `usb_audio: play buffer N frames (setting M)`. No USB device was attached here.
+
+Packed 24-bit was already in the previous build. `usb_audio` accepts a 3-byte subframe, and `hmulti_audio` writes three bytes when the channel stride is not a multiple of 4. That path was not changed.
+
+`jam -q Media usb_audio` exited 0 on 2 Nov 2026 at 23:55 Europe/Amsterdam. `distro/BUILD` is 10040. What's new is "Shorter sound buffers". `jam -q @r5-raw` on 2 Nov 2026 at 23:58 Europe/Amsterdam exited 0 and updated 1237 targets. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started a new VDI from this image on 2 Nov 2026 at 23:59 Europe/Amsterdam. The Latency menu was not opened from here. No loopback was measured.
+
 ### Mixer resampling uses cubic Hermite
 
 The mixer’s high-quality resampler joined two samples with a straight line. That rolls the highs off well below the Nyquist frequency (Haiku #9438). It now uses four neighbours (Catmull-Rom). The same-rate path is still a copy. Drop/repeat samples is unchanged. The preference line says cubic interpolation.
