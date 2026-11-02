@@ -16,6 +16,7 @@ Application Settings :
 	LegacyPages.cpp
 	WallpaperModule.cpp
 	DeskbarModule.cpp
+	NotificationsModule.cpp
 	InformationModule.cpp
 	AdminLock.cpp
 	: be tracker translation libr5icons.so [ TargetLibstdc++ ]

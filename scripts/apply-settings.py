@@ -41,6 +41,8 @@ SOURCES = (
     "InformationModule.h",
     "DeskbarModule.cpp",
     "DeskbarModule.h",
+    "NotificationsModule.cpp",
+    "NotificationsModule.h",
 )
 
 

@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Notifications is a Settings page
+
+Settings adds Notifications under System. The home card for System now says display, sound, notifications, and this computer. The card on the System category is the page description. The icon signature is `application/x-vnd.Haiku-Notifications`.
+
+The page writes `~/config/settings/system/notifications` as soon as a value changes. That flattened `BMessage` is the file the notification server already watches. There is no second copy under `r5-settings`. `settings/system` is created first. `B_CREATE_FILE` does not create that parent, and the old program reported the failure as "It's possible you are running out of disk space." The alert now includes `strerror`. An applications list that is missing from the file is a valid empty list. The notification server creates the same directory before it creates the file, so the node watch starts.
+
+Width, timeout, and position send one sample (`NotificationsSample`) after a successful write. Enable and mute do not. Defaults restores notifications on, a timeout of 10 seconds, a width of 300, and Follow Deskbar. It does not clear the application list, and it keeps a stored icon size. Revert restores the snapshot from when the page was opened, including that list. The separate Notifications program stays installed. The field names match the server: `auto-start`, `timeout`, `width`, `icon size`, `notification position`, and `app_usage` blobs of type `'ipau'`.
+
+`distro/BUILD` is 10028. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 14:47 Europe/Amsterdam exited 0 and updated 1152 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10028. The image stamp is `2 Nov 2026, 14:47`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### Settings applies a change immediately
 
 The bottom row is Back, Home, Revert, and Defaults. Save is gone. `NotifyChanged()` makes the window call `SaveSettings()`. Revert restores the snapshot from when the page was opened and writes that again. Defaults calls `ApplyDefaults()`. Only Desktop and Deskbar reports `CanApplyDefaults()`. The Settings module API is version 2 because those two methods were added at the end of `SettingsModule`. An add-on built for version 1 is not loaded.

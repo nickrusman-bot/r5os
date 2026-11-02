@@ -61,9 +61,9 @@ Call `NotifyChanged()` after the user edits a value. The window then calls `Save
 
 `ReadSettings()` / `WriteSettings()` flatten one `BMessage` into `~/config/settings/r5-settings/<identifier>`. A missing file is `B_ENTRY_NOT_FOUND`; treat that as the defaults.
 
-Do not write Haiku's existing preference files from a new module. Open those programs with `LaunchLegacy(signature)` until the page is a real module.
+A page that replaces a preference the system already watches writes that existing file, and does not also keep a second copy. Notifications writes `~/config/settings/system/notifications`. Desktop and Deskbar messages the running Deskbar and does not write its settings file. Other new modules use `ReadSettings()` / `WriteSettings()`.
 
-`LoadSettings()` copies the file into the module. `SaveSettings()` writes it and clears the modified flag. `RevertSettings()` puts back the last loaded or saved values and updates the view.
+`LoadSettings()` copies the file into the module. `SaveSettings()` writes it. `RevertSettings()` puts back the values from when the page was opened, including after an immediate save.
 
 ## Failure
 
