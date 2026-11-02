@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The minimum image includes Settings
+
+`build/jam/images/definitions/minimum` lists `Settings` with the other preferences, and it installs `settings_appearance` with it. The regular image already did. The name of the icon library stays `libr5icons`. This definition was not built into an image from here. The running regular image is unchanged.
+
 ### Settings asks a public function for the Back and Home icons
 
 Back and Home no longer read resource ids out of `libtracker.so`. Those ids are private. The pictures are now unmodified Tracker HVIF inside `libr5icons.a`, and Settings calls `r5_button_set_icon()` with `R5_ICON_BACK` and `R5_ICON_HOME`. The buttons stay the same height as Revert and Save, in that order, and they still do not get the wrench.
