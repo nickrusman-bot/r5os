@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The Notifications boxes match in height
+
+Enable notifications was taller than Applications, because the boxes stayed top-aligned and only as tall as their contents. Both now use the full height of that row. The sliders, the screen picture, the list, and Mute stay at the top of their box. The extra space is below them, so the two frames end on the same line.
+
+`distro/BUILD` is 10033. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 16:12 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10033. The image stamp is `2 Nov 2026, 16:12`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### Notifications and Wallpaper sit side by side
 
 Enable notifications and Applications were stacked, so Notifications was taller than the area under the subtitle. They now share one row, top aligned, the same way Desktop and Deskbar puts Applications and Menu next to each other. The screen picture stays 200 by 148. The application list keeps a minimum width of 220. Both fit in the 1100-wide window, so that page no longer needs a scrollbar.

@@ -855,15 +855,16 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 	BGroupView* generalInner = new BGroupView(B_VERTICAL, 0);
 	BLayoutBuilder::Group<>(generalInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
-		.Add(fWidth)
-		.Add(fTimeout)
-		.AddGroup(B_HORIZONTAL, 0)
+		.Add(fWidth, 0)
+		.Add(fTimeout, 0)
+		.AddGroup(B_HORIZONTAL, 0, 0)
 			.Add(fPlace)
 			.AddGlue()
-			.End();
+			.End()
+		.AddGlue();
 	general->AddChild(generalInner);
 	general->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
-		B_ALIGN_TOP));
+		B_ALIGN_USE_FULL_HEIGHT));
 
 	fApps = new BListView("applications");
 	fApps->SetSelectionMessage(new BMessage(kMsgSelect));
@@ -885,7 +886,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 		B_USE_DEFAULT_SPACING);
 	BLayoutBuilder::Group<>(applicationsInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
-		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
 			.Add(scroll)
 			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
 				.Add(fAdd)
@@ -893,10 +894,11 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 				.AddGlue()
 				.End()
 			.End()
-		.Add(fMute);
+		.Add(fMute, 0)
+		.AddGlue();
 	applications->AddChild(applicationsInner);
 	applications->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
-		B_ALIGN_TOP));
+		B_ALIGN_USE_FULL_HEIGHT));
 
 	fFilter = new AppSignatureFilter();
 	fPanel = new BFilePanel(B_OPEN_PANEL, NULL, NULL, B_FILE_NODE, false,
