@@ -18,10 +18,10 @@ This layout is fixed. Do not move it.
 
 - The list starts under the yellow tab and runs down to Search.
 - The title and the subtitle sit beside the list.
-- Every page shows its icon at the right of that title block. A new page adds its icon in `module_icon()` in `distro/settings/SettingsWindow.cpp`. Home uses the Preferences folder icon. A category uses the icon already stored for that category.
-- Every settings icon, including the home cards, gets the Haiku preferences wrench on top. That is `r5_settings_apply_prefs_overlay()`. Do not draw a settings icon without it.
+- Every page of this Settings application shows its icon at the right of that title block. A new page adds its icon in `module_icon()` in `distro/settings/SettingsWindow.cpp`. Home uses the Preferences folder icon. A category uses the icon already stored for that category.
+- Those page icons, and the icons on the home cards, get the Haiku preferences wrench on top. That is `r5_settings_apply_prefs_overlay()`. Do not draw one of those icons without it. The wrench is only for this Settings application and the modules inside it. About R5 is not a settings module and does not get the wrench.
 - The page content is the only part that changes. It sits under the subtitle.
-- Search stays under the list. Home, Back, Revert, and Save stay on that same bottom row.
+- Search stays under the list. The bottom row is Back, Home, Revert, and Save, in that order. Back and Home are the Tracker back arrow and the Tracker home icon, used as buttons, the same height as Revert and Save. They do not get the wrench.
 
 `docs/SETTINGS.md` describes the same frame.
 

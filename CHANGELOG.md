@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Back and Home are Tracker icons, and the wrench stays on Settings
+
+The preferences wrench is only for this Settings application and the modules inside it: the page icon and the home cards. About R5 is not a settings module and does not get the wrench.
+
+Back and Home on the bottom row are now buttons that draw Tracker's back arrow (`R_ResBackNav`) and home-directory icon (`R_HomeDirIcon`) from `libtracker`. They are the same height as Revert and Save. The order is Back, Home, Revert, Save. Those two icons do not get the wrench. `AGENTS.md` says so.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 09:40 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 09:40`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Settings icons wear the preferences wrench
 
 Every icon in Settings, on the page and on the home cards, gets the Haiku preferences wrench drawn on top. The wrench is the unmodified Haiku file `data/artwork/icons/Overlay_prefs`, MIT, copied to `distro/settings/overlay-prefs.hvif` and stored in the Settings resources as `prefs-overlay`. `AGENTS.md` requires that overlay. A page icon is not drawn without it.

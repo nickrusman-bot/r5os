@@ -9,8 +9,10 @@
 class BBitmap;
 
 
-// Draws the Haiku preferences wrench over a settings icon. Every icon
-// this application shows goes through here.
+// Draws the Haiku preferences wrench over an icon that belongs to this
+// Settings application: the page icon and the home cards. About R5 is
+// not a settings module. The Back and Home buttons are Tracker icons
+// and do not go through here.
 void r5_settings_apply_prefs_overlay(BBitmap* icon);
 
 
