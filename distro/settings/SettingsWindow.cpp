@@ -21,6 +21,7 @@
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
 #include <ListView.h>
+#include <ScrollBar.h>
 #include <ScrollView.h>
 #include <StringItem.h>
 #include <StringView.h>
@@ -100,6 +101,74 @@ NavItem::DrawItem(BView* owner, BRect frame, bool complete)
 }
 
 
+class NavList : public BListView {
+public:
+								NavList();
+	virtual	void				FrameResized(float width, float height);
+			void				UpdateScrollBar();
+
+private:
+			bool				fBarShown;
+			bool				fUpdatingBar;
+};
+
+
+NavList::NavList()
+	:
+	BListView("nav", B_SINGLE_SELECTION_LIST,
+		B_WILL_DRAW | B_NAVIGABLE | B_FRAME_EVENTS),
+	fBarShown(true),
+	fUpdatingBar(false)
+{
+}
+
+
+void
+NavList::FrameResized(float width, float height)
+{
+	BListView::FrameResized(width, height);
+	UpdateScrollBar();
+}
+
+
+void
+NavList::UpdateScrollBar()
+{
+	if (fUpdatingBar)
+		return;
+
+	BScrollBar* bar = ScrollBar(B_VERTICAL);
+	if (bar == NULL)
+		return;
+
+	float min = 0;
+	float max = 0;
+	bar->GetRange(&min, &max);
+	bool need = max > 0;
+	if (need == fBarShown)
+		return;
+
+	fUpdatingBar = true;
+	fBarShown = need;
+	if (need) {
+		bar->SetExplicitMinSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
+		bar->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
+		bar->SetExplicitPreferredSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
+		if (bar->IsHidden())
+			bar->Show();
+	} else {
+		bar->SetExplicitMinSize(BSize(0, 0));
+		bar->SetExplicitMaxSize(BSize(0, 0));
+		bar->SetExplicitPreferredSize(BSize(0, 0));
+		if (!bar->IsHidden())
+			bar->Hide();
+	}
+	if (Parent() != NULL)
+		Parent()->InvalidateLayout();
+	fUpdatingBar = false;
+}
+
+
 static SettingsPlace*
 make_place(const char* id, bool category)
 {
@@ -136,7 +205,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fSearch = new BTextControl("search", "Search:", "", NULL);
 	fSearch->SetModificationMessage(new BMessage(kMsgSearch));
 
-	fList = new BListView("nav");
+	fList = new NavList();
 	fList->SetSelectionMessage(new BMessage(kMsgOpenPage));
 	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true);
 
@@ -189,8 +258,10 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
 	fSave->SetEnabled(false);
-	SetSizeLimits(980, 4096, 560, 4096);
-	ResizeTo(1100, 680);
+	// 510 is 170 below the old 680. The home cards keep a margin
+	// above the buttons. 480 is the shortest the window may be.
+	SetSizeLimits(980, 4096, 480, 4096);
+	ResizeTo(1100, 510);
 	CenterOnScreen();
 }
 
@@ -396,6 +467,9 @@ SettingsWindow::_BuildSidebar()
 	}
 	fAdjusting = false;
 	_SelectSidebar(fCurrent != NULL ? fCurrent->Identifier() : NULL);
+	NavList* list = dynamic_cast<NavList*>(fList);
+	if (list != NULL)
+		list->UpdateScrollBar();
 }
 
 

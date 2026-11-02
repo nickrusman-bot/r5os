@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Settings opens shorter, and the home cards respond to the pointer
+
+The window opened at 680 pixels tall, so Home had a large empty band under the cards and the same empty area in the list. It now opens at 1100 by 510, which is 170 pixels shorter. The shortest height is 480, so a margin stays above the buttons.
+
+The list scrollbar was always drawn. It is hidden, and that column is given back to the list, when every item fits. It comes back when the items are taller than the list.
+
+A category card uses the button look. It lights up under the pointer and looks pressed while the mouse button is down. Releasing the button inside the card opens that page. The card does not stay marked.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 08:13 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10024. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Choosing Image after Workspace still locked Settings
 
 The refresh posted from a menu click runs inside the menu's own loop, while the popup is still tracking. Refresh rebuilt the image menu and freed the item that had just been chosen. The window then ignored clicks, and quitting it was a double free. A menu click now updates the page directly and does not touch the menu that is open. Image items are not removed. A new picture is inserted.

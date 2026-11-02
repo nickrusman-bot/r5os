@@ -6,7 +6,7 @@ One Settings window for R5OS. Existing preference programs stay separate and kee
 
 `Settings` is a single-launch preference (`application/x-vnd.R5OS-Settings`). The window is a sidebar, a search field, and one content deck (`BCardLayout`). Changing page does not create a new window.
 
-The page title sits above the list and the page. The list and the page share one row, so they start and end together. Search sits on the bottom row with Home, Back, Revert, and Save.
+The page title sits above the list and the page. The list and the page share one row, so they start and end together. Search sits on the bottom row with Home, Back, Revert, and Save. The window opens at 1100 by 510. The list scrollbar is there only when the items are taller than the list. A category card lights up under the pointer and looks pressed while the mouse button is held down.
 
 The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Home sits with Back, Revert, and Save.
 
