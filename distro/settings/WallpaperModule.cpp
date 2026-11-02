@@ -64,6 +64,9 @@ static const uint32 kMsgPreview = 'r5pv';
 static const uint32 kMsgOutline = 'r5ol';
 static const uint32 kMsgColor = 'r5cl';
 static const uint32 kMsgRefresh = 'r5rf';
+static const int32 kLeaveWorkspace = 1;
+static const int32 kLeaveImage = 2;
+static const int32 kLeavePlacement = 3;
 static const uint32 kMsgDesktopColor = 'udsc';
 
 static const int32 kScopeCurrent = 0;
@@ -163,7 +166,9 @@ private:
 			void				_FillImageMenu();
 			void				_MarkScope();
 			void				_MarkPlacement();
-			void				_Refresh(status_t error = B_OK);
+			void				_Refresh(status_t error = B_OK,
+									int32 leaveMenu = 0);
+			void				_Apply(int32 leaveMenu);
 			void				_LoadRecent();
 			void				_SaveRecent();
 			void				_AddRecent(const char* path);
@@ -183,7 +188,6 @@ private:
 			ImageFilter			fImageFilter;
 			std::vector<BString>	fRecent;
 			bool				fAdjusting;
-			bool				fRefreshPosted;
 };
 
 
@@ -798,8 +802,7 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 	fPicker(NULL),
 	fImagePanel(NULL),
 	fFolderPanel(NULL),
-	fAdjusting(false),
-	fRefreshPosted(false)
+	fAdjusting(false)
 {
 	fPreview = new WallpaperPreview(this);
 
@@ -1050,19 +1053,55 @@ WallpaperView::_AddRecent(const char* path)
 }
 
 
+static const char*
+item_path(BMenuItem* item)
+{
+	if (item == NULL || item->Message() == NULL)
+		return NULL;
+	const char* path = NULL;
+	if (item->Message()->FindString("path", &path) != B_OK)
+		return NULL;
+	return path != NULL ? path : "";
+}
+
+
+static BMenuItem*
+find_image_item(BMenu* menu, const char* path)
+{
+	if (path == NULL)
+		path = "";
+	for (int32 i = 0; i < menu->CountItems(); i++) {
+		const char* existing = item_path(menu->ItemAt(i));
+		if (existing != NULL && strcmp(existing, path) == 0)
+			return menu->ItemAt(i);
+	}
+	return NULL;
+}
+
+
 void
 WallpaperView::_FillImageMenu()
 {
-	while (fImageMenu->CountItems() > 0)
-		delete fImageMenu->RemoveItem((int32)0);
-
-	BMessage* none = new BMessage(kMsgImage);
-	none->AddString("path", "");
+	// The menu message is delivered while the popup is still tracking.
+	// Removing items there frees the item the menu is using, and the
+	// window stops taking clicks. Items stay; the mark moves.
 	const char* noneLabel = "None";
 	if (fModule != NULL && !fModule->IsDesktop())
 		noneLabel = "Default";
-	fImageMenu->AddItem(new BMenuItem(noneLabel, none));
-	fImageMenu->AddSeparatorItem();
+	const char* selected = fModule != NULL ? fModule->Path() : "";
+	if (selected == NULL)
+		selected = "";
+
+	if (fImageMenu->CountItems() == 0) {
+		BMessage* none = new BMessage(kMsgImage);
+		none->AddString("path", "");
+		fImageMenu->AddItem(new BMenuItem(noneLabel, none));
+		fImageMenu->AddSeparatorItem();
+		fImageMenu->AddSeparatorItem();
+		fImageMenu->AddItem(new BMenuItem("Other" B_UTF8_ELLIPSIS,
+			new BMessage(kMsgOtherImage)));
+	} else if (fImageMenu->ItemAt(0) != NULL)
+		fImageMenu->ItemAt(0)->SetLabel(noneLabel);
 
 	std::vector<BString> pictures;
 	if (fModule != NULL) {
@@ -1070,28 +1109,33 @@ WallpaperView::_FillImageMenu()
 			pictures.push_back(fModule->PictureAt(i));
 	}
 	std::sort(pictures.begin(), pictures.end(), leaf_less);
-	const char* selected = fModule != NULL ? fModule->Path() : "";
-	bool marked = false;
 	for (int32 i = 0; i < (int32)pictures.size(); i++) {
+		if (find_image_item(fImageMenu, pictures[i].String()) != NULL)
+			continue;
 		BMessage* message = new BMessage(kMsgImage);
 		message->AddString("path", pictures[i].String());
 		BPath path(pictures[i].String());
 		const char* leaf = path.InitCheck() == B_OK
 			? path.Leaf() : pictures[i].String();
 		BMenuItem* item = new BMenuItem(leaf, message);
-		fImageMenu->AddItem(item);
-		if (selected != NULL && pictures[i] == selected) {
-			item->SetMarked(true);
-			marked = true;
+		int32 insertAt = 2;
+		for (; insertAt < fImageMenu->CountItems(); insertAt++) {
+			const char* existing = item_path(fImageMenu->ItemAt(insertAt));
+			if (existing == NULL || existing[0] == '\0')
+				break;
+			if (leaf_less(pictures[i], BString(existing)))
+				break;
 		}
+		fImageMenu->AddItem(item, insertAt);
+		if (Window() != NULL)
+			item->SetTarget(this);
 	}
-	fImageMenu->AddSeparatorItem();
-	fImageMenu->AddItem(new BMenuItem("Other" B_UTF8_ELLIPSIS,
-		new BMessage(kMsgOtherImage)));
-	if (!marked && fImageMenu->ItemAt(0) != NULL)
-		fImageMenu->ItemAt(0)->SetMarked(true);
-	if (Window() != NULL)
-		fImageMenu->SetTargetForItems(this);
+
+	BMenuItem* chosen = find_image_item(fImageMenu, selected);
+	if (chosen == NULL)
+		chosen = fImageMenu->ItemAt(0);
+	if (chosen != NULL)
+		chosen->SetMarked(true);
 }
 
 
@@ -1142,17 +1186,14 @@ WallpaperView::_MarkPlacement()
 
 
 void
-WallpaperView::_Refresh(status_t error)
+WallpaperView::_Refresh(status_t error, int32 leaveMenu)
 {
 	BMessage refresh(kMsgRefresh);
 	if (error != B_OK)
 		refresh.AddInt32("error", error);
-	if (fRefreshPosted && error == B_OK)
-		return;
-	fRefreshPosted = true;
+	refresh.AddInt32("leave", leaveMenu);
 	if (Window() == NULL) {
-		fRefreshPosted = false;
-		Apply();
+		_Apply(leaveMenu);
 		return;
 	}
 	Window()->PostMessage(&refresh, this);
@@ -1162,16 +1203,27 @@ WallpaperView::_Refresh(status_t error)
 void
 WallpaperView::Apply()
 {
+	_Apply(0);
+}
+
+
+void
+WallpaperView::_Apply(int32 leaveMenu)
+{
 	fAdjusting = true;
-	_FillImageMenu();
-	_MarkScope();
-	_MarkPlacement();
+	if (leaveMenu != kLeaveImage)
+		_FillImageMenu();
+	if (leaveMenu != kLeaveWorkspace)
+		_MarkScope();
+	if (leaveMenu != kLeavePlacement)
+		_MarkPlacement();
 
 	const char* path = fModule != NULL ? fModule->Path() : "";
 	int32 mode = fModule != NULL ? fModule->Mode() : kModePosition;
 	bool hasPicture = path != NULL && path[0] != '\0';
 	bool manual = hasPicture && mode == kModePosition;
-	fPlacementMenu->SetEnabled(hasPicture);
+	if (leaveMenu != kLeavePlacement)
+		fPlacementMenu->SetEnabled(hasPicture);
 	fX->SetEnabled(manual);
 	fY->SetEnabled(manual);
 	char buffer[32];
@@ -1210,8 +1262,6 @@ WallpaperView::Apply()
 		fModule != NULL ? fModule->OffsetY() : 0);
 	fPreview->SetDragEnabled(manual);
 	fAdjusting = false;
-	if (Window() != NULL)
-		_Targets();
 }
 
 
@@ -1243,7 +1293,9 @@ WallpaperView::MessageReceived(BMessage* message)
 			const char* path = NULL;
 			message->FindString("path", &path);
 			status_t status = fModule->SelectScope(scope, path);
-			_Refresh(status);
+			_Apply(kLeaveWorkspace);
+			if (status != B_OK)
+				_Refresh(status, kLeaveWorkspace);
 			break;
 		}
 		case kMsgOtherFolder:
@@ -1289,7 +1341,7 @@ WallpaperView::MessageReceived(BMessage* message)
 			const char* path = NULL;
 			if (message->FindString("path", &path) == B_OK && fModule != NULL)
 				fModule->SetPicture(path);
-			_Refresh();
+			_Apply(kLeaveImage);
 			break;
 		}
 		case kMsgPlacement:
@@ -1297,13 +1349,11 @@ WallpaperView::MessageReceived(BMessage* message)
 			int32 mode = kModePosition;
 			if (message->FindInt32("mode", &mode) == B_OK && fModule != NULL)
 				fModule->SetMode(mode);
-			_Refresh();
+			_Apply(kLeavePlacement);
 			break;
 		}
 		case kMsgRefresh:
 		{
-			fRefreshPosted = false;
-			Apply();
 			status_t status = B_OK;
 			if (message->FindInt32("error", &status) == B_OK
 				&& status != B_OK) {
