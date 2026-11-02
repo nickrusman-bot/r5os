@@ -44,11 +44,11 @@ The contract is `distro/settings/SettingsModule.h`, version 2. `distro/settings/
 
 `SettingsManager` loads add-ons from the `Settings` directories under the system and user add-ons paths, including `non-packaged`. It checks `settings_api_version()` before `instantiate_settings_module()`. A wrong version is not loaded. Images stay loaded until the modules are deleted, then `unload_add_on` runs.
 
-Appearance (`settings_appearance`) is the first native module. It stores `large_sample` in `~/config/settings/r5-settings/appearance`. It does not write the Haiku Appearance file. Colors and fonts open `application/x-vnd.Haiku-Appearance`.
+Appearance (`settings_appearance`) is a page under Personalization. The subtitle is "Personalize how the system looks". The tabs are Fonts, Colors, Look and feel, and Antialiasing. A change is applied at once, through the same font, color, decorator, control look, scrollbar, and antialiasing calls the separate program uses. The page does not write a settings file of its own. Revert and Defaults are the window buttons. The page is not locked. The separate Appearance program stays installed. Colors and fonts is not a list item, because this page was asked for in its place. The order and the five descriptions above stay as they are.
 
 ## Legacy programs
 
-`LegacyPages.cpp` is a table of programs that already exist: Appearance, Screen, Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Backgrounds and the Deskbar preferences program stay installed and are not in this table.
+`LegacyPages.cpp` is a table of programs that already exist: Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Appearance, Screen, Backgrounds, the Deskbar preferences program, Notifications, and VirtualMemory stay installed and are not in this table.
 
 Adding a row there is how an old preference shows up before it is rewritten. A new native page does not need a row and does not need a change to the window.
 

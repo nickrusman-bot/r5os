@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Appearance page
+
+The Appearance item opened a small sample checkbox and a button for the separate program. Colors and fonts was a second list item that launched that same program. Appearance is now the page. The subtitle is "Personalize how the system looks". The tabs are Fonts, Colors, Look and feel, and Antialiasing. A change is applied at once, through the existing font, color, decorator, control look, scrollbar, and antialiasing calls. Revert and Defaults are the window buttons. The page does not write its own settings file. The separate Appearance program stays installed. Colors and fonts is no longer a list item, because this page was asked for in its place. Information stays first under System, the other pages stay alphabetical, and the five existing descriptions are unchanged.
+
+`distro/BUILD` is 10038. `jam -q Settings` exited 0 and updated 18 targets. The first `settings_appearance` compile failed: the font call wanted a writable family and style, `get_font_style` could not choose a flags pointer, and `AppearanceModule` was used before it was named. Those are fixed, and the next `jam -q settings_appearance` exited 0 and updated 2 targets. `jam -q @r5-raw` on 2 Nov 2026 at 19:29 Europe/Amsterdam exited 0 and updated 1155 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. The first package script in the image script failed on a `bash\r` shebang. Running that script after stripping the carriage return printed `mesa_packages_ok`. About shows build 10038. The image stamp is `2 Nov 2026, 19:29`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The Appearance page was not opened from here.
+
 ### Information stays first
 
 The Settings list followed registration order, so Information sat at the bottom of System. Information is now first under System. Every other page, in every category, is alphabetical by name. The same order is used for the cards on a category page. The card line and the subtitle are the page description.

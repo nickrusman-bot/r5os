@@ -27,5 +27,5 @@ Application Settings :
 
 Addon settings_appearance :
 	AppearanceModule.cpp
-	: be [ TargetLibstdc++ ]
+	: be shared [ TargetLibstdc++ ]
 	;

@@ -1065,7 +1065,6 @@ module_icon(const char* moduleId)
 	};
 	static const IconRow rows[] = {
 		{ "appearance", "application/x-vnd.Haiku-Appearance" },
-		{ "colors", "application/x-vnd.Haiku-Appearance" },
 		{ "deskbar", "application/x-vnd.Haiku-DeskbarPreferences" },
 		{ "wallpaper", "application/x-vnd.Haiku-Backgrounds" },
 		{ "information", "application/x-vnd.Haiku-About" },

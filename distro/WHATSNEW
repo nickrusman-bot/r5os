@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10038 - Appearance
+Settings has an Appearance page. The tabs are Fonts, Colors, Look and feel, and Antialiasing. A change is applied at once. The separate Appearance program stays installed.
+
 R5OS 2026.1-dev Build 10037 - Settings list
 Information is the first page under System. The other pages are in alphabetical order. Information, Virtual memory, Wallpaper, Desktop and Deskbar, and Notifications use a shorter line under the title.
 
