@@ -58,7 +58,7 @@ CategoryCard::CategoryCard(const char* name, const char* summary,
 	fHover(false),
 	fPressed(false)
 {
-	SetExplicitMinSize(BSize(300, 88));
+	SetExplicitMinSize(BSize(280, 88));
 	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 88));
 	if (iconSignature != NULL && iconSignature[0] != '\0') {
 		BRect bounds(BPoint(0, 0),

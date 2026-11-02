@@ -494,13 +494,13 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	// taller than that area scrolls there. Back, Home, the lock, Revert,
 	// and Defaults stay on the bottom row. Back, Home, and the lock use
 	// r5_button_set_icon() / r5_button_set_lock(). See AGENTS.md.
-	const float sidebarWidth = 248;
+	const float sidebarWidth = 200;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
 	fSearch->SetExplicitMinSize(BSize(sidebarWidth, B_SIZE_UNSET));
 	fSearch->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNSET));
 
-	fDeck->SetExplicitMinSize(BSize(760, 280));
+	fDeck->SetExplicitMinSize(BSize(740, 280));
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 1)
@@ -544,10 +544,11 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
 	fDefaults->SetEnabled(false);
-	// 610 is 100 taller than 510, so the page still has room under
-	// the title. 560 is the shortest the window may be.
-	SetSizeLimits(980, 4096, 560, 4096);
-	ResizeTo(1100, 610);
+	// Opens at 1030 by 610. The list is 200. A home card is at
+	// least 280. 910 is the shortest width. 560 is the shortest
+	// height.
+	SetSizeLimits(910, 4096, 560, 4096);
+	ResizeTo(1030, 610);
 	CenterOnScreen();
 }
 

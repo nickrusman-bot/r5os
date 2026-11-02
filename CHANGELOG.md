@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Settings opens narrower
+
+The list and Search were 248 wide, and a home card was at least 300. On a 1024-wide screen the window opened at 1100, so Defaults sat past the right edge. The list and Search are now 200. A home card is at least 280. The page area's minimum is 740. The window opens at 1030 by 610, and the shortest size is 910 by 560. On a 1024-wide screen the frame is still 6 pixels wider than the display. A first cut used 198 and 290. Those widths were changed to 200 and 280 before this image was looked at.
+
+VirtualBox guest resize for a standard account is [#4055](https://github.com/nickrusman-bot/r5os/issues/4055). It is not changed here.
+
+`distro/BUILD` is 10035. `jam -q Settings` for the 200 and 280 widths exited 0 and updated 17 targets. `jam -q @r5-raw` on 2 Nov 2026 at 17:30 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. About shows build 10035. The image stamp is `2 Nov 2026, 17:30`. An earlier image at 17:22 used 198 and 290. This image replaces it. VirtualBox is started from this image afterwards. The desktop was not seen from here. The window width was not measured from here.
+
 ### Settings lock and Virtual memory
 
 `libr5icons.so` gains `R5_ICON_UNLOCKED` (5) and `R5_ICON_LOCKED` (6), plus `r5_button_set_lock()`. The pictures are unmodified HVIF of Haiku `Action_Login` and `Action_Logout`. The bytes stay MIT in `distro/icons/lock_icons.inc`. The call is additive. Old programs that already link the library keep working.
