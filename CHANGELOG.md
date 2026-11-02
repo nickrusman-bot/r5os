@@ -6,7 +6,7 @@ The Settings list followed registration order, so Information sat at the bottom 
 
 Those descriptions are shorter. Information is "View system details". Virtual memory is "Extra memory stored on disk". Wallpaper is "Set the background of your desktop". Desktop and Deskbar is "Adjust desktop and Deskbar settings". Notifications is "Manage alerts and notifications".
 
-This was written earlier on `cursor/settings-list` and never merged. Display had already taken build 10036, so this lands as 10037 on top of that page. The Display page, the bold box titles, and `libr5ui.so` stay.
+This was written earlier on `cursor/settings-list` and never merged. Display had already taken build 10036, so this lands as 10037 on top of that page. The Display page, the bold box titles, and `libr5ui.so` stay. The order and those five lines stay as they are until the user explicitly asks to change them. Another Settings task does not include reordering the list or rewriting the lines.
 
 `distro/BUILD` is 10037. `jam -q Settings` exited 0 and updated 22 targets. `jam -q @r5-raw` on 2 Nov 2026 at 18:52 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. About shows build 10037. The image stamp is `2 Nov 2026, 18:52`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The list was not opened from here.
 
