@@ -1,3 +1,8 @@
+R5 2026.1-dev Build 10039 - Clearer audio
+Sound that does not match the mixer rate stays brighter. High quality follows the curve of the sound instead of a straight line between samples. The usual rate is 48 kHz. A late sound no longer leaves the mixer delayed.
+
+A sound device plugged in after start shows up without restarting media services. A notification sound lets go of the mixer when it finishes.
+
 R5 2026.1-dev Build 10038 - Fonts and look
 Settings has Fonts and Look and Feel under Personalization. Fonts sets the four fonts, with antialiasing in a box. Look and Feel sets the decorator and the scroll-bar arrows, with colors in a box. A change is applied at once. The separate Appearance program stays installed.
 

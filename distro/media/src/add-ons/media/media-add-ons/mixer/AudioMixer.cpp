@@ -2010,7 +2010,7 @@ AudioMixer::UpdateParameterWeb()
 	dp = group->MakeDiscreteParameter(PARAM_ETC(70), B_MEDIA_RAW_AUDIO,
 		B_TRANSLATE("Resampling algorithm:"), B_INPUT_MUX);
 	dp->AddItem(0, B_TRANSLATE("Low quality (drop/repeat samples)"));
-	dp->AddItem(2, B_TRANSLATE("High quality (linear interpolation)"));
+	dp->AddItem(2, B_TRANSLATE("High quality (cubic interpolation)"));
 
 	// Note: The following code is outcommented on purpose
 	// and is about to be modified at a later point
