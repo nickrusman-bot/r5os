@@ -34,6 +34,8 @@ SOURCES = (
     "SettingsWindow.h",
     "WallpaperModule.cpp",
     "WallpaperModule.h",
+    "InformationModule.cpp",
+    "InformationModule.h",
 )
 
 

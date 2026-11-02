@@ -1,5 +1,45 @@
 # R5OS changelog (lokaal)
 
+### The Settings frame stays put, and each page has an icon
+
+The list, the title block, the icon at the right of that block, and the bottom row (Search, Home, Back, Revert, Save) are fixed. `AGENTS.md` says not to move them. A page only changes the area under the subtitle. Each page loads the icon of its program. Home uses the Preferences folder icon. Information uses the About icon. A page without a signature in `module_icon()` shows an empty slot of the same size.
+
+Information labels are left-aligned. Copy sits under the rows of its box.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 08:36 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 08:36`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
+### Information is a Settings page, and the list stays beside the title
+
+The list now starts at the top of the window, under the tab, and runs down to Search. The title and the subtitle sit beside the list. The page is under the subtitle. The window opens at 1100 by 610. That layout is the one to keep.
+
+Information is under System. Device shows the host name, the processor brand from `cpuid` plus the current frequency when the kernel reports it, installed memory, the boot volume (`used of capacity`), the graphics device from `BScreen::GetDeviceInfo`, and the system type (AMD64 on this image). There is no device id in the public system info, so that row is not shown. R5 Operating System shows `2026.1, Development`, build 10025, the image time `2 Nov 2026, 08:24` (Europe/Amsterdam, written into `r5_os_version.h` by the jam script), and the kernel name with the kernel's own build date. Copy puts that box on the clipboard as plain text. The page does not save anything.
+
+`distro/BUILD` is 10025. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 08:24 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays in step with this build. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
+### Settings opens shorter, and the home cards respond to the pointer
+
+The window opened at 680 pixels tall, so Home had a large empty band under the cards and the same empty area in the list. It now opens at 1100 by 510, which is 170 pixels shorter. The shortest height is 480, so a margin stays above the buttons.
+
+The list scrollbar was always drawn. It is hidden, and that column is given back to the list, when every item fits. It comes back when the items are taller than the list.
+
+A category card uses the button look. It lights up under the pointer and looks pressed while the mouse button is down. Releasing the button inside the card opens that page. The card does not stay marked.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 08:13 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10024. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
+### Choosing Image after Workspace still locked Settings
+
+The refresh posted from a menu click runs inside the menu's own loop, while the popup is still tracking. Refresh rebuilt the image menu and freed the item that had just been chosen. The window then ignored clicks, and quitting it was a double free. A menu click now updates the page directly and does not touch the menu that is open. Image items are not removed. A new picture is inserted.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 07:53 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. About stays build 10024. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
+### Wallpaper menus overlapped, and choosing one froze Settings
+
+The workspace menu was the label of the right box, and that box also had its own layout, so the Image menu was drawn underneath it. Choosing Current workspace rebuilt the menus while that menu was still open. The window then ignored clicks. Quitting it stopped in the debugger with `double free` in `SettingsWindow::~SettingsWindow`. The menu update is posted after the menu closes. The box keeps a single child below the label, so the label is no longer laid out as content.
+
+The preview grows with the box and keeps the screen's shape. The page title sits above the list and the page. The list and the page share one row, and Search sits with the buttons.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 07:42 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. About stays build 10024. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### About names this computer AMD64, and Wallpaper is the Backgrounds page
 
 About still reads the short ABI name from `libbe.so` (Walter on this disk) and puts the target in parentheses. `x86_64` is shown as AMD64. The package ABI is still `x86_64`. The source maps `aarch64` to ARM64 and `riscv64` to RISC-V 64. This image is the AMD64 build, so those two names are not in the About binary.

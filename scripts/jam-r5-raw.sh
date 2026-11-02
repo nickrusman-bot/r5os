@@ -8,6 +8,7 @@ export PATH=/usr/bin:/bin:/home/nickr/bin:$PATH
 
 ver="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/VERSION" | head -1 | tr -d '\r' | tr -d '[:space:]')"
 build="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/BUILD" | head -1 | tr -d '\r' | tr -d '[:space:]')"
+stamp="$(TZ=Europe/Amsterdam date '+%-d %b %Y, %H:%M')"
 rev="r5-${ver}"
 tr -d '\r' < "$WIN/distro/UserBuildConfig" | sed "s/^HAIKU_REVISION = .*/HAIKU_REVISION = ${rev} ;/" > "$HAIKU/build/jam/UserBuildConfig"
 mkdir -p "$HAIKU/generated.x86_64/build" "$HAIKU/headers/private/system"
@@ -17,6 +18,7 @@ printf '%s\n' \
 	'#define R5_OS_VERSION_H' \
 	"#define R5_OS_VERSION \"${ver}\"" \
 	"#define R5_OS_BUILD ${build}" \
+	"#define R5_OS_BUILD_DATE \"${stamp}\"" \
 	'#endif' > "$HAIKU/headers/private/system/r5_os_version.h"
 rm -f "$HAIKU/generated.x86_64/build/last-built-revision"
 

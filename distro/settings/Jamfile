@@ -12,6 +12,7 @@ Application Settings :
 	SettingsFont.cpp
 	LegacyPages.cpp
 	WallpaperModule.cpp
+	InformationModule.cpp
 	AdminLock.cpp
 	: be tracker translation [ TargetLibstdc++ ]
 	: Settings.rdef

@@ -33,12 +33,17 @@ public:
 	virtual	void				Draw(BRect update);
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				MouseUp(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 transit,
+									const BMessage* message);
+	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 	virtual	void				GetPreferredSize(float* width, float* height);
 
 private:
 			BString				fName;
 			BString				fSummary;
 			BBitmap*			fIcon;
+			bool				fHover;
+			bool				fPressed;
 };
 
 
@@ -48,7 +53,9 @@ CategoryCard::CategoryCard(const char* name, const char* summary,
 	BControl(name, NULL, message, B_WILL_DRAW),
 	fName(name),
 	fSummary(summary),
-	fIcon(NULL)
+	fIcon(NULL),
+	fHover(false),
+	fPressed(false)
 {
 	SetExplicitMinSize(BSize(300, 88));
 	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 88));
@@ -76,8 +83,14 @@ CategoryCard::Draw(BRect update)
 	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
 	rgb_color background = base;
 	uint32 flags = 0;
-	if (IsFocus() || Value() == B_CONTROL_ON)
+	if (!IsEnabled())
+		flags |= BControlLook::B_DISABLED;
+	if (Value() == B_CONTROL_ON)
 		flags |= BControlLook::B_ACTIVATED;
+	else if (fHover)
+		flags |= BControlLook::B_HOVER;
+	if (IsFocus())
+		flags |= BControlLook::B_FOCUSED;
 
 	BRect rect = Bounds();
 	be_control_look->DrawButtonFrame(this, rect, update, base, background,
@@ -122,17 +135,53 @@ CategoryCard::Draw(BRect update)
 void
 CategoryCard::MouseDown(BPoint where)
 {
+	if (!IsEnabled() || !Bounds().Contains(where))
+		return;
+
+	fPressed = true;
+	SetValue(B_CONTROL_ON);
 	SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
-	BControl::MouseDown(where);
 }
 
 
 void
 CategoryCard::MouseUp(BPoint where)
 {
-	BControl::MouseUp(where);
-	if (Bounds().Contains(where))
+	bool inside = Bounds().Contains(where);
+	fPressed = false;
+	fHover = inside;
+	SetValue(B_CONTROL_OFF);
+	Invalidate();
+	if (inside)
 		Invoke();
+}
+
+
+void
+CategoryCard::MouseMoved(BPoint where, uint32 transit, const BMessage* message)
+{
+	bool inside = transit != B_EXITED_VIEW && Bounds().Contains(where);
+	if (fPressed) {
+		SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
+		return;
+	}
+	if (fHover == inside)
+		return;
+	fHover = inside;
+	Invalidate();
+}
+
+
+void
+CategoryCard::KeyDown(const char* bytes, int32 numBytes)
+{
+	if (bytes != NULL && numBytes > 0
+		&& (*bytes == B_ENTER || *bytes == B_SPACE)) {
+		if (IsEnabled())
+			Invoke();
+		return;
+	}
+	BControl::KeyDown(bytes, numBytes);
 }
 
 

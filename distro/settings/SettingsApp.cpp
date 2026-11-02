@@ -4,6 +4,7 @@
  */
 
 
+#include "InformationModule.h"
 #include "LegacyPages.h"
 #include "SettingsManager.h"
 #include "WallpaperModule.h"
@@ -33,6 +34,7 @@ SettingsApp::SettingsApp()
 {
 	register_legacy_pages(fManager);
 	register_wallpaper_page(fManager);
+	register_information_page(fManager);
 }
 
 
