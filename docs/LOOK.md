@@ -48,6 +48,6 @@ Each chunk is one bootable change. Stop after the chunk. Look at Tracker, one pr
 
 ## Not in these chunks
 
-- A Haiku wordmark wallpaper, or any new desktop background.
+- The desktop picture. That is `r5-wallpaper.jpg`, scaled to fit. The two Haiku logo pictures are not installed.
 - Restyling one preference by hand so it looks round while other windows stay square.
 - Hiding controls, changing multi-user behavior, or moving settings into one Preferences window.

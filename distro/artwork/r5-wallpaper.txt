@@ -1,0 +1,6 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+Copyright 2026 R5OS Contributors
+
+r5-wallpaper.jpg is an original picture contributed to R5OS.
+The contributor allowed this picture under GPL-3.0-or-later or MIT.
+This copy is GPL-3.0-or-later.

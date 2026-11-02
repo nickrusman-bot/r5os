@@ -23,6 +23,7 @@
 #include <MenuField.h>
 #include <OS.h>
 #include <MenuItem.h>
+#include <MessageRunner.h>
 #include <PopUpMenu.h>
 #include <R5UI.h>
 #include <Screen.h>
@@ -43,6 +44,8 @@ static const uint32 kMsgScope = 'dscp';
 static const uint32 kMsgColumns = 'dcln';
 static const uint32 kMsgRows = 'drow';
 static const uint32 kMsgApply = 'dapp';
+static const uint32 kMsgDisplayChoice = 'ddch';
+static const uint32 kMsgDisplayTimeout = 'ddto';
 
 
 struct DisplayChoice {
@@ -190,6 +193,8 @@ private:
 			DisplayModule*		fModule;
 			bool				fUpdating;
 			bool				fConfirming;
+			BAlert*				fAlert;
+			BMessageRunner*		fConfirmRunner;
 			BBox*				fScreenBox;
 			BStringView*		fScreenLabel;
 			BStringView*		fDevice;
@@ -240,9 +245,8 @@ private:
 			bool				_Match(const DisplayChoice& choice,
 									display_mode& mode) const;
 			status_t			_SetMode(const display_mode& mode,
-									bool all);
+									bool all, bool makeDefault);
 			void				_RestoreHardware();
-			static int32		_Timeout(void* data);
 
 			DisplayView*		fView;
 			SettingsContext*	fContext;
@@ -384,7 +388,7 @@ DisplayModule::RevertSettings(SettingsContext* context)
 	status_t status = B_OK;
 	display_mode mode;
 	if (_Match(fOpened, mode))
-		status = _SetMode(mode, false);
+		status = _SetMode(mode, false, true);
 	if (status == B_OK)
 		fActive = fOpened;
 	if (fView != NULL)
@@ -443,12 +447,12 @@ DisplayModule::_Match(const DisplayChoice& choice, display_mode& mode) const
 
 
 status_t
-DisplayModule::_SetMode(const display_mode& mode, bool all)
+DisplayModule::_SetMode(const display_mode& mode, bool all, bool makeDefault)
 {
 	BScreen screen;
 	int32 workspace = current_workspace();
 	display_mode copy = mode;
-	status_t status = screen.SetMode(workspace, &copy, true);
+	status_t status = screen.SetMode(workspace, &copy, makeDefault);
 	if (status != B_OK || !all)
 		return status;
 	int32 count = count_workspaces();
@@ -456,7 +460,7 @@ DisplayModule::_SetMode(const display_mode& mode, bool all)
 		if (i == workspace)
 			continue;
 		copy = mode;
-		screen.SetMode(i, &copy, true);
+		screen.SetMode(i, &copy, makeDefault);
 	}
 	return B_OK;
 }
@@ -465,20 +469,8 @@ DisplayModule::_SetMode(const display_mode& mode, bool all)
 void
 DisplayModule::_RestoreHardware()
 {
-	_SetMode(fPreviousMode, fActive.allWorkspaces);
+	_SetMode(fPreviousMode, fActive.allWorkspaces, false);
 	fSelected = fActive;
-}
-
-
-int32
-DisplayModule::_Timeout(void* data)
-{
-	DisplayModule* module = static_cast<DisplayModule*>(data);
-	snooze(12000000);
-	if (atomic_add(&module->fSettled, 2) != 0)
-		return 0;
-	module->_RestoreHardware();
-	return 0;
 }
 
 
@@ -499,7 +491,9 @@ DisplayModule::Apply()
 	if (screen.GetMode(&previous) != B_OK)
 		return B_ERROR;
 
-	status_t status = _SetMode(wanted, fSelected.allWorkspaces);
+	// The trial does not become the boot mode. Keep writes that afterwards.
+	// A second thread must not call SetMode: that froze the desktop.
+	status_t status = _SetMode(wanted, fSelected.allWorkspaces, false);
 	if (status != B_OK)
 		return status;
 
@@ -507,14 +501,6 @@ DisplayModule::Apply()
 	fActive = fSelected;
 	fSettled = 0;
 	fTiming = true;
-	thread_id thread = spawn_thread(_Timeout, "display mode",
-		B_LOW_PRIORITY, this);
-	if (thread >= 0)
-		resume_thread(thread);
-	else {
-		fTiming = false;
-		fSettled = 1;
-	}
 	return B_OK;
 }
 
@@ -524,20 +510,17 @@ DisplayModule::Settle(bool keep)
 {
 	if (!fTiming)
 		return;
-	int32 add = keep ? 1 : 2;
-	if (atomic_add(&fSettled, add) != 0) {
-		if (keep) {
-			display_mode mode;
-			if (_Match(fSelected, mode))
-				_SetMode(mode, fSelected.allWorkspaces);
-			fActive = fSelected;
-		}
-		fTiming = false;
+	if (atomic_add(&fSettled, 1) != 0)
+		return;
+	fTiming = false;
+	if (keep) {
+		display_mode mode;
+		if (_Match(fSelected, mode))
+			_SetMode(mode, fSelected.allWorkspaces, true);
+		fActive = fSelected;
 		return;
 	}
-	if (!keep)
-		_RestoreHardware();
-	fTiming = false;
+	_RestoreHardware();
 }
 
 
@@ -547,6 +530,8 @@ DisplayView::DisplayView(DisplayModule* module)
 	fModule(module),
 	fUpdating(false),
 	fConfirming(false),
+	fAlert(NULL),
+	fConfirmRunner(NULL),
 	fScreenBox(NULL),
 	fScreenLabel(NULL),
 	fDevice(NULL),
@@ -587,19 +572,24 @@ DisplayView::DisplayView(DisplayModule* module)
 	fRows->SetAlignment(B_ALIGN_RIGHT);
 	BLayoutItem* columnText = fColumns->CreateTextViewLayoutItem();
 	BLayoutItem* rowText = fRows->CreateTextViewLayoutItem();
-	columnText->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
-	rowText->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
-	workBox->AddChild(BLayoutBuilder::Group<>()
-		.AddGroup(B_HORIZONTAL, 0)
+	BAlignment fieldAlign(B_ALIGN_USE_FULL_WIDTH, B_ALIGN_VERTICAL_CENTER);
+	columnText->SetExplicitAlignment(fieldAlign);
+	rowText->SetExplicitAlignment(fieldAlign);
+	// Weight 0 keeps the fields at one line. Extra height stays under them.
+	workBox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL, 0)
+		.AddGroup(B_HORIZONTAL, 0, 0)
 			.AddGlue()
 			.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
 				.Add(fColumns->CreateLabelLayoutItem(), 0, 0)
 				.Add(columnText, 1, 0)
 				.Add(fRows->CreateLabelLayoutItem(), 0, 1)
 				.Add(rowText, 1, 1)
+				.SetRowWeight(0, 0)
+				.SetRowWeight(1, 0)
 				.End()
 			.AddGlue()
 			.End()
+		.AddGlue()
 		.View());
 
 	fScopeMenu = new BPopUpMenu("scope", true, true);
@@ -986,15 +976,38 @@ DisplayView::MessageReceived(BMessage* message)
 			}
 			fConfirming = true;
 			_UpdateApply();
-			BAlert* alert = new BAlert("Display",
+			delete fConfirmRunner;
+			fConfirmRunner = new BMessageRunner(BMessenger(this),
+				new BMessage(kMsgDisplayTimeout), 12000000, 1);
+			fAlert = new BAlert("Display",
 				"Do you wish to keep these settings?\n"
 				"The previous picture returns after 12 seconds.",
 				"Undo", "Keep", NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-			int32 which = alert->Go();
+			fAlert->SetFlags(fAlert->Flags() | B_CLOSE_ON_ESCAPE);
+			fAlert->Go(new BInvoker(new BMessage(kMsgDisplayChoice), this));
+			break;
+		}
+		case kMsgDisplayChoice:
+		case kMsgDisplayTimeout:
+		{
+			bool keep = false;
+			if (message->what == kMsgDisplayChoice) {
+				int32 which = 0;
+				message->FindInt32("which", &which);
+				keep = which == 1;
+			}
+			if (fAlert != NULL) {
+				BAlert* alert = fAlert;
+				fAlert = NULL;
+				alert->PostMessage(B_QUIT_REQUESTED);
+			}
+			delete fConfirmRunner;
+			fConfirmRunner = NULL;
 			fConfirming = false;
-			fModule->Settle(which == 1);
-			ShowChoice(fModule->Selected(), true);
+			if (fModule != NULL)
+				fModule->Settle(keep);
+			if (fModule != NULL)
+				ShowChoice(fModule->Selected(), true);
 			break;
 		}
 		default:
@@ -1006,6 +1019,14 @@ DisplayView::MessageReceived(BMessage* message)
 
 DisplayView::~DisplayView()
 {
+	delete fConfirmRunner;
+	fConfirmRunner = NULL;
+	if (fAlert != NULL) {
+		fAlert->PostMessage(B_QUIT_REQUESTED);
+		fAlert = NULL;
+	}
+	if (fModule != NULL && fConfirming)
+		fModule->Settle(false);
 	if (fModule != NULL)
 		fModule->ClearView(this);
 }

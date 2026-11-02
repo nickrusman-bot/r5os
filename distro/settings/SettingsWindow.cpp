@@ -380,6 +380,8 @@ PageScroller::DoLayout()
 		return;
 
 	fScrolling = true;
+	// Size the page before laying it out. A layout at the old height
+	// leaves a tab body at zero.
 	float width = Bounds().Width();
 	float height = Bounds().Height();
 	BSize preferred = fContent->PreferredSize();
@@ -403,6 +405,8 @@ PageScroller::DoLayout()
 
 	fContent->MoveTo(0, overflow ? -value : 0);
 	fContent->ResizeTo(contentWidth, contentHeight);
+	fContent->InvalidateLayout(true);
+	fContent->Layout(true);
 	if (overflow) {
 		if (fBar->IsHidden())
 			fBar->Show();
@@ -1065,7 +1069,6 @@ module_icon(const char* moduleId)
 	};
 	static const IconRow rows[] = {
 		{ "appearance", "application/x-vnd.Haiku-Appearance" },
-		{ "colors", "application/x-vnd.Haiku-Appearance" },
 		{ "deskbar", "application/x-vnd.Haiku-DeskbarPreferences" },
 		{ "wallpaper", "application/x-vnd.Haiku-Backgrounds" },
 		{ "information", "application/x-vnd.Haiku-About" },

@@ -39,6 +39,13 @@ if [[ -f "$deskSrc" ]]; then
 	echo "Wrote $deskDst"
 fi
 
+paperSrc="$ROOT/distro/artwork/r5-wallpaper.jpg"
+paperDst="$ROOT/haiku/data/artwork/r5-wallpaper.jpg"
+if [[ -f "$paperSrc" ]]; then
+	cp "$paperSrc" "$paperDst"
+	echo "Wrote $paperDst"
+fi
+
 splashSrc="$ROOT/distro/artwork/r5-os-splash.png"
 if [[ -f "$splashSrc" ]]; then
 	cp "$splashSrc" "$ROOT/haiku/data/artwork/boot_splash/splash_logo-empty.png"

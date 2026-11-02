@@ -190,10 +190,6 @@ register_legacy_pages(SettingsManager& manager)
 		const char* signature;
 	};
 	const entry pages[] = {
-		{ "colors", "Colors and fonts", "personalization",
-			"Colors, fonts, and the window look.",
-			"appearance colors fonts antialiasing",
-			"application/x-vnd.Haiku-Appearance" },
 		{ "sound", "Sound", "system",
 			"Event sounds and the output device.",
 			"audio volume media",

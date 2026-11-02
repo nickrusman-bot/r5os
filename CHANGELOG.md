@@ -1,5 +1,43 @@
 # R5OS changelog (lokaal)
 
+### Desktop picture
+
+The artwork folder shipped two Haiku logo pictures, and the Desktop folder had no picture of its own. The desktop now uses `r5-wallpaper.jpg`, an original picture contributed to R5OS under GPL-3.0-or-later. The placement is scale to fit (mode 2): the picture fills the screen and keeps its proportions. Those two Haiku logo files are no longer installed. The picture files stay in the Haiku tree. They are just not copied into this image.
+
+The attribute is on the administrator Desktop folder in the image. A home created later does not get it until that folder is given the same attribute.
+
+`distro/BUILD` stays 10038. `jam -q @r5-raw` on 2 Nov 2026 at 21:43 Europe/Amsterdam exited 0 and updated 1109 targets. The staged artwork directory contains only `r5-wallpaper.jpg`. VirtualBox is started from this image afterwards. The desktop was not seen from here.
+
+### Appearance body and workspace fields
+
+The previous layout pass still left Appearance as four tabs over an empty page. `BTabView` kept its page body at the height it had before the scroller gave the page a real size. The tab view now sets that body to the area under the tabs after its own layout. The font size field keeps a single-line maximum, and the preview takes its colors from the page, the same way the separate Appearance program does.
+
+Workspace columns and rows grew into two large boxes. The row under Workspaces was taking the spare height of that box, and a full-height alignment then stretched each field. The fields stay on one line. Spare height sits under them.
+
+A box title lost its bold face when the plain-font walk compared `Face()`. That flag does not survive `SetFont`. The walk now matches family, style, and size, and it leaves a view named `box title` alone.
+
+`distro/BUILD` stays 10038. `jam -q Settings` exited 0 and updated 18 targets. `jam -q settings_appearance` exited 0 and updated 2 targets. `jam -q @r5-raw` on 2 Nov 2026 exited 0 and updated 1127 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. `scripts/jam-r5-raw.sh` was not used: from this shell it stops on carriage returns, so the About stamp was not rewritten and is still the 20:22 stamp. The image file is `generated.x86_64/r5-os.image`. VirtualBox was not started. The tabs, the workspace fields, and a box title were not opened.
+
+### Settings audit after the empty Appearance tabs
+
+Opening Appearance showed the four tabs and an empty page. The page scroller sizes its page by hand. A resize during that layout does not lay the page out again, so a tab body stayed at zero height. The scroller now lays the page out after it places it. A hidden tab lays itself out when it is shown.
+
+Manrope was applied to every child, including a box title that had already been set bold. Enable notifications and Enable virtual memory lost that face the same way. The walk now leaves the bold face and the title face as they were set.
+
+Display Apply called `BScreen::SetMode` on the window thread and again from a second thread after 12 seconds, and the first call stored the mode as the boot mode. Choosing 1024x768 froze the desktop, Settings stopped in the kernel debugger (`bogus pointer` while freeing the window), and a later start could come up in that mode. The trial mode is no longer the boot mode. Keep writes it. Undo and the 12 second timeout put the previous picture back on the window thread. There is no second thread.
+
+`distro/BUILD` stays 10038. `jam -q Settings` exited 0 and updated 18 targets. `jam -q settings_appearance` exited 0 and updated 2 targets. `jam -q @r5-raw` on 2 Nov 2026 at 20:22 Europe/Amsterdam exited 0 and updated 1139 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. The package script failed on a `bash\r` shebang. Running it after stripping the carriage return printed `mesa_packages_ok`. About shows build 10038. The image stamp is `2 Nov 2026, 20:22`. This image replaces the 20:01 image. VirtualBox is started from this image afterwards. The desktop was not seen from here. The tabs and a resolution change were not tried from here.
+
+### Appearance page
+
+The Appearance item opened a small sample checkbox and a button for the separate program. Colors and fonts was a second list item that launched that same program. Appearance is now the page. The subtitle is "Personalize how the system looks". The tabs are Fonts, Colors, Look and feel, and Antialiasing. A change is applied at once, through the existing font, color, decorator, control look, scrollbar, and antialiasing calls. Revert and Defaults are the window buttons. The page does not write its own settings file. The separate Appearance program stays installed. Colors and fonts is no longer a list item, because this page was asked for in its place. Information stays first under System, the other pages stay alphabetical, and the five existing descriptions are unchanged.
+
+A chosen font was written, then the menu was filled again from `be_plain_font` before that copy had changed, so Plain snapped back and the other rows kept a menu mark that did not match the preview. The row now keeps the choice it applied. The preview uses the panel color and the width of the old preview, so it is no longer a white field. Size keeps its number. The font menu stays a menu. Look and feel selects a decorator by its list index. The earlier call looked the decorator up by a name that search does not use, so the choice did not stick.
+
+`distro/BUILD` stays 10038. `jam -q settings_appearance` for this fix exited 0 and updated 2 targets. `jam -q @r5-raw` on 2 Nov 2026 at 20:01 Europe/Amsterdam exited 0 and updated 1155 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. The package script in the image script failed again on a `bash\r` shebang. Running it after stripping the carriage return printed `mesa_packages_ok`. About shows build 10038. The image stamp is `2 Nov 2026, 20:01`. This image replaces the 19:29 image. VirtualBox is started from this image afterwards. The desktop was not seen from here. The four tabs were not opened from here.
+
+The first image for this page was `2 Nov 2026, 19:29`. `jam -q Settings` then exited 0 and updated 18 targets. The first `settings_appearance` compile failed: the font call wanted a writable family and style, `get_font_style` could not choose a flags pointer, and `AppearanceModule` was used before it was named. Those were fixed before that image. That image is the one where the font rows, the white preview, the missing size number, and Look and feel were seen.
+
 ### Information stays first
 
 The Settings list followed registration order, so Information sat at the bottom of System. Information is now first under System. Every other page, in every category, is alphabetical by name. The same order is used for the cards on a category page. The card line and the subtitle are the page description.
