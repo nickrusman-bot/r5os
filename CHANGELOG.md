@@ -4,6 +4,8 @@
 
 The refresh posted from a menu click runs inside the menu's own loop, while the popup is still tracking. Refresh rebuilt the image menu and freed the item that had just been chosen. The window then ignored clicks, and quitting it was a double free. A menu click now updates the page directly and does not touch the menu that is open. Image items are not removed. A new picture is inserted.
 
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 07:53 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. About stays build 10024. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Wallpaper menus overlapped, and choosing one froze Settings
 
 The workspace menu was the label of the right box, and that box also had its own layout, so the Image menu was drawn underneath it. Choosing Current workspace rebuilt the menus while that menu was still open. The window then ignored clicks. Quitting it stopped in the debugger with `double free` in `SettingsWindow::~SettingsWindow`. The menu update is posted after the menu closes. The box keeps a single child below the label, so the label is no longer laid out as content.
