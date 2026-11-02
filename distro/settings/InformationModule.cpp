@@ -325,7 +325,7 @@ InformationView::InformationView()
 		new BMessage(kMsgCopySystem));
 
 	BBox* device = new BBox("device");
-	device->SetLabel("Device");
+	device->SetLabel(r5_settings_box_title("Device"));
 	BGridView* deviceGrid = new BGridView(B_USE_SMALL_SPACING,
 		B_USE_SMALL_SPACING);
 	BLayoutBuilder::Grid<>(deviceGrid)
@@ -355,7 +355,7 @@ InformationView::InformationView()
 		B_ALIGN_TOP));
 
 	BBox* system = new BBox("os");
-	system->SetLabel("R5 Operating System");
+	system->SetLabel(r5_settings_box_title("R5 Operating System"));
 	BGridView* systemGrid = new BGridView(B_USE_SMALL_SPACING,
 		B_USE_SMALL_SPACING);
 	BLayoutBuilder::Grid<>(systemGrid)

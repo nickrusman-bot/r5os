@@ -46,13 +46,18 @@ def apply_icons(haiku: pathlib.Path | None = None) -> None:
     shutil.copy2(SRC / "R5Icons.h", header)
     print("copied R5Icons.h into the public headers")
 
-    replace_once(
-        tree / "src" / "preferences" / "Jamfile",
-        "SubInclude HAIKU_TOP src preferences settings ;\n",
-        "SubInclude HAIKU_TOP src preferences r5icons ;\n"
-        "SubInclude HAIKU_TOP src preferences settings ;\n",
-        "r5icons jam",
-    )
+    jamfile = tree / "src" / "preferences" / "Jamfile"
+    icons_line = "SubInclude HAIKU_TOP src preferences r5icons ;\n"
+    jam_text = jamfile.read_text(encoding="utf-8")
+    if icons_line in jam_text:
+        print(f"already {jamfile.name} (r5icons jam)")
+    else:
+        replace_once(
+            jamfile,
+            "SubInclude HAIKU_TOP src preferences settings ;\n",
+            icons_line + "SubInclude HAIKU_TOP src preferences settings ;\n",
+            "r5icons jam",
+        )
     lib_line = "\t\t\tlibpackage.so\n"
     lib_insert = "\t\t\tlibpackage.so\n\t\t\tlibr5icons.so\n"
     for profile in ("regular", "minimum"):

@@ -1,6 +1,6 @@
 # Icons
 
-Public helpers for a bitmap or a button icon. They live in the shared library `libr5icons.so`.
+Public helpers for a bitmap or a button icon. They live in the shared library `libr5icons.so`. The screen picture is a different library, `libr5ui.so`, described in `docs/LIBR5.md`.
 
 ## For developers
 

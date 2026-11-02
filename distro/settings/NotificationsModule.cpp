@@ -8,6 +8,9 @@
 
 #include "NotificationsModule.h"
 
+#include <R5UI.h>
+
+#include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsModule.h"
 
@@ -34,6 +37,7 @@
 #include <ScrollView.h>
 #include <Slider.h>
 #include <String.h>
+#include <StringView.h>
 #include <SupportDefs.h>
 
 #include <algorithm>
@@ -696,17 +700,13 @@ NotificationPlace::Draw(BRect updateRect)
 {
 	(void)updateRect;
 	BRect outer = _Screen();
-	BRect inner = outer.InsetByCopy(5, 5);
-	rgb_color border = ui_color(B_CONTROL_BORDER_COLOR);
 	rgb_color text = ui_color(fEnabled
 		? B_CONTROL_TEXT_COLOR : B_CONTROL_BORDER_COLOR);
-	SetHighColor(border);
-	FillRoundRect(outer, 4, 4);
-	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		B_DARKEN_1_TINT));
-	FillRoundRect(inner, 2, 2);
-	SetHighColor(border);
-	StrokeRoundRect(inner, 2, 2);
+	rgb_color content = fEnabled
+		? tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), B_DARKEN_1_TINT)
+		: ui_color(B_PANEL_BACKGROUND_COLOR);
+	BRect inner = r5_screen_draw(this, outer, content);
+	rgb_color border = ui_color(B_CONTROL_BORDER_COLOR);
 
 	BRect bar = _Bar(inner);
 	SetHighColor(fPosition == kFollowDeskbar ? text : border);
@@ -826,6 +826,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 {
 	fEnable = new BCheckBox("server", "Enable notifications",
 		new BMessage(kMsgEnable));
+	fEnable->SetFont(r5_settings_bold_font());
 
 	float ratio = be_plain_font->Size() / 12.0f;
 	int32 minWidth = (int32)(kMinimumWidth / kWidthStep * ratio);
@@ -881,7 +882,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 	fRemove->SetExplicitMinSize(BSize(buttonWidth, B_SIZE_UNSET));
 
 	BBox* applications = new BBox("applications");
-	applications->SetLabel("Applications");
+	applications->SetLabel(r5_settings_box_title("Applications"));
 	BGroupView* applicationsInner = new BGroupView(B_VERTICAL,
 		B_USE_DEFAULT_SPACING);
 	BLayoutBuilder::Group<>(applicationsInner)
