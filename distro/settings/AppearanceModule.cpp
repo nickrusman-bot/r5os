@@ -411,6 +411,22 @@ private:
 };
 
 
+// BTabView's own layout leaves the page body at zero height when this
+// window sizes the page by hand. After that layout, the body is the area
+// under the tabs.
+class AppearanceTabs : public BTabView {
+public:
+								AppearanceTabs();
+	virtual	void				Select(int32 index);
+	virtual	void				DoLayout();
+
+private:
+			void				_ShowBody();
+
+			bool				fAdjusting;
+};
+
+
 class AppearancePage : public BGroupView {
 public:
 								AppearancePage(AppearanceModule* module);
@@ -490,6 +506,7 @@ FontRow::FontRow(const char* which, const char* label)
 	sizeMessage->AddString("which", which);
 	fSize = new BSpinner("size", "Size:", sizeMessage);
 	fSize->SetRange(kMinFontSize, kMaxFontSize);
+	fSize->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	fPreview = new BTextView("preview");
 	fPreview->SetText(kPreviewText);
 	fPreview->MakeEditable(false);
@@ -497,8 +514,9 @@ FontRow::FontRow(const char* which, const char* label)
 	fPreview->MakeResizable(false);
 	fPreview->SetWordWrap(true);
 	fPreview->SetInsets(0, 0, 0, 0);
-	fPreview->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	fPreview->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
+	fPreview->SetViewUIColor(ViewUIColor());
+	fPreview->SetLowUIColor(LowUIColor());
+	fPreview->SetHighUIColor(HighUIColor());
 	fPreviewBox = new BBox("preview");
 	fPreviewBox->AddChild(BLayoutBuilder::Group<>(B_HORIZONTAL, 0)
 		.SetInsets(B_USE_SMALL_SPACING)
@@ -680,10 +698,11 @@ FontRow::_ShowChoice()
 		if (lines > 3.0f)
 			lines = 3.0f;
 	}
-	float height = font.Size() * 1.4f * lines;
-	fPreview->SetExplicitMinSize(BSize(previewWidth, height));
-	fPreview->SetExplicitMaxSize(BSize(previewWidth, height));
-	fPreview->SetExplicitPreferredSize(BSize(previewWidth, height));
+	float height = fPreview->LineHeight(0) * lines;
+	fPreview->SetExplicitSize(BSize(previewWidth, height));
+	fPreview->SetViewUIColor(ViewUIColor());
+	fPreview->SetLowUIColor(LowUIColor());
+	fPreview->SetHighUIColor(HighUIColor());
 	fPreview->Invalidate();
 }
 
@@ -1718,6 +1737,53 @@ AntialiasTab::MessageReceived(BMessage* message)
 }
 
 
+AppearanceTabs::AppearanceTabs()
+	:
+	BTabView("appearance tabs", B_WIDTH_FROM_LABEL),
+	fAdjusting(false)
+{
+	SetBorder(B_NO_BORDER);
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
+	SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
+}
+
+
+void
+AppearanceTabs::Select(int32 index)
+{
+	BTabView::Select(index);
+	_ShowBody();
+}
+
+
+void
+AppearanceTabs::DoLayout()
+{
+	if (fAdjusting)
+		return;
+	fAdjusting = true;
+	BTabView::DoLayout();
+	_ShowBody();
+	fAdjusting = false;
+}
+
+
+void
+AppearanceTabs::_ShowBody()
+{
+	BView* container = ContainerView();
+	if (container == NULL)
+		return;
+	BRect bounds = Bounds();
+	float top = TabHeight();
+	if (bounds.Width() < 2.0f || bounds.Height() <= top + 2.0f)
+		return;
+	container->MoveTo(0, top);
+	container->ResizeTo(bounds.Width(), bounds.Height() - top);
+}
+
+
 AppearancePage::AppearancePage(AppearanceModule* module)
 	:
 	BGroupView(B_VERTICAL, 0),
@@ -1742,8 +1808,7 @@ AppearancePage::AppearancePage(AppearanceModule* module)
 	fLook->Remember(fOpenDecor, fOpenLook, fOpenArrows);
 	fAntialias = new AntialiasTab();
 	fAntialias->Remember(fOpenSubpixel, fOpenHint, fOpenWeight);
-	BTabView* tabs = new BTabView("appearance tabs", B_WIDTH_FROM_LABEL);
-	tabs->SetBorder(B_NO_BORDER);
+	AppearanceTabs* tabs = new AppearanceTabs();
 	tabs->AddTab(fFonts);
 	tabs->AddTab(fColors);
 	tabs->AddTab(fLook);
@@ -1758,7 +1823,6 @@ AppearancePage::AllAttached()
 {
 	BGroupView::AllAttached();
 	InvalidateLayout();
-	Layout(true);
 }
 
 

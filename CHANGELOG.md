@@ -1,5 +1,23 @@
 # R5OS changelog (lokaal)
 
+### Desktop picture
+
+The artwork folder shipped two Haiku logo pictures, and the Desktop folder had no picture of its own. The desktop now uses `r5-wallpaper.jpg`, an original picture contributed to R5OS under GPL-3.0-or-later. The placement is scale to fit (mode 2): the picture fills the screen and keeps its proportions. Those two Haiku logo files are no longer installed. The picture files stay in the Haiku tree. They are just not copied into this image.
+
+The attribute is on the administrator Desktop folder in the image. A home created later does not get it until that folder is given the same attribute.
+
+`distro/BUILD` stays 10038. `jam -q @r5-raw` on 2 Nov 2026 at 21:43 Europe/Amsterdam exited 0 and updated 1109 targets. The staged artwork directory contains only `r5-wallpaper.jpg`. VirtualBox is started from this image afterwards. The desktop was not seen from here.
+
+### Appearance body and workspace fields
+
+The previous layout pass still left Appearance as four tabs over an empty page. `BTabView` kept its page body at the height it had before the scroller gave the page a real size. The tab view now sets that body to the area under the tabs after its own layout. The font size field keeps a single-line maximum, and the preview takes its colors from the page, the same way the separate Appearance program does.
+
+Workspace columns and rows grew into two large boxes. The row under Workspaces was taking the spare height of that box, and a full-height alignment then stretched each field. The fields stay on one line. Spare height sits under them.
+
+A box title lost its bold face when the plain-font walk compared `Face()`. That flag does not survive `SetFont`. The walk now matches family, style, and size, and it leaves a view named `box title` alone.
+
+`distro/BUILD` stays 10038. `jam -q Settings` exited 0 and updated 18 targets. `jam -q settings_appearance` exited 0 and updated 2 targets. `jam -q @r5-raw` on 2 Nov 2026 exited 0 and updated 1127 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. `scripts/jam-r5-raw.sh` was not used: from this shell it stops on carriage returns, so the About stamp was not rewritten and is still the 20:22 stamp. The image file is `generated.x86_64/r5-os.image`. VirtualBox was not started. The tabs, the workspace fields, and a box title were not opened.
+
 ### Settings audit after the empty Appearance tabs
 
 Opening Appearance showed the four tabs and an empty page. The page scroller sizes its page by hand. A resize during that layout does not lay the page out again, so a tab body stayed at zero height. The scroller now lays the page out after it places it. A hidden tab lays itself out when it is shown.

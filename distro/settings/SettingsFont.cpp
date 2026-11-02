@@ -120,7 +120,8 @@ keeps_face(BView* view, const BFont* face)
 	font_style rightStyle;
 	current.GetFamilyAndStyle(&leftFamily, &leftStyle);
 	face->GetFamilyAndStyle(&rightFamily, &rightStyle);
-	return current.Face() == face->Face() && current.Size() == face->Size()
+	// Face() does not round-trip through SetFont. Family and style do.
+	return current.Size() == face->Size()
 		&& strcmp(leftFamily, rightFamily) == 0
 		&& strcmp(leftStyle, rightStyle) == 0;
 }
@@ -133,7 +134,10 @@ r5_settings_apply_plain(BView* view)
 		return;
 	// Box titles and the two bold checkboxes set their font first.
 	// This walk must leave those faces in place.
-	if (!keeps_face(view, r5_settings_bold_font())
+	const char* name = view->Name();
+	bool boxTitle = name != NULL && strcmp(name, "box title") == 0;
+	if (!boxTitle
+		&& !keeps_face(view, r5_settings_bold_font())
 		&& !keeps_face(view, r5_settings_title_font()))
 		view->SetFont(r5_settings_plain_font());
 	for (int32 i = 0; i < view->CountChildren(); i++)

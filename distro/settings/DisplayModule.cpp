@@ -572,19 +572,24 @@ DisplayView::DisplayView(DisplayModule* module)
 	fRows->SetAlignment(B_ALIGN_RIGHT);
 	BLayoutItem* columnText = fColumns->CreateTextViewLayoutItem();
 	BLayoutItem* rowText = fRows->CreateTextViewLayoutItem();
-	columnText->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
-	rowText->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
-	workBox->AddChild(BLayoutBuilder::Group<>()
-		.AddGroup(B_HORIZONTAL, 0)
+	BAlignment fieldAlign(B_ALIGN_USE_FULL_WIDTH, B_ALIGN_VERTICAL_CENTER);
+	columnText->SetExplicitAlignment(fieldAlign);
+	rowText->SetExplicitAlignment(fieldAlign);
+	// Weight 0 keeps the fields at one line. Extra height stays under them.
+	workBox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL, 0)
+		.AddGroup(B_HORIZONTAL, 0, 0)
 			.AddGlue()
 			.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
 				.Add(fColumns->CreateLabelLayoutItem(), 0, 0)
 				.Add(columnText, 1, 0)
 				.Add(fRows->CreateLabelLayoutItem(), 0, 1)
 				.Add(rowText, 1, 1)
+				.SetRowWeight(0, 0)
+				.SetRowWeight(1, 0)
 				.End()
 			.AddGlue()
 			.End()
+		.AddGlue()
 		.View());
 
 	fScopeMenu = new BPopUpMenu("scope", true, true);

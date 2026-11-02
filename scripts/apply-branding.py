@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import shutil
 import sys
 
 HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/haiku")
@@ -136,6 +137,52 @@ def rewrite_product_name(path: pathlib.Path) -> None:
     print(f"patched {path} (R5OS name)")
 
 
+def install_wallpaper(haiku: pathlib.Path) -> None:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source = root / "distro" / "artwork" / "r5-wallpaper.jpg"
+    if not source.is_file():
+        raise SystemExit(f"missing {source}")
+    dest = haiku / "data" / "artwork" / "r5-wallpaper.jpg"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, dest)
+    print(f"copied {dest}")
+
+    package = haiku / "build" / "jam" / "packages" / "Haiku"
+    text = package.read_text(encoding="utf-8")
+    old = (
+        "local logoArtwork =\n"
+        '\t$(HAIKU_INCLUDE_TRADEMARKS)"HAIKU logo - white on blue - big.png"\n'
+        '\t$(HAIKU_INCLUDE_TRADEMARKS)"HAIKU logo - white on blue - normal.png" ;\n'
+    )
+    new = "local logoArtwork = r5-wallpaper.jpg ;\n"
+    if "local logoArtwork = r5-wallpaper.jpg ;" in text:
+        print(f"already {package.name} (wallpaper)")
+    elif old not in text:
+        raise SystemExit(f"Haiku artwork list not found in {package}")
+    else:
+        package.write_text(text.replace(old, new, 1), encoding="utf-8")
+        print(f"patched {package} (wallpaper)")
+
+    desktop = haiku / "src" / "data" / "directory_attrs" / "home-desktop.rdef"
+    rdef = desktop.read_text(encoding="utf-8")
+    if "r5-wallpaper.jpg" in rdef:
+        print(f"already {desktop.name} (wallpaper)")
+        return
+    rdef = rdef.rstrip() + (
+        "\n\n"
+        'resource(1, "be:bgndimginfo") message {\n'
+        '\t"be:bgndimginfopath" = "/boot/system/data/artwork/r5-wallpaper.jpg",\n'
+        '\t"be:bgndimginfomode" = 2,\n'
+        '\t"be:bgndimginfoworkspaces" = -1,\n'
+        '\t"be:bgndimginfooffset" = point { 0, 0 },\n'
+        '\t"be:bgndimginfoerasetext" = false,\n'
+        '\t"be:bgndimginfoset" = 0\n'
+        "};\n"
+    )
+    desktop.write_text(rdef, encoding="utf-8")
+    print(f"patched {desktop} (wallpaper)")
+
+
 def main() -> int:
     patch_icons_rdef(HAIKU / "src/apps/deskbar/icons.rdef")
     patch_barmenubar(HAIKU / "src/apps/deskbar/BarMenuBar.cpp")
@@ -151,6 +198,7 @@ def main() -> int:
         "src/apps/firstbootprompt/BootPromptWindow.cpp",
     ):
         rewrite_product_name(HAIKU / rel)
+    install_wallpaper(HAIKU)
     return 0
 
 
