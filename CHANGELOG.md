@@ -1,5 +1,39 @@
 # R5OS changelog (lokaal)
 
+### libr5icons.so is a system library
+
+The icon helpers are no longer a static archive inside Settings. They are `libr5icons.so`, soname `libr5icons.so`, linked against `libbe.so`. Settings lists that library as `NEEDED`. The regular image and the minimum image both name it in `HaikuImageGetSystemLibs`, so it is installed under `/system/lib` with `libbe.so`. The devel package links it from `develop/lib` when that package is built. The header for programs is `<R5Icons.h>`. `docs/ICONS.md` tells a developer how to include it, how to link it, and which changes break the soname.
+
+The C++ is GPL-3.0-or-later. The four built-in pictures stay Open Tracker HVIF. They are not relicensed, and the calls are not added to `libbe`.
+
+`jam -q Settings` exited 0 and linked `libr5icons.so`. `readelf` shows soname `libr5icons.so` and shows Settings needs `libr5icons.so`. `jam -q @r5-raw` on 2 Nov 2026 at 10:16 Europe/Amsterdam exited 0 and updated 1141 targets. The package copy script for `haiku.hpkg` includes `libr5icons.so`. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 10:16`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. A minimum image was not built.
+
+### The minimum image includes Settings
+
+`build/jam/images/definitions/minimum` lists `Settings` with the other preferences, and it installs `settings_appearance` with it. The regular image already did. The name of the icon library stays `libr5icons`. This definition was not built into an image from here. The running regular image is unchanged.
+
+### Settings asks a public function for the Back and Home icons
+
+Back and Home no longer read resource ids out of `libtracker.so`. Those ids are private. The pictures are now unmodified Tracker HVIF inside `libr5icons.a`, and Settings calls `r5_button_set_icon()` with `R5_ICON_BACK` and `R5_ICON_HOME`. The buttons stay the same height as Revert and Save, in that order, and they still do not get the wrench.
+
+The same library can draw any other icon. `r5_icon_bitmap()` takes a predefined name: back, forward, up, or home. The numbers 1 to 4 stay fixed. `r5_vector_icon_bitmap()` takes HVIF bytes, `r5_file_icon_bitmap()` takes a path, and `r5_mime_icon_bitmap()` takes a MIME type. Each has a `r5_button_set_*()` call that sizes the button. `docs/ICONS.md` is the contract. `AGENTS.md` says not to open Tracker’s private resources for this.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 09:54 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 09:54`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
+### Back and Home are Tracker icons, and the wrench stays on Settings
+
+The preferences wrench is only for this Settings application and the modules inside it: the page icon and the home cards. About R5 is not a settings module and does not get the wrench.
+
+Back and Home on the bottom row are now buttons that draw Tracker's back arrow (`R_ResBackNav`) and home-directory icon (`R_HomeDirIcon`) from `libtracker`. They are the same height as Revert and Save. The order is Back, Home, Revert, Save. Those two icons do not get the wrench. `AGENTS.md` says so.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 09:40 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 09:40`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
+### Settings icons wear the preferences wrench
+
+Every icon in Settings, on the page and on the home cards, gets the Haiku preferences wrench drawn on top. The wrench is the unmodified Haiku file `data/artwork/icons/Overlay_prefs`, MIT, copied to `distro/settings/overlay-prefs.hvif` and stored in the Settings resources as `prefs-overlay`. `AGENTS.md` requires that overlay. A page icon is not drawn without it.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 09:29 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 09:29`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### The Settings frame stays put, and each page has an icon
 
 The list, the title block, the icon at the right of that block, and the bottom row (Search, Home, Back, Revert, Save) are fixed. `AGENTS.md` says not to move them. A page only changes the area under the subtitle. Each page loads the icon of its program. Home uses the Preferences folder icon. Information uses the About icon. A page without a signature in `module_icon()` shows an empty slot of the same size.

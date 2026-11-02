@@ -22,6 +22,9 @@ SOURCES = (
     "SettingsApp.cpp",
     "SettingsFont.cpp",
     "SettingsFont.h",
+    "SettingsIcon.cpp",
+    "SettingsIcon.h",
+    "overlay-prefs.hvif",
     "SettingsHost.cpp",
     "SettingsHost.h",
     "SettingsManager.cpp",
@@ -88,13 +91,18 @@ def copy_sources() -> None:
 
 
 def patch_jams() -> None:
-    replace_once(
-        HAIKU / "src" / "preferences" / "Jamfile",
-        "SubInclude HAIKU_TOP src preferences users ;\n",
-        "SubInclude HAIKU_TOP src preferences users ;\n"
-        "SubInclude HAIKU_TOP src preferences settings ;\n",
-        "settings jam",
-    )
+    prefs_jam = HAIKU / "src" / "preferences" / "Jamfile"
+    prefs_text = prefs_jam.read_text(encoding="utf-8")
+    if "SubInclude HAIKU_TOP src preferences settings ;" in prefs_text:
+        print(f"already {prefs_jam.name} (settings jam)")
+    else:
+        replace_once(
+            prefs_jam,
+            "SubInclude HAIKU_TOP src preferences users ;\n",
+            "SubInclude HAIKU_TOP src preferences users ;\n"
+            "SubInclude HAIKU_TOP src preferences settings ;\n",
+            "settings jam",
+        )
     replace_once(
         HAIKU / "build" / "jam" / "images" / "definitions" / "regular",
         "SYSTEM_PREFERENCES += Users ;\n",
@@ -109,6 +117,19 @@ def patch_jams() -> None:
         "\n"
         "SYSTEM_ADD_ONS_SETTINGS = ;\n",
         "settings addon variable",
+    )
+    replace_once(
+        HAIKU / "build" / "jam" / "images" / "definitions" / "minimum",
+        "\t<preference>Tracker\n\tVirtualMemory\n] ;\n",
+        "\t<preference>Tracker\n\tVirtualMemory\n\tSettings\n] ;\n",
+        "settings on minimum",
+    )
+    replace_once(
+        HAIKU / "build" / "jam" / "images" / "definitions" / "minimum",
+        "SYSTEM_ADD_ONS_SETTINGS = ;\n",
+        "SYSTEM_ADD_ONS_SETTINGS = ;\n"
+        "SYSTEM_ADD_ONS_SETTINGS += settings_appearance ;\n",
+        "settings addon on minimum",
     )
     replace_once(
         HAIKU / "build" / "jam" / "images" / "definitions" / "regular",
@@ -158,6 +179,13 @@ def main() -> None:
     copy_sources()
     copy_fonts()
     patch_jams()
+    # Settings links libr5icons.so. The settings SubInclude must exist first.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "apply_icons", ROOT / "scripts" / "apply-icons.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.apply_icons(HAIKU)
 
 
 if __name__ == "__main__":

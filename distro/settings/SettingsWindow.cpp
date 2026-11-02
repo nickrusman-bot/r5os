@@ -9,6 +9,7 @@
 #include "HomeView.h"
 #include "SettingsFont.h"
 #include "SettingsHost.h"
+#include "SettingsIcon.h"
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
 #include "SettingsModule.h"
@@ -23,6 +24,7 @@
 #include <Mime.h>
 #include <NodeInfo.h>
 #include <Path.h>
+#include <R5Icons.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
@@ -251,6 +253,7 @@ PageIcon::_Load(BNode& node)
 		delete bitmap;
 		return false;
 	}
+	r5_settings_apply_prefs_overlay(bitmap);
 	fBitmap = bitmap;
 	return true;
 }
@@ -264,9 +267,10 @@ PageIcon::SetSignature(const char* signature)
 		BRect bounds(BPoint(0, 0),
 			be_control_look->ComposeIconSize(B_LARGE_ICON));
 		BBitmap* bitmap = new BBitmap(bounds, B_RGBA32);
-		if (BMimeType(signature).GetIcon(bitmap, B_LARGE_ICON) == B_OK)
+		if (BMimeType(signature).GetIcon(bitmap, B_LARGE_ICON) == B_OK) {
+			r5_settings_apply_prefs_overlay(bitmap);
 			fBitmap = bitmap;
-		else
+		} else
 			delete bitmap;
 	}
 	Invalidate();
@@ -327,8 +331,10 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fList->SetSelectionMessage(new BMessage(kMsgOpenPage));
 	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true);
 
-	fHome = new BButton("home", "Home", new BMessage(kMsgOpenHome));
-	fBack = new BButton("back", "Back", new BMessage(kMsgGoBack));
+	fBack = new BButton("back", NULL, new BMessage(kMsgGoBack));
+	fHome = new BButton("home", NULL, new BMessage(kMsgOpenHome));
+	fBack->SetToolTip("Back");
+	fHome->SetToolTip("Home");
 	fTitle = new BStringView("title", "Settings");
 	fDescription = new BStringView("description",
 		"One place for the computer's settings.");
@@ -346,8 +352,9 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	// Locked. Do not move these. The list starts under the tab and
 	// runs down to Search. The title and the subtitle sit beside the
 	// list, with this page's icon at the right of that block. The
-	// page is under the subtitle. Home, Back, Revert, and Save stay
-	// on the bottom row. See AGENTS.md.
+	// page is under the subtitle. Back, Home, Revert, and Save stay
+	// on the bottom row. Back and Home use r5_button_set_icon().
+	// See AGENTS.md and docs/ICONS.md.
 	const float sidebarWidth = 248;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
@@ -373,8 +380,8 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
 			.Add(fSearch)
 			.AddGlue()
-			.Add(fHome)
 			.Add(fBack)
+			.Add(fHome)
 			.Add(fRevert)
 			.Add(fSave)
 			.End();
@@ -383,6 +390,10 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fTitle->SetFont(r5_settings_title_font());
 	if (fSearch->TextView() != NULL)
 		fSearch->TextView()->SetFontAndColor(r5_settings_plain_font());
+
+	float buttonHeight = fRevert->PreferredSize().height;
+	r5_button_set_icon(fBack, R5_ICON_BACK, buttonHeight);
+	r5_button_set_icon(fHome, R5_ICON_HOME, buttonHeight);
 
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);

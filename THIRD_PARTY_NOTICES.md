@@ -6,6 +6,10 @@ Readable list for users and release builds. The rules are `docs/LICENSING.md`. T
 
 R5OS is an independent system based on Haiku. Haiku’s own copyright notices and licenses stay on Haiku’s files. Much of Haiku is MIT; the tree is not all MIT. This repository does not relicense it.
 
+The preferences wrench on Settings page icons and home cards is Haiku’s unmodified `data/artwork/icons/Overlay_prefs`, copied to `distro/settings/overlay-prefs.hvif`. `data/artwork/ReadMe` releases the icons under the MIT license. About R5 does not use that wrench.
+
+The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF from Haiku’s `src/kits/tracker/TrackerIcons.rdef` (`R_ResBackNav`, `R_ResForwNav`, `R_ResUpNav`, `R_HomeDirIcon`). The bytes live in `distro/icons/standard_icons.inc`. The Open Tracker notice is `distro/icons/TRACKER_ICON_NOTICE.txt`. The C++ around them is GPL-3.0-or-later, and that is the license of the shared library as shipped. The picture bytes keep the Open Tracker notice. Those pictures do not get the preferences wrench. Settings does not read Tracker’s private resources at run time.
+
 ## Identified in this repository
 
 ### AirPlay receiver

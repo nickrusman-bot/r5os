@@ -7,6 +7,7 @@
 #include "HomeView.h"
 
 #include "SettingsFont.h"
+#include "SettingsIcon.h"
 
 #include <Bitmap.h>
 #include <Control.h>
@@ -66,7 +67,8 @@ CategoryCard::CategoryCard(const char* name, const char* summary,
 		if (BMimeType(iconSignature).GetIcon(fIcon, B_LARGE_ICON) != B_OK) {
 			delete fIcon;
 			fIcon = NULL;
-		}
+		} else
+			r5_settings_apply_prefs_overlay(fIcon);
 	}
 }
 
