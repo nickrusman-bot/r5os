@@ -14,7 +14,9 @@ FILES = (
     "R5Icons.cpp",
     "R5Icons.h",
     "standard_icons.inc",
+    "lock_icons.inc",
     "TRACKER_ICON_NOTICE.txt",
+    "HAIKU_ICON_NOTICE.txt",
 )
 
 

@@ -10,6 +10,7 @@
 
 #include <GroupView.h>
 #include <List.h>
+#include <Messenger.h>
 #include <SupportDefs.h>
 
 
@@ -26,6 +27,12 @@ const uint32 kMsgAdminLockChanged = 'r5ac';
 
 
 bool r5_admin_change_allowed();
+// administrator is the signed-in account. unlocked is that, or a grant
+// that is still running. Both are false when Login cannot be asked.
+status_t r5_admin_query(bool& administrator, bool& unlocked);
+// Asks for an administrator name and password. On success, sends
+// kMsgAdminLockChanged to target. The password is not logged.
+void r5_admin_prompt_unlock(BMessenger target);
 status_t r5_admin_unlock(const char* name, const char* password, BString& error);
 status_t r5_admin_relock();
 status_t r5_admin_set_clock(unsigned long seconds);

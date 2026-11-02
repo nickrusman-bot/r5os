@@ -6,6 +6,7 @@
 
 #include "SettingsWindow.h"
 
+#include "AdminLock.h"
 #include "HomeView.h"
 #include "SettingsFont.h"
 #include "SettingsHost.h"
@@ -19,6 +20,7 @@
 #include <Bitmap.h>
 #include <Button.h>
 #include <CardLayout.h>
+#include <Control.h>
 #include <ControlLook.h>
 #include <FindDirectory.h>
 #include <Mime.h>
@@ -29,6 +31,7 @@
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
 #include <ListView.h>
+#include <MessageRunner.h>
 #include <ScrollBar.h>
 #include <ScrollView.h>
 #include <StringItem.h>
@@ -55,7 +58,8 @@ static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
 		"Appearance, the desktop, wallpaper, and the Deskbar.",
 		"application/x-vnd.Haiku-Appearance" },
-	{ "system", "System", "Display, sound, notifications, and this computer.",
+	{ "system", "System",
+		"Display, sound, notifications, virtual memory, and this computer.",
 		"application/x-vnd.Haiku-Screen" },
 	{ "devices", "Devices", "Keyboard, mouse, Bluetooth, and printers.",
 		"application/x-vnd.Haiku-Input" },
@@ -449,7 +453,12 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fDefaults(NULL),
 	fCurrent(NULL),
 	fAdjusting(false),
-	fLastApplyError(B_OK)
+	fLastApplyError(B_OK),
+	fLock(NULL),
+	fLockRunner(NULL),
+	fLockAdmin(false),
+	fLockOpen(false),
+	fLockButtonHeight(0)
 {
 	fContext = new SettingsHost(fStorage, BMessenger(this));
 
@@ -462,6 +471,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 
 	fBack = new BButton("back", NULL, new BMessage(kMsgGoBack));
 	fHome = new BButton("home", NULL, new BMessage(kMsgOpenHome));
+	fLock = new BButton("lock", NULL, new BMessage(kMsgLockButton));
 	fBack->SetToolTip("Back");
 	fHome->SetToolTip("Home");
 	fTitle = new BStringView("title", "Settings");
@@ -481,9 +491,9 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	// The list starts under the tab and runs down to Search. The title
 	// and the subtitle sit beside the list, with this page's icon at the
 	// right of that block. The page is under the subtitle. A page that is
-	// taller than that area scrolls there. Back, Home, Revert, and
-	// Defaults stay on the bottom row. Back and Home use
-	// r5_button_set_icon(). See AGENTS.md.
+	// taller than that area scrolls there. Back, Home, the lock, Revert,
+	// and Defaults stay on the bottom row. Back, Home, and the lock use
+	// r5_button_set_icon() / r5_button_set_lock(). See AGENTS.md.
 	const float sidebarWidth = 248;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
@@ -511,6 +521,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 			.AddGlue()
 			.Add(fBack)
 			.Add(fHome)
+			.Add(fLock)
 			.Add(fRevert)
 			.Add(fDefaults)
 			.End();
@@ -521,8 +532,14 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 		fSearch->TextView()->SetFontAndColor(r5_settings_plain_font());
 
 	float buttonHeight = fRevert->PreferredSize().height;
+	fLockButtonHeight = buttonHeight;
 	r5_button_set_icon(fBack, R5_ICON_BACK, buttonHeight);
 	r5_button_set_icon(fHome, R5_ICON_HOME, buttonHeight);
+	r5_button_set_lock(fLock, true, buttonHeight);
+	fLock->SetToolTip("Unlock");
+	_ReloadLock(false);
+	fLockRunner = new BMessageRunner(BMessenger(this),
+		new BMessage(kMsgLockTick), 2000000);
 
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
@@ -537,6 +554,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 
 SettingsWindow::~SettingsWindow()
 {
+	delete fLockRunner;
 	for (int32 i = 0; i < fHistory.CountItems(); i++)
 		delete static_cast<SettingsPlace*>(fHistory.ItemAt(i));
 	if (fList != NULL) {
@@ -665,6 +683,8 @@ SettingsWindow::MessageReceived(BMessage* message)
 			break;
 		}
 		case kMsgRevert:
+			if (fCurrent != NULL && fCurrent->RequiresAdmin() && !fLockOpen)
+				break;
 			if (fCurrent != NULL && fCurrent->CanSave()) {
 				fLastApplyError = B_OK;
 				status_t status = fCurrent->RevertSettings(fContext);
@@ -679,6 +699,8 @@ SettingsWindow::MessageReceived(BMessage* message)
 			}
 			break;
 		case kMsgDefaults:
+			if (fCurrent != NULL && fCurrent->RequiresAdmin() && !fLockOpen)
+				break;
 			if (fCurrent != NULL && fCurrent->CanApplyDefaults()) {
 				fLastApplyError = B_OK;
 				status_t status = fCurrent->ApplyDefaults(fContext);
@@ -695,6 +717,19 @@ SettingsWindow::MessageReceived(BMessage* message)
 		case kMsgModuleChanged:
 			_ApplyCurrent();
 			_UpdateActions();
+			break;
+		case kMsgLockButton:
+			if (fLockAdmin)
+				break;
+			if (fLockOpen)
+				r5_admin_relock();
+			else
+				r5_admin_prompt_unlock(BMessenger(this));
+			_ReloadLock(false);
+			break;
+		case kMsgLockTick:
+		case kMsgAdminLockChanged:
+			_ReloadLock(false);
 			break;
 		default:
 			BWindow::MessageReceived(message);
@@ -747,6 +782,7 @@ SettingsWindow::_ShowHome()
 	_Remember("home", false);
 	_SelectSidebar(NULL);
 	_UpdateActions();
+	_ApplyPageLock();
 }
 
 
@@ -776,6 +812,7 @@ SettingsWindow::_ShowCategory(const char* categoryId)
 	_Remember(categoryId, true);
 	_SelectSidebar(NULL);
 	_UpdateActions();
+	_ApplyPageLock();
 }
 
 
@@ -797,6 +834,7 @@ SettingsWindow::_ShowModule(const char* moduleId)
 	_Remember(module->Identifier(), false);
 	_SelectSidebar(module->Identifier());
 	_UpdateActions();
+	_ApplyPageLock();
 }
 
 
@@ -848,9 +886,100 @@ SettingsWindow::_SetHeader(const char* title, const char* description,
 void
 SettingsWindow::_UpdateActions()
 {
-	bool can = fCurrent != NULL && fCurrent->CanSave();
+	bool locked = fCurrent != NULL && fCurrent->RequiresAdmin() && !fLockOpen;
+	bool can = fCurrent != NULL && fCurrent->CanSave() && !locked;
 	fRevert->SetEnabled(can && fCurrent->IsModified());
-	fDefaults->SetEnabled(fCurrent != NULL && fCurrent->CanApplyDefaults());
+	fDefaults->SetEnabled(!locked && fCurrent != NULL
+		&& fCurrent->CanApplyDefaults());
+}
+
+
+void
+SettingsWindow::_ReloadLock(bool pageChanged)
+{
+	bool administrator = false;
+	bool unlocked = false;
+	r5_admin_query(administrator, unlocked);
+	bool changed = administrator != fLockAdmin || unlocked != fLockOpen;
+	fLockAdmin = administrator;
+	fLockOpen = unlocked;
+	if (fLock != NULL) {
+		r5_button_set_lock(fLock, !fLockOpen, fLockButtonHeight);
+		if (fLockAdmin)
+			fLock->SetToolTip("Administrator");
+		else if (fLockOpen)
+			fLock->SetToolTip("Lock");
+		else
+			fLock->SetToolTip("Unlock");
+	}
+	if (changed || pageChanged) {
+		_ApplyPageLock();
+		_UpdateActions();
+	}
+}
+
+
+void
+SettingsWindow::_ApplyPageLock()
+{
+	_RestoreLockedControls();
+	BView* content = _PageContent();
+	if (content != NULL) {
+		BMessage refresh(kMsgRefreshPage);
+		content->MessageReceived(&refresh);
+	}
+	if (fCurrent == NULL || fLockOpen || !fCurrent->RequiresAdmin())
+		return;
+	_DisableLocked(content);
+}
+
+
+void
+SettingsWindow::_RestoreLockedControls()
+{
+	for (int32 i = 0; i < fLockedControls.CountItems(); i++) {
+		BControl* control = static_cast<BControl*>(
+			fLockedControls.ItemAt(i));
+		if (control != NULL)
+			control->SetEnabled(true);
+	}
+	fLockedControls.MakeEmpty();
+}
+
+
+void
+SettingsWindow::_DisableLocked(BView* view)
+{
+	if (view == NULL)
+		return;
+	BControl* control = dynamic_cast<BControl*>(view);
+	if (control != NULL && dynamic_cast<BScrollBar*>(control) == NULL
+		&& control->IsEnabled() && !fLockedControls.HasItem(control)) {
+		control->SetEnabled(false);
+		fLockedControls.AddItem(control);
+	}
+	int32 count = view->CountChildren();
+	for (int32 i = 0; i < count; i++)
+		_DisableLocked(view->ChildAt(i));
+}
+
+
+BView*
+SettingsWindow::_PageContent() const
+{
+	if (fCurrent == NULL || fDeck == NULL)
+		return NULL;
+	BString name("module:");
+	name << fCurrent->Identifier();
+	BView* scroller = fDeck->FindView(name.String());
+	if (scroller == NULL)
+		return NULL;
+	for (int32 i = 0; i < scroller->CountChildren(); i++) {
+		BView* child = scroller->ChildAt(i);
+		if (dynamic_cast<BScrollBar*>(child) == NULL)
+			return child;
+	}
+	return NULL;
 }
 
 
@@ -891,6 +1020,7 @@ module_icon(const char* moduleId)
 		{ "wallpaper", "application/x-vnd.Haiku-Backgrounds" },
 		{ "information", "application/x-vnd.Haiku-About" },
 		{ "notifications", "application/x-vnd.Haiku-Notifications" },
+		{ "virtualmemory", "application/x-vnd.Haiku-VirtualMemory" },
 		{ "display", "application/x-vnd.Haiku-Screen" },
 		{ "sound", "application/x-vnd.Haiku-Sounds" },
 		{ "keyboard", "application/x-vnd.Haiku-Keymap" },

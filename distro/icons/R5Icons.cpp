@@ -19,6 +19,7 @@
 
 
 #include "standard_icons.inc"
+#include "lock_icons.inc"
 
 
 static int32
@@ -103,6 +104,14 @@ r5_icon_bitmap(r5_icon which, float side)
 		case R5_ICON_HOME:
 			data = kHomeIcon;
 			size = kHomeIconSize;
+			break;
+		case R5_ICON_UNLOCKED:
+			data = kUnlockedIcon;
+			size = kUnlockedIconSize;
+			break;
+		case R5_ICON_LOCKED:
+			data = kLockedIcon;
+			size = kLockedIconSize;
 			break;
 		default:
 			return NULL;
@@ -199,4 +208,12 @@ r5_button_set_mime_icon(BButton* button, const char* type,
 	float side = icon_side_for_button(buttonHeight);
 	return apply_button_bitmap(button, r5_mime_icon_bitmap(type, side),
 		buttonHeight);
+}
+
+
+status_t
+r5_button_set_lock(BButton* button, bool locked, float buttonHeight)
+{
+	return r5_button_set_icon(button,
+		locked ? R5_ICON_LOCKED : R5_ICON_UNLOCKED, buttonHeight);
 }

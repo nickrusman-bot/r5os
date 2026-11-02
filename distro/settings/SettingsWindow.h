@@ -14,6 +14,7 @@
 class BButton;
 class BCardLayout;
 class BListView;
+class BMessageRunner;
 class BStringView;
 class PageIcon;
 class BTextControl;
@@ -54,6 +55,11 @@ private:
 									const char* description,
 									const char* iconSignature);
 			void				_UpdateActions();
+			void				_ReloadLock(bool pageChanged);
+			void				_ApplyPageLock();
+			void				_RestoreLockedControls();
+			void				_DisableLocked(BView* view);
+			BView*				_PageContent() const;
 			BView*				_ModuleView(SettingsModule* module);
 			BView*				_CategoryView(const char* categoryId,
 									const char* name);
@@ -82,6 +88,12 @@ private:
 			bool				fAdjusting;
 			BString				fQuery;
 			status_t			fLastApplyError;
+			BButton*			fLock;
+			BMessageRunner*		fLockRunner;
+			BList				fLockedControls;
+			bool				fLockAdmin;
+			bool				fLockOpen;
+			float				fLockButtonHeight;
 };
 
 
