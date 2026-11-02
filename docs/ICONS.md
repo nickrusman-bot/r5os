@@ -19,7 +19,7 @@ Application Example :
 
 On a running system the file is `/system/lib/libr5icons.so`. The soname is `libr5icons.so`, with no version suffix, the same way `libbe.so` is named. The regular image and the minimum image both install it. A program that is linked against it will not start if that file is missing.
 
-The C++ is GPL-3.0-or-later. That is the license of the shared library. The four built-in pictures are unmodified Tracker HVIF and stay under the Open Tracker license (`distro/icons/TRACKER_ICON_NOTICE.txt`). Do not put a GPL header on `standard_icons.inc`. Do not move these calls into `libbe`. `libbe` stays MIT. A program that links `libr5icons.so` combines with this GPL library. A program that does not link it is unchanged.
+The C++ is GPL-3.0-or-later. That is the license of the shared library. The four navigation pictures are unmodified Tracker HVIF and stay under the Open Tracker license (`distro/icons/TRACKER_ICON_NOTICE.txt`). The open and closed locks are unmodified Haiku artwork, `Action_Login` and `Action_Logout`, under the MIT license (`distro/icons/HAIKU_ICON_NOTICE.txt`). Do not put a GPL header on `standard_icons.inc` or `lock_icons.inc`. Do not move these calls into `libbe`. `libbe` stays MIT. A program that links `libr5icons.so` combines with this GPL library. A program that does not link it is unchanged.
 
 Adding a function, or a new `r5_icon` value at the end of the enum, keeps old programs working. Changing a function’s arguments, removing a function, or renumbering an icon breaks programs already built against this soname. Do that only with a written note in this file and in `CHANGELOG.md`.
 
@@ -37,10 +37,12 @@ None of these pictures gets the preferences wrench. That overlay belongs to the 
 | `R5_ICON_FORWARD` | 2 | Tracker’s forward arrow (`R_ResForwNav`) |
 | `R5_ICON_UP` | 3 | Tracker’s up arrow (`R_ResUpNav`) |
 | `R5_ICON_HOME` | 4 | The house Tracker draws on the home folder (`R_HomeDirIcon`) |
+| `R5_ICON_UNLOCKED` | 5 | Haiku's open lock (`Action_Login`) |
+| `R5_ICON_LOCKED` | 6 | Haiku's closed lock (`Action_Logout`) |
 
 The numbers are part of the contract. Do not change a number that already shipped. A new predefined icon is added at the end of `enum r5_icon`, with the next number, the unmodified picture, and a row in this table.
 
-The bytes are unmodified HVIF from `src/kits/tracker/TrackerIcons.rdef`, stored in `distro/icons/standard_icons.inc`. The Open Tracker notice is `distro/icons/TRACKER_ICON_NOTICE.txt`. Do not put a GPL header on that byte file. The C++ around the bytes is GPL-3.0-or-later.
+The bytes for 1–4 are unmodified HVIF from `src/kits/tracker/TrackerIcons.rdef`, stored in `distro/icons/standard_icons.inc`. The Open Tracker notice is `distro/icons/TRACKER_ICON_NOTICE.txt`. The lock bytes are unmodified HVIF in `distro/icons/lock_icons.inc`. The MIT notice is `distro/icons/HAIKU_ICON_NOTICE.txt`. Do not put a GPL header on either byte file. The C++ around the bytes is GPL-3.0-or-later.
 
 ```cpp
 BBitmap* icon = r5_icon_bitmap(R5_ICON_BACK, 16);
@@ -72,7 +74,10 @@ Pass that height. The call makes the button a square of that height and draws th
 float height = revert->PreferredSize().height;
 r5_button_set_icon(back, R5_ICON_BACK, height);
 r5_button_set_icon(home, R5_ICON_HOME, height);
+r5_button_set_lock(lock, true, height);
 ```
+
+`r5_button_set_lock(button, locked, height)` draws `R5_ICON_LOCKED` when `locked` is true and `R5_ICON_UNLOCKED` when it is false. It does not change the label and it does not open a password window. The caller decides what a click does. Settings uses it for the lock between Home and Revert.
 
 The same height is accepted by:
 
@@ -82,4 +87,4 @@ The same height is accepted by:
 
 Each returns `B_OK` when the icon was set. The button is still resized to the square when the pointer is valid, including when the picture itself could not be loaded, so the row does not jump. A `NULL` button or a height below 1 returns `B_BAD_VALUE` and does not resize.
 
-Settings links `libr5icons.so` and calls `r5_button_set_icon()` for Back and Home, after the plain font is applied, so the height matches Revert and Save. The order on that row is Back, Home, Revert, Save. Those two icons do not get the preferences wrench.
+Settings links `libr5icons.so` and calls `r5_button_set_icon()` for Back and Home, and `r5_button_set_lock()` for the lock, after the plain font is applied, so the height matches Revert and Defaults. The order on that row is Back, Home, the lock, Revert, Defaults. Those icons do not get the preferences wrench.

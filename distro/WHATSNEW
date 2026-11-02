@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10034 - Lock and virtual memory
+Settings has a lock beside Home. A locked page stays gray until an administrator opens it. Virtual memory sets swap for this computer. A change is kept at once and takes effect on the next start.
+
 R5OS 2026.1-dev Build 10033 - Even boxes
 Notifications draws Enable notifications and Applications to the same height.
 

@@ -29,14 +29,17 @@ class BButton;
 //
 // R5_ICON_BACK, R5_ICON_FORWARD, and R5_ICON_UP are the arrows Tracker
 // draws in its location bar. R5_ICON_HOME is the house Tracker draws
-// on the home folder. The bytes are unmodified Tracker HVIF. None of
-// these pictures includes the preferences wrench. About R5 does not
-// use this header.
+// on the home folder. Those bytes are unmodified Tracker HVIF.
+// R5_ICON_UNLOCKED is Haiku's Action_Login (open lock). R5_ICON_LOCKED
+// is Haiku's Action_Logout (closed lock). None of these pictures
+// includes the preferences wrench. About R5 does not use this header.
 enum r5_icon {
 	R5_ICON_BACK = 1,
 	R5_ICON_FORWARD = 2,
 	R5_ICON_UP = 3,
-	R5_ICON_HOME = 4
+	R5_ICON_HOME = 4,
+	R5_ICON_UNLOCKED = 5,
+	R5_ICON_LOCKED = 6
 };
 
 
@@ -67,6 +70,12 @@ status_t r5_button_set_vector(BButton* button, const uint8* data,
 status_t r5_button_set_file_icon(BButton* button, const char* path,
 	float buttonHeight);
 status_t r5_button_set_mime_icon(BButton* button, const char* type,
+	float buttonHeight);
+
+// Draws the open lock when `locked` is false, and the closed lock when
+// `locked` is true. Same square and height as r5_button_set_icon().
+// The label is left as the caller set it. No preferences wrench.
+status_t r5_button_set_lock(BButton* button, bool locked,
 	float buttonHeight);
 
 

@@ -117,18 +117,35 @@ ask_login(BMessage& request, BMessage& reply, BString& error)
 bool
 r5_admin_change_allowed()
 {
-	if (geteuid() == 0)
-		return true;
+	bool administrator = false;
+	bool unlocked = false;
+	if (r5_admin_query(administrator, unlocked) != B_OK)
+		return false;
+	return unlocked;
+}
+
+
+status_t
+r5_admin_query(bool& administrator, bool& unlocked)
+{
+	administrator = false;
+	unlocked = false;
+	if (geteuid() == 0) {
+		administrator = true;
+		unlocked = true;
+		return B_OK;
+	}
 
 	BMessage request(kMsgAdminQuery);
 	BMessage reply;
 	BString error;
-	if (ask_login(request, reply, error) != B_OK)
-		return false;
+	status_t status = ask_login(request, reply, error);
+	if (status != B_OK)
+		return status;
 
-	bool unlocked = false;
+	reply.FindBool("admin", &administrator);
 	reply.FindBool("unlocked", &unlocked);
-	return unlocked;
+	return B_OK;
 }
 
 
@@ -242,6 +259,7 @@ public:
 		}
 
 		fTarget.SendMessage(kMsgRefreshLock);
+		fTarget.SendMessage(kMsgAdminLockChanged);
 		PostMessage(B_QUIT_REQUESTED);
 	}
 
@@ -250,6 +268,13 @@ private:
 	BTextControl*	fName;
 	BTextControl*	fPassword;
 };
+
+
+void
+r5_admin_prompt_unlock(BMessenger target)
+{
+	(new UnlockWindow(target))->Show();
+}
 
 
 AdminLockBar::AdminLockBar()

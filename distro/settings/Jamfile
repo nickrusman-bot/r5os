@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 SubDir HAIKU_TOP src preferences settings ;
 
-UsePrivateHeaders interface ;
+UsePrivateHeaders interface shared ;
 
 Application Settings :
 	SettingsApp.cpp
@@ -17,9 +17,10 @@ Application Settings :
 	WallpaperModule.cpp
 	DeskbarModule.cpp
 	NotificationsModule.cpp
+	VirtualMemoryModule.cpp
 	InformationModule.cpp
 	AdminLock.cpp
-	: be tracker translation libr5icons.so [ TargetLibstdc++ ]
+	: be tracker translation shared libr5icons.so [ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

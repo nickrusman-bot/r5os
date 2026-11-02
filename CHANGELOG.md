@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Settings lock and Virtual memory
+
+`libr5icons.so` gains `R5_ICON_UNLOCKED` (5) and `R5_ICON_LOCKED` (6), plus `r5_button_set_lock()`. The pictures are unmodified HVIF of Haiku `Action_Login` and `Action_Logout`. The bytes stay MIT in `distro/icons/lock_icons.inc`. The call is additive. Old programs that already link the library keep working.
+
+Settings puts that button between Home and Revert. Closed means a `RequiresAdmin()` page is gray and `SaveSettings()` is not called. Open asks Login for an administrator name and password, the same grant the old preferences use, and one open lock covers every such page. An administrator account starts open. Clicking the open lock closes the grant again. The password is not logged. Lists still scroll. Back, Home, Search, and the sidebar stay usable.
+
+Virtual memory is a System page. It reads and writes `/boot/system/settings/kernel/drivers/virtual_memory` in the kernel's existing text (`vm`, `swap_auto`, `swap_size`, and the four volume fields). A missing file uses swap on, automatic size from the installed memory, and the boot volume. Turning swap off asks first. The separate VirtualMemory program stays installed. A written change takes effect on the next start.
+
+`distro/BUILD` is 10034. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 16:51 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10034. The image stamp is `2 Nov 2026, 16:51`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### The Notifications boxes match in height
 
 Enable notifications was taller than Applications, because the boxes stayed top-aligned and only as tall as their contents. Both now use the full height of that row. The sliders, the screen picture, the list, and Mute stay at the top of their box. The extra space is below them, so the two frames end on the same line.
