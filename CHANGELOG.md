@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Information is a Settings page, and the list stays beside the title
+
+The list now starts at the top of the window, under the tab, and runs down to Search. The title and the subtitle sit beside the list. The page is under the subtitle. The window opens at 1100 by 610. That layout is the one to keep.
+
+Information is under System. Device shows the host name, the processor brand from `cpuid` plus the current frequency when the kernel reports it, installed memory, the boot volume (`used of capacity`), the graphics device from `BScreen::GetDeviceInfo`, and the system type (AMD64 on this image). There is no device id in the public system info, so that row is not shown. R5 Operating System shows `2026.1, Development`, build 10025, the image time `2 Nov 2026, 08:24` (Europe/Amsterdam, written into `r5_os_version.h` by the jam script), and the kernel name with the kernel's own build date. Copy puts that box on the clipboard as plain text. The page does not save anything.
+
+`distro/BUILD` is 10025. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 08:24 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays in step with this build. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Settings opens shorter, and the home cards respond to the pointer
 
 The window opened at 680 pixels tall, so Home had a large empty band under the cards and the same empty area in the list. It now opens at 1100 by 510, which is 170 pixels shorter. The shortest height is 480, so a margin stays above the buttons.

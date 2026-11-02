@@ -1,3 +1,8 @@
+R5OS 2026.1-dev Build 10025 - Information
+Settings has an Information page under System. It shows this computer and the R5OS version. Each box can be copied.
+
+The list stays beside the title. The page sits under the title.
+
 R5OS 2026.1-dev Build 10024 - Wallpaper
 Settings opens on cards. Wallpaper shows a preview, the picture, where it sits, the icon label outline, and the desktop color. Save can use the current workspace, every workspace, or a folder. Backgrounds is still its own program.
 

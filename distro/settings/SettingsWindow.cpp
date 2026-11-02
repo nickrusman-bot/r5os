@@ -44,7 +44,7 @@ static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
 		"Appearance, the desktop, and wallpaper.",
 		"application/x-vnd.Haiku-Appearance" },
-	{ "system", "System", "Display and sound.",
+	{ "system", "System", "Display, sound, and this computer.",
 		"application/x-vnd.Haiku-Screen" },
 	{ "devices", "Devices", "Keyboard, mouse, Bluetooth, and printers.",
 		"application/x-vnd.Haiku-Input" },
@@ -224,8 +224,9 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
 	fSave = new BButton("save", "Save", new BMessage(kMsgSave));
 
-	// The list and the page share one row, so their tops and bottoms
-	// line up. Search sits with the buttons on the row below.
+	// Locked. The list starts at the top of the window, under the
+	// tab, and runs down to Search. The title and the subtitle sit
+	// beside the list. The page is under the subtitle.
 	const float sidebarWidth = 248;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
@@ -235,11 +236,13 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fDeck->SetExplicitMinSize(BSize(760, 280));
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
-		.Add(fTitle)
-		.Add(fDescription)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 1)
 			.Add(scroll, 0)
-			.Add(fDeck, 1)
+			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1)
+				.Add(fTitle)
+				.Add(fDescription)
+				.Add(fDeck, 1)
+				.End()
 			.End()
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
 			.Add(fSearch)
@@ -258,10 +261,10 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
 	fSave->SetEnabled(false);
-	// 510 is 170 below the old 680. The home cards keep a margin
-	// above the buttons. 480 is the shortest the window may be.
-	SetSizeLimits(980, 4096, 480, 4096);
-	ResizeTo(1100, 510);
+	// 610 is 100 taller than 510, so the page still has room under
+	// the title. 560 is the shortest the window may be.
+	SetSizeLimits(980, 4096, 560, 4096);
+	ResizeTo(1100, 610);
 	CenterOnScreen();
 }
 
