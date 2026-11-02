@@ -15,8 +15,14 @@
 
 #include <Alert.h>
 #include <Application.h>
+#include <Bitmap.h>
 #include <Button.h>
 #include <CardLayout.h>
+#include <ControlLook.h>
+#include <FindDirectory.h>
+#include <Mime.h>
+#include <NodeInfo.h>
+#include <Path.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
@@ -38,6 +44,9 @@ struct SettingsCategory {
 	const char* summary;
 	const char* iconSignature;
 };
+
+
+static const char* module_icon(const char* moduleId);
 
 
 static const SettingsCategory kCategories[] = {
@@ -169,6 +178,114 @@ NavList::UpdateScrollBar()
 }
 
 
+class PageIcon : public BView {
+public:
+								PageIcon();
+	virtual						~PageIcon();
+	virtual	void				Draw(BRect update);
+			void				SetSignature(const char* signature);
+			void				UsePreferencesFolder();
+
+private:
+			void				_Clear();
+			bool				_Load(BNode& node);
+
+			BBitmap*			fBitmap;
+};
+
+
+PageIcon::PageIcon()
+	:
+	BView("page-icon", B_WILL_DRAW),
+	fBitmap(NULL)
+{
+	BSize size = be_control_look->ComposeIconSize(B_LARGE_ICON);
+	SetExplicitMinSize(size);
+	SetExplicitMaxSize(size);
+	SetExplicitPreferredSize(size);
+	SetExplicitAlignment(BAlignment(B_ALIGN_RIGHT, B_ALIGN_VERTICAL_CENTER));
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+}
+
+
+PageIcon::~PageIcon()
+{
+	delete fBitmap;
+}
+
+
+void
+PageIcon::Draw(BRect update)
+{
+	(void)update;
+	SetLowColor(ViewColor());
+	FillRect(Bounds(), B_SOLID_LOW);
+	if (fBitmap == NULL)
+		return;
+
+	SetDrawingMode(B_OP_ALPHA);
+	SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+	BPoint where(
+		(Bounds().Width() - fBitmap->Bounds().Width()) / 2,
+		(Bounds().Height() - fBitmap->Bounds().Height()) / 2);
+	DrawBitmap(fBitmap, where);
+	SetDrawingMode(B_OP_COPY);
+}
+
+
+void
+PageIcon::_Clear()
+{
+	delete fBitmap;
+	fBitmap = NULL;
+}
+
+
+bool
+PageIcon::_Load(BNode& node)
+{
+	BRect bounds(BPoint(0, 0), be_control_look->ComposeIconSize(B_LARGE_ICON));
+	BBitmap* bitmap = new BBitmap(bounds, B_RGBA32);
+	BNodeInfo info(&node);
+	if (info.GetIcon(bitmap, B_LARGE_ICON) != B_OK) {
+		delete bitmap;
+		return false;
+	}
+	fBitmap = bitmap;
+	return true;
+}
+
+
+void
+PageIcon::SetSignature(const char* signature)
+{
+	_Clear();
+	if (signature != NULL && signature[0] != '\0') {
+		BRect bounds(BPoint(0, 0),
+			be_control_look->ComposeIconSize(B_LARGE_ICON));
+		BBitmap* bitmap = new BBitmap(bounds, B_RGBA32);
+		if (BMimeType(signature).GetIcon(bitmap, B_LARGE_ICON) == B_OK)
+			fBitmap = bitmap;
+		else
+			delete bitmap;
+	}
+	Invalidate();
+}
+
+
+void
+PageIcon::UsePreferencesFolder()
+{
+	_Clear();
+	BPath path;
+	BNode node;
+	if (find_directory(B_SYSTEM_PREFERENCES_DIRECTORY, &path) == B_OK
+		&& node.SetTo(path.Path()) == B_OK)
+		_Load(node);
+	Invalidate();
+}
+
+
 static SettingsPlace*
 make_place(const char* id, bool category)
 {
@@ -191,6 +308,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fList(NULL),
 	fTitle(NULL),
 	fDescription(NULL),
+	fIcon(NULL),
 	fCards(NULL),
 	fDeck(NULL),
 	fHome(NULL),
@@ -215,6 +333,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fDescription = new BStringView("description",
 		"One place for the computer's settings.");
 	fTitle->SetFont(r5_settings_title_font());
+	fIcon = new PageIcon();
 
 	fDeck = new BView("deck", 0);
 	fCards = new BCardLayout();
@@ -224,9 +343,11 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
 	fSave = new BButton("save", "Save", new BMessage(kMsgSave));
 
-	// Locked. The list starts at the top of the window, under the
-	// tab, and runs down to Search. The title and the subtitle sit
-	// beside the list. The page is under the subtitle.
+	// Locked. Do not move these. The list starts under the tab and
+	// runs down to Search. The title and the subtitle sit beside the
+	// list, with this page's icon at the right of that block. The
+	// page is under the subtitle. Home, Back, Revert, and Save stay
+	// on the bottom row. See AGENTS.md.
 	const float sidebarWidth = 248;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
@@ -239,8 +360,13 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 1)
 			.Add(scroll, 0)
 			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1)
-				.Add(fTitle)
-				.Add(fDescription)
+				.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
+					.AddGroup(B_VERTICAL, 0, 1)
+						.Add(fTitle)
+						.Add(fDescription)
+						.End()
+					.Add(fIcon)
+					.End()
 				.Add(fDeck, 1)
 				.End()
 			.End()
@@ -481,7 +607,9 @@ SettingsWindow::_ShowHome()
 {
 	fCurrent = NULL;
 	fCards->SetVisibleItem((int32)0);
-	_SetHeader("Settings", "One place for the computer's settings.");
+	_SetHeader("Settings", "One place for the computer's settings.", NULL);
+	if (fIcon != NULL)
+		fIcon->UsePreferencesFolder();
 	_Remember("home", false);
 	_SelectSidebar(NULL);
 	_UpdateActions();
@@ -505,7 +633,12 @@ SettingsWindow::_ShowCategory(const char* categoryId)
 	int32 index = fCards->IndexOfView(existing);
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
-	_SetHeader(_CategoryName(categoryId), _CategorySummary(categoryId));
+	const char* icon = NULL;
+	for (uint32 i = 0; i < sizeof(kCategories) / sizeof(kCategories[0]); i++) {
+		if (strcmp(kCategories[i].id, categoryId) == 0)
+			icon = kCategories[i].iconSignature;
+	}
+	_SetHeader(_CategoryName(categoryId), _CategorySummary(categoryId), icon);
 	_Remember(categoryId, true);
 	_SelectSidebar(NULL);
 	_UpdateActions();
@@ -525,7 +658,8 @@ SettingsWindow::_ShowModule(const char* moduleId)
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
 	fCurrent = module;
-	_SetHeader(module->Name(), module->Description());
+	_SetHeader(module->Name(), module->Description(),
+		module_icon(module->Identifier()));
 	_Remember(module->Identifier(), false);
 	_SelectSidebar(module->Identifier());
 	_UpdateActions();
@@ -566,10 +700,13 @@ SettingsWindow::_Remember(const char* id, bool category)
 
 
 void
-SettingsWindow::_SetHeader(const char* title, const char* description)
+SettingsWindow::_SetHeader(const char* title, const char* description,
+	const char* iconSignature)
 {
 	fTitle->SetText(title != NULL ? title : "");
 	fDescription->SetText(description != NULL ? description : "");
+	if (fIcon != NULL)
+		fIcon->SetSignature(iconSignature);
 }
 
 
@@ -617,6 +754,7 @@ module_icon(const char* moduleId)
 		{ "colors", "application/x-vnd.Haiku-Appearance" },
 		{ "deskbar", "application/x-vnd.Haiku-DeskbarPreferences" },
 		{ "wallpaper", "application/x-vnd.Haiku-Backgrounds" },
+		{ "information", "application/x-vnd.Haiku-About" },
 		{ "display", "application/x-vnd.Haiku-Screen" },
 		{ "sound", "application/x-vnd.Haiku-Sounds" },
 		{ "keyboard", "application/x-vnd.Haiku-Keymap" },

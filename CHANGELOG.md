@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The Settings frame stays put, and each page has an icon
+
+The list, the title block, the icon at the right of that block, and the bottom row (Search, Home, Back, Revert, Save) are fixed. `AGENTS.md` says not to move them. A page only changes the area under the subtitle. Each page loads the icon of its program. Home uses the Preferences folder icon. Information uses the About icon. A page without a signature in `module_icon()` shows an empty slot of the same size.
+
+Information labels are left-aligned. Copy sits under the rows of its box.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 08:36 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 08:36`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Information is a Settings page, and the list stays beside the title
 
 The list now starts at the top of the window, under the tab, and runs down to Search. The title and the subtitle sit beside the list. The page is under the subtitle. The window opens at 1100 by 610. That layout is the one to keep.

@@ -15,6 +15,7 @@ class BButton;
 class BCardLayout;
 class BListView;
 class BStringView;
+class PageIcon;
 class BTextControl;
 class BView;
 class HomeView;
@@ -50,7 +51,8 @@ private:
 			bool				_ConfirmLeave();
 			void				_Remember(const char* id, bool category);
 			void				_SetHeader(const char* title,
-									const char* description);
+									const char* description,
+									const char* iconSignature);
 			void				_UpdateActions();
 			BView*				_ModuleView(SettingsModule* module);
 			BView*				_CategoryView(const char* categoryId,
@@ -68,6 +70,7 @@ private:
 			BListView*			fList;
 			BStringView*		fTitle;
 			BStringView*		fDescription;
+			PageIcon*			fIcon;
 			BCardLayout*		fCards;
 			BView*				fDeck;
 			BButton*			fHome;

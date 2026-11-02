@@ -246,9 +246,9 @@ static BStringView*
 make_label(const char* text)
 {
 	BStringView* view = new BStringView("label", text);
-	view->SetAlignment(B_ALIGN_RIGHT);
+	view->SetAlignment(B_ALIGN_LEFT);
 	view->SetFont(r5_settings_plain_font());
-	view->SetExplicitAlignment(BAlignment(B_ALIGN_RIGHT,
+	view->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
 		B_ALIGN_VERTICAL_CENTER));
 	return view;
 }
@@ -343,11 +343,11 @@ InformationView::InformationView()
 	BGroupView* deviceInner = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
 	BLayoutBuilder::Group<>(deviceInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
+		.Add(deviceGrid)
 		.AddGroup(B_HORIZONTAL, 0)
 			.AddGlue()
 			.Add(fCopyDevice)
-			.End()
-		.Add(deviceGrid);
+			.End();
 	device->AddChild(deviceInner);
 	device->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_TOP));
@@ -368,11 +368,11 @@ InformationView::InformationView()
 	BGroupView* systemInner = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
 	BLayoutBuilder::Group<>(systemInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
+		.Add(systemGrid)
 		.AddGroup(B_HORIZONTAL, 0)
 			.AddGlue()
 			.Add(fCopySystem)
-			.End()
-		.Add(systemGrid);
+			.End();
 	system->AddChild(systemInner);
 	system->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_TOP));
