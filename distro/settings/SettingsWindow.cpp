@@ -380,6 +380,10 @@ PageScroller::DoLayout()
 		return;
 
 	fScrolling = true;
+	// This view places its page by hand. ResizeTo marks the page for
+	// layout, then skips it while this layout is still running. Lay the
+	// page out here, or a tab body stays at zero height.
+	fContent->Layout(true);
 	float width = Bounds().Width();
 	float height = Bounds().Height();
 	BSize preferred = fContent->PreferredSize();
@@ -403,6 +407,7 @@ PageScroller::DoLayout()
 
 	fContent->MoveTo(0, overflow ? -value : 0);
 	fContent->ResizeTo(contentWidth, contentHeight);
+	fContent->Layout(true);
 	if (overflow) {
 		if (fBar->IsHidden())
 			fBar->Show();

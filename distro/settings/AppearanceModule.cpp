@@ -279,6 +279,7 @@ public:
 								FontsTab();
 	virtual	void				AttachedToWindow();
 	virtual	void				DetachedFromWindow();
+	virtual	void				Show();
 	virtual	void				MessageReceived(BMessage* message);
 			void				Reload();
 			void				Use(const FontSnap plain, const FontSnap bold,
@@ -328,6 +329,7 @@ class ColorsTab : public BGroupView {
 public:
 								ColorsTab();
 	virtual	void				AttachedToWindow();
+	virtual	void				Show();
 	virtual	void				MessageReceived(BMessage* message);
 			void				Reload();
 
@@ -364,6 +366,7 @@ class LookTab : public BGroupView {
 public:
 								LookTab();
 	virtual	void				AttachedToWindow();
+	virtual	void				Show();
 	virtual	void				MessageReceived(BMessage* message);
 			void				Reload();
 			void				Remember(BString& decor, BString& look,
@@ -389,6 +392,7 @@ class AntialiasTab : public BGroupView {
 public:
 								AntialiasTab();
 	virtual	void				AttachedToWindow();
+	virtual	void				Show();
 	virtual	void				MessageReceived(BMessage* message);
 			void				Reload();
 			void				Remember(bool& subpixel, uint8& hint,
@@ -411,6 +415,7 @@ class AppearancePage : public BGroupView {
 public:
 								AppearancePage(AppearanceModule* module);
 	virtual						~AppearancePage();
+	virtual	void				AllAttached();
 			void				Revert();
 			void				Defaults();
 			bool				Modified() const;
@@ -718,6 +723,15 @@ FontsTab::FontsTab()
 }
 
 
+static void
+show_tab(BView* view)
+{
+	view->InvalidateLayout();
+	if (view->Parent() != NULL)
+		view->Parent()->InvalidateLayout();
+}
+
+
 void
 FontsTab::AttachedToWindow()
 {
@@ -729,6 +743,14 @@ FontsTab::AttachedToWindow()
 	fRunner = new BMessageRunner(this, new BMessage(kMsgFontsChanged),
 		3000000);
 	Reload();
+}
+
+
+void
+FontsTab::Show()
+{
+	BGroupView::Show();
+	show_tab(this);
 }
 
 
@@ -959,6 +981,14 @@ ColorsTab::AttachedToWindow()
 	fPicker->SetTarget(this);
 	if (fList->CurrentSelection() < 0 && fList->CountItems() > 0)
 		fList->Select(0);
+}
+
+
+void
+ColorsTab::Show()
+{
+	BGroupView::Show();
+	show_tab(this);
 }
 
 
@@ -1365,6 +1395,14 @@ LookTab::AttachedToWindow()
 
 
 void
+LookTab::Show()
+{
+	BGroupView::Show();
+	show_tab(this);
+}
+
+
+void
 LookTab::_MarkArrows(bool doubled)
 {
 	fSingle->SetValue(doubled ? B_CONTROL_OFF : B_CONTROL_ON);
@@ -1595,6 +1633,14 @@ AntialiasTab::AttachedToWindow()
 
 
 void
+AntialiasTab::Show()
+{
+	BGroupView::Show();
+	show_tab(this);
+}
+
+
+void
 AntialiasTab::Reload()
 {
 	fUpdating = true;
@@ -1704,6 +1750,15 @@ AppearancePage::AppearancePage(AppearanceModule* module)
 	tabs->AddTab(fAntialias);
 	BLayoutBuilder::Group<>(this)
 		.Add(tabs);
+}
+
+
+void
+AppearancePage::AllAttached()
+{
+	BGroupView::AllAttached();
+	InvalidateLayout();
+	Layout(true);
 }
 
 

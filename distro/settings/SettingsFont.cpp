@@ -14,6 +14,7 @@
 #include <StringView.h>
 #include <View.h>
 
+#include <string.h>
 #include <syslog.h>
 
 
@@ -106,12 +107,35 @@ r5_settings_box_title(const char* text)
 }
 
 
+static bool
+keeps_face(BView* view, const BFont* face)
+{
+	if (view == NULL || face == NULL)
+		return false;
+	BFont current;
+	view->GetFont(&current);
+	font_family leftFamily;
+	font_style leftStyle;
+	font_family rightFamily;
+	font_style rightStyle;
+	current.GetFamilyAndStyle(&leftFamily, &leftStyle);
+	face->GetFamilyAndStyle(&rightFamily, &rightStyle);
+	return current.Face() == face->Face() && current.Size() == face->Size()
+		&& strcmp(leftFamily, rightFamily) == 0
+		&& strcmp(leftStyle, rightStyle) == 0;
+}
+
+
 void
 r5_settings_apply_plain(BView* view)
 {
 	if (view == NULL)
 		return;
-	view->SetFont(r5_settings_plain_font());
+	// Box titles and the two bold checkboxes set their font first.
+	// This walk must leave those faces in place.
+	if (!keeps_face(view, r5_settings_bold_font())
+		&& !keeps_face(view, r5_settings_title_font()))
+		view->SetFont(r5_settings_plain_font());
 	for (int32 i = 0; i < view->CountChildren(); i++)
 		r5_settings_apply_plain(view->ChildAt(i));
 }
