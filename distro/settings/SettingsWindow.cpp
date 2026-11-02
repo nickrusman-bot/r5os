@@ -53,7 +53,7 @@ static const char* module_icon(const char* moduleId);
 
 static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
-		"Appearance, the desktop, and wallpaper.",
+		"Appearance, the desktop, wallpaper, and the Deskbar.",
 		"application/x-vnd.Haiku-Appearance" },
 	{ "system", "System", "Display, sound, and this computer.",
 		"application/x-vnd.Haiku-Screen" },

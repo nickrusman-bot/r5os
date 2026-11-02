@@ -12,11 +12,15 @@ A new page adds its icon signature in `module_icon()` in `SettingsWindow.cpp`. H
 
 Information is a page under System. It shows the computer and the R5OS version in two boxes. The labels are left-aligned. Copy sits under the rows of its box. There is no device id to show. Storage is the boot volume. The build date is the Europe/Amsterdam time of the image jam.
 
-The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Back and Home sit with Revert and Save.
+The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. Personalization's summary is appearance, the desktop, wallpaper, and the Deskbar. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Back and Home sit with Revert and Save.
 
 Manrope Regular and Bold are the default plain and bold fonts when no font settings are saved. The fixed font stays Noto Sans Mono. The files are installed in `data/fonts/ttfonts`. Settings still selects Manrope for its own window, and falls back to the system font if that family is missing. The page title is the bold face, eight points above the bold system size.
 
 Wallpaper is the Backgrounds window, rewritten as this page. It writes `be:bgndimginfo` on the Desktop folder, or on a folder, then asks Tracker to restore the picture. Save can keep the other workspaces, replace every workspace, or change a folder. The desktop color is `BScreen::SetDesktopColor`. The separate Backgrounds program stays on the disk and is not a page in this window.
+
+Desktop and Deskbar is a page under Personalization. Save messages the running Deskbar (`application/x-vnd.Be-TSKB`). It does not write `~/config/settings/deskbar/settings` itself. Deskbar writes that file when it quits. Auto-hide is the exception Deskbar already had: that one is written immediately. The clock stays out of this page. The separate Deskbar preferences program stays installed.
+
+The page reads that settings file for the application list, the icon size, and the recent counts, because Deskbar has no public getter for them. The place and the three window flags come from `BDeskbar` when Deskbar is running. Sort, Tracker first, the expanders, and hide names are toggles: Save sends one message only when the value differs from the file read at load. If the old preferences window changed Deskbar's memory in this session and Deskbar has not quit, that one toggle can land on the wrong side. Icon size (`be:value` times 8) and the recent counts are absolute. Location uses `BDeskbar::SetLocation`. Top and bottom are always expanded. Left bottom and right bottom are not. Show applications is only offered for left top and right top. Always on top is sent before auto-raise, and auto-raise is not sent while always on top is on. A recent count of 0 is stored by Deskbar as off. Defaults fills Deskbar's own defaults and waits for Save. Edit in Tracker opens `B_USER_DESKBAR_DIRECTORY` with `B_REFS_RECEIVED`. The count fields are `BSpinner`. The class lives in `libbe`. The header is private, so the Settings Jamfile has `UsePrivateHeaders interface`, the same way Deskbar's own window includes it.
 
 Search compares the module name, description, keywords, and category label.
 
@@ -34,7 +38,7 @@ Appearance (`settings_appearance`) is the first native module. It stores `large_
 
 ## Legacy programs
 
-`LegacyPages.cpp` is a table of programs that already exist: Appearance, Deskbar, Screen, Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Backgrounds stays installed and is not in this table.
+`LegacyPages.cpp` is a table of programs that already exist: Appearance, Screen, Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Backgrounds and the Deskbar preferences program stay installed and are not in this table.
 
 Adding a row there is how an old preference shows up before it is rewritten. A new native page does not need a row and does not need a change to the window.
 

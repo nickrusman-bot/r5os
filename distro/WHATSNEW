@@ -1,3 +1,8 @@
+R5OS 2026.1-dev Build 10026 - Deskbar
+Settings has a Desktop and Deskbar page under Personalization. It sets where the bar sits, the application list, and the recent menus. Save applies that to the Deskbar that is already running.
+
+The separate Deskbar preferences program is still installed.
+
 R5OS 2026.1-dev Build 10025 - Information
 Settings has an Information page under System. It shows this computer and the R5OS version. Each box can be copied.
 

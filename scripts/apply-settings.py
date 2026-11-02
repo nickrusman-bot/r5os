@@ -39,6 +39,8 @@ SOURCES = (
     "WallpaperModule.h",
     "InformationModule.cpp",
     "InformationModule.h",
+    "DeskbarModule.cpp",
+    "DeskbarModule.h",
 )
 
 
