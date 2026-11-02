@@ -21,6 +21,8 @@
 #include <Entry.h>
 #include <File.h>
 #include <Font.h>
+#include <FontPrivate.h>
+#include <GridLayout.h>
 #include <GroupView.h>
 #include <HSL.h>
 #include <InterfacePrivate.h>
@@ -35,6 +37,7 @@
 #include <PopUpMenu.h>
 #include <ScrollView.h>
 #include <Slider.h>
+#include <SpaceLayoutItem.h>
 #include <Spinner.h>
 #include <String.h>
 #include <StringView.h>
@@ -246,18 +249,23 @@ public:
 			void				Reload();
 			void				RefreshFamilies();
 			void				SetTargets(BHandler* target);
-			void				Select(const char* family, const char* style,
-									float size);
-			FontSnap			Value() const;
-			float				SizeValue() const;
+			void				SetLabelColumn(float width);
+			void				Use(const FontSnap& snap);
+			void				ApplyChoice(const char* family,
+									const char* style, float size);
+			bool				Updating() const { return fUpdating; }
+			FontSnap			Chosen() const { return fCurrent; }
+			int32				EnteredSize() const;
 
 private:
 			void				_Fill();
 			void				_Retarget();
-			void				_ShowPreview();
+			void				_ShowChoice();
 
 			BString				fWhich;
 			BHandler*			fTarget;
+			FontSnap			fCurrent;
+			bool				fUpdating;
 			BPopUpMenu*			fMenu;
 			BMenuField*			fField;
 			BSpinner*			fSize;
@@ -462,6 +470,7 @@ FontRow::FontRow(const char* which, const char* label)
 	BGroupView(B_VERTICAL, 0),
 	fWhich(which),
 	fTarget(NULL),
+	fUpdating(false),
 	fMenu(NULL),
 	fField(NULL),
 	fSize(NULL),
@@ -476,24 +485,29 @@ FontRow::FontRow(const char* which, const char* label)
 	sizeMessage->AddString("which", which);
 	fSize = new BSpinner("size", "Size:", sizeMessage);
 	fSize->SetRange(kMinFontSize, kMaxFontSize);
-	fSize->SetExplicitMaxSize(BSize(72, B_SIZE_UNSET));
 	fPreview = new BTextView("preview");
 	fPreview->SetText(kPreviewText);
 	fPreview->MakeEditable(false);
 	fPreview->MakeSelectable(false);
+	fPreview->MakeResizable(false);
 	fPreview->SetWordWrap(true);
+	fPreview->SetInsets(0, 0, 0, 0);
+	fPreview->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	fPreview->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 	fPreviewBox = new BBox("preview");
 	fPreviewBox->AddChild(BLayoutBuilder::Group<>(B_HORIZONTAL, 0)
 		.SetInsets(B_USE_SMALL_SPACING)
 		.Add(fPreview)
+		.AddGlue()
 		.View());
-	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
-		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
-			.Add(fField)
-			.AddGlue()
-			.Add(fSize)
-			.End()
-		.Add(fPreviewBox);
+	BLayoutBuilder::Grid<>(this, 5, 5)
+		.Add(fField->CreateLabelLayoutItem(), 0, 0)
+		.Add(fField->CreateMenuBarLayoutItem(), 1, 0)
+		.Add(BSpaceLayoutItem::CreateGlue(), 2, 0)
+		.Add(fSize, 3, 0)
+		.Add(BSpaceLayoutItem::CreateGlue(), 0, 1)
+		.Add(fPreviewBox, 1, 1, 3)
+		.SetInsets(0, B_USE_SMALL_SPACING, 0, B_USE_SMALL_SPACING);
 	_Fill();
 	Reload();
 }
@@ -507,9 +521,15 @@ FontRow::_Fill()
 	int32 families = count_font_families();
 	for (int32 i = 0; i < families; i++) {
 		font_family family;
-		if (get_font_family(i, &family, NULL) != B_OK)
+		uint32 flags = 0;
+		if (get_font_family(i, &family, &flags) != B_OK)
+			continue;
+		if (fWhich == kWhichFixed
+			&& (flags & (B_IS_FIXED
+				| B_PRIVATE_FONT_IS_FULL_AND_HALF_FIXED)) == 0)
 			continue;
 		BMenu* styles = new BMenu(family);
+		styles->SetRadioMode(true);
 		int32 count = count_font_styles(family);
 		for (int32 s = 0; s < count; s++) {
 			font_style style;
@@ -521,7 +541,10 @@ FontRow::_Fill()
 			message->AddString("style", style);
 			styles->AddItem(new BMenuItem(style, message));
 		}
-		fMenu->AddItem(new BMenuItem(styles));
+		BMessage* familyMessage = new BMessage(kMsgFont);
+		familyMessage->AddString("which", fWhich);
+		familyMessage->AddString("family", family);
+		fMenu->AddItem(new BMenuItem(styles, familyMessage));
 	}
 	_Retarget();
 }
@@ -531,7 +554,7 @@ void
 FontRow::RefreshFamilies()
 {
 	_Fill();
-	Reload();
+	_ShowChoice();
 }
 
 
@@ -558,72 +581,104 @@ FontRow::_Retarget()
 }
 
 
-void
-FontRow::Reload()
+int32
+FontRow::EnteredSize() const
 {
-	FontSnap snap = current_font(fWhich.String());
-	Select(snap.family, snap.style, snap.size);
+	return fSize->Value();
 }
 
 
 void
-FontRow::Select(const char* family, const char* style, float size)
+FontRow::SetLabelColumn(float width)
+{
+	BGridLayout* grid = dynamic_cast<BGridLayout*>(GetLayout());
+	if (grid != NULL)
+		grid->SetMinColumnWidth(0, width);
+}
+
+
+void
+FontRow::Reload()
+{
+	fCurrent = current_font(fWhich.String());
+	_ShowChoice();
+}
+
+
+void
+FontRow::Use(const FontSnap& snap)
+{
+	fCurrent = snap;
+	apply_font(fWhich.String(), fCurrent);
+	_ShowChoice();
+}
+
+
+void
+FontRow::ApplyChoice(const char* family, const char* style, float size)
+{
+	if (family != NULL && family[0] != '\0')
+		strlcpy(fCurrent.family, family, sizeof(fCurrent.family));
+	if (style != NULL && style[0] != '\0')
+		strlcpy(fCurrent.style, style, sizeof(fCurrent.style));
+	else {
+		BMenuItem* familyItem = fMenu->FindItem(fCurrent.family);
+		BMenu* styles = familyItem != NULL ? familyItem->Submenu() : NULL;
+		BMenuItem* kept = styles != NULL
+			? styles->FindItem(fCurrent.style) : NULL;
+		if (kept == NULL && styles != NULL && styles->CountItems() > 0)
+			strlcpy(fCurrent.style, styles->ItemAt(0)->Label(),
+				sizeof(fCurrent.style));
+	}
+	if (size > 0.0f)
+		fCurrent.size = size;
+	apply_font(fWhich.String(), fCurrent);
+	_ShowChoice();
+}
+
+
+void
+FontRow::_ShowChoice()
 {
 	for (int32 i = 0; i < fMenu->CountItems(); i++) {
 		BMenuItem* familyItem = fMenu->ItemAt(i);
 		BMenu* styles = familyItem->Submenu();
-		bool thisFamily = styles != NULL && family != NULL
-			&& strcmp(styles->Name(), family) == 0;
+		bool thisFamily = styles != NULL && fCurrent.family[0] != '\0'
+			&& strcmp(styles->Name(), fCurrent.family) == 0;
 		familyItem->SetMarked(thisFamily);
 		if (styles == NULL)
 			continue;
 		for (int32 s = 0; s < styles->CountItems(); s++) {
 			BMenuItem* item = styles->ItemAt(s);
-			item->SetMarked(thisFamily && style != NULL
-				&& strcmp(item->Label(), style) == 0);
+			item->SetMarked(thisFamily
+				&& strcmp(item->Label(), fCurrent.style) == 0);
 		}
 	}
-	if (fMenu->Superitem() != NULL && family != NULL && family[0] != '\0')
-		fMenu->Superitem()->SetLabel(family);
-	fSize->SetValue((int32)(size + 0.5f));
-	_ShowPreview();
-}
-
-
-FontSnap
-FontRow::Value() const
-{
-	return current_font(fWhich.String());
-}
-
-
-float
-FontRow::SizeValue() const
-{
-	return (float)fSize->Value();
-}
-
-
-void
-FontRow::_ShowPreview()
-{
-	FontSnap snap = current_font(fWhich.String());
+	if (fMenu->Superitem() != NULL && fCurrent.family[0] != '\0')
+		fMenu->Superitem()->SetLabel(fCurrent.family);
+	fUpdating = true;
+	fSize->SetValue((int32)(fCurrent.size + 0.5f));
+	fUpdating = false;
 	BFont font;
-	font.SetFamilyAndStyle(snap.family, snap.style);
-	font.SetSize(snap.size);
-	fPreview->SetFontAndColor(&font);
-	float lines = 2.0f;
-	float width = fPreview->Bounds().Width();
-	if (width > 20.0f) {
-		float textWidth = font.StringWidth(kPreviewText);
-		lines = textWidth / width;
+	font.SetFamilyAndStyle(fCurrent.family, fCurrent.style);
+	font.SetSize(fCurrent.size);
+	rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
+	fPreview->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	fPreview->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
+	fPreview->SetFontAndColor(&font, B_FONT_ALL, &textColor);
+	float previewWidth = be_control_look->DefaultLabelSpacing() * 58.0f;
+	float lines = 1.0f;
+	if (previewWidth > 1.0f) {
+		lines = font.StringWidth(kPreviewText) / previewWidth;
 		if (lines < 1.0f)
 			lines = 1.0f;
 		if (lines > 3.0f)
 			lines = 3.0f;
 	}
-	float height = font.Size() * 1.4f * lines + 8.0f;
-	fPreview->SetExplicitMinSize(BSize(180, height));
+	float height = font.Size() * 1.4f * lines;
+	fPreview->SetExplicitMinSize(BSize(previewWidth, height));
+	fPreview->SetExplicitMaxSize(BSize(previewWidth, height));
+	fPreview->SetExplicitPreferredSize(BSize(previewWidth, height));
 	fPreview->Invalidate();
 }
 
@@ -641,12 +696,24 @@ FontsTab::FontsTab()
 	fBold = new FontRow(kWhichBold, "Bold font:");
 	fFixed = new FontRow(kWhichFixed, "Fixed font:");
 	fMenu = new FontRow(kWhichMenu, "Menu font:");
+	float labelWidth = be_plain_font->StringWidth("Plain font:");
+	labelWidth = std::max(labelWidth,
+		be_plain_font->StringWidth("Bold font:"));
+	labelWidth = std::max(labelWidth,
+		be_plain_font->StringWidth("Fixed font:"));
+	labelWidth = std::max(labelWidth,
+		be_plain_font->StringWidth("Menu font:"));
+	labelWidth += be_control_look->DefaultLabelSpacing();
+	fPlain->SetLabelColumn(labelWidth);
+	fBold->SetLabelColumn(labelWidth);
+	fFixed->SetLabelColumn(labelWidth);
+	fMenu->SetLabelColumn(labelWidth);
 	BLayoutBuilder::Group<>(this)
 		.SetInsets(B_USE_DEFAULT_SPACING)
-		.Add(fPlain)
-		.Add(fBold)
-		.Add(fFixed)
-		.Add(fMenu)
+		.Add(fPlain, 0)
+		.Add(fBold, 0)
+		.Add(fFixed, 0)
+		.Add(fMenu, 0)
 		.AddGlue();
 }
 
@@ -714,13 +781,9 @@ FontsTab::MessageReceived(BMessage* message)
 			message->FindString("family", &family);
 			message->FindString("style", &style);
 			FontRow* row = _Row(which);
-			if (row == NULL || family == NULL || style == NULL)
+			if (row == NULL || row->Updating() || family == NULL)
 				break;
-			FontSnap snap = row->Value();
-			strlcpy(snap.family, family, sizeof(snap.family));
-			strlcpy(snap.style, style, sizeof(snap.style));
-			apply_font(which, snap);
-			row->Reload();
+			row->ApplyChoice(family, style, row->Chosen().size);
 			AppearancePage* page = page_of(this);
 			if (page != NULL)
 				page->Touch();
@@ -731,12 +794,10 @@ FontsTab::MessageReceived(BMessage* message)
 			const char* which = NULL;
 			message->FindString("which", &which);
 			FontRow* row = _Row(which);
-			if (row == NULL)
+			if (row == NULL || row->Updating())
 				break;
-			FontSnap snap = row->Value();
-			snap.size = row->SizeValue();
-			apply_font(which, snap);
-			row->Reload();
+			row->ApplyChoice(row->Chosen().family, row->Chosen().style,
+				(float)row->EnteredSize());
 			AppearancePage* page = page_of(this);
 			if (page != NULL)
 				page->Touch();
@@ -771,11 +832,10 @@ void
 FontsTab::Use(const FontSnap plain, const FontSnap bold,
 	const FontSnap fixed, const FontSnap menu)
 {
-	apply_font(kWhichPlain, plain);
-	apply_font(kWhichBold, bold);
-	apply_font(kWhichFixed, fixed);
-	apply_font(kWhichMenu, menu);
-	Reload();
+	fPlain->Use(plain);
+	fBold->Use(bold);
+	fFixed->Use(fixed);
+	fMenu->Use(menu);
 }
 
 
@@ -783,10 +843,8 @@ bool
 FontsTab::Differs(const FontSnap plain, const FontSnap bold,
 	const FontSnap fixed, const FontSnap menu) const
 {
-	return !(current_font(kWhichPlain) == plain
-		&& current_font(kWhichBold) == bold
-		&& current_font(kWhichFixed) == fixed
-		&& current_font(kWhichMenu) == menu);
+	return !(fPlain->Chosen() == plain && fBold->Chosen() == bold
+		&& fFixed->Chosen() == fixed && fMenu->Chosen() == menu);
 }
 
 
@@ -1244,7 +1302,8 @@ LookTab::_BuildDecor()
 		if (decor == NULL)
 			continue;
 		BMessage* message = new BMessage(kMsgDecor);
-		message->AddString("decor", decor->ShortcutName());
+		message->AddInt32("index", i);
+		message->AddString("decor", decor->Path());
 		BString label = trimmed_label(decor->Name(), "Decorator");
 		BMenuItem* item = new BMenuItem(label.String(), message);
 		fDecorMenu->AddItem(item);
@@ -1341,7 +1400,7 @@ void
 LookTab::Reload()
 {
 	BPrivate::DecorInfo* current = fDecors.CurrentDecorator();
-	BString decor = current != NULL ? current->ShortcutName() : "";
+	BString decor = current != NULL ? current->Path() : "";
 	mark_menu(fDecorMenu, "decor", decor.String());
 	BPrivate::get_control_look(fLookPath);
 	mark_menu(fLookMenu, "path", fLookPath.String());
@@ -1410,10 +1469,11 @@ LookTab::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kMsgDecor:
 		{
-			const char* name = NULL;
-			if (message->FindString("decor", &name) != B_OK)
+			int32 index = -1;
+			if (message->FindInt32("index", &index) != B_OK)
 				break;
-			fDecors.SetDecorator(fDecors.FindDecorator(name));
+			if (fDecors.SetDecorator(index) != B_OK)
+				Reload();
 			AppearancePage* page = page_of(this);
 			if (page != NULL)
 				page->Touch();
@@ -1425,7 +1485,8 @@ LookTab::MessageReceived(BMessage* message)
 			if (message->FindString("path", &path) != B_OK)
 				break;
 			fLookPath = path;
-			BPrivate::set_control_look(fLookPath);
+			if (BPrivate::set_control_look(fLookPath) != B_OK)
+				Reload();
 			AppearancePage* page = page_of(this);
 			if (page != NULL)
 				page->Touch();
