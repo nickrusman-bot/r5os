@@ -48,7 +48,7 @@ private:
 			void				_ShowHome();
 			void				_ShowCategory(const char* categoryId);
 			void				_ShowModule(const char* moduleId);
-			bool				_ConfirmLeave();
+			void				_ApplyCurrent();
 			void				_Remember(const char* id, bool category);
 			void				_SetHeader(const char* title,
 									const char* description,
@@ -76,11 +76,12 @@ private:
 			BButton*			fHome;
 			BButton*			fBack;
 			BButton*			fRevert;
-			BButton*			fSave;
+			BButton*			fDefaults;
 			SettingsModule*		fCurrent;
 			BList				fHistory;
 			bool				fAdjusting;
 			BString				fQuery;
+			status_t			fLastApplyError;
 };
 
 

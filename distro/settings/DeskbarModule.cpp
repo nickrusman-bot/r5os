@@ -23,9 +23,6 @@
 #include <FindDirectory.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
-#include <Menu.h>
-#include <MenuField.h>
-#include <MenuItem.h>
 #include <Message.h>
 #include <Messenger.h>
 #include <Path.h>
@@ -39,7 +36,7 @@
 
 
 static const uint32 kMsgChanged = 'r5dc';
-static const uint32 kMsgDefaults = 'r5df';
+static const uint32 kMsgPlace = 'r5dp';
 static const uint32 kMsgEditTracker = 'r5dt';
 
 // Deskbar's own application messages. They are not in a public header.
@@ -284,6 +281,32 @@ toggle_deskbar(bool have, bool want, uint32 what)
 }
 
 
+class DeskbarPlace : public BView {
+public:
+								DeskbarPlace();
+			void				SetPlace(deskbar_location location,
+									bool expanded);
+			deskbar_location	Location() const { return fLocation; }
+			bool				Expanded() const { return fExpanded; }
+			void				SetHandler(BHandler* handler);
+	virtual	void				Draw(BRect updateRect);
+	virtual	void				MouseDown(BPoint where);
+	virtual	void				MouseUp(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 transit,
+									const BMessage* message);
+
+private:
+			BRect				_Screen() const;
+			void				_Pick(BPoint where);
+			void				_Notify();
+
+			deskbar_location	fLocation;
+			bool				fExpanded;
+			bool				fTracking;
+			BMessenger			fHandler;
+};
+
+
 class DeskbarModule;
 
 
@@ -315,12 +338,11 @@ private:
 			BSpinner*			fRecentDocsCount;
 			BSpinner*			fRecentFoldersCount;
 			BSpinner*			fRecentAppsCount;
-			BMenuField*			fLocation;
+			DeskbarPlace*		fPlace;
 			BCheckBox*			fShowApplications;
 			BCheckBox*			fAlwaysOnTop;
 			BCheckBox*			fAutoRaise;
 			BCheckBox*			fAutoHide;
-			BButton*			fDefaults;
 };
 
 
@@ -344,6 +366,8 @@ public:
 	virtual	status_t			SaveSettings(SettingsContext* context);
 	virtual	status_t			RevertSettings(SettingsContext* context);
 	virtual	bool				IsModified() const { return fModified; }
+	virtual	bool				CanApplyDefaults() const;
+	virtual	status_t			ApplyDefaults(SettingsContext* context);
 
 			const DeskbarChoices& Current() const { return fCurrent; }
 			void				UserEdited(const DeskbarChoices& choices);
@@ -363,6 +387,196 @@ private:
 };
 
 
+DeskbarPlace::DeskbarPlace()
+	:
+	BView("place", B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE),
+	fLocation(B_DESKBAR_RIGHT_TOP),
+	fExpanded(true),
+	fTracking(false)
+{
+	SetExplicitMinSize(BSize(168, 112));
+	SetExplicitMaxSize(BSize(168, 112));
+	SetExplicitPreferredSize(BSize(168, 112));
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+}
+
+
+void
+DeskbarPlace::SetPlace(deskbar_location location, bool expanded)
+{
+	if (fLocation == location && fExpanded == expanded)
+		return;
+	fLocation = location;
+	fExpanded = expanded;
+	Invalidate();
+}
+
+
+void
+DeskbarPlace::SetHandler(BHandler* handler)
+{
+	fHandler = BMessenger(handler);
+}
+
+
+BRect
+DeskbarPlace::_Screen() const
+{
+	BRect bounds = Bounds();
+	bounds.InsetBy(8, 6);
+	float width = bounds.Width();
+	float height = bounds.Height();
+	const float ratio = 4.0f / 3.0f;
+	if (width / ratio > height)
+		width = height * ratio;
+	else
+		height = width / ratio;
+	float left = bounds.left + (bounds.Width() - width) / 2.0f;
+	float top = bounds.top + (bounds.Height() - height) / 2.0f;
+	return BRect(left, top, left + width, top + height);
+}
+
+
+void
+DeskbarPlace::Draw(BRect updateRect)
+{
+	(void)updateRect;
+	BRect outer = _Screen();
+	BRect inner = outer.InsetByCopy(5, 5);
+	SetHighColor(ui_color(B_CONTROL_BORDER_COLOR));
+	FillRoundRect(outer, 4, 4);
+	SetHighColor(ui_color(B_CONTROL_BACKGROUND_COLOR));
+	FillRoundRect(inner, 2, 2);
+	SetHighColor(ui_color(B_CONTROL_BORDER_COLOR));
+	StrokeRoundRect(inner, 2, 2);
+
+	BRect bar = inner.InsetByCopy(3, 3);
+	float thickness = 8;
+	switch (fLocation) {
+		case B_DESKBAR_TOP:
+			bar.bottom = bar.top + thickness;
+			break;
+		case B_DESKBAR_BOTTOM:
+			bar.top = bar.bottom - thickness;
+			break;
+		case B_DESKBAR_LEFT_TOP:
+			bar.right = bar.left + thickness + 2;
+			bar.bottom = bar.top + (fExpanded ? bar.Height() * 0.72f : 16);
+			break;
+		case B_DESKBAR_RIGHT_TOP:
+			bar.left = bar.right - thickness - 2;
+			bar.bottom = bar.top + (fExpanded ? bar.Height() * 0.72f : 16);
+			break;
+		case B_DESKBAR_LEFT_BOTTOM:
+			bar.right = bar.left + thickness + 2;
+			bar.top = bar.bottom - 16;
+			break;
+		case B_DESKBAR_RIGHT_BOTTOM:
+			bar.left = bar.right - thickness - 2;
+			bar.top = bar.bottom - 16;
+			break;
+		default:
+			break;
+	}
+	SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+	FillRect(bar);
+}
+
+
+void
+DeskbarPlace::_Pick(BPoint where)
+{
+	BRect inner = _Screen().InsetByCopy(5, 5);
+	if (!inner.Contains(where))
+		return;
+
+	float leftX = inner.left + inner.Width() / 3.0f;
+	float rightX = inner.left + 2.0f * inner.Width() / 3.0f;
+	float topY = inner.top + inner.Height() / 3.0f;
+	float midY = inner.top + inner.Height() / 2.0f;
+	float bottomY = inner.top + 2.0f * inner.Height() / 3.0f;
+
+	deskbar_location location = fLocation;
+	bool expanded = fExpanded;
+	if (where.x < leftX) {
+		if (where.y < topY) {
+			location = B_DESKBAR_LEFT_TOP;
+			expanded = false;
+		} else if (where.y > bottomY) {
+			location = B_DESKBAR_LEFT_BOTTOM;
+			expanded = false;
+		} else {
+			location = B_DESKBAR_LEFT_TOP;
+			expanded = true;
+		}
+	} else if (where.x > rightX) {
+		if (where.y < topY) {
+			location = B_DESKBAR_RIGHT_TOP;
+			expanded = false;
+		} else if (where.y > bottomY) {
+			location = B_DESKBAR_RIGHT_BOTTOM;
+			expanded = false;
+		} else {
+			location = B_DESKBAR_RIGHT_TOP;
+			expanded = true;
+		}
+	} else if (where.y < midY) {
+		location = B_DESKBAR_TOP;
+		expanded = true;
+	} else {
+		location = B_DESKBAR_BOTTOM;
+		expanded = true;
+	}
+
+	if (location == fLocation && expanded == fExpanded)
+		return;
+	fLocation = location;
+	fExpanded = expanded;
+	Invalidate();
+	_Notify();
+}
+
+
+void
+DeskbarPlace::_Notify()
+{
+	if (!fHandler.IsValid())
+		return;
+	BMessage message(kMsgPlace);
+	message.AddInt32("location", static_cast<int32>(fLocation));
+	message.AddBool("expand", fExpanded);
+	fHandler.SendMessage(&message);
+}
+
+
+void
+DeskbarPlace::MouseDown(BPoint where)
+{
+	fTracking = true;
+	SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
+	_Pick(where);
+}
+
+
+void
+DeskbarPlace::MouseUp(BPoint where)
+{
+	(void)where;
+	fTracking = false;
+}
+
+
+void
+DeskbarPlace::MouseMoved(BPoint where, uint32 transit,
+	const BMessage* message)
+{
+	(void)transit;
+	(void)message;
+	if (fTracking)
+		_Pick(where);
+}
+
+
 DeskbarView::DeskbarView(DeskbarModule* module)
 	:
 	BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING),
@@ -380,12 +594,11 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 	fRecentDocsCount(NULL),
 	fRecentFoldersCount(NULL),
 	fRecentAppsCount(NULL),
-	fLocation(NULL),
+	fPlace(NULL),
 	fShowApplications(NULL),
 	fAlwaysOnTop(NULL),
 	fAutoRaise(NULL),
-	fAutoHide(NULL),
-	fDefaults(NULL)
+	fAutoHide(NULL)
 {
 	fSort = new BCheckBox("sort", "Sort applications by name",
 		new BMessage(kMsgChanged));
@@ -422,25 +635,7 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 	fRecentFoldersCount->SetRange(0, 50);
 	fRecentAppsCount->SetRange(0, 50);
 
-	BMenu* places = new BMenu("Right top");
-	const struct {
-		deskbar_location	location;
-		const char*			label;
-	} kPlaces[] = {
-		{ B_DESKBAR_TOP, "Top" },
-		{ B_DESKBAR_BOTTOM, "Bottom" },
-		{ B_DESKBAR_LEFT_TOP, "Left top" },
-		{ B_DESKBAR_RIGHT_TOP, "Right top" },
-		{ B_DESKBAR_LEFT_BOTTOM, "Left bottom" },
-		{ B_DESKBAR_RIGHT_BOTTOM, "Right bottom" }
-	};
-	for (uint32 i = 0; i < sizeof(kPlaces) / sizeof(kPlaces[0]); i++) {
-		BMessage* message = new BMessage(kMsgChanged);
-		message->AddInt32("location", static_cast<int32>(kPlaces[i].location));
-		places->AddItem(new BMenuItem(kPlaces[i].label, message));
-	}
-	places->SetLabelFromMarked(true);
-	fLocation = new BMenuField("location", "Location:", places);
+	fPlace = new DeskbarPlace();
 	fShowApplications = new BCheckBox("show", "Show applications",
 		new BMessage(kMsgChanged));
 	fAlwaysOnTop = new BCheckBox("top", "Always on top",
@@ -449,8 +644,6 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		new BMessage(kMsgChanged));
 	fAutoHide = new BCheckBox("hide", "Auto-hide",
 		new BMessage(kMsgChanged));
-	fDefaults = new BButton("defaults", "Defaults",
-		new BMessage(kMsgDefaults));
 	BButton* edit = new BButton("edit", "Edit in Tracker" B_UTF8_ELLIPSIS,
 		new BMessage(kMsgEditTracker));
 
@@ -463,9 +656,9 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		.Add(fTrackerFirst)
 		.Add(fExpanders)
 		.AddGroup(B_HORIZONTAL, 0)
-			.Add(BSpaceLayoutItem::CreateHorizontalStrut(
-				B_USE_DEFAULT_SPACING * 2))
+			.Add(BSpaceLayoutItem::CreateHorizontalStrut(20))
 			.Add(fExpandNew)
+			.AddGlue()
 			.End()
 		.Add(fHideLabels)
 		.Add(fIconSize);
@@ -502,11 +695,9 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		B_USE_DEFAULT_SPACING);
 	BLayoutBuilder::Group<>(windowInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
-		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
-			.Add(fLocation)
-			.Add(fShowApplications)
-			.End()
+		.Add(fPlace)
 		.AddGroup(B_VERTICAL, 0)
+			.Add(fShowApplications)
 			.Add(fAlwaysOnTop)
 			.Add(fAutoRaise)
 			.Add(fAutoHide)
@@ -520,7 +711,6 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		.Add(applications)
 		.Add(menu)
 		.Add(window)
-		.Add(fDefaults)
 		.AddGlue();
 
 	if (fModule != NULL)
@@ -545,9 +735,6 @@ DeskbarView::_SetTargets(BView* view)
 		BControl* control = dynamic_cast<BControl*>(child);
 		if (control != NULL)
 			control->SetTarget(this);
-		BMenuField* field = dynamic_cast<BMenuField*>(child);
-		if (field != NULL && field->Menu() != NULL)
-			field->Menu()->SetTargetForItems(this);
 		_SetTargets(child);
 	}
 }
@@ -558,6 +745,8 @@ DeskbarView::AttachedToWindow()
 {
 	BGroupView::AttachedToWindow();
 	_SetTargets(this);
+	if (fPlace != NULL)
+		fPlace->SetHandler(this);
 }
 
 
@@ -591,13 +780,8 @@ DeskbarView::_Read() const
 		choices.recentFoldersCount = clamp_count(fRecentFoldersCount->Value());
 	if (fRecentAppsCount != NULL)
 		choices.recentAppsCount = clamp_count(fRecentAppsCount->Value());
-	if (fLocation != NULL && fLocation->Menu() != NULL) {
-		BMenuItem* marked = fLocation->Menu()->FindMarked();
-		int32 location = static_cast<int32>(choices.location);
-		if (marked != NULL && marked->Message() != NULL
-			&& marked->Message()->FindInt32("location", &location) == B_OK)
-			choices.location = static_cast<deskbar_location>(location);
-	}
+	if (fPlace != NULL)
+		choices.location = fPlace->Location();
 	if (fShowApplications != NULL)
 		choices.showApplications = fShowApplications->Value() == B_CONTROL_ON;
 	if (fAlwaysOnTop != NULL)
@@ -631,8 +815,6 @@ DeskbarView::_SyncEnabled()
 		fRecentFoldersCount->SetEnabled(choices.recentFolders);
 	if (fRecentAppsCount != NULL)
 		fRecentAppsCount->SetEnabled(choices.recentApps);
-	if (fDefaults != NULL)
-		fDefaults->SetEnabled(!choices_equal(choices, default_choices()));
 }
 
 
@@ -668,18 +850,8 @@ DeskbarView::ApplyState(const DeskbarChoices& choices)
 		fRecentFoldersCount->SetValue(choices.recentFoldersCount);
 	if (fRecentAppsCount != NULL)
 		fRecentAppsCount->SetValue(choices.recentAppsCount);
-	if (fLocation != NULL && fLocation->Menu() != NULL) {
-		BMenu* menu = fLocation->Menu();
-		for (int32 i = 0; i < menu->CountItems(); i++) {
-			BMenuItem* item = menu->ItemAt(i);
-			int32 location = -1;
-			bool mark = item != NULL && item->Message() != NULL
-				&& item->Message()->FindInt32("location", &location) == B_OK
-				&& location == static_cast<int32>(choices.location);
-			if (item != NULL)
-				item->SetMarked(mark);
-		}
-	}
+	if (fPlace != NULL)
+		fPlace->SetPlace(choices.location, choices.showApplications);
 	if (fShowApplications != NULL) {
 		fShowApplications->SetValue(choices.showApplications
 			? B_CONTROL_ON : B_CONTROL_OFF);
@@ -724,16 +896,36 @@ void
 DeskbarView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
-		case kMsgChanged:
+		case kMsgPlace:
+		{
 			if (fUpdating || fModule == NULL)
 				break;
+			int32 location = static_cast<int32>(B_DESKBAR_RIGHT_TOP);
+			bool expand = true;
+			message->FindInt32("location", &location);
+			message->FindBool("expand", &expand);
+			fUpdating = true;
+			if (fShowApplications != NULL && corner_honors_expand(
+				static_cast<deskbar_location>(location))) {
+				fShowApplications->SetValue(expand
+					? B_CONTROL_ON : B_CONTROL_OFF);
+			}
+			fUpdating = false;
 			fModule->UserEdited(_Read());
 			_SyncEnabled();
 			break;
-		case kMsgDefaults:
-			if (fModule != NULL)
-				fModule->ApplyDefaults();
+		}
+		case kMsgChanged:
+		{
+			if (fUpdating || fModule == NULL)
+				break;
+			DeskbarChoices choices = _Read();
+			if (fPlace != NULL)
+				fPlace->SetPlace(choices.location, choices.showApplications);
+			fModule->UserEdited(choices);
+			_SyncEnabled();
 			break;
+		}
 		case kMsgEditTracker:
 			_EditTracker();
 			break;
@@ -789,14 +981,23 @@ DeskbarModule::UserEdited(const DeskbarChoices& choices)
 }
 
 
-void
-DeskbarModule::ApplyDefaults()
+bool
+DeskbarModule::CanApplyDefaults() const
 {
+	return !choices_equal(fCurrent, default_choices());
+}
+
+
+status_t
+DeskbarModule::ApplyDefaults(SettingsContext* context)
+{
+	if (context != NULL)
+		fContext = context;
 	fCurrent = default_choices();
+	status_t status = _Apply(fCurrent);
 	fModified = !choices_equal(fCurrent, fOriginal);
 	_Push();
-	if (fContext != NULL)
-		fContext->NotifyChanged(Identifier());
+	return status;
 }
 
 
@@ -933,14 +1134,9 @@ DeskbarModule::SaveSettings(SettingsContext* context)
 	if (context != NULL)
 		fContext = context;
 	status_t status = _Apply(fCurrent);
-	if (status == B_OK) {
-		fOriginal = fCurrent;
-		fModified = false;
-	}
-	if (status != B_OK) {
+	fModified = !choices_equal(fCurrent, fOriginal);
+	if (status != B_OK)
 		syslog(LOG_ERR, "settings deskbar: %s", strerror(status));
-	}
-	_Push();
 	return status;
 }
 
@@ -958,8 +1154,6 @@ DeskbarModule::RevertSettings(SettingsContext* context)
 		fModified = false;
 	}
 	_Push();
-	if (fContext != NULL)
-		fContext->NotifyChanged(Identifier());
 	return status;
 }
 

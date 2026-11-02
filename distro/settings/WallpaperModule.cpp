@@ -210,7 +210,7 @@ public:
 	virtual	status_t			LoadSettings(SettingsContext* context);
 	virtual	status_t			SaveSettings(SettingsContext* context);
 	virtual	status_t			RevertSettings(SettingsContext* context);
-	virtual	bool				IsModified() const { return fModified; }
+	virtual	bool				IsModified() const;
 
 			const char*			Path() const { return fPath.String(); }
 			int32				Mode() const { return fMode; }
@@ -241,6 +241,9 @@ private:
 			void				_RememberPicture(const char* path);
 			void				_ScanArtwork();
 			void				_Changed();
+			void				_RememberOpened();
+			void				_RestoreOpened();
+			bool				_OpenedDiffers() const;
 
 			WallpaperView*		fView;
 			SettingsContext*	fContext;
@@ -257,6 +260,18 @@ private:
 			rgb_color			fColor;
 			bool				fDesktop;
 			bool				fModified;
+			bool				fHaveOpened;
+			std::vector<BgRecord>	fOpenedRecords;
+			BString				fOpenedPath;
+			BString				fOpenedNode;
+			int32				fOpenedScope;
+			int32				fOpenedMode;
+			int32				fOpenedX;
+			int32				fOpenedY;
+			bool				fOpenedOutline;
+			int32				fOpenedImageSet;
+			rgb_color			fOpenedColor;
+			bool				fOpenedDesktop;
 };
 
 
@@ -1417,7 +1432,16 @@ WallpaperModule::WallpaperModule()
 	fImageSet(0),
 	fColor({255, 255, 255, 255}),
 	fDesktop(true),
-	fModified(false)
+	fModified(false),
+	fHaveOpened(false),
+	fOpenedScope(kScopeCurrent),
+	fOpenedMode(kModePosition),
+	fOpenedX(0),
+	fOpenedY(0),
+	fOpenedOutline(true),
+	fOpenedImageSet(0),
+	fOpenedColor({255, 255, 255, 255}),
+	fOpenedDesktop(true)
 {
 }
 
@@ -1569,6 +1593,7 @@ WallpaperModule::LoadSettings(SettingsContext* context)
 	fScope = kScopeCurrent;
 	status_t status = _LoadDesktop();
 	fModified = false;
+	_RememberOpened();
 	return status;
 }
 
@@ -1661,22 +1686,86 @@ WallpaperModule::SaveSettings(SettingsContext* context)
 status_t
 WallpaperModule::RevertSettings(SettingsContext* context)
 {
-	(void)context;
-	int32 scope = fScope;
-	BString node = fNodePath;
-	status_t status = B_OK;
-	if (scope == kScopeFolder || scope == kScopeDefault)
-		status = _LoadNode(node.String(), false);
-	else {
-		fScope = kScopeCurrent;
-		status = _LoadDesktop();
-	}
-	if (status == B_OK)
-		fScope = scope == kScopeAll ? kScopeCurrent : scope;
+	if (!fHaveOpened)
+		return B_NO_INIT;
+	_RestoreOpened();
+	status_t status = SaveSettings(context);
 	fModified = false;
 	if (fView != NULL)
 		fView->Apply();
 	return status;
+}
+
+
+bool
+WallpaperModule::IsModified() const
+{
+	return _OpenedDiffers();
+}
+
+
+void
+WallpaperModule::_RememberOpened()
+{
+	fOpenedRecords = fRecords;
+	fOpenedPath = fPath;
+	fOpenedNode = fNodePath;
+	fOpenedScope = fScope;
+	fOpenedMode = fMode;
+	fOpenedX = fOffsetX;
+	fOpenedY = fOffsetY;
+	fOpenedOutline = fOutline;
+	fOpenedImageSet = fImageSet;
+	fOpenedColor = fColor;
+	fOpenedDesktop = fDesktop;
+	fHaveOpened = true;
+}
+
+
+void
+WallpaperModule::_RestoreOpened()
+{
+	fRecords = fOpenedRecords;
+	fPath = fOpenedPath;
+	fNodePath = fOpenedNode;
+	fScope = fOpenedScope;
+	fMode = fOpenedMode;
+	fOffsetX = fOpenedX;
+	fOffsetY = fOpenedY;
+	fOutline = fOpenedOutline;
+	fImageSet = fOpenedImageSet;
+	fColor = fOpenedColor;
+	fDesktop = fOpenedDesktop;
+}
+
+
+bool
+WallpaperModule::_OpenedDiffers() const
+{
+	if (!fHaveOpened)
+		return fModified;
+	if (fPath != fOpenedPath || fNodePath != fOpenedNode
+		|| fScope != fOpenedScope || fMode != fOpenedMode
+		|| fOffsetX != fOpenedX || fOffsetY != fOpenedY
+		|| fOutline != fOpenedOutline || fImageSet != fOpenedImageSet
+		|| fDesktop != fOpenedDesktop)
+		return true;
+	if (fColor.red != fOpenedColor.red || fColor.green != fOpenedColor.green
+		|| fColor.blue != fOpenedColor.blue
+		|| fColor.alpha != fOpenedColor.alpha)
+		return true;
+	if (fRecords.size() != fOpenedRecords.size())
+		return true;
+	for (uint32 i = 0; i < fRecords.size(); i++) {
+		const BgRecord& current = fRecords[i];
+		const BgRecord& opened = fOpenedRecords[i];
+		if (current.workspace != opened.workspace || current.path != opened.path
+			|| current.mode != opened.mode || current.x != opened.x
+			|| current.y != opened.y || current.outline != opened.outline
+			|| current.imageSet != opened.imageSet)
+			return true;
+	}
+	return false;
 }
 
 

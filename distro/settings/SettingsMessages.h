@@ -16,6 +16,7 @@ const uint32 kMsgGoBack = 'r5sb';
 const uint32 kMsgSearch = 'r5ss';
 const uint32 kMsgSave = 'r5sv';
 const uint32 kMsgRevert = 'r5sr';
+const uint32 kMsgDefaults = 'r5sd';
 const uint32 kMsgModuleChanged = 'r5sm';
 
 

@@ -2,7 +2,7 @@
 
 The Settings host loads a module without knowing how that module stores its page. A new module is an add-on. It does not require a change to the Settings window.
 
-API version is `kSettingsApiVersion` in `SettingsModule.h`. It is 1. The host loads a module only when `settings_api_version()` returns that number. A module built for another version is skipped and reported in the syslog.
+API version is `kSettingsApiVersion` in `SettingsModule.h`. It is 2. The host loads a module only when `settings_api_version()` returns that number. A module built for another version is skipped and reported in the syslog. Version 2 adds `CanApplyDefaults()` and `ApplyDefaults()` at the end of `SettingsModule`.
 
 ## Files
 
@@ -45,7 +45,9 @@ Include `SettingsModule.h` only. Do not include the Settings window or the host.
 
 `RequiresAdmin()` means Save is refused unless `SettingsContext::AdminChangeAllowed()` is true. That call is the existing administrator lock (`r5_admin_change_allowed`). A checkbox in the module is not the check. `SaveSettings()` must call `AdminChangeAllowed()` again before it writes a privileged value. Appearance does not require an administrator.
 
-`CanSave()` is false for a page that only opens an existing preference program. Those programs keep their own files.
+`CanSave()` is false for a page that only opens an existing preference program. Those programs keep their own files. A page with `CanSave()` true is written as soon as the user changes it. The window calls `SaveSettings()` from `NotifyChanged()`. Do not wait for a Save button. There is none.
+
+`CanApplyDefaults()` is true only when Defaults would change the page. `ApplyDefaults()` writes the factory setup. The window calls it from the Defaults button. Revert still calls `RevertSettings()`, which must restore the values from when the page was opened, including after an immediate save.
 
 ## The view
 
@@ -53,7 +55,7 @@ Include `SettingsModule.h` only. Do not include the Settings window or the host.
 
 The window does not rebuild itself when the page changes. It keeps the view and shows it again.
 
-Call `NotifyChanged()` after the user edits a value. Do not write the file from the control handler. The window calls `SaveSettings()` or `RevertSettings()`.
+Call `NotifyChanged()` after the user edits a value. The window then calls `SaveSettings()`. Keep the opened snapshot separate from that write, so `RevertSettings()` can put it back.
 
 ## Storage
 

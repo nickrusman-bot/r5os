@@ -13,6 +13,7 @@
 
 #include <Accelerant.h>
 #include <Box.h>
+#include <Control.h>
 #include <Button.h>
 #include <Clipboard.h>
 #include <LayoutBuilder.h>
@@ -270,6 +271,7 @@ class InformationView : public BGroupView {
 public:
 								InformationView();
 	virtual						~InformationView();
+	virtual	void				AttachedToWindow();
 	virtual	void				MessageReceived(BMessage* message);
 
 private:
@@ -391,6 +393,31 @@ InformationView::~InformationView()
 }
 
 
+static void
+target_controls(BView* view, BHandler* target)
+{
+	if (view == NULL)
+		return;
+	for (int32 i = 0; i < view->CountChildren(); i++) {
+		BView* child = view->ChildAt(i);
+		BControl* control = dynamic_cast<BControl*>(child);
+		if (control != NULL)
+			control->SetTarget(target);
+		target_controls(child, target);
+	}
+}
+
+
+void
+InformationView::AttachedToWindow()
+{
+	BGroupView::AttachedToWindow();
+	// A button's message goes to its target. That starts out as the
+	// window, so Copy never reached this view.
+	target_controls(this, this);
+}
+
+
 void
 InformationView::MessageReceived(BMessage* message)
 {
@@ -426,7 +453,7 @@ InformationView::_Copy(const char* heading, const char* body, BButton* button)
 		BMessage* clip = clipboard.Data();
 		if (clip != NULL) {
 			clip->AddData("text/plain", B_MIME_TYPE, text.String(),
-				text.Length());
+				text.Length() + 1);
 		}
 		clipboard.Commit();
 		clipboard.Unlock();

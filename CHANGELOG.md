@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Settings applies a change immediately
+
+The bottom row is Back, Home, Revert, and Defaults. Save is gone. `NotifyChanged()` makes the window call `SaveSettings()`. Revert restores the snapshot from when the page was opened and writes that again. Defaults calls `ApplyDefaults()`. Only Desktop and Deskbar reports `CanApplyDefaults()`. The Settings module API is version 2 because those two methods were added at the end of `SettingsModule`. An add-on built for version 1 is not loaded.
+
+A page taller than the area under the subtitle sits in a scroller. The scrollbar is shown only when the page is taller than that area. The list, the title, and the bottom row stay put.
+
+Desktop and Deskbar no longer has its own Defaults button. The icon-size slider and the application checkboxes message Deskbar while you edit them, as do the other controls on that page. "Expand new applications" is indented 20 pixels. The old indent used `B_USE_DEFAULT_SPACING * 2`, and that constant is -1002, so the strut pushed the checkbox across the box. Where the bar sits is a screen picture: edges for top and bottom, corners for the four sides, and the middle of a top side for the expanded list. Information's Copy buttons target the page. They had been targeted at the window, so the view never saw the click. The clipboard text includes the trailing NUL.
+
+`distro/BUILD` is 10027. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 14:15 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10027. The image stamp is `2 Nov 2026, 14:15`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Desktop and Deskbar is a Settings page
 
 Settings replaces the legacy Deskbar row with a page under Personalization. The name stays Desktop and Deskbar. Save messages the running Deskbar (`application/x-vnd.Be-TSKB`). The page does not write `~/config/settings/deskbar/settings`. Deskbar still writes that file when it quits. Auto-hide is written immediately, which is the behavior Deskbar already had. The clock is not on this page. The separate Deskbar preferences program stays installed.

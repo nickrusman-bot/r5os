@@ -78,7 +78,7 @@ private:
 			AppearanceView*		fView;
 			SettingsContext*	fContext;
 			bool				fLarge;
-			bool				fSaved;
+			bool				fOpened;
 			bool				fModified;
 };
 
@@ -174,7 +174,7 @@ AppearanceModule::AppearanceModule()
 	fView(NULL),
 	fContext(NULL),
 	fLarge(false),
-	fSaved(false),
+	fOpened(false),
 	fModified(false)
 {
 }
@@ -209,7 +209,7 @@ AppearanceModule::SetLarge(bool large)
 	if (fLarge == large)
 		return;
 	fLarge = large;
-	fModified = fLarge != fSaved;
+	fModified = fLarge != fOpened;
 	if (fContext != NULL)
 		fContext->NotifyChanged(Identifier());
 }
@@ -234,7 +234,7 @@ AppearanceModule::LoadSettings(SettingsContext* context)
 		if (status == B_OK)
 			settings.FindBool("large_sample", &fLarge);
 	}
-	fSaved = fLarge;
+	fOpened = fLarge;
 	fModified = false;
 	_Push();
 	return B_OK;
@@ -253,8 +253,7 @@ AppearanceModule::SaveSettings(SettingsContext* context)
 	status_t status = context->WriteSettings(Identifier(), settings);
 	if (status != B_OK)
 		return status;
-	fSaved = fLarge;
-	fModified = false;
+	fModified = fLarge != fOpened;
 	return B_OK;
 }
 
@@ -263,10 +262,10 @@ status_t
 AppearanceModule::RevertSettings(SettingsContext* context)
 {
 	(void)context;
-	fLarge = fSaved;
+	fLarge = fOpened;
 	fModified = false;
 	_Push();
-	return B_OK;
+	return SaveSettings(context);
 }
 
 

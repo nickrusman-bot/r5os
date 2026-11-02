@@ -17,7 +17,7 @@ class BMessage;
 class BView;
 
 
-static const int32 kSettingsApiVersion = 1;
+static const int32 kSettingsApiVersion = 2;
 
 
 class SettingsContext {
@@ -58,6 +58,12 @@ public:
 	virtual	status_t			SaveSettings(SettingsContext* context) = 0;
 	virtual	status_t			RevertSettings(SettingsContext* context) = 0;
 	virtual	bool				IsModified() const { return false; }
+
+	// True when Defaults would change this page. The window applies it
+	// immediately. A module without a factory setup returns false.
+	virtual	bool				CanApplyDefaults() const { return false; }
+	virtual	status_t			ApplyDefaults(SettingsContext* context)
+									{ (void)context; return B_OK; }
 };
 
 
