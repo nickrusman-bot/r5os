@@ -20,13 +20,11 @@
 #include <Button.h>
 #include <CardLayout.h>
 #include <ControlLook.h>
-#include <File.h>
 #include <FindDirectory.h>
-#include <IconUtils.h>
 #include <Mime.h>
 #include <NodeInfo.h>
 #include <Path.h>
-#include <Resources.h>
+#include <R5Icons.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
@@ -38,15 +36,8 @@
 #include <TextControl.h>
 #include <TextView.h>
 
-#include <image.h>
 #include <stdio.h>
 #include <string.h>
-
-
-// TrackerIcons.h. Read from libtracker at run time. These are not
-// settings icons, so they do not get the preferences wrench.
-static const int32 kTrackerBackIcon = 1042;
-static const int32 kTrackerHomeIcon = 1019;
 
 
 struct SettingsCategory {
@@ -309,74 +300,6 @@ make_place(const char* id, bool category)
 }
 
 
-static BBitmap*
-tracker_nav_icon(int32 id, float side)
-{
-	int32 pixels = (int32)side;
-	if (pixels < 8)
-		return NULL;
-
-	image_info info;
-	int32 cookie = 0;
-	BFile file;
-	bool opened = false;
-	while (get_next_image_info(B_CURRENT_TEAM, &cookie, &info) == B_OK) {
-		if (info.name[0] == '\0')
-			continue;
-		const char* slash = strrchr(info.name, '/');
-		const char* base = slash != NULL ? slash + 1 : info.name;
-		if (strcmp(base, "libtracker.so") != 0)
-			continue;
-		opened = file.SetTo(info.name, B_READ_ONLY) == B_OK;
-		break;
-	}
-	if (!opened)
-		return NULL;
-
-	BResources resources;
-	if (resources.SetTo(&file) != B_OK)
-		return NULL;
-
-	size_t length = 0;
-	const void* data = resources.LoadResource(B_VECTOR_ICON_TYPE, id,
-		&length);
-	if (data == NULL || length == 0)
-		return NULL;
-
-	BBitmap* bitmap = new BBitmap(BRect(0, 0, pixels - 1, pixels - 1),
-		B_RGBA32);
-	if (BIconUtils::GetVectorIcon(static_cast<const uint8*>(data), length,
-			bitmap) != B_OK) {
-		delete bitmap;
-		return NULL;
-	}
-	return bitmap;
-}
-
-
-static void
-fit_nav_button(BButton* button, int32 resourceId, float height)
-{
-	float left;
-	float top;
-	float right;
-	float bottom;
-	be_control_look->GetInsets(BControlLook::B_BUTTON_FRAME,
-		BControlLook::B_BUTTON_BACKGROUND, 0, left, top, right, bottom);
-	float side = height - top - bottom - 2;
-	BBitmap* icon = tracker_nav_icon(resourceId, side);
-	if (icon != NULL) {
-		button->SetIcon(icon);
-		delete icon;
-	}
-
-	BSize box(height, height);
-	button->SetExplicitMinSize(box);
-	button->SetExplicitMaxSize(box);
-	button->SetExplicitPreferredSize(box);
-}
-
-
 SettingsWindow::SettingsWindow(SettingsManager* manager,
 	SettingsStorage* storage)
 	:
@@ -430,7 +353,8 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	// runs down to Search. The title and the subtitle sit beside the
 	// list, with this page's icon at the right of that block. The
 	// page is under the subtitle. Back, Home, Revert, and Save stay
-	// on the bottom row. Back and Home are Tracker icons. See AGENTS.md.
+	// on the bottom row. Back and Home use r5_button_set_icon().
+	// See AGENTS.md and docs/ICONS.md.
 	const float sidebarWidth = 248;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
@@ -468,8 +392,8 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 		fSearch->TextView()->SetFontAndColor(r5_settings_plain_font());
 
 	float buttonHeight = fRevert->PreferredSize().height;
-	fit_nav_button(fBack, kTrackerBackIcon, buttonHeight);
-	fit_nav_button(fHome, kTrackerHomeIcon, buttonHeight);
+	r5_button_set_icon(fBack, R5_ICON_BACK, buttonHeight);
+	r5_button_set_icon(fHome, R5_ICON_HOME, buttonHeight);
 
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Settings asks a public function for the Back and Home icons
+
+Back and Home no longer read resource ids out of `libtracker.so`. Those ids are private. The pictures are now unmodified Tracker HVIF inside `libr5icons.a`, and Settings calls `r5_button_set_icon()` with `R5_ICON_BACK` and `R5_ICON_HOME`. The buttons stay the same height as Revert and Save, in that order, and they still do not get the wrench.
+
+The same library can draw any other icon. `r5_icon_bitmap()` takes a predefined name: back, forward, up, or home. The numbers 1 to 4 stay fixed. `r5_vector_icon_bitmap()` takes HVIF bytes, `r5_file_icon_bitmap()` takes a path, and `r5_mime_icon_bitmap()` takes a MIME type. Each has a `r5_button_set_*()` call that sizes the button. `docs/ICONS.md` is the contract. `AGENTS.md` says not to open Tracker’s private resources for this.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 09:54 Europe/Amsterdam exited 0 and updated 1140 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 09:54`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### Back and Home are Tracker icons, and the wrench stays on Settings
 
 The preferences wrench is only for this Settings application and the modules inside it: the page icon and the home cards. About R5 is not a settings module and does not get the wrench.

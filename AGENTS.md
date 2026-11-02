@@ -21,9 +21,11 @@ This layout is fixed. Do not move it.
 - Every page of this Settings application shows its icon at the right of that title block. A new page adds its icon in `module_icon()` in `distro/settings/SettingsWindow.cpp`. Home uses the Preferences folder icon. A category uses the icon already stored for that category.
 - Those page icons, and the icons on the home cards, get the Haiku preferences wrench on top. That is `r5_settings_apply_prefs_overlay()`. Do not draw one of those icons without it. The wrench is only for this Settings application and the modules inside it. About R5 is not a settings module and does not get the wrench.
 - The page content is the only part that changes. It sits under the subtitle.
-- Search stays under the list. The bottom row is Back, Home, Revert, and Save, in that order. Back and Home are the Tracker back arrow and the Tracker home icon, used as buttons, the same height as Revert and Save. They do not get the wrench.
+- Search stays under the list. The bottom row is Back, Home, Revert, and Save, in that order. Back and Home are icon buttons of the same height as Revert and Save. They call `r5_button_set_icon()` with `R5_ICON_BACK` and `R5_ICON_HOME`. They do not get the wrench.
 
-`docs/SETTINGS.md` describes the same frame.
+Do not open Tracker’s private resources, and do not read `libtracker.so`, to draw an icon. The public calls are `r5_icon_bitmap()`, `r5_vector_icon_bitmap()`, `r5_file_icon_bitmap()`, and `r5_mime_icon_bitmap()`, plus the matching `r5_button_set_*()` calls that size the button. Predefined icons are `R5_ICON_BACK`, `R5_ICON_FORWARD`, `R5_ICON_UP`, and `R5_ICON_HOME`. Their numbers stay fixed. A new predefined icon is added at the end of that enum, with the unmodified picture and a line in `docs/ICONS.md`. Any other icon is a vector buffer, a file path, or a MIME type passed to those calls. The library is `libr5icons.a` from `distro/icons`.
+
+`docs/SETTINGS.md` describes the same frame. `docs/ICONS.md` is the icon contract.
 
 ## Compatibility
 
