@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10041 - Media closes
+Closing Media after a sound setting no longer stops the program. The latency choice is saved. Restart media services to use it.
+
 R5 2026.1-dev Build 10040 - Shorter sound buffers
 Media has a Latency choice on Audio settings. Normal keeps the usual buffer. Low latency uses 256 frames. Pro audio uses 128 frames. Restart media services to apply it.
 

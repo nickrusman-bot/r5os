@@ -119,6 +119,7 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				AttachedToWindow();
+	virtual	void				AllAttached();
 
 private:
 			BMenuField*			_MakeChannelMenu();
@@ -133,6 +134,7 @@ private:
 
 			BMenu*				fChannelMenu;
 			BMenu*				fLatencyMenu;
+			BStringView*		fLatencyHint;
 			BCheckBox* 			fVolumeCheckBox;
 };
 

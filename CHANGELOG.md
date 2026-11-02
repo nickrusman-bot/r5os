@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Media preferences quit double-free
+
+Closing Media after changing a popup (audio output, or the HD Audio sample rate) stopped the program. The debugger showed `bogus pointer (double free)` in `BLooper::SetCommonFilterList`, called from `MediaWindow::~MediaWindow`. `BMenuField::MouseDown` puts a filter on the window. `MouseUp` removes it. Quitting while that menu is still tracking skips `MouseUp`. `~BMenuField` deleted the filter, then `~BLooper` deleted it again. The filter is now removed in `DetachedFromWindow` before the field is deleted.
+
+The destructor also called `StartWatching` for `B_MEDIA_SERVER_QUIT` where it should stop. Both watches are now stopped, and a missing roster is ignored.
+
+The guest syslog is inside the virtual machine. This host cannot read it: there are no Guest Additions, and COM1 is the clipboard pipe. `hda.settings` was not created. A failed save only printed to stderr, which Deskbar does not show. The directory is now created as `kernel` then `drivers`, the file is written with `open`, and a failed save opens an alert. After a save the line under the menu says to restart media services. `buffer length` is printed only when HD Audio sets the stream up again, which is that restart, or the next time sound starts.
+
+`jam -q Media` exited 0 on 3 Nov 2026 at 00:21 Europe/Amsterdam. `distro/BUILD` is 10041. What's new is "Media closes". `jam -q @r5-raw` on 3 Nov 2026 at 00:24 Europe/Amsterdam exited 0 and updated 1731 targets. `libbe.so` and Media were linked at 00:21 and went into that image. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 00:26 Europe/Amsterdam. The guest syslog was not read. The Latency menu was not opened from here.
+
 ### Audio latency choice
 
 Media preferences, Audio settings, has a Latency menu. Normal leaves the sound-card buffer alone. Low latency writes 256 frames. Pro audio writes 128 frames. The choice is stored in the user driver settings `kernel/drivers/hda.settings` and `kernel/drivers/usb_audio` (`play_buffer_frames` and `record_buffer_frames`). Restart media services closes the device so the next open picks it up.

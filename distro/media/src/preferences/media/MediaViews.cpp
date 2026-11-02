@@ -10,6 +10,7 @@
 
 #include "MediaViews.h"
 
+#include <Alert.h>
 #include <AutoDeleter.h>
 #include <Box.h>
 #include <Button.h>
@@ -33,8 +34,11 @@
 #include <TextView.h>
 
 #include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "MediaWindow.h"
 
@@ -282,15 +286,30 @@ is_latency_key(const BString& line, const char* key)
 static status_t
 driver_settings_path(const char* fileName, BPath& path)
 {
-	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);
+	BPath settings;
+	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &settings, true);
 	if (status != B_OK)
 		return status;
-	path.Append("kernel/drivers");
-	status = create_directory(path.Path(), 0755);
+
+	// Build the directory as a string. BPath::Append normalizes through a
+	// BEntry, and that fails when kernel/drivers does not exist yet.
+	BString dir(settings.Path());
+	if (dir.Length() == 0)
+		return B_BAD_VALUE;
+	if (dir.ByteAt(dir.Length() - 1) != '/')
+		dir << '/';
+	dir << "kernel";
+	status = create_directory(dir.String(), 0755);
 	if (status != B_OK && status != B_FILE_EXISTS)
 		return status;
-	path.Append(fileName);
-	return B_OK;
+	dir << "/drivers";
+	status = create_directory(dir.String(), 0755);
+	if (status != B_OK && status != B_FILE_EXISTS)
+		return status;
+
+	BString file(dir);
+	file << '/' << fileName;
+	return path.SetTo(file.String());
 }
 
 
@@ -383,14 +402,13 @@ write_latency_file(const char* fileName, int32 frames)
 		kept << "record_buffer_frames " << frames << "\n";
 	}
 
-	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
-	status = file.InitCheck();
-	if (status != B_OK)
-		return status;
-	ssize_t written = file.Write(kept.String(), kept.Length());
-	if (written < 0)
-		return (status_t)written;
-	return B_OK;
+	int fd = open(path.Path(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0)
+		return errno != 0 ? errno : B_ERROR;
+	ssize_t written = write(fd, kept.String(), kept.Length());
+	status = written < 0 ? (errno != 0 ? errno : B_ERROR) : B_OK;
+	close(fd);
+	return status;
 }
 
 
@@ -413,7 +431,7 @@ AudioSettingsView::AudioSettingsView()
 		.AddMenuField(outputMenuField, 0, 1)
 		.AddMenuField(_MakeChannelMenu(), 2, 1)
 		.AddMenuField(_MakeLatencyMenu(), 0, 2, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
-		.Add(new BStringView("latency hint",
+		.Add(fLatencyHint = new BStringView("latency hint",
 			B_TRANSLATE("Restart media services to apply.")), 0, 3, 3);
 
 	defaultsBox->AddChild(defaultsGridView);
@@ -453,6 +471,14 @@ AudioSettingsView::AttachedToWindow()
 
 
 void
+AudioSettingsView::AllAttached()
+{
+	BGroupView::AllAttached();
+	fLatencyMenu->SetTargetForItems(BMessenger(this));
+}
+
+
+void
 AudioSettingsView::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
@@ -487,8 +513,17 @@ AudioSettingsView::MessageReceived(BMessage* message)
 			if (status == B_OK)
 				status = write_latency_file("usb_audio", frames);
 			if (status != B_OK) {
-				fprintf(stderr, "Could not save audio latency: %s\n",
-					strerror(status));
+				BString text(B_TRANSLATE("Could not save the latency choice."));
+				text << "\n" << strerror(status);
+				(new BAlert("latency", text.String(), B_TRANSLATE("OK")))->Go();
+				break;
+			}
+			if (frames == 256 || frames == 128) {
+				fLatencyHint->SetText(B_TRANSLATE(
+					"Saved. Restart media services to apply."));
+			} else {
+				fLatencyHint->SetText(B_TRANSLATE(
+					"Normal buffer saved. Restart media services to apply."));
 			}
 			break;
 		}

@@ -28,6 +28,8 @@ FILES = (
     "src/add-ons/kernel/drivers/audio/usb/Stream.h",
     "src/preferences/media/MediaViews.cpp",
     "src/preferences/media/MediaViews.h",
+    "src/preferences/media/MediaWindow.cpp",
+    "src/kits/interface/MenuField.cpp",
 )
 
 
