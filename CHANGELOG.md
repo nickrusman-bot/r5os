@@ -1,5 +1,55 @@
 # R5OS changelog (lokaal)
 
+### The Notifications boxes match in height
+
+Enable notifications was taller than Applications, because the boxes stayed top-aligned and only as tall as their contents. Both now use the full height of that row. The sliders, the screen picture, the list, and Mute stay at the top of their box. The extra space is below them, so the two frames end on the same line.
+
+`distro/BUILD` is 10033. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 16:12 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10033. The image stamp is `2 Nov 2026, 16:12`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
+### Notifications and Wallpaper sit side by side
+
+Enable notifications and Applications were stacked, so Notifications was taller than the area under the subtitle. They now share one row, top aligned, the same way Desktop and Deskbar puts Applications and Menu next to each other. The screen picture stays 200 by 148. The application list keeps a minimum width of 220. Both fit in the 1100-wide window, so that page no longer needs a scrollbar.
+
+Wallpaper already used one row. The preview column was on the left. It is now on the right, and the workspace menu, picture, placement, outline, and color are on the left. The strut that lines the two box borders up still follows the workspace-menu label.
+
+`distro/BUILD` is 10032. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 15:45 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10032. The image stamp is `2 Nov 2026, 15:45`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
+### Notifications default to the lower right, and Deskbar fits
+
+A missing notification position, and Defaults, use the lower right (`B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT`). Follow Deskbar stays a choice on the screen picture. The server constant `kDefaultNotificationPosition` matches that, so a new file and the old preferences program use the same place.
+
+Desktop and Deskbar lays Applications and Menu in one row. Window is under that row. The page was taller than the area under the subtitle, so the scrollbar was showing.
+
+`distro/BUILD` is 10031. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 15:34 Europe/Amsterdam exited 0 and updated 1742 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10031. The image stamp is `2 Nov 2026, 15:34`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
+### The notification example can be saved
+
+Build 10029 still reported `Permission denied` and showed no example. The image creates `/boot/home/config/settings` as root, mode 0755, the same way it creates `config/cache`. The signed-in user cannot create `settings/system` there. The example is sent only after the write succeeds, so the alert was the only result.
+
+`r5-desktop` now gives `config`, `config/settings`, and `config/settings/system` to the session user and mode 0700 before it drops uid. That is the same moment it already fixes `config/cache`. The notification server re-reads the file when a notification arrives, so the example uses the place just written.
+
+`distro/BUILD` is 10030. `jam -q @r5-raw` on 2 Nov 2026 at 15:26 Europe/Amsterdam exited 0 and updated 1165 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10030. The image stamp is `2 Nov 2026, 15:26`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
+### Notification position is a screen, and the save is writable
+
+Changing position in Settings reported `Permission denied`. The notification server is `launch_daemon` service `x-vnd.Haiku-notification_server`, so it runs as uid 0. `get_user_home_path` for uid 0 is `/boot/home`. The server created `settings/system` and the notifications file there. The signed-in account is uid ≥ 1000 and could not replace that file. The old preferences program then showed its save error and still posted the sample, because the sample was sent after a failed write.
+
+The server now only reads the file. It watches the settings directory until the file exists, then watches the file. It does not create either. Settings and the old program create the directory as the signed-in user. The old program posts the sample only after the write succeeds.
+
+Position is no longer a menu. The page draws a screen, the same kind of picture as Desktop and Deskbar. The four corners place the message there. The bar on the screen is the running Deskbar, and choosing it stores Follow Deskbar. Width, timeout, and that picture still send one sample after a successful write.
+
+`distro/BUILD` is 10029. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 15:14 Europe/Amsterdam exited 0 and updated 1150 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10029. The image stamp is `2 Nov 2026, 15:14`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
+### Notifications is a Settings page
+
+Settings adds Notifications under System. The home card for System now says display, sound, notifications, and this computer. The card on the System category is the page description. The icon signature is `application/x-vnd.Haiku-Notifications`.
+
+The page writes `~/config/settings/system/notifications` as soon as a value changes. That flattened `BMessage` is the file the notification server already watches. There is no second copy under `r5-settings`. `settings/system` is created first. `B_CREATE_FILE` does not create that parent, and the old program reported the failure as "It's possible you are running out of disk space." The alert now includes `strerror`. An applications list that is missing from the file is a valid empty list. Build 10028 also had the notification server create that directory. That was wrong: the server is uid 0, so the signed-in user could not write the file. Build 10029 removes that create.
+
+Width, timeout, and position send one sample (`NotificationsSample`) after a successful write. Enable and mute do not. Defaults restores notifications on, a timeout of 10 seconds, a width of 300, and Follow Deskbar. It does not clear the application list, and it keeps a stored icon size. Revert restores the snapshot from when the page was opened, including that list. The separate Notifications program stays installed. The field names match the server: `auto-start`, `timeout`, `width`, `icon size`, `notification position`, and `app_usage` blobs of type `'ipau'`.
+
+`distro/BUILD` is 10028. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 14:47 Europe/Amsterdam exited 0 and updated 1152 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10028. The image stamp is `2 Nov 2026, 14:47`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### Settings applies a change immediately
 
 The bottom row is Back, Home, Revert, and Defaults. Save is gone. `NotifyChanged()` makes the window call `SaveSettings()`. Revert restores the snapshot from when the page was opened and writes that again. Defaults calls `ApplyDefaults()`. Only Desktop and Deskbar reports `CanApplyDefaults()`. The Settings module API is version 2 because those two methods were added at the end of `SettingsModule`. An add-on built for version 1 is not loaded.

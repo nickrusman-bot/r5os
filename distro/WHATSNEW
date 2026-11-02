@@ -1,3 +1,25 @@
+R5OS 2026.1-dev Build 10033 - Even boxes
+Notifications draws Enable notifications and Applications to the same height.
+
+R5OS 2026.1-dev Build 10032 - Side by side
+Notifications puts Enable notifications and Applications next to each other. Wallpaper puts the preview on the right.
+
+R5OS 2026.1-dev Build 10031 - Lower right
+A new notification appears at the lower right. Desktop and Deskbar puts Applications and Menu next to each other, with Window underneath.
+
+R5OS 2026.1-dev Build 10030 - Notification example
+Choosing where a notification appears saves that choice and shows an example.
+
+R5OS 2026.1-dev Build 10029 - Notification place
+Notifications shows a screen for where a message appears. Click a corner, or the bar, to follow the Deskbar. An example message appears when that changes.
+
+Saving notifications no longer reports that permission was denied.
+
+R5OS 2026.1-dev Build 10028 - Notifications
+Settings has a Notifications page under System. It sets how long a notification stays, where it shows, and which applications are muted. A change is applied at once.
+
+The separate Notifications program is still installed. Saving there works when the settings folder was missing.
+
 R5OS 2026.1-dev Build 10027 - Changes apply at once
 Settings applies a change as soon as you make it. Revert puts the page back to how it was when you opened it. Defaults puts Desktop and Deskbar back to the usual setup.
 

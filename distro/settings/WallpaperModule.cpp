@@ -871,8 +871,8 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 
 	BMenuField* workspaceField = new BMenuField("workspace", NULL,
 		fWorkspaceMenu);
-	BBox* rightBox = new BBox("background");
-	rightBox->SetLabel(workspaceField);
+	BBox* controlsBox = new BBox("background");
+	controlsBox->SetLabel(workspaceField);
 
 	fImageMenu = new BPopUpMenu("image");
 	BMenuField* imageField = new BMenuField("image", "Image:", fImageMenu);
@@ -930,24 +930,26 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 			.End()
 		.AddGlue()
 		.Add(fPicker);
-	rightBox->AddChild(rightInner);
+	controlsBox->AddChild(rightInner);
 	previewBox->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_USE_FULL_HEIGHT));
-	rightBox->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+	controlsBox->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_USE_FULL_HEIGHT));
 
-	float align = floorf(rightBox->TopBorderOffset()
+	// The workspace menu is the controls label, so that border starts
+	// lower than the Preview label. The strut keeps the two borders level.
+	float align = floorf(controlsBox->TopBorderOffset()
 		- previewBox->TopBorderOffset()) - 1;
 	if (align < 0)
 		align = 0;
 
 	BLayoutBuilder::Group<>(this)
 		.SetInsets(0, 0, 0, 0)
+		.Add(controlsBox, 1)
 		.AddGroup(B_VERTICAL, 0, 1)
 			.AddStrut(align)
 			.Add(previewBox, 1)
-			.End()
-		.Add(rightBox, 1);
+			.End();
 
 	_LoadRecent();
 	Apply();
