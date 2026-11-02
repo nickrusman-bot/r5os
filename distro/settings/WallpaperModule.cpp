@@ -203,7 +203,7 @@ public:
 	virtual	const char*			Category() const
 									{ return "personalization"; }
 	virtual	const char*			Description() const
-		{ return "Picture, placement, and color behind the icons."; }
+		{ return "Set the background of your desktop"; }
 	virtual	const char*			Keywords() const
 		{ return "background wallpaper image color workspace folder"; }
 

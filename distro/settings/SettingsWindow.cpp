@@ -34,6 +34,7 @@
 #include <MessageRunner.h>
 #include <ScrollBar.h>
 #include <ScrollView.h>
+#include <String.h>
 #include <StringItem.h>
 #include <StringView.h>
 #include <TextControl.h>
@@ -739,6 +740,54 @@ SettingsWindow::MessageReceived(BMessage* message)
 }
 
 
+static bool
+module_before(const SettingsModule* left, const SettingsModule* right)
+{
+	// Information stays first under System. Every other page is
+	// alphabetical by its name, in every category.
+	bool leftInfo = left->Identifier() != NULL
+		&& strcmp(left->Identifier(), "information") == 0;
+	bool rightInfo = right->Identifier() != NULL
+		&& strcmp(right->Identifier(), "information") == 0;
+	if (leftInfo != rightInfo)
+		return leftInfo;
+	BString leftName(left->Name() != NULL ? left->Name() : "");
+	BString rightName(right->Name() != NULL ? right->Name() : "");
+	int compare = leftName.ICompare(rightName);
+	if (compare != 0)
+		return compare < 0;
+	BString leftId(left->Identifier() != NULL ? left->Identifier() : "");
+	BString rightId(right->Identifier() != NULL ? right->Identifier() : "");
+	return leftId.ICompare(rightId) < 0;
+}
+
+
+static int32
+modules_in_category(SettingsManager* manager, const char* categoryId,
+	SettingsModule** out, int32 maxOut)
+{
+	int32 count = 0;
+	if (manager == NULL || categoryId == NULL || out == NULL || maxOut <= 0)
+		return 0;
+	for (int32 i = 0; i < manager->Count(); i++) {
+		SettingsModule* module = manager->ModuleAt(i);
+		if (module == NULL || module->Category() == NULL
+			|| strcmp(module->Category(), categoryId) != 0)
+			continue;
+		if (count >= maxOut)
+			continue;
+		int32 at = count;
+		while (at > 0 && module_before(module, out[at - 1])) {
+			out[at] = out[at - 1];
+			at--;
+		}
+		out[at] = module;
+		count++;
+	}
+	return count;
+}
+
+
 void
 SettingsWindow::_BuildSidebar()
 {
@@ -747,21 +796,20 @@ SettingsWindow::_BuildSidebar()
 		delete fList->RemoveItem(i);
 	fList->MakeEmpty();
 	for (uint32 c = 0; c < sizeof(kCategories) / sizeof(kCategories[0]); c++) {
+		SettingsModule* modules[64];
+		int32 count = modules_in_category(fManager, kCategories[c].id,
+			modules, 64);
 		bool header = false;
-		for (int32 i = 0; i < fManager->Count(); i++) {
-			SettingsModule* module = fManager->ModuleAt(i);
-			if (module == NULL
-				|| strcmp(module->Category(), kCategories[c].id) != 0)
-				continue;
-			if (!_Matches(module, fQuery.String()))
+		for (int32 i = 0; i < count; i++) {
+			if (!_Matches(modules[i], fQuery.String()))
 				continue;
 			if (!header) {
 				fList->AddItem(new NavItem(kCategories[c].name,
 					kCategories[c].id, true));
 				header = true;
 			}
-			fList->AddItem(new NavItem(module->Name(), module->Identifier(),
-				false));
+			fList->AddItem(new NavItem(modules[i]->Name(),
+				modules[i]->Identifier(), false));
 		}
 	}
 	fAdjusting = false;
@@ -1046,18 +1094,15 @@ SettingsWindow::_CategoryView(const char* categoryId, const char* name)
 {
 	(void)name;
 	SettingsHomeItem items[16];
-	int32 count = 0;
-	for (int32 i = 0; i < fManager->Count() && count < 16; i++) {
-		SettingsModule* module = fManager->ModuleAt(i);
-		if (module == NULL || strcmp(module->Category(), categoryId) != 0)
-			continue;
-		items[count].id = module->Identifier();
-		items[count].name = module->Name();
-		items[count].summary = module->Description();
-		items[count].iconSignature = module_icon(module->Identifier());
-		items[count].command = kMsgOpenPage;
-		items[count].field = "module";
-		count++;
+	SettingsModule* modules[16];
+	int32 count = modules_in_category(fManager, categoryId, modules, 16);
+	for (int32 i = 0; i < count; i++) {
+		items[i].id = modules[i]->Identifier();
+		items[i].name = modules[i]->Name();
+		items[i].summary = modules[i]->Description();
+		items[i].iconSignature = module_icon(modules[i]->Identifier());
+		items[i].command = kMsgOpenPage;
+		items[i].field = "module";
 	}
 	return new HomeView(items, count, NULL);
 }

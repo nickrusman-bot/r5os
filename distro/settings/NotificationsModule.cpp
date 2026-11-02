@@ -1144,8 +1144,7 @@ NotificationsView::MessageReceived(BMessage* message)
 const char*
 NotificationsModule::Description() const
 {
-	return "How long a notification stays, where it shows, and which "
-		"applications are muted.";
+	return "Manage alerts and notifications";
 }
 
 
