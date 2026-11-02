@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The notification example can be saved
+
+Build 10029 still reported `Permission denied` and showed no example. The image creates `/boot/home/config/settings` as root, mode 0755, the same way it creates `config/cache`. The signed-in user cannot create `settings/system` there. The example is sent only after the write succeeds, so the alert was the only result.
+
+`r5-desktop` now gives `config`, `config/settings`, and `config/settings/system` to the session user and mode 0700 before it drops uid. That is the same moment it already fixes `config/cache`. The notification server re-reads the file when a notification arrives, so the example uses the place just written.
+
+`distro/BUILD` is 10030. `jam -q @r5-raw` on 2 Nov 2026 at 15:26 Europe/Amsterdam exited 0 and updated 1165 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10030. The image stamp is `2 Nov 2026, 15:26`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### Notification position is a screen, and the save is writable
 
 Changing position in Settings reported `Permission denied`. The notification server is `launch_daemon` service `x-vnd.Haiku-notification_server`, so it runs as uid 0. `get_user_home_path` for uid 0 is `/boot/home`. The server created `settings/system` and the notifications file there. The signed-in account is uid ≥ 1000 and could not replace that file. The old preferences program then showed its save error and still posted the sample, because the sample was sent after a failed write.

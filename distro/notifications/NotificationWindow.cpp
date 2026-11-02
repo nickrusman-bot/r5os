@@ -167,6 +167,10 @@ NotificationWindow::MessageReceived(BMessage* message)
 		}
 		case kNotificationMessage:
 		{
+			// Read the file the user just wrote. The directory watch can
+			// arrive after this message, and the example would otherwise
+			// use the previous place.
+			_LoadSettings(false);
 			if (!fShouldRun)
 				break;
 

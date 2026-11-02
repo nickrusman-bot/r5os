@@ -85,6 +85,52 @@ ensure_user_cache(const struct passwd* pwd)
 }
 
 
+static void
+own_directory(const struct passwd* pwd, const char* path)
+{
+	struct stat st;
+	if (lstat(path, &st) != 0) {
+		if (errno != ENOENT || mkdir(path, 0700) != 0) {
+			r5_session_log("settings mkdir %s: %s", path, strerror(errno));
+			return;
+		}
+	} else if (!S_ISDIR(st.st_mode)) {
+		r5_session_log("settings %s is not a directory", path);
+		return;
+	}
+	if (chown(path, pwd->pw_uid, pwd->pw_gid) != 0)
+		r5_session_log("settings chown %s: %s", path, strerror(errno));
+	if (chmod(path, 0700) != 0)
+		r5_session_log("settings chmod %s: %s", path, strerror(errno));
+}
+
+
+static void
+ensure_user_settings(const struct passwd* pwd)
+{
+	if (pwd->pw_dir == NULL || pwd->pw_dir[0] == '\0')
+		return;
+
+	// The image creates config/settings as root, mode 0755. The session
+	// user then cannot create settings/system, and Notifications reports
+	// Permission denied instead of showing the example.
+	const char* suffixes[] = {
+		"/config",
+		"/config/settings",
+		"/config/settings/system",
+		NULL
+	};
+	for (int i = 0; suffixes[i] != NULL; i++) {
+		char path[B_PATH_NAME_LENGTH];
+		int written = snprintf(path, sizeof(path), "%s%s", pwd->pw_dir,
+			suffixes[i]);
+		if (written <= 0 || (size_t)written >= sizeof(path))
+			return;
+		own_directory(pwd, path);
+	}
+}
+
+
 int
 main(int argc, char** argv)
 {
@@ -120,6 +166,7 @@ main(int argc, char** argv)
 		setenv("SHELL", pwd->pw_shell, 1);
 
 	ensure_user_cache(pwd);
+	ensure_user_settings(pwd);
 
 	if (setresgid(pwd->pw_gid, pwd->pw_gid, pwd->pw_gid) != 0) {
 		r5_session_log("setresgid: %s", strerror(errno));

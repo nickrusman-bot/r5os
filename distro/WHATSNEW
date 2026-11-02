@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10030 - Notification example
+Choosing where a notification appears saves that choice and shows an example.
+
 R5OS 2026.1-dev Build 10029 - Notification place
 Notifications shows a screen for where a message appears. Click a corner, or the bar, to follow the Deskbar. An example message appears when that changes.
 
