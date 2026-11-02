@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Wallpaper menus overlapped, and choosing one froze Settings
+
+The workspace menu was the label of the right box, and that box also had its own layout, so the Image menu was drawn underneath it. Choosing Current workspace rebuilt the menus while that menu was still open. The window then ignored clicks. Quitting it stopped in the debugger with `double free` in `SettingsWindow::~SettingsWindow`. The menu update is posted after the menu closes. The box keeps a single child below the label, so the label is no longer laid out as content.
+
+The preview grows with the box and keeps the screen's shape. The page title sits above the list and the page. The list and the page share one row, and Search sits with the buttons.
+
+`jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 07:42 Europe/Amsterdam exited 0 and updated 1138 targets. The package check printed `mesa_packages_ok`. About stays build 10024. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`.
+
 ### About names this computer AMD64, and Wallpaper is the Backgrounds page
 
 About still reads the short ABI name from `libbe.so` (Walter on this disk) and puts the target in parentheses. `x86_64` is shown as AMD64. The package ABI is still `x86_64`. The source maps `aarch64` to ARM64 and `riscv64` to RISC-V 64. This image is the AMD64 build, so those two names are not in the About binary.

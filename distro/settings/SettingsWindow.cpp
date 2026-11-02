@@ -155,36 +155,31 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
 	fSave = new BButton("save", "Save", new BMessage(kMsgSave));
 
-	// Fixed width. A flexible sidebar grows when the page's preferred
-	// width shrinks, which is the jump between Home and a page.
+	// The list and the page share one row, so their tops and bottoms
+	// line up. Search sits with the buttons on the row below.
 	const float sidebarWidth = 248;
-	scroll->SetExplicitMinSize(BSize(sidebarWidth - 16, 160));
-	scroll->SetExplicitMaxSize(BSize(sidebarWidth - 16, B_SIZE_UNLIMITED));
-	BGroupView* sidebar = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
-	sidebar->SetExplicitMinSize(BSize(sidebarWidth, B_SIZE_UNSET));
-	sidebar->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
-	BLayoutBuilder::Group<>(sidebar)
-		.SetInsets(B_USE_SMALL_SPACING, B_USE_SMALL_SPACING,
-			B_USE_SMALL_SPACING, B_USE_WINDOW_SPACING)
-		.Add(scroll, 1)
-		.Add(fSearch);
+	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
+	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
+	fSearch->SetExplicitMinSize(BSize(sidebarWidth, B_SIZE_UNSET));
+	fSearch->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNSET));
 
 	fDeck->SetExplicitMinSize(BSize(760, 280));
-	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 0)
-		.Add(sidebar, 0)
-		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1)
-			.SetInsets(B_USE_WINDOW_SPACING)
-			.Add(fTitle)
-			.Add(fDescription)
-			.Add(fDeck)
-			.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING)
-				.AddGlue()
-				.Add(fHome)
-				.Add(fBack)
-				.Add(fRevert)
-				.Add(fSave)
+	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
+		.SetInsets(B_USE_WINDOW_SPACING)
+		.Add(fTitle)
+		.Add(fDescription)
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 1)
+			.Add(scroll, 0)
+			.Add(fDeck, 1)
 			.End()
-		.End();
+		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
+			.Add(fSearch)
+			.AddGlue()
+			.Add(fHome)
+			.Add(fBack)
+			.Add(fRevert)
+			.Add(fSave)
+			.End();
 	for (int32 i = 0; i < CountChildren(); i++)
 		r5_settings_apply_plain(ChildAt(i));
 	fTitle->SetFont(r5_settings_title_font());

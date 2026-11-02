@@ -6,6 +6,8 @@ One Settings window for R5OS. Existing preference programs stay separate and kee
 
 `Settings` is a single-launch preference (`application/x-vnd.R5OS-Settings`). The window is a sidebar, a search field, and one content deck (`BCardLayout`). Changing page does not create a new window.
 
+The page title sits above the list and the page. The list and the page share one row, so they start and end together. Search sits on the bottom row with Home, Back, Revert, and Save.
+
 The sidebar and the home cards are filled from the module list. Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Home sits with Back, Revert, and Save.
 
 Manrope Regular and Bold are the default plain and bold fonts when no font settings are saved. The fixed font stays Noto Sans Mono. The files are installed in `data/fonts/ttfonts`. Settings still selects Manrope for its own window, and falls back to the system font if that family is missing. The page title is the bold face, eight points above the bold system size.

@@ -25,6 +25,7 @@
 #include <FindDirectory.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
+#include <MenuBar.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <Messenger.h>
@@ -32,6 +33,7 @@
 #include <NodeInfo.h>
 #include <Path.h>
 #include <PopUpMenu.h>
+#include <Region.h>
 #include <Screen.h>
 #include <String.h>
 #include <TextControl.h>
@@ -61,6 +63,7 @@ static const uint32 kMsgOffset = 'r5xy';
 static const uint32 kMsgPreview = 'r5pv';
 static const uint32 kMsgOutline = 'r5ol';
 static const uint32 kMsgColor = 'r5cl';
+static const uint32 kMsgRefresh = 'r5rf';
 static const uint32 kMsgDesktopColor = 'udsc';
 
 static const int32 kScopeCurrent = 0;
@@ -126,6 +129,10 @@ public:
 			void				SetDragEnabled(bool enabled);
 
 private:
+			BRect				_ScreenRect() const;
+			void				_ScreenSize(float& width, float& height) const;
+
+private:
 			WallpaperView*		fOwner;
 			BBitmap*			fBitmap;
 			BString				fPath;
@@ -156,6 +163,7 @@ private:
 			void				_FillImageMenu();
 			void				_MarkScope();
 			void				_MarkPlacement();
+			void				_Refresh(status_t error = B_OK);
 			void				_LoadRecent();
 			void				_SaveRecent();
 			void				_AddRecent(const char* path);
@@ -175,6 +183,7 @@ private:
 			ImageFilter			fImageFilter;
 			std::vector<BString>	fRecent;
 			bool				fAdjusting;
+			bool				fRefreshPosted;
 };
 
 
@@ -558,17 +567,10 @@ WallpaperPreview::WallpaperPreview(WallpaperView* owner)
 	fXRatio(1),
 	fYRatio(1)
 {
-	BRect screen = BScreen().Frame();
-	float width = screen.Width();
-	float height = screen.Height();
-	if (width < 1 || height < 1) {
-		width = 1024;
-		height = 768;
-	}
-	float previewWidth = 180.0f;
-	float previewHeight = ceilf(previewWidth * height / width);
-	SetExplicitMinSize(BSize(previewWidth, previewHeight));
-	SetExplicitMaxSize(BSize(previewWidth, previewHeight));
+	SetExplicitMinSize(BSize(320, 180));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
+	SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
 }
 
 
@@ -628,24 +630,64 @@ WallpaperPreview::SetDragEnabled(bool enabled)
 
 
 void
+WallpaperPreview::_ScreenSize(float& width, float& height) const
+{
+	BRect screen = Window() != NULL ? BScreen(Window()).Frame()
+		: BScreen().Frame();
+	width = screen.Width();
+	height = screen.Height();
+	if (width < 1 || height < 1) {
+		width = 1024;
+		height = 768;
+	}
+}
+
+
+BRect
+WallpaperPreview::_ScreenRect() const
+{
+	float realWidth = 1024;
+	float realHeight = 768;
+	_ScreenSize(realWidth, realHeight);
+	BRect bounds = Bounds();
+	float availWidth = bounds.Width();
+	float availHeight = bounds.Height();
+	if (availWidth < 1)
+		availWidth = 1;
+	if (availHeight < 1)
+		availHeight = 1;
+	float width = availWidth;
+	float height = width * realHeight / realWidth;
+	if (height > availHeight) {
+		height = availHeight;
+		width = height * realWidth / realHeight;
+	}
+	float left = bounds.left + (availWidth - width) / 2.0f;
+	float top = bounds.top + (availHeight - height) / 2.0f;
+	return BRect(left, top, left + width, top + height);
+}
+
+
+void
 WallpaperPreview::Draw(BRect updateRect)
 {
 	(void)updateRect;
-	SetLowColor(fColor);
+	SetLowColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 	FillRect(Bounds(), B_SOLID_LOW);
-	if (fBitmap != NULL && Window() != NULL) {
-		BRect screen = BScreen(Window()).Frame();
-		float screenWidth = screen.Width();
-		float screenHeight = screen.Height();
-		if (screenWidth < 1)
-			screenWidth = 1;
-		if (screenHeight < 1)
-			screenHeight = 1;
-		float xRatio = Bounds().Width() / screenWidth;
-		float yRatio = Bounds().Height() / screenHeight;
+	BRect screen = _ScreenRect();
+	SetLowColor(fColor);
+	FillRect(screen, B_SOLID_LOW);
+	if (fBitmap != NULL) {
+		float realWidth = 1024;
+		float realHeight = 768;
+		_ScreenSize(realWidth, realHeight);
+		float xRatio = screen.Width() / realWidth;
+		float yRatio = screen.Height() / realHeight;
 		BRect bitmap = fBitmap->Bounds();
+		BRegion clip(screen);
+		ConstrainClippingRegion(&clip);
 		if (fMode == kModeScale) {
-			DrawBitmap(fBitmap, bitmap, Bounds());
+			DrawBitmap(fBitmap, bitmap, screen);
 		} else if (fMode == kModeTile) {
 			float tileWidth = bitmap.Width() * xRatio;
 			float tileHeight = bitmap.Height() * yRatio;
@@ -653,8 +695,8 @@ WallpaperPreview::Draw(BRect updateRect)
 				tileWidth = 1;
 			if (tileHeight < 1)
 				tileHeight = 1;
-			for (float top = 0; top < Bounds().Height(); top += tileHeight) {
-				for (float left = 0; left < Bounds().Width();
+			for (float top = screen.top; top < screen.bottom; top += tileHeight) {
+				for (float left = screen.left; left < screen.right;
 					left += tileWidth) {
 					BRect dest(left, top, left + tileWidth, top + tileHeight);
 					DrawBitmap(fBitmap, bitmap, dest);
@@ -663,40 +705,38 @@ WallpaperPreview::Draw(BRect updateRect)
 		} else {
 			float destWidth = bitmap.Width() * xRatio;
 			float destHeight = bitmap.Height() * yRatio;
-			float left = fX * xRatio;
-			float top = fY * yRatio;
+			float left = screen.left + fX * xRatio;
+			float top = screen.top + fY * yRatio;
 			if (fMode == kModeCenter) {
-				left = (Bounds().Width() - destWidth) / 2;
-				top = (Bounds().Height() - destHeight) / 2;
+				left = screen.left + (screen.Width() - destWidth) / 2;
+				top = screen.top + (screen.Height() - destHeight) / 2;
 			}
 			BRect dest(left, top, left + destWidth, top + destHeight);
 			DrawBitmap(fBitmap, bitmap, dest);
 		}
+		ConstrainClippingRegion(NULL);
 	}
 	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
 		B_DARKEN_2_TINT));
-	StrokeRect(Bounds());
+	StrokeRect(screen);
 }
 
 
 void
 WallpaperPreview::MouseDown(BPoint point)
 {
-	if (!fDragEnabled || !Bounds().Contains(point) || fBitmap == NULL)
+	BRect fitted = _ScreenRect();
+	if (!fDragEnabled || !fitted.Contains(point) || fBitmap == NULL)
 		return;
 	uint32 buttons = 0;
 	GetMouse(&point, &buttons);
 	if ((buttons & B_PRIMARY_MOUSE_BUTTON) == 0)
 		return;
-	BRect screen = BScreen(Window()).Frame();
-	float screenWidth = screen.Width();
-	float screenHeight = screen.Height();
-	if (screenWidth < 1)
-		screenWidth = 1;
-	if (screenHeight < 1)
-		screenHeight = 1;
-	fXRatio = Bounds().Width() / screenWidth;
-	fYRatio = Bounds().Height() / screenHeight;
+	float screenWidth = 1024;
+	float screenHeight = 768;
+	_ScreenSize(screenWidth, screenHeight);
+	fXRatio = fitted.Width() / screenWidth;
+	fYRatio = fitted.Height() / screenHeight;
 	if (fXRatio == 0)
 		fXRatio = 1;
 	if (fYRatio == 0)
@@ -758,7 +798,8 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 	fPicker(NULL),
 	fImagePanel(NULL),
 	fFolderPanel(NULL),
-	fAdjusting(false)
+	fAdjusting(false),
+	fRefreshPosted(false)
 {
 	fPreview = new WallpaperPreview(this);
 
@@ -779,22 +820,20 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 
 	BBox* previewBox = new BBox("preview");
 	previewBox->SetLabel("Preview");
-	BLayoutBuilder::Group<>(previewBox, B_VERTICAL, 0)
+	BGroupView* previewInner = new BGroupView(B_VERTICAL, 0);
+	previewInner->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
+	BLayoutBuilder::Group<>(previewInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
-		.AddGlue()
-		.AddGroup(B_HORIZONTAL, 0)
-			.AddGlue()
-			.Add(fPreview)
-			.AddGlue()
-			.End()
-		.AddStrut(B_USE_DEFAULT_SPACING)
+		.Add(fPreview, 1)
+		.AddStrut(B_USE_SMALL_SPACING)
 		.AddGroup(B_HORIZONTAL)
 			.AddGlue()
 			.Add(fX)
 			.Add(fY)
 			.AddGlue()
-			.End()
-		.AddGlue();
+			.End();
+	previewBox->AddChild(previewInner);
 
 	fWorkspaceMenu = new BPopUpMenu("workspace");
 	BMessage* all = new BMessage(kMsgScope);
@@ -842,8 +881,22 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 	fPicker = new BColorControl(BPoint(0, 0), B_CELLS_32x8, 8.0f, "color",
 		new BMessage(kMsgColor));
 
-	BLayoutBuilder::Group<>(rightBox, B_VERTICAL)
-		.SetInsets(B_USE_DEFAULT_SPACING)
+	if (imageField->MenuBar() != NULL) {
+		imageField->MenuBar()->SetExplicitMaxSize(
+			BSize(280, B_SIZE_UNSET));
+	}
+	if (placementField->MenuBar() != NULL) {
+		placementField->MenuBar()->SetExplicitMaxSize(
+			BSize(280, B_SIZE_UNSET));
+	}
+	// A layout on the box itself draws under the label. One child is
+	// placed in the area below that label.
+	BGroupView* rightInner = new BGroupView(B_VERTICAL);
+	rightInner->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
+	BLayoutBuilder::Group<>(rightInner)
+		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING,
+			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
 		.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
 			.Add(imageField->CreateLabelLayoutItem(), 0, 0)
 			.AddGroup(B_HORIZONTAL, 0, 1, 0)
@@ -859,6 +912,11 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 			.End()
 		.AddGlue()
 		.Add(fPicker);
+	rightBox->AddChild(rightInner);
+	previewBox->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
+	rightBox->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
 
 	float align = floorf(rightBox->TopBorderOffset()
 		- previewBox->TopBorderOffset()) - 1;
@@ -866,13 +924,12 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 		align = 0;
 
 	BLayoutBuilder::Group<>(this)
-		.SetInsets(B_USE_SMALL_SPACING, B_USE_DEFAULT_SPACING,
-			B_USE_SMALL_SPACING, B_USE_DEFAULT_SPACING)
-		.AddGroup(B_VERTICAL, 0, 0)
+		.SetInsets(0, 0, 0, 0)
+		.AddGroup(B_VERTICAL, 0, 1)
 			.AddStrut(align)
-			.Add(previewBox)
+			.Add(previewBox, 1)
 			.End()
-		.Add(rightBox);
+		.Add(rightBox, 1);
 
 	_LoadRecent();
 	Apply();
@@ -1085,6 +1142,24 @@ WallpaperView::_MarkPlacement()
 
 
 void
+WallpaperView::_Refresh(status_t error)
+{
+	BMessage refresh(kMsgRefresh);
+	if (error != B_OK)
+		refresh.AddInt32("error", error);
+	if (fRefreshPosted && error == B_OK)
+		return;
+	fRefreshPosted = true;
+	if (Window() == NULL) {
+		fRefreshPosted = false;
+		Apply();
+		return;
+	}
+	Window()->PostMessage(&refresh, this);
+}
+
+
+void
 WallpaperView::Apply()
 {
 	fAdjusting = true;
@@ -1168,14 +1243,7 @@ WallpaperView::MessageReceived(BMessage* message)
 			const char* path = NULL;
 			message->FindString("path", &path);
 			status_t status = fModule->SelectScope(scope, path);
-			Apply();
-			if (status != B_OK) {
-				BString text("Could not open that folder.\n");
-				text << strerror(status);
-				BAlert* alert = new BAlert("Settings", text.String(), "OK",
-					NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-				alert->Go(NULL);
-			}
+			_Refresh(status);
 			break;
 		}
 		case kMsgOtherFolder:
@@ -1221,7 +1289,7 @@ WallpaperView::MessageReceived(BMessage* message)
 			const char* path = NULL;
 			if (message->FindString("path", &path) == B_OK && fModule != NULL)
 				fModule->SetPicture(path);
-			Apply();
+			_Refresh();
 			break;
 		}
 		case kMsgPlacement:
@@ -1229,7 +1297,22 @@ WallpaperView::MessageReceived(BMessage* message)
 			int32 mode = kModePosition;
 			if (message->FindInt32("mode", &mode) == B_OK && fModule != NULL)
 				fModule->SetMode(mode);
+			_Refresh();
+			break;
+		}
+		case kMsgRefresh:
+		{
+			fRefreshPosted = false;
 			Apply();
+			status_t status = B_OK;
+			if (message->FindInt32("error", &status) == B_OK
+				&& status != B_OK) {
+				BString text("Could not open that folder.\n");
+				text << strerror(status);
+				BAlert* alert = new BAlert("Settings", text.String(), "OK",
+					NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+				alert->Go(NULL);
+			}
 			break;
 		}
 		case kMsgOffset:
