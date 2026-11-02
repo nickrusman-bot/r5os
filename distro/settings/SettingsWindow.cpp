@@ -53,7 +53,7 @@ static const char* module_icon(const char* moduleId);
 
 static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
-		"Appearance, the desktop, and wallpaper.",
+		"Appearance, the desktop, wallpaper, and the Deskbar.",
 		"application/x-vnd.Haiku-Appearance" },
 	{ "system", "System", "Display, sound, and this computer.",
 		"application/x-vnd.Haiku-Screen" },
@@ -290,6 +290,134 @@ PageIcon::UsePreferencesFolder()
 }
 
 
+class PageBar;
+
+
+// Shows the page at its real height. When that is taller than the area
+// under the subtitle, the scrollbar appears. The list, title, and bottom
+// row stay where they are.
+class PageScroller : public BView {
+public:
+								PageScroller(BView* content);
+	virtual						~PageScroller();
+	virtual	void				DoLayout();
+			void				ScrollToValue(float value);
+
+private:
+			BView*				fContent;
+			PageBar*			fBar;
+			bool				fScrolling;
+};
+
+
+class PageBar : public BScrollBar {
+public:
+								PageBar(PageScroller* owner);
+	virtual	void				ValueChanged(float newValue);
+
+private:
+			PageScroller*		fOwner;
+};
+
+
+PageBar::PageBar(PageScroller* owner)
+	:
+	BScrollBar(BRect(0, 0, 14, 14), "page-bar", NULL, 0, 0, B_VERTICAL),
+	fOwner(owner)
+{
+}
+
+
+void
+PageBar::ValueChanged(float newValue)
+{
+	if (fOwner != NULL)
+		fOwner->ScrollToValue(newValue);
+	SetValue(newValue);
+}
+
+
+PageScroller::PageScroller(BView* content)
+	:
+	BView("page-scroll", B_WILL_DRAW | B_FRAME_EVENTS),
+	fContent(content),
+	fBar(NULL),
+	fScrolling(false)
+{
+	SetFlags(Flags() | B_SUPPORTS_LAYOUT);
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	fBar = new PageBar(this);
+	if (fContent != NULL)
+		AddChild(fContent);
+	AddChild(fBar);
+	fBar->Hide();
+}
+
+
+PageScroller::~PageScroller()
+{
+}
+
+
+void
+PageScroller::ScrollToValue(float value)
+{
+	if (fContent == NULL || fScrolling)
+		return;
+	fContent->MoveTo(0, -value);
+}
+
+
+void
+PageScroller::DoLayout()
+{
+	if (fContent == NULL || fBar == NULL || fScrolling)
+		return;
+
+	fScrolling = true;
+	float width = Bounds().Width();
+	float height = Bounds().Height();
+	BSize preferred = fContent->PreferredSize();
+	float barWidth = fBar->PreferredSize().width;
+	bool overflow = preferred.height > height + 1.0f;
+	float contentWidth = overflow ? width - barWidth - 1.0f : width;
+	float contentHeight = overflow ? preferred.height : height;
+	if (contentWidth < 0)
+		contentWidth = 0;
+	if (contentHeight < 0)
+		contentHeight = 0;
+
+	float value = fBar->Value();
+	float maxValue = 0;
+	if (overflow)
+		maxValue = preferred.height - height;
+	if (value > maxValue)
+		value = maxValue;
+	if (value < 0)
+		value = 0;
+
+	fContent->MoveTo(0, overflow ? -value : 0);
+	fContent->ResizeTo(contentWidth, contentHeight);
+	if (overflow) {
+		if (fBar->IsHidden())
+			fBar->Show();
+		fBar->MoveTo(width - barWidth, 0);
+		fBar->ResizeTo(barWidth, height);
+		fBar->SetRange(0, maxValue);
+		fBar->SetSteps(20, height);
+		if (preferred.height > 0)
+			fBar->SetProportion(height / preferred.height);
+		if (fBar->Value() != value)
+			fBar->SetValue(value);
+	} else {
+		fBar->SetRange(0, 0);
+		if (!fBar->IsHidden())
+			fBar->Hide();
+	}
+	fScrolling = false;
+}
+
+
 static SettingsPlace*
 make_place(const char* id, bool category)
 {
@@ -318,9 +446,10 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fHome(NULL),
 	fBack(NULL),
 	fRevert(NULL),
-	fSave(NULL),
+	fDefaults(NULL),
 	fCurrent(NULL),
-	fAdjusting(false)
+	fAdjusting(false),
+	fLastApplyError(B_OK)
 {
 	fContext = new SettingsHost(fStorage, BMessenger(this));
 
@@ -347,14 +476,14 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fDeck->SetExplicitMinSize(BSize(360, 240));
 
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
-	fSave = new BButton("save", "Save", new BMessage(kMsgSave));
+	fDefaults = new BButton("defaults", "Defaults", new BMessage(kMsgDefaults));
 
-	// Locked. Do not move these. The list starts under the tab and
-	// runs down to Search. The title and the subtitle sit beside the
-	// list, with this page's icon at the right of that block. The
-	// page is under the subtitle. Back, Home, Revert, and Save stay
-	// on the bottom row. Back and Home use r5_button_set_icon().
-	// See AGENTS.md and docs/ICONS.md.
+	// The list starts under the tab and runs down to Search. The title
+	// and the subtitle sit beside the list, with this page's icon at the
+	// right of that block. The page is under the subtitle. A page that is
+	// taller than that area scrolls there. Back, Home, Revert, and
+	// Defaults stay on the bottom row. Back and Home use
+	// r5_button_set_icon(). See AGENTS.md.
 	const float sidebarWidth = 248;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
@@ -383,7 +512,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 			.Add(fBack)
 			.Add(fHome)
 			.Add(fRevert)
-			.Add(fSave)
+			.Add(fDefaults)
 			.End();
 	for (int32 i = 0; i < CountChildren(); i++)
 		r5_settings_apply_plain(ChildAt(i));
@@ -397,7 +526,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 
 	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
-	fSave->SetEnabled(false);
+	fDefaults->SetEnabled(false);
 	// 610 is 100 taller than 510, so the page still has room under
 	// the title. 560 is the shortest the window may be.
 	SetSizeLimits(980, 4096, 560, 4096);
@@ -421,8 +550,6 @@ SettingsWindow::~SettingsWindow()
 bool
 SettingsWindow::QuitRequested()
 {
-	if (!_ConfirmLeave())
-		return false;
 	be_app->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }
@@ -480,16 +607,14 @@ SettingsWindow::MessageReceived(BMessage* message)
 			break;
 		}
 		case kMsgOpenHome:
-			if (_ConfirmLeave())
-				_ShowHome();
+			_ShowHome();
 			break;
 		case kMsgOpenCategory:
 		{
 			const char* category = NULL;
 			if (message->FindString("category", &category) != B_OK)
 				break;
-			if (_ConfirmLeave())
-				_ShowCategory(category);
+			_ShowCategory(category);
 			break;
 		}
 		case kMsgOpenPage:
@@ -507,14 +632,12 @@ SettingsWindow::MessageReceived(BMessage* message)
 				}
 				moduleId = item->Id();
 			}
-			if (moduleId != NULL && _ConfirmLeave())
+			if (moduleId != NULL)
 				_ShowModule(moduleId);
 			break;
 		}
 		case kMsgGoBack:
 		{
-			if (!_ConfirmLeave())
-				break;
 			if (fHistory.CountItems() < 2) {
 				_ShowHome();
 				break;
@@ -541,36 +664,36 @@ SettingsWindow::MessageReceived(BMessage* message)
 				_ShowModule(id.String());
 			break;
 		}
-		case kMsgSave:
-		{
-			if (fCurrent == NULL || !fCurrent->CanSave())
-				break;
-			if (fCurrent->RequiresAdmin()
-				&& !fContext->AdminChangeAllowed()) {
-				BAlert* alert = new BAlert("Settings",
-					"An administrator has to unlock this page before it can be saved.",
-					"OK", NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-				alert->Go(NULL);
-				break;
-			}
-			status_t status = fCurrent->SaveSettings(fContext);
-			if (status != B_OK) {
-				BString text("Could not save ");
-				text << fCurrent->Name() << ".\n" << strerror(status);
-				BAlert* alert = new BAlert("Settings", text.String(), "OK",
-					NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-				alert->Go(NULL);
-			}
-			_UpdateActions();
-			break;
-		}
 		case kMsgRevert:
 			if (fCurrent != NULL && fCurrent->CanSave()) {
-				fCurrent->RevertSettings(fContext);
+				fLastApplyError = B_OK;
+				status_t status = fCurrent->RevertSettings(fContext);
+				if (status != B_OK) {
+					BString text("Could not revert ");
+					text << fCurrent->Name() << ".\n" << strerror(status);
+					BAlert* alert = new BAlert("Settings", text.String(), "OK",
+						NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+					alert->Go(NULL);
+				}
+				_UpdateActions();
+			}
+			break;
+		case kMsgDefaults:
+			if (fCurrent != NULL && fCurrent->CanApplyDefaults()) {
+				fLastApplyError = B_OK;
+				status_t status = fCurrent->ApplyDefaults(fContext);
+				if (status != B_OK) {
+					BString text("Could not restore defaults for ");
+					text << fCurrent->Name() << ".\n" << strerror(status);
+					BAlert* alert = new BAlert("Settings", text.String(), "OK",
+						NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+					alert->Go(NULL);
+				}
 				_UpdateActions();
 			}
 			break;
 		case kMsgModuleChanged:
+			_ApplyCurrent();
 			_UpdateActions();
 			break;
 		default:
@@ -677,25 +800,26 @@ SettingsWindow::_ShowModule(const char* moduleId)
 }
 
 
-bool
-SettingsWindow::_ConfirmLeave()
+void
+SettingsWindow::_ApplyCurrent()
 {
-	if (fCurrent == NULL || !fCurrent->IsModified())
-		return true;
-	BAlert* alert = new BAlert("Settings",
-		"This page has changes that are not saved.",
-		"Cancel", "Revert", "Save", B_WIDTH_AS_USUAL, B_WARNING_ALERT);
-	int32 choice = alert->Go();
-	if (choice == 0)
-		return false;
-	if (choice == 2) {
-		if (fCurrent->RequiresAdmin() && !fContext->AdminChangeAllowed())
-			return false;
-		if (fCurrent->SaveSettings(fContext) != B_OK)
-			return false;
-	} else
-		fCurrent->RevertSettings(fContext);
-	return true;
+	if (fCurrent == NULL || !fCurrent->CanSave())
+		return;
+	if (fCurrent->RequiresAdmin() && !fContext->AdminChangeAllowed())
+		return;
+	status_t status = fCurrent->SaveSettings(fContext);
+	if (status == B_OK) {
+		fLastApplyError = B_OK;
+		return;
+	}
+	if (status == fLastApplyError)
+		return;
+	fLastApplyError = status;
+	BString text("Could not apply ");
+	text << fCurrent->Name() << ".\n" << strerror(status);
+	BAlert* alert = new BAlert("Settings", text.String(), "OK",
+		NULL, NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+	alert->Go(NULL);
 }
 
 
@@ -725,9 +849,8 @@ void
 SettingsWindow::_UpdateActions()
 {
 	bool can = fCurrent != NULL && fCurrent->CanSave();
-	bool dirty = can && fCurrent->IsModified();
-	fSave->SetEnabled(dirty);
-	fRevert->SetEnabled(dirty);
+	fRevert->SetEnabled(can && fCurrent->IsModified());
+	fDefaults->SetEnabled(fCurrent != NULL && fCurrent->CanApplyDefaults());
 }
 
 
@@ -746,10 +869,11 @@ SettingsWindow::_ModuleView(SettingsModule* module)
 		view = new BStringView(name.String(),
 			"This page could not be opened.");
 	}
-	view->SetName(name.String());
 	r5_settings_apply_plain(view);
-	fCards->AddView(view);
-	return view;
+	PageScroller* scroller = new PageScroller(view);
+	scroller->SetName(name.String());
+	fCards->AddView(scroller);
+	return scroller;
 }
 
 
