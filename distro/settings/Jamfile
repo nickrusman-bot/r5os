@@ -15,7 +15,7 @@ Application Settings :
 	WallpaperModule.cpp
 	InformationModule.cpp
 	AdminLock.cpp
-	: be tracker translation libr5icons.a [ TargetLibstdc++ ]
+	: be tracker translation libr5icons.so [ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

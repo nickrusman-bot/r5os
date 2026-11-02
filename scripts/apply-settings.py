@@ -179,7 +179,7 @@ def main() -> None:
     copy_sources()
     copy_fonts()
     patch_jams()
-    # Settings links libr5icons.a. The settings SubInclude must exist first.
+    # Settings links libr5icons.so. The settings SubInclude must exist first.
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "apply_icons", ROOT / "scripts" / "apply-icons.py")

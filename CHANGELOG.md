@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### libr5icons.so is a system library
+
+The icon helpers are no longer a static archive inside Settings. They are `libr5icons.so`, soname `libr5icons.so`, linked against `libbe.so`. Settings lists that library as `NEEDED`. The regular image and the minimum image both name it in `HaikuImageGetSystemLibs`, so it is installed under `/system/lib` with `libbe.so`. The devel package links it from `develop/lib` when that package is built. The header for programs is `<R5Icons.h>`. `docs/ICONS.md` tells a developer how to include it, how to link it, and which changes break the soname.
+
+The C++ is GPL-3.0-or-later. The four built-in pictures stay Open Tracker HVIF. They are not relicensed, and the calls are not added to `libbe`.
+
+`jam -q Settings` exited 0 and linked `libr5icons.so`. `readelf` shows soname `libr5icons.so` and shows Settings needs `libr5icons.so`. `jam -q @r5-raw` on 2 Nov 2026 at 10:16 Europe/Amsterdam exited 0 and updated 1141 targets. The package copy script for `haiku.hpkg` includes `libr5icons.so`. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About stays build 10025. The image stamp is now `2 Nov 2026, 10:16`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. A minimum image was not built.
+
 ### The minimum image includes Settings
 
 `build/jam/images/definitions/minimum` lists `Settings` with the other preferences, and it installs `settings_appearance` with it. The regular image already did. The name of the icon library stays `libr5icons`. This definition was not built into an image from here. The running regular image is unchanged.

@@ -13,7 +13,16 @@ class BBitmap;
 class BButton;
 
 
-// Public icon helpers. The long description is docs/ICONS.md.
+// Public icon helpers in libr5icons.so. The long description for
+// developers is docs/ICONS.md.
+//
+// The soname is libr5icons.so. The regular image and the minimum image
+// both install it in /system/lib. A Jam program links libr5icons.so and
+// includes this header.
+//
+// Adding a function keeps the library compatible. Changing or removing
+// a function, or renumbering r5_icon, breaks programs already built
+// against this soname.
 //
 // The numbered values below are part of the call contract. Add a new
 // icon at the end. Do not renumber one that already shipped.

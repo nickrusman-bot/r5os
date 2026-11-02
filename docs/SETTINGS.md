@@ -4,7 +4,7 @@ One Settings window for R5OS. Existing preference programs stay separate and kee
 
 ## Host
 
-`Settings` is a single-launch preference (`application/x-vnd.R5OS-Settings`). The window is a sidebar, a search field, and one content deck (`BCardLayout`). Changing page does not create a new window. The regular image and the minimum image both install this program, and both install the appearance module.
+`Settings` is a single-launch preference (`application/x-vnd.R5OS-Settings`). The window is a sidebar, a search field, and one content deck (`BCardLayout`). Changing page does not create a new window. The regular image and the minimum image both install this program, the appearance module, and `libr5icons.so`. Settings links that shared library.
 
 This frame is fixed (`AGENTS.md`). The list starts under the tab and runs down to Search. The title and the subtitle sit beside the list, and that page's icon sits at the right of the title block. The page content is under the subtitle. Search stays under the list. The bottom row is Back, Home, Revert, and Save. Back and Home call `r5_button_set_icon()` (`R5_ICON_BACK`, `R5_ICON_HOME`) so they match the height of Revert and Save. Those two icons do not get the preferences wrench. The window opens at 1100 by 610. The list scrollbar is there only when the items are taller than the list. A category card lights up under the pointer and looks pressed while the mouse button is held down.
 

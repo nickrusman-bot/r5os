@@ -51,6 +51,15 @@ def apply_icons(haiku: pathlib.Path | None = None) -> None:
         "SubInclude HAIKU_TOP src preferences settings ;\n",
         "r5icons jam",
     )
+    lib_line = "\t\t\tlibpackage.so\n"
+    lib_insert = "\t\t\tlibpackage.so\n\t\t\tlibr5icons.so\n"
+    for profile in ("regular", "minimum"):
+        replace_once(
+            tree / "build" / "jam" / "images" / "definitions" / profile,
+            lib_line,
+            lib_insert,
+            "libr5icons.so on " + profile,
+        )
 
 
 def main() -> None:
