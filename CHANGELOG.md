@@ -1,10 +1,20 @@
 # R5OS changelog (lokaal)
 
+### Notification position is a screen, and the save is writable
+
+Changing position in Settings reported `Permission denied`. The notification server is `launch_daemon` service `x-vnd.Haiku-notification_server`, so it runs as uid 0. `get_user_home_path` for uid 0 is `/boot/home`. The server created `settings/system` and the notifications file there. The signed-in account is uid ≥ 1000 and could not replace that file. The old preferences program then showed its save error and still posted the sample, because the sample was sent after a failed write.
+
+The server now only reads the file. It watches the settings directory until the file exists, then watches the file. It does not create either. Settings and the old program create the directory as the signed-in user. The old program posts the sample only after the write succeeds.
+
+Position is no longer a menu. The page draws a screen, the same kind of picture as Desktop and Deskbar. The four corners place the message there. The bar on the screen is the running Deskbar, and choosing it stores Follow Deskbar. Width, timeout, and that picture still send one sample after a successful write.
+
+`distro/BUILD` is 10029. `jam -q Settings` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 15:14 Europe/Amsterdam exited 0 and updated 1150 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available`, plus the usual `mesa_swpipe`, `bios_ia32`, and `pxe_ia32` lines. About shows build 10029. The image stamp is `2 Nov 2026, 15:14`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The first boot can sit in `package_daemon`. The page was not clicked from here.
+
 ### Notifications is a Settings page
 
 Settings adds Notifications under System. The home card for System now says display, sound, notifications, and this computer. The card on the System category is the page description. The icon signature is `application/x-vnd.Haiku-Notifications`.
 
-The page writes `~/config/settings/system/notifications` as soon as a value changes. That flattened `BMessage` is the file the notification server already watches. There is no second copy under `r5-settings`. `settings/system` is created first. `B_CREATE_FILE` does not create that parent, and the old program reported the failure as "It's possible you are running out of disk space." The alert now includes `strerror`. An applications list that is missing from the file is a valid empty list. The notification server creates the same directory before it creates the file, so the node watch starts.
+The page writes `~/config/settings/system/notifications` as soon as a value changes. That flattened `BMessage` is the file the notification server already watches. There is no second copy under `r5-settings`. `settings/system` is created first. `B_CREATE_FILE` does not create that parent, and the old program reported the failure as "It's possible you are running out of disk space." The alert now includes `strerror`. An applications list that is missing from the file is a valid empty list. Build 10028 also had the notification server create that directory. That was wrong: the server is uid 0, so the signed-in user could not write the file. Build 10029 removes that create.
 
 Width, timeout, and position send one sample (`NotificationsSample`) after a successful write. Enable and mute do not. Defaults restores notifications on, a timeout of 10 seconds, a width of 300, and Follow Deskbar. It does not clear the application list, and it keeps a stored icon size. Revert restores the snapshot from when the page was opened, including that list. The separate Notifications program stays installed. The field names match the server: `auto-start`, `timeout`, `width`, `icon size`, `notification position`, and `app_usage` blobs of type `'ipau'`.
 

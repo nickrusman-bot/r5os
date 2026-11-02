@@ -160,7 +160,9 @@ NotificationWindow::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case B_NODE_MONITOR:
 		{
-			_LoadSettings();
+			// Re-arm the watch. The file may have just been created
+			// by the signed-in user.
+			_LoadSettings(true);
 			break;
 		}
 		case kNotificationMessage:
@@ -372,36 +374,62 @@ NotificationWindow::_LoadSettings(bool startMonitor)
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, &path) != B_OK)
 		return;
 
-	// kSettingsFile is "system/notifications". B_CREATE_FILE does not
-	// create the parent, so the file and the node watch never started
-	// when settings/system was missing.
-	if (path.Append("system") != B_OK)
+	// This server is started by launch_daemon as uid 0. Creating the
+	// file here makes settings/system root-owned, and the signed-in
+	// user then cannot save (Permission denied). Only read a file the
+	// user created.
+	BPath settingsDir(path);
+	BPath systemDir(path);
+	if (systemDir.Append("system") != B_OK)
 		return;
-	if (create_directory(path.Path(), 0755) != B_OK)
-		return;
-	if (path.Append("notifications") != B_OK)
+	if (path.Append("system") != B_OK || path.Append("notifications") != B_OK)
 		return;
 
-	BFile file(path.Path(), B_READ_ONLY | B_CREATE_FILE);
-	settings.Unflatten(&file);
-
-	_LoadGeneralSettings(settings);
-	_LoadDisplaySettings(settings);
-	_LoadAppFilters(settings);
-
-	if (startMonitor) {
-		node_ref nref;
-		BEntry entry(path.Path());
-		entry.GetNodeRef(&nref);
-
-		if (watch_node(&nref, B_WATCH_ALL, BMessenger(this)) != B_OK) {
-			BAlert* alert = new BAlert(B_TRANSLATE("Warning"),
-				B_TRANSLATE("Couldn't start general settings monitor.\n"
-					"Live filter changes disabled."), B_TRANSLATE("OK"));
-			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-			alert->Go(NULL);
-		}
+	BEntry fileEntry(path.Path());
+	if (fileEntry.Exists()) {
+		BFile file(path.Path(), B_READ_ONLY);
+		if (file.InitCheck() == B_OK)
+			settings.Unflatten(&file);
+		_LoadGeneralSettings(settings);
+		_LoadDisplaySettings(settings);
+		_LoadAppFilters(settings);
 	}
+
+	if (!startMonitor)
+		return;
+
+	static bool sWatching = false;
+	static node_ref sWatched;
+	if (sWatching) {
+		watch_node(&sWatched, B_STOP_WATCHING, BMessenger(this));
+		sWatching = false;
+	}
+
+	BEntry watchEntry;
+	uint32 flags = B_WATCH_DIRECTORY;
+	if (fileEntry.Exists()) {
+		watchEntry = fileEntry;
+		flags = B_WATCH_ALL;
+	} else if (BEntry(systemDir.Path()).Exists())
+		watchEntry.SetTo(systemDir.Path());
+	else
+		watchEntry.SetTo(settingsDir.Path());
+
+	node_ref nref;
+	if (watchEntry.GetNodeRef(&nref) != B_OK)
+		return;
+	if (watch_node(&nref, flags, BMessenger(this)) != B_OK) {
+		if (!fileEntry.Exists())
+			return;
+		BAlert* alert = new BAlert(B_TRANSLATE("Warning"),
+			B_TRANSLATE("Couldn't start general settings monitor.\n"
+				"Live filter changes disabled."), B_TRANSLATE("OK"));
+		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+		alert->Go(NULL);
+		return;
+	}
+	sWatched = nref;
+	sWatching = true;
 }
 
 
@@ -411,14 +439,24 @@ NotificationWindow::_LoadAppFilters(BMessage& settings)
 	type_code type;
 	int32 count = 0;
 
+	for (appfilter_t::iterator it = fAppFilters.begin();
+		it != fAppFilters.end(); it++)
+		delete it->second;
+	fAppFilters.clear();
+
 	if (settings.GetInfo("app_usage", &type, &count) != B_OK)
 		return;
 
 	for (int32 i = 0; i < count; i++) {
 		AppUsage* app = new AppUsage();
-		if (settings.FindFlat("app_usage", i, app) == B_OK)
-			fAppFilters[app->Signature()] = app;
-		else
+		if (settings.FindFlat("app_usage", i, app) == B_OK) {
+			appfilter_t::iterator it = fAppFilters.find(app->Signature());
+			if (it != fAppFilters.end()) {
+				delete it->second;
+				it->second = app;
+			} else
+				fAppFilters[app->Signature()] = app;
+		} else
 			delete app;
 	}
 }

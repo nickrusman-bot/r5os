@@ -143,11 +143,9 @@ PrefletWin::MessageReceived(BMessage* msg)
 					B_STOP_ALERT);
 				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 				(void)alert->Go();
-			}
-			file.Unset();
-
-			if (msg->what == kApplyWithExample)
+			} else if (msg->what == kApplyWithExample)
 				_SendExampleNotification();
+			file.Unset();
 
 			break;
 		}

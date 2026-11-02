@@ -16,6 +16,7 @@
 #include <Button.h>
 #include <CheckBox.h>
 #include <Control.h>
+#include <Deskbar.h>
 #include <Directory.h>
 #include <Entry.h>
 #include <File.h>
@@ -24,14 +25,12 @@
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
-#include <MenuField.h>
-#include <MenuItem.h>
 #include <Message.h>
+#include <Messenger.h>
 #include <Mime.h>
 #include <Node.h>
 #include <Notification.h>
 #include <Path.h>
-#include <PopUpMenu.h>
 #include <ScrollView.h>
 #include <Slider.h>
 #include <String.h>
@@ -128,6 +127,37 @@ public:
 };
 
 
+static const char* position_name(int32 position);
+
+
+class NotificationPlace : public BView {
+public:
+								NotificationPlace();
+			void				SetPosition(int32 position);
+			int32				Position() const { return fPosition; }
+			void				SetEnabled(bool enabled);
+			void				SetHandler(BHandler* handler);
+	virtual	void				Draw(BRect updateRect);
+	virtual	void				MouseDown(BPoint where);
+	virtual	void				MouseUp(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 transit,
+									const BMessage* message);
+
+private:
+			BRect				_Screen() const;
+			deskbar_location	_Deskbar() const;
+			BRect				_Bar(BRect inner) const;
+			BRect				_Card(BRect inner) const;
+			void				_Pick(BPoint where);
+			void				_Notify();
+
+			int32				fPosition;
+			bool				fEnabled;
+			bool				fTracking;
+			BMessenger			fHandler;
+};
+
+
 class NotificationsView : public BGroupView {
 public:
 								NotificationsView(NotificationsModule* module);
@@ -151,8 +181,7 @@ private:
 			BCheckBox*			fEnable;
 			BSlider*			fWidth;
 			BSlider*			fTimeout;
-			BPopUpMenu*			fPositionMenu;
-			BMenuField*			fPositionField;
+			NotificationPlace*	fPlace;
 			BListView*			fApps;
 			BButton*			fAdd;
 			BButton*			fRemove;
@@ -493,6 +522,290 @@ AppSignatureFilter::Filter(const entry_ref* ref, BNode* node,
 }
 
 
+static const char*
+position_name(int32 position)
+{
+	if (position == (int32)(B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT))
+		return "Lower right";
+	if (position == (int32)(B_FOLLOW_BOTTOM | B_FOLLOW_LEFT))
+		return "Lower left";
+	if (position == (int32)(B_FOLLOW_TOP | B_FOLLOW_RIGHT))
+		return "Upper right";
+	if (position == (int32)(B_FOLLOW_TOP | B_FOLLOW_LEFT))
+		return "Upper left";
+	return "Follow Deskbar";
+}
+
+
+NotificationPlace::NotificationPlace()
+	:
+	BView("place", B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE),
+	fPosition(kFollowDeskbar),
+	fEnabled(true),
+	fTracking(false)
+{
+	SetExplicitMinSize(BSize(200, 148));
+	SetExplicitMaxSize(BSize(200, 148));
+	SetExplicitPreferredSize(BSize(200, 148));
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+}
+
+
+void
+NotificationPlace::SetPosition(int32 position)
+{
+	if (!known_position(position))
+		position = kFollowDeskbar;
+	if (fPosition == position)
+		return;
+	fPosition = position;
+	Invalidate();
+}
+
+
+void
+NotificationPlace::SetEnabled(bool enabled)
+{
+	if (fEnabled == enabled)
+		return;
+	fEnabled = enabled;
+	Invalidate();
+}
+
+
+void
+NotificationPlace::SetHandler(BHandler* handler)
+{
+	fHandler = BMessenger(handler);
+}
+
+
+BRect
+NotificationPlace::_Screen() const
+{
+	BRect bounds = Bounds();
+	bounds.bottom -= 20;
+	bounds.InsetBy(4, 4);
+	float width = bounds.Width();
+	float height = bounds.Height();
+	const float ratio = 4.0f / 3.0f;
+	if (width / ratio > height)
+		width = height * ratio;
+	else
+		height = width / ratio;
+	float left = bounds.left + (bounds.Width() - width) / 2.0f;
+	float top = bounds.top + (bounds.Height() - height) / 2.0f;
+	return BRect(left, top, left + width, top + height);
+}
+
+
+deskbar_location
+NotificationPlace::_Deskbar() const
+{
+	BDeskbar deskbar;
+	if (deskbar.IsRunning())
+		return deskbar.Location();
+	return B_DESKBAR_RIGHT_TOP;
+}
+
+
+BRect
+NotificationPlace::_Bar(BRect inner) const
+{
+	BRect bar = inner.InsetByCopy(2, 2);
+	float thickness = 7;
+	float tall = bar.Height() * 0.55f;
+	switch (_Deskbar()) {
+		case B_DESKBAR_TOP:
+			bar.bottom = bar.top + thickness;
+			break;
+		case B_DESKBAR_BOTTOM:
+			bar.top = bar.bottom - thickness;
+			break;
+		case B_DESKBAR_LEFT_TOP:
+			bar.right = bar.left + thickness;
+			bar.bottom = bar.top + tall;
+			break;
+		case B_DESKBAR_LEFT_BOTTOM:
+			bar.right = bar.left + thickness;
+			bar.top = bar.bottom - 16;
+			break;
+		case B_DESKBAR_RIGHT_BOTTOM:
+			bar.left = bar.right - thickness;
+			bar.top = bar.bottom - 16;
+			break;
+		default:
+			bar.left = bar.right - thickness;
+			bar.bottom = bar.top + tall;
+			break;
+	}
+	return bar;
+}
+
+
+BRect
+NotificationPlace::_Card(BRect inner) const
+{
+	float cardWidth = std::max(42.0f, inner.Width() * 0.40f);
+	float cardHeight = 22;
+	BRect card(0, 0, cardWidth, cardHeight);
+	if (fPosition == kFollowDeskbar) {
+		BRect bar = _Bar(inner);
+		switch (_Deskbar()) {
+			case B_DESKBAR_LEFT_TOP:
+			case B_DESKBAR_LEFT_BOTTOM:
+				card.OffsetTo(bar.right + 3, bar.top);
+				break;
+			case B_DESKBAR_TOP:
+				card.OffsetTo(inner.right - cardWidth - 4, bar.bottom + 3);
+				break;
+			case B_DESKBAR_BOTTOM:
+				card.OffsetTo(inner.right - cardWidth - 4,
+					bar.top - cardHeight - 3);
+				break;
+			default:
+				card.OffsetTo(bar.left - cardWidth - 3, bar.top);
+				break;
+		}
+	} else if (fPosition == (int32)(B_FOLLOW_BOTTOM | B_FOLLOW_LEFT)) {
+		card.OffsetTo(inner.left + 4, inner.bottom - cardHeight - 4);
+	} else if (fPosition == (int32)(B_FOLLOW_TOP | B_FOLLOW_RIGHT)) {
+		card.OffsetTo(inner.right - cardWidth - 4, inner.top + 4);
+	} else if (fPosition == (int32)(B_FOLLOW_TOP | B_FOLLOW_LEFT)) {
+		card.OffsetTo(inner.left + 4, inner.top + 4);
+	} else {
+		card.OffsetTo(inner.right - cardWidth - 4,
+			inner.bottom - cardHeight - 4);
+	}
+	if (card.left < inner.left + 2)
+		card.OffsetBy(inner.left + 2 - card.left, 0);
+	if (card.top < inner.top + 2)
+		card.OffsetBy(0, inner.top + 2 - card.top);
+	if (card.right > inner.right - 2)
+		card.OffsetBy(inner.right - 2 - card.right, 0);
+	if (card.bottom > inner.bottom - 2)
+		card.OffsetBy(0, inner.bottom - 2 - card.bottom);
+	return card;
+}
+
+
+void
+NotificationPlace::Draw(BRect updateRect)
+{
+	(void)updateRect;
+	BRect outer = _Screen();
+	BRect inner = outer.InsetByCopy(5, 5);
+	rgb_color border = ui_color(B_CONTROL_BORDER_COLOR);
+	rgb_color text = ui_color(fEnabled
+		? B_CONTROL_TEXT_COLOR : B_CONTROL_BORDER_COLOR);
+	SetHighColor(border);
+	FillRoundRect(outer, 4, 4);
+	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_1_TINT));
+	FillRoundRect(inner, 2, 2);
+	SetHighColor(border);
+	StrokeRoundRect(inner, 2, 2);
+
+	BRect bar = _Bar(inner);
+	SetHighColor(fPosition == kFollowDeskbar ? text : border);
+	FillRect(bar);
+
+	BRect card = _Card(inner);
+	SetHighColor(ui_color(B_LIST_BACKGROUND_COLOR));
+	FillRoundRect(card, 2, 2);
+	SetHighColor(border);
+	StrokeRoundRect(card, 2, 2);
+	BRect icon = card.InsetByCopy(3, 4);
+	icon.right = icon.left + icon.Height();
+	SetHighColor(ui_color(B_CONTROL_HIGHLIGHT_COLOR));
+	FillRect(icon);
+	SetHighColor(border);
+	float line = icon.right + 4;
+	StrokeLine(BPoint(line, card.top + 7), BPoint(card.right - 4, card.top + 7));
+	StrokeLine(BPoint(line, card.top + 12),
+		BPoint(card.right - 8, card.top + 12));
+
+	const char* name = position_name(fPosition);
+	float textWidth = StringWidth(name);
+	font_height fontHeight;
+	GetFontHeight(&fontHeight);
+	float x = outer.left + (outer.Width() - textWidth) / 2.0f;
+	float y = Bounds().bottom - 2 - fontHeight.descent;
+	SetHighColor(text);
+	DrawString(name, BPoint(x, y));
+}
+
+
+void
+NotificationPlace::_Pick(BPoint where)
+{
+	if (!fEnabled)
+		return;
+	BRect inner = _Screen().InsetByCopy(5, 5);
+	if (!inner.Contains(where))
+		return;
+
+	int32 position = fPosition;
+	if (_Bar(inner).InsetByCopy(-2, -2).Contains(where))
+		position = kFollowDeskbar;
+	else if (where.x < inner.left + inner.Width() / 2.0f) {
+		position = where.y < inner.top + inner.Height() / 2.0f
+			? (int32)(B_FOLLOW_TOP | B_FOLLOW_LEFT)
+			: (int32)(B_FOLLOW_BOTTOM | B_FOLLOW_LEFT);
+	} else {
+		position = where.y < inner.top + inner.Height() / 2.0f
+			? (int32)(B_FOLLOW_TOP | B_FOLLOW_RIGHT)
+			: (int32)(B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT);
+	}
+	if (position == fPosition)
+		return;
+	fPosition = position;
+	Invalidate();
+	_Notify();
+}
+
+
+void
+NotificationPlace::_Notify()
+{
+	if (!fHandler.IsValid())
+		return;
+	BMessage message(kMsgPosition);
+	message.AddInt32("position", fPosition);
+	fHandler.SendMessage(&message);
+}
+
+
+void
+NotificationPlace::MouseDown(BPoint where)
+{
+	if (!fEnabled)
+		return;
+	fTracking = true;
+	SetMouseEventMask(B_POINTER_EVENTS, B_NO_POINTER_HISTORY);
+	_Pick(where);
+}
+
+
+void
+NotificationPlace::MouseUp(BPoint where)
+{
+	(void)where;
+	fTracking = false;
+}
+
+
+void
+NotificationPlace::MouseMoved(BPoint where, uint32 transit,
+	const BMessage* message)
+{
+	(void)transit;
+	(void)message;
+	if (fTracking)
+		_Pick(where);
+}
+
+
 NotificationsView::NotificationsView(NotificationsModule* module)
 	:
 	BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING),
@@ -501,8 +814,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 	fEnable(NULL),
 	fWidth(NULL),
 	fTimeout(NULL),
-	fPositionMenu(NULL),
-	fPositionField(NULL),
+	fPlace(NULL),
 	fApps(NULL),
 	fAdd(NULL),
 	fRemove(NULL),
@@ -534,27 +846,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 	maxLabel << kMaximumTimeout;
 	fTimeout->SetLimitLabels(minLabel.String(), maxLabel.String());
 
-	fPositionMenu = new BPopUpMenu("Follow Deskbar");
-	const char* labels[] = {
-		"Follow Deskbar",
-		"Lower right",
-		"Lower left",
-		"Upper right",
-		"Upper left"
-	};
-	const int32 positions[] = {
-		kFollowDeskbar,
-		(int32)(B_FOLLOW_BOTTOM | B_FOLLOW_RIGHT),
-		(int32)(B_FOLLOW_BOTTOM | B_FOLLOW_LEFT),
-		(int32)(B_FOLLOW_TOP | B_FOLLOW_RIGHT),
-		(int32)(B_FOLLOW_TOP | B_FOLLOW_LEFT)
-	};
-	for (int32 i = 0; i < 5; i++) {
-		BMessage* message = new BMessage(kMsgPosition);
-		message->AddInt32("position", positions[i]);
-		fPositionMenu->AddItem(new BMenuItem(labels[i], message));
-	}
-	fPositionField = new BMenuField("Position:", fPositionMenu);
+	fPlace = new NotificationPlace();
 
 	BBox* general = new BBox("general");
 	general->SetLabel(fEnable);
@@ -563,7 +855,10 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 		.SetInsets(B_USE_DEFAULT_SPACING)
 		.Add(fWidth)
 		.Add(fTimeout)
-		.Add(fPositionField);
+		.AddGroup(B_HORIZONTAL, 0)
+			.Add(fPlace)
+			.AddGlue()
+			.End();
 	general->AddChild(generalInner);
 	general->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_TOP));
@@ -631,7 +926,7 @@ NotificationsView::AttachedToWindow()
 	fEnable->SetTarget(this);
 	fWidth->SetTarget(this);
 	fTimeout->SetTarget(this);
-	fPositionMenu->SetTargetForItems(this);
+	fPlace->SetHandler(this);
 	fApps->SetTarget(this);
 	fAdd->SetTarget(this);
 	fRemove->SetTarget(this);
@@ -651,17 +946,7 @@ NotificationsView::ApplyState(const NotificationState& state)
 	fWidth->SetValue(width);
 	fTimeout->SetValue(state.timeout);
 	_SetTimeoutLabel(state.timeout);
-	BMenuItem* item = fPositionMenu->ItemAt(0);
-	for (int32 i = 0; i < fPositionMenu->CountItems(); i++) {
-		BMenuItem* candidate = fPositionMenu->ItemAt(i);
-		int32 position = kFollowDeskbar;
-		if (candidate != NULL && candidate->Message() != NULL)
-			candidate->Message()->FindInt32("position", &position);
-		if (position == state.position)
-			item = candidate;
-	}
-	if (item != NULL)
-		item->SetMarked(true);
+	fPlace->SetPosition(state.position);
 	_FillApps(state.apps);
 	_EnableGeneral(state.enabled);
 	fUpdating = false;
@@ -676,11 +961,7 @@ NotificationsView::_Read() const
 	state.enabled = fEnable->Value() == B_CONTROL_ON;
 	state.timeout = fTimeout->Value();
 	state.width = (float)(fWidth->Value() * kWidthStep);
-	int32 position = kFollowDeskbar;
-	BMenuItem* marked = fPositionMenu->FindMarked();
-	if (marked != NULL && marked->Message() != NULL)
-		marked->Message()->FindInt32("position", &position);
-	state.position = position;
+	state.position = fPlace->Position();
 	for (int32 i = 0; i < fApps->CountItems(); i++) {
 		AppItem* item = dynamic_cast<AppItem*>(fApps->ItemAt(i));
 		if (item == NULL)
@@ -729,7 +1010,7 @@ NotificationsView::_EnableGeneral(bool enabled)
 {
 	fWidth->SetEnabled(enabled);
 	fTimeout->SetEnabled(enabled);
-	fPositionField->SetEnabled(enabled);
+	fPlace->SetEnabled(enabled);
 }
 
 
