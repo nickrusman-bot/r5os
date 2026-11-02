@@ -744,7 +744,8 @@ static bool
 module_before(const SettingsModule* left, const SettingsModule* right)
 {
 	// Information stays first under System. Every other page is
-	// alphabetical by its name, in every category.
+	// alphabetical by its name, in every category. Do not change this
+	// order unless the user explicitly asks. See AGENTS.md.
 	bool leftInfo = left->Identifier() != NULL
 		&& strcmp(left->Identifier(), "information") == 0;
 	bool rightInfo = right->Identifier() != NULL
