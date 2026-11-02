@@ -17,6 +17,8 @@ FILES = (
     "src/servers/media_addon/MediaFilePlayer.cpp",
     "src/servers/media_addon/MediaFilePlayer.h",
     "src/add-ons/media/media-add-ons/mixer/AudioMixer.cpp",
+    "src/add-ons/media/media-add-ons/mixer/Interpolate.cpp",
+    "src/add-ons/media/media-add-ons/mixer/Interpolate.h",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioAddOn.cpp",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioAddOn.h",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioDevice.h",

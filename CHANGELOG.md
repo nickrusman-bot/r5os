@@ -1,12 +1,22 @@
 # R5OS changelog (lokaal)
 
+### Mixer resampling uses cubic Hermite
+
+The mixer’s high-quality resampler joined two samples with a straight line. That rolls the highs off well below the Nyquist frequency (Haiku #9438). It now uses four neighbours (Catmull-Rom). The same-rate path is still a copy. Drop/repeat samples is unchanged. The preference line says cubic interpolation.
+
+The first image crashed on that copy. After the samples were written, the tail was read from the pointer that had already walked off the end of the buffer. A 48 kHz MP3 into the 48 kHz mixer takes this path, so MediaPlayer hit a segment violation in `AudioMixer control` (`kernel<float, float, …>`, `movss (%rsi,%r8,1)`). The tail is now indexed from the start of the buffer.
+
+`jam -q mixer.media_addon` exited 0 on 2 Nov 2026 at 23:22 Europe/Amsterdam. `distro/BUILD` is 10039. What's new is "Clearer audio". `jam -q @r5-raw` on 2 Nov 2026 at 23:31 Europe/Amsterdam exited 0 and updated 1234 targets. AboutSystem was relinked. The mixer add-on was already linked at 23:22 and went into the rebuilt `haiku.hpkg`. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started a new VDI from this image on 2 Nov 2026 at 23:33 Europe/Amsterdam. Playing a 48 kHz MP3 opened the debugger, as described above.
+
+`jam -q @r5-raw` on 2 Nov 2026 at 23:40 Europe/Amsterdam exited 0 and updated 1232 targets, including `Interpolate.o`. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started a new VDI from this image on 2 Nov 2026 at 23:41 Europe/Amsterdam. The MP3 was not played again from here.
+
 ### Audio tickets: time source, hot-plug, packed 24-bit, mixer latency
 
 `BTimeSource` no longer enters the debugger when a performance or real time span is too wide for a float. The scale uses double (Haiku #20307). A finished notification sound deletes its player, which disconnects and releases the mixer (Haiku #16739). Changing a sound-card rate no longer divides by zero in `hmulti_audio` (Haiku #19978). Packed 24-bit samples are written and read as 3 bytes when the channel stride is not a multiple of 4, and `usb_audio` accepts that subframe size again (Haiku #20267).
 
 `multi_audio` watches `/dev/audio/hmulti` and publishes a new device. The add-on server instantiates that physical node and asks the media server to rescan. A dead default output is dropped, and a failed disconnect does not block the next connection (Haiku #12776, #12777).
 
-The system mixer no longer adds every late buffer on top of the last one, up to 150 ms. Its published latency is one buffer plus the current lateness, and a smaller notice gives half of the extra back. The wildcard format is 48 kHz instead of 96 kHz (Haiku #10142, #9438). The resampler is still linear.
+The system mixer no longer adds every late buffer on top of the last one, up to 150 ms. Its published latency is one buffer plus the current lateness, and a smaller notice gives half of the extra back. The wildcard format is 48 kHz instead of 96 kHz (Haiku #10142, #9438). That image still used the linear resampler. Cubic Hermite is the section above.
 
 Not changed: USB audio KDL and EHCI isochronous locks (#18320, #18842, #18994, #18995, #19472), UAC2 headers, and more than two USB channels. No loopback was measured.
 
