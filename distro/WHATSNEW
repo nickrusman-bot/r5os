@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10035 - Narrower Settings
+Settings opens a little narrower, so Revert and Defaults stay on the screen.
+
 R5OS 2026.1-dev Build 10034 - Lock and virtual memory
 Settings has a lock beside Home. A locked page stays gray until an administrator opens it. Virtual memory sets swap for this computer. A change is kept at once and takes effect on the next start.
 
