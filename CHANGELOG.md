@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Information stays first
+
+The Settings list followed registration order, so Information sat at the bottom of System. Information is now first under System. Every other page, in every category, is alphabetical by name. The same order is used for the cards on a category page. The card line and the subtitle are the page description.
+
+Those descriptions are shorter. Information is "View system details". Virtual memory is "Extra memory stored on disk". Wallpaper is "Set the background of your desktop". Desktop and Deskbar is "Adjust desktop and Deskbar settings". Notifications is "Manage alerts and notifications".
+
+This was written earlier on `cursor/settings-list` and never merged. Display had already taken build 10036, so this lands as 10037 on top of that page. The Display page, the bold box titles, and `libr5ui.so` stay.
+
+`distro/BUILD` is 10037. `jam -q Settings` exited 0 and updated 22 targets. `jam -q @r5-raw` on 2 Nov 2026 at 18:52 Europe/Amsterdam exited 0 and updated 1141 targets. The package check printed `mesa_packages_ok`. Jam also printed `package mawk not available` and `package mesa_swpipe not available`, plus the usual `bios_ia32` and `pxe_ia32` lines. About shows build 10037. The image stamp is `2 Nov 2026, 18:52`. VirtualBox is started from this image afterwards. The desktop was not seen from here. The list was not opened from here.
+
 ### Display page and libr5ui.so
 
 The sidebar item Display opened the separate Screen program. Display is now a page under System. It reads the mode list from `BScreen` and sets a mode with `BScreen::SetMode`, the same call Screen uses. The separate Screen program stays installed. The page requires an administrator. Resolution, colors, and refresh stay on the menus until Apply. Apply asks to keep the picture. A thread restores the previous mode after 12 seconds if neither button was used. Workspace columns and rows call `BPrivate::set_workspaces_layout` immediately. Revert puts back the mode and the workspace layout from when the page was opened. Brightness, combined displays, and the VESA boot file are not on this page.

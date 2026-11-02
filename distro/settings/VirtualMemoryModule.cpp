@@ -563,7 +563,7 @@ VirtualMemoryView::MessageReceived(BMessage* message)
 const char*
 VirtualMemoryModule::Description() const
 {
-	return "Swap space for when memory is full.";
+	return "Extra memory stored on disk";
 }
 
 

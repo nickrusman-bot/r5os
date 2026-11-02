@@ -360,7 +360,7 @@ public:
 	virtual	const char*			Category() const
 									{ return "personalization"; }
 	virtual	const char*			Description() const
-		{ return "Where the Deskbar sits, the application list, and recent items."; }
+		{ return "Adjust desktop and Deskbar settings"; }
 	virtual	const char*			Keywords() const
 		{ return "deskbar desktop menu recent applications location"; }
 

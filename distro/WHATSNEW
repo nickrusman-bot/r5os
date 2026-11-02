@@ -1,3 +1,6 @@
+R5OS 2026.1-dev Build 10037 - Settings list
+Information is the first page under System. The other pages are in alphabetical order. Information, Virtual memory, Wallpaper, Desktop and Deskbar, and Notifications use a shorter line under the title.
+
 R5OS 2026.1-dev Build 10036 - Display
 Settings has a Display page under System. It sets the resolution, the colors, the refresh rate, and the workspaces. Apply keeps the picture. The page stays gray until an administrator opens the lock.
 

@@ -502,7 +502,7 @@ public:
 	virtual	const char*			Name() const { return "Information"; }
 	virtual	const char*			Category() const { return "system"; }
 	virtual	const char*			Description() const
-		{ return "This computer, and the version of R5 Operating System."; }
+		{ return "View system details"; }
 	virtual	const char*			Keywords() const
 		{ return "information device processor memory version build kernel"; }
 	virtual	bool				CanSave() const { return false; }
