@@ -10,6 +10,7 @@
 
 #include <R5UI.h>
 
+#include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsModule.h"
 
@@ -36,6 +37,7 @@
 #include <ScrollView.h>
 #include <Slider.h>
 #include <String.h>
+#include <StringView.h>
 #include <SupportDefs.h>
 
 #include <algorithm>
@@ -824,6 +826,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 {
 	fEnable = new BCheckBox("server", "Enable notifications",
 		new BMessage(kMsgEnable));
+	fEnable->SetFont(r5_settings_bold_font());
 
 	float ratio = be_plain_font->Size() / 12.0f;
 	int32 minWidth = (int32)(kMinimumWidth / kWidthStep * ratio);
@@ -879,7 +882,7 @@ NotificationsView::NotificationsView(NotificationsModule* module)
 	fRemove->SetExplicitMinSize(BSize(buttonWidth, B_SIZE_UNSET));
 
 	BBox* applications = new BBox("applications");
-	applications->SetLabel("Applications");
+	applications->SetLabel(r5_settings_box_title("Applications"));
 	BGroupView* applicationsInner = new BGroupView(B_VERTICAL,
 		B_USE_DEFAULT_SPACING);
 	BLayoutBuilder::Group<>(applicationsInner)

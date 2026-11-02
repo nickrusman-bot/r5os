@@ -7,6 +7,7 @@
 
 
 class BFont;
+class BStringView;
 class BView;
 
 
@@ -14,6 +15,7 @@ const BFont*	r5_settings_plain_font();
 const BFont*	r5_settings_bold_font();
 const BFont*	r5_settings_title_font();
 void			r5_settings_apply_plain(BView* view);
+BStringView*	r5_settings_box_title(const char* text);
 
 
 #endif

@@ -11,6 +11,7 @@
 
 #include <R5UI.h>
 
+#include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsModule.h"
 
@@ -23,6 +24,7 @@
 #include <Entry.h>
 #include <File.h>
 #include <FindDirectory.h>
+#include <StringView.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
@@ -644,7 +646,7 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		new BMessage(kMsgEditTracker));
 
 	BBox* applications = new BBox("applications");
-	applications->SetLabel("Applications");
+	applications->SetLabel(r5_settings_box_title("Applications"));
 	BGroupView* applicationsInner = new BGroupView(B_VERTICAL, 0);
 	BLayoutBuilder::Group<>(applicationsInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
@@ -663,7 +665,7 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		B_ALIGN_TOP));
 
 	BBox* menu = new BBox("menu");
-	menu->SetLabel("Menu");
+	menu->SetLabel(r5_settings_box_title("Menu"));
 	BGroupView* menuInner = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
 	BLayoutBuilder::Group<>(menuInner)
 		.SetInsets(B_USE_DEFAULT_SPACING)
@@ -686,7 +688,7 @@ DeskbarView::DeskbarView(DeskbarModule* module)
 		B_ALIGN_TOP));
 
 	BBox* window = new BBox("window");
-	window->SetLabel("Window");
+	window->SetLabel(r5_settings_box_title("Window"));
 	BGroupView* windowInner = new BGroupView(B_HORIZONTAL,
 		B_USE_DEFAULT_SPACING);
 	BLayoutBuilder::Group<>(windowInner)

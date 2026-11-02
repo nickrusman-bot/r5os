@@ -8,6 +8,7 @@
 
 #include "DisplayModule.h"
 
+#include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
 #include "SettingsModule.h"
@@ -15,6 +16,7 @@
 #include <Alert.h>
 #include <Box.h>
 #include <Button.h>
+#include <GroupLayout.h>
 #include <GroupView.h>
 #include <InterfacePrivate.h>
 #include <LayoutBuilder.h>
@@ -99,6 +101,29 @@ refresh_rate(const display_mode& mode)
 }
 
 
+static void
+format_refresh(float rate, BString& name)
+{
+	char buffer[32];
+	snprintf(buffer, sizeof(buffer), "%.*g", rate >= 100.0f ? 4 : 3, rate);
+	name.SetTo(buffer);
+	name.Append(" Hz");
+}
+
+
+static void
+show_marked_label(BMenu* menu, const char* fallback)
+{
+	if (menu == NULL || menu->Superitem() == NULL)
+		return;
+	BMenuItem* marked = menu->FindMarked();
+	if (marked != NULL)
+		menu->Superitem()->SetLabel(marked->Label());
+	else if (fallback != NULL)
+		menu->Superitem()->SetLabel(fallback);
+}
+
+
 static int
 compare_mode(const void* left, const void* right)
 {
@@ -148,6 +173,7 @@ public:
 								DisplayView(DisplayModule* module);
 	virtual						~DisplayView();
 	virtual	void				AttachedToWindow();
+	virtual	void				AllAttached();
 	virtual	void				MessageReceived(BMessage* message);
 			void				ShowChoice(const DisplayChoice& choice,
 									bool hardware);
@@ -165,6 +191,7 @@ private:
 			bool				fUpdating;
 			bool				fConfirming;
 			BBox*				fScreenBox;
+			BStringView*		fScreenLabel;
 			BStringView*		fDevice;
 			DisplayPicture*		fPicture;
 			BSpinner*			fColumns;
@@ -521,6 +548,7 @@ DisplayView::DisplayView(DisplayModule* module)
 	fUpdating(false),
 	fConfirming(false),
 	fScreenBox(NULL),
+	fScreenLabel(NULL),
 	fDevice(NULL),
 	fPicture(NULL),
 	fColumns(NULL),
@@ -533,7 +561,8 @@ DisplayView::DisplayView(DisplayModule* module)
 	fApply(NULL)
 {
 	fScreenBox = new BBox("screen");
-	fScreenBox->SetLabel("Display");
+	fScreenLabel = r5_settings_box_title("Display");
+	fScreenBox->SetLabel(fScreenLabel);
 	BGroupView* screenGroup = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
 	screenGroup->GroupLayout()->SetInsets(B_USE_DEFAULT_SPACING);
 	fScreenBox->AddChild(screenGroup);
@@ -545,23 +574,29 @@ DisplayView::DisplayView(DisplayModule* module)
 	screenGroup->AddChild(fPicture);
 
 	BBox* workBox = new BBox("workspaces");
-	workBox->SetLabel("Workspaces");
+	workBox->SetLabel(r5_settings_box_title("Workspaces"));
+	BGroupLayout* workLayout = new BGroupLayout(B_VERTICAL);
+	workLayout->SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
+		B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING);
+	workBox->SetLayout(workLayout);
 	fColumns = new BSpinner("columns", "Columns:", new BMessage(kMsgColumns));
 	fRows = new BSpinner("rows", "Rows:", new BMessage(kMsgRows));
 	fColumns->SetRange(1, 32);
 	fRows->SetRange(1, 32);
 	fColumns->SetAlignment(B_ALIGN_RIGHT);
 	fRows->SetAlignment(B_ALIGN_RIGHT);
+	BLayoutItem* columnText = fColumns->CreateTextViewLayoutItem();
+	BLayoutItem* rowText = fRows->CreateTextViewLayoutItem();
+	columnText->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
+	rowText->SetExplicitMaxSize(BSize(B_SIZE_UNSET, B_SIZE_UNSET));
 	workBox->AddChild(BLayoutBuilder::Group<>()
-		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_BIG_SPACING,
-			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
 		.AddGroup(B_HORIZONTAL, 0)
 			.AddGlue()
 			.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
 				.Add(fColumns->CreateLabelLayoutItem(), 0, 0)
-				.Add(fColumns->CreateTextViewLayoutItem(), 1, 0)
+				.Add(columnText, 1, 0)
 				.Add(fRows->CreateLabelLayoutItem(), 0, 1)
-				.Add(fRows->CreateTextViewLayoutItem(), 1, 1)
+				.Add(rowText, 1, 1)
 				.End()
 			.AddGlue()
 			.End()
@@ -576,7 +611,7 @@ DisplayView::DisplayView(DisplayModule* module)
 	BMenuField* scopeField = new BMenuField("scope field", NULL, fScopeMenu);
 
 	fResolutionMenu = new BPopUpMenu("resolution", true, true);
-	fColorsMenu = new BPopUpMenu("colors", true, false);
+	fColorsMenu = new BPopUpMenu("colors", true, true);
 	fRefreshMenu = new BPopUpMenu("refresh", true, true);
 	BMenuField* resolutionField = new BMenuField("resolution field",
 		"Resolution:", fResolutionMenu);
@@ -628,6 +663,13 @@ DisplayView::AttachedToWindow()
 	fRows->SetTarget(this);
 	fApply->SetTarget(this);
 	fScopeMenu->SetTargetForItems(this);
+}
+
+
+void
+DisplayView::AllAttached()
+{
+	BGroupView::AllAttached();
 	_FillMenus();
 	if (fModule != NULL)
 		ShowChoice(fModule->Selected(), true);
@@ -711,15 +753,12 @@ DisplayView::_FillRefresh()
 		BMessage* message = new BMessage(kMsgRefresh);
 		message->AddFloat("refresh", rate);
 		BString name;
-		if (fabs(rate - rint(rate)) < 0.05f)
-			name.SetToFormat("%.0f Hz", rate);
-		else
-			name.SetToFormat("%.1f Hz", rate);
+		format_refresh(rate, name);
 		fRefreshMenu->AddItem(new BMenuItem(name.String(), message));
 	}
 	if (fRefreshMenu->CountItems() == 0) {
 		BString name;
-		name.SetToFormat("%.1f Hz", choice.refresh);
+		format_refresh(choice.refresh, name);
 		BMessage* message = new BMessage(kMsgRefresh);
 		message->AddFloat("refresh", choice.refresh);
 		BMenuItem* item = new BMenuItem(name.String(), message);
@@ -772,6 +811,19 @@ DisplayView::_MarkChoice()
 	}
 	if (refreshMarked != NULL)
 		refreshMarked->SetMarked(true);
+
+	BString resolutionLabel;
+	resolutionLabel.SetToFormat("%" B_PRId32 " × %" B_PRId32,
+		choice.width, choice.height);
+	show_marked_label(fResolutionMenu, resolutionLabel.String());
+	BString colorLabel;
+	colorLabel.SetToFormat("%" B_PRId32 " bits/pixel",
+		bits_per_pixel(choice.space));
+	show_marked_label(fColorsMenu, colorLabel.String());
+	BString refreshLabel;
+	format_refresh(choice.refresh, refreshLabel);
+	show_marked_label(fRefreshMenu, refreshLabel.String());
+
 	if (fAllItem != NULL)
 		fAllItem->SetMarked(choice.allWorkspaces);
 	if (fScopeMenu->ItemAt(1) != NULL)
@@ -807,9 +859,10 @@ DisplayView::_UpdatePicture()
 			+ info.height * info.height) / 0.254) / 10.0);
 		BString label;
 		label.SetToFormat("%g\"", inches);
-		fScreenBox->SetLabel(label.String());
+		fScreenLabel->SetText(label.String());
 	} else
-		fScreenBox->SetLabel("Display");
+		fScreenLabel->SetText("Display");
+	fScreenBox->InvalidateLayout();
 
 	accelerant_device_info device;
 	if (screen.GetDeviceInfo(&device) == B_OK) {

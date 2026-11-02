@@ -8,6 +8,7 @@
 
 #include "VirtualMemoryModule.h"
 
+#include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
 #include "SettingsModule.h"
@@ -268,6 +269,7 @@ VirtualMemoryView::VirtualMemoryView(VirtualMemoryModule* module)
 {
 	fEnable = new BCheckBox("enable", "Enable virtual memory",
 		new BMessage(kMsgEnable));
+	fEnable->SetFont(r5_settings_bold_font());
 	fUsage = new BStatusBar("usage");
 	fAutomatic = new BCheckBox("automatic", "Automatic swap management",
 		new BMessage(kMsgAuto));

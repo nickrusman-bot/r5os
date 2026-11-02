@@ -8,6 +8,7 @@
 
 #include "WallpaperModule.h"
 
+#include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsModule.h"
 
@@ -23,6 +24,7 @@
 #include <File.h>
 #include <FilePanel.h>
 #include <FindDirectory.h>
+#include <StringView.h>
 #include <GroupView.h>
 #include <LayoutBuilder.h>
 #include <MenuBar.h>
@@ -837,7 +839,7 @@ WallpaperView::WallpaperView(WallpaperModule* module)
 	fY->SetExplicitMaxSize(BSize(90, B_SIZE_UNSET));
 
 	BBox* previewBox = new BBox("preview");
-	previewBox->SetLabel("Preview");
+	previewBox->SetLabel(r5_settings_box_title("Preview"));
 	BGroupView* previewInner = new BGroupView(B_VERTICAL, 0);
 	previewInner->SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
 		B_ALIGN_USE_FULL_HEIGHT));

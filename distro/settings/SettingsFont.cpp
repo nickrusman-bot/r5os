@@ -11,6 +11,7 @@
 #include <FindDirectory.h>
 #include <Font.h>
 #include <Path.h>
+#include <StringView.h>
 #include <View.h>
 
 #include <syslog.h>
@@ -93,6 +94,15 @@ r5_settings_title_font()
 {
 	ensure_fonts();
 	return sTitle;
+}
+
+
+BStringView*
+r5_settings_box_title(const char* text)
+{
+	BStringView* title = new BStringView("box title", text);
+	title->SetFont(r5_settings_bold_font());
+	return title;
 }
 
 
