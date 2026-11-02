@@ -1,73 +1,73 @@
-R5OS 2026.1-dev Build 10038 - Appearance
-Settings has an Appearance page. The tabs are Fonts, Colors, Look and feel, and Antialiasing. A change is applied at once. The separate Appearance program stays installed.
+R5 2026.1-dev Build 10038 - Fonts and look
+Settings has Fonts and Look and Feel under Personalization. Fonts sets the four fonts, with antialiasing in a box. Look and Feel sets the decorator and the scroll-bar arrows, with colors in a box. A change is applied at once. The separate Appearance program stays installed.
 
-R5OS 2026.1-dev Build 10037 - Settings list
+R5 2026.1-dev Build 10037 - Settings list
 Information is the first page under System. The other pages are in alphabetical order. Information, Virtual memory, Wallpaper, Desktop and Deskbar, and Notifications use a shorter line under the title.
 
-R5OS 2026.1-dev Build 10036 - Display
+R5 2026.1-dev Build 10036 - Display
 Settings has a Display page under System. It sets the resolution, the colors, the refresh rate, and the workspaces. Apply keeps the picture. The page stays gray until an administrator opens the lock.
 
-R5OS 2026.1-dev Build 10035 - Narrower Settings
+R5 2026.1-dev Build 10035 - Narrower Settings
 Settings opens a little narrower, so Revert and Defaults stay on the screen.
 
-R5OS 2026.1-dev Build 10034 - Lock and virtual memory
+R5 2026.1-dev Build 10034 - Lock and virtual memory
 Settings has a lock beside Home. A locked page stays gray until an administrator opens it. Virtual memory sets swap for this computer. A change is kept at once and takes effect on the next start.
 
-R5OS 2026.1-dev Build 10033 - Even boxes
+R5 2026.1-dev Build 10033 - Even boxes
 Notifications draws Enable notifications and Applications to the same height.
 
-R5OS 2026.1-dev Build 10032 - Side by side
+R5 2026.1-dev Build 10032 - Side by side
 Notifications puts Enable notifications and Applications next to each other. Wallpaper puts the preview on the right.
 
-R5OS 2026.1-dev Build 10031 - Lower right
+R5 2026.1-dev Build 10031 - Lower right
 A new notification appears at the lower right. Desktop and Deskbar puts Applications and Menu next to each other, with Window underneath.
 
-R5OS 2026.1-dev Build 10030 - Notification example
+R5 2026.1-dev Build 10030 - Notification example
 Choosing where a notification appears saves that choice and shows an example.
 
-R5OS 2026.1-dev Build 10029 - Notification place
+R5 2026.1-dev Build 10029 - Notification place
 Notifications shows a screen for where a message appears. Click a corner, or the bar, to follow the Deskbar. An example message appears when that changes.
 
 Saving notifications no longer reports that permission was denied.
 
-R5OS 2026.1-dev Build 10028 - Notifications
+R5 2026.1-dev Build 10028 - Notifications
 Settings has a Notifications page under System. It sets how long a notification stays, where it shows, and which applications are muted. A change is applied at once.
 
 The separate Notifications program is still installed. Saving there works when the settings folder was missing.
 
-R5OS 2026.1-dev Build 10027 - Changes apply at once
+R5 2026.1-dev Build 10027 - Changes apply at once
 Settings applies a change as soon as you make it. Revert puts the page back to how it was when you opened it. Defaults puts Desktop and Deskbar back to the usual setup.
 
 Desktop and Deskbar shows a screen for where the bar sits. The application list and the icon size change while you edit them. A page that is taller than the window scrolls, and the scrollbar is visible.
 
 Copy on Information puts that box on the clipboard.
 
-R5OS 2026.1-dev Build 10026 - Deskbar
+R5 2026.1-dev Build 10026 - Deskbar
 Settings has a Desktop and Deskbar page under Personalization. It sets where the bar sits, the application list, and the recent menus. Save applies that to the Deskbar that is already running.
 
 The separate Deskbar preferences program is still installed.
 
-R5OS 2026.1-dev Build 10025 - Information
+R5 2026.1-dev Build 10025 - Information
 Settings has an Information page under System. It shows this computer and the R5OS version. Each box can be copied.
 
 The list stays beside the title. The page sits under the title.
 
-R5OS 2026.1-dev Build 10024 - Wallpaper
+R5 2026.1-dev Build 10024 - Wallpaper
 Settings opens on cards. Wallpaper shows a preview, the picture, where it sits, the icon label outline, and the desktop color. Save can use the current workspace, every workspace, or a folder. Backgrounds is still its own program.
 
 The interface uses Manrope, unless a font was already chosen.
 
 About names this computer AMD64.
 
-R5OS 2026.1-dev Build 10023 - Controls
+R5 2026.1-dev Build 10023 - Controls
 A program filling in a text box no longer counts as typing. Clicking a slider again still sends its message when the value stays the same. A scrollbar that already shows everything keeps its arrows off. An option that is not in the menu leaves the current choice as it is.
 
 Home, system, apps, preferences, develop, and config use their translated names when the folder has no stored name. In icon view a shortened name is shown in full again.
 
-R5OS 2026.1-dev Build 10022 - Leaf menu
+R5 2026.1-dev Build 10022 - Leaf menu
 The leaf menu no longer shows an up arrow and a down arrow when the whole menu fits on the screen.
 
-R5OS 2026.1-dev Build 10021 - Lists and Find
+R5 2026.1-dev Build 10021 - Lists and Find
 Shift-click a column heading to add a second sort. Click it again for the other direction, and once more to turn it off. A normal click sorts by that column only.
 
 Command+A in the path field selects the path. Ctrl+Up and Ctrl+Down go to the first or last item.
@@ -76,85 +76,85 @@ A new search names the result window after what you typed. Open With no longer o
 
 A vertical Deskbar clock stays on the bar when the bar is narrow. The leaf menu item is Show replicants handle.
 
-R5OS 2026.1-dev Build 10020 - Desktop icons
+R5 2026.1-dev Build 10020 - Desktop icons
 A shared folder on the Desktop no longer covers another icon. Moving that icon no longer freezes the Desktop, so folders open again.
 
-R5OS 2026.1-dev Build 10019 - Tracker and Deskbar
+R5 2026.1-dev Build 10019 - Tracker and Deskbar
 Tracker keeps a long name inside the copy window, and that window grows with the font. The finish time no longer shows a date in 1901. Escape clears a selection. Opening the parent folder keeps that folder selected. Find starts in the folder you have open. Get Info can be resized, and it says so when an item cannot be renamed. Open With remembers its size.
 
 The leaf menu says Shut down, with the same words as the question. An empty Recent menu stays on the screen. Escape closes an open menu. A vertical Deskbar does not shrink below one icon row.
 
-R5OS 2026.1-dev Build 10018 - OpenGL
+R5 2026.1-dev Build 10018 - OpenGL
 OpenGL drawing uses Mesa 25. A demo such as GLTeapot still draws on the processor, not on the graphics chip. The older Mesa 22 package is no longer on this disk.
 
-R5OS 2026.1-dev Build 10017 - License links
+R5 2026.1-dev Build 10017 - License links
 The Licenses tab uses the same green headings as What's new. It links to the license pages, and lists the same components as Credits, including their license text.
 
-R5OS 2026.1-dev Build 10016 - Licenses
+R5 2026.1-dev Build 10016 - Licenses
 About has a Licenses tab, next to Credits and What's new. Credits stays the list of people and projects.
 
-R5OS 2026.1-dev Build 10015 - Window size and shared folders
+R5 2026.1-dev Build 10015 - Window size and shared folders
 The disk has more free space. On VirtualBox, the desktop follows the window when you resize it. A folder the host shares shows up on the Desktop as VBox Share. On another computer those stay off.
 
-R5OS 2026.1-dev Build 10014 - VirtualBox guest
+R5 2026.1-dev Build 10014 - VirtualBox guest
 On VirtualBox, the desktop can follow the window size. A shared folder can be mounted when the host offers one. This build includes GNU GPL version 3 code: the VirtualBox guest software. The license and the matching source are stored on this disk with the other license texts.
 
-R5OS 2026.1-dev Build 10013 - Lock screen
+R5 2026.1-dev Build 10013 - Lock screen
 Lock screen in the leaf menu covers the screen. The lock window has the same title tab as Sign in. Your apps stay open. Type your own password to continue. Log out on that screen returns to Sign in. A preference window that was unlocked locks again.
 
-R5OS 2026.1-dev Build 10012 - Shared machine settings
+R5 2026.1-dev Build 10012 - Shared machine settings
 Printers, Repositories, and VirtualMemory stay in Preferences for everyone. An administrator can change them. Another account uses the lock at the bottom right. Printer queues and swap belong to the computer. A new account needs a password. The account that is signed in cannot be removed. Adding an account no longer shows an error after it has succeeded.
 
-R5OS 2026.1-dev Build 10011 - Your account
+R5 2026.1-dev Build 10011 - Your account
 Users & Accounts opens on your own card: picture, name, username, email, and password. Other people stay hidden until an administrator unlocks the list. Sign in still shows everyone who can sign in.
 
-R5OS 2026.1-dev Build 10010 - Log out name, Sign in after Restart
+R5 2026.1-dev Build 10010 - Log out name, Sign in after Restart
 The leaf menu says Log out and your account name. Restart and a cold boot go to Sign in again after the first administrator is no longer user id 0.
 
-R5OS 2026.1-dev Build 10009 - Locked machine settings
+R5 2026.1-dev Build 10009 - Locked machine settings
 Network, Screen, Time, and Users & Accounts stay in Preferences for everyone. An administrator can change them. Another account can look, then open the lock at the bottom right with an administrator's name and password. Until then the buttons in that window stay off. That lasts a few minutes and is checked by Sign in. Appearance and the other personal settings stay with the person who is signed in.
 
-R5OS 2026.1-dev Build 10008 - Sign in as that person
+R5 2026.1-dev Build 10008 - Sign in as that person
 Sign in starts the desktop as the account you chose. A standard account uses its own home under home/users and its own Tracker. Terminal uses that same home. Trash, Home, Quick Tour, and User Guide are on that desktop. Folder icons in Tracker and the leaf menu (Applications, Demos, Desktop applets, Preferences) are the same yellow folders for everyone. Each account has its own MIME database. The administrator still uses /boot/home. There is still one screen. Preferences are not hidden per role yet.
 
-R5OS 2026.1-dev Build 10007 - Administrator is not root
+R5 2026.1-dev Build 10007 - Administrator is not root
 After Sign in, the first account (`user`, home folder `/boot/home`) is a normal user id (1000 or higher), not 0. Tracker and Deskbar run as that person. Another account’s folder under home/users stays unreadable. Sign in as someone else still opens this same desktop for now. Users & Accounts still works: the sign-in program applies the changes.
 
-R5OS 2026.1-dev Build 10006 - Private home folders
+R5 2026.1-dev Build 10006 - Private home folders
 Another account cannot open your Desktop or Documents. Extra people still live under home/users. The original account is user id 0, so that one can still read the others. Everyone still shares one desktop after Sign in.
 
-R5OS 2026.1-dev Build 10005 - Log out
+R5 2026.1-dev Build 10005 - Log out
 The leaf menu can log you out. Tracker, Deskbar, and other session apps close, then Sign in comes back. The next Sign in is still the same computer session — homes are not isolated yet.
 
-R5OS 2026.1-dev Build 10004 - Sign in
+R5 2026.1-dev Build 10004 - Sign in
 The desktop waits at a sign-in screen. Choose a person, type the password, and press Sign in. Restart and Shut down sit at the bottom. An empty password still works if the account has none. This is a gate, not separate desktops: after sign-in you still get the same session until logout and isolation exist.
 
-R5OS 2026.1-dev Build 10003 - Add and remove accounts
+R5 2026.1-dev Build 10003 - Add and remove accounts
 Users & Accounts can add a person, disable an account, or delete it. Open it from Preferences. New people get a user id of 1000 or higher and a folder under home/users. System accounts such as sshd stay off the list. The original administrator cannot be removed. An empty password is allowed; that is convenient, not a lock. Everyone still shares the same desktop until a login screen exists.
 
-R5OS 2026.1-dev Build 10002 - Users & Accounts
+R5 2026.1-dev Build 10002 - Users & Accounts
 Preferences now includes Users & Accounts. It lists the accounts that already exist on this computer (name, user id, home folder, and whether the account looks like an administrator). You cannot yet add people, set passwords, log in as someone else, or keep separate desktops. Everyone still shares the same session.
 
-R5OS 2026.1-dev Build 10001 - IPv6
+R5 2026.1-dev Build 10001 - IPv6
 On a home network the computer can take an IPv6 address from the router as well as IPv4, and use that address to reach the rest of the network. Open Network, select the card, and look under IPv6. Automatic is the default. You should see a link-local address and, if the router offers one, a second address. Set IPv6 to Disabled if you do not want that.
 
-R5OS 2026.1-dev Build 10001 - Shutdown
+R5 2026.1-dev Build 10001 - Shutdown
 Shutting down should no longer sit forever while IPv6 autoconfig (SLAAC) is still listening. If it still hangs, say so — ACPI power-off is a different path.
 
-R5OS 2026.1-dev Build 10001 - AirPlay
+R5 2026.1-dev Build 10001 - AirPlay
 We've added AirPlay so you can play this computer's sound on speakers on your Wi-Fi network, such as Sonos. Open the AirPlay icon in the Deskbar, pick a speaker, and choose Play to. You can also receive classic AirPlay 1 audio on this computer. An iPhone usually will not list R5OS in Control Center yet — AirPlay 2 pairing is not included.
 
-R5OS 2026.1-dev Build 10001 - Wi-Fi
+R5 2026.1-dev Build 10001 - Wi-Fi
 Wi-Fi is on one screen: scan, enter a password, and connect. Open it from Network preferences or from the network icon in the Deskbar. Networks you join are remembered, and R5OS can reconnect after sleep or a dropped link. The Deskbar tooltip shows the network name, or that it is still connecting.
 
-R5OS 2026.1-dev Build 10001 - AirPrint
+R5 2026.1-dev Build 10001 - AirPrint
 You can add network printers that speak AirPrint or IPP. Open the printer settings, add a printer, and choose one that appears on the network. This is new; not every printer has been tried.
 
-R5OS 2026.1-dev Build 10001 - Dark Mode
+R5 2026.1-dev Build 10001 - Dark Mode
 You can switch the desktop to a dark look. Open Preferences → Appearance, choose a dark color scheme, and apply it. More of the system (Deskbar, Tracker, windows) follows those colors than before. Some apps still keep their own look.
 
-R5OS 2026.1-dev Build 10001 - Desktop and Deskbar
+R5 2026.1-dev Build 10001 - Desktop and Deskbar
 Icons on the Desktop overlap less, sit clearer of the Deskbar, and keep a sensible size. The Deskbar clock, mute, battery, and menus behave more predictably. Lists, scrollbars, and alert windows clip and resize more cleanly.
 
-R5OS 2026.1-dev Build 10001 - Name and About
+R5 2026.1-dev Build 10001 - Name and About
 The system identifies as R5OS in the Deskbar, installer, boot splash, and About R5OS. Open About R5OS from the Deskbar leaf menu. This is not an official Haiku release.

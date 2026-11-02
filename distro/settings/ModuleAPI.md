@@ -13,7 +13,7 @@ Put the module in its own directory and build it with the `Addon` rule. Install 
 - `/boot/home/config/add-ons/Settings`
 - `/boot/home/config/non-packaged/add-ons/Settings`
 
-The Appearance module is installed as `settings_appearance` in the system add-ons directory.
+Fonts is installed as `settings_fonts`, and Look and Feel as `settings_look`, in the system add-ons directory.
 
 ## Entry points
 
@@ -43,7 +43,7 @@ Include `SettingsModule.h` only. Do not include the Settings window or the host.
 
 `Name()`, `Description()`, and `Keywords()` are what search compares. Search is case-insensitive.
 
-`RequiresAdmin()` means Save is refused unless `SettingsContext::AdminChangeAllowed()` is true. That call is the existing administrator lock (`r5_admin_change_allowed`). A checkbox in the module is not the check. `SaveSettings()` must call `AdminChangeAllowed()` again before it writes a privileged value. Appearance does not require an administrator.
+`RequiresAdmin()` means Save is refused unless `SettingsContext::AdminChangeAllowed()` is true. That call is the existing administrator lock (`r5_admin_change_allowed`). A checkbox in the module is not the check. `SaveSettings()` must call `AdminChangeAllowed()` again before it writes a privileged value. Fonts and Look and Feel do not require an administrator.
 
 `CanSave()` is false for a page that only opens an existing preference program. Those programs keep their own files. A page with `CanSave()` true is written as soon as the user changes it. The window calls `SaveSettings()` from `NotifyChanged()`. Do not wait for a Save button. There is none.
 

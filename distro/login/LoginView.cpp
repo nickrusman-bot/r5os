@@ -99,7 +99,7 @@ LoginView::LoginView()
 	fUserList->SetExplicitMaxSize(BSize(280, 120));
 	fUserScroll = new BScrollView("userssv", fUserList, 0, false, true);
 
-	fWelcomeView = new BStringView("welcome", "Welcome to R5OS");
+	fWelcomeView = new BStringView("welcome", "Welcome to R5");
 	BFont welcomeFont(be_bold_font);
 	welcomeFont.SetSize(be_plain_font->Size() * 1.6f);
 	fWelcomeView->SetFont(&welcomeFont);

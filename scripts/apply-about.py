@@ -331,7 +331,7 @@ AboutView::_FillWhatsNew()
 			end = text.Length();
 		BString line;
 		text.CopyInto(line, start, end - start);
-		if (line.FindFirst("R5OS ") == 0) {
+		if (line.FindFirst("R5 ") == 0) {
 			fWhatsNewView->SetFontAndColor(&headingFont, B_FONT_ALL,
 				&fHaikuGreenColor);
 		} else {
@@ -786,6 +786,97 @@ AboutView::_FillLicensesUnusedAnchor()
     print("patched AboutSystem.cpp (license links)")
 
 
+def patch_r5_names() -> None:
+    """About R5, the two-line version, and the credits heading."""
+    about = ABOUT / "AboutSystem.cpp"
+    replace_once(
+        about,
+        """	BWindow(BRect(0, 0, kWindowWidth, kWindowHeight),
+		B_TRANSLATE("About this system"), B_TITLED_WINDOW,""",
+        """	BWindow(BRect(0, 0, kWindowWidth, kWindowHeight),
+		B_TRANSLATE("About R5"), B_TITLED_WINDOW,""",
+        "About window title",
+    )
+    replace_once(
+        about,
+        """	fVersionLabelView = _CreateLabel("oslabel", _GetOSVersion());
+	fVersionInfoView = _CreateSubtext("ostext", _GetABIVersion());""",
+        """	fVersionLabelView = _CreateLabel("oslabel",
+		B_TRANSLATE("R5 Operating System"));
+	fVersionInfoView = _CreateSubtext("ostext", _GetOSVersion());
+	BStringView* abiView = _CreateSubtext("abitext", _GetABIVersion());""",
+        "About version lines",
+    )
+    replace_once(
+        about,
+        """		.Add(fVersionLabelView)
+		.Add(fVersionInfoView)
+		.AddStrut(offset)""",
+        """		.Add(fVersionLabelView)
+		.Add(fVersionInfoView)
+		.Add(abiView)
+		.AddStrut(offset)""",
+        "About ABI line",
+    )
+    replace_once(
+        about,
+        "	static const uint8		kSubtextCount = 5;",
+        "	static const uint8		kSubtextCount = 6;",
+        "About subtext count",
+    )
+    replace_once(
+        about,
+        """	fCachedMinWidth = ceilf(std::max(fCachedBaseWidth,
+		fVersionLabelView->StringWidth(fVersionLabelView->Text()) + insets));""",
+        """	fCachedMinWidth = ceilf(std::max(fCachedBaseWidth,
+		fVersionLabelView->StringWidth(fVersionLabelView->Text()) + insets));
+	fCachedMinWidth = ceilf(std::max(fCachedMinWidth,
+		fVersionInfoView->StringWidth(fVersionInfoView->Text()) + insets));""",
+        "About version width",
+    )
+    replace_once(
+        about,
+        """		B_TRANSLATE_COMMENT("R5OS %s Build %" B_PRId32,
+			"Marketing version and build, e.g. R5OS 2026.1-dev Build 10001"),""",
+        """		B_TRANSLATE_COMMENT("Version %s Build %" B_PRId32,
+			"Version line, e.g. Version 2026.1-dev Build 10001"),""",
+        "About version string",
+    )
+    replace_once(
+        about,
+        """	fCreditsView->Insert("R5OS\\n");
+	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert(B_TRANSLATE(
+		"R5OS is based on Haiku, but it is not the official distribution "
+		"from the Haiku Project. R5OS is not associated with the Haiku "
+		"Project.\\n\\n"));""",
+        """	fCreditsView->Insert("R5 Operating System\\n");
+	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
+	fCreditsView->Insert(B_TRANSLATE(
+		"R5 is based on Haiku, but it is not the official distribution "
+		"from the Haiku Project. R5 is not associated with the Haiku "
+		"Project.\\n\\n"));""",
+        "About credits heading",
+    )
+    replace_once(
+        about,
+        'if (line.FindFirst("R5OS ") == 0) {',
+        'if (line.FindFirst("R5 ") == 0) {',
+        "whats new heading",
+    )
+    menu = HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp"
+    text = menu.read_text(encoding="utf-8")
+    updated = text.replace("About R5OS", "About R5")
+    if updated == text:
+        if "About R5" in text:
+            print(f"already {menu.name} (About R5)")
+        else:
+            raise SystemExit(f"About R5OS not found in {menu}")
+    else:
+        menu.write_text(updated, encoding="utf-8")
+        print(f"patched {menu.name} (About R5)")
+
+
 def main() -> int:
     copy_whatsnew()
     patch_license_format()
@@ -794,6 +885,7 @@ def main() -> int:
     patch_cpp()
     patch_gpl_credit()
     patch_license_entries()
+    patch_r5_names()
     return 0
 
 

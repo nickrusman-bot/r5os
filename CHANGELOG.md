@@ -1,5 +1,21 @@
 # R5OS changelog (lokaal)
 
+### Fonts and Look and Feel taken from the Appearance preference
+
+The first Settings pages for fonts and look drew only the lower box. The font rows, the decorator, the control look, and the scroll-bar arrows were not on the page. Those modules, and `AppearanceModule.cpp`, are removed. The two pages are built again from the Appearance preference (`FontView`, `FontSelectionView`, `AntialiasingSettingsView`, `LookAndFeelSettingsView`, `FakeScrollBar`, `ColorsView`). Those files keep the Haiku MIT copyright. Antialiasing is a box on Fonts. Colors is a box on Look and Feel. A change still posts the preference's update message to the page, which applies it at once.
+
+Sign in says Welcome to R5. The first-start screen says Welcome to R5 Operating System, Try R5, Install R5, and Quit R5. What's new headings start with `R5`, not `R5OS`. The Wi-Fi hint says R5 remembers the network. The AirPlay credit line is R5 AirPlay.
+
+`distro/BUILD` stays 10038. `jam -q settings_fonts settings_look` exited 0. About, Login, and FirstBootPrompt linked. `jam -q @r5-raw` on 2 Nov 2026 at 22:40 Europe/Amsterdam exited 0 and updated 1155 targets. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox is started from this image afterwards. The pages were not opened from here.
+
+### About R5, disk name, and separate font and look pages
+
+The Deskbar leaf item and the About window title are About R5. The logo page shows R5 Operating System, then Version plus the version and build, then the ABI line. Credits uses that same name as its heading. The sentence under it says R5 is based on Haiku. The boot volume label is R5.
+
+Settings no longer has an Appearance page or tabs. Personalization has Fonts and Look and Feel. Fonts is the four font rows from the separate Appearance program, with Antialiasing in a box under them. Look and Feel is the decorator, control look, and arrow style, with Colors in a box under them. A change is applied at once. Revert and Defaults stay the window buttons. The separate Appearance program stays installed.
+
+`distro/BUILD` stays 10038. `jam -q settings_fonts settings_look` exited 0. `jam -q @r5-raw` on 2 Nov 2026 at 22:18 Europe/Amsterdam exited 0 and updated 1137 targets. Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox is started from this image afterwards. The new pages and About were not opened from here.
+
 ### Desktop picture
 
 The artwork folder shipped two Haiku logo pictures, and the Desktop folder had no picture of its own. The desktop now uses `r5-wallpaper.jpg`, an original picture contributed to R5OS under GPL-3.0-or-later. The placement is scale to fit (mode 2): the picture fills the screen and keeps its proportions. Those two Haiku logo files are no longer installed. The picture files stay in the Haiku tree. They are just not copied into this image.

@@ -255,7 +255,7 @@ WiFiWindow::WiFiWindow()
 		.SetInsets(B_USE_WINDOW_INSETS)
 		.Add(new BStringView("hint",
 			B_TRANSLATE("Choose a network, enter a password if needed, "
-				"and connect. R5OS remembers it for next boot.")))
+				"and connect. R5 remembers it for next boot.")))
 		.Add(new BScrollView("scroll", fList, 0, false, true))
 		.Add(fPassword)
 		.AddGroup(B_HORIZONTAL)

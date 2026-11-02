@@ -212,7 +212,7 @@ def patch_about() -> None:
         "		\"https://www.netbsd.org\");\n"
         "\n"
         "#ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL\n"
-        "	AddCopyrightEntry(\"R5OS AirPlay\",\n"
+        "	AddCopyrightEntry(\"R5 AirPlay\",\n"
         "		B_TRANSLATE(\"AirPlay 1 RAOP audio receiver. Protocol flow and "
         "AirPort Express RSA key from Shairport (James Laird) and Shairport "
         "Sync (Mike Brady). ALAC decoder by David Hammerton. AES-128-CBC from "
@@ -229,6 +229,14 @@ def patch_about() -> None:
         "\n"
         "	// FFmpeg copyrights\n",
         "AboutSystem AirPlay credits",
+        optional=True,
+    )
+    replace_once(
+        HAIKU / "src" / "apps" / "aboutsystem" / "AboutSystem.cpp",
+        "AddCopyrightEntry(\"R5OS AirPlay\",\n",
+        "AddCopyrightEntry(\"R5 AirPlay\",\n",
+        "AirPlay credit name",
+        optional=True,
     )
 
 

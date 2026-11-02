@@ -12,7 +12,23 @@ SRC = ROOT / "distro" / "settings"
 USERS = ROOT / "distro" / "users"
 
 SOURCES = (
-    "AppearanceModule.cpp",
+    "AppearanceNotify.h",
+    "AntialiasingSettingsView.cpp",
+    "AntialiasingSettingsView.h",
+    "Colors.cpp",
+    "Colors.h",
+    "ColorsView.cpp",
+    "ColorsView.h",
+    "FakeScrollBar.cpp",
+    "FakeScrollBar.h",
+    "FontSelectionView.cpp",
+    "FontSelectionView.h",
+    "FontView.cpp",
+    "FontView.h",
+    "FontsModule.cpp",
+    "LookAndFeelSettingsView.cpp",
+    "LookAndFeelSettingsView.h",
+    "LookModule.cpp",
     "HomeView.cpp",
     "HomeView.h",
     "Jamfile",
@@ -88,6 +104,10 @@ def copy_fonts() -> None:
 def copy_sources() -> None:
     dest = HAIKU / "src" / "preferences" / "settings"
     dest.mkdir(parents=True, exist_ok=True)
+    stale = dest / "AppearanceModule.cpp"
+    if stale.is_file():
+        stale.unlink()
+        print(f"removed {stale.name}")
     for name in SOURCES:
         shutil.copy2(SRC / name, dest / name)
         (dest / name).touch()
@@ -179,6 +199,29 @@ def patch_jams() -> None:
         "AddFilesToPackage data fonts ttfonts : $(uiFonts) ;\n",
         "ui fonts",
     )
+    split = (
+        "SYSTEM_ADD_ONS_SETTINGS += settings_fonts ;\n"
+        "SYSTEM_ADD_ONS_SETTINGS += settings_look ;\n"
+    )
+    appearance = "SYSTEM_ADD_ONS_SETTINGS += settings_appearance ;\n"
+    for rel in (
+        "build/jam/images/definitions/regular",
+        "build/jam/images/definitions/minimum",
+    ):
+        path = HAIKU / rel
+        text = path.read_text(encoding="utf-8")
+        if "settings_fonts" in text and "settings_look" in text:
+            updated = text.replace(appearance, "")
+            if updated != text:
+                path.write_text(updated, encoding="utf-8")
+                print(f"removed appearance addon from {path.name}")
+            else:
+                print(f"already {path.name} (fonts and look)")
+            continue
+        if appearance not in text:
+            raise SystemExit(f"appearance addon line missing in {path}")
+        path.write_text(text.replace(appearance, split, 1), encoding="utf-8")
+        print(f"patched {path.name} (fonts and look)")
 
 
 def main() -> None:
