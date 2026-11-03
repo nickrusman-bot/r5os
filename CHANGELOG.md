@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Radeon sources live in the R5 tree
+
+`connector.cpp`, `display.cpp`, `gpu.cpp`, `pll.cpp`, `driver.cpp` and `radeon_hd.cpp` are copied from `distro/graphics` by `scripts/apply-radeon.py`. They replace the same paths in the Haiku tree. The string patches that used to edit those files are gone. Each file keeps the Haiku copyright and the MIT license on the original work. R5OS changes sit in `SPDX-Snippet` blocks and are GPL-3.0-or-later. A build that ships both follows GPL-3.0-or-later, and the MIT notices stay. `r5_pstate_log.cpp` was already an R5OS file under GPL-3.0-or-later in `distro/cpu`.
+
+Content revision 4 is the 16-byte path: the encoder-record offset is at byte 8. Content revision 5 reserves bytes 6 through 11, so that offset stays 0. The device tag is at byte 12 in both. The syslog line is `R5 radeon_hd display object table` plus `encoder record`.
+
+DCN, from `RADEON_RAVEN` onward, does not program the DCE 5 CRTC registers. `display_crtc_fb_set` and `display_dce45_crtc_load_lut` return after `R5 radeon_hd: DCN, skip DCE 5 CRTC registers`. The memory-controller skip logs `R5 radeon_hd: DCN, leave the boot memory aperture alone`. The stick written at 15:35 Europe/Amsterdam does not have this CRTC skip.
+
+`jam -q @r5-anyboot` for AMD64 finished at 15:59 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1176 targets). The linked accelerant contains `R5 radeon_hd`, `display object table`, `SetDCEClock 2.2`, `skip DCE 5 CRTC`, `boot memory aperture`, and `boot VESA EDID`. The kernel driver contains `R5 radeon_hd: CONFIG_MEMSIZE` and `Radeon Vega Barcelo`. That image has not been written to the stick and has not been booted. AtomBIOS `SetCRTC_Timing` is still called; a bad modeset can still black the panel.
+
 ### Barcelo reads the display-object table
 
 The 14:48 boot opened `radeon_hd` and then closed it. That AtomBIOS is master format 2. The driver read the GPIO pin table at the old index 11, which on this format is `vram_usagebyfirmware`, and it looked for `GPIO_I2C_Info` at index 10, which is empty. `connector_probe` treated the flat display-object list as the old object header, counted 235 paths, and stopped on `usSize`. `SetDCEClock` reported table 2.2 and returned before running. `CONFIG_MEMSIZE` read `0x3fffff` and was printed as 4194303 MB. The mapped window was still the 256 MB PCI BAR. `detect_displays` then logged 0 monitors. `framebuffer` kept the picture.
