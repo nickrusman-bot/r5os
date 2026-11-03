@@ -1,6 +1,6 @@
 # MIDI 2.0 on R5OS
 
-`libmidi2.so` can send and receive a Universal MIDI Packet (UMP). The MIDI 1.0 calls stay. There is no second MIDI kit. Property Exchange, MIDI-CI, and Profiles are not implemented.
+`libmidi2.so` can send and receive a Universal MIDI Packet (UMP). The MIDI 1.0 calls stay. There is no second MIDI kit. Property Exchange is the MIDI-CI request, reply, and subscription layer in this same kit. Profiles are not implemented.
 
 The check program is `midi2test` in `/system/bin`. This file is the contract for that program and for an application that links `libmidi2.so`.
 
@@ -95,6 +95,57 @@ MyConsumer::Data(uchar* data, size_t length, bool atomic, bigtime_t time)
 
 `midi_server` reads `B_MIDI_READ_UMP` from a MIDI 2.0 port and sprays that packet, so `Data` on a connected consumer has the same full value. The 7-bit hooks still run. A port that does not implement the ioctl is read as MIDI 1.0 bytes, as before. `read()` expands one packet from that queue into MIDI 1.0 bytes. `midi_server` uses the ioctl for a MIDI 2.0 port and does not also `read()` it, so each packet is sprayed once.
 
+## Property Exchange
+
+Property Exchange is MIDI-CI System Exclusive. The payload is the bytes between `F0` and `F7`. Those bytes travel as SysEx7: `midi2_encode_sysex` turns them into type 0x3 packets, and `SystemExclusive` hands the same bytes back when the message is complete. `usb_midi` already carries that SysEx. There is no separate Property Exchange transport.
+
+A data message (get `0x34`, reply `0x35`, set `0x36`, reply `0x37`, subscription `0x38`, reply `0x39`, notify `0x3F`) is:
+
+| Field | Size |
+|---|---|
+| `7E`, device id `7F`, sub-id `0x0D`, Property Exchange sub-id, MIDI-CI version `1` | 5 |
+| source MUID, destination MUID, 28-bit, least significant 7-bit byte first | 8 |
+| request id, 0..127 | 1 |
+| header length, then the JSON header | 2 + n |
+| chunk count, this chunk (first chunk is 1), body length, body | 6 + n |
+
+Each 14-bit length is two bytes, 7 bits each, least significant byte first. The header is only in chunk 1. Later chunks set the header length to 0. A capabilities inquiry (`0x30`) and its reply (`0x31`) stop after the MUIDs and one byte, the number of simultaneous requests.
+
+```cpp
+midi2_pe_message request;
+memset(&request, 0, sizeof(request));
+request.subId = B_MIDI2_PE_GET;
+request.sourceMuid = 2;
+request.destinationMuid = 1;
+request.requestId = 3;
+request.header = "{\"resource\":\"DeviceInfo\"}";
+request.headerLength = strlen(request.header);
+request.chunkCount = 1;
+request.chunkNumber = 1;
+
+uint8 payload[128];
+size_t length = 0;
+midi2_pe_encode(&request, payload, sizeof(payload), &length);
+```
+
+`midi2_pe_decode` reads one payload. `midi2_pe_split` breaks a body that does not fit in `maxPayload` (the other device's maximum SysEx size, counting these bytes and not `F0` or `F7`). Pass 0 to keep a single chunk. `midi2_pe_assembly_add` joins chunks that share a request id. A gap, or chunk 0, drops the assembly. The header in the assembly is a C string. The body is not.
+
+Header JSON has no whitespace. A request starts with `resource`. A reply starts with `status`. A subscription starts with `command`. `midi2_pe_header_string` and `midi2_pe_header_number` read one of those fields. Reply status values used here are 200, 400, 404, 405, and 413. A notify uses 100 (wait), 144 (terminate), or 408 (timeout) and has no reply.
+
+`midi2_pe_catalog` is one local property set. `midi2_pe_catalog_init` fills:
+
+| Resource | Body |
+|---|---|
+| `ResourceList` | `DeviceInfo`, `ChannelList`, `ProgramList`, `CtrlMapList` |
+| `DeviceInfo` | educational manufacturer id 125,0,0, family `R5OS`, model `midi2` |
+| `ChannelList` | channel 1, program Piano, bank 0,0,0 |
+| `ProgramList` | Piano and Strings. `resId` is `programs` when a request sends one |
+| `CtrlMapList` | values Off and Full. `resId` is `volume` when a request sends one |
+
+`ControllerMap` is the same body as `CtrlMapList`. The specification name is `CtrlMapList`. `ChannelList` and `CtrlMapList` accept `{"command":"start"}`. The reply is `{"status":200,"subscribeId":"sub1"}`. This catalog keeps one subscription. `{"command":"end"}` clears it. `midi2_pe_subscription_full` then writes `{"command":"full","subscribeId":"sub1"}` and points at the current body, which is the notification. A `full`, `partial`, or `notify` command received from the other device is acknowledged with status 200.
+
+`midi2_pe_respond` answers one complete inquiry. The caller passes the header and body buffers. The reply message points into those buffers. Set replaces the matching catalog string when the new text fits and every byte is 7-bit. `setPartial` is refused with status 400.
+
 ## Drivers
 
 `midi_server` sends a recognised UMP with `ioctl(fd, B_MIDI_WRITE_UMP, &packet)`. The argument is `midi_ump_packet` from `<midi_driver.h>`: `word_count` and `words[4]`, native `uint32`. A buffer that is not a UMP still goes out with `write()`, unchanged.
@@ -105,7 +156,7 @@ Version 2.0 or newer writes the UMP words, little-endian, to the bulk OUT endpoi
 
 On a version 1.0 endpoint, a type 0x3 packet is sent as USB MIDI CIN SysEx. A type 0x4 note or control change is still one CIN packet with the top 7 bits.
 
-On the VirtualBox guest, `midi2test` printed `all checks passed` on 3 Nov 2026 (reported at 10:03 Europe/Amsterdam). No USB MIDI device was attached. A physical MIDI 2.0 interface is not a tested path.
+On the VirtualBox guest, `midi2test` printed `all checks passed` on 3 Nov 2026 (reported at 10:26 Europe/Amsterdam), including Property Exchange. No USB MIDI device was attached. A physical MIDI 2.0 interface is not a tested path.
 
 ## midi2test
 
@@ -122,9 +173,9 @@ The rest registers a local producer and a local consumer, connects them, and spr
 - a MIDI 1.0 SysEx, which arrives as `F0` … `F7` and as `SystemExclusive` without those two bytes
 - an eight-byte SysEx7 in two type 0x3 packets, which arrives as one `SystemExclusive` after the end packet
 
-The helper checks also cover `midi2_encode_sysex` and `midi2_sysex_payload`. They do not need `midi_server`.
+The helper checks also cover `midi2_encode_sysex`, `midi2_sysex_payload`, Property Exchange encode and decode, a two-chunk reply, `DeviceInfo`, an unknown resource, subscribe, unsubscribe, and Notify status 144. They do not need `midi_server`.
 
-It does not open a USB device, and it does not check `B_MIDI_WRITE_UMP`. Run it from Terminal on a booted system:
+The spray checks also send one Get Property Data inquiry as SysEx7. `SystemExclusive` receives the same payload. It does not open a USB device, and it does not check `B_MIDI_WRITE_UMP`. Run it from Terminal on a booted system:
 
 ```
 midi2test

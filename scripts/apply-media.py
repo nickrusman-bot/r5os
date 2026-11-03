@@ -31,6 +31,7 @@ FILES = (
     "src/preferences/media/MediaWindow.cpp",
     "src/kits/interface/MenuField.cpp",
     "headers/os/midi2/Midi2Defs.h",
+    "headers/os/midi2/Midi2Property.h",
     "headers/os/midi2/MidiProducer.h",
     "headers/os/drivers/midi_driver.h",
     "src/kits/midi2/MidiLocalProducer.cpp",
