@@ -3848,7 +3848,7 @@ id	r5_status	branch	commit	notes
 20314	fixed			Scan remaining mixer params for B_MUTE (apply-deskbar-bugs.py)
 20317	open			
 20318	open			
-20319	open			
+20319	fixed	cursor/webpositive-url	8b251bbb0e	LoadNegotiating leaves the address bar alone for a tab that is not selected. jam -q WebPositive exited 0 on 3 Nov 2026. A background tab was not opened.
 20320	open			
 20321	open			
 20322	open			
