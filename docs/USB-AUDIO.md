@@ -6,6 +6,6 @@ A stream may have 1 to 16 channels. Media settings, Audio, has **USB layout** ne
 
 24-bit samples in three bytes are packed. 24-bit samples in a four-byte container are left-justified: the low byte is padding. `usb_audiotest` checks those layouts and the descriptor bytes. It does not open a device.
 
-Unplug stops the isochronous queue before the transfers are cancelled, and waits until the callback has returned. The EHCI host-controller locks in Haiku #18842, #18994, #18995, and #19472 are not changed here.
+Unplug stops the isochronous queue before the transfers are cancelled, and waits until the callback has returned. An isochronous callback on EHCI runs without the controller lock, so queueing the next packet does not lock the same mutex twice. A halted xHCI endpoint (babble, stall, or a transaction error) is reset and its ring is cleared before the next packet is queued. Setting an alternate interface uses the alternate the caller passed, and does not index the alternate array with the raw setting number.
 
-On the VirtualBox guest from build 10045, `usb_audiotest` printed `all checks passed` on 3 Nov 2026 (reported at 11:26 Europe/Amsterdam). Audio settings showed the USB layout menu. No USB audio device was attached.
+On the VirtualBox guest from build 10045, `usb_audiotest` printed `all checks passed` on 3 Nov 2026 (reported at 11:26 Europe/Amsterdam). Audio settings showed the USB layout menu. No USB audio device was attached, so the EHCI lock, the xHCI babble reset, and the alternate-interface crash are not yet seen on hardware.

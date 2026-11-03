@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### USB audio host stability
+
+Playing USB audio on EHCI took the isochronous lock in the finish thread and again in the callback that queues the next packet. That is the double-lock KDL on startup (Haiku #19472). The same wait is the hang that looks like the system is looping (Haiku #18842). The callback now runs without that lock. An error completion waits 1 ms before the next packet is queued, so a stream that fails immediately does not spin.
+
+A babble, stall, or transaction error that halts an xHCI endpoint left the endpoint halted. Later transfers on that controller then stopped (Haiku #20149). The finish thread resets a halted endpoint, clears its ring, and cancels the packets that were still queued before the audio callback queues another one. A soft error does not clear the ring.
+
+`SetAltInterface` indexed the alternate array with `bAlternateSetting` and the interface array with `bInterfaceNumber`. A webcam audio interface walks off that array (Haiku #20323). The call now uses the alternate pointer it was given, after checking that the pointer belongs to the current configuration.
+
+Haiku #18994 is the KDL once that callback or that alternate switch runs. The unlock and the pointer check are the changes for it. The earlier unplug stop flag is unchanged. No USB audio device was attached, so none of these five tickets is confirmed on hardware.
+
+Jam `usb`, `usb_audio`, `<usb>ehci`, and `<usb>xhci` for AMD64 finished at 11:39 Europe/Amsterdam on 3 Nov 2026 with exit 0. `ehci.cpp` still prints the existing packed-member warning in `CreateDescriptor`. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The image was not rebuilt. The running VirtualBox guest does not have this driver.
+
 ### USB audio channels, UAC2, and layout
 
 USB audio stayed on class 1.0 and ignored an alternate with more than two channels. A class 2.0 device was not recognised. 24-bit in three bytes already worked. 24-bit in four bytes was the ordinary 32-bit store, which is left-justified if the device reads the top 24 bits.
