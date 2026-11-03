@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Boot logs stay on the BeFS volume
+
+The stick written at 15:59 Europe/Amsterdam reached the kernel and then stayed on the rocket. The first start listed all 132 first-boot packages and never wrote `activated-packages`. The second start, at 16:23, skipped that round and the flushed syslog ends when both package volumes are called consistent, about 23 seconds in. There is no panic, no `app_server`, and no `radeon_hd`. The logger had mounted the stick's own EFI partition, on the same USB disk as the boot volume, and did not write again.
+
+The boot logs are now only `/boot/home/r5-cpu.txt`, `/boot/home/r5-hardware.txt`, and `/boot/home/r5-syslog.txt`. Nothing is mounted from `/dev/disk`. `tools/r5-befs/r5_befs.py` reads them from the BeFS partition. No MSR is written.
+
 ### Radeon sources live in the R5 tree
 
 `connector.cpp`, `display.cpp`, `gpu.cpp`, `pll.cpp`, `driver.cpp` and `radeon_hd.cpp` are copied from `distro/graphics` by `scripts/apply-radeon.py`. They replace the same paths in the Haiku tree. The string patches that used to edit those files are gone. Each file keeps the Haiku copyright and the MIT license on the original work. R5OS changes sit in `SPDX-Snippet` blocks and are GPL-3.0-or-later. A build that ships both follows GPL-3.0-or-later, and the MIT notices stay. `r5_pstate_log.cpp` was already an R5OS file under GPL-3.0-or-later in `distro/cpu`.

@@ -2,28 +2,25 @@
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Read /dev/misc/r5_pstate twice and leave the text where a USB stick's
- * FAT partition can be opened from another computer. Also copy the tail
- * of the kernel syslog, a device list, and the early display lines onto
- * that partition. No MSR is written.
+ * Read /dev/misc/r5_pstate twice and write the boot logs on /boot/home.
+ * That directory is on the BeFS boot volume. Mounting another partition
+ * of the same USB stick stalled the boot while the rocket was still on
+ * screen. No FAT partition is mounted. No MSR is written.
  */
 
 
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
-#include <Drivers.h>
 #include <OS.h>
-#include <fs_volume.h>
 
 
 static const char* kHomeReport = "/boot/home/r5-cpu.txt";
-static const char* kMountPoint = "/boot/system/cache/r5-esp";
+static const char* kHomeHardware = "/boot/home/r5-hardware.txt";
+static const char* kHomeSyslog = "/boot/home/r5-syslog.txt";
 
 
 static bool
@@ -53,123 +50,6 @@ burn_cpu()
 	while (system_time() - start < 1000000)
 		sink += 1;
 	(void)sink;
-}
-
-
-static bool
-looks_like_fat(const uint8* sector, bool* fat32)
-{
-	if (sector[510] != 0x55 || sector[511] != 0xaa)
-		return false;
-
-	*fat32 = memcmp(sector + 0x52, "FAT32   ", 8) == 0;
-	if (*fat32)
-		return true;
-	if (memcmp(sector + 0x36, "FAT16   ", 8) == 0)
-		return true;
-	if (memcmp(sector + 0x36, "FAT12   ", 8) == 0)
-		return true;
-	if (memcmp(sector + 0x36, "FAT     ", 8) == 0)
-		return true;
-
-	// The anyboot EFI partition is FAT12 and does carry "FAT12   ".
-	// A sector that lost that string still has a BIOS parameter block.
-	uint16 bytesPerSector = sector[11] | (uint16(sector[12]) << 8);
-	if (bytesPerSector != 512 || sector[13] == 0 || sector[16] == 0
-		|| sector[16] > 2)
-		return false;
-	return true;
-}
-
-
-struct fat_choice {
-	char	path[256];
-	off_t	size;
-	int		nodes;
-	int		opened;
-	int		signatures;
-	bool	fat32;
-	bool	found;
-};
-
-
-static void
-consider(const char* path, fat_choice* best)
-{
-	// The internal NVMe EFI partition is FAT32. Preferring FAT32 wrote
-	// the log onto the Windows boot partition on the 5625U. The anyboot
-	// EFI partition is the small FAT12 volume on the USB disk.
-	if (strstr(path, "/nvme/") != NULL)
-		return;
-
-	int fd = open(path, O_RDONLY);
-	if (fd < 0)
-		return;
-
-	best->opened++;
-	uint8 sector[512];
-	ssize_t got = read(fd, sector, sizeof(sector));
-	partition_info info;
-	memset(&info, 0, sizeof(info));
-	status_t status = ioctl(fd, B_GET_PARTITION_INFO, &info, sizeof(info));
-	close(fd);
-	if (got != ssize_t(sizeof(sector)))
-		return;
-	if (sector[510] == 0x55 && sector[511] == 0xaa)
-		best->signatures++;
-
-	bool fat32 = false;
-	if (!looks_like_fat(sector, &fat32))
-		return;
-
-	off_t size = status == B_OK && info.size > 0 ? info.size
-		: (off_t(1) << 62);
-	bool better = !best->found || size < best->size;
-	if (!better)
-		return;
-
-	strlcpy(best->path, path, sizeof(best->path));
-	best->size = size;
-	best->fat32 = fat32;
-	best->found = true;
-}
-
-
-static void
-walk(const char* path, int depth, fat_choice* best)
-{
-	if (depth > 8)
-		return;
-
-	DIR* dir = opendir(path);
-	if (dir == NULL)
-		return;
-
-	struct dirent* entry;
-	while ((entry = readdir(dir)) != NULL) {
-		if (strcmp(entry->d_name, ".") == 0
-			|| strcmp(entry->d_name, "..") == 0)
-			continue;
-
-		char child[512];
-		int wrote = snprintf(child, sizeof(child), "%s/%s", path,
-			entry->d_name);
-		if (wrote < 0 || wrote >= int(sizeof(child)))
-			continue;
-
-		struct stat st;
-		if (stat(child, &st) != 0)
-			continue;
-		if (S_ISDIR(st.st_mode))
-			walk(child, depth + 1, best);
-		else {
-			// devfs nodes are character devices. A later publish can
-			// also show up as a plain file, so both are read.
-			best->nodes++;
-			consider(child, best);
-		}
-	}
-	closedir(dir);
 }
 
 
@@ -346,35 +226,20 @@ write_hardware(const char* path, const char* source)
 }
 
 
-static bool
-write_fat(const fat_choice* best, const char* report)
+static void
+write_boot_logs(const char* report, int pass)
 {
-	mkdir("/boot/system/cache", 0755);
-	mkdir(kMountPoint, 0755);
-	dev_t volume = fs_mount_volume(kMountPoint, best->path, "fat", 0, NULL);
-	if (volume < 0) {
-		fprintf(stderr, "r5_pstate_log: mount %s: %s\n", best->path,
-			strerror(volume));
-		return false;
-	}
-
-	char fatPath[320];
-	snprintf(fatPath, sizeof(fatPath), "%s/r5-cpu.txt", kMountPoint);
-	write_text(fatPath, report);
+	char text[9200];
+	snprintf(text, sizeof(text),
+		"%s"
+		"\nlogs: /boot/home pass %d, no FAT mount\n",
+		report, pass);
+	write_text(kHomeReport, text);
 
 	const char* source = syslog_source();
-	snprintf(fatPath, sizeof(fatPath), "%s/r5-hardware.txt", kMountPoint);
-	write_hardware(fatPath, source);
-	if (source != NULL) {
-		snprintf(fatPath, sizeof(fatPath), "%s/r5-syslog.txt", kMountPoint);
-		// The EFI system partition is about 2.8 MB. The boot files stay,
-		// and the newest part of the log is what a later boot needs.
-		copy_tail(source, fatPath, 1200 * 1024);
-	}
-
-	status_t unmount = fs_unmount_volume(kMountPoint, 0);
-	fprintf(stderr, "r5_pstate_log: unmount %" B_PRId32 "\n", unmount);
-	return true;
+	write_hardware(kHomeHardware, source);
+	if (source != NULL)
+		copy_tail(source, kHomeSyslog, 1200 * 1024);
 }
 
 
@@ -406,54 +271,14 @@ main()
 		"sample: after one second busy on this thread\n"
 		"%s",
 		idle, busy);
-	write_text(kHomeReport, report);
+	write_boot_logs(report, 0);
 
-	fat_choice best;
-	memset(&best, 0, sizeof(best));
-	best.size = off_t(1) << 62;
-	for (int attempt = 0; attempt < 40 && !best.found; attempt++) {
-		walk("/dev/disk", 0, &best);
-		if (!best.found)
-			snooze(500000);
-	}
-
-	char note[512];
-	if (!best.found) {
-		snprintf(note, sizeof(note),
-			"\nFAT: no FAT partition found under /dev/disk"
-			" (nodes %d opened %d signatures %d)\n",
-			best.nodes, best.opened, best.signatures);
-	} else if (!write_fat(&best, report)) {
-		snprintf(note, sizeof(note),
-			"\nFAT: %s mount failed\n", best.path);
-	} else {
-		snprintf(note, sizeof(note),
-			"\nFAT: wrote r5-cpu.txt, r5-hardware.txt, and r5-syslog.txt"
-			" on %s\n",
-			best.path);
-	}
-
-	FILE* home = fopen(kHomeReport, "a");
-	if (home != NULL) {
-		fputs(note, home);
-		fclose(home);
-	}
-	fprintf(stderr, "%s", note);
-
-	// The EFI partition can appear after the boot volume. Each pass looks
-	// again. A hang in between still leaves the previous FAT files.
+	// Later passes still run if the desktop has not appeared. They write
+	// the BeFS files again and do not mount a disk.
 	const bigtime_t waits[] = { 15000000, 45000000, 120000000 };
 	for (int pass = 0; pass < 3; pass++) {
 		snooze(waits[pass]);
-		if (!best.found) {
-			for (int attempt = 0; attempt < 10 && !best.found; attempt++) {
-				walk("/dev/disk", 0, &best);
-				if (!best.found)
-					snooze(500000);
-			}
-		}
-		if (best.found)
-			write_fat(&best, report);
+		write_boot_logs(report, pass + 1);
 	}
 	return 0;
 }
