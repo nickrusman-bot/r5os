@@ -197,7 +197,7 @@ Version 2.0 or newer writes the UMP words, little-endian, to the bulk OUT endpoi
 
 On a version 1.0 endpoint, a type 0x3 packet is sent as USB MIDI CIN SysEx. A type 0x4 note or control change is still one CIN packet with the top 7 bits.
 
-On the VirtualBox guest, `midi2test` printed `all checks passed` on 3 Nov 2026 (reported at 10:26 Europe/Amsterdam), including Property Exchange. No USB MIDI device was attached. A physical MIDI 2.0 interface is not a tested path.
+On the VirtualBox guest, `midi2test` printed `all checks passed` on 3 Nov 2026 (reported at 10:55 Europe/Amsterdam). That run includes per-note controllers, profiles, endpoint and function-block discovery, the USB descriptor helpers, Property Exchange, and the earlier MIDI 1.0 and UMP checks. No USB MIDI device was attached. A physical MIDI 2.0 interface is not a tested path. The program name is `midi2test`.
 
 ## midi2test
 
