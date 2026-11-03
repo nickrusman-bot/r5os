@@ -1682,7 +1682,7 @@ id	r5_status	branch	commit	notes
 14475	open			
 14477	open			
 14483	open			
-14485	open			
+14485	fixed	cursor/textsearch-line	61f7158e37	The grep scanset is limited to the file-name array, so a long line cannot walk off it. jam -q TextSearch exited 0 on 3 Nov 2026. No search was run.
 14488	open			
 14490	open			
 14507	open			

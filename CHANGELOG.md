@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### TextSearch long grep line
+
+`Grepper` read a grep line into a buffer twice as long as the file-name array, then copied the name with an unbounded scanset. A long line, or the rest of a line that `fgets` had split, wrote past that array and TextSearch crashed (Haiku #14485). The scanset is now limited to the array, leaving room for the terminating NUL. A line that does not fit is skipped. A normal `file:line:text` result is unchanged.
+
+`jam -q TextSearch` for AMD64 finished at 12:52 Europe/Amsterdam on 3 Nov 2026 with exit 0 (`Grepper.o` compiled, `TextSearch` linked). Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. No search was run.
+
 ### Terminal wheel while the mouse is reported
 
 On the alternate screen the wheel always became arrow or page keys. A program that had turned mouse reporting on, such as a full-screen editor, then saw keys instead of a scroll (Haiku #20409). When any mouse-report mode is set, the wheel is written as X10 button 64 or 65, or as the same button in the extended `CSI <` form. One event is sent per wheel step. Arrow and page keys stay in use on the alternate screen when mouse reporting is off. The ordinary scrollback, outside the alternate screen, is unchanged.

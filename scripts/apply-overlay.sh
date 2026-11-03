@@ -60,6 +60,7 @@ python3 "$ROOT/scripts/apply-media.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-netservices.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-mail.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-terminal.py" "$ROOT/haiku"
+python3 "$ROOT/scripts/apply-textsearch.py" "$ROOT/haiku"
 for patch in apply-deskbar-bugs.py apply-tracker-desktop.py apply-ui-shell.py apply-high-bugs.py apply-qemu-drivers.py apply-desktop-enh.py apply-zeroconf.py apply-airplay.py apply-wifi.py apply-vboxclip.py apply-ipv6.py apply-users.py apply-settings.py apply-notifications.py apply-icons.py apply-r5ui.py apply-login.py apply-app-server.py apply-vbox-guest.py apply-about.py apply-user-paths.py apply-debugger.py; do
 	if [[ -f "$ROOT/scripts/$patch" ]]; then
 		python3 "$ROOT/scripts/$patch" "$ROOT/haiku"
