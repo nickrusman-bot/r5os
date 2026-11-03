@@ -1,6 +1,6 @@
 # MIDI 2.0 on R5OS
 
-`libmidi2.so` can send and receive a Universal MIDI Packet (UMP). The MIDI 1.0 calls stay. There is no second MIDI kit. Property Exchange is the MIDI-CI request, reply, and subscription layer in this same kit. Profiles are not implemented.
+`libmidi2.so` can send and receive a Universal MIDI Packet (UMP). The MIDI 1.0 calls stay. There is no second MIDI kit. Property Exchange, Profiles, per-note controllers, and Endpoint and Function Block discovery are in this same kit.
 
 The check program is `midi2test` in `/system/bin`. This file is the contract for that program and for an application that links `libmidi2.so`.
 
@@ -146,6 +146,47 @@ Header JSON has no whitespace. A request starts with `resource`. A reply starts 
 
 `midi2_pe_respond` answers one complete inquiry. The caller passes the header and body buffers. The reply message points into those buffers. Set replaces the matching catalog string when the new text fits and every byte is 7-bit. `setPartial` is refused with status 400.
 
+## Per-note controllers
+
+A per-note controller is one MIDI 2.0 channel-voice packet, message type 0x4. Status 0 is registered. Status 1 is assignable. The note is 7 bits. The controller index is the low byte of word 0. The value is all of word 1. The group nibble stays 0, as with the other helpers.
+
+```cpp
+uint32 words[2];
+midi2_encode_per_note(1, 60, 7, 0x80000000, false, words);
+producer->SprayUMP(words, 2);
+```
+
+`midi2_is_per_note`, `midi2_per_note_note`, `midi2_per_note_index`, `midi2_per_note_value`, and `midi2_per_note_registered` read it back from `Data`. `NoteOn` and `ControlChange` are not called. A MIDI 1.0 application does not see the message as a channel controller.
+
+## Profiles
+
+Profile messages are MIDI-CI System Exclusive, sub-id `0x0D`, on the same bytes-between-`F0`-and-`F7` path as Property Exchange.
+
+| Sub-id | Message |
+|---|---|
+| `0x20` / `0x21` | Profile Inquiry and the reply |
+| `0x22` / `0x23` | Set Profile On and Set Profile Off |
+| `0x24` / `0x25` | Profile Enabled and Profile Disabled reports |
+| `0x2F` | Profile Specific Data |
+
+A profile id is 5 bytes. `midi2_profile_catalog_init` holds one standard id, `7E 00 00 00 01`, and it starts disabled. An inquiry reply lists it under the disabled ids. Set Profile On answers with a Profile Enabled report and the catalog marks it enabled. Set Profile Off answers with Profile Disabled. Profile Specific Data is stored, up to 32 bytes, and the reply carries those bytes. An id that is not in the catalog returns `B_NAME_NOT_FOUND`.
+
+## Endpoint and Function Block discovery
+
+These are UMP Stream messages, message type `0xF`, four words. The format is 0 (one packet). The status is the next 10 bits.
+
+`midi2_stream_endpoint_discovery` writes status `0x000`, UMP version 1.1, and a filter in the low byte of word 1. The bits are endpoint info `0x01`, device identity `0x02`, endpoint name `0x04`, product instance id `0x08`, and stream configuration `0x10`.
+
+`midi2_stream_block_discovery` writes status `0x010`. The block number is the next byte (`0xFF` asks for every block). The filter is info `0x01` and name `0x02`.
+
+`midi2_endpoint_init` is one local endpoint named `R5OS`, protocol MIDI 2.0, with one bidirectional function block named `midi2` on group 0. `midi2_stream_reply` turns a discovery packet into the notifications that filter asked for. A block number this endpoint does not have returns `B_NAME_NOT_FOUND`. Names here fit in one packet.
+
+## USB MIDI 2.0 descriptors
+
+`midi2_usb_write_interface` and `midi2_usb_parse_interface` are the standard interface descriptor: type `0x04`, 9 bytes, audio class `0x01`, MIDI streaming subclass `0x03`. `bAlternateSetting` is the caller's value. Alternate setting 0 is the MIDI 1.0 interface. A later setting is the MIDI 2.0 interface when its class-specific header is version `0x0200`.
+
+`midi2_usb_write_header` and `midi2_usb_parse_header` are that class-specific header: type `0x24`, subtype `0x01`, version `0x0200`, then the total length. `midi2_usb_write_group_terminal` and `midi2_usb_parse_group_terminal` are one Group Terminal Block: type `0x26`, subtype `0x01`, 13 bytes. Direction 0 is bidirectional, 1 is input, 2 is output. Protocol `0x11` is MIDI 2.0. `usb_midi` treats that block, and a header version of `0x0200` or newer, as a MIDI 2.0 endpoint. No device was attached for this.
+
 ## Drivers
 
 `midi_server` sends a recognised UMP with `ioctl(fd, B_MIDI_WRITE_UMP, &packet)`. The argument is `midi_ump_packet` from `<midi_driver.h>`: `word_count` and `words[4]`, native `uint32`. A buffer that is not a UMP still goes out with `write()`, unchanged.
@@ -173,7 +214,9 @@ The rest registers a local producer and a local consumer, connects them, and spr
 - a MIDI 1.0 SysEx, which arrives as `F0` … `F7` and as `SystemExclusive` without those two bytes
 - an eight-byte SysEx7 in two type 0x3 packets, which arrives as one `SystemExclusive` after the end packet
 
-The helper checks also cover `midi2_encode_sysex`, `midi2_sysex_payload`, Property Exchange encode and decode, a two-chunk reply, `DeviceInfo`, an unknown resource, subscribe, unsubscribe, and Notify status 144. They do not need `midi_server`.
+The helper checks also cover per-note controllers, profile inquiry, enable, and specific data, endpoint and function-block discovery, and the USB MIDI 2.0 interface alternate setting, header, and Group Terminal Block. They do not need `midi_server`.
+
+The spray checks also send one per-note controller, one endpoint-discovery packet, and one Profile Enabled report. `NoteOn` and `ControlChange` do not run for the per-note controller. The profile report arrives as one `SystemExclusive`.
 
 The spray checks also send one Get Property Data inquiry as SysEx7. `SystemExclusive` receives the same payload. It does not open a USB device, and it does not check `B_MIDI_WRITE_UMP`. Run it from Terminal on a booted system:
 

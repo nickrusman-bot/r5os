@@ -644,6 +644,13 @@ got_one:
 			if (version >= 0x0200)
 				midiDevice->ump_endpoint = true;
 		}
+		/* USB MIDI 2.0 Group Terminal Block. Same bytes as Midi2Usb.h:
+		 * type 0x26, subtype in data[0], protocol in data[6]. 0x11 is MIDI 2.0.
+		 */
+		if (generic->descriptor_type == 0x26 && generic->length >= 13
+			&& generic->data[0] == 0x01 && generic->data[6] == 0x11) {
+			midiDevice->ump_endpoint = true;
+		}
 		if (generic->descriptor_type == USB_DESCRIPTOR_CS_ENDPOINT
 			&& generic->data[0] == USB_MS_GENERAL_DESCRIPTOR) {
 			/* These *better* be in the same order as the endpoints! */

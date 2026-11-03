@@ -719,9 +719,236 @@ test_spray()
 		&& probe->Wait() == B_OK && probe->SawSysex(pePayload, peLength),
 		"Property Exchange arrives as one SystemExclusive");
 
+	probe->Reset();
+	uint32 perNote[2];
+	midi2_encode_per_note(1, 60, 7, 0x80000000, false, perNote);
+	expect(producer->SprayUMP(perNote, 2) == B_OK,
+		"per-note controller is accepted");
+	expect(probe->Wait() == B_OK && probe->HasUmp(perNote, 2)
+		&& !probe->SawNote() && !probe->SawControl(),
+		"per-note controller arrives without a MIDI 1.0 hook");
+
+	probe->Reset();
+	uint32 discovery[4];
+	expect(midi2_stream_endpoint_discovery(B_MIDI2_STREAM_FILTER_INFO, discovery)
+			== B_OK
+		&& producer->SprayUMP(discovery, 4) == B_OK && probe->Wait() == B_OK
+		&& probe->HasUmp(discovery, 4),
+		"endpoint discovery arrives as one UMP");
+
+	midi2_profile_message enabledReport;
+	memset(&enabledReport, 0, sizeof(enabledReport));
+	enabledReport.subId = B_MIDI2_PROFILE_ENABLED;
+	enabledReport.sourceMuid = 1;
+	enabledReport.hasProfile = true;
+	enabledReport.profile.bytes[0] = 0x7e;
+	enabledReport.profile.bytes[4] = 1;
+	uint8 profilePayload[32];
+	size_t profileLength = 0;
+	uint32 profileWords[16];
+	size_t profileWordCount = 0;
+	expect(midi2_profile_encode(&enabledReport, profilePayload,
+			sizeof(profilePayload), &profileLength) == B_OK
+		&& midi2_encode_sysex(profilePayload, profileLength, profileWords, 16,
+			&profileWordCount) == B_OK,
+		"profile enabled report encodes");
+	bool profileSprayed = true;
+	for (size_t i = 0; i + 2 < profileWordCount; i += 2) {
+		probe->Reset();
+		if (producer->SprayUMP(profileWords + i, 2) != B_OK
+			|| probe->Wait() != B_OK || probe->SawAnySysex()) {
+			profileSprayed = false;
+			break;
+		}
+	}
+	probe->Reset();
+	expect(profileSprayed
+		&& producer->SprayUMP(profileWords + profileWordCount - 2, 2) == B_OK
+		&& probe->Wait() == B_OK
+		&& probe->SawSysex(profilePayload, profileLength),
+		"profile enabled report arrives as one SystemExclusive");
+
 	producer->Disconnect(probe);
 	producer->Release();
 	probe->Release();
+}
+
+
+static void
+test_more()
+{
+	uint32 perNote[2];
+	midi2_encode_per_note(4, 0x6f, 0xb1, 0x46105ee5, false, perNote);
+	expect(perNote[0] == 0x40146fb1 && perNote[1] == 0x46105ee5,
+		"assignable per-note controller word");
+	expect(midi2_is_per_note(perNote, 2) && !midi2_per_note_registered(perNote, 2)
+		&& midi2_per_note_note(perNote, 2) == 0x6f
+		&& midi2_per_note_index(perNote, 2) == 0xb1
+		&& midi2_per_note_value(perNote, 2) == 0x46105ee5,
+		"assignable per-note controller reads back");
+	midi2_encode_per_note(4, 0x6f, 3, 0x1000, true, perNote);
+	expect(midi2_per_note_registered(perNote, 2)
+		&& ((perNote[0] >> 20) & 0xf) == 0 && midi2_per_note_index(perNote, 2) == 3,
+		"registered per-note controller uses status 0");
+	expect(!midi2_is_note(perNote, 2) && !midi2_is_control(perNote, 2),
+		"a per-note controller is not a note or a channel controller");
+
+	midi2_profile_catalog profiles;
+	midi2_profile_catalog_init(&profiles);
+	midi2_profile_message inquiry;
+	memset(&inquiry, 0, sizeof(inquiry));
+	inquiry.subId = B_MIDI2_PROFILE_INQUIRY;
+	inquiry.sourceMuid = 2;
+	inquiry.destinationMuid = 1;
+	uint8 profileBytes[64];
+	size_t profileLength = 0;
+	midi2_profile_message decodedProfile;
+	expect(midi2_profile_encode(&inquiry, profileBytes, sizeof(profileBytes),
+			&profileLength) == B_OK
+		&& midi2_profile_decode(profileBytes, profileLength, &decodedProfile)
+			== B_OK
+		&& decodedProfile.subId == B_MIDI2_PROFILE_INQUIRY,
+		"profile inquiry round-trips");
+
+	midi2_profile_message profileReply;
+	expect(midi2_profile_respond(&profiles, &decodedProfile, &profileReply)
+			== B_OK
+		&& profileReply.subId == B_MIDI2_PROFILE_INQUIRY_REPLY
+		&& profileReply.disabledCount == 1 && profileReply.enabledCount == 0,
+		"a new profile starts disabled");
+
+	midi2_profile_message setOn;
+	memset(&setOn, 0, sizeof(setOn));
+	setOn.subId = B_MIDI2_PROFILE_SET_ON;
+	setOn.sourceMuid = 2;
+	setOn.hasProfile = true;
+	setOn.profile = profiles.ids[0];
+	expect(midi2_profile_encode(&setOn, profileBytes, sizeof(profileBytes),
+			&profileLength) == B_OK
+		&& midi2_profile_decode(profileBytes, profileLength, &decodedProfile)
+			== B_OK
+		&& midi2_profile_respond(&profiles, &decodedProfile, &profileReply)
+			== B_OK
+		&& profileReply.subId == B_MIDI2_PROFILE_ENABLED
+		&& profiles.enabled[0],
+		"Set Profile On reports the profile enabled");
+
+	uint8 specific[3] = { 1, 2, 3 };
+	midi2_profile_message dataMessage;
+	memset(&dataMessage, 0, sizeof(dataMessage));
+	dataMessage.subId = B_MIDI2_PROFILE_SPECIFIC;
+	dataMessage.sourceMuid = 2;
+	dataMessage.hasProfile = true;
+	dataMessage.profile = profiles.ids[0];
+	dataMessage.data = specific;
+	dataMessage.dataLength = sizeof(specific);
+	expect(midi2_profile_encode(&dataMessage, profileBytes, sizeof(profileBytes),
+			&profileLength) == B_OK
+		&& midi2_profile_decode(profileBytes, profileLength, &decodedProfile)
+			== B_OK
+		&& decodedProfile.dataLength == 3 && decodedProfile.data[2] == 3
+		&& midi2_profile_respond(&profiles, &decodedProfile, &profileReply)
+			== B_OK
+		&& profiles.specificLength == 3 && profiles.specific[0] == 1,
+		"profile specific data is stored");
+
+	setOn.profile.bytes[4] = 0x7f;
+	expect(midi2_profile_respond(&profiles, &setOn, &profileReply)
+		== B_NAME_NOT_FOUND, "an unknown profile is rejected");
+
+	uint32 discovery[4];
+	expect(midi2_stream_endpoint_discovery(
+			B_MIDI2_STREAM_FILTER_INFO | B_MIDI2_STREAM_FILTER_CONFIG, discovery)
+			== B_OK
+		&& discovery[0] == 0xf0000101 && discovery[1] == 0x00000011,
+		"endpoint discovery packet");
+	midi2_endpoint endpoint;
+	midi2_endpoint_init(&endpoint);
+	uint32 replies[8 * 4];
+	size_t replyCount = 0;
+	expect(midi2_stream_reply(&endpoint, discovery, replies, 8, &replyCount)
+			== B_OK && replyCount == 2
+		&& midi2_stream_status(replies[0]) == B_MIDI2_STREAM_ENDPOINT_INFO
+		&& midi2_stream_status(replies[4]) == B_MIDI2_STREAM_CONFIG_NOTIFY
+		&& ((replies[4] >> 8) & 0xff) == B_MIDI2_STREAM_PROTOCOL_MIDI2,
+		"endpoint discovery replies with info and the protocol");
+
+	uint32 blockRequest[4];
+	expect(midi2_stream_block_discovery(0,
+			B_MIDI2_STREAM_BLOCK_FILTER_INFO | B_MIDI2_STREAM_BLOCK_FILTER_NAME,
+			blockRequest) == B_OK
+		&& blockRequest[0] == 0xf0100003, "function block discovery packet");
+	expect(midi2_stream_reply(&endpoint, blockRequest, replies, 8, &replyCount)
+			== B_OK && replyCount == 2
+		&& midi2_stream_status(replies[0]) == B_MIDI2_STREAM_BLOCK_INFO
+		&& midi2_stream_status(replies[4]) == B_MIDI2_STREAM_BLOCK_NAME,
+		"function block discovery replies with info and a name");
+	uint32 nameWord0 = replies[4];
+	uint32 nameWord1 = replies[5];
+	char blockName[6];
+	blockName[0] = nameWord0 & 0xff;
+	blockName[1] = (nameWord1 >> 24) & 0xff;
+	blockName[2] = (nameWord1 >> 16) & 0xff;
+	blockName[3] = (nameWord1 >> 8) & 0xff;
+	blockName[4] = nameWord1 & 0xff;
+	blockName[5] = '\0';
+	expect(strcmp(blockName, "midi2") == 0, "function block name is midi2");
+	expect(midi2_stream_block_discovery(9, B_MIDI2_STREAM_BLOCK_FILTER_INFO,
+			blockRequest) == B_OK
+		&& midi2_stream_reply(&endpoint, blockRequest, replies, 8, &replyCount)
+			== B_NAME_NOT_FOUND,
+		"an unknown function block is rejected");
+
+	midi2_usb_header usbHeader;
+	memset(&usbHeader, 0, sizeof(usbHeader));
+	usbHeader.version = B_MIDI2_USB_VERSION;
+	usbHeader.totalLength = 32;
+	uint8 usbBytes[16];
+	size_t usbLength = 0;
+	midi2_usb_header parsedHeader;
+	expect(midi2_usb_write_header(&usbHeader, usbBytes, sizeof(usbBytes),
+			&usbLength) == B_OK
+		&& midi2_usb_parse_header(usbBytes, usbLength, &parsedHeader) == B_OK
+		&& parsedHeader.version == 0x0200 && parsedHeader.totalLength == 32,
+		"USB MIDI 2.0 interface header round-trips");
+
+	midi2_usb_group_terminal block;
+	memset(&block, 0, sizeof(block));
+	block.blockId = 1;
+	block.direction = B_MIDI2_USB_BLOCK_BIDIRECTIONAL;
+	block.firstGroup = 0;
+	block.groupCount = 1;
+	block.protocol = B_MIDI2_USB_PROTOCOL_MIDI2;
+	block.maxInputBandwidth = 0x0100;
+	midi2_usb_group_terminal parsedBlock;
+	expect(midi2_usb_write_group_terminal(&block, usbBytes, sizeof(usbBytes),
+			&usbLength) == B_OK
+		&& usbBytes[1] == B_MIDI2_USB_GROUP_TERMINAL_TYPE
+		&& midi2_usb_parse_group_terminal(usbBytes, usbLength, &parsedBlock)
+			== B_OK
+		&& parsedBlock.protocol == B_MIDI2_USB_PROTOCOL_MIDI2
+		&& parsedBlock.blockId == 1 && parsedBlock.maxInputBandwidth == 0x0100,
+		"USB Group Terminal Block round-trips");
+	block.groupCount = 0;
+	expect(midi2_usb_write_group_terminal(&block, usbBytes, sizeof(usbBytes),
+			&usbLength) == B_BAD_VALUE,
+		"a Group Terminal Block needs at least one group");
+
+	midi2_usb_interface usbInterface;
+	memset(&usbInterface, 0, sizeof(usbInterface));
+	usbInterface.interfaceNumber = 2;
+	usbInterface.alternateSetting = 1;
+	usbInterface.numEndpoints = 2;
+	midi2_usb_interface parsedInterface;
+	expect(midi2_usb_write_interface(&usbInterface, usbBytes, sizeof(usbBytes),
+			&usbLength) == B_OK
+		&& usbBytes[3] == 1
+		&& midi2_usb_parse_interface(usbBytes, usbLength, &parsedInterface)
+			== B_OK
+		&& parsedInterface.alternateSetting == 1
+		&& parsedInterface.deviceClass == B_MIDI2_USB_AUDIO_CLASS
+		&& parsedInterface.subclass == B_MIDI2_USB_MIDISTREAMING,
+		"USB MIDI alternate setting round-trips");
 }
 
 
@@ -730,6 +957,7 @@ main()
 {
 	test_helpers();
 	test_property();
+	test_more();
 	test_spray();
 	if (sFailures == 0) {
 		printf("midi2test: all checks passed\n");
