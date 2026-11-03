@@ -54,7 +54,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ *
+ * R5OS: a menuentry title that already starts with "Boot " is the whole
+ * label. Copyright 2026 R5OS Contributors. Same license as the rEFInd
+ * modifications above.
+ */
 
 #include "global.h"
 #include "lib.h"
@@ -1052,6 +1056,14 @@ static LOADER_ENTRY * AddStanzaEntries(REFIT_FILE *File, REFIT_VOLUME *Volume, C
     if (!DefaultsSet) {
         // user included no "loader" line; use bogus one
         SetLoaderDefaults(Entry, L"\\EFI\\BOOT\\nemo.efi", CurrentVolume);
+    }
+
+    // A title that already says "Boot …" is shown as written. The volume
+    // name is not appended, including when a volume line replaced it above.
+    if ((Title != NULL) && (Title[0] == L'B') && (Title[1] == L'o')
+        && (Title[2] == L'o') && (Title[3] == L't') && (Title[4] == L' ')) {
+        MyFreePool(Entry->me.Title);
+        Entry->me.Title = StrDuplicate(Title);
     }
 
     return(Entry);

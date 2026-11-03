@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The boot menu says Boot R5 Operating System and keeps two tool icons
+
+The line under the feather was “Boot R5 from HAIKU ESP”, because rEFInd appends the volume name. A menu title that already starts with “Boot ” is now the whole label. The entry text is “Boot R5 Operating System”. The second row had shutdown, restart, About, shutdown again, restart again, and the firmware tool, even with `showtools shutdown,reboot` on the disc. The scan now keeps shutdown and restart only, and a second scan does not add them again. After the feather was chosen, the Haiku loader switched to the largest GOP mode and the VirtualBox window followed. The loader now keeps the firmware's current mode when that mode is at least 800 by 600, and it does not call SetMode when the mode is already current. A saved display mode still replaces it. `distro/BUILD` stays 10048. The new disc was booted in VirtualBox `R5OS-EFI`. The menu line is “Boot R5 Operating System”. The second row is shutdown and restart. The picture stays 1024 by 768. The splash then stopped. The loader logged `Calling ExitBootServices. So long, EFI!` and then a divide error in `hpet_spin`: VirtualBox’s HPET period is 0. A zero period now waits on the time stamp counter instead. `jam -q @r5-anyboot` finished with exit 0 at 21:10 Europe/Amsterdam on 3 Nov 2026. That ISO reached the desktop in `R5OS-EFI` at 1024 by 768. The serial log has no divide error. Tracker and Deskbar logged their distro lines. The window was left running. No laptop test.
+
 ### UEFI starts at a black rEFInd menu and then the Haiku loader
 
 The anyboot EFI system partition is 16 MiB. `EFI/BOOT/BOOTX64.EFI` is rEFInd 0.14.2. The background is a black banner. The menu entry R5 starts `EFI/haiku/haiku_loader.efi`, which is still the program that loads the kernel. The BIOS boot sector is unchanged. rEFInd does not run on that path. `scripts/run-qemu-r5.sh` and `scripts/run-vbox-r5.ps1` still use BIOS.

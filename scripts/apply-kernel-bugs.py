@@ -23,6 +23,36 @@ def install_kernel_sources() -> None:
         )
 
 
+def install_efi_smp() -> None:
+    src = pathlib.Path(__file__).resolve().parents[1] / "distro/system/boot/platform/efi/arch/x86/arch_smp.cpp"
+    dst = HAIKU / "src/system/boot/platform/efi/arch/x86/arch_smp.cpp"
+    if not src.is_file():
+        raise SystemExit(f"missing {src}")
+    if not dst.parent.is_dir():
+        raise SystemExit(f"missing {dst.parent}")
+    data = src.read_bytes().replace(b"\r\n", b"\n")
+    if dst.is_file() and dst.read_bytes().replace(b"\r\n", b"\n") == data:
+        print(f"already {dst.name} (efi smp spin)")
+        return
+    dst.write_bytes(data)
+    print(f"copied {dst} (efi smp spin)")
+
+
+def install_efi_video() -> None:
+    src = pathlib.Path(__file__).resolve().parents[1] / "distro/system/boot/platform/efi/video.cpp"
+    dst = HAIKU / "src/system/boot/platform/efi/video.cpp"
+    if not src.is_file():
+        raise SystemExit(f"missing {src}")
+    if not dst.parent.is_dir():
+        raise SystemExit(f"missing {dst.parent}")
+    data = src.read_bytes().replace(b"\r\n", b"\n")
+    if dst.is_file() and dst.read_bytes().replace(b"\r\n", b"\n") == data:
+        print(f"already {dst.name} (efi video mode)")
+        return
+    dst.write_bytes(data)
+    print(f"copied {dst} (efi video mode)")
+
+
 def install_smp_boot() -> None:
     src = pathlib.Path(__file__).resolve().parents[1] / "distro/boot/bios_ia32/smp.cpp"
     dst = HAIKU / "src/system/boot/platform/bios_ia32/smp.cpp"
@@ -147,6 +177,8 @@ def install_usb_stability() -> None:
 
 
 def main() -> int:
+    install_efi_smp()
+    install_efi_video()
     install_smp_boot()
     install_kernel_sources()
     install_pstate()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stage rEFInd and teach the image how to put it on the EFI partition.
 
-The rEFInd sources stay unmodified. This script builds refind_x64.efi with
+This script builds refind_x64.efi with
 GNU-EFI when that binary is older than the sources, then copies the loader,
 the black theme, the icons, and the license texts into the Haiku tree.
 Filesystem drivers are not built and are not installed.

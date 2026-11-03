@@ -53,6 +53,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * R5OS: the second row is shutdown and restart only. Copyright 2026
+ * R5OS Contributors. Same license as the rEFInd modifications above.
  */
 
 #include "global.h"
@@ -1516,6 +1519,20 @@ VOID FindTool(CHAR16 *Locations, CHAR16 *Names, CHAR16 *Description, UINTN Icon)
     } // for
 } // VOID FindTool()
 
+// TRUE when this tool tag is already on the second row. A second scan
+// must not add shutdown or restart again.
+static BOOLEAN ToolAlreadyShown(UINTN Tag) {
+    UINTN Index;
+
+    for (Index = 0; Index < MainMenu.EntryCount; Index++) {
+        if (MainMenu.Entries[Index] != NULL && MainMenu.Entries[Index]->Row == 1
+            && MainMenu.Entries[Index]->Tag == Tag) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 // Add the second-row tags containing built-in and external tools (EFI shell,
 // reboot, etc.)
 VOID ScanForTools(VOID) {
@@ -1527,6 +1544,11 @@ VOID ScanForTools(VOID) {
     UINT32 CsrValue;
 
     LOG(1, LOG_LINE_SEPARATOR, L"Scanning for tools");
+    // The menu keeps shutdown and restart. About, firmware setup, and a
+    // second copy of these two stay off even when a scan runs again.
+    SetMem(GlobalConfig.ShowTools, NUM_TOOLS * sizeof(UINTN), 0);
+    GlobalConfig.ShowTools[0] = TAG_SHUTDOWN;
+    GlobalConfig.ShowTools[1] = TAG_REBOOT;
     if (!IsIn(GlobalConfig.ExtraToolLocations, SelfDirPath))
         MergeStrings(&GlobalConfig.ExtraToolLocations, SelfDirPath, L',');
 
@@ -1536,12 +1558,16 @@ VOID ScanForTools(VOID) {
         switch(GlobalConfig.ShowTools[i]) {
             // NOTE: Be sure that FileName is NULL at the end of each case.
             case TAG_SHUTDOWN:
+                if (ToolAlreadyShown(TAG_SHUTDOWN))
+                    break;
                 TempMenuEntry = CopyMenuEntry(&MenuEntryShutdown);
                 TempMenuEntry->Image = BuiltinIcon(BUILTIN_ICON_FUNC_SHUTDOWN);
                 AddMenuEntry(&MainMenu, TempMenuEntry);
                 break;
 
             case TAG_REBOOT:
+                if (ToolAlreadyShown(TAG_REBOOT))
+                    break;
                 TempMenuEntry = CopyMenuEntry(&MenuEntryReset);
                 TempMenuEntry->Image = BuiltinIcon(BUILTIN_ICON_FUNC_RESET);
                 AddMenuEntry(&MainMenu, TempMenuEntry);

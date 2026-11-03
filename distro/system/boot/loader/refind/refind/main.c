@@ -90,6 +90,7 @@ REFIT_MENU_SCREEN MainMenu       = { L"Main Menu", NULL, 0, NULL, 0, NULL, 0, L"
                                      L"Insert, Tab, or F2 for more options; Esc or Backspace to refresh" };
 static REFIT_MENU_SCREEN AboutMenu      = { L"About", NULL, 0, NULL, 0, NULL, 0, NULL, L"Press Enter to return to main menu", L"" };
 
+// The second row starts as shutdown and restart. ScanForTools keeps it there.
 REFIT_CONFIG GlobalConfig = { /* TextOnly = */ FALSE,
                               /* ScanAllLinux = */ TRUE,
                               /* DeepLegacyScan = */ FALSE,
@@ -151,9 +152,8 @@ REFIT_CONFIG GlobalConfig = { /* TextOnly = */ FALSE,
                               /* *ExtraKernelVersionStrings = */ NULL,
                               /* *SpoofOSXVersion = */ NULL,
                               /* CsrValues = */ NULL,
-                              /* ShowTools = */ { TAG_SHELL, TAG_MEMTEST, TAG_GDISK, TAG_APPLE_RECOVERY, TAG_WINDOWS_RECOVERY,
-                                                  TAG_MOK_TOOL, TAG_ABOUT, TAG_HIDDEN, TAG_SHUTDOWN, TAG_REBOOT, TAG_FIRMWARE,
-                                                  TAG_FWUPDATE_TOOL, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+                              /* ShowTools = */ { TAG_SHUTDOWN, TAG_REBOOT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
                             };
 
 CHAR16 *gHiddenTools = NULL;
