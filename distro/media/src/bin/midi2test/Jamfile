@@ -1,0 +1,6 @@
+SubDir HAIKU_TOP src bin midi2test ;
+
+Application midi2test :
+	midi2test.cpp
+	: be libmidi2.so [ TargetLibsupc++ ]
+	;

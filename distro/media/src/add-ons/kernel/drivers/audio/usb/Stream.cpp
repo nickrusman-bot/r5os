@@ -7,6 +7,11 @@
 
 #include "Stream.h"
 
+#include <stdlib.h>
+#include <string.h>
+
+#include <KernelExport.h>
+#include <driver_settings.h>
 #include <kernel.h>
 #include <usb/USB_audio.h>
 
@@ -29,6 +34,7 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fDescriptorsCount(0),
 	fCurrentBuffer(0),
 	fSamplesCount(0),
+	fConfiguredFrames(0),
 	fRealTime(0),
 	fStartingFrame(0),
 	fProcessedBuffers(0),
@@ -163,6 +169,29 @@ Stream::OnRemove()
 }
 
 
+static uint32
+latency_frames(bool input)
+{
+	void* handle = load_driver_settings(DRIVER_NAME);
+	if (handle == NULL)
+		return 0;
+
+	const char* key = input ? "record_buffer_frames" : "play_buffer_frames";
+	const char* item = get_driver_parameter(handle, key, NULL, NULL);
+	uint32 frames = 0;
+	if (item != NULL) {
+		char* end = NULL;
+		unsigned long value = strtoul(item, &end, 0);
+		if (end != item && end != NULL && *end == '\0'
+			&& value >= 32 && value <= 8192) {
+			frames = (uint32)value;
+		}
+	}
+	unload_driver_settings(handle);
+	return frames;
+}
+
+
 status_t
 Stream::_SetupBuffers()
 {
@@ -189,7 +218,24 @@ Stream::_SetupBuffers()
 		delete fDescriptors;
 	}
 
-	fAreaSize = sampleSize * kSamplesBufferSize * kSamplesBufferCount;
+	// 0 keeps the historical area (2048 samples times two buffers). A Media
+	// preference writes 256 or 128. USB packets are 1 ms, so the frame count
+	// is rounded up to a whole packet. The extra bytes of the page stay unused.
+	uint32 frames = latency_frames(fIsInput);
+	uint32 packetCount = 0;
+	if (frames == 0) {
+		fAreaSize = sampleSize * kSamplesBufferSize * kSamplesBufferCount;
+	} else {
+		uint32 samplesPerPacket = packetSize / sampleSize;
+		if (samplesPerPacket == 0) {
+			TRACE(ERR, "samples per packet is 0\n");
+			return B_BAD_VALUE;
+		}
+		uint32 aligned = ((frames + samplesPerPacket - 1) / samplesPerPacket)
+			* samplesPerPacket;
+		packetCount = (aligned / samplesPerPacket) * kSamplesBufferCount;
+		fAreaSize = packetCount * packetSize;
+	}
 	TRACE(INF, "estimate fAreaSize:%d\n", fAreaSize);
 
 	// round up to B_PAGE_SIZE and create area
@@ -219,14 +265,21 @@ Stream::_SetupBuffers()
 	TRACE(INF, "Created area id:%d at addr:%#010x size:%#010lx\n",
 		fArea, fDescriptors, fAreaSize);
 
-	fDescriptorsCount = fAreaSize / packetSize;
-	// we need same size sub-buffers. round it
-	fDescriptorsCount = ROUNDDOWN(fDescriptorsCount, kSamplesBufferCount);
+	if (frames == 0) {
+		fDescriptorsCount = fAreaSize / packetSize;
+		// we need same size sub-buffers. round it
+		fDescriptorsCount = ROUNDDOWN(fDescriptorsCount, kSamplesBufferCount);
+	} else
+		fDescriptorsCount = packetCount;
 	fDescriptors = new usb_iso_packet_descriptor[fDescriptorsCount];
 	TRACE(INF, "descriptorsCount:%d\n", fDescriptorsCount);
 
 	// samples count
 	fSamplesCount = fDescriptorsCount * packetSize / sampleSize;
+	fConfiguredFrames = frames;
+	dprintf("usb_audio: %s buffer %" B_PRIu32 " frames (setting %" B_PRIu32
+		")\n", fIsInput ? "record" : "play",
+		(uint32)(fSamplesCount / kSamplesBufferCount), frames);
 	TRACE(INF, "samplesCount:%d\n", fSamplesCount);
 
 	// initialize descriptors array
@@ -428,9 +481,16 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	_multi_format* format = fIsInput ? &Format->input : &Format->output;
 	AudioStreamAlternate* alternate = fAlternates[fActiveAlternate];
 	if (format->rate == alternate->GetSamplingRateId(0)
-			&& format->format == alternate->GetFormatId()) {
+			&& format->format == alternate->GetFormatId()
+			&& latency_frames(fIsInput) == fConfiguredFrames) {
 		TRACE(INF, "No changes required\n");
 		return B_OK;
+	}
+
+	if (format->rate == alternate->GetSamplingRateId(0)
+			&& format->format == alternate->GetFormatId()) {
+		Stop();
+		return _SetupBuffers();
 	}
 
 	alternate->SetSamplingRateById(format->rate);

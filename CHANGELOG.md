@@ -1,5 +1,57 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 test and developer notes
+
+`midi2test` checks the UMP helpers and sprays a local producer into a local consumer. A `uchar` note stays three MIDI 1.0 bytes. A `uint16` note and a `uint32` controller arrive as a type 0x4 packet, and the old hooks see the top 7 bits. The command is `/system/bin/midi2test` on the regular image. `docs/MIDI2.md` is the developer contract: the casts, the roster payload, what `Data` does, and what `usb_midi` sends. The program does not open a USB device. A bare integer is ambiguous between the MIDI 1.0 and MIDI 2.0 overloads; the header now says to cast it.
+
+`jam -q midi2test` exited 0 on 3 Nov 2026 at 08:49 Europe/Amsterdam. `jam -q @r5-raw` on 3 Nov 2026 at 08:54 Europe/Amsterdam exited 0 and updated 1795 targets. `haiku.hpkg` contains `midi2test`. The raw image stores that package; `package_daemon` publishes `/system/bin/midi2test` at boot. Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 08:57 Europe/Amsterdam. The guest was still on its first boot, which runs `package_daemon` before the desktop. `midi2test` was not run in the guest. No USB MIDI device was attached.
+
+### MIDI 2.0 UMP and 16-bit velocity
+
+`kits/midi2` can build and parse a Universal MIDI Packet without a new kit. `SprayNoteOn(channel, note, uchar)` and `SprayControlChange(channel, controller, uchar)` still send a MIDI 1.0 byte message. The new overloads take `uint16` velocity and `uint32` controller value and send one MIDI 2.0 channel-voice packet (message type 0x4, two 32-bit words). `SprayUMP` sends one packet of 1, 2, or 4 words when the count matches the message type. The methods are not virtual: the existing spray calls are not virtual, and a new virtual would move the vtable of a subclass that was compiled earlier.
+
+The bytes after the roster header are `B_MIDI2_UMP_MAGIC`, the word count, and the words. `BMidiLocalConsumer::Data` turns a MIDI 2.0 note or controller into the existing 7-bit `NoteOn` / `ControlChange` (top 7 bits). An application that wants the full value overrides `Data`, calls `midi2_ump_from_payload`, and does not call the base for that buffer. `midi_server` sends that payload with `B_MIDI_WRITE_UMP` instead of `write()`.
+
+`usb_midi` reads the class-specific MIDI header. Below version 2.0 the endpoint stays on USB MIDI 1.0 CIN packets. A type 0x4 packet is then the 7-bit note or controller in one CIN packet, so a current interface still plays. Version 2.0 or newer carries UMP words on the bulk endpoint. A MIDI 1.0 `write()` on that endpoint becomes one type 0x1 or type 0x2 word. SysEx on a version 2.0 endpoint returns `B_UNSUPPORTED`. The group nibble is the cable of the open port. Incoming UMP is parsed back into MIDI 1.0 bytes for the existing reader, so the 16-bit value is not kept on the way in.
+
+No USB MIDI device was attached. Property Exchange and Profiles are not implemented.
+
+`jam -q libmidi2.so libmidi.so usb_midi midi_server` exited 0 on 3 Nov 2026 at 01:13 Europe/Amsterdam. `libmidi.so` still compiled against the new overloads. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The running VirtualBox image was not rebuilt.
+
+### Latency file and mixer gain
+
+Build 10041 created `~/config/settings/kernel/drivers` and still did not create `hda.settings`. The prefs built that path with `BPath` / `create_directory`, which walk a `BEntry`. The directory was left behind and the file was not. The save now uses `find_directory` into a string, `mkdir`, `chmod 0755`, and `open`. A failure alert includes that path and `strerror`. The same text is written to `usb_audio`.
+
+The mixer scaled a stereo gain by the average of the two channels. With both channels at 0 that divides by zero and stores NaN. A slider that starts from silence now sets both channels to the new level. This is the code path behind the mixer-volume crash (Haiku #18981, GitHub #3347). It is not proven to be the whole crash.
+
+`multi_audio` called `BufferExchange` in a loop and ignored an error. A driver that returns at once then uses a whole CPU (Haiku #16057, GitHub #2250). An error now waits 20 ms before the next try. A successful exchange is unchanged.
+
+Hardware-specific "no sound on this laptop" tickets were not changed. Guest syslog was not read.
+
+`jam -q Media mixer.media_addon hmulti_audio.media_addon` exited 0 before the image. `MediaViews.o`, `AudioMixer.o`, `MultiAudioNode.o`, and `libbe.so` linked. `jam -q @r5-raw` on 3 Nov 2026 at 00:48 Europe/Amsterdam exited 0 and updated 1743 targets. `distro/BUILD` is 10042. What's new is "Latency file". The header date is "3 Nov 2026, 00:45". Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 00:50 Europe/Amsterdam. The Latency menu was not opened from here.
+
+### Media preferences quit double-free
+
+Closing Media after changing a popup (audio output, or the HD Audio sample rate) stopped the program. The debugger showed `bogus pointer (double free)` in `BLooper::SetCommonFilterList`, called from `MediaWindow::~MediaWindow`. `BMenuField::MouseDown` puts a filter on the window. `MouseUp` removes it. Quitting while that menu is still tracking skips `MouseUp`. `~BMenuField` deleted the filter, then `~BLooper` deleted it again. The filter is now removed in `DetachedFromWindow` before the field is deleted.
+
+The destructor also called `StartWatching` for `B_MEDIA_SERVER_QUIT` where it should stop. Both watches are now stopped, and a missing roster is ignored.
+
+The guest syslog is inside the virtual machine. This host cannot read it: there are no Guest Additions, and COM1 is the clipboard pipe. `hda.settings` was not created. A failed save only printed to stderr, which Deskbar does not show. The directory is now created as `kernel` then `drivers`, the file is written with `open`, and a failed save opens an alert. After a save the line under the menu says to restart media services. `buffer length` is printed only when HD Audio sets the stream up again, which is that restart, or the next time sound starts.
+
+`jam -q Media` exited 0 on 3 Nov 2026 at 00:21 Europe/Amsterdam. `distro/BUILD` is 10041. What's new is "Media closes". `jam -q @r5-raw` on 3 Nov 2026 at 00:24 Europe/Amsterdam exited 0 and updated 1731 targets. `libbe.so` and Media were linked at 00:21 and went into that image. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 00:26 Europe/Amsterdam. The guest syslog was not read. The Latency menu was not opened from here.
+
+### Audio latency choice
+
+Media preferences, Audio settings, has a Latency menu. Normal leaves the sound-card buffer alone. Low latency writes 256 frames. Pro audio writes 128 frames. The choice is stored in the user driver settings `kernel/drivers/hda.settings` and `kernel/drivers/usb_audio` (`play_buffer_frames` and `record_buffer_frames`). Restart media services closes the device so the next open picks it up.
+
+HDA already read those keys on open and used them instead of `default_buffer_length_for_rate` (2048 frames at 48 kHz, about 42.7 ms). 256 frames is about 5.3 ms. 128 frames is about 2.7 ms. The buffer count stays 2. syslog prints `hda: sample size … buffer length …` when the stream is set up.
+
+USB audio ignored that file. It now reads the same keys when it lays out isochronous buffers. A 1 ms USB packet does not divide 256 or 128 at 48 kHz, so the driver rounds up to a whole packet (288 or 144 frames). The normal path is unchanged: 2048 samples times two buffers, then rounded to a page. syslog prints `usb_audio: play buffer N frames (setting M)`. No USB device was attached here.
+
+Packed 24-bit was already in the previous build. `usb_audio` accepts a 3-byte subframe, and `hmulti_audio` writes three bytes when the channel stride is not a multiple of 4. That path was not changed.
+
+`jam -q Media usb_audio` exited 0 on 2 Nov 2026 at 23:55 Europe/Amsterdam. `distro/BUILD` is 10040. What's new is "Shorter sound buffers". `jam -q @r5-raw` on 2 Nov 2026 at 23:58 Europe/Amsterdam exited 0 and updated 1237 targets. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started a new VDI from this image on 2 Nov 2026 at 23:59 Europe/Amsterdam. The Latency menu was not opened from here. No loopback was measured.
+
 ### Mixer resampling uses cubic Hermite
 
 The mixer’s high-quality resampler joined two samples with a straight line. That rolls the highs off well below the Nyquist frequency (Haiku #9438). It now uses four neighbours (Catmull-Rom). The same-rate path is still a copy. Drop/repeat samples is unchanged. The preference line says cubic interpolation.
