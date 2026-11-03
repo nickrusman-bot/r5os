@@ -1,10 +1,26 @@
 # R5OS changelog (lokaal)
 
+### Latency choice was still permission denied
+
+Build 10043 showed `Could not save the latency choice` and `Permission denied`, with no path on the alert. The image already contains `/boot/home/config/settings/kernel/drivers` (the `kernel` driver settings file). That directory is root, mode 0755. `r5-desktop` gave the session user `config`, `settings`, and `settings/system`, and left `kernel/drivers` owned by root. Creating `hda.settings` there returns `EACCES`. `chmod` from Media cannot change a directory this user does not own.
+
+`r5-desktop` now gives `config/settings/kernel` and `config/settings/kernel/drivers` to the session user, mode 0700, before it drops uid. That is the same moment as `settings/system`. The kernel still reads `hda.settings` from that user directory. A root-owned file in a directory the user can write is removed and created again.
+
+Build 10044. What's new is "Latency save".
+
+`jam -q r5-desktop Media` exited 0 before the image. `jam -q @r5-raw` on 3 Nov 2026 at 09:22 Europe/Amsterdam exited 0 and updated 1794 targets. The header date is "3 Nov 2026, 09:19". Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image at 09:23 Europe/Amsterdam. The guest syslog sent at 09:28 Europe/Amsterdam shows the save is used. The first HDA open prints `buffer length 2048`. After media services restart the same line is `256`, then `128`, then `2048` again. Those are Low latency, Pro audio, and Normal. This is the VirtualBox ICH6 HDA (codec 8384:7680, 16-bit, 16/22/44 kHz), not the Ryzen machine. The log shows the programmed buffer, not a measured delay.
+
+### What's new for finer MIDI
+
+Build 10043. What's new is "Finer MIDI". MIDI notes can use a finer velocity, and controllers a finer value. Programs that already send MIDI keep working. The Terminal command `midi2test` checks the new notes.
+
+`jam -q @r5-raw` on 3 Nov 2026 at 09:09 Europe/Amsterdam exited 0 and updated 1140 targets. The header date is "3 Nov 2026, 09:07". Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 09:10 Europe/Amsterdam. The guest was on its first boot. About was not opened from here. The earlier guest run of `midi2test` was build 10042.
+
 ### MIDI 2.0 test and developer notes
 
 `midi2test` checks the UMP helpers and sprays a local producer into a local consumer. A `uchar` note stays three MIDI 1.0 bytes. A `uint16` note and a `uint32` controller arrive as a type 0x4 packet, and the old hooks see the top 7 bits. The command is `/system/bin/midi2test` on the regular image. `docs/MIDI2.md` is the developer contract: the casts, the roster payload, what `Data` does, and what `usb_midi` sends. The program does not open a USB device. A bare integer is ambiguous between the MIDI 1.0 and MIDI 2.0 overloads; the header now says to cast it.
 
-`jam -q midi2test` exited 0 on 3 Nov 2026 at 08:49 Europe/Amsterdam. `jam -q @r5-raw` on 3 Nov 2026 at 08:54 Europe/Amsterdam exited 0 and updated 1795 targets. `haiku.hpkg` contains `midi2test`. The raw image stores that package; `package_daemon` publishes `/system/bin/midi2test` at boot. Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 08:57 Europe/Amsterdam. The guest was still on its first boot, which runs `package_daemon` before the desktop. `midi2test` was not run in the guest. No USB MIDI device was attached.
+`jam -q midi2test` exited 0 on 3 Nov 2026 at 08:49 Europe/Amsterdam. `jam -q @r5-raw` on 3 Nov 2026 at 08:54 Europe/Amsterdam exited 0 and updated 1795 targets. `haiku.hpkg` contains `midi2test`. The raw image stores that package; `package_daemon` publishes `/system/bin/midi2test` at boot. Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 08:57 Europe/Amsterdam. In the guest Terminal, `midi2test` printed `ok` for every check and `midi2test: all checks passed` on 3 Nov 2026 at 08:59 Europe/Amsterdam. That covers the helpers and a local producer sprayed into a local consumer through `midi_server`. No USB MIDI device was attached.
 
 ### MIDI 2.0 UMP and 16-bit velocity
 

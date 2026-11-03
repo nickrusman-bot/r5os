@@ -111,13 +111,16 @@ ensure_user_settings(const struct passwd* pwd)
 	if (pwd->pw_dir == NULL || pwd->pw_dir[0] == '\0')
 		return;
 
-	// The image creates config/settings as root, mode 0755. The session
-	// user then cannot create settings/system, and Notifications reports
-	// Permission denied instead of showing the example.
+	// The image creates config/settings as root, mode 0755, and it also
+	// ships config/settings/kernel/drivers. The session user then cannot
+	// create a file there. Notifications needs settings/system. Media
+	// writes the latency choice in kernel/drivers.
 	const char* suffixes[] = {
 		"/config",
 		"/config/settings",
 		"/config/settings/system",
+		"/config/settings/kernel",
+		"/config/settings/kernel/drivers",
 		NULL
 	};
 	for (int i = 0; suffixes[i] != NULL; i++) {
