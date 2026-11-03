@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Latency choice was still permission denied
+
+Build 10043 showed `Could not save the latency choice` and `Permission denied`, with no path on the alert. The image already contains `/boot/home/config/settings/kernel/drivers` (the `kernel` driver settings file). That directory is root, mode 0755. `r5-desktop` gave the session user `config`, `settings`, and `settings/system`, and left `kernel/drivers` owned by root. Creating `hda.settings` there returns `EACCES`. `chmod` from Media cannot change a directory this user does not own.
+
+`r5-desktop` now gives `config/settings/kernel` and `config/settings/kernel/drivers` to the session user, mode 0700, before it drops uid. That is the same moment as `settings/system`. The kernel still reads `hda.settings` from that user directory. A root-owned file in a directory the user can write is removed and created again.
+
+Build 10044. What's new is "Latency save".
+
+`jam -q r5-desktop Media` exited 0 before the image. `jam -q @r5-raw` on 3 Nov 2026 at 09:22 Europe/Amsterdam exited 0 and updated 1794 targets. The header date is "3 Nov 2026, 09:19". Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image at 09:23 Europe/Amsterdam. The guest was on its first boot. The Latency menu was not opened from here.
+
 ### What's new for finer MIDI
 
 Build 10043. What's new is "Finer MIDI". MIDI notes can use a finer velocity, and controllers a finer value. Programs that already send MIDI keep working. The Terminal command `midi2test` checks the new notes.

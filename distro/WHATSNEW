@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10044 - Latency save
+The latency choice is saved for this account. Restart media services to use it.
+
 R5 2026.1-dev Build 10043 - Finer MIDI
 MIDI notes can use a finer velocity, and controllers a finer value. Programs that already send MIDI keep working. The Terminal command midi2test checks the new notes.
 

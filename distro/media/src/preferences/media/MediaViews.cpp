@@ -300,16 +300,18 @@ driver_settings_file(const char* fileName, char* path, size_t pathSize)
 	if (snprintf(directory, sizeof(directory), "%s/kernel", settings)
 			>= (int)sizeof(directory))
 		return B_NAME_TOO_LONG;
-	if (mkdir(directory, 0755) < 0 && errno != EEXIST)
+	if (mkdir(directory, 0755) < 0 && errno != EEXIST) {
+		strlcpy(path, directory, pathSize);
 		return errno != 0 ? errno : B_ERROR;
-	chmod(directory, 0755);
+	}
 
 	if (snprintf(directory, sizeof(directory), "%s/kernel/drivers", settings)
 			>= (int)sizeof(directory))
 		return B_NAME_TOO_LONG;
-	if (mkdir(directory, 0755) < 0 && errno != EEXIST)
+	if (mkdir(directory, 0755) < 0 && errno != EEXIST) {
+		strlcpy(path, directory, pathSize);
 		return errno != 0 ? errno : B_ERROR;
-	chmod(directory, 0755);
+	}
 
 	if (snprintf(path, pathSize, "%s/%s", directory, fileName) >= (int)pathSize)
 		return B_NAME_TOO_LONG;
@@ -406,18 +408,16 @@ write_latency_file(const char* fileName, int32 frames, char* writtenPath,
 
 	int fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (fd < 0) {
-		// The directory can exist without write permission for this user.
-		char directory[B_PATH_NAME_LENGTH];
-		strlcpy(directory, writtenPath, sizeof(directory));
-		char* slash = strrchr(directory, '/');
-		if (slash != NULL) {
-			*slash = '\0';
-			chmod(directory, 0755);
+		int error = errno != 0 ? errno : B_ERROR;
+		// A root-owned file in a directory this user can write.
+		if (error == EACCES && unlink(writtenPath) == 0) {
+			fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (fd < 0 && errno != 0)
+				error = errno;
 		}
-		fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (fd < 0)
+			return error;
 	}
-	if (fd < 0)
-		return errno != 0 ? errno : B_ERROR;
 
 	ssize_t written = write(fd, kept.String(), (size_t)kept.Length());
 	if (written == (ssize_t)kept.Length())
