@@ -20,9 +20,9 @@ A babble, stall, or transaction error that halts an xHCI endpoint left the endpo
 
 `SetAltInterface` indexed the alternate array with `bAlternateSetting` and the interface array with `bInterfaceNumber`. A webcam audio interface walks off that array (Haiku #20323). The call now uses the alternate pointer it was given, after checking that the pointer belongs to the current configuration.
 
-Haiku #18994 is the KDL once that callback or that alternate switch runs. The unlock and the pointer check are the changes for it. The earlier unplug stop flag is unchanged. No USB audio device was attached, so none of these five tickets is confirmed on hardware.
+Haiku #18994 is the KDL once that callback or that alternate switch runs. The unlock and the pointer check are the changes for it. The earlier unplug stop flag is unchanged.
 
-Jam `usb`, `usb_audio`, `<usb>ehci`, and `<usb>xhci` for AMD64 finished at 11:39 Europe/Amsterdam on 3 Nov 2026 with exit 0. `ehci.cpp` still prints the existing packed-member warning in `CreateDescriptor`. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The image was not rebuilt. The running VirtualBox guest does not have this driver.
+Jam `usb`, `usb_audio`, `<usb>ehci`, and `<usb>xhci` for AMD64 finished at 11:39 Europe/Amsterdam on 3 Nov 2026 with exit 0. `ehci.cpp` still prints the existing packed-member warning in `CreateDescriptor`. Jam `@r5-raw` started at 11:42 the same morning and finished with exit 0 (1828 targets). The header date is "3 Nov 2026, 11:42". The Mesa 25 check passed. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox was started from that image. The USB audio test on that guest was reported good at 11:49 Europe/Amsterdam. PR #4072 was merged at 11:48 Europe/Amsterdam (`5440628b7e`).
 
 ### USB audio channels, UAC2, and layout
 

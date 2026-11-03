@@ -3193,7 +3193,7 @@ id	r5_status	branch	commit	notes
 18837	open			
 18839	open			
 18840	open			
-18842	open			
+18842	fixed	main	5440628b7e	EHCI callback no longer takes the isochronous lock it already holds. Guest USB audio test reported good 3 Nov 2026 11:49 Europe/Amsterdam. PR #4072.
 18843	open			
 18846	open			
 18847	open			
@@ -3247,7 +3247,7 @@ id	r5_status	branch	commit	notes
 18987	open			
 18991	open			
 18993	open			
-18994	open			
+18994	fixed	main	5440628b7e	Same EHCI unlock and SetAltInterface pointer check. Guest USB audio test reported good 3 Nov 2026 11:49 Europe/Amsterdam. PR #4072.
 18995	open			
 18996	open			
 18998	open			
@@ -3452,7 +3452,7 @@ id	r5_status	branch	commit	notes
 19466	open			
 19468	open			
 19470	open			
-19472	open			
+19472	fixed	main	5440628b7e	EHCI drops the isochronous lock before the audio callback. Guest USB audio test reported good 3 Nov 2026 11:49 Europe/Amsterdam. PR #4072.
 19473	open			
 19474	open			
 19475	open			
@@ -3753,7 +3753,7 @@ id	r5_status	branch	commit	notes
 20143	open			
 20146	open			
 20147	open			
-20149	open			
+20149	fixed	main	5440628b7e	xHCI resets a halted endpoint after babble or stall. Guest USB audio test reported good 3 Nov 2026 11:49 Europe/Amsterdam. PR #4072.
 20150	open			
 20151	open			
 20152	open			
@@ -3852,7 +3852,7 @@ id	r5_status	branch	commit	notes
 20320	open			
 20321	open			
 20322	open			
-20323	open			
+20323	fixed	main	5440628b7e	SetAltInterface uses the caller's alternate pointer. Guest USB audio test reported good 3 Nov 2026 11:49 Europe/Amsterdam. PR #4072.
 20325	open			
 20326	open			
 20327	open			
