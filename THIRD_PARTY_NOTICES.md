@@ -61,6 +61,16 @@ Location: `distro/fonts/manrope`. Installed on the image at `data/settings/fonts
 
 Copyright line in the font's license file: Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope). No Reserved Font Name is declared after that line. The files are not modified, so the name stays Manrope. `OFL.txt` and `FONTLOG.txt` ship next to the fonts. The SPDX text is `LICENSES/OFL-1.1.txt`. The same files are installed under `data/fonts/ttfonts`. app_server uses Manrope Regular and Bold as the default plain and bold fonts when the user has not saved a font choice. The fixed font stays Noto Sans Mono. Noto Sans remains the fallback if Manrope is missing.
 
+### AMD family 19h microcode
+
+Location: `distro/firmware/amd-ucode`. Installed on the boot volume at `system/non-packaged/data/firmware/amd-ucode/`.
+
+| Piece | Project | License |
+|---|---|---|
+| `microcode_amd_fam19h.bin` | Advanced Micro Devices, Inc., 2010-2025, via linux-firmware | AMD microcode license |
+
+The blob is unmodified. sha256 `c614d6db8056c5c67a9189b225124127d56990a190305bcb3927d50e132de7dd`. `LICENSE.amd-ucode` is the unmodified AMD text and is installed beside the blob. Redistribution of the binary is allowed when that notice stays with it. This is not an open-source license. AMD does not endorse R5OS.
+
 ## Not included
 
 Linux DRM and `amdgpu` are not imported.

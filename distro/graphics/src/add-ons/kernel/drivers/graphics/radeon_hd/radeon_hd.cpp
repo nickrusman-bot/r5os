@@ -792,8 +792,24 @@ radeon_hd_init(radeon_info &info)
 	// if graphics memory is larger then PCI bar, just map bar
 	if (info.shared_info->graphics_memory_size == 0) {
 		// we can recover as we have PCI FB bar, but this should be fixed
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (info.chipsetID >= RADEON_RAVEN) {
+			// Raven leaves CONFIG_MEMSIZE unused. The PCI aperture stays
+			// the upper bound. The mapped picture is the boot framebuffer.
+			ERROR("%s: R5 radeon_hd: CONFIG_MEMSIZE unused, PCI aperture %"
+				B_PRIu64 " KiB remains the upper bound\n",
+				__func__, fbBarSize);
+		} else {
+// SPDX-SnippetEnd
 		ERROR("%s: Error: found 0MB video ram, using PCI bar size...\n",
 			__func__);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		}
+// SPDX-SnippetEnd
 		info.shared_info->frame_buffer_size = fbBarSize;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
