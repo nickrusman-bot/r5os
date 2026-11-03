@@ -14,6 +14,9 @@ AIRPRINT = ROOT / "distro" / "print" / "airprint"
 
 def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     text = path.read_text(encoding="utf-8")
+    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+        print(f"already {path.name} ({tag})")
+        return
     if new in text:
         print(f"already {path.name} ({tag})")
         return

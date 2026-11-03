@@ -53,6 +53,7 @@ if [[ -f "$splashSrc" ]]; then
 fi
 
 python3 "$ROOT/scripts/apply-desktop-native.py" "$ROOT/haiku"
+python3 "$ROOT/scripts/apply-rest-native.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-branding.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-darkmode.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-ui-bugs.py" "$ROOT/haiku"
