@@ -3924,7 +3924,7 @@ id	r5_status	branch	commit	notes
 20433	open			
 20434	open			
 20435	open			
-20436	open			
+20436	fixed	cursor/http-timeout	4167412d09	SetTimeout stores the value and applies it when the HTTP socket is created, before connect. jam -q libnetservices.a exited 0 on 3 Nov 2026. No timed request was run.
 20438	open			
 20439	open			
 20440	open			
