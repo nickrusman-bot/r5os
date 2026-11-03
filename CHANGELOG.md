@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### MIDI-CI Property Exchange
+
+An application could send notes and SysEx, and could not ask a device for DeviceInfo or subscribe to a resource.
+
+Property Exchange is MIDI-CI System Exclusive in `libmidi2`, not a second kit. `midi2_pe_encode` and `midi2_pe_decode` read the request, reply, subscription, notify, and capabilities layouts. A body that does not fit one SysEx is split into chunks and joined again with `midi2_pe_assembly_add`. The bytes between `F0` and `F7` are the existing SysEx7 packets. `midi2_pe_catalog` answers `ResourceList`, `DeviceInfo`, `ChannelList`, `ProgramList`, and `CtrlMapList` (also accepted as `ControllerMap`). `ChannelList` and `CtrlMapList` can be subscribed and then reported with a `full` command. Notify status 144 has no reply. MIDI 1.0 and the earlier UMP calls are unchanged.
+
+`midi2test` covers encode, decode, two chunks, the catalog replies, subscribe, unsubscribe, and one sprayed Get inquiry. No USB MIDI device was attached. Jam `@r5-raw` for AMD64 started at 10:19 Europe/Amsterdam on 3 Nov 2026 and finished with exit 0 (1178 targets). The Mesa 25 check passed. On the VirtualBox guest from that image, `midi2test` printed `all checks passed` (reported at 10:26 Europe/Amsterdam), including the Property Exchange lines and the earlier MIDI 1.0 and UMP checks. That run does not exercise a USB MIDI device.
+
 ### MIDI 2.0 receive and SysEx
 
 Incoming UMP was reduced to 7-bit MIDI 1.0 before an application could read it, and `usb_midi` returned `B_UNSUPPORTED` for SysEx on a version 2.0 endpoint.

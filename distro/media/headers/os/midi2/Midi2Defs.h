@@ -280,4 +280,7 @@ midi2_sysex_payload(const uint32* words, size_t wordCount, uint8* _status,
 }
 
 
+#include <Midi2Property.h>
+
+
 #endif // _MIDI2_DEFS_H
