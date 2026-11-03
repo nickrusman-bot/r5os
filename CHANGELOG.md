@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### HTTP request timeout
+
+`SetTimeout()` on a `BHttpRequest` did nothing when it was called before the socket existed. The value is kept and applied when the socket is created, before connect (Haiku #20436). A timeout set after the socket exists still reaches that socket. Gopher already had a socket at construction, so that path is unchanged.
+
 ### Mixer with no sound device
 
 A late-buffer notice and the buffer-group request both read the mixer output without checking it. With no sound device that pointer is empty, and `media_addon_server` crashes (Haiku #20425). Both calls return when there is no output. A connected mixer is unchanged.
