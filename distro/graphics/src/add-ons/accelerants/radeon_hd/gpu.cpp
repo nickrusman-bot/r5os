@@ -648,6 +648,15 @@ radeon_gpu_ring_boot(uint32 ringType)
 {
 	TRACE("%s called\n", __func__);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (gInfo->shared_info->chipsetID >= RADEON_RAVEN) {
+		ERROR("%s: R5 radeon_hd: DCN, command ring stays off\n", __func__);
+		return B_OK;
+	}
+// SPDX-SnippetEnd
+
 	RingQueue* ring = gInfo->ringQueue[ringType];
 	if (ring == NULL) {
 		ERROR("%s: Specified ring doesn't exist!\n", __func__);

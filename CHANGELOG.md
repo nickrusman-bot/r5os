@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Barcelo keeps the picture, and family 19h microcode is on the boot volume
+
+`CONFIG_MEMSIZE` on this APU is not a size. The `0MB` line is gone. The log now says the register is unused and the PCI aperture stays the upper bound. The mapped picture is still the boot framebuffer. DPMS on DCN returns before `encoder_dpms_set`, so the DIG table and link training do not run. The command ring returns before the R600 reset and stays off.
+
+The bootloader already looks for `system/non-packaged/data/firmware/amd-ucode/microcode_amd_fam19h.bin`. That file is the unmodified linux-firmware container, sha256 `c614d6db8056c5c67a9189b225124127d56990a190305bcb3927d50e132de7dd`, with AMD's license beside it. Family `0x19` model `0x50` stepping `0` is CPUID `0x00a50f00`, equivalence id `0xa500`, patch `0x0a500012`. The BIOS on this machine is patch `0x0a50000f`, which is older. The equivalence match used to compare the CPUID with the 16-bit equivalence id, which never hits. It now compares `installed_cpu`. P-state MSRs are not written.
+
+`jam -q @r5-anyboot` for AMD64 finished at 18:07 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1415 targets). The accelerant contains `skip encoder DPMS` and `command ring stays off`. The kernel driver contains `CONFIG_MEMSIZE unused`. The anyboot image contains `microcode_amd_fam19h.bin` and `LICENSE.amd-ucode`. The image was written raw to the General UDisk at 18:11. Read-back matched at the start, the BeFS start, and the EFI start. Disk 0, the NVMe, was not opened.
+
+That stick booted on the Ryzen 5 5625U and reached the desktop. The BeFS syslog contains `CONFIG_MEMSIZE unused, PCI aperture 262144 KiB`, `leave the firmware display setup`, `command ring stays off`, `keep the boot scanout`, and `skip encoder DPMS`. There is no `found 0MB`, no `encoder_dpms_set`, and no `dp_link_train`. First login ran. The bootloader logged `microcode file read in memory`. The kernel logged `found equiv cpu: a500`, then `incorrect alignment` on the Barcelo section, then `no fw update found for this cpu`. `patch_level` stayed `0xa50000f` on every CPU. The patch `0x0a500012` was not applied. No P-state MSR was written. The logs are on `/boot/home` (`no FAT mount`, pass 2).
+
 ### DCN init leaves the firmware picture in place
 
 The image that left `1002:15e7` unclaimed reached the desktop. Claiming Barcelo and then running the DCE encoder init and `SetDCEClock` stops that picture. `radeon_hd` claims the id again. On `RADEON_RAVEN` and later the accelerant does not run encoder init, the display-clock command, DisplayPort link setup, AUX, DPMS, or a modeset. The kernel maps the bootloader framebuffer and keeps its pitch. The parser and the other DCN skips stay. This is not a DCN modeset. The panel is the firmware scanout with `radeon_hd` drawing into that buffer.

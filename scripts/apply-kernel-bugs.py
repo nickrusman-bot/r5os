@@ -10,7 +10,9 @@ HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/hai
 
 
 def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
-    text = path.read_text(encoding="utf-8")
+    old = old.replace("\r\n", "\n").replace("\r", "\n")
+    new = new.replace("\r\n", "\n").replace("\r", "\n")
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
     if new in text and old not in text:
         print(f"already {path.name} ({tag})")
         return
@@ -295,6 +297,24 @@ job x-vnd.R5OS-cpu-log {
     )
 
 
+def patch_amd_ucode_match() -> None:
+    # The equivalence table stores the CPUID in installed_cpu. equiv_cpu is
+    # the 16-bit id on the patch header. Comparing the CPUID to that field
+    # never selects family 19h.
+    replace_once(
+        HAIKU / "src/system/kernel/arch/x86/arch_cpu.cpp",
+        """		if (signature == table[i].equiv_cpu) {
+			equiv_id = table[i].equiv_cpu;""",
+        """// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (signature == table[i].installed_cpu) {
+			equiv_id = table[i].equiv_cpu;
+// SPDX-SnippetEnd""",
+        "AMD microcode CPUID match",
+    )
+
+
 def install_usb_stability() -> None:
     root = pathlib.Path(__file__).resolve().parents[1]
     source_root = root / "distro" / "kernel"
@@ -318,6 +338,7 @@ def main() -> int:
     install_smp_boot()
     patch_tsc_div0()
     install_pstate()
+    patch_amd_ucode_match()
     install_usb_stability()
     return 0
 

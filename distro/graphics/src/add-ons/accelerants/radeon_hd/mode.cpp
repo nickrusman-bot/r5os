@@ -158,6 +158,15 @@ radeon_dpms_mode(void)
 void
 radeon_dpms_set(uint8 id, int mode)
 {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (gInfo->shared_info->chipsetID >= RADEON_RAVEN) {
+		ERROR("%s: R5 radeon_hd: DCN, skip encoder DPMS\n", __func__);
+		gInfo->dpms_mode = mode;
+		return;
+	}
+// SPDX-SnippetEnd
 	if (mode == B_DPMS_ON) {
 		display_crtc_dpms(id, mode);
 		encoder_dpms_set(id, mode);
