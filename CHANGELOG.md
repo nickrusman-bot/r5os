@@ -4,6 +4,8 @@
 
 `POP3Protocol::SendCommand` drained leftover bytes before the next command. A closed socket stays readable, and `Read` then returns 0. The loop printed `Had to flush 0 bytes` and never left, so `mail_daemon` used a core (Haiku #14441). A zero-length read now ends the flush. A real leftover is still discarded, and a read error is still returned. The command is sent after that, and a closed connection fails on the write.
 
+`jam -q POP3` for AMD64 finished at 12:40 Europe/Amsterdam on 3 Nov 2026 with exit 0 (4 targets updated, `POP3` linked). Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. No POP3 server was contacted.
+
 ### Mail dates marked UT
 
 A date ending in `UT` (Universal Time, from RFC 822) was left for `parsedate()`, which accepts `GMT` and `UTC` and rejects `UT`. The parse failed and the mail's When time became the moment it was fetched (Haiku #20440). A trailing `UT` is rewritten to `GMT` before that parse. Numeric zones and `UTC` are unchanged.
