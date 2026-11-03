@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Raven and Renoir keep a GFX9 ring in the visible pool
+
+Linux `gfx_v9_0_cp_gfx_resume` points `CP_RB0_BASE` at a ring only after the ME, PFP, and CE microcode is loaded. `gfx_v9_0_ring_test_ring` then writes scratch register 0 from `0xCAFEDEAD` to `0xDEADBEEF` with `PACKET3_SET_UCONFIG_REG`. The register numbers come from `gc_9_0_offset.h` plus the Vega10 GC bases that `soc15_reg_base_init` uses for Raven and Renoir: segment 0 is `0x2000`, segment 1 is `0xA000`, and scratch 0 is segment 1. Navi is GFX10 and is not programmed with those registers.
+
+On Raven and Renoir, `radeon_gpu_ring_boot` now takes 4 KiB from the visible pool for that ring and another 4 KiB for a fence word. The ring is filled with type-2 NOPs (`0x80000000`). The first three dwords are the scratch packet, index `0x40`, value `0xDEADBEEF`. The fence word is `0xCAFEDEAD`. The CPU reads both back. No `CP_RB0_*` or `CP_ME_CNTL` register is read or written, and `GRBM_SOFT_RESET` stays unreachable. Hainan, Topaz, and Navi log `GFX9 ring stays off`. DCE still returns at the old TODO before the R600 reset. The scanout is not moved. Memory beyond the BAR and GART are not programmed.
+
+`jam -q @r5-anyboot` for AMD64 finished at 00:23 Europe/Amsterdam on 4 Nov 2026 with exit 0. The linked accelerant contains `GFX9 CP not touched, fence not submitted`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It does not contain `refind.conf`. This image has not been booted.
+
 ### The visible VRAM window keeps the firmware picture
 
 Linux `gmc_v9_0_mc_init` takes the framebuffer BAR as the CPU-visible aperture. `amdgpu_gmc_get_vbios_allocations` then keeps the firmware picture out of the heap. Raven and Renoir also keep 9 MiB at the start. The Haiku driver maps that same BAR with one write-combining area, for every chip, not for one PCI ID. The boot picture is reserved when it sits inside the BAR, aligned to 4 KiB. The pool is the larger side that does not overlap it. `radeon_vram_alloc` bumps the pool and does not free it. Memory beyond the BAR is not part of the pool. GART is not programmed. DCN still does not write memory-controller registers. DCE still programs its controller and still uses the start of the BAR for the scanout.

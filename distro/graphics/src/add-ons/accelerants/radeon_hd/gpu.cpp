@@ -703,6 +703,67 @@ radeon_gpu_ring_setup()
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Linux gfx_v9_0_cp_gfx_resume programs CP_RB0 only after the ME, PFP, and
+// CE microcode is loaded and the GFX clock is held. This driver has neither.
+// The ring below is the buffer that resume would point at. The packet is the
+// gfx_v9_0_ring_test_ring scratch write. Nothing here writes CP registers.
+static void
+radeon_gfx9_prepare_ring()
+{
+	const uint32 kRingBytes = 4096;
+	const uint32 kFenceBytes = 4096;
+	// PACKET3(SET_UCONFIG_REG, 1). Type 3, count 1, opcode 0x79.
+	const uint32 kSetUconfig = (3u << 30) | (1u << 16) | (0x79u << 8);
+	// GC segment 1 is 0xA000 and SCRATCH_REG0 is 0x2040 there. The packet
+	// index is that dword offset minus SET_UCONFIG_REG_START (0xC000).
+	const uint32 kScratchIndex = (0xA000u + 0x2040u) - 0xC000u;
+	const uint32 kNop = 0x80000000;
+	const uint32 kFence = 0xCAFEDEAD;
+
+	uint64 ringOffset = 0;
+	uint8* ringAddress = NULL;
+	status_t result = radeon_vram_alloc(kRingBytes, kRingBytes, &ringOffset,
+		&ringAddress);
+	if (result != B_OK || ringAddress == NULL) {
+		ERROR("%s: R5 radeon_hd: GFX9 ring alloc failed\n", __func__);
+		return;
+	}
+
+	uint64 fenceOffset = 0;
+	uint8* fenceAddress = NULL;
+	result = radeon_vram_alloc(kFenceBytes, kFenceBytes, &fenceOffset,
+		&fenceAddress);
+	if (result != B_OK || fenceAddress == NULL) {
+		ERROR("%s: R5 radeon_hd: GFX9 fence alloc failed\n", __func__);
+		return;
+	}
+
+	uint32* ring = (uint32*)ringAddress;
+	uint32 dwords = kRingBytes / sizeof(uint32);
+	for (uint32 i = 0; i < dwords; i++)
+		ring[i] = kNop;
+	ring[0] = kSetUconfig;
+	ring[1] = kScratchIndex;
+	ring[2] = 0xDEADBEEF;
+
+	volatile uint32* fence = (volatile uint32*)fenceAddress;
+	*fence = kFence;
+	uint32 fenceRead = *fence;
+	uint32 headerRead = ring[0];
+
+	ERROR("%s: R5 radeon_hd: GFX9 ring 0x%" B_PRIx64 "+0x%" B_PRIx32
+		" packet 0x%" B_PRIx32 " fence 0x%" B_PRIx64 " read 0x%" B_PRIx32
+		"\n", __func__, ringOffset, kRingBytes, headerRead, fenceOffset,
+		fenceRead);
+	ERROR("%s: R5 radeon_hd: GFX9 CP not touched, fence not submitted\n",
+		__func__);
+}
+// SPDX-SnippetEnd
+
+
 status_t
 radeon_gpu_ring_boot(uint32 ringType)
 {
@@ -712,7 +773,13 @@ radeon_gpu_ring_boot(uint32 ringType)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
-		ERROR("%s: R5 radeon_hd: DCN, command ring stays off\n", __func__);
+		uint16 chipsetID = gInfo->shared_info->chipsetID;
+		if (ringType == RADEON_QUEUE_TYPE_GFX_INDEX
+			&& chipsetID >= RADEON_RAVEN && chipsetID <= RADEON_RENOIR) {
+			radeon_gfx9_prepare_ring();
+		} else {
+			ERROR("%s: R5 radeon_hd: GFX9 ring stays off\n", __func__);
+		}
 		return B_OK;
 	}
 // SPDX-SnippetEnd
