@@ -12,8 +12,10 @@ import shutil
 import sys
 
 FILES = (
+    "src/add-ons/accelerants/radeon_hd/accelerant.cpp",
     "src/add-ons/accelerants/radeon_hd/connector.cpp",
     "src/add-ons/accelerants/radeon_hd/display.cpp",
+    "src/add-ons/accelerants/radeon_hd/mode.cpp",
     "src/add-ons/accelerants/radeon_hd/gpu.cpp",
     "src/add-ons/accelerants/radeon_hd/pll.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",

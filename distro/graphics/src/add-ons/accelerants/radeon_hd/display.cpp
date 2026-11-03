@@ -249,6 +249,13 @@ detect_crt_ranges(uint32 crtid)
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static bool r5_display_is_dcn();
+// SPDX-SnippetEnd
+
+
 status_t
 detect_displays()
 {
@@ -277,6 +284,20 @@ detect_displays()
 			TRACE("%s: connector(%" B_PRIu32 "): Checking %sDP.\n", __func__, id,
 				gConnector[id]->type == VIDEO_CONNECTOR_EDP ? "e" : "");
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			if (r5_display_is_dcn()) {
+				ERROR("%s: connector(%" B_PRIu32
+					"): R5 radeon_hd: DCN, skip AUX\n", __func__, id);
+				if (gConnector[id]->type == VIDEO_CONNECTOR_EDP
+					&& gInfo->shared_info->has_edid) {
+					memcpy(&gDisplay[displayIndex]->edidData,
+						&gInfo->shared_info->edid_info, sizeof(edid1_info));
+					gDisplay[displayIndex]->attached = true;
+				}
+			} else {
+// SPDX-SnippetEnd
 			if (gConnector[id]->encoderExternal.valid == true) {
 				// If this has a valid external encoder (dp bridge)
 				// normally TRAVIS (LVDS) or NUTMEG (VGA)
@@ -310,6 +331,7 @@ detect_displays()
 				gDisplay[displayIndex]->attached = true;
 			}
 // SPDX-SnippetEnd
+			}
 		}
 
 
@@ -336,7 +358,11 @@ detect_displays()
 		}
 
 		// If no display found yet, try more standard detection methods
-		if (gDisplay[displayIndex]->attached == false) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (gDisplay[displayIndex]->attached == false && !r5_display_is_dcn()) {
+// SPDX-SnippetEnd
 			TRACE("%s: connector(%" B_PRIu32 "): bit-banging ddc for EDID.\n",
 				__func__, id);
 
@@ -583,6 +609,16 @@ void
 display_crtc_dpms(uint8 crtcID, int mode)
 {
 	radeon_shared_info &info = *gInfo->shared_info;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (r5_display_is_dcn()) {
+		ERROR("%s: R5 radeon_hd: DCN, skip DPMS\n", __func__);
+		gDisplay[crtcID]->powered = (mode == B_DPMS_ON);
+		return;
+	}
+// SPDX-SnippetEnd
 
 	switch (mode) {
 		case B_DPMS_ON:

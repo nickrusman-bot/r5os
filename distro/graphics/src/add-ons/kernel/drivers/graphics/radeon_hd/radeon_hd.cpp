@@ -32,6 +32,7 @@
 
 #include <ACPI.h>
 #include <boot_item.h>
+#include <frame_buffer_console.h>
 #include <driver_settings.h>
 #include <util/AreaKeeper.h>
 #include <util/kernel_cpp.h>
@@ -827,10 +828,37 @@ radeon_hd_init(radeon_info &info)
 
 	// *** Framebuffer mapping
 
-	TRACE("framebuffer paddr: %#" B_PRIxPHYSADDR "\n", fbAddr);
+	phys_addr_t mapAddr = fbAddr;
+	uint32 mapBytes = info.shared_info->frame_buffer_size * 1024;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (info.chipsetID >= RADEON_RAVEN) {
+		frame_buffer_boot_info* bootFrame
+			= (frame_buffer_boot_info*)get_boot_item(
+				FRAME_BUFFER_BOOT_INFO, NULL);
+		if (bootFrame != NULL && bootFrame->physical_frame_buffer != 0
+			&& bootFrame->bytes_per_row > 0 && bootFrame->height > 0) {
+			uint64 bytes = (uint64)bootFrame->bytes_per_row
+				* (uint64)bootFrame->height;
+			mapAddr = bootFrame->physical_frame_buffer;
+			mapBytes = (uint32)((bytes + 4095) & ~4095ULL);
+			info.shared_info->frame_buffer_size = mapBytes / 1024;
+			info.shared_info->bytes_per_row = bootFrame->bytes_per_row;
+			ERROR("%s: R5 radeon_hd: DCN, boot framebuffer %" B_PRId32
+				"x%" B_PRId32 " pitch %" B_PRId32 "\n", __func__,
+				bootFrame->width, bootFrame->height,
+				bootFrame->bytes_per_row);
+		} else {
+			ERROR("%s: R5 radeon_hd: DCN, no boot framebuffer\n", __func__);
+		}
+	}
+// SPDX-SnippetEnd
+
+	TRACE("framebuffer paddr: %#" B_PRIxPHYSADDR "\n", mapAddr);
 	AreaKeeper frambufferMapper;
 	info.framebuffer_area = frambufferMapper.Map("radeon hd frame buffer",
-		fbAddr, info.shared_info->frame_buffer_size * 1024,
+		mapAddr, mapBytes,
 		B_ANY_KERNEL_ADDRESS, B_READ_AREA | B_WRITE_AREA,
 		(void**)&info.shared_info->frame_buffer);
 
@@ -845,12 +873,13 @@ radeon_hd_init(radeon_info &info)
 		(size_t)info.shared_info->frame_buffer_size * 1024);
 
 	// Turn on write combining for the frame buffer area
-	vm_set_area_memory_type(info.framebuffer_area, fbAddr, B_WRITE_COMBINING_MEMORY);
+	vm_set_area_memory_type(info.framebuffer_area, mapAddr,
+		B_WRITE_COMBINING_MEMORY);
 
 	frambufferMapper.Detach();
 
 	info.shared_info->frame_buffer_area = info.framebuffer_area;
-	info.shared_info->frame_buffer_phys = fbAddr;
+	info.shared_info->frame_buffer_phys = mapAddr;
 
 	// Pass common information to accelerant
 	info.shared_info->deviceIndex = info.id;

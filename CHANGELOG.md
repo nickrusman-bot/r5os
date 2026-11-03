@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### DCN init leaves the firmware picture in place
+
+The image that left `1002:15e7` unclaimed reached the desktop. Claiming Barcelo and then running the DCE encoder init and `SetDCEClock` stops that picture. `radeon_hd` claims the id again. On `RADEON_RAVEN` and later the accelerant does not run encoder init, the display-clock command, DisplayPort link setup, AUX, DPMS, or a modeset. The kernel maps the bootloader framebuffer and keeps its pitch. The parser and the other DCN skips stay. This is not a DCN modeset. The panel is the firmware scanout with `radeon_hd` drawing into that buffer.
+
+`jam -q @r5-anyboot` for AMD64 finished at 17:34 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1185 targets). The linked driver contains `Radeon Vega Barcelo` and `boot framebuffer`. The accelerant contains `leave the firmware display setup`, `keep the boot scanout`, `leave the display clock alone`, and `skip AUX`. The image was written raw to the General UDisk at 17:38. Read-back matched at the start, the BeFS start, and the EFI start. Disk 0, the NVMe, was not opened. This image has not been booted.
+
 ### Barcelo stays off the claimed display list
 
 The boots at 16:14 and 16:47 Europe/Amsterdam stayed on the rocket. The flushed log ends at first-boot package 131. The next lines on a QEMU serial log of the same image are the graphics probes, then `ps2: keyboard found`, and then silence. QEMU has no `1002:15e7`. `ati-vga` is a Rage 128 or an RV100, so that device id cannot be substituted.

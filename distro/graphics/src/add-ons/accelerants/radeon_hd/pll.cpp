@@ -1148,6 +1148,16 @@ pll_external_init()
 {
 	radeon_shared_info &info = *gInfo->shared_info;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (info.chipsetID >= RADEON_RAVEN) {
+		ERROR("%s: R5 radeon_hd: DCN, leave the display clock alone\n",
+			__func__);
+		return;
+	}
+// SPDX-SnippetEnd
+
 	if (info.dceMajor >= 12) {
 		pll_set_dce(gInfo->displayClockFrequency,
 			DCE_CLOCK_TYPE_DISPCLK, ATOM_GCK_DFS);
