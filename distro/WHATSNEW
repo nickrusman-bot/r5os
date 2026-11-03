@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10043 - Finer MIDI
+MIDI notes can use a finer velocity, and controllers a finer value. Programs that already send MIDI keep working. The Terminal command midi2test checks the new notes.
+
 R5 2026.1-dev Build 10042 - Latency file
 The latency choice is written into the sound settings. Restart media services to use it. A volume slider that starts from silence keeps a real level.
 
