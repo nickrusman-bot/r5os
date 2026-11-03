@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 per-note controllers, profiles, and discovery
+
+Property Exchange could ask for a resource. A per-note controller, a profile, and endpoint discovery still had no calls.
+
+`midi2_encode_per_note` writes one type 0x4 packet. Status 0 is registered and status 1 is assignable. The value stays in `Data`. `NoteOn` and `ControlChange` are not called. Profile inquiry, Set On, Set Off, the enabled and disabled reports, and Profile Specific Data are MIDI-CI System Exclusive on the existing SysEx7 path. One catalog profile starts disabled and can be enabled. UMP Stream messages answer Endpoint Discovery and Function Block Discovery for one local endpoint. The USB MIDI 2.0 interface descriptor (including the alternate setting), the class-specific header, and a Group Terminal Block can be written and parsed without a device. `usb_midi` treats protocol `0x11` in that block as a MIDI 2.0 endpoint. MIDI 1.0 and the earlier MIDI 2.0 calls are unchanged.
+
+`midi2test` covers each of those paths, including a sprayed per-note controller, a sprayed discovery packet, and a sprayed Profile Enabled report. No USB MIDI device was attached. Jam `usb_midi` for AMD64 finished at 10:43 Europe/Amsterdam on 3 Nov 2026 with exit 0. Jam `midi2test` (and `libmidi2.so`) finished at 10:46 the same morning with exit 0. The helper checks, which do not need `midi_server`, were run on the host from these headers and printed `helper checks passed`, including the alternate setting. The new `midi2test` binary was not run in the guest, so the spray path for per-note, discovery, and the profile report is not confirmed on a booted system.
+
 ### MIDI-CI Property Exchange
 
 An application could send notes and SysEx, and could not ask a device for DeviceInfo or subscribe to a resource.

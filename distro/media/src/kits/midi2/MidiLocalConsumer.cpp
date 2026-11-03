@@ -261,6 +261,7 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 			uchar value = (uchar)(midi2_control_value(words, wordCount) >> 25);
 			consumer->ControlChange(channel, index, value, time);
 		}
+		// Status 0 and 1 are per-note controllers. They stay in Data().
 		return;
 	}
 

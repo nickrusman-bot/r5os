@@ -192,6 +192,65 @@ midi2_control_value(const uint32* words, size_t wordCount)
 }
 
 
+/* MIDI 2.0 per-note controller, message type 0x4. Status 0 is registered,
+ * status 1 is assignable. The note is 7 bits. The index is one byte.
+ * The controller value is all of word 1. MIDI 1.0 hooks do not see it.
+ */
+inline void
+midi2_encode_per_note(uchar channel, uchar note, uint8 index, uint32 value,
+	bool registered, uint32 words[2])
+{
+	uint32 status = registered ? 0 : 1;
+	words[0] = (0x4u << 28) | (status << 20) | ((uint32)(channel & 0x0f) << 16)
+		| ((uint32)(note & 0x7f) << 8) | index;
+	words[1] = value;
+}
+
+
+inline bool
+midi2_is_per_note(const uint32* words, size_t wordCount)
+{
+	if (words == NULL || wordCount != 2 || (words[0] >> 28) != 0x4)
+		return false;
+	uint32 status = (words[0] >> 20) & 0x0f;
+	return status == 0 || status == 1;
+}
+
+
+inline uint8
+midi2_per_note_note(const uint32* words, size_t wordCount)
+{
+	if (!midi2_is_per_note(words, wordCount))
+		return 0;
+	return (words[0] >> 8) & 0x7f;
+}
+
+
+inline uint8
+midi2_per_note_index(const uint32* words, size_t wordCount)
+{
+	if (!midi2_is_per_note(words, wordCount))
+		return 0;
+	return words[0] & 0xff;
+}
+
+
+inline uint32
+midi2_per_note_value(const uint32* words, size_t wordCount)
+{
+	if (!midi2_is_per_note(words, wordCount))
+		return 0;
+	return words[1];
+}
+
+
+inline bool
+midi2_per_note_registered(const uint32* words, size_t wordCount)
+{
+	return midi2_is_per_note(words, wordCount) && ((words[0] >> 20) & 0x0f) == 0;
+}
+
+
 /* SysEx7, message type 0x3. Status 0 is a complete message, 1 starts,
  * 2 continues, 3 ends. The payload is the bytes between F0 and F7.
  * Each packet holds at most 6 of those bytes.
@@ -281,6 +340,9 @@ midi2_sysex_payload(const uint32* words, size_t wordCount, uint8* _status,
 
 
 #include <Midi2Property.h>
+#include <Midi2Profile.h>
+#include <Midi2Stream.h>
+#include <Midi2Usb.h>
 
 
 #endif // _MIDI2_DEFS_H
