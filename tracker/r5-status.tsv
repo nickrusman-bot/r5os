@@ -3908,7 +3908,7 @@ id	r5_status	branch	commit	notes
 20405	open			
 20406	open			
 20407	open			
-20409	open			
+20409	fixed	cursor/terminal-wheel	63a9499701	Alternate-screen wheel is a mouse button 64/65 report when mouse tracking is on. Arrow keys remain when tracking is off. jam -q Terminal exited 0 on 3 Nov 2026. The wheel was not turned in a running Terminal.
 20412	open			
 20413	open			
 20414	open			
