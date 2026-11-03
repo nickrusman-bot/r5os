@@ -63,6 +63,8 @@ R5OS is multi-license. New R5OS-owned files default to `GPL-3.0-or-later` with a
 
 Do not assume the Haiku tree is all MIT. Do not drop a suitable driver only to keep a single license. Do not rewrite license headers in bulk. The file-by-file audit, REUSE lint, and About credits view are not done.
 
+When a file contains both original Haiku code and R5OS changes, keep the MIT header and copyright. Mark only the R5OS portions with SPDX-Snippet tags and a GPL-3.0-or-later notice. Do not relicense the entire file. The combined binary is distributed under GPL-3.0-or-later.
+
 Before adding a component, report project, SPDX license (`-only` or `-or-later`), copyright, integration, source-offer duties, and combination questions. Uncertain kernel integration stays out of the image until reviewed. Credit shipped third-party code from `THIRD_PARTY_NOTICES.md` (AirPlay detail: `distro/airplay/THIRD_PARTY.md`). Do not invent copyright holders.
 
 ## AI
@@ -102,17 +104,21 @@ If a test cannot run, say which one and why.
 
 ## Overlays and native source
 
-R5OS is an independent Haiku **fork**. `origin` is the product. `upstream` is fetch-only. Do not push to Haiku remotes or open PRs against Haiku.
+R5OS is an independent Haiku fork. `origin` is the product. `upstream` is fetch-only. Do not push to Haiku remotes or open PRs against Haiku.
 
-OS behavior belongs in **native source** under `distro/` (copied into the Haiku tree at apply time) or, later, in an in-tree `haiku/` checkout. Do **not** add new overlays. Do **not** add Python whose purpose is a string patch of Haiku C++. Existing `apply-*.py` may only **copy** `distro/` files, Jam `SubInclude`, launch jobs, or other idempotent hooks. Fail loudly if a required pattern is missing. New features go in `distro/users`, `distro/login`, … — not `replace_once`.
+All OS behavior and R5OS changes belong in native source under `distro/` (copied into the Haiku tree at apply time). Do not add new overlays. Do not add Python whose purpose is a string patch of Haiku C++.
 
-`replace_once` matching a short substring can insert **duplicates**. After apply, grep for doubled `SYSTEM_SERVERS`, `SYSTEM_PREFERENCES`, launch jobs, and includes.
+Copy relevant Haiku files into `distro/` when you need to change them. Keep the original MIT license and copyright notice. Apply R5OS changes on top and mark those changes with SPDX-Snippet tags and a GPL-3.0-or-later notice. The original Haiku portions remain MIT. The combined binary is distributed under GPL-3.0-or-later.
+
+Existing `apply-*.py` may only copy `distro/` files, Jam `SubInclude`, launch jobs, or other idempotent hooks. Fail loudly if a required pattern is missing. New features go in `distro/users`, `distro/login`, `distro/graphics`, `distro/media`, `distro/kernel`, and the other `distro/` trees — not `replace_once`.
+
+`replace_once` matching a short substring can insert duplicates. After apply, grep for doubled `SYSTEM_SERVERS`, `SYSTEM_PREFERENCES`, launch jobs, and includes.
 
 Hook new `apply-*.py` into `scripts/apply-overlay.sh`. Keep upstream imports distinct from R5OS-only changes. Temporary overlays must not become silent architecture.
 
-To retire an overlay: land the native replacement, jam, boot, compare behavior, then remove the old patch. Do not delete overlays wholesale. Keep Python for jam/image/tracker/tests.
+To retire an overlay: land the native replacement in `distro/`, jam, boot, compare behavior, then remove the old patch. Do not delete overlays wholesale. Keep Python for jam, image, tracker, and tests.
 
-Inventory and migration order: `docs/MULTIUSER.md`.
+Older string patches are still in some `apply-*.py` scripts. Do not add more. Retire them by copying the file into `distro/` as above. Inventory and migration order for accounts: `docs/MULTIUSER.md`.
 
 ## Multi-user
 

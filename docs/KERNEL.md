@@ -1,6 +1,6 @@
 # Kernel and CPU
 
-Audit of the AMD64 kernel and boot loader that R5OS actually builds. Source of the limits is the Haiku tree at `/home/nickr/r5os/haiku`, plus the R5OS boot-loader copy `distro/boot/bios_ia32/smp.cpp` installed by `scripts/apply-kernel-bugs.py`. This is source inspection and the boots already recorded in `CHANGELOG.md` and `docs/vbox.md`. It is not a 64-CPU test, a 128-CPU test, or a bare-metal boot of the Ryzen 5 5625U.
+Audit of the AMD64 kernel and boot loader that R5OS actually builds. Source of the limits is the Haiku tree at `/home/nickr/r5os/haiku`. `scripts/apply-kernel-bugs.py` copies `distro/boot/bios_ia32/smp.cpp`, `distro/kernel/src/system/kernel/arch/x86/arch_timer.cpp`, and `arch_cpu.cpp` over that tree. Those two kernel files keep the Haiku MIT header and the NewOS notice. The R5OS edits are GPL-3.0-or-later `SPDX-Snippet` blocks: TSC divide guards (Haiku #20400), the `r5_pstate` publish call, and the microcode match on `installed_cpu`. A successful boot logs `R5 kernel: arch_timer TSC guards active` and `R5 kernel: arch_cpu from distro, microcode match uses installed_cpu`. The combined kernel is distributed under GPL-3.0-or-later. Haiku, Inc. and the original authors keep the credit on the unmodified portions. This is source inspection and the boots already recorded in `CHANGELOG.md` and `docs/vbox.md`. It is not a 64-CPU test, a 128-CPU test, or a bare-metal boot of the Ryzen 5 5625U.
 
 No kernel source was changed for this audit. The read-only snapshot
 further down was added later. It does not write a P-state.

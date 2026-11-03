@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Interface, Tracker, and Deskbar sources are copied from the R5 tree
+
+The string patches in `apply-ui-bugs.py`, `apply-tracker-desktop.py`, `apply-deskbar-bugs.py`, `apply-darkmode.py`, `apply-ui-shell.py`, and `apply-desktop-enh.py` are retired. `scripts/apply-desktop-native.py` copies those files from `distro/desktop` before branding runs. `distro/ui` stays the `libr5ui` sources. Each file keeps its Haiku copyright and MIT notice. The R5OS edits are GPL-3.0-or-later `SPDX-Snippet` blocks. Deskbar logs `R5 deskbar: BarApp from distro`. Tracker logs `R5 tracker: Tracker from distro`. The control look logs `R5 interface: HaikuControlLook from distro`. Branding, login, and About still adjust the product name and the session menu on top of that copy, and those hooks stay idempotent. `MenuField.cpp` stays with the media copy. The Deskbar Jamfile link line and `icons.rdef` stay in the branding script. `ServerApp.cpp` stays with the account script. `scripts/tracker-deskbar-more.diff` is no longer applied.
+
+### Kernel TSC guards and the microcode match are copied from the R5 tree
+
+`arch_timer.cpp` and `arch_cpu.cpp` now live under `distro/kernel`. `scripts/apply-kernel-bugs.py` copies them. It no longer string-patches those files. The Haiku MIT header and the NewOS notice stay. The TSC zero checks, the `r5_pstate` hook, and the `installed_cpu` comparison are GPL-3.0-or-later snippets. Boot logs `R5 kernel: arch_timer TSC guards active` and `R5 kernel: arch_cpu from distro, microcode match uses installed_cpu`. Jamfile lines and the CPU-log launch job are still idempotent inserts. Graphics, media, USB audio, and MIDI were already copies. Interface, Tracker, Deskbar, IPv6, About, and branding string patches are not moved yet.
+
 ### Barcelo keeps the picture, and family 19h microcode is on the boot volume
 
 `CONFIG_MEMSIZE` on this APU is not a size. The `0MB` line is gone. The log now says the register is unused and the PCI aperture stays the upper bound. The mapped picture is still the boot framebuffer. DPMS on DCN returns before `encoder_dpms_set`, so the DIG table and link training do not run. The command ring returns before the R600 reset and stays off.

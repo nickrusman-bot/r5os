@@ -12,9 +12,17 @@ SRC = ROOT / "distro" / "login"
 
 
 def replace_once(
-    path: pathlib.Path, old: str, new: str, tag: str, optional: bool = False
+    path: pathlib.Path,
+    old: str,
+    new: str,
+    tag: str,
+    optional: bool = False,
+    marker: str | None = None,
 ) -> None:
     text = path.read_text(encoding="utf-8")
+    if marker is not None and marker in text:
+        print(f"already {path.name} ({tag})")
+        return
     if new in text:
         print(f"already {path.name} ({tag})")
         return
@@ -238,6 +246,7 @@ def patch_deskbar() -> None:
         "#include <pwd.h>\n"
         "#include <unistd.h>\n",
         "Deskbar logout pwd include",
+        marker="#include <pwd.h>",
     )
     logout_plain = (
         "	item = new BMenuItem(B_TRANSLATE(\"Log out\"),\n"
@@ -272,6 +281,7 @@ def patch_deskbar() -> None:
         "				case kShutdownSystem:\n"
         "				case kLogoutSession:\n",
         "Deskbar Log out target",
+        marker="case kLogoutSession:",
     )
     replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "DeskbarMenu.cpp",
@@ -286,6 +296,7 @@ def patch_deskbar() -> None:
         "#include <LaunchRoster.h>\n"
         "#include <Roster.h>\n",
         "Deskbar LaunchRoster include",
+        marker="#include <LaunchRoster.h>",
     )
     replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "BarApp.cpp",
@@ -316,6 +327,7 @@ def patch_deskbar() -> None:
         "			run_be_about();\n"
         "			break;\n",
         "Deskbar Log out handler",
+        marker="Log out of this session?",
     )
     replace_once(
         HAIKU / "src" / "apps" / "deskbar" / "BarApp.cpp",
