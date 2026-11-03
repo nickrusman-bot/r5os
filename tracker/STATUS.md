@@ -4,21 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3810 |
+| open | 3809 |
 | in-progress | 8 |
-| fixed | 118 |
+| fixed | 119 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2470** bugs, **1288** enhancements, rest overig (van 3818 open/bezig).
+Nog open in R5OS: **2469** bugs, **1288** enhancements, rest overig (van 3817 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2470 |
+| bug | 2469 |
 | enhancement | 1288 |
 | task | 60 |
 
@@ -26,7 +26,7 @@ Nog open in R5OS: **2470** bugs, **1288** enhancements, rest overig (van 3818 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3524 |
+| normal | 3523 |
 | low | 258 |
 | high | 34 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2470** bugs, **1288** enhancements, rest overig (van 3818 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3030 |
+| Unscheduled | 3029 |
 | R1 | 419 |
 | R1.1 | 298 |
 | — | 29 |
@@ -165,7 +165,7 @@ Nog open in R5OS: **2470** bugs, **1288** enhancements, rest overig (van 3818 op
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
 | [#18057](https://dev.haiku-os.org/ticket/18057) | new | User Interface | Misaligned scrollbars and resize knob |  |
 | [#18060](https://dev.haiku-os.org/ticket/18060) | new | Applications/Tracker | [Tracker] Double clicking on Size column header hides all info |  |
-| … | | | *38 meer in r5-status.tsv* | |
+| … | | | *39 meer in r5-status.tsv* | |
 
 ## Nog open (eerste 80)
 
@@ -251,5 +251,5 @@ Nog open in R5OS: **2470** bugs, **1288** enhancements, rest overig (van 3818 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3730 meer in r5-status.tsv* | |
+| … | | | *3729 meer in r5-status.tsv* | |
 

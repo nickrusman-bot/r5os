@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Terminal wheel while the mouse is reported
+
+On the alternate screen the wheel always became arrow or page keys. A program that had turned mouse reporting on, such as a full-screen editor, then saw keys instead of a scroll (Haiku #20409). When any mouse-report mode is set, the wheel is written as X10 button 64 or 65, or as the same button in the extended `CSI <` form. One event is sent per wheel step. Arrow and page keys stay in use on the alternate screen when mouse reporting is off. The ordinary scrollback, outside the alternate screen, is unchanged.
+
+`jam -q Terminal` for AMD64 finished at 12:44 Europe/Amsterdam on 3 Nov 2026 with exit 0 (`TermView.o` compiled, `Terminal` linked). Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The wheel was not turned in a running Terminal.
+
 ### POP3 flush on a closed connection
 
 `POP3Protocol::SendCommand` drained leftover bytes before the next command. A closed socket stays readable, and `Read` then returns 0. The loop printed `Had to flush 0 bytes` and never left, so `mail_daemon` used a core (Haiku #14441). A zero-length read now ends the flush. A real leftover is still discarded, and a read error is still returned. The command is sent after that, and a closed connection fails on the write.
