@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### POP3 flush on a closed connection
+
+`POP3Protocol::SendCommand` drained leftover bytes before the next command. A closed socket stays readable, and `Read` then returns 0. The loop printed `Had to flush 0 bytes` and never left, so `mail_daemon` used a core (Haiku #14441). A zero-length read now ends the flush. A real leftover is still discarded, and a read error is still returned. The command is sent after that, and a closed connection fails on the write.
+
 ### Mail dates marked UT
 
 A date ending in `UT` (Universal Time, from RFC 822) was left for `parsedate()`, which accepts `GMT` and `UTC` and rejects `UT`. The parse failed and the mail's When time became the moment it was fetched (Haiku #20440). A trailing `UT` is rewritten to `GMT` before that parse. Numeric zones and `UTC` are unchanged.
