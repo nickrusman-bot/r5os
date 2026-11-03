@@ -3918,7 +3918,7 @@ id	r5_status	branch	commit	notes
 20419	fixed			Keep Arrange by on the Desktop menu; lazily create it so DeskWindow context menu does not SIGSEGV
 20422	open			
 20423	open			
-20425	fixed	cursor/media-no-output	9421ee4ebf	LateNoticeReceived and CreateBufferGroup no longer follow a missing mixer output. jam -q mixer.media_addon exited 0 on 3 Nov 2026. No guest without a sound device was booted.
+20425	fixed	cursor/media-no-output	245585e854	LateNoticeReceived and CreateBufferGroup no longer follow a missing mixer output. jam -q mixer.media_addon exited 0 on 3 Nov 2026. No guest without a sound device was booted.
 20426	open			
 20429	open			
 20433	open			
