@@ -671,8 +671,12 @@ const struct supported_device {
 	// Ryzen 5 5625U, read from the USB boot on 3 Nov 2026.
 	// Picasso 0x15d8 is the same Raven path, but that line is inside
 	// `#if 0 /* disabled for R1/beta5 */` and is not compiled.
-	// Not modeset-tested. A bad modeset can leave the panel black.
+	// The boots at 16:14 and 16:47 stayed on the rocket before this
+	// driver logged. Leave the panel on framebuffer until a boot
+	// reaches the desktop. The parser below stays in the tree.
+#if 0
 	{0x15e7, 12, 0, RADEON_RAVEN, CHIP_APU, "Radeon Vega Barcelo"},
+#endif
 // SPDX-SnippetEnd
 };
 

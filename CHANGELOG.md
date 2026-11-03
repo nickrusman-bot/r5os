@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Barcelo stays off the claimed display list
+
+The boots at 16:14 and 16:47 Europe/Amsterdam stayed on the rocket. The flushed log ends at first-boot package 131. The next lines on a QEMU serial log of the same image are the graphics probes, then `ps2: keyboard found`, and then silence. QEMU has no `1002:15e7`. `ati-vga` is a Rage 128 or an RV100, so that device id cannot be substituted.
+
+`1002:15e7` is compiled out of the live `radeon_hd` table. The parser and the DCN skip stay in the tree and do not run. `framebuffer` keeps the boot picture. Each post-install script logs its package name before `system()` and the result after. The file is `distro/package/.../CommitTransactionHandler.cpp`: Haiku keeps the MIT header, and those two lines are GPL-3.0-or-later snippets.
+
+`jam -q @r5-anyboot` for AMD64 finished at 17:14 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1170 targets). The linked `radeon_hd` does not contain `Radeon Vega Barcelo`. `package_daemon` contains `script starting` and `script finished`. The image was written raw to the General UDisk at 17:18. Read-back matched at the start, the BeFS start, and the EFI start. Disk 0, the NVMe, was not opened. This image has not been booted.
+
 ### Boot logs stay on the BeFS volume
 
 The stick written at 15:59 Europe/Amsterdam reached the kernel and then stayed on the rocket. The first start listed all 132 first-boot packages and never wrote `activated-packages`. The second start, at 16:23, skipped that round and the flushed syslog ends when both package volumes are called consistent, about 23 seconds in. There is no panic, no `app_server`, and no `radeon_hd`. The logger had mounted the stick's own EFI partition, on the same USB disk as the boot volume, and did not write again.

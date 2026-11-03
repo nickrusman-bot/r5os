@@ -309,7 +309,21 @@ SizeSlider::SetValue(int32 value)
     )
 
 
+def copy_package_scripts() -> None:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source = root / "distro/package/src/servers/package/CommitTransactionHandler.cpp"
+    destination = HAIKU / "src/servers/package/CommitTransactionHandler.cpp"
+    if not source.is_file():
+        raise SystemExit(f"missing {source}")
+    if not destination.parent.is_dir():
+        raise SystemExit(f"missing {destination.parent}")
+    text = source.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    destination.write_bytes(text)
+    print(f"copied {destination.relative_to(HAIKU)}")
+
+
 def main() -> int:
+    copy_package_scripts()
     patch_packages_first_boot()
     patch_input_retry()
     patch_drivesetup_size()
