@@ -96,6 +96,12 @@ struct fat_choice {
 static void
 consider(const char* path, fat_choice* best)
 {
+	// The internal NVMe EFI partition is FAT32. Preferring FAT32 wrote
+	// the log onto the Windows boot partition on the 5625U. The anyboot
+	// EFI partition is the small FAT12 volume on the USB disk.
+	if (strstr(path, "/nvme/") != NULL)
+		return;
+
 	int fd = open(path, O_RDONLY);
 	if (fd < 0)
 		return;
@@ -118,8 +124,7 @@ consider(const char* path, fat_choice* best)
 
 	off_t size = status == B_OK && info.size > 0 ? info.size
 		: (off_t(1) << 62);
-	bool better = !best->found || (fat32 && !best->fat32)
-		|| (fat32 == best->fat32 && size < best->size);
+	bool better = !best->found || size < best->size;
 	if (!better)
 		return;
 

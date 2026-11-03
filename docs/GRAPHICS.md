@@ -28,7 +28,7 @@ There is no libdrm and no amdgpu/i915/nouveau kernel driver. OpenGL, where it ru
 
 USB boot of this Ryzen 5 5625U on 3 Nov 2026, read back from the stick’s BeFS syslog: the VGA device is `1002:15e7` revision `c2`, bus 4 device 0 function 0, subsystem `103c:8a31`. The kernel names it Barcelo. The old `radeon` driver logged `no supported devices found`. The loaded graphics driver on that boot was `framebuffer`, reusing the firmware buffer at `0xfce0000000`, size `0x7e9000` (1920×1080, 32-bit). HDMI audio on the same device is `1002:1637`.
 
-`1002:15e7` is in the live device table as `RADEON_RAVEN`, DCE 12.0, `CHIP_APU`. Picasso `1002:15d8` is the same Raven path, but that line sits inside `#if 0 /* disabled for R1/beta5 */` and is not compiled, so the new line is after that `#endif`. That image has not been booted. Do not claim `radeon_hd` drives the panel until a later syslog says the driver set a mode. A table match is still modesetting, not command submission and not RADV.
+`1002:15e7` is in the live device table as `RADEON_RAVEN`, DCE 12.0, `CHIP_APU`. Picasso `1002:15d8` is the same Raven path, but that line sits inside `#if 0 /* disabled for R1/beta5 */` and is not compiled, so the new line is after that `#endif`. The stick written at 14:48 Europe/Amsterdam on 3 Nov 2026 did boot. `radeon_hd` opened the device, read the video memory size as 4194303 MB, mapped 256 MB, and then logged `0 attached monitors` and closed. `framebuffer` kept the firmware buffer. Do not claim `radeon_hd` drives the panel. A table match is still modesetting, not command submission and not RADV.
 
 ## Other people’s work
 

@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The 14:48 stick booted, and the log landed on the Windows EFI partition
+
+That image reached the desktop and then shut down. `radeon_hd` claimed `1002:15e7` as `Radeon Vega Barcelo`, mapped 256 MB after reading the video memory size as 4194303 MB, probed 235 connector paths, rejected path 0 for `usSize`, and logged `0 attached monitors`. It closed. `framebuffer` then kept the firmware buffer. The desktop the user saw was that framebuffer. `package_daemon` ran first-boot processing for 132 packages; the last of those lines is at about 8.9 seconds into the boot. The syslog ends in the first-login script, then shutdown. No panic. No MSR write. The idle sample was P-state 1 (1800 MHz) and the busy sample was P-state 0 (2300 MHz).
+
+`r5_pstate_log` wrote `r5-cpu.txt`, `r5-hardware.txt`, and `r5-syslog.txt` on `/dev/disk/nvme/0/0`. That is the Windows EFI partition, because the chooser preferred FAT32 over the FAT12 USB partition. `E:` stayed empty. The three files were removed from that EFI root afterwards. The chooser now skips `/dev/disk/nvme` and keeps the smallest other FAT volume. The stick still has the old chooser.
+
 ### Barcelo in radeon_hd, and the FAT log looks again
 
 `1002:15e7` from the 5625U boot is now in the compiled `radeon_hd` table: DCE 12.0, `RADEON_RAVEN`, `CHIP_APU`. Picasso `1002:15d8` is the same Raven path, but that entry (and the rest of Vega and Navi) sits inside `#if 0 /* disabled for R1/beta5 */`, so a line next to it is not compiled. `15e7` is placed after that `#endif`. It has not been modeset on the machine. If `init_driver` claims the device and the registers do not match, the panel can go black; `framebuffer` remains the fallback when the id is absent.
