@@ -152,4 +152,132 @@ midi2_ump_from_payload(const void* data, size_t length, uint32* words,
 }
 
 
+/* Type 0x4 channel voice. The 16-bit velocity is the top half of word 1.
+ * A 32-bit controller value is all of word 1. These do not change the
+ * 7-bit NoteOn / ControlChange hooks.
+ */
+inline bool
+midi2_is_note(const uint32* words, size_t wordCount)
+{
+	if (words == NULL || wordCount != 2 || (words[0] >> 28) != 0x4)
+		return false;
+	uint32 status = (words[0] >> 20) & 0x0f;
+	return status == 0x8 || status == 0x9;
+}
+
+
+inline uint16
+midi2_note_velocity(const uint32* words, size_t wordCount)
+{
+	if (!midi2_is_note(words, wordCount))
+		return 0;
+	return (uint16)(words[1] >> 16);
+}
+
+
+inline bool
+midi2_is_control(const uint32* words, size_t wordCount)
+{
+	return words != NULL && wordCount == 2 && (words[0] >> 28) == 0x4
+		&& ((words[0] >> 20) & 0x0f) == 0x0b;
+}
+
+
+inline uint32
+midi2_control_value(const uint32* words, size_t wordCount)
+{
+	if (!midi2_is_control(words, wordCount))
+		return 0;
+	return words[1];
+}
+
+
+/* SysEx7, message type 0x3. Status 0 is a complete message, 1 starts,
+ * 2 continues, 3 ends. The payload is the bytes between F0 and F7.
+ * Each packet holds at most 6 of those bytes.
+ */
+inline size_t
+midi2_sysex_packet_count(size_t length)
+{
+	if (length == 0)
+		return 1;
+	return (length + 5) / 6;
+}
+
+
+inline status_t
+midi2_encode_sysex(const uint8* data, size_t length, uint32* words,
+	size_t wordCapacity, size_t* _wordCount)
+{
+	if (words == NULL || _wordCount == NULL || (length > 0 && data == NULL))
+		return B_BAD_VALUE;
+
+	size_t packets = midi2_sysex_packet_count(length);
+	if (wordCapacity < packets * 2)
+		return B_BAD_VALUE;
+
+	size_t offset = 0;
+	for (size_t packet = 0; packet < packets; packet++) {
+		size_t count = length - offset;
+		if (count > 6)
+			count = 6;
+		bool first = packet == 0;
+		bool last = offset + count == length;
+		uint32 status = 0;
+		if (!first && last)
+			status = 3;
+		else if (!first)
+			status = 2;
+		else if (!last)
+			status = 1;
+
+		uint32 word0 = (0x3u << 28) | (status << 20) | ((uint32)count << 16);
+		uint32 word1 = 0;
+		for (size_t i = 0; i < count; i++) {
+			uint32 byte = data[offset + i] & 0x7f;
+			if (i == 0)
+				word0 |= byte << 8;
+			else if (i == 1)
+				word0 |= byte;
+			else
+				word1 |= byte << (8 * (5 - i));
+		}
+		words[packet * 2] = word0;
+		words[packet * 2 + 1] = word1;
+		offset += count;
+	}
+
+	*_wordCount = packets * 2;
+	return B_OK;
+}
+
+
+inline status_t
+midi2_sysex_payload(const uint32* words, size_t wordCount, uint8* _status,
+	uint8* out, size_t outSize, size_t* _length)
+{
+	if (words == NULL || wordCount != 2 || (words[0] >> 28) != 0x3)
+		return B_BAD_VALUE;
+
+	uint32 count = (words[0] >> 16) & 0x0f;
+	if (count > 6 || (out == NULL && count > 0) || outSize < count)
+		return B_BAD_VALUE;
+
+	uint8 raw[6];
+	raw[0] = (words[0] >> 8) & 0xff;
+	raw[1] = words[0] & 0xff;
+	raw[2] = (words[1] >> 24) & 0xff;
+	raw[3] = (words[1] >> 16) & 0xff;
+	raw[4] = (words[1] >> 8) & 0xff;
+	raw[5] = words[1] & 0xff;
+	if (count > 0)
+		memcpy(out, raw, count);
+	if (_status != NULL)
+		*_status = (words[0] >> 20) & 0x0f;
+	if (_length != NULL)
+		*_length = count;
+	return B_OK;
+}
+
+
 #endif // _MIDI2_DEFS_H

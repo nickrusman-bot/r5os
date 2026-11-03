@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 receive and SysEx
+
+Incoming UMP was reduced to 7-bit MIDI 1.0 before an application could read it, and `usb_midi` returned `B_UNSUPPORTED` for SysEx on a version 2.0 endpoint.
+
+`Data` still receives the Universal MIDI Packet. `midi2_note_velocity` and `midi2_control_value` read the 16-bit velocity and the 32-bit controller from that packet. The existing `NoteOn`, `NoteOff`, and `ControlChange` hooks still get the top 7 bits. A type 0x3 packet is SysEx7: `midi2_encode_sysex` builds it, and the consumer calls `SystemExclusive` once the message is complete. `SpraySystemExclusive` is unchanged.
+
+`midi_server` reads `B_MIDI_READ_UMP` and sprays that packet, so a USB producer delivers the same `Data` buffer. A driver that does not implement the ioctl is still read as MIDI 1.0 bytes. `read()` on `usb_midi` expands the same queue to those bytes. A SysEx `write()` on a version 2.0 endpoint becomes type 0x3. On a version 1.0 endpoint a type 0x3 packet becomes CIN SysEx.
+
+`midi2test` checks the helpers, the values left in `Data`, MIDI 1.0 SysEx, and an eight-byte SysEx7. No USB MIDI device was attached. Jam `@r5-raw` for AMD64 started at 09:54 Europe/Amsterdam on 3 Nov 2026 and finished with exit 0 (8287 targets). The Mesa 25 check passed. On the VirtualBox guest from that image, `midi2test` printed `all checks passed` (reported at 10:03 Europe/Amsterdam). That run does not exercise a USB MIDI device.
+
 ### Latency choice was still permission denied
 
 Build 10043 showed `Could not save the latency choice` and `Permission denied`, with no path on the alert. The image already contains `/boot/home/config/settings/kernel/drivers` (the `kernel` driver settings file). That directory is root, mode 0755. `r5-desktop` gave the session user `config`, `settings`, and `settings/system`, and left `kernel/drivers` owned by root. Creating `hda.settings` there returns `EACCES`. `chmod` from Media cannot change a directory this user does not own.

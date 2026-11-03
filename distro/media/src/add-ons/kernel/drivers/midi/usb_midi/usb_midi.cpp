@@ -106,6 +106,22 @@ create_usbmidi_port(usbmidi_device_info* devinfo,
 	port->has_in = has_in;
 	port->has_out = has_out;
 	port->rbuf = create_ring_buffer(1024);
+	port->ump_capacity = 64;
+	port->ump_packets = (midi_ump_packet*)malloc(
+		sizeof(midi_ump_packet) * port->ump_capacity);
+	port->ump_head = 0;
+	port->ump_tail = 0;
+	port->ump_count = 0;
+	port->ump_pending_len = 0;
+	port->ump_pending_pos = 0;
+	port->sysex_hold_len = 0;
+	if (port->rbuf == NULL || port->ump_packets == NULL) {
+		if (port->rbuf != NULL)
+			delete_ring_buffer(port->rbuf);
+		free(port->ump_packets);
+		free(port);
+		return NULL;
+	}
 
 	devinfo->ports[cable] = port;
 	devinfo->port_count++;
@@ -125,6 +141,8 @@ remove_port(usbmidi_port_info* port)
 		delete_ring_buffer(port->rbuf);
 		port->rbuf = NULL;
 	}
+	free(port->ump_packets);
+	port->ump_packets = NULL;
 	port->device->port_count--;
 	DPRINTF_INFO((MY_ID "remove_port %p done\n", port));
 
@@ -303,13 +321,101 @@ ump_word_count(uint32 first)
 
 
 static void
-push_midi_bytes(usbmidi_port_info* port, const uint8* midi, int length)
+push_ump_packet(usbmidi_port_info* port, const uint32* words, uint32 count)
 {
-	if (port == NULL || port->open_fd == NULL || length <= 0)
+	if (port == NULL || port->open_fd == NULL || port->ump_packets == NULL
+		|| count == 0 || count > 4)
 		return;
+	if (port->ump_count >= port->ump_capacity) {
+		DPRINTF_ERR((MY_ID "UMP queue full\n"));
+		return;
+	}
 
-	ring_buffer_write(port->rbuf, midi, length);
-	release_sem_etc(port->open_fd->sem_cb, length, B_DO_NOT_RESCHEDULE);
+	midi_ump_packet* slot = &port->ump_packets[port->ump_head];
+	slot->word_count = count;
+	for (uint32 i = 0; i < 4; i++)
+		slot->words[i] = i < count ? words[i] : 0;
+	port->ump_head++;
+	if (port->ump_head >= port->ump_capacity)
+		port->ump_head = 0;
+	port->ump_count++;
+	release_sem_etc(port->open_fd->sem_cb, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
+static int
+sysex7_bytes(const uint32* words, uint8* status, uint8 data[6])
+{
+	if ((words[0] >> 28) != 0x3)
+		return -1;
+	*status = (words[0] >> 20) & 0x0f;
+	int count = (int)((words[0] >> 16) & 0x0f);
+	if (*status > 3 || count > 6)
+		return -1;
+	data[0] = (words[0] >> 8) & 0xff;
+	data[1] = words[0] & 0xff;
+	data[2] = (words[1] >> 24) & 0xff;
+	data[3] = (words[1] >> 16) & 0xff;
+	data[4] = (words[1] >> 8) & 0xff;
+	data[5] = words[1] & 0xff;
+	return count;
+}
+
+
+static int
+expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
+{
+	const uint32* words = packet->words;
+	uint32 messageType = words[0] >> 28;
+	if (messageType == 0x1 || messageType == 0x2) {
+		out[0] = (words[0] >> 16) & 0xff;
+		out[1] = (words[0] >> 8) & 0xff;
+		out[2] = words[0] & 0xff;
+		if (messageType == 0x1) {
+			if (out[0] >= 0xf8 || out[0] == 0xf6)
+				return 1;
+			if (out[0] == 0xf1 || out[0] == 0xf3)
+				return 2;
+			if (out[0] == 0xf2)
+				return 3;
+			return 0;
+		}
+		uint8 kind = out[0] & 0xf0;
+		if (kind == 0xc0 || kind == 0xd0)
+			return 2;
+		if (kind >= 0x80 && kind <= 0xe0)
+			return 3;
+		return 0;
+	}
+	if (messageType == 0x4 && packet->word_count == 2) {
+		uint8 status = (words[0] >> 20) & 0x0f;
+		uint8 channel = (words[0] >> 16) & 0x0f;
+		out[0] = (status << 4) | channel;
+		out[1] = (words[0] >> 8) & 0xff;
+		if (status == 0x8 || status == 0x9)
+			out[2] = (uint8)((words[1] >> 16) >> 9);
+		else if (status == 0xb)
+			out[2] = (uint8)(words[1] >> 25);
+		else
+			return 0;
+		return 3;
+	}
+	if (messageType == 0x3 && packet->word_count == 2) {
+		uint8 status = 0;
+		uint8 data[6];
+		int count = sysex7_bytes(words, &status, data);
+		if (count < 0)
+			return 0;
+		int length = 0;
+		if (status == 0 || status == 1)
+			out[length++] = 0xf0;
+		for (int i = 0; i < count; i++)
+			out[length++] = data[i] & 0x7f;
+		if (status == 0 || status == 3)
+			out[length++] = 0xf7;
+		return length;
+	}
+	return 0;
 }
 
 
@@ -331,51 +437,8 @@ interpret_ump_buffer(usbmidi_device_info* midiDevice)
 
 		uint32 group = (word >> 24) & 0x0f;
 		usbmidi_port_info* port = group < 16 ? midiDevice->ports[group] : NULL;
-		uint32 messageType = word >> 28;
-
-		if ((messageType == 0x1 || messageType == 0x2) && port != NULL) {
-			uint8 midi[3];
-			midi[0] = (words[0] >> 16) & 0xff;
-			midi[1] = (words[0] >> 8) & 0xff;
-			midi[2] = words[0] & 0xff;
-			int length = 0;
-			if (messageType == 0x1) {
-				if (midi[0] >= 0xf8 || midi[0] == 0xf6)
-					length = 1;
-				else if (midi[0] == 0xf1 || midi[0] == 0xf3)
-					length = 2;
-				else if (midi[0] == 0xf2)
-					length = 3;
-			} else {
-				uint8 kind = midi[0] & 0xf0;
-				if (kind == 0xc0 || kind == 0xd0)
-					length = 2;
-				else if (kind >= 0x80 && kind <= 0xe0)
-					length = 3;
-			}
-			if (length > 0)
-				push_midi_bytes(port, midi, length);
-		} else if (messageType == 0x4 && count == 2 && port != NULL) {
-			uint8 status = (words[0] >> 20) & 0x0f;
-			uint8 channel = (words[0] >> 16) & 0x0f;
-			uint8 index = (words[0] >> 8) & 0xff;
-			uint8 value = 0;
-			bool known = false;
-			if (status == 0x8 || status == 0x9) {
-				value = (uint8)((words[1] >> 16) >> 9);
-				known = true;
-			} else if (status == 0xb) {
-				value = (uint8)(words[1] >> 25);
-				known = true;
-			}
-			if (known) {
-				uint8 midi[3];
-				midi[0] = (status << 4) | channel;
-				midi[1] = index;
-				midi[2] = value;
-				push_midi_bytes(port, midi, 3);
-			}
-		}
+		if (port != NULL)
+			push_ump_packet(port, words, count);
 
 		bytes += count * 4;
 		left -= count * 4;
@@ -749,6 +812,12 @@ usb_midi_open(const char* name, uint32 flags,
 		release_sem(usbmidi_port_list_lock);
 		return B_BUSY;
 	}
+	port->ump_head = 0;
+	port->ump_tail = 0;
+	port->ump_count = 0;
+	port->ump_pending_len = 0;
+	port->ump_pending_pos = 0;
+	port->sysex_hold_len = 0;
 	port->open_fd = cookie;
 	port->open++;
 	release_sem(usbmidi_port_list_lock);
@@ -757,6 +826,87 @@ usb_midi_open(const char* name, uint32 flags,
 	DPRINTF_INFO((MY_ID "usb_midi_open: device %s open (%d)\n",
 		name, port->open));
 	return B_OK;
+}
+
+
+static bool
+pop_ump_packet(usbmidi_port_info* port, midi_ump_packet* packet)
+{
+	if (port->ump_count <= 0 || port->ump_packets == NULL)
+		return false;
+	*packet = port->ump_packets[port->ump_tail];
+	port->ump_tail++;
+	if (port->ump_tail >= port->ump_capacity)
+		port->ump_tail = 0;
+	port->ump_count--;
+	return true;
+}
+
+
+static status_t
+read_ump_as_midi1(driver_cookie* cookie, void* buf, size_t* num_bytes)
+{
+	usbmidi_port_info* port = cookie->port;
+	usbmidi_device_info* midiDevice = cookie->device;
+
+	if (*num_bytes == 0)
+		return B_OK;
+
+	while (midiDevice != NULL && midiDevice->active) {
+		acquire_sem(midiDevice->sem_lock);
+		if (port->ump_pending_pos < port->ump_pending_len) {
+			size_t have = port->ump_pending_len - port->ump_pending_pos;
+			size_t count = have < *num_bytes ? have : *num_bytes;
+			status_t copied = user_memcpy((uint8*)buf,
+				port->ump_pending + port->ump_pending_pos, count);
+			port->ump_pending_pos += count;
+			release_sem(midiDevice->sem_lock);
+			if (copied != B_OK)
+				return B_BAD_ADDRESS;
+			*num_bytes = count;
+			return B_OK;
+		}
+		release_sem(midiDevice->sem_lock);
+
+		status_t status = acquire_sem_etc(cookie->sem_cb, 1,
+			B_RELATIVE_TIMEOUT | B_CAN_INTERRUPT, 1000000);
+		if (status == B_TIMED_OUT)
+			continue;
+		if (status != B_OK) {
+			*num_bytes = 0;
+			return status;
+		}
+
+		acquire_sem(midiDevice->sem_lock);
+		midi_ump_packet packet;
+		bool havePacket = pop_ump_packet(port, &packet);
+		if (!havePacket) {
+			release_sem(midiDevice->sem_lock);
+			continue;
+		}
+		uint8 expanded[8];
+		int expandedLength = expand_ump_to_midi1(&packet, expanded);
+		if (expandedLength <= 0) {
+			release_sem(midiDevice->sem_lock);
+			continue;
+		}
+		size_t count = (size_t)expandedLength < *num_bytes
+			? (size_t)expandedLength : *num_bytes;
+		status_t copied = user_memcpy(buf, expanded, count);
+		if (copied == B_OK && count < (size_t)expandedLength) {
+			port->ump_pending_len = (uint8)(expandedLength - count);
+			port->ump_pending_pos = 0;
+			memcpy(port->ump_pending, expanded + count, port->ump_pending_len);
+		}
+		release_sem(midiDevice->sem_lock);
+		if (copied != B_OK)
+			return B_BAD_ADDRESS;
+		*num_bytes = count;
+		return B_OK;
+	}
+
+	*num_bytes = 0;
+	return B_ERROR;
 }
 
 
@@ -771,6 +921,9 @@ usb_midi_read(driver_cookie* cookie, off_t position,
 
 	if (midiDevice == NULL || !midiDevice->active)
 		return B_ERROR;	/* already unplugged */
+
+	if (midiDevice->ump_endpoint)
+		return read_ump_as_midi1(cookie, buf, num_bytes);
 
 	DPRINTF_DEBUG((MY_ID "usb_midi_read: (%" B_PRIuSIZE " byte buffer at %"
 		B_PRIdOFF " cookie %p)\n", *num_bytes, position, cookie));
@@ -897,6 +1050,59 @@ send_cin_packet(usbmidi_port_info* port, uint8 cin, const uint8 midi[3])
 }
 
 
+static void
+encode_sysex7(uint8 status, const uint8* data, int count, uint32 words[2])
+{
+	words[0] = (0x3u << 28) | ((uint32)status << 20) | ((uint32)count << 16);
+	words[1] = 0;
+	for (int i = 0; i < count; i++) {
+		uint32 byte = data[i] & 0x7f;
+		if (i == 0)
+			words[0] |= byte << 8;
+		else if (i == 1)
+			words[0] |= byte;
+		else
+			words[1] |= byte << (8 * (5 - i));
+	}
+}
+
+
+static status_t
+send_sysex_cin(usbmidi_port_info* port, const uint8* extra, size_t extraLength,
+	bool finish)
+{
+	uint8 bytes[16];
+	size_t total = port->sysex_hold_len + extraLength;
+	if (total > sizeof(bytes))
+		return B_BAD_VALUE;
+	memcpy(bytes, port->sysex_hold, port->sysex_hold_len);
+	if (extraLength > 0)
+		memcpy(bytes + port->sysex_hold_len, extra, extraLength);
+
+	size_t send = finish ? total : total - (total % 3);
+	size_t offset = 0;
+	while (offset < send) {
+		size_t left = send - offset;
+		uint8 count = left > 3 ? 3 : (uint8)left;
+		uint8 cin = 4;
+		if (finish && offset + count == send)
+			cin = 4 + count;
+		uint8 midi[3];
+		memset(midi, 0, sizeof(midi));
+		memcpy(midi, bytes + offset, count);
+		status_t status = send_cin_packet(port, cin, midi);
+		if (status != B_OK)
+			return status;
+		offset += count;
+	}
+
+	port->sysex_hold_len = (uint8)(total - send);
+	if (port->sysex_hold_len > 0)
+		memcpy(port->sysex_hold, bytes + send, port->sysex_hold_len);
+	return B_OK;
+}
+
+
 static status_t
 send_ump_as_midi1(usbmidi_port_info* port, const uint32* words, uint32 wordCount)
 {
@@ -926,8 +1132,28 @@ send_ump_as_midi1(usbmidi_port_info* port, const uint32* words, uint32 wordCount
 		midi[1] = (words[0] >> 8) & 0xff;
 		midi[2] = words[0] & 0xff;
 		cin = CINcode[midi[0] & 0x0f];
-	} else
+	} else if (messageType == 0x3 && wordCount == 2) {
+		uint8 status = 0;
+		uint8 data[6];
+		int count = sysex7_bytes(words, &status, data);
+		if (count < 0)
+			return B_UNSUPPORTED;
+		uint8 midi[8];
+		size_t length = 0;
+		if (status == 0 || status == 1)
+			midi[length++] = 0xf0;
+		for (int i = 0; i < count; i++)
+			midi[length++] = data[i] & 0x7f;
+		bool finish = status == 0 || status == 3;
+		if (finish)
+			midi[length++] = 0xf7;
+		if (status == 0)
+			port->sysex_hold_len = 0;
+		return send_sysex_cin(port, midi, length, finish);
+	} else {
+		port->sysex_hold_len = 0;
 		return B_UNSUPPORTED;
+	}
 
 	if (cin == 0 || CINbytes[cin] == 0)
 		return B_UNSUPPORTED;
@@ -958,15 +1184,75 @@ send_ump_words(usbmidi_port_info* port, uint32* words, uint32 wordCount)
 
 
 static status_t
+write_sysex_as_ump(driver_cookie* cookie, const uint8* midiseq, size_t* num_bytes)
+{
+	if (*num_bytes < 1)
+		return B_BAD_DATA;
+
+	uint8 first = 0;
+	if (user_memcpy(&first, midiseq, 1) != B_OK)
+		return B_BAD_ADDRESS;
+	if (first != 0xf0)
+		return B_BAD_DATA;
+
+	size_t payload = *num_bytes - 1;
+	if (payload > 0) {
+		uint8 last = 0;
+		if (user_memcpy(&last, midiseq + *num_bytes - 1, 1) != B_OK)
+			return B_BAD_ADDRESS;
+		if (last == 0xf7)
+			payload--;
+	}
+
+	if (payload == 0) {
+		uint32 words[2];
+		encode_sysex7(0, NULL, 0, words);
+		return send_ump_words(cookie->port, words, 2);
+	}
+
+	const uint8* source = midiseq + 1;
+	size_t offset = 0;
+	while (offset < payload) {
+		size_t count = payload - offset;
+		if (count > 6)
+			count = 6;
+		uint8 data[6];
+		memset(data, 0, sizeof(data));
+		if (user_memcpy(data, source + offset, count) != B_OK)
+			return B_BAD_ADDRESS;
+
+		bool firstPacket = offset == 0;
+		bool lastPacket = offset + count == payload;
+		uint8 status = 0;
+		if (!firstPacket && lastPacket)
+			status = 3;
+		else if (!firstPacket)
+			status = 2;
+		else if (!lastPacket)
+			status = 1;
+
+		uint32 words[2];
+		encode_sysex7(status, data, (int)count, words);
+		status_t statusCode = send_ump_words(cookie->port, words, 2);
+		if (statusCode != B_OK)
+			return statusCode;
+		offset += count;
+	}
+	return B_OK;
+}
+
+
+static status_t
 write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 	size_t* num_bytes, uint8 midicode, uint8 cin)
 {
 	/* A MIDI 2.0 USB endpoint does not accept CIN packets. Channel voice
-	 * and system messages become one UMP word. SysEx stays on MIDI 1.0
-	 * endpoints only.
+	 * and system messages become one UMP word. SysEx becomes type 0x3.
 	 */
-	if (midicode == 0xf0 || midicode == 0xf7)
-		return B_UNSUPPORTED;
+	if (midicode == 0xf0)
+		return write_sysex_as_ump(cookie, midiseq, num_bytes);
+	if (midicode == 0xf7)
+		return B_BAD_DATA;
 	if (cin >= 16 || CINbytes[cin] == 0)
 		return B_BAD_DATA;
 	if ((int)*num_bytes < CINbytes[cin])
@@ -1107,6 +1393,29 @@ usb_midi_control(driver_cookie* cookie, uint32 op, void* data, size_t len)
 			if (user_memcpy(&packet, data, sizeof(packet)) < B_OK)
 				return B_BAD_ADDRESS;
 			return send_ump_words(port, packet.words, packet.word_count);
+		}
+
+		case B_MIDI_READ_UMP:
+		{
+			if (!midiDevice->ump_endpoint)
+				return B_UNSUPPORTED;
+			if (data == NULL || len < sizeof(midi_ump_packet))
+				return B_BAD_VALUE;
+
+			status_t status = acquire_sem_etc(cookie->sem_cb, 1,
+				B_RELATIVE_TIMEOUT | B_CAN_INTERRUPT, 1000000);
+			if (status != B_OK)
+				return status;
+
+			acquire_sem(midiDevice->sem_lock);
+			midi_ump_packet packet;
+			bool havePacket = pop_ump_packet(port, &packet);
+			release_sem(midiDevice->sem_lock);
+			if (!havePacket)
+				return B_ERROR;
+			if (user_memcpy(data, &packet, sizeof(packet)) != B_OK)
+				return B_BAD_ADDRESS;
+			return B_OK;
 		}
 
 		case B_MIDI_GET_PORT_INFO:

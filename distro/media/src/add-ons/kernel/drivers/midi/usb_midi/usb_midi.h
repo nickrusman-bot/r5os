@@ -21,6 +21,7 @@
 
 #include <Drivers.h>
 #include <USB.h>
+#include <midi_driver.h>
 #include <usb/USB_midi.h>
 
 #include <util/ring_buffer.h>
@@ -125,6 +126,20 @@ typedef struct usbmidi_port_info
 	/* Port-specific variables */
 	char name[40];	/* complete pathname of this port */
 	struct ring_buffer* rbuf;
+
+	/* UMP packets for B_MIDI_READ_UMP. read() expands the same queue to
+	 * MIDI 1.0 bytes. sysex_hold keeps a short CIN fragment across packets.
+	 */
+	midi_ump_packet* ump_packets;
+	int32 ump_capacity;
+	int32 ump_head;
+	int32 ump_tail;
+	int32 ump_count;
+	uint8 ump_pending[8];
+	uint8 ump_pending_len;
+	uint8 ump_pending_pos;
+	uint8 sysex_hold[2];
+	uint8 sysex_hold_len;
 
 	int cable;	/* index of this port */
 	bool has_in, has_out;

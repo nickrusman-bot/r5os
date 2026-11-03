@@ -9,11 +9,142 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "debug.h"
+#include <Locker.h>
 #include <MidiConsumer.h>
 #include <MidiRoster.h>
 #include "protocol.h"
+
+
+struct SysexAssembly {
+	BMidiLocalConsumer*	consumer;
+	uint8*				data;
+	size_t				size;
+	size_t				used;
+	bool				started;
+	SysexAssembly*		next;
+};
+
+
+static BLocker sSysexLock("midi2 sysex");
+static SysexAssembly* sSysex = NULL;
+
+
+static SysexAssembly*
+sysex_find(BMidiLocalConsumer* consumer)
+{
+	for (SysexAssembly* node = sSysex; node != NULL; node = node->next) {
+		if (node->consumer == consumer)
+			return node;
+	}
+	return NULL;
+}
+
+
+static void
+sysex_forget(BMidiLocalConsumer* consumer)
+{
+	sSysexLock.Lock();
+	SysexAssembly** link = &sSysex;
+	while (*link != NULL) {
+		if ((*link)->consumer == consumer) {
+			SysexAssembly* node = *link;
+			*link = node->next;
+			free(node->data);
+			free(node);
+			break;
+		}
+		link = &(*link)->next;
+	}
+	sSysexLock.Unlock();
+}
+
+
+static bool
+sysex_append(SysexAssembly* node, const uint8* bytes, size_t length)
+{
+	if (node->used + length > 65536)
+		return false;
+	if (node->used + length > node->size) {
+		size_t size = node->size == 0 ? 64 : node->size;
+		while (size < node->used + length)
+			size *= 2;
+		uint8* grown = (uint8*)realloc(node->data, size);
+		if (grown == NULL)
+			return false;
+		node->data = grown;
+		node->size = size;
+	}
+	if (length > 0)
+		memcpy(node->data + node->used, bytes, length);
+	node->used += length;
+	return true;
+}
+
+
+static void
+dispatch_sysex(BMidiLocalConsumer* consumer, const uint32* words,
+	bigtime_t time)
+{
+	uint8 status = 0;
+	uint8 bytes[6];
+	size_t count = 0;
+	if (midi2_sysex_payload(words, 2, &status, bytes, sizeof(bytes), &count)
+			!= B_OK || status > 3)
+		return;
+
+	uint8* owned = NULL;
+	size_t ownedCount = 0;
+
+	sSysexLock.Lock();
+	SysexAssembly* node = sysex_find(consumer);
+	if (node == NULL) {
+		node = (SysexAssembly*)calloc(1, sizeof(SysexAssembly));
+		if (node == NULL) {
+			sSysexLock.Unlock();
+			return;
+		}
+		node->consumer = consumer;
+		node->next = sSysex;
+		sSysex = node;
+	}
+
+	bool deliver = false;
+	if (status == 0 || status == 1) {
+		node->used = 0;
+		node->started = status == 1;
+	}
+	if (status == 2 || status == 3) {
+		if (!node->started) {
+			sSysexLock.Unlock();
+			return;
+		}
+	}
+	if (!sysex_append(node, bytes, count)) {
+		node->used = 0;
+		node->started = false;
+		sSysexLock.Unlock();
+		return;
+	}
+	if (status == 0 || status == 3) {
+		ownedCount = node->used;
+		if (ownedCount > 0) {
+			owned = (uint8*)malloc(ownedCount);
+			if (owned != NULL)
+				memcpy(owned, node->data, ownedCount);
+		}
+		deliver = owned != NULL || ownedCount == 0;
+		node->used = 0;
+		node->started = false;
+	}
+	sSysexLock.Unlock();
+
+	if (deliver)
+		consumer->SystemExclusive(owned, ownedCount, time);
+	free(owned);
+}
 
 
 int32 
@@ -57,6 +188,7 @@ BMidiLocalConsumer::~BMidiLocalConsumer()
 
 	status_t result;
 	wait_for_thread(fThread, &result);
+	sysex_forget(this);
 }
 
 
@@ -119,16 +251,21 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 		uchar channel = (words[0] >> 16) & 0x0f;
 		uchar index = (words[0] >> 8) & 0xff;
 		if (status == 0x8 || status == 0x9) {
-			// MIDI 2.0 -> MIDI 1.0 keeps the top 7 bits of the 16-bit velocity.
-			uchar velocity = (uchar)((words[1] >> 16) >> 9);
+			// MIDI 1.0 hooks keep the top 7 bits. Data() still has the packet.
+			uchar velocity = (uchar)(midi2_note_velocity(words, wordCount) >> 9);
 			if (status == 0x9)
 				consumer->NoteOn(channel, index, velocity, time);
 			else
 				consumer->NoteOff(channel, index, velocity, time);
 		} else if (status == 0xb) {
-			uchar value = (uchar)(words[1] >> 25);
+			uchar value = (uchar)(midi2_control_value(words, wordCount) >> 25);
 			consumer->ControlChange(channel, index, value, time);
 		}
+		return;
+	}
+
+	if (messageType == 0x3 && wordCount == 2) {
+		dispatch_sysex(consumer, words, time);
 		return;
 	}
 
