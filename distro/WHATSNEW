@@ -1,3 +1,9 @@
+R5 2026.1-dev Build 10047 - Virtual surround
+Audio settings can play multi-channel sound in headphones as a simple spatial mix. Virtual surround is Off or On. Restart media services to apply it.
+
+R5 2026.1-dev Build 10046 - HDMI output name
+An HDMI sound output is labeled HDMI. The analog outputs stay in the list.
+
 R5 2026.1-dev Build 10045 - USB channel layout
 Audio settings can ask a USB sound device for stereo, 4 channels, 5.1, or 7.1. Automatic uses what the device reports. Restart media services to apply it.
 

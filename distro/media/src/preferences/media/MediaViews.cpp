@@ -536,6 +536,59 @@ write_channel_layout(int32 channels, char* writtenPath, size_t pathSize)
 }
 
 
+static bool
+read_virtual_surround()
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (driver_settings_file("virtual_surround", path, sizeof(path)) != B_OK)
+		return false;
+
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return false;
+
+	char bytes[64];
+	ssize_t length = read(fd, bytes, sizeof(bytes) - 1);
+	close(fd);
+	if (length <= 0)
+		return false;
+	bytes[length] = '\0';
+	return strncmp(bytes, "virtual_surround on", 19) == 0
+		&& (bytes[19] == '\0' || bytes[19] == '\n' || bytes[19] == '\r');
+}
+
+
+static status_t
+write_virtual_surround(bool enabled, char* writtenPath, size_t pathSize)
+{
+	status_t status = driver_settings_file("virtual_surround", writtenPath,
+		pathSize);
+	if (status != B_OK)
+		return status;
+
+	const char* text = enabled ? "virtual_surround on\n" : "virtual_surround off\n";
+	int fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0) {
+		int error = errno != 0 ? errno : B_ERROR;
+		if (error == EACCES && unlink(writtenPath) == 0) {
+			fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (fd < 0 && errno != 0)
+				error = errno;
+		}
+		if (fd < 0)
+			return error;
+	}
+
+	size_t length = strlen(text);
+	ssize_t written = write(fd, text, length);
+	if (written == (ssize_t)length)
+		fsync(fd);
+	status = written == (ssize_t)length ? B_OK : (errno != 0 ? errno : B_ERROR);
+	close(fd);
+	return status;
+}
+
+
 AudioSettingsView::AudioSettingsView()
 {
 	BBox* defaultsBox = new BBox("defaults");
@@ -556,8 +609,9 @@ AudioSettingsView::AudioSettingsView()
 		.AddMenuField(_MakeChannelMenu(), 2, 1)
 		.AddMenuField(_MakeLayoutMenu(), 0, 2, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
 		.AddMenuField(_MakeLatencyMenu(), 0, 3, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
+		.AddMenuField(_MakeSurroundMenu(), 0, 4, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
 		.Add(fLatencyHint = new BStringView("latency hint",
-			B_TRANSLATE("Restart media services to apply.")), 0, 4, 3);
+			B_TRANSLATE("Restart media services to apply.")), 0, 5, 3);
 
 	defaultsBox->AddChild(defaultsGridView);
 
@@ -592,6 +646,7 @@ AudioSettingsView::AttachedToWindow()
 	fChannelMenu->SetTargetForItems(thisMessenger);
 	fLayoutMenu->SetTargetForItems(thisMessenger);
 	fLatencyMenu->SetTargetForItems(thisMessenger);
+	fSurroundMenu->SetTargetForItems(thisMessenger);
 	fVolumeCheckBox->SetTarget(thisMessenger);
 }
 
@@ -602,6 +657,7 @@ AudioSettingsView::AllAttached()
 	BGroupView::AllAttached();
 	fLayoutMenu->SetTargetForItems(BMessenger(this));
 	fLatencyMenu->SetTargetForItems(BMessenger(this));
+	fSurroundMenu->SetTargetForItems(BMessenger(this));
 }
 
 
@@ -681,6 +737,25 @@ AudioSettingsView::MessageReceived(BMessage* message)
 			}
 			break;
 		}
+		case ML_VIRTUAL_SURROUND:
+		{
+			int32 enabled = 0;
+			if (message->FindInt32("enabled", &enabled) != B_OK)
+				break;
+			char path[B_PATH_NAME_LENGTH];
+			path[0] = '\0';
+			status_t status = write_virtual_surround(enabled != 0, path,
+				sizeof(path));
+			if (status != B_OK) {
+				BString text(B_TRANSLATE("Could not save virtual surround."));
+				text << "\n" << path << "\n" << strerror(status);
+				(new BAlert("surround", text.String(), B_TRANSLATE("OK")))->Go();
+				break;
+			}
+			fLatencyHint->SetText(B_TRANSLATE(
+				"Virtual surround saved. Restart media services to apply."));
+			break;
+		}
 
 		default:
 			SettingsView::MessageReceived(message);
@@ -735,6 +810,35 @@ AudioSettingsView::_MakeLatencyMenu()
 
 	return new BMenuField("latencyMenuField", B_TRANSLATE("Latency:"),
 		fLatencyMenu);
+}
+
+
+BMenuField*
+AudioSettingsView::_MakeSurroundMenu()
+{
+	fSurroundMenu = new BPopUpMenu(B_TRANSLATE("Off"));
+	fSurroundMenu->SetLabelFromMarked(true);
+
+	const bool current = read_virtual_surround();
+	struct surround_choice {
+		int32 enabled;
+		const char* label;
+	};
+	const surround_choice choices[] = {
+		{ 0, B_TRANSLATE("Off") },
+		{ 1, B_TRANSLATE("On") },
+	};
+	for (uint32 i = 0; i < B_COUNT_OF(choices); i++) {
+		BMessage* message = new BMessage(ML_VIRTUAL_SURROUND);
+		message->AddInt32("enabled", choices[i].enabled);
+		BMenuItem* item = new BMenuItem(choices[i].label, message);
+		fSurroundMenu->AddItem(item);
+		if ((choices[i].enabled != 0) == current)
+			item->SetMarked(true);
+	}
+
+	return new BMenuField("surroundMenuField", B_TRANSLATE("Virtual surround:"),
+		fSurroundMenu);
 }
 
 

@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Virtual surround
+
+Multi-channel sound folded into headphones with one gain per ear. The MIT KEMAR recordings are research-only, so they are not shipped. The mixer uses a synthetic delay instead: Woodworth's formula, head radius 8.75 cm, 12 dB quieter at the far ear when the speaker is at 90 degrees. Center and the low-frequency channel stay in both ears. The added wait is the far-ear delay, under a millisecond at 48 kHz. The history is 128 samples, which holds that delay at 96 kHz.
+
+Audio settings has Virtual surround: Off or On. It is written as `virtual_surround` in the user settings file `kernel/drivers/virtual_surround`. Restart media services to apply it. The mix runs only for a stereo output. A 5.1 or 7.1 device still gets its own channels. USB and HDA playback are unchanged. With the switch off, the mixer sums channels the way it did before. `virtual_surround_test` is a host program and is not in the image. On this machine it printed `virtual_surround_test: all checks passed`. `jam -q mixer.media_addon Media` for AMD64 finished at 12:09 Europe/Amsterdam on 3 Nov 2026 and linked `mixer.media_addon` and Media. A following `jam -q` of those targets exited 0 (13707 targets). Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The image was not rebuilt. The menu was not opened, and no headphone mix was heard.
+
+### HDMI output name
+
+Enabling an HDMI converter cleared the analog format mask, and a pin with no device type was shown as `HDMI <NULL>` (Haiku #20171). The missing name is now `HDMI`. Analog converters keep their format. An HDMI converter is added only when it supports that format. The digital converter is enabled with DigEn. A GPU modesetting driver still has to carry the samples onto the link. The VirtualBox codec has no HDMI pin, so this was not heard.
+
+`jam -q hda` for AMD64 finished at 11:57 Europe/Amsterdam on 3 Nov 2026 with exit 0 (9333 targets). Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The image was not rebuilt.
+
 ### USB audio host stability
 
 Playing USB audio on EHCI took the isochronous lock in the finish thread and again in the callback that queues the next packet. That is the double-lock KDL on startup (Haiku #19472). The same wait is the hang that looks like the system is looping (Haiku #18842). The callback now runs without that lock. An error completion waits 1 ms before the next packet is queued, so a stream that fails immediately does not spin.

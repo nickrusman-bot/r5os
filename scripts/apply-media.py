@@ -19,6 +19,10 @@ FILES = (
     "src/add-ons/media/media-add-ons/mixer/AudioMixer.cpp",
     "src/add-ons/media/media-add-ons/mixer/Interpolate.cpp",
     "src/add-ons/media/media-add-ons/mixer/Interpolate.h",
+    "src/add-ons/media/media-add-ons/mixer/MixerCore.cpp",
+    "src/add-ons/media/media-add-ons/mixer/MixerCore.h",
+    "src/add-ons/media/media-add-ons/mixer/VirtualSurround.cpp",
+    "src/add-ons/media/media-add-ons/mixer/VirtualSurround.h",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioAddOn.cpp",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioAddOn.h",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioDevice.h",
@@ -32,6 +36,10 @@ FILES = (
     "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.cpp",
     "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.h",
     "src/add-ons/kernel/drivers/audio/usb/Device.cpp",
+    "src/add-ons/kernel/drivers/audio/hda/hda_codec.cpp",
+    "src/add-ons/kernel/drivers/audio/hda/hda_codec_defs.h",
+    "src/add-ons/kernel/drivers/audio/hda/hda_controller.cpp",
+    "src/add-ons/kernel/drivers/audio/hda/hda_multi_audio.cpp",
     "headers/os/drivers/usb/USB_audio.h",
     "src/preferences/media/MediaViews.cpp",
     "src/preferences/media/MediaViews.h",
@@ -73,6 +81,23 @@ def main() -> None:
         print(f"copied {relative}")
 
     hook_midi2test(haiku)
+    hook_mixer(haiku)
+
+
+def hook_mixer(haiku: pathlib.Path) -> None:
+    jam = haiku / "src" / "add-ons" / "media" / "media-add-ons" / "mixer" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    if "VirtualSurround.cpp" in text:
+        print("already mixer Jamfile")
+        return
+    anchor = "MixerCore.cpp\n"
+    if anchor not in text:
+        raise SystemExit("mixer Jamfile has no MixerCore.cpp line")
+    jam.write_text(
+        text.replace(anchor, "MixerCore.cpp\n\t\t\tVirtualSurround.cpp\n", 1),
+        encoding="utf-8",
+    )
+    print("patched mixer Jamfile")
 
 
 def hook_midi2test(haiku: pathlib.Path) -> None:
