@@ -8,7 +8,7 @@ Build 10043 showed `Could not save the latency choice` and `Permission denied`, 
 
 Build 10044. What's new is "Latency save".
 
-`jam -q r5-desktop Media` exited 0 before the image. `jam -q @r5-raw` on 3 Nov 2026 at 09:22 Europe/Amsterdam exited 0 and updated 1794 targets. The header date is "3 Nov 2026, 09:19". Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image at 09:23 Europe/Amsterdam. The guest was on its first boot. The Latency menu was not opened from here.
+`jam -q r5-desktop Media` exited 0 before the image. `jam -q @r5-raw` on 3 Nov 2026 at 09:22 Europe/Amsterdam exited 0 and updated 1794 targets. The header date is "3 Nov 2026, 09:19". Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image at 09:23 Europe/Amsterdam. The guest syslog sent at 09:28 Europe/Amsterdam shows the save is used. The first HDA open prints `buffer length 2048`. After media services restart the same line is `256`, then `128`, then `2048` again. Those are Low latency, Pro audio, and Normal. This is the VirtualBox ICH6 HDA (codec 8384:7680, 16-bit, 16/22/44 kHz), not the Ryzen machine. The log shows the programmed buffer, not a measured delay.
 
 ### What's new for finer MIDI
 
