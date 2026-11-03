@@ -4,6 +4,8 @@
 
 Middle-clicking a link opens a tab without selecting it. `LoadNegotiating` still wrote that URL into the address bar, then a later update put the current page back (Haiku #20319). The bar looked as if the open page was being replaced. A background tab now keeps its URL on that tab and leaves the address bar alone. The selected tab still shows the URL it is requesting.
 
+`jam -q WebPositive` for AMD64 finished at 12:51 Europe/Amsterdam on 3 Nov 2026 with exit 0 (`BrowserWindow.o` compiled, `WebPositive` linked). Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. A background tab was not opened.
+
 ### TextSearch long grep line
 
 `Grepper` read a grep line into a buffer twice as long as the file-name array, then copied the name with an unbounded scanset. A long line, or the rest of a line that `fgets` had split, wrote past that array and TextSearch crashed (Haiku #14485). The scanset is now limited to the array, leaving room for the terminating NUL. A line that does not fit is skipped. A normal `file:line:text` result is unchanged.
