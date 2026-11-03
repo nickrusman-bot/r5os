@@ -1668,7 +1668,7 @@ id	r5_status	branch	commit	notes
 14432	open			
 14434	open			
 14438	open			
-14441	open			
+14441	fixed	cursor/pop3-flush	65bb4b1a13	SendCommand stops flushing when Read returns 0, so a closed POP3 socket does not spin. jam -q POP3 exited 0 on 3 Nov 2026. No POP3 server was contacted.
 14442	open			
 14448	open			
 14453	open			

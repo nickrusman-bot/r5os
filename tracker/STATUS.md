@@ -4,21 +4,21 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3811 |
+| open | 3810 |
 | in-progress | 8 |
-| fixed | 117 |
+| fixed | 118 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2471** bugs, **1288** enhancements, rest overig (van 3819 open/bezig).
+Nog open in R5OS: **2470** bugs, **1288** enhancements, rest overig (van 3818 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
-| bug | 2471 |
+| bug | 2470 |
 | enhancement | 1288 |
 | task | 60 |
 
@@ -26,7 +26,7 @@ Nog open in R5OS: **2471** bugs, **1288** enhancements, rest overig (van 3819 op
 
 | Priority | Aantal |
 |---|---|
-| normal | 3525 |
+| normal | 3524 |
 | low | 258 |
 | high | 34 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2471** bugs, **1288** enhancements, rest overig (van 3819 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3031 |
+| Unscheduled | 3030 |
 | R1 | 419 |
 | R1.1 | 298 |
 | — | 29 |
@@ -133,6 +133,7 @@ Nog open in R5OS: **2471** bugs, **1288** enhancements, rest overig (van 3819 op
 | [#13431](https://dev.haiku-os.org/ticket/13431) | assigned | Applications/Deskbar | Deskbar menu screen edge margin |  |
 | [#13680](https://dev.haiku-os.org/ticket/13680) | new | Kits/Interface Kit | BSlider missing message on second click |  |
 | [#13754](https://dev.haiku-os.org/ticket/13754) | new | Servers/input_server | Mouse + keyboard input non-functional after install |  |
+| [#14441](https://dev.haiku-os.org/ticket/14441) | new | Servers/mail_daemon | [mail_daemon] high CPU usage (POP3Protocol::SendCommand Bug! Had to flush 0 bytes:) | cursor/pop3-flush |
 | [#14846](https://dev.haiku-os.org/ticket/14846) | new | Applications/Deskbar | Deskbar display of weekday clipped |  |
 | [#14900](https://dev.haiku-os.org/ticket/14900) | new | Applications/Tracker | Revert secondary sort order when shift-click |  |
 | [#14991](https://dev.haiku-os.org/ticket/14991) | new | User Interface | Several apps don't obey changing system colors on the fly |  |
@@ -164,8 +165,7 @@ Nog open in R5OS: **2471** bugs, **1288** enhancements, rest overig (van 3819 op
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
 | [#18057](https://dev.haiku-os.org/ticket/18057) | new | User Interface | Misaligned scrollbars and resize knob |  |
 | [#18060](https://dev.haiku-os.org/ticket/18060) | new | Applications/Tracker | [Tracker] Double clicking on Size column header hides all info |  |
-| [#18300](https://dev.haiku-os.org/ticket/18300) | new | User Interface | Application menus at screen border |  |
-| … | | | *37 meer in r5-status.tsv* | |
+| … | | | *38 meer in r5-status.tsv* | |
 
 ## Nog open (eerste 80)
 
@@ -251,5 +251,5 @@ Nog open in R5OS: **2471** bugs, **1288** enhancements, rest overig (van 3819 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3731 meer in r5-status.tsv* | |
+| … | | | *3730 meer in r5-status.tsv* | |
 
