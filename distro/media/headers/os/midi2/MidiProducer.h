@@ -74,6 +74,7 @@ public:
 
 	/* 16-bit velocity. An existing call that passes a uchar still uses the
 	 * MIDI 1.0 method above. Pass a uint16 when the full velocity is meant.
+	 * A bare integer is ambiguous between the two; cast it.
 	 */
 	void SprayNoteOn(
 		uchar channel, uchar note, uint16 velocity,
@@ -88,6 +89,7 @@ public:
 		bigtime_t time = 0) const;
 
 	/* 32-bit controller value. A uchar value still uses the MIDI 1.0 method.
+	 * A bare integer is ambiguous between the two; cast it.
 	 */
 	void SprayControlChange(
 		uchar channel, uchar controller, uint32 value,

@@ -38,6 +38,8 @@ FILES = (
     "src/servers/midi/PortDrivers.cpp",
     "src/add-ons/kernel/drivers/midi/usb_midi/usb_midi.h",
     "src/add-ons/kernel/drivers/midi/usb_midi/usb_midi.cpp",
+    "src/bin/midi2test/Jamfile",
+    "src/bin/midi2test/midi2test.cpp",
 )
 
 
@@ -56,6 +58,34 @@ def main() -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         print(f"copied {relative}")
+
+    hook_midi2test(haiku)
+
+
+def hook_midi2test(haiku: pathlib.Path) -> None:
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin midi2test ;\n"
+    anchor = "SubInclude HAIKU_TOP src bin writembr ;\n"
+    if line not in text:
+        if anchor not in text:
+            raise SystemExit("midi2test anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile")
+    else:
+        print("already src/bin/Jamfile")
+
+    regular = haiku / "build" / "jam" / "images" / "definitions" / "regular"
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += midi2test ;\n"
+    anchor = "SYSTEM_BIN += userguide quicktour welcome ;\n"
+    if line not in text:
+        if anchor not in text:
+            raise SystemExit("midi2test anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image")
+    else:
+        print("already regular image")
 
 
 if __name__ == "__main__":

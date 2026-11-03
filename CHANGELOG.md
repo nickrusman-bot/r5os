@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 test and developer notes
+
+`midi2test` checks the UMP helpers and sprays a local producer into a local consumer. A `uchar` note stays three MIDI 1.0 bytes. A `uint16` note and a `uint32` controller arrive as a type 0x4 packet, and the old hooks see the top 7 bits. The command is `/system/bin/midi2test` on the regular image. `docs/MIDI2.md` is the developer contract: the casts, the roster payload, what `Data` does, and what `usb_midi` sends. The program does not open a USB device. A bare integer is ambiguous between the MIDI 1.0 and MIDI 2.0 overloads; the header now says to cast it.
+
+`jam -q midi2test` exited 0 on 3 Nov 2026 at 08:49 Europe/Amsterdam. `jam -q @r5-raw` on 3 Nov 2026 at 08:54 Europe/Amsterdam exited 0 and updated 1795 targets. `haiku.hpkg` contains `midi2test`. The raw image stores that package; `package_daemon` publishes `/system/bin/midi2test` at boot. Jam also printed `package mesa_swpipe not available`, `package mawk not available`, and the usual `bios_ia32` and `pxe_ia32` lines. VirtualBox started from this image on 3 Nov 2026 at 08:57 Europe/Amsterdam. The guest was still on its first boot, which runs `package_daemon` before the desktop. `midi2test` was not run in the guest. No USB MIDI device was attached.
+
 ### MIDI 2.0 UMP and 16-bit velocity
 
 `kits/midi2` can build and parse a Universal MIDI Packet without a new kit. `SprayNoteOn(channel, note, uchar)` and `SprayControlChange(channel, controller, uchar)` still send a MIDI 1.0 byte message. The new overloads take `uint16` velocity and `uint32` controller value and send one MIDI 2.0 channel-voice packet (message type 0x4, two 32-bit words). `SprayUMP` sends one packet of 1, 2, or 4 words when the count matches the message type. The methods are not virtual: the existing spray calls are not virtual, and a new virtual would move the vtable of a subclass that was compiled earlier.
