@@ -29,6 +29,18 @@ The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is
 
 R5OS-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
 
+### rEFInd 0.14.2
+
+Location: `distro/system/boot/loader/refind`. Upstream sources are unmodified. The black theme and `distro/system/boot/loader/r5/refind.conf` are R5OS text, GPL-3.0-or-later.
+
+| Piece | Project | License |
+|---|---|---|
+| rEFInd 0.14.2 | Roderick W. Smith. Forked from rEFIt, Christoph Pfisterer, 2006 | rEFIt: BSD-style (`LICENSE.txt`). rEFInd modifications: GPL-3.0-only (`LICENSE.txt`, `COPYING.txt`). Two Makefiles say “or later”; those files were not relabeled |
+| GNU-EFI 3.0.18 | Hewlett-Packard, David Mosberger, Stephane Eranian, 1999–2007 | BSD-style, from the upstream Makefile. Linked into `refind_x64.efi`. Not stored in git |
+| Icons | Mixed, see `icons/licenses/` | CC, GPL-2.0, GPL-3.0, LGPL-3.0. Separate files, shipped with those license texts |
+
+The EFI binary is its own program. It is not linked into the kernel or the Haiku loader. The GPLv2 filesystem drivers are not built and are not on the image. The GFDL-1.3 HTML docs are not installed. `COPYING.txt`, `LICENSE.txt`, and `CREDITS.txt` are copied onto the EFI partition. Secure Boot is off.
+
 ## Built outside this repository, not in the image
 
 ### VirtualBox Guest Additions 7.2.22

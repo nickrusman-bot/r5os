@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10048 - Black boot menu
+A UEFI start shows a black menu and then starts R5. Starting from the older boot sector is unchanged.
+
 R5 2026.1-dev Build 10047 - Virtual surround
 Audio settings can play multi-channel sound in headphones as a simple spatial mix. Virtual surround is Off or On. Restart media services to apply it.
 

@@ -13,6 +13,8 @@ R5OS AMD64 defaults to the BIOS boot platform and also builds the EFI loader.
 
 `scripts/run-qemu-r5.sh` starts QEMU with `-machine pc` (SeaBIOS), `-smp 2`, and `-cpu host` when KVM is available, otherwise `-cpu qemu64`. `scripts/run-vbox-r5.ps1` defaults to `--cpus 2` and `--firmware bios`. Those two scripts never reach the EFI loader.
 
+The anyboot image's EFI system partition is 16 MiB. Firmware starts `EFI/BOOT/BOOTX64.EFI`, which is rEFInd 0.14.2 with a black background. The menu entry R5 starts `EFI/haiku/haiku_loader.efi`. That Haiku loader is still the program that reads the kernel from the BeFS volume. The BIOS loader in the boot sector is unchanged. rEFInd does not run on the BIOS path. The installer copies the same EFI layout onto a target disk's EFI system partition when one is present, and it keeps a foreign `BOOTX64.EFI` once under `EFI/boot-saved`. Secure Boot is off. This is not a laptop dual-boot test.
+
 CPU identification in `src/system/kernel/arch/x86/arch_cpu.cpp` reads the vendor string, family, extended family, model, extended model, and stepping from leaf 1, then the brand string from leaves `0x80000002`–`0x80000004` (around lines 1215–1297). Named feature bits include x2APIC (`FEATURE_EXT` / `EXT_X2APIC`, line 445), Intel HWP (lines 471–483), hybrid (`FEATURE_7_EDX` / `HYBRID_CPU`, line 530), AMD hardware P-states, and invariant TSC (lines 541–542). A per-CPU feature mismatch with the boot CPU is detected only inside the optional feature dump (`sameAsBoot`, around line 388). That dump does not change scheduling.
 
 Topology:

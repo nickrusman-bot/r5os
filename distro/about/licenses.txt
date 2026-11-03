@@ -33,3 +33,9 @@ Interface typeface designed by Mikhail Sharanda.
 
 License: OFL-1.1
 Source: https://github.com/googlefonts/manrope
+
+# rEFInd
+UEFI boot menu. The Haiku loader still loads the kernel.
+
+License: GPL-3.0-only, BSD
+Source: https://www.rodsbooks.com/refind/
