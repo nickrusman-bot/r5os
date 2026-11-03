@@ -2,7 +2,7 @@
 
 Long-term plan for a physical GPU. VirtualBox guest devices are `docs/VBOX-GUEST.md`. A framebuffer mode is not GPU acceleration. A Vulkan loader that only finds Lavapipe is not GPU acceleration.
 
-On the Ryzen 5 5625U the USB boot of 3 Nov 2026 showed a picture through `framebuffer`, not through `radeon_hd`. Acceleration below has not been shown. The desktop people use today is software painting in `app_server`.
+On the Ryzen 5 5625U the USB boot at 17:38 Europe/Amsterdam on 3 Nov 2026 reached the desktop through `radeon_hd`. That driver claimed `1002:15e7` and mapped the firmware framebuffer, `1920x1080`, pitch `7680`. It did not modeset DCN. Acceleration below has not been shown. The desktop is software painting in `app_server`.
 
 ## What the daily image has
 
@@ -28,7 +28,11 @@ There is no libdrm and no amdgpu/i915/nouveau kernel driver. OpenGL, where it ru
 
 USB boot of this Ryzen 5 5625U on 3 Nov 2026, read back from the stick’s BeFS syslog: the VGA device is `1002:15e7` revision `c2`, bus 4 device 0 function 0, subsystem `103c:8a31`. The kernel names it Barcelo. The old `radeon` driver logged `no supported devices found`. The loaded graphics driver on that boot was `framebuffer`, reusing the firmware buffer at `0xfce0000000`, size `0x7e9000` (1920×1080, 32-bit). HDMI audio on the same device is `1002:1637`.
 
-`1002:15e7` is in the live device table as `RADEON_RAVEN`, DCE 12.0, `CHIP_APU`. Picasso `1002:15d8` is the same Raven path, but that line sits inside `#if 0 /* disabled for R1/beta5 */` and is not compiled, so the new line is after that `#endif`. The stick written at 14:48 Europe/Amsterdam on 3 Nov 2026 did boot. `radeon_hd` opened the device, read the video memory size as 4194303 MB, mapped 256 MB, and then logged `0 attached monitors` and closed. `framebuffer` kept the firmware buffer. Do not claim `radeon_hd` drives the panel. A table match is still modesetting, not command submission and not RADV.
+`1002:15e7` is in the live device table as `RADEON_RAVEN`, DCE 12.0, `CHIP_APU`. Init does not run the DCE encoder, display clock, AUX, or modeset. The bootloader framebuffer stays the scanout. The 17:38 boot confirmed that path: eDP attached, `1920x1080`, and the desktop appeared. Picasso `1002:15d8` is the same Raven path, but that line sits inside `#if 0 /* disabled for R1/beta5 */` and is not compiled, so the new line is after that `#endif`. The stick written at 14:48 Europe/Amsterdam on 3 Nov 2026 did boot. `radeon_hd` opened the device, read the video memory size as 4194303 MB, mapped 256 MB, and then logged `0 attached monitors` and closed. `framebuffer` kept the firmware buffer.
+
+That BIOS is AtomBIOS master format 2. The old object-header walk counted 235 paths and stopped on `usSize`. The driver now reads a display-object table of revision 1.4 or newer as a flat path list, takes the GPIO pin LUT from index 12, treats a missing `GPIO_I2C_Info` as normal, runs `SetDCEClock` 2.2 with the 2.1 argument block, and ignores a `CONFIG_MEMSIZE` of 0 or above 65536 MB in favour of the PCI BAR. eDP falls back to the boot loader's VESA EDID when AUX fails. Raven does not write Evergreen memory-controller registers. On DCN (`RADEON_RAVEN` and later) it also does not program the DCE 5 CRTC registers. The image built at 15:35 Europe/Amsterdam on 3 Nov 2026 contains the probe and was written to the USB stick. It does not contain the CRTC skip. A later image, jammed at 15:59 Europe/Amsterdam the same day (exit 0, 1176 targets), contains the CRTC skip. That image has not been written to the stick. Neither image has been booted. Do not claim `radeon_hd` drives the panel until a later syslog shows a mode. A table match is still modesetting, not command submission and not RADV. A bad modeset can leave the panel black until reboot.
+
+Those six sources live in `distro/graphics` and are copied over the Haiku tree by `scripts/apply-radeon.py`. Haiku, Inc. keeps the MIT license on the original work; the copyright and MIT header stay at the top of each file. R5OS changes are the `SPDX-Snippet` blocks and are GPL-3.0-or-later. Shipping the combined file follows GPL-3.0-or-later. The syslog lines that start with `R5 radeon_hd` come from that copy. The CPU log writer is a separate R5OS program, `distro/cpu/r5_pstate_log.cpp`, already GPL-3.0-or-later.
 
 ## Other people’s work
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Apply HIGH boot/install/GPU/DriveSetup fixes:
-#16573 #13754 #17377 #17664 #10208."""
+"""Apply HIGH boot/install/DriveSetup fixes: #16573 #13754 #10208.
+
+The radeon_hd sources, including #17377, #17664 and the Barcelo probe,
+are copied from distro/graphics by scripts/apply-radeon.py.
+"""
 from __future__ import annotations
 
 import pathlib
@@ -205,134 +208,6 @@ InputServer::ReadyToRun()
     )
 
 
-def patch_radeon_connector() -> None:
-    path = HAIKU / "src/add-ons/accelerants/radeon_hd/connector.cpp"
-    replace_all(
-        path,
-        "((uint16*)gAtomContext->bios + tableOffset",
-        "(gAtomContext->bios + tableOffset",
-        "Haiku #17377 ATOM record byte offsets",
-    )
-    replace_once(
-        path,
-        """		uint8* address = (uint8*)pathObject->asDispPath;
-		ATOM_DISPLAY_OBJECT_PATH* path;
-		address += pathSize;
-		path = (ATOM_DISPLAY_OBJECT_PATH*)address;
-		pathSize += B_LENDIAN_TO_HOST_INT16(path->usSize);
-""",
-        """		uint8* address = (uint8*)pathObject->asDispPath;
-		ATOM_DISPLAY_OBJECT_PATH* path;
-		address += pathSize;
-		path = (ATOM_DISPLAY_OBJECT_PATH*)address;
-		uint16 thisPathSize = B_LENDIAN_TO_HOST_INT16(path->usSize);
-		if (thisPathSize < 8) {
-			ERROR("%s: Path #%" B_PRId32 ": invalid usSize, stopping.\\n",
-				__func__, i);
-			break;
-		}
-		pathSize += thisPathSize;
-""",
-        "Haiku #17377 path usSize guard",
-    )
-    replace_once(
-        path,
-        """	int deviceSupport = B_LENDIAN_TO_HOST_INT16(objectHeader->usDeviceSupport);
-
-	int pathSize = 0;
-""",
-        """	int deviceSupport = B_LENDIAN_TO_HOST_INT16(objectHeader->usDeviceSupport);
-
-	if (pathObject == NULL || encoderObject == NULL) {
-		ERROR("%s: ERROR: ATOM object tables missing!\\n", __func__);
-		return B_ERROR;
-	}
-
-	int pathSize = 0;
-""",
-        "Haiku #17377 null object tables",
-    )
-
-
-def patch_radeon_barcelo() -> None:
-    path = HAIKU / "src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp"
-    # Raven, Vega, and Navi sit inside `#if 0 /* disabled for R1/beta5 */`.
-    # A line next to 0x15d8 is not compiled. 0x15e7 has to follow that #endif.
-    buried = (
-        '\t// Ryzen 5 5625U, read from the USB boot on 3 Nov 2026.\n'
-        '\t// Same Raven display path as Picasso 0x15d8. Not modeset-tested.\n'
-        '\t{0x15e7, 12, 0, RADEON_RAVEN, CHIP_APU, "Radeon Vega Barcelo"},\n'
-    )
-    text = path.read_text(encoding="utf-8")
-    if buried in text:
-        path.write_text(text.replace(buried, "", 1), encoding="utf-8")
-        print(f"removed buried 15e7 from {path.name}")
-    replace_once(
-        path,
-        '\t{0x73ff, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Dimgrey)"},\n'
-        "#endif\n};\n",
-        '\t{0x73ff, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Dimgrey)"},\n'
-        "#endif\n"
-        "\t// Ryzen 5 5625U, read from the USB boot on 3 Nov 2026.\n"
-        "\t// Picasso 0x15d8 is the same Raven path, but that line is inside\n"
-        "\t// `#if 0 /* disabled for R1/beta5 */` and is not compiled.\n"
-        "\t// Not modeset-tested. A bad modeset can leave the panel black.\n"
-        '\t{0x15e7, 12, 0, RADEON_RAVEN, CHIP_APU, "Radeon Vega Barcelo"},\n'
-        "};\n",
-        "5625U 1002:15e7",
-    )
-
-
-def patch_radeon_cedar_fb() -> None:
-    path = HAIKU / "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd.cpp"
-    replace_once(
-        path,
-        """			default:
-				// Evergreen+ has memory stored in MB
-				info.shared_info->graphics_memory_size
-					= read32(info.registers + CONFIG_MEMSIZE) * 1024;
-				break;
-""",
-        """			default:
-				// Evergreen+ has memory stored in MB
-				info.shared_info->graphics_memory_size
-					= read32(info.registers + CONFIG_MEMSIZE) * 1024;
-				// Haiku #17664: Cedar sometimes leaves CONFIG_MEMSIZE at 0.
-				// Retry as bytes (R700-style) before falling back to the BAR.
-				if (info.shared_info->graphics_memory_size == 0) {
-					uint32 memSize = read32(info.registers + CONFIG_MEMSIZE);
-					if (memSize > 1024)
-						info.shared_info->graphics_memory_size = memSize / 1024;
-				}
-				break;
-""",
-        "Haiku #17664 Cedar MEMSIZE",
-    )
-    replace_once(
-        path,
-        """	if (info.shared_info->frame_buffer_size < 8192) {
-		ERROR("%s: Error: frame buffer is less than 8 MiB. I give up.\\n",
-			__func__);
-		return B_ERROR;
-	}
-""",
-        """	if (info.shared_info->frame_buffer_size == 0) {
-		ERROR("%s: Error: frame buffer size is 0. I give up.\\n",
-			__func__);
-		return B_ERROR;
-	}
-	if (info.shared_info->frame_buffer_size < 8192) {
-		// Haiku #17664: still map a small BAR rather than leaving app_server
-		// with a NULL framebuffer.
-		ERROR("%s: Warning: frame buffer is less than 8 MiB (%" B_PRIu32
-			" KiB), continuing.\\n",
-			__func__, info.shared_info->frame_buffer_size);
-	}
-""",
-        "Haiku #17664 small FB continue",
-    )
-
-
 def patch_drivesetup_size() -> None:
     path = HAIKU / "src/apps/drivesetup/Support.cpp"
     replace_once(
@@ -434,12 +309,23 @@ SizeSlider::SetValue(int32 value)
     )
 
 
+def copy_package_scripts() -> None:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source = root / "distro/package/src/servers/package/CommitTransactionHandler.cpp"
+    destination = HAIKU / "src/servers/package/CommitTransactionHandler.cpp"
+    if not source.is_file():
+        raise SystemExit(f"missing {source}")
+    if not destination.parent.is_dir():
+        raise SystemExit(f"missing {destination.parent}")
+    text = source.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    destination.write_bytes(text)
+    print(f"copied {destination.relative_to(HAIKU)}")
+
+
 def main() -> int:
+    copy_package_scripts()
     patch_packages_first_boot()
     patch_input_retry()
-    patch_radeon_connector()
-    patch_radeon_barcelo()
-    patch_radeon_cedar_fb()
     patch_drivesetup_size()
     return 0
 

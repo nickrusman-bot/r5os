@@ -184,6 +184,8 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 | `distro/app_server/`, `distro/boot/`, `distro/debugger/`, `distro/user-paths/` | unchanged | Haiku files. Headers were not rewritten |
 | `distro/kernel/x86/r5_pstate.cpp`, `r5_pstate.h` | MIT | New readout, compiled into the kernel. The kernel is a combined work with Haiku's MIT sources. A GPL-3.0 kernel combination was not reviewed, so this file stays MIT |
 | `distro/cpu/r5_pstate_log.cpp` | GPL-3.0-or-later | Separate log program. It only reads `/dev/misc/r5_pstate` |
+| `distro/graphics/` `radeon_hd` `accelerant.cpp`, `connector.cpp`, `display.cpp`, `gpu.cpp`, `mode.cpp`, `pll.cpp`, `driver.cpp`, `radeon_hd.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of Haiku’s accelerant and kernel driver. Copyright Haiku, Inc., MIT header kept. R5OS edits (Barcelo object table, EDID fallback, PLL 2.2, VRAM size, DCN init that leaves the firmware scanout) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The copied file is one combined work; shipping it follows GPL-3.0-or-later and the MIT notices stay. `1002:15e7` is claimed. DCN does not run the DCE encoder, clock, AUX, or modeset |
+| `distro/package/.../CommitTransactionHandler.cpp` | MIT, with GPL-3.0-or-later snippets | Haiku package daemon, copyright Haiku, Inc. The two script-start and script-finish log lines are R5OS snippets |
 
 `scripts/` is R5OS build tooling and still has no SPDX headers. This was not a pass over the Haiku tree, the packages, or the image.
 

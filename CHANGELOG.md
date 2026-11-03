@@ -1,5 +1,47 @@
 # R5OS changelog (lokaal)
 
+### DCN init leaves the firmware picture in place
+
+The image that left `1002:15e7` unclaimed reached the desktop. Claiming Barcelo and then running the DCE encoder init and `SetDCEClock` stops that picture. `radeon_hd` claims the id again. On `RADEON_RAVEN` and later the accelerant does not run encoder init, the display-clock command, DisplayPort link setup, AUX, DPMS, or a modeset. The kernel maps the bootloader framebuffer and keeps its pitch. The parser and the other DCN skips stay. This is not a DCN modeset. The panel is the firmware scanout with `radeon_hd` drawing into that buffer.
+
+`jam -q @r5-anyboot` for AMD64 finished at 17:34 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1185 targets). The linked driver contains `Radeon Vega Barcelo` and `boot framebuffer`. The accelerant contains `leave the firmware display setup`, `keep the boot scanout`, `leave the display clock alone`, and `skip AUX`. The image was written raw to the General UDisk at 17:38. Read-back matched at the start, the BeFS start, and the EFI start. Disk 0, the NVMe, was not opened.
+
+That stick booted on the Ryzen 5 5625U and reached the desktop. The BeFS syslog names `Radeon Vega Barcelo` revision `c2`, ignores `CONFIG_MEMSIZE` `4294967295`, and maps the boot framebuffer at `1920x1080`, pitch `7680`, physical `0xfce0000000`. The display-object table is 1.4 with 6 paths. eDP is attached from the boot EDID. The log contains `leave the firmware display setup`, `skip AUX`, `keep the boot scanout` for `1920x1080`, and `bytes_per_row` `7680`. First login ran. There is no panic. After the DPMS skip, `encoder_dpms_set` still called the DIG transmitter; the picture stayed. No MSR was written. The logs are on `/boot/home` (`no FAT mount`, pass 2). This is the firmware scanout. It is not a DCN modeset and not acceleration.
+
+### Barcelo stays off the claimed display list
+
+The boots at 16:14 and 16:47 Europe/Amsterdam stayed on the rocket. The flushed log ends at first-boot package 131. The next lines on a QEMU serial log of the same image are the graphics probes, then `ps2: keyboard found`, and then silence. QEMU has no `1002:15e7`. `ati-vga` is a Rage 128 or an RV100, so that device id cannot be substituted.
+
+`1002:15e7` is compiled out of the live `radeon_hd` table. The parser and the DCN skip stay in the tree and do not run. `framebuffer` keeps the boot picture. Each post-install script logs its package name before `system()` and the result after. The file is `distro/package/.../CommitTransactionHandler.cpp`: Haiku keeps the MIT header, and those two lines are GPL-3.0-or-later snippets.
+
+`jam -q @r5-anyboot` for AMD64 finished at 17:14 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1170 targets). The linked `radeon_hd` does not contain `Radeon Vega Barcelo`. `package_daemon` contains `script starting` and `script finished`. The image was written raw to the General UDisk at 17:18. Read-back matched at the start, the BeFS start, and the EFI start. Disk 0, the NVMe, was not opened. This image has not been booted.
+
+### Boot logs stay on the BeFS volume
+
+The stick written at 15:59 Europe/Amsterdam reached the kernel and then stayed on the rocket. The first start listed all 132 first-boot packages and never wrote `activated-packages`. The second start, at 16:23, skipped that round and the flushed syslog ends when both package volumes are called consistent, about 23 seconds in. There is no panic, no `app_server`, and no `radeon_hd`. The logger had mounted the stick's own EFI partition, on the same USB disk as the boot volume, and did not write again.
+
+The boot logs are now only `/boot/home/r5-cpu.txt`, `/boot/home/r5-hardware.txt`, and `/boot/home/r5-syslog.txt`. Nothing is mounted from `/dev/disk`. `tools/r5-befs/r5_befs.py` reads them from the BeFS partition. No MSR is written.
+
+`jam -q @r5-anyboot` for AMD64 finished at 16:38 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1168 targets). The linked `r5_pstate_log` contains `no FAT mount`. This image has not been booted.
+
+### Radeon sources live in the R5 tree
+
+`connector.cpp`, `display.cpp`, `gpu.cpp`, `pll.cpp`, `driver.cpp` and `radeon_hd.cpp` are copied from `distro/graphics` by `scripts/apply-radeon.py`. They replace the same paths in the Haiku tree. The string patches that used to edit those files are gone. Each file keeps the Haiku copyright and the MIT license on the original work. R5OS changes sit in `SPDX-Snippet` blocks and are GPL-3.0-or-later. A build that ships both follows GPL-3.0-or-later, and the MIT notices stay. `r5_pstate_log.cpp` was already an R5OS file under GPL-3.0-or-later in `distro/cpu`.
+
+Content revision 4 is the 16-byte path: the encoder-record offset is at byte 8. Content revision 5 reserves bytes 6 through 11, so that offset stays 0. The device tag is at byte 12 in both. The syslog line is `R5 radeon_hd display object table` plus `encoder record`.
+
+DCN, from `RADEON_RAVEN` onward, does not program the DCE 5 CRTC registers. `display_crtc_fb_set` and `display_dce45_crtc_load_lut` return after `R5 radeon_hd: DCN, skip DCE 5 CRTC registers`. The memory-controller skip logs `R5 radeon_hd: DCN, leave the boot memory aperture alone`. The stick written at 15:35 Europe/Amsterdam does not have this CRTC skip.
+
+`jam -q @r5-anyboot` for AMD64 finished at 15:59 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1176 targets). The linked accelerant contains `R5 radeon_hd`, `display object table`, `SetDCEClock 2.2`, `skip DCE 5 CRTC`, `boot memory aperture`, and `boot VESA EDID`. The kernel driver contains `R5 radeon_hd: CONFIG_MEMSIZE` and `Radeon Vega Barcelo`. That image has not been written to the stick and has not been booted. AtomBIOS `SetCRTC_Timing` is still called; a bad modeset can still black the panel.
+
+### Barcelo reads the display-object table
+
+The 14:48 boot opened `radeon_hd` and then closed it. That AtomBIOS is master format 2. The driver read the GPIO pin table at the old index 11, which on this format is `vram_usagebyfirmware`, and it looked for `GPIO_I2C_Info` at index 10, which is empty. `connector_probe` treated the flat display-object list as the old object header, counted 235 paths, and stopped on `usSize`. `SetDCEClock` reported table 2.2 and returned before running. `CONFIG_MEMSIZE` read `0x3fffff` and was printed as 4194303 MB. The mapped window was still the 256 MB PCI BAR. `detect_displays` then logged 0 monitors. `framebuffer` kept the picture.
+
+The object table at revision 1.4 or newer is now a flat path list: connector object, encoder object, record offsets, and the device tag. On master format 2 the GPIO pin LUT is index 12, and a missing `GPIO_I2C_Info` table is not fatal because I2C is on the path records. `SetDCEClock` 2.2 uses the 2.1 argument block and runs. A memory-size register of 0 or above 65536 MB is ignored, and both the map and the reported size follow the PCI BAR. An eDP connector whose AUX EDID fails uses the VESA EDID the boot loader already stored. Raven does not program the Evergreen memory-controller registers; those writes halt a controller this driver does not own. This is still not a claim that the panel is driven. A bad modeset can leave the picture black until the next boot. `framebuffer` is the fallback when the accelerant closes.
+
+The logger that skips `/dev/disk/nvme` is in this image. `jam -q @r5-anyboot` for AMD64 finished at 15:35 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1191 targets, `r5-os-anyboot.iso`, 2156724224 bytes, BeFS type `0xeb` plus EFI type `0xef`). The linked accelerant contains `display object table`, `boot VESA EDID`, and `leaving the boot memory`. The kernel driver still contains `Radeon Vega Barcelo`. `r5_pstate_log` contains `/nvme/`. The image was written raw to the General UDisk. The first pass stopped at the EFI partition because that volume was still mounted; the body matched the image, and a second pass locked that volume and wrote the tail. A read-back of the first EFI sector matched. Disk 0, the NVMe, was not opened. The four-byte Windows disk signature in the MBR is not the image's. This image has not been booted.
+
 ### The 14:48 stick booted, and the log landed on the Windows EFI partition
 
 That image reached the desktop and then shut down. `radeon_hd` claimed `1002:15e7` as `Radeon Vega Barcelo`, mapped 256 MB after reading the video memory size as 4194303 MB, probed 235 connector paths, rejected path 0 for `usSize`, and logged `0 attached monitors`. It closed. `framebuffer` then kept the firmware buffer. The desktop the user saw was that framebuffer. `package_daemon` ran first-boot processing for 132 packages; the last of those lines is at about 8.9 seconds into the boot. The syslog ends in the first-login script, then shutdown. No panic. No MSR write. The idle sample was P-state 1 (1800 MHz) and the busy sample was P-state 0 (2300 MHz).
