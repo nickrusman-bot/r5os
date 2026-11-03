@@ -38,7 +38,8 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fRealTime(0),
 	fStartingFrame(0),
 	fProcessedBuffers(0),
-	fInsideNotify(0)
+	fInsideNotify(0),
+	fQueueStopped(0)
 {
 }
 
@@ -51,11 +52,35 @@ Stream::~Stream()
 }
 
 
+static uint8
+layout_channels()
+{
+	void* handle = load_driver_settings(DRIVER_NAME);
+	if (handle == NULL)
+		return 0;
+
+	const char* item = get_driver_parameter(handle, "channel_layout", NULL, NULL);
+	uint8 channels = 0;
+	if (item != NULL && strcmp(item, "auto") != 0) {
+		char* end = NULL;
+		unsigned long value = strtoul(item, &end, 0);
+		if (end != item && end != NULL && *end == '\0'
+			&& value >= 1 && value <= 16) {
+			channels = (uint8)value;
+		}
+	}
+	unload_driver_settings(handle);
+	return channels;
+}
+
+
 status_t
 Stream::_ChooseAlternate()
 {
-	// lookup alternate with maximal (ch * 100 + resolution)
-	uint16 maxChxRes = 0;
+	// Automatic keeps the widest layout. A saved channel_layout prefers
+	// that count, then the nearest one the device actually has.
+	uint8 wanted = layout_channels();
+	uint16 bestScore = 0;
 	for (int i = 0; i < fAlternates.Count(); i++) {
 		if (fAlternates[i]->Interface() == 0) {
 			TRACE(INF, "Ignore alternate %d - zero interface description.\n", i);
@@ -90,7 +115,7 @@ Stream::_ChooseAlternate()
 		TypeIFormatDescriptor* format
 			= static_cast<TypeIFormatDescriptor*>(fAlternates[i]->Format());
 
-		if (format->fNumChannels > 2) {
+		if (format->fNumChannels < 1 || format->fNumChannels > 16) {
 			TRACE(ERR, "Ignore alternate %d - channel count %d "
 				"is not supported.\n", i, format->fNumChannels);
 			continue;
@@ -118,14 +143,22 @@ Stream::_ChooseAlternate()
 			}
 		}
 
-		uint16 chxRes = format->fNumChannels * 100 + format->fBitResolution;
-		if (chxRes > maxChxRes) {
-			maxChxRes = chxRes;
+		uint16 score = format->fBitResolution;
+		if (wanted == 0)
+			score = format->fNumChannels * 100 + format->fBitResolution;
+		else {
+			uint8 distance = format->fNumChannels > wanted
+				? format->fNumChannels - wanted : wanted - format->fNumChannels;
+			score = 5000 - distance * 100 - format->fNumChannels
+				+ format->fBitResolution;
+		}
+		if (score > bestScore) {
+			bestScore = score;
 			fActiveAlternate = i;
 		}
 	}
 
-	if (maxChxRes <= 0) {
+	if (bestScore <= 0) {
 		TRACE(ERR, "No compatible alternate found. "
 			"Stream initialization failed.\n");
 		return B_NO_INIT;
@@ -162,10 +195,14 @@ Stream::OnRemove()
 	// not inside the callback anymore before returning, as we would otherwise
 	// violate the promise not to use any of the pipes after returning from the
 	// removed callback
+	atomic_set(&fQueueStopped, 1);
+	fIsRunning = false;
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 
 	gUSBModule->cancel_queued_transfers(fStreamEndpoint);
+	while (atomic_get(&fInsideNotify) != 0)
+		snooze(100);
 }
 
 
@@ -209,6 +246,19 @@ Stream::_SetupBuffers()
 	if (packetSize == 0) {
 		TRACE(ERR, "computed packet size is 0!");
 		return B_BAD_VALUE;
+	}
+
+	// Do not ask the host controller for a packet bigger than the endpoint.
+	// High-speed UAC2 microframes are smaller than a full-speed 1 ms packet.
+	uint16 maxPacket = fAlternates[fActiveAlternate]->Endpoint()->fMaxPacketSize
+		& 0x7ff;
+	if (maxPacket > 0 && packetSize > maxPacket) {
+		packetSize = maxPacket - (maxPacket % sampleSize);
+		if (packetSize == 0) {
+			TRACE(ERR, "endpoint packet %u is smaller than one frame\n",
+				maxPacket);
+			return B_BAD_VALUE;
+		}
 	}
 
 	if (fArea != -1) {
@@ -334,6 +384,7 @@ Stream::Start()
 {
 	status_t result = B_BUSY;
 	if (!fIsRunning) {
+		atomic_set(&fQueueStopped, 0);
 		for (size_t i = 0; i < kSamplesBufferCount; i++)
 			result = _QueueNextTransfer(i, i == 0);
 		fIsRunning = result == B_OK;
@@ -345,13 +396,13 @@ Stream::Start()
 status_t
 Stream::Stop()
 {
-	if (fIsRunning) {
-		// wait until possible notification handling finished...
-		while (atomic_get(&fInsideNotify) != 0)
-			snooze(100);
-		fIsRunning = false;
-	}
+	atomic_set(&fQueueStopped, 1);
+	fIsRunning = false;
+	while (atomic_get(&fInsideNotify) != 0)
+		snooze(100);
 	gUSBModule->cancel_queued_transfers(fStreamEndpoint);
+	while (atomic_get(&fInsideNotify) != 0)
+		snooze(100);
 
 	return B_OK;
 }
@@ -394,7 +445,8 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 		stream->fStreamEndpoint, status, data, actualLength);
 
 	atomic_add(&stream->fInsideNotify, 1);
-	if (status == B_CANCELED || stream->fDevice->fRemoved || !stream->fIsRunning) {
+	if (status == B_CANCELED || atomic_get(&stream->fQueueStopped) != 0
+		|| stream->fDevice->fRemoved || !stream->fIsRunning) {
 		TRACE(ERR, "Cancelled: c:%p st:%#010x, data:%#010x, len:%d\n",
 			cookie, status, data, actualLength);
 		atomic_add(&stream->fInsideNotify, -1);
@@ -515,6 +567,20 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	size_t actualLength = 0;
 	usb_audio_sampling_freq freq = _ASFormatDescriptor::GetSamFreq(samplingRate);
 	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
+
+	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
+		_AudioControl* control = fControlInterface->Find(TerminalLink());
+		uint8 clock = control != NULL ? control->ClockSourceId() : 0;
+		uint32 rate = samplingRate;
+		status = gUSBModule->send_request(fDevice->fDevice,
+			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,
+			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
+			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
+			sizeof(rate), &rate, &actualLength);
+		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
+			samplingRate, clock, strerror(status));
+		return status;
+	}
 
 	status = gUSBModule->send_request(fDevice->fDevice,
 		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,

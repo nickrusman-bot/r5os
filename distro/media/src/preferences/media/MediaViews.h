@@ -34,6 +34,7 @@ class MediaWindow;
 
 const uint32 ML_RESTART_MEDIA_SERVER = 'resr';
 const uint32 ML_DEFAULT_CHANNEL_CHANGED = 'chch';
+const uint32 ML_USB_CHANNEL_LAYOUT = 'ulyt';
 
 
 class NodeMenuItem : public BMenuItem
@@ -123,6 +124,7 @@ public:
 
 private:
 			BMenuField*			_MakeChannelMenu();
+			BMenuField*			_MakeLayoutMenu();
 			BMenuField*			_MakeLatencyMenu();
 			BCheckBox*			_MakeVolumeCheckBox();
 			void				_FillChannelMenu(const dormant_node_info* info);
@@ -133,6 +135,7 @@ private:
 			ChannelMenuItem*	_ChannelMenuItemAt(int32 index);
 
 			BMenu*				fChannelMenu;
+			BMenu*				fLayoutMenu;
 			BMenu*				fLatencyMenu;
 			BStringView*		fLatencyHint;
 			BCheckBox* 			fVolumeCheckBox;
