@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 UMP and 16-bit velocity
+
+`kits/midi2` can build and parse a Universal MIDI Packet without a new kit. `SprayNoteOn(channel, note, uchar)` and `SprayControlChange(channel, controller, uchar)` still send a MIDI 1.0 byte message. The new overloads take `uint16` velocity and `uint32` controller value and send one MIDI 2.0 channel-voice packet (message type 0x4, two 32-bit words). `SprayUMP` sends one packet of 1, 2, or 4 words when the count matches the message type. The methods are not virtual: the existing spray calls are not virtual, and a new virtual would move the vtable of a subclass that was compiled earlier.
+
+The bytes after the roster header are `B_MIDI2_UMP_MAGIC`, the word count, and the words. `BMidiLocalConsumer::Data` turns a MIDI 2.0 note or controller into the existing 7-bit `NoteOn` / `ControlChange` (top 7 bits). An application that wants the full value overrides `Data`, calls `midi2_ump_from_payload`, and does not call the base for that buffer. `midi_server` sends that payload with `B_MIDI_WRITE_UMP` instead of `write()`.
+
+`usb_midi` reads the class-specific MIDI header. Below version 2.0 the endpoint stays on USB MIDI 1.0 CIN packets. A type 0x4 packet is then the 7-bit note or controller in one CIN packet, so a current interface still plays. Version 2.0 or newer carries UMP words on the bulk endpoint. A MIDI 1.0 `write()` on that endpoint becomes one type 0x1 or type 0x2 word. SysEx on a version 2.0 endpoint returns `B_UNSUPPORTED`. The group nibble is the cable of the open port. Incoming UMP is parsed back into MIDI 1.0 bytes for the existing reader, so the 16-bit value is not kept on the way in.
+
+No USB MIDI device was attached. Property Exchange and Profiles are not implemented.
+
+`jam -q libmidi2.so libmidi.so usb_midi midi_server` exited 0 on 3 Nov 2026 at 01:08 Europe/Amsterdam. `libmidi.so` still compiled against the new overloads. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The running VirtualBox image was not rebuilt.
+
 ### Latency file and mixer gain
 
 Build 10041 created `~/config/settings/kernel/drivers` and still did not create `hda.settings`. The prefs built that path with `BPath` / `create_directory`, which walk a `BEntry`. The directory was left behind and the file was not. The save now uses `find_directory` into a string, `mkdir`, `chmod 0755`, and `open`. A failure alert includes that path and `strerror`. The same text is written to `usb_audio`.

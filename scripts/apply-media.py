@@ -30,6 +30,14 @@ FILES = (
     "src/preferences/media/MediaViews.h",
     "src/preferences/media/MediaWindow.cpp",
     "src/kits/interface/MenuField.cpp",
+    "headers/os/midi2/Midi2Defs.h",
+    "headers/os/midi2/MidiProducer.h",
+    "headers/os/drivers/midi_driver.h",
+    "src/kits/midi2/MidiLocalProducer.cpp",
+    "src/kits/midi2/MidiLocalConsumer.cpp",
+    "src/servers/midi/PortDrivers.cpp",
+    "src/add-ons/kernel/drivers/midi/usb_midi/usb_midi.h",
+    "src/add-ons/kernel/drivers/midi/usb_midi/usb_midi.cpp",
 )
 
 
