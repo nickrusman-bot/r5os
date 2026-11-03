@@ -583,6 +583,58 @@ radeon_gpu_mc_init()
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static void
+radeon_vram_pool_report()
+{
+	radeon_shared_info* info = gInfo->shared_info;
+	ERROR("%s: R5 radeon_hd: pool 0x%" B_PRIx64 "+0x%" B_PRIx64
+		" gpu base 0x%" B_PRIx64 "\n", __func__,
+		info->vram_pool_offset, info->vram_pool_bytes, gInfo->fb.vramStart);
+}
+
+
+status_t
+radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
+	uint8** _address)
+{
+	if (_offset == NULL || bytes == 0)
+		return B_BAD_VALUE;
+	if (alignment == 0 || (alignment & (alignment - 1)) != 0)
+		return B_BAD_VALUE;
+	if (alignment < 4096)
+		alignment = 4096;
+
+	radeon_shared_info* info = gInfo->shared_info;
+	Autolock lock(info->accelerant_lock);
+	if (!lock.IsLocked())
+		return B_ERROR;
+
+	uint64 start = info->vram_pool_offset;
+	uint64 end = start + info->vram_pool_bytes;
+	uint64 cursor = info->vram_pool_cursor;
+	if (cursor < start)
+		cursor = start;
+	uint64 aligned = (cursor + alignment - 1) & ~(alignment - 1);
+	if (aligned < cursor || aligned > end || bytes > end - aligned)
+		return B_NO_MEMORY;
+
+	info->vram_pool_cursor = aligned + bytes;
+	*_offset = aligned;
+
+	if (_address != NULL) {
+		uint8* base = (uint8*)info->frame_buffer;
+		if (!radeon_hd_uses_dce(info->chipsetID))
+			base -= info->vram_reserved_offset;
+		*_address = base + aligned;
+	}
+	return B_OK;
+}
+// SPDX-SnippetEnd
+
+
 status_t
 radeon_gpu_mc_setup()
 {
@@ -607,19 +659,27 @@ radeon_gpu_mc_setup()
 		// Programming them halts a controller this driver does not own.
 		TRACE("%s: R5 radeon_hd: DCN, leave the boot memory aperture alone\n",
 			__func__);
+		radeon_vram_pool_report();
 		return B_OK;
 	}
 // SPDX-SnippetEnd
+	status_t result = B_ERROR;
 	if (info.chipsetID >= RADEON_CAYMAN)
-		return radeon_gpu_mc_setup_evergreen();	// also for ni
+		result = radeon_gpu_mc_setup_evergreen();	// also for ni
 	else if (info.chipsetID >= RADEON_CEDAR)
-		return radeon_gpu_mc_setup_evergreen();
+		result = radeon_gpu_mc_setup_evergreen();
 	else if (info.chipsetID >= RADEON_RV770)
-		return radeon_gpu_mc_setup_r700();
+		result = radeon_gpu_mc_setup_r700();
 	else if (info.chipsetID >= RADEON_R600)
-		return radeon_gpu_mc_setup_r600();
+		result = radeon_gpu_mc_setup_r600();
 
-	return B_ERROR;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (result == B_OK)
+		radeon_vram_pool_report();
+// SPDX-SnippetEnd
+	return result;
 }
 
 

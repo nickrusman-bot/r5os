@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The visible VRAM window keeps the firmware picture
+
+Linux `gmc_v9_0_mc_init` takes the framebuffer BAR as the CPU-visible aperture. `amdgpu_gmc_get_vbios_allocations` then keeps the firmware picture out of the heap. Raven and Renoir also keep 9 MiB at the start. The Haiku driver maps that same BAR with one write-combining area, for every chip, not for one PCI ID. The boot picture is reserved when it sits inside the BAR, aligned to 4 KiB. The pool is the larger side that does not overlap it. `radeon_vram_alloc` bumps the pool and does not free it. Memory beyond the BAR is not part of the pool. GART is not programmed. DCN still does not write memory-controller registers. DCE still programs its controller and still uses the start of the BAR for the scanout.
+
+`jam -q @r5-anyboot` for AMD64 finished at 23:46 Europe/Amsterdam on 3 Nov 2026 with exit 0. The linked `radeon_hd` contains `visible VRAM bar`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 23:51. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This image has not been booted.
+
 ### The radeon_hd device table names the display engine
 
 The block Haiku had inside `#if 0` for R1/beta5 is compiled again. Each row now carries the display class and version from Linux `amdgpu_drv.c` (v6.12) and from `vi.c` plus `dc_resource.c` `resource_parse_asic_id` (v6.12, with the v5.15 IP blocks where the parser is less specific). DCE rows keep that version in `dceMajor` and `dceMinor`. DCN rows and Topaz store the version beside that, and leave `dceMajor` at 0, so the DCE register paths do not see DCN as DCE 12 or 13. `1002:15e7` is Renoir, DCN 2.1, the same class Linux gives `1636`, `1638` and `164c`. Vega M is DCE 11.2, not DCE 12. Vega 20 is DCE 12.1. Stoney uses the DCE 11.0 block. `0x73cf` is not in those Linux tables and is gone. `0x163f` is not in the v6.12 table. Hainan and Topaz do not run the DCE setup.

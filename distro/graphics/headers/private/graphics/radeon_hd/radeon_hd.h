@@ -266,6 +266,25 @@ struct radeon_shared_info {
 // SPDX-SnippetEnd
 
 	uint16			color_data[3 * 256];    // colour lookup table
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// CPU-visible VRAM window. This is the PCI framebuffer BAR, or the
+	// smaller mapping used when that BAR would not map. Offsets are bytes
+	// from vram_window_phys.
+	// The reserved range is the live scanout. The pool is the larger side
+	// that does not overlap it. vram_pool_cursor walks the pool.
+	uint64			vram_bar_phys;
+	uint64			vram_bar_bytes;
+	uint64			vram_window_phys;
+	uint64			vram_window_bytes;
+	uint64			vram_reserved_offset;
+	uint64			vram_reserved_bytes;
+	uint64			vram_pool_offset;
+	uint64			vram_pool_bytes;
+	uint64			vram_pool_cursor;
+// SPDX-SnippetEnd
 };
 
 // SPDX-SnippetBegin
@@ -284,6 +303,13 @@ radeon_hd_uses_dce(uint16 chipsetID)
 		return false;
 	return chipsetID < RADEON_RAVEN;
 }
+
+
+// Allocate bytes from the visible VRAM pool. The offset is from
+// vram_window_phys. The address is the CPU mapping of that offset.
+// alignment must be a power of two. The pool is not freed.
+status_t radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
+	uint8** _address);
 // SPDX-SnippetEnd
 
 //----------------- ioctl() interface ----------------

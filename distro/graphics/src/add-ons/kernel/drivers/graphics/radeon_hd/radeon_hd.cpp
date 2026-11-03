@@ -665,6 +665,79 @@ radeon_hd_pci_bar_mmio(uint16 chipsetID)
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static uint64
+radeon_align_down(uint64 value, uint64 align)
+{
+	return value & ~(align - 1);
+}
+
+
+static uint64
+radeon_align_up(uint64 value, uint64 align)
+{
+	return (value + align - 1) & ~(align - 1);
+}
+
+
+static void
+radeon_publish_vram_window(radeon_shared_info* info, uint64 barPhys,
+	uint64 barBytes, uint64 windowPhys, uint64 windowBytes,
+	uint64 reservedOffset, uint64 reservedBytes)
+{
+	const uint64 kAlign = 4096;
+
+	if (reservedBytes > 0 && reservedOffset < windowBytes) {
+		uint64 end = reservedOffset + reservedBytes;
+		if (end > windowBytes)
+			end = windowBytes;
+		reservedOffset = radeon_align_down(reservedOffset, kAlign);
+		end = radeon_align_up(end, kAlign);
+		if (end > windowBytes)
+			end = windowBytes;
+		reservedBytes = end - reservedOffset;
+	} else {
+		reservedOffset = 0;
+		reservedBytes = 0;
+	}
+
+	uint64 before = reservedOffset;
+	uint64 afterOffset = reservedBytes == 0
+		? 0 : reservedOffset + reservedBytes;
+	uint64 windowEnd = radeon_align_down(windowBytes, kAlign);
+	uint64 after = windowEnd > afterOffset ? windowEnd - afterOffset : 0;
+	uint64 poolOffset;
+	uint64 poolBytes;
+	if (after >= before) {
+		poolOffset = afterOffset;
+		poolBytes = after;
+	} else {
+		poolOffset = 0;
+		poolBytes = radeon_align_down(before, kAlign);
+	}
+
+	info->vram_bar_phys = barPhys;
+	info->vram_bar_bytes = barBytes;
+	info->vram_window_phys = windowPhys;
+	info->vram_window_bytes = windowBytes;
+	info->vram_reserved_offset = reservedOffset;
+	info->vram_reserved_bytes = reservedBytes;
+	info->vram_pool_offset = poolOffset;
+	info->vram_pool_bytes = poolBytes;
+	info->vram_pool_cursor = poolOffset;
+
+	ERROR("%s: R5 radeon_hd: visible VRAM bar 0x%" B_PRIx64
+		" size 0x%" B_PRIx64 ", window 0x%" B_PRIx64
+		" size 0x%" B_PRIx64 ", reserved 0x%" B_PRIx64
+		"+0x%" B_PRIx64 ", pool 0x%" B_PRIx64 "+0x%" B_PRIx64 "\n",
+		__func__, barPhys, barBytes, windowPhys, windowBytes,
+		reservedOffset, reservedBytes, poolOffset, poolBytes);
+}
+// SPDX-SnippetEnd
+
+
 status_t
 radeon_hd_init(radeon_info &info)
 {
@@ -843,30 +916,42 @@ radeon_hd_init(radeon_info &info)
 		info.shared_info->graphics_memory_size / 1024);
 
 	// *** Framebuffer mapping
+	//
+	// The PCI BAR is the CPU-visible VRAM window. Linux gmc_v9_0_mc_init
+	// records that BAR as aper_base/aper_size and then keeps the firmware
+	// picture out of the allocator (amdgpu_gmc_get_vbios_allocations).
+	// The picture stays where the firmware put it. The pool is the rest
+	// of the window. Nothing here writes a memory-controller register.
 
 	phys_addr_t mapAddr = fbAddr;
 	uint32 mapBytes = info.shared_info->frame_buffer_size * 1024;
+	uint64 barPhys = (uint64)fbAddr;
+	uint64 barBytes = (uint64)fbBarSize * 1024;
+	uint64 reservedOffset = 0;
+	uint64 reservedBytes = 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (!radeon_hd_uses_dce(info.chipsetID)) {
-		frame_buffer_boot_info* bootFrame
-			= (frame_buffer_boot_info*)get_boot_item(
-				FRAME_BUFFER_BOOT_INFO, NULL);
-		if (bootFrame != NULL && bootFrame->physical_frame_buffer != 0
-			&& bootFrame->bytes_per_row > 0 && bootFrame->height > 0) {
-			uint64 bytes = (uint64)bootFrame->bytes_per_row
-				* (uint64)bootFrame->height;
-			mapAddr = bootFrame->physical_frame_buffer;
-			mapBytes = (uint32)((bytes + 4095) & ~4095ULL);
-			info.shared_info->frame_buffer_size = mapBytes / 1024;
+	frame_buffer_boot_info* bootFrame
+		= (frame_buffer_boot_info*)get_boot_item(FRAME_BUFFER_BOOT_INFO, NULL);
+	if (bootFrame != NULL && bootFrame->physical_frame_buffer != 0
+		&& bootFrame->bytes_per_row > 0 && bootFrame->height > 0) {
+		uint64 scanPhys = (uint64)bootFrame->physical_frame_buffer;
+		uint64 scanBytes = (uint64)bootFrame->bytes_per_row
+			* (uint64)bootFrame->height;
+		if (scanPhys >= barPhys && scanBytes > 0
+			&& scanPhys - barPhys < (uint64)mapBytes
+			&& scanBytes <= (uint64)mapBytes - (scanPhys - barPhys)) {
+			reservedOffset = scanPhys - barPhys;
+			reservedBytes = scanBytes;
 			info.shared_info->bytes_per_row = bootFrame->bytes_per_row;
-			ERROR("%s: R5 radeon_hd: DCN, boot framebuffer %" B_PRId32
-				"x%" B_PRId32 " pitch %" B_PRId32 "\n", __func__,
-				bootFrame->width, bootFrame->height,
-				bootFrame->bytes_per_row);
+			ERROR("%s: R5 radeon_hd: boot framebuffer %" B_PRId32
+				"x%" B_PRId32 " pitch %" B_PRId32 " at window +0x%" B_PRIx64
+				"\n", __func__, bootFrame->width, bootFrame->height,
+				bootFrame->bytes_per_row, reservedOffset);
 		} else {
-			ERROR("%s: R5 radeon_hd: DCN, no boot framebuffer\n", __func__);
+			ERROR("%s: R5 radeon_hd: boot framebuffer is outside the "
+				"visible window\n", __func__);
 		}
 	}
 // SPDX-SnippetEnd
@@ -877,6 +962,27 @@ radeon_hd_init(radeon_info &info)
 		mapAddr, mapBytes,
 		B_ANY_KERNEL_ADDRESS, B_READ_AREA | B_WRITE_AREA,
 		(void**)&info.shared_info->frame_buffer);
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (frambufferMapper.InitCheck() < B_OK && reservedBytes > 0) {
+		// The whole window did not map. Keep the picture, and publish
+		// an empty pool, which is the previous DCN mapping.
+		uint64 scanBytes = (reservedBytes + 4095) & ~4095ULL;
+		mapAddr = (phys_addr_t)(barPhys + reservedOffset);
+		mapBytes = (uint32)scanBytes;
+		info.shared_info->frame_buffer_size = mapBytes / 1024;
+		reservedOffset = 0;
+		reservedBytes = scanBytes;
+		ERROR("%s: R5 radeon_hd: visible window map failed, mapping the "
+			"boot framebuffer only\n", __func__);
+		info.framebuffer_area = frambufferMapper.Map(
+			"radeon hd frame buffer", mapAddr, mapBytes,
+			B_ANY_KERNEL_ADDRESS, B_READ_AREA | B_WRITE_AREA,
+			(void**)&info.shared_info->frame_buffer);
+	}
+// SPDX-SnippetEnd
 
 	if (frambufferMapper.InitCheck() < B_OK) {
 		ERROR("%s: card(%" B_PRId32 "): couldn't map frame buffer!\n",
@@ -895,7 +1001,23 @@ radeon_hd_init(radeon_info &info)
 	frambufferMapper.Detach();
 
 	info.shared_info->frame_buffer_area = info.framebuffer_area;
-	info.shared_info->frame_buffer_phys = mapAddr;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	{
+		uint8* window = info.shared_info->frame_buffer;
+		// DCN keeps drawing into the firmware picture. DCE modeset still
+		// uses the start of the BAR, which is the pointer it had before.
+		if (!radeon_hd_uses_dce(info.chipsetID)) {
+			info.shared_info->frame_buffer = window + reservedOffset;
+			info.shared_info->frame_buffer_phys
+				= (addr_t)((uint64)mapAddr + reservedOffset);
+		} else
+			info.shared_info->frame_buffer_phys = (addr_t)mapAddr;
+		radeon_publish_vram_window(info.shared_info, barPhys, barBytes,
+			(uint64)mapAddr, (uint64)mapBytes, reservedOffset, reservedBytes);
+	}
+// SPDX-SnippetEnd
 
 	// Pass common information to accelerant
 	info.shared_info->deviceIndex = info.id;
