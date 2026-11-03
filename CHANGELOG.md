@@ -4,7 +4,9 @@
 
 Linux `gmc_v9_0_mc_init` takes the framebuffer BAR as the CPU-visible aperture. `amdgpu_gmc_get_vbios_allocations` then keeps the firmware picture out of the heap. Raven and Renoir also keep 9 MiB at the start. The Haiku driver maps that same BAR with one write-combining area, for every chip, not for one PCI ID. The boot picture is reserved when it sits inside the BAR, aligned to 4 KiB. The pool is the larger side that does not overlap it. `radeon_vram_alloc` bumps the pool and does not free it. Memory beyond the BAR is not part of the pool. GART is not programmed. DCN still does not write memory-controller registers. DCE still programs its controller and still uses the start of the BAR for the scanout.
 
-`jam -q @r5-anyboot` for AMD64 finished at 23:46 Europe/Amsterdam on 3 Nov 2026 with exit 0. The linked `radeon_hd` contains `visible VRAM bar`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 23:51. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This image has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 23:46 Europe/Amsterdam on 3 Nov 2026 with exit 0. The linked `radeon_hd` contains `visible VRAM bar`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 23:51. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened.
+
+That stick booted on the Ryzen 5 5625U and reached the desktop. The syslog says `visible VRAM bar 0xfce0000000 size 0x10000000`, window the same size, `boot framebuffer 1920x1080 pitch 7680 at window +0x0`, `reserved 0x0+0x7e9000`, and `pool 0x7e9000+0xf817000`. The accelerant repeats the pool and `gpu base 0x0`. The kernel noted the 256 MiB area overlaps the firmware area of `0x7e9000` and kept the existing memory type. `keep the boot scanout` is 1920x1080. The command ring stays off. There is no panic. Tracker started. The pool was not allocated.
 
 ### The radeon_hd device table names the display engine
 
