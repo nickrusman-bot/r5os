@@ -10,7 +10,7 @@ The bytes after the roster header are `B_MIDI2_UMP_MAGIC`, the word count, and t
 
 No USB MIDI device was attached. Property Exchange and Profiles are not implemented.
 
-`jam -q libmidi2.so libmidi.so usb_midi midi_server` exited 0 on 3 Nov 2026 at 01:08 Europe/Amsterdam. `libmidi.so` still compiled against the new overloads. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The running VirtualBox image was not rebuilt.
+`jam -q libmidi2.so libmidi.so usb_midi midi_server` exited 0 on 3 Nov 2026 at 01:13 Europe/Amsterdam. `libmidi.so` still compiled against the new overloads. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. The running VirtualBox image was not rebuilt.
 
 ### Latency file and mixer gain
 
