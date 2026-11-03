@@ -26,6 +26,13 @@ FILES = (
     "src/add-ons/media/media-add-ons/multi_audio/Resampler.cpp",
     "src/add-ons/kernel/drivers/audio/usb/Stream.cpp",
     "src/add-ons/kernel/drivers/audio/usb/Stream.h",
+    "src/add-ons/kernel/drivers/audio/usb/UsbAudioFormat.h",
+    "src/add-ons/kernel/drivers/audio/usb/AudioControlInterface.cpp",
+    "src/add-ons/kernel/drivers/audio/usb/AudioControlInterface.h",
+    "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.cpp",
+    "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.h",
+    "src/add-ons/kernel/drivers/audio/usb/Device.cpp",
+    "headers/os/drivers/usb/USB_audio.h",
     "src/preferences/media/MediaViews.cpp",
     "src/preferences/media/MediaViews.h",
     "src/preferences/media/MediaWindow.cpp",
@@ -44,6 +51,8 @@ FILES = (
     "src/add-ons/kernel/drivers/midi/usb_midi/usb_midi.cpp",
     "src/bin/midi2test/Jamfile",
     "src/bin/midi2test/midi2test.cpp",
+    "src/bin/usb_audiotest/Jamfile",
+    "src/bin/usb_audiotest/usb_audiotest.cpp",
 )
 
 
@@ -90,6 +99,30 @@ def hook_midi2test(haiku: pathlib.Path) -> None:
         print("patched regular image")
     else:
         print("already regular image")
+
+    line = "SubInclude HAIKU_TOP src bin usb_audiotest ;\n"
+    if line not in jam.read_text(encoding="utf-8"):
+        text = jam.read_text(encoding="utf-8")
+        anchor = "SubInclude HAIKU_TOP src bin midi2test ;\n"
+        if anchor not in text:
+            anchor = "SubInclude HAIKU_TOP src bin writembr ;\n"
+        if anchor not in text:
+            raise SystemExit("usb_audiotest anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched usb_audiotest Jamfile")
+    else:
+        print("already usb_audiotest Jamfile")
+
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += usb_audiotest ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += midi2test ;\n"
+        if anchor not in text:
+            raise SystemExit("usb_audiotest anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched usb_audiotest image")
+    else:
+        print("already usb_audiotest image")
 
 
 if __name__ == "__main__":

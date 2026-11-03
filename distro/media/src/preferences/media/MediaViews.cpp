@@ -429,6 +429,113 @@ write_latency_file(const char* fileName, int32 frames, char* writtenPath,
 }
 
 
+static int32
+read_channel_layout()
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (driver_settings_file("usb_audio", path, sizeof(path)) != B_OK)
+		return 0;
+
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return 0;
+
+	char bytes[32768];
+	ssize_t length = read(fd, bytes, sizeof(bytes) - 1);
+	close(fd);
+	if (length <= 0)
+		return 0;
+
+	BString text;
+	char* buffer = text.LockBuffer((int32)length);
+	if (buffer == NULL)
+		return 0;
+	memcpy(buffer, bytes, (size_t)length);
+	text.UnlockBuffer((int32)length);
+
+	int32 start = 0;
+	while (start < text.Length()) {
+		int32 end = text.FindFirst('\n', start);
+		if (end < 0)
+			end = text.Length();
+		BString line;
+		text.CopyInto(line, start, end - start);
+		line.RemoveAll("\r");
+		if (is_latency_key(line, "channel_layout")) {
+			int32 value = 0;
+			if (sscanf(line.String(), "channel_layout %" B_PRId32, &value) == 1
+				&& value >= 1 && value <= 16) {
+				return value;
+			}
+			return 0;
+		}
+		start = end + 1;
+	}
+	return 0;
+}
+
+
+static status_t
+write_channel_layout(int32 channels, char* writtenPath, size_t pathSize)
+{
+	status_t status = driver_settings_file("usb_audio", writtenPath, pathSize);
+	if (status != B_OK)
+		return status;
+
+	BString kept;
+	int existingFd = open(writtenPath, O_RDONLY);
+	if (existingFd >= 0) {
+		char bytes[32768];
+		ssize_t length = read(existingFd, bytes, sizeof(bytes) - 1);
+		close(existingFd);
+		if (length > 0) {
+			BString text;
+			char* buffer = text.LockBuffer((int32)length);
+			if (buffer != NULL) {
+				memcpy(buffer, bytes, (size_t)length);
+				text.UnlockBuffer((int32)length);
+				int32 start = 0;
+				while (start < text.Length()) {
+					int32 end = text.FindFirst('\n', start);
+					if (end < 0)
+						end = text.Length();
+					BString line;
+					text.CopyInto(line, start, end - start);
+					if (!is_latency_key(line, "channel_layout"))
+						kept << line << "\n";
+					start = end + 1;
+				}
+			}
+		}
+	}
+
+	if (channels >= 1 && channels <= 16)
+		kept << "channel_layout " << channels << "\n";
+	else
+		kept << "channel_layout auto\n";
+
+	int fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0) {
+		int error = errno != 0 ? errno : B_ERROR;
+		if (error == EACCES && unlink(writtenPath) == 0) {
+			fd = open(writtenPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (fd < 0 && errno != 0)
+				error = errno;
+		}
+		if (fd < 0)
+			return error;
+	}
+
+	ssize_t written = write(fd, kept.String(), (size_t)kept.Length());
+	if (written == (ssize_t)kept.Length())
+		fsync(fd);
+	status = written == (ssize_t)kept.Length() ? B_OK
+		: (errno != 0 ? errno : B_ERROR);
+	close(fd);
+	return status;
+}
+
+
 AudioSettingsView::AudioSettingsView()
 {
 	BBox* defaultsBox = new BBox("defaults");
@@ -447,9 +554,10 @@ AudioSettingsView::AudioSettingsView()
 		.AddMenuField(inputMenuField, 0, 0, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
 		.AddMenuField(outputMenuField, 0, 1)
 		.AddMenuField(_MakeChannelMenu(), 2, 1)
-		.AddMenuField(_MakeLatencyMenu(), 0, 2, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
+		.AddMenuField(_MakeLayoutMenu(), 0, 2, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
+		.AddMenuField(_MakeLatencyMenu(), 0, 3, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
 		.Add(fLatencyHint = new BStringView("latency hint",
-			B_TRANSLATE("Restart media services to apply.")), 0, 3, 3);
+			B_TRANSLATE("Restart media services to apply.")), 0, 4, 3);
 
 	defaultsBox->AddChild(defaultsGridView);
 
@@ -482,6 +590,7 @@ AudioSettingsView::AttachedToWindow()
 
 	BMessenger thisMessenger(this);
 	fChannelMenu->SetTargetForItems(thisMessenger);
+	fLayoutMenu->SetTargetForItems(thisMessenger);
 	fLatencyMenu->SetTargetForItems(thisMessenger);
 	fVolumeCheckBox->SetTarget(thisMessenger);
 }
@@ -491,6 +600,7 @@ void
 AudioSettingsView::AllAttached()
 {
 	BGroupView::AllAttached();
+	fLayoutMenu->SetTargetForItems(BMessenger(this));
 	fLatencyMenu->SetTargetForItems(BMessenger(this));
 }
 
@@ -519,6 +629,24 @@ AudioSettingsView::MessageReceived(BMessage* message)
 				_ShowDeskbarVolumeControl();
 			else
 				_HideDeskbarVolumeControl();
+			break;
+		}
+		case ML_USB_CHANNEL_LAYOUT:
+		{
+			int32 channels = 0;
+			if (message->FindInt32("channels", &channels) != B_OK)
+				break;
+			char path[B_PATH_NAME_LENGTH];
+			path[0] = '\0';
+			status_t status = write_channel_layout(channels, path, sizeof(path));
+			if (status != B_OK) {
+				BString text(B_TRANSLATE("Could not save the channel layout."));
+				text << "\n" << path << "\n" << strerror(status);
+				(new BAlert("layout", text.String(), B_TRANSLATE("OK")))->Go();
+				break;
+			}
+			fLatencyHint->SetText(B_TRANSLATE(
+				"Channel layout saved. Restart media services to apply."));
 			break;
 		}
 		case ML_AUDIO_LATENCY:
@@ -607,6 +735,38 @@ AudioSettingsView::_MakeLatencyMenu()
 
 	return new BMenuField("latencyMenuField", B_TRANSLATE("Latency:"),
 		fLatencyMenu);
+}
+
+
+BMenuField*
+AudioSettingsView::_MakeLayoutMenu()
+{
+	fLayoutMenu = new BPopUpMenu(B_TRANSLATE("Automatic"));
+	fLayoutMenu->SetLabelFromMarked(true);
+
+	const int32 current = read_channel_layout();
+	struct layout_choice {
+		int32 channels;
+		const char* label;
+	};
+	const layout_choice choices[] = {
+		{ 0, B_TRANSLATE("Automatic") },
+		{ 2, B_TRANSLATE("Stereo (2.0)") },
+		{ 4, B_TRANSLATE("4 channels") },
+		{ 6, B_TRANSLATE("5.1") },
+		{ 8, B_TRANSLATE("7.1") },
+	};
+	for (uint32 i = 0; i < B_COUNT_OF(choices); i++) {
+		BMessage* message = new BMessage(ML_USB_CHANNEL_LAYOUT);
+		message->AddInt32("channels", choices[i].channels);
+		BMenuItem* item = new BMenuItem(choices[i].label, message);
+		fLayoutMenu->AddItem(item);
+		if (choices[i].channels == current)
+			item->SetMarked(true);
+	}
+
+	return new BMenuField("layoutMenuField", B_TRANSLATE("USB layout:"),
+		fLayoutMenu);
 }
 
 

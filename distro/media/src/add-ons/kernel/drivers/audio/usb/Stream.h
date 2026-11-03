@@ -62,6 +62,7 @@ protected:
 			uint32			fStartingFrame;
 			int32			fProcessedBuffers;
 			int32			fInsideNotify;
+			int32			fQueueStopped;
 
 private:
 			status_t		_ChooseAlternate();

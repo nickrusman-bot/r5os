@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### USB audio channels, UAC2, and layout
+
+USB audio stayed on class 1.0 and ignored an alternate with more than two channels. A class 2.0 device was not recognised. 24-bit in three bytes already worked. 24-bit in four bytes was the ordinary 32-bit store, which is left-justified if the device reads the top 24 bits.
+
+The control header version `0x0200` is accepted. The streaming descriptor is read with the class 2.0 layout: channel count from the general descriptor, subslot size and bit depth from the format descriptor, and 44.1, 48, 88.2, and 96 kHz on the clock source. Class 1.0 still sets the rate with the three-byte endpoint request. A continuous class 1.0 range now includes the usual rates inside that range, not only the two ends. One to sixteen channels are allowed. The UAC1 input-terminal channel bitmap is a 16-bit field, so side channels are not dropped.
+
+Media, Audio settings, has USB layout: Automatic, Stereo (2.0), 4 channels, 5.1, or 7.1. It is written as `channel_layout` in the user `usb_audio` settings, next to the latency keys. Restart media services to apply it. Automatic keeps the widest alternate. Another choice picks that count, or the nearest one the device has. `multi_audio` sizes each bus from its own channel count, so a stereo pair and a centre channel do not share one buffer size. The system mixer stays stereo.
+
+Unplug sets a stop flag, cancels isochronous transfers, and waits until the callback has left. An isochronous packet is not larger than the endpoint's maximum. The EHCI locks in Haiku #18842, #18994, #18995, and #19472 are unchanged. `usb_audiotest` checks the descriptor bytes and both 24-bit layouts. No USB audio device was attached.
+
+The first jam of `usb_audio` failed: the channel-count comparison mixed `size_t` and `int32`, and `layout_channels` was called before it was defined. Both are fixed. A host compile of `usb_audiotest` printed `all checks passed`. Jam `usb_audio` and `usb_audiotest` for AMD64 finished at 11:15 Europe/Amsterdam on 3 Nov 2026 with exit 0. Jam `@r5-raw` started at 11:17 the same morning and finished with exit 0 (1802 targets). The header date is "3 Nov 2026, 11:17". The Mesa 25 check passed. Jam also printed `package mesa_swpipe not available` and the usual `bios_ia32` and `pxe_ia32` lines. `haiku.hpkg` contains `usb_audiotest` and `usb_audio`. VirtualBox was started from this image. On that guest, `usb_audiotest` printed `ok` for every check and `usb_audiotest: all checks passed` (reported at 11:26 Europe/Amsterdam). Media, Audio settings, showed USB layout: Automatic, Stereo (2.0), 4 channels, 5.1, and 7.1, with Automatic selected. The output device on that screen was HD Audio, the VirtualBox codec. No USB audio device was attached.
+
 ### MIDI 2.0 per-note controllers, profiles, and discovery
 
 Property Exchange could ask for a resource. A per-note controller, a profile, and endpoint discovery still had no calls.

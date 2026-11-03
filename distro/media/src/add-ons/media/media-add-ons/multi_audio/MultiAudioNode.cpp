@@ -357,6 +357,29 @@ MultiAudioNode::HandleMessage(int32 message, const void* data, size_t size)
 }
 
 
+static void
+set_bus_buffer_size(media_format* format, uint32 frames)
+{
+	uint32 sampleSize = format->u.raw_audio.format
+		& media_raw_audio_format::B_AUDIO_SIZE_MASK;
+	if (sampleSize == 0)
+		sampleSize = 4;
+	format->u.raw_audio.buffer_size = frames * sampleSize
+		* format->u.raw_audio.channel_count;
+}
+
+
+static void
+set_input_buffer_size(node_input* input, uint32 frames)
+{
+	set_bus_buffer_size(&input->fPreferredFormat, frames);
+	input->fFormat.u.raw_audio.buffer_size
+		= input->fPreferredFormat.u.raw_audio.buffer_size;
+	input->fInput.format.u.raw_audio.buffer_size
+		= input->fPreferredFormat.u.raw_audio.buffer_size;
+}
+
+
 void
 MultiAudioNode::NodeRegistered()
 {
@@ -406,6 +429,8 @@ MultiAudioNode::NodeRegistered()
 			currentInput->fPreferredFormat.u.raw_audio.channel_count = 1;
 			currentInput->fFormat = currentInput->fPreferredFormat;
 			currentInput->fInput.format = currentInput->fPreferredFormat;
+			set_input_buffer_size(currentInput,
+				fDevice->BufferList().return_playback_buffer_size);
 
 			delete currentInput->fResampler;
 			currentInput->fResampler = new
@@ -422,6 +447,8 @@ MultiAudioNode::NodeRegistered()
 			currentInput->fPreferredFormat.u.raw_audio.channel_count++;
 			currentInput->fFormat = currentInput->fPreferredFormat;
 			currentInput->fInput.format = currentInput->fPreferredFormat;
+			set_input_buffer_size(currentInput,
+				fDevice->BufferList().return_playback_buffer_size);
 		}
 		currentInput->fInput.format.u.raw_audio.format
 			= media_raw_audio_format::wildcard.format;
@@ -468,6 +495,10 @@ MultiAudioNode::NodeRegistered()
 			currentOutput = new node_output(*output, fInputPreferredFormat);
 			currentOutput->fPreferredFormat.u.raw_audio.channel_count = 1;
 			currentOutput->fOutput.format = currentOutput->fPreferredFormat;
+			set_bus_buffer_size(&currentOutput->fPreferredFormat,
+				fDevice->BufferList().return_record_buffer_size);
+			currentOutput->fOutput.format.u.raw_audio.buffer_size
+				= currentOutput->fPreferredFormat.u.raw_audio.buffer_size;
 
 			delete currentOutput->fResampler;
 			currentOutput->fResampler = new
@@ -483,6 +514,10 @@ MultiAudioNode::NodeRegistered()
 			PRINT(("NodeRegistered(): adding a channel\n"));
 			currentOutput->fPreferredFormat.u.raw_audio.channel_count++;
 			currentOutput->fOutput.format = currentOutput->fPreferredFormat;
+			set_bus_buffer_size(&currentOutput->fPreferredFormat,
+				fDevice->BufferList().return_record_buffer_size);
+			currentOutput->fOutput.format.u.raw_audio.buffer_size
+				= currentOutput->fPreferredFormat.u.raw_audio.buffer_size;
 		}
 	}
 
@@ -2318,16 +2353,10 @@ MultiAudioNode::_SetNodeInputFrameRate(float frameRate)
 	for (int32 i = 0; node_input* channel = (node_input*)fInputs.ItemAt(i);
 			i++) {
 		channel->fPreferredFormat.u.raw_audio.frame_rate = frameRate;
-		channel->fPreferredFormat.u.raw_audio.buffer_size
-			= fOutputPreferredFormat.u.raw_audio.buffer_size;
-
 		channel->fFormat.u.raw_audio.frame_rate = frameRate;
-		channel->fFormat.u.raw_audio.buffer_size
-			= fOutputPreferredFormat.u.raw_audio.buffer_size;
-
 		channel->fInput.format.u.raw_audio.frame_rate = frameRate;
-		channel->fInput.format.u.raw_audio.buffer_size
-			= fOutputPreferredFormat.u.raw_audio.buffer_size;
+		set_input_buffer_size(channel,
+			fDevice->BufferList().return_playback_buffer_size);
 	}
 
 	// make sure the time base is reset

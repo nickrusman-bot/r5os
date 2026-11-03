@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10045 - USB channel layout
+Audio settings can ask a USB sound device for stereo, 4 channels, 5.1, or 7.1. Automatic uses what the device reports. Restart media services to apply it.
+
 R5 2026.1-dev Build 10044 - Latency save
 The latency choice is saved for this account. Restart media services to use it.
 
