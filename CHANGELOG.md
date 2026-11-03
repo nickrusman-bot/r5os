@@ -6,6 +6,8 @@ The stick written at 15:59 Europe/Amsterdam reached the kernel and then stayed o
 
 The boot logs are now only `/boot/home/r5-cpu.txt`, `/boot/home/r5-hardware.txt`, and `/boot/home/r5-syslog.txt`. Nothing is mounted from `/dev/disk`. `tools/r5-befs/r5_befs.py` reads them from the BeFS partition. No MSR is written.
 
+`jam -q @r5-anyboot` for AMD64 finished at 16:38 Europe/Amsterdam on 3 Nov 2026 with exit 0 (1168 targets). The linked `r5_pstate_log` contains `no FAT mount`. This image has not been booted.
+
 ### Radeon sources live in the R5 tree
 
 `connector.cpp`, `display.cpp`, `gpu.cpp`, `pll.cpp`, `driver.cpp` and `radeon_hd.cpp` are copied from `distro/graphics` by `scripts/apply-radeon.py`. They replace the same paths in the Haiku tree. The string patches that used to edit those files are gone. Each file keeps the Haiku copyright and the MIT license on the original work. R5OS changes sit in `SPDX-Snippet` blocks and are GPL-3.0-or-later. A build that ships both follows GPL-3.0-or-later, and the MIT notices stay. `r5_pstate_log.cpp` was already an R5OS file under GPL-3.0-or-later in `distro/cpu`.
