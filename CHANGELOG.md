@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Mail dates marked UT
+
+A date ending in `UT` (Universal Time, from RFC 822) was left for `parsedate()`, which accepts `GMT` and `UTC` and rejects `UT`. The parse failed and the mail's When time became the moment it was fetched (Haiku #20440). A trailing `UT` is rewritten to `GMT` before that parse. Numeric zones and `UTC` are unchanged.
+
 ### HTTP request timeout
 
 `SetTimeout()` on a `BHttpRequest` did nothing when it was called before the socket existed. The value is kept and applied when the socket is created, before connect (Haiku #20436). A timeout set after the socket exists still reaches that socket. Gopher already had a socket at construction, so that path is unchanged.
