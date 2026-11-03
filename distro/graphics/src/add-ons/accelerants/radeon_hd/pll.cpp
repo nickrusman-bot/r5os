@@ -1151,7 +1151,7 @@ pll_external_init()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (info.chipsetID >= RADEON_RAVEN) {
+	if (!radeon_hd_uses_dce(info.chipsetID)) {
 		ERROR("%s: R5 radeon_hd: DCN, leave the display clock alone\n",
 			__func__);
 		return;

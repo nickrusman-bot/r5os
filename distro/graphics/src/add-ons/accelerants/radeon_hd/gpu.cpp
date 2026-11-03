@@ -602,7 +602,7 @@ radeon_gpu_mc_setup()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (info.chipsetID >= RADEON_RAVEN) {
+	if (!radeon_hd_uses_dce(info.chipsetID)) {
 		// Evergreen MC registers are not the Raven display controller.
 		// Programming them halts a controller this driver does not own.
 		TRACE("%s: R5 radeon_hd: DCN, leave the boot memory aperture alone\n",
@@ -651,7 +651,7 @@ radeon_gpu_ring_boot(uint32 ringType)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (gInfo->shared_info->chipsetID >= RADEON_RAVEN) {
+	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
 		ERROR("%s: R5 radeon_hd: DCN, command ring stays off\n", __func__);
 		return B_OK;
 	}

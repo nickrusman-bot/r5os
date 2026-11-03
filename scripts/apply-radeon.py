@@ -20,6 +20,8 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/pll.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd.cpp",
+    "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd_private.h",
+    "headers/private/graphics/radeon_hd/radeon_hd.h",
 )
 
 

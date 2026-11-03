@@ -795,7 +795,7 @@ radeon_hd_init(radeon_info &info)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-		if (info.chipsetID >= RADEON_RAVEN) {
+		if (!radeon_hd_uses_dce(info.chipsetID)) {
 			// Raven leaves CONFIG_MEMSIZE unused. The PCI aperture stays
 			// the upper bound. The mapped picture is the boot framebuffer.
 			ERROR("%s: R5 radeon_hd: CONFIG_MEMSIZE unused, PCI aperture %"
@@ -849,7 +849,7 @@ radeon_hd_init(radeon_info &info)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (info.chipsetID >= RADEON_RAVEN) {
+	if (!radeon_hd_uses_dce(info.chipsetID)) {
 		frame_buffer_boot_info* bootFrame
 			= (frame_buffer_boot_info*)get_boot_item(
 				FRAME_BUFFER_BOOT_INFO, NULL);
@@ -905,6 +905,10 @@ radeon_hd_init(radeon_info &info)
 	info.shared_info->chipsetFlags = info.chipsetFlags;
 	info.shared_info->dceMajor = info.dceMajor;
 	info.shared_info->dceMinor = info.dceMinor;
+	info.shared_info->displayClass = info.displayClass;
+	info.shared_info->displayMajor = info.displayMajor;
+	info.shared_info->displayMinor = info.displayMinor;
+	info.shared_info->displayStepping = info.displayStepping;
 	info.shared_info->registers_area = info.registers_area;
 	strlcpy(info.shared_info->deviceName,
 		info.deviceName, MAX_NAME_LENGTH);

@@ -653,7 +653,7 @@ display_crtc_dpms(uint8 crtcID, int mode)
 static bool
 r5_display_is_dcn()
 {
-	return gInfo->shared_info->chipsetID >= RADEON_RAVEN;
+	return !radeon_hd_uses_dce(gInfo->shared_info->chipsetID);
 }
 
 
