@@ -36,6 +36,7 @@ test_helpers()
 {
 	expect(midi2_ump_word_count(0x00000000) == 1, "type 0 is one word");
 	expect(midi2_ump_word_count(0x20000000) == 1, "type 2 is one word");
+	expect(midi2_ump_word_count(0x30000000) == 2, "type 3 is two words");
 	expect(midi2_ump_word_count(0x40000000) == 2, "type 4 is two words");
 	expect(midi2_ump_word_count(0x50000000) == 4, "type 5 is four words");
 	expect(midi2_ump_word_count(0x60000000) == 0, "type 6 is rejected");
@@ -72,6 +73,40 @@ test_helpers()
 	payload[0] ^= 0xff;
 	expect(midi2_ump_from_payload(payload, 16, out, 4, &outCount) == B_BAD_VALUE,
 		"wrong magic is rejected");
+
+	expect(midi2_note_velocity(note, 2) == 0x8000,
+		"helper keeps the 16-bit velocity");
+	expect(midi2_control_value(control, 2) == 0x80000000,
+		"helper keeps the 32-bit controller");
+	expect(midi2_note_velocity(control, 2) == 0,
+		"a controller is not a note velocity");
+
+	uint8 sysex[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+	uint32 sysexWords[4];
+	size_t sysexCount = 0;
+	expect(midi2_encode_sysex(sysex, 8, sysexWords, 2, &sysexCount) == B_BAD_VALUE,
+		"short SysEx buffer is rejected");
+	expect(midi2_encode_sysex(sysex, 8, sysexWords, 4, &sysexCount) == B_OK
+		&& sysexCount == 4, "eight SysEx bytes are two packets");
+	expect((sysexWords[0] >> 28) == 0x3 && ((sysexWords[0] >> 20) & 0xf) == 1
+		&& ((sysexWords[0] >> 16) & 0xf) == 6, "first SysEx packet starts");
+	expect(((sysexWords[2] >> 20) & 0xf) == 3
+		&& ((sysexWords[2] >> 16) & 0xf) == 2, "second SysEx packet ends");
+
+	uint8 unpacked[6];
+	uint8 sysexStatus = 0xff;
+	size_t unpackedCount = 0;
+	expect(midi2_sysex_payload(sysexWords, 2, &sysexStatus, unpacked, 6,
+			&unpackedCount) == B_OK && sysexStatus == 1 && unpackedCount == 6
+		&& memcmp(unpacked, sysex, 6) == 0, "start packet returns six bytes");
+	expect(midi2_sysex_payload(sysexWords + 2, 2, &sysexStatus, unpacked, 6,
+			&unpackedCount) == B_OK && sysexStatus == 3 && unpackedCount == 2
+		&& unpacked[0] == 7 && unpacked[1] == 8, "end packet returns the rest");
+
+	uint32 one[2];
+	expect(midi2_encode_sysex(sysex, 4, one, 2, &sysexCount) == B_OK
+		&& sysexCount == 2 && ((one[0] >> 20) & 0xf) == 0,
+		"four SysEx bytes are one complete packet");
 }
 
 
@@ -92,7 +127,9 @@ public:
 		fVelocity(0),
 		fControl(false),
 		fController(0),
-		fControlValue(0)
+		fControlValue(0),
+		fSysex(false),
+		fSysexLength(0)
 	{
 		fDone = create_sem(0, "midi2test done");
 	}
@@ -106,6 +143,8 @@ public:
 		fNote = false;
 		fNoteOff = false;
 		fControl = false;
+		fSysex = false;
+		fSysexLength = 0;
 		memset(fWords, 0, sizeof(fWords));
 		memset(fBytes, 0, sizeof(fBytes));
 		while (acquire_sem_etc(fDone, 1, B_RELATIVE_TIMEOUT, 0) == B_OK)
@@ -171,6 +210,28 @@ public:
 		return fControl;
 	}
 
+	uint16 FullVelocity() const
+	{
+		return midi2_note_velocity(fWords, fWordCount);
+	}
+
+	uint32 FullControl() const
+	{
+		return midi2_control_value(fWords, fWordCount);
+	}
+
+	bool SawSysex(const uint8* bytes, size_t length) const
+	{
+		if (!fSysex || fSysexLength != length)
+			return false;
+		return memcmp(fSysexBytes, bytes, length) == 0;
+	}
+
+	bool SawAnySysex() const
+	{
+		return fSysex;
+	}
+
 	virtual void Data(uchar* data, size_t length, bool atomic, bigtime_t time)
 	{
 		uint32 words[4];
@@ -221,6 +282,14 @@ public:
 		fControlValue = value;
 	}
 
+	virtual void SystemExclusive(void* data, size_t length, bigtime_t)
+	{
+		fSysex = true;
+		fSysexLength = length < sizeof(fSysexBytes) ? length : sizeof(fSysexBytes);
+		if (data != NULL && fSysexLength > 0)
+			memcpy(fSysexBytes, data, fSysexLength);
+	}
+
 private:
 	sem_id		fDone;
 	int32		fDepth;
@@ -238,6 +307,9 @@ private:
 	bool		fControl;
 	uchar		fController;
 	uchar		fControlValue;
+	bool		fSysex;
+	uint8		fSysexBytes[16];
+	size_t		fSysexLength;
 };
 
 
@@ -308,6 +380,8 @@ test_spray()
 	expect(probe->SawNote() && probe->Channel() == 2 && probe->Key() == 64
 		&& probe->NoteVelocity() == 0x40,
 		"NoteOn receives the top 7 velocity bits");
+	expect(probe->FullVelocity() == wide,
+		"Data keeps the 16-bit velocity");
 
 	probe->Reset();
 	uint32 noteOff[2];
@@ -339,6 +413,32 @@ test_spray()
 	expect(probe->SawControl() && probe->Channel() == 4
 		&& probe->Controller() == B_MAIN_VOLUME && probe->ControlValue() == 0x40,
 		"ControlChange receives the top 7 bits");
+	expect(probe->FullControl() == wideControl,
+		"Data keeps the 32-bit controller");
+
+	probe->Reset();
+	uint8 classicSysex[3] = { 0x7e, 0x7f, 0x06 };
+	producer->SpraySystemExclusive(classicSysex, 3, 0);
+	expect(probe->Wait() == B_OK, "MIDI 1.0 SysEx arrives");
+	uchar wrapped[5] = { B_SYS_EX_START, 0x7e, 0x7f, 0x06, B_SYS_EX_END };
+	expect(probe->HasMidi(wrapped, 5), "MIDI 1.0 SysEx keeps F0 and F7");
+	expect(probe->SawSysex(classicSysex, 3),
+		"SystemExclusive receives the bytes between F0 and F7");
+
+	probe->Reset();
+	uint8 longSysex[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+	uint32 sysexWords[4];
+	size_t sysexCount = 0;
+	expect(midi2_encode_sysex(longSysex, 8, sysexWords, 4, &sysexCount) == B_OK,
+		"SysEx UMP encodes");
+	expect(producer->SprayUMP(sysexWords, 2) == B_OK, "SysEx start is accepted");
+	expect(probe->Wait() == B_OK, "SysEx start arrives");
+	expect(!probe->SawAnySysex(), "SysEx waits for the end packet");
+	probe->Reset();
+	expect(producer->SprayUMP(sysexWords + 2, 2) == B_OK, "SysEx end is accepted");
+	expect(probe->Wait() == B_OK, "SysEx end arrives");
+	expect(probe->SawSysex(longSysex, 8),
+		"SystemExclusive receives the whole SysEx7 payload");
 
 	probe->Reset();
 	uint32 midi2Voice = (0x2u << 28) | ((uint32)(B_NOTE_ON + 1) << 16)

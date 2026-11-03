@@ -50,7 +50,7 @@ Message type, in the top 4 bits of word 0:
 | Type | Words | Used here |
 |---|---|---|
 | 0x0 utility, 0x1 system, 0x2 MIDI 1.0 channel voice | 1 | A type 0x2 packet is unpacked to the old byte hooks. Type 0x1 is accepted by `SprayUMP`. |
-| 0x3 data, 0x4 MIDI 2.0 channel voice | 2 | Type 0x4 note-on, note-off, and control change are mapped to the 7-bit hooks. |
+| 0x3 data, 0x4 MIDI 2.0 channel voice | 2 | Type 0x4 note-on, note-off, and control change keep the full value in `Data` and call the 7-bit hooks. Type 0x3 is SysEx7 and calls `SystemExclusive` when the message is complete. |
 | 0x5 data, 0xD Flex Data, 0xF reserved | 4 | The packet is delivered. No extra hook reads it. |
 | anything else | 0 | `SprayUMP` and `midi2_ump_from_payload` reject it. |
 
@@ -66,13 +66,15 @@ The group nibble (bits 27..24) is left 0 by the helpers. `usb_midi` replaces it 
 
 ## Reading a packet
 
-`BMidiLocalConsumer::Data` sees the bytes after the roster header. When the magic matches, it does not treat those bytes as a MIDI 1.0 status byte.
+`BMidiLocalConsumer::Data` sees the bytes after the roster header. When the magic matches, it does not treat those bytes as a MIDI 1.0 status byte. The full packet stays in that buffer. `midi2_note_velocity` reads the 16-bit velocity. `midi2_control_value` reads the 32-bit controller. `midi2_sysex_payload` reads one SysEx7 packet.
 
-A type 0x4 note calls `NoteOn` or `NoteOff` with the top 7 bits of the 16-bit velocity (`value >> 9`). A type 0x4 control change calls `ControlChange` with the top 7 bits of the 32-bit value (`value >> 25`). Velocity 0 on a MIDI 2.0 note-on stays `NoteOn`. An application that only implements `NoteOn` still hears the note, at MIDI 1.0 resolution.
+The base `Data` still calls the MIDI 1.0 hooks. A type 0x4 note calls `NoteOn` or `NoteOff` with the top 7 bits of the 16-bit velocity (`value >> 9`). A type 0x4 control change calls `ControlChange` with the top 7 bits of the 32-bit value (`value >> 25`). Velocity 0 on a MIDI 2.0 note-on stays `NoteOn`. An application that only implements `NoteOn` still hears the note, at MIDI 1.0 resolution.
 
 A type 0x2 packet is turned back into MIDI 1.0 bytes and passed through `Data` again, so the existing `NoteOn` / `ControlChange` / `ProgramChange` hooks run.
 
-An application that wants the full value overrides `Data`, calls `midi2_ump_from_payload`, and returns without the base when it handled the packet. Calling the base as well runs the 7-bit hooks.
+A type 0x3 packet is SysEx7. Status 0 is the whole message. Status 1 starts it, 2 continues it, and 3 ends it. The base `Data` calls `SystemExclusive` once, with the bytes between `F0` and `F7`, when the message is complete. `SpraySystemExclusive` is still the MIDI 1.0 call: the consumer sees `F0`, the payload, and `F7`.
+
+An application that wants the full value overrides `Data`, calls `midi2_ump_from_payload`, and returns without the base when it handled the packet. Calling the base as well runs the 7-bit hooks and `SystemExclusive`.
 
 ```cpp
 void
@@ -81,8 +83,8 @@ MyConsumer::Data(uchar* data, size_t length, bool atomic, bigtime_t time)
 	uint32 words[4];
 	size_t count = 0;
 	if (midi2_ump_from_payload(data, length, words, 4, &count) == B_OK) {
-		if ((words[0] >> 28) == 0x4 && ((words[0] >> 20) & 0xf) == 0x9) {
-			uint16 velocity = (uint16)(words[1] >> 16);
+		if (midi2_is_note(words, count)) {
+			uint16 velocity = midi2_note_velocity(words, count);
 			(void)velocity;
 		}
 		return;
@@ -91,7 +93,7 @@ MyConsumer::Data(uchar* data, size_t length, bool atomic, bigtime_t time)
 }
 ```
 
-The bytes a hardware port reads are MIDI 1.0. `midi_server` does not put the 16-bit value on the read side. A program that only consumes a USB MIDI producer sees the 7-bit hooks.
+`midi_server` reads `B_MIDI_READ_UMP` from a MIDI 2.0 port and sprays that packet, so `Data` on a connected consumer has the same full value. The 7-bit hooks still run. A port that does not implement the ioctl is read as MIDI 1.0 bytes, as before. `read()` expands one packet from that queue into MIDI 1.0 bytes. `midi_server` uses the ioctl for a MIDI 2.0 port and does not also `read()` it, so each packet is sprayed once.
 
 ## Drivers
 
@@ -99,9 +101,11 @@ The bytes a hardware port reads are MIDI 1.0. `midi_server` does not put the 16-
 
 `usb_midi` looks at the class-specific MIDI header on the streaming interface. A version below 2.0 keeps USB MIDI 1.0 CIN packets. On that endpoint a type 0x4 note or control change becomes one CIN packet with the same top 7 bits. Other UMP types return `B_UNSUPPORTED` there.
 
-Version 2.0 or newer writes the UMP words, little-endian, to the bulk OUT endpoint. The group nibble is the cable of that port. A MIDI 1.0 `write()` on that endpoint becomes one type 0x1 or type 0x2 word. SysEx on a version 2.0 endpoint returns `B_UNSUPPORTED`. Bytes read from the device are parsed back into MIDI 1.0 for the existing reader. The 16-bit value is not kept on the way in.
+Version 2.0 or newer writes the UMP words, little-endian, to the bulk OUT endpoint. The group nibble is the cable of that port. A MIDI 1.0 `write()` on that endpoint becomes one type 0x1 or type 0x2 word. A SysEx `write()` (`F0` … `F7`) becomes one or more type 0x3 packets, six payload bytes each. `B_MIDI_READ_UMP` returns the packet that arrived, including type 0x3 and type 0x4. `read()` expands that same queue to MIDI 1.0 bytes: a type 0x4 note keeps the top 7 bits, and type 0x3 becomes `F0`, the payload, and `F7`.
 
-No USB MIDI device was attached when this was added. A physical MIDI 2.0 interface is not a tested path.
+On a version 1.0 endpoint, a type 0x3 packet is sent as USB MIDI CIN SysEx. A type 0x4 note or control change is still one CIN packet with the top 7 bits.
+
+On the VirtualBox guest, `midi2test` printed `all checks passed` on 3 Nov 2026 (reported at 10:03 Europe/Amsterdam). No USB MIDI device was attached. A physical MIDI 2.0 interface is not a tested path.
 
 ## midi2test
 
@@ -114,6 +118,11 @@ The rest registers a local producer and a local consumer, connects them, and spr
 - a type 0x4 note-off of velocity `0xFFFF`, which arrives as `NoteOff` velocity `0x7F`
 - a `uint32` control change of `0x80000000`, which arrives as type 0x4 and as `ControlChange` value `0x40`
 - a type 0x2 channel-voice word, which arrives both as that word and as MIDI 1.0 bytes
+- the 16-bit velocity and the 32-bit controller, read back with `midi2_note_velocity` and `midi2_control_value` from the bytes in `Data`
+- a MIDI 1.0 SysEx, which arrives as `F0` … `F7` and as `SystemExclusive` without those two bytes
+- an eight-byte SysEx7 in two type 0x3 packets, which arrives as one `SystemExclusive` after the end packet
+
+The helper checks also cover `midi2_encode_sysex` and `midi2_sysex_payload`. They do not need `midi_server`.
 
 It does not open a USB device, and it does not check `B_MIDI_WRITE_UMP`. Run it from Terminal on a booted system:
 

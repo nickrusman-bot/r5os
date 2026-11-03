@@ -110,7 +110,33 @@ MidiPortProducer::GetData()
 	size_t sysexBufferSize = B_PAGE_SIZE;
 	size_t sysexSize = 0;
 
+	// A MIDI 2.0 driver queues the original packet. read() still returns
+	// MIDI 1.0 bytes for a program that does not use this ioctl. This reader
+	// uses the packet, so NoteOn stays 7-bit and Data() keeps the full value.
+	bool readUmp = true;
+
 	while (fKeepRunning) {
+		if (readUmp) {
+			midi_ump_packet packet;
+			status_t umpStatus = ioctl(fFileDescriptor, B_MIDI_READ_UMP,
+				&packet, sizeof(packet));
+			if (umpStatus == B_OK) {
+				if (packet.word_count >= 1 && packet.word_count <= 4) {
+					SprayUMP(packet.words, packet.word_count,
+						system_time());
+				}
+				continue;
+			}
+			if (umpStatus == B_TIMED_OUT || umpStatus == B_INTERRUPTED)
+				continue;
+			if (umpStatus == B_UNSUPPORTED || umpStatus == B_DEV_INVALID_IOCTL)
+				readUmp = false;
+			else {
+				fKeepRunning = false;
+				break;
+			}
+		}
+
 		if (bytesCount == 0) {
 			bytesCount = read(fFileDescriptor, bytes, sizeof(bytes));
 			if (bytesCount < 0) {

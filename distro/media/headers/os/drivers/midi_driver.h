@@ -27,7 +27,8 @@ enum {
 	B_MIDI_GET_READ_TIMEOUT_OLD = B_DEVICE_OP_CODES_END + 1,
 	B_MIDI_SET_READ_TIMEOUT_OLD,
 	B_MIDI_GET_PORT_INFO, // see midi_device_port_info
-	B_MIDI_WRITE_UMP // see midi_ump_packet
+	B_MIDI_WRITE_UMP, // see midi_ump_packet
+	B_MIDI_READ_UMP // see midi_ump_packet; one queued packet, or B_UNSUPPORTED
 };
 
 
