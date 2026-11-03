@@ -1113,8 +1113,19 @@ AudioMixer::LateNoticeReceived(const media_source& what, bigtime_t howMuch,
 	ERROR("AudioMixer::LateNoticeReceived, %lld too late at %lld\n", howMuch,
 		performanceTime);
 
-	if (what == fCore->Output()->MediaOutput().source
-		&& RunMode() == B_INCREASE_LATENCY) {
+	// A machine with no sound device has no mixer output. The notice still
+	// arrives (Haiku #20425).
+	fCore->Lock();
+	MixerOutput* output = fCore->Output();
+	media_source source;
+	bool haveOutput = output != NULL;
+	if (haveOutput)
+		source = output->MediaOutput().source;
+	fCore->Unlock();
+	if (!haveOutput)
+		return;
+
+	if (what == source && RunMode() == B_INCREASE_LATENCY) {
 		// We need to ignore subsequent notices whose arrival time here
 		// lies within the last lateness, because queued-up buffers will all be 'late'
 		if (performanceTime < fLastLateNotification)
@@ -1301,8 +1312,15 @@ AudioMixer::CreateBufferGroup(BBufferGroup** buffer) const
 		count = 3;
 
 	fCore->Lock();
-	uint32 size = fCore->Output()->MediaOutput().format.u.raw_audio.buffer_size;
+	MixerOutput* output = fCore->Output();
+	if (output == NULL) {
+		fCore->Unlock();
+		return B_NO_INIT;
+	}
+	uint32 size = output->MediaOutput().format.u.raw_audio.buffer_size;
 	fCore->Unlock();
+	if (size == 0)
+		return B_NO_INIT;
 
 	TRACE("AudioMixer: allocating %ld buffers of %ld bytes each\n",
 		count, size);

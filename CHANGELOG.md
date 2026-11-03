@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Mixer with no sound device
+
+A late-buffer notice and the buffer-group request both read the mixer output without checking it. With no sound device that pointer is empty, and `media_addon_server` crashes (Haiku #20425). Both calls return when there is no output. A connected mixer is unchanged.
+
 ### Virtual surround
 
 Multi-channel sound folded into headphones with one gain per ear. The MIT KEMAR recordings are research-only, so they are not shipped. The mixer uses a synthetic delay instead: Woodworth's formula, head radius 8.75 cm, 12 dB quieter at the far ear when the speaker is at 90 degrees. Center and the low-frequency channel stay in both ears. The added wait is the far-ear delay, under a millisecond at 48 kHz. The history is 128 samples, which holds that delay at 96 kHz.
