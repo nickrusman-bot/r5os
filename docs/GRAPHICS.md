@@ -2,7 +2,7 @@
 
 Long-term plan for a physical GPU. VirtualBox guest devices are `docs/VBOX-GUEST.md`. A framebuffer mode is not GPU acceleration. A Vulkan loader that only finds Lavapipe is not GPU acceleration.
 
-Nothing below has been shown on the Ryzen 5 5625U. The desktop people use today is software painting in `app_server`.
+On the Ryzen 5 5625U the USB boot of 3 Nov 2026 showed a picture through `framebuffer`, not through `radeon_hd`. Acceleration below has not been shown. The desktop people use today is software painting in `app_server`.
 
 ## What the daily image has
 
@@ -24,7 +24,11 @@ Build 10018. OpenGL on that disk is libglvnd 1.7.0 plus Mesa 25.3.6. Jam compile
 
 There is no libdrm and no amdgpu/i915/nouveau kernel driver. OpenGL, where it runs, is Mesa software. A QEMU probe of an earlier test image reported `llvmpipe (LLVM 21.1.8, 128 bits)` and `Mesa 25.3.6`. On 2026-11-01 the VirtualBox daily showed GLTeapot drawing a teapot. That boot did not print a renderer string. It is not a GPU result.
 
-`radeon_hd` in this tree lists `1002:1636` and `1002:1638` as “Radeon Renoir” and enables them. `1002:164c` is compiled out (upstream note: not working, Haiku `#17516`). `1002:15e7` is not in the table. PCI databases call `1638` Cezanne and `15e7` Barcelo. The Ryzen 5 5625U is a Barcelo-refresh Cezanne with Radeon Vega 7. **This machine’s PCI ID has not been read.** Until it is, do not claim `radeon_hd` drives the panel. Even a match is modesetting, not command submission and not RADV.
+`radeon_hd` in this tree lists `1002:1636` and `1002:1638` as “Radeon Renoir” and enables them. `1002:164c` is compiled out (upstream note: not working, Haiku `#17516`). PCI databases call `1638` Cezanne and `15e7` Barcelo.
+
+USB boot of this Ryzen 5 5625U on 3 Nov 2026, read back from the stick’s BeFS syslog: the VGA device is `1002:15e7` revision `c2`, bus 4 device 0 function 0, subsystem `103c:8a31`. The kernel names it Barcelo. The old `radeon` driver logged `no supported devices found`. The loaded graphics driver on that boot was `framebuffer`, reusing the firmware buffer at `0xfce0000000`, size `0x7e9000` (1920×1080, 32-bit). HDMI audio on the same device is `1002:1637`.
+
+`1002:15e7` is in the live device table as `RADEON_RAVEN`, DCE 12.0, `CHIP_APU`. Picasso `1002:15d8` is the same Raven path, but that line sits inside `#if 0 /* disabled for R1/beta5 */` and is not compiled, so the new line is after that `#endif`. The stick written at 14:48 Europe/Amsterdam on 3 Nov 2026 did boot. `radeon_hd` opened the device, read the video memory size as 4194303 MB, mapped 256 MB, and then logged `0 attached monitors` and closed. `framebuffer` kept the firmware buffer. Do not claim `radeon_hd` drives the panel. A table match is still modesetting, not command submission and not RADV.
 
 ## Other people’s work
 
@@ -57,7 +61,7 @@ QEMU and VirtualBox may test the software path and `virtio_gpu` / VESA / `vboxvi
 
 ## Order
 
-1. **Name the device.** On the 5625U, record the VGA PCI ID. Confirm whether this tree’s `radeon_hd` table contains it. No driver change before that.
+1. **Name the device.** On the 5625U, record the VGA PCI ID from `r5-hardware.txt` on the anyboot EFI partition (FAT, Windows can open it; `listdev` is in that file). Confirm whether this tree’s `radeon_hd` table contains it. No driver change before that.
 2. **Picture, software stack unchanged.** If the ID matches, boot the panel with `radeon_hd` (or VESA if it does not). Desktop still painted by `app_server` on the CPU. This is the display milestone, and it is not acceleration.
 3. **Software Vulkan.** Done as a CPU test. Lavapipe’s manifest is `add-ons/vulkan/icd.d/lvp_icd.json`. On 1 Nov 2026 the user ran `vulkaninfo --summary` on the 21:36 VirtualBox image. The device was `PHYSICAL_DEVICE_TYPE_CPU`, name `llvmpipe (LLVM 21.1.8, 256 bits)`, driver `llvmpipe`, driver info `Mesa 25.3.6 (LLVM 21.1.8)`. Lavapipe is the ICD; the device string is llvmpipe, not the word Lavapipe. Keep this as the API test and the fallback. vkcube and the Vulkan-Tools mock ICD are not required for this step.
 4. **One kernel submission path** for the 5625U only: memory, a ring, a fence, and a fault that does not panic the machine. This is the long task. It is not a Linux DRM dump.

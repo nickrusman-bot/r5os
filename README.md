@@ -35,6 +35,7 @@ Home folders of extra accounts are private (`0700`). `user` is in group `admin` 
 | `THIRD_PARTY_NOTICES.md` | Components that have actually been identified |
 | `tracker/` | Open Haiku tickets and whether R5OS already fixed them |
 | `scripts/` | Clone, overlay, jam, QEMU/VBox, ticket sync |
+| `tools/r5-befs` | Read-only BeFS reader for Windows. Lists a volume and exports a file. `tools/r5-befs/README.md` |
 | `haiku/` | R5OS fork of the OS sources (`r5` branch; not in *this* git) |
 | `buildtools/` | Haiku build tools (after setup, fetch-only) |
 

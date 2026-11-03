@@ -322,7 +322,13 @@ r5_pstate_read(void* _cookie, off_t position, void* buffer, size_t* numBytes)
 	size_t left = cookie->length - size_t(position);
 	if (*numBytes > left)
 		*numBytes = left;
-	memcpy(buffer, cookie->text + position, *numBytes);
+	// The buffer is the caller's. memcpy touches it with SMAP still
+	// active and panics on hardware. QEMU's CPU did not.
+	status_t copied = user_memcpy(buffer, cookie->text + position, *numBytes);
+	if (copied != B_OK) {
+		*numBytes = 0;
+		return copied;
+	}
 	return B_OK;
 }
 

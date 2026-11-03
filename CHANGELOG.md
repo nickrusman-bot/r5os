@@ -1,5 +1,33 @@
 # R5OS changelog (lokaal)
 
+### The 14:48 stick booted, and the log landed on the Windows EFI partition
+
+That image reached the desktop and then shut down. `radeon_hd` claimed `1002:15e7` as `Radeon Vega Barcelo`, mapped 256 MB after reading the video memory size as 4194303 MB, probed 235 connector paths, rejected path 0 for `usSize`, and logged `0 attached monitors`. It closed. `framebuffer` then kept the firmware buffer. The desktop the user saw was that framebuffer. `package_daemon` ran first-boot processing for 132 packages; the last of those lines is at about 8.9 seconds into the boot. The syslog ends in the first-login script, then shutdown. No panic. No MSR write. The idle sample was P-state 1 (1800 MHz) and the busy sample was P-state 0 (2300 MHz).
+
+`r5_pstate_log` wrote `r5-cpu.txt`, `r5-hardware.txt`, and `r5-syslog.txt` on `/dev/disk/nvme/0/0`. That is the Windows EFI partition, because the chooser preferred FAT32 over the FAT12 USB partition. `E:` stayed empty. The three files were removed from that EFI root afterwards. The chooser now skips `/dev/disk/nvme` and keeps the smallest other FAT volume. The stick still has the old chooser.
+
+### Barcelo in radeon_hd, and the FAT log looks again
+
+`1002:15e7` from the 5625U boot is now in the compiled `radeon_hd` table: DCE 12.0, `RADEON_RAVEN`, `CHIP_APU`. Picasso `1002:15d8` is the same Raven path, but that entry (and the rest of Vega and Navi) sits inside `#if 0 /* disabled for R1/beta5 */`, so a line next to it is not compiled. `15e7` is placed after that `#endif`. It has not been modeset on the machine. If `init_driver` claims the device and the registers do not match, the panel can go black; `framebuffer` remains the fallback when the id is absent.
+
+`r5_pstate_log` stopped after about ten seconds when `/dev/disk` had no FAT boot sector, and the later copies then did nothing. The anyboot EFI partition is FAT12, which the check already accepted. The scan now waits longer, runs again after 15 seconds, 45 seconds and two minutes, counts the nodes it opened, and also accepts a BIOS parameter block whose type string is blank. Still no MSR write.
+
+`tools/r5-befs/r5_befs.py` reads a BeFS image or an anyboot MBR from Windows. On the partition copied from this stick it listed `home` and exported `system/var/log/syslog` (155889 bytes, including `device 15e7`). There is no separate toolchain repository; the reader lives in this tree. No C++ or C# compiler is installed here, so the tool is Python 3. Attributes and a Dokan or WinFsp drive letter are not implemented.
+
+`jam -q @r5-anyboot` for AMD64 finished at 14:44 Europe/Amsterdam on 3 Nov 2026 with exit 0 (`r5-os-anyboot.iso`, 2156724224 bytes, BeFS type `0xeb` plus EFI type `0xef`). The linked `radeon_hd` contains the string `Radeon Vega Barcelo`. `r5_pstate_log` contains the node/opened/signature note. That image was written raw to the General UDisk. Disk 0, the NVMe, was not opened. This image has not been booted.
+
+### USB boot of the Ryzen 5 5625U
+
+The image written at 13:53 Europe/Amsterdam booted. The kernel enumerated 12 CPUs (0–11), family `0x19` model `0x50`, `AMD Ryzen 5 5625U with Radeon Graphics`. The VGA PCI id is `1002:15e7` (Barcelo, revision `c2`, subsystem `103c:8a31`). `radeon_hd` does not list that id. The old `radeon` driver found no supported device. `framebuffer` loaded and kept the firmware buffer, 1920×1080 at 32-bit. HDMI audio is `1002:1637`. The CPU log shows P-states at 2300, 1800 and 1600 MHz and `no msr write`. `r5_pstate_log` did not see a FAT boot sector, so `r5-cpu.txt` and the syslog are on the BeFS volume (`home/r5-cpu.txt`, `system/var/log/syslog`, 155889 bytes). The EFI partition stayed without those files. The syslog ends in the first-login script, then the machine shut down. No panic in this boot.
+
+### CPU log read panics on hardware
+
+Reading `/dev/misc/r5_pstate` copied the report into the caller’s buffer with `memcpy`. That buffer is a user address. On the Ryzen 5 5625U SMAP is on, so the kernel panicked: `SMAP violation user-mapped address … touched from kernel`, thread `r5_pstate_log`, in `r5_pstate_read` (the debugger named the callee `memcmp`). The same read on QEMU did not fault. The copy now goes through `user_memcpy`. No MSR is written. The photo of that panic is from the USB boot on 3 Nov 2026. `jam -q @r5-anyboot` afterwards exited 0, and that image was written raw to the same General UDisk at 13:53 Europe/Amsterdam. That image is the one that booted, described above.
+
+### USB boot log on the EFI partition
+
+The anyboot image has a small FAT partition named HAIKU ESP. Windows can open that partition from the stick. `r5_pstate_log` writes three files there: `r5-cpu.txt`, `r5-hardware.txt` (`listdev`, the kernel's loaded images, and syslog lines that mention PCI, VGA, radeon, VESA, framebuffer, or a panic), and `r5-syslog.txt` (the newest 1.2 MB of `/var/log/syslog`). The first copy runs when the boot volume is mounted. Later copies replace those files after 15 seconds, then 45 seconds, then two minutes, so a hang during display setup still leaves the previous copy. The rest of the log stays on the BeFS system partition. The EFI partition is about 2.8 MB, which is why the full syslog is not copied. No MSR is written. `jam -q @r5-anyboot` for AMD64 finished on 3 Nov 2026 with exit 0 (`r5-os-anyboot.iso`, 2.01 GiB, BeFS plus a 2.8 MB EFI partition). That image was written raw to the General UDisk at 13:33 Europe/Amsterdam. Disk 0, the NVMe, was not opened. Booting that image on the Ryzen 5 5625U reached the kernel and then panicked in `r5_pstate_log`, as the section above describes.
+
 ### Address bar while a background tab loads
 
 Middle-clicking a link opens a tab without selecting it. `LoadNegotiating` still wrote that URL into the address bar, then a later update put the current page back (Haiku #20319). The bar looked as if the open page was being replaced. A background tab now keeps its URL on that tab and leaves the address bar alone. The selected tab still shows the URL it is requesting.
