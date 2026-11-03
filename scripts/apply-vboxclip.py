@@ -48,6 +48,10 @@ def patch_jams() -> None:
 
 
 def patch_launch() -> None:
+    user_launch = (HAIKU / "data" / "launch" / "user").read_text(encoding="utf-8")
+    if "job x-vnd.R5OS-vbox-clip" in user_launch:
+        print("already user (vbox clip launch job)")
+        return
     replace_once(
         HAIKU / "data" / "launch" / "user",
         """	job x-vnd.R5OS-NetworkStatus {

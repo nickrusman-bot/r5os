@@ -20,6 +20,9 @@ def replace_once(
     marker: str | None = None,
 ) -> None:
     text = path.read_text(encoding="utf-8")
+    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+        print(f"already {path.name} ({tag})")
+        return
     if marker is not None and marker in text:
         print(f"already {path.name} ({tag})")
         return

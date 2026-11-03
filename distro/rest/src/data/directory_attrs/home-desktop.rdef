@@ -1,0 +1,21 @@
+/*
+ * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
+ * SPDX-Snippet markers. The copyright and license notice above still cover
+ * the original work. A build that ships both follows GPL-3.0-or-later, and
+ * that notice stays on the original portions.
+ */
+
+resource(0, "SYS:NAME") "x-vnd.Haiku-libtracker:B_DESKTOP_DIRECTORY:home";
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+resource(1, "be:bgndimginfo") message {
+	"be:bgndimginfopath" = "/boot/system/data/artwork/r5-wallpaper.jpg",
+	"be:bgndimginfomode" = 2,
+	"be:bgndimginfoworkspaces" = -1,
+	"be:bgndimginfooffset" = point { 0, 0 },
+	"be:bgndimginfoerasetext" = false,
+	"be:bgndimginfoset" = 0
+};
+// SPDX-SnippetEnd

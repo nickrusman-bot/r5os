@@ -13,6 +13,9 @@ SRC = ROOT / "distro" / "network"
 
 def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
     text = path.read_text(encoding="utf-8")
+    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+        print(f"already {path.name} ({tag})")
+        return
     if new in text:
         print(f"already {path.name} ({tag})")
         return
@@ -220,6 +223,10 @@ def patch_status_view() -> None:
 
 
 def patch_launch() -> None:
+    user_launch = (HAIKU / "data" / "launch" / "user").read_text(encoding="utf-8")
+    if "job x-vnd.R5OS-NetworkStatus" in user_launch:
+        print("already user (NetworkStatus deskbar job)")
+        return
     replace_once(
         HAIKU / "data" / "launch" / "user",
         """	service x-vnd.Be-TSKB {

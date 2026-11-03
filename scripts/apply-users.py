@@ -15,6 +15,9 @@ def replace_once(
     path: pathlib.Path, old: str, new: str, tag: str, optional: bool = False
 ) -> None:
     text = path.read_text(encoding="utf-8")
+    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+        print(f"already {path.name} ({tag})")
+        return
     if new in text:
         print(f"already {path.name} ({tag})")
         return
@@ -92,6 +95,9 @@ def install_lock(folder: str) -> None:
 
 def retarget_lock(path: pathlib.Path, current: str, desired: str, original: str, tag: str) -> None:
     text = path.read_text(encoding="utf-8")
+    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+        print(f"already {path.name} ({tag})")
+        return
     if desired in text:
         print(f"already {path.name} ({tag})")
         return

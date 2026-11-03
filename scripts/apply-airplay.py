@@ -17,6 +17,9 @@ def replace_once(
     path: pathlib.Path, old: str, new: str, tag: str, optional: bool = False
 ) -> None:
     text = path.read_text(encoding="utf-8")
+    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+        print(f"already {path.name} ({tag})")
+        return
     if new in text:
         print(f"already {path.name} ({tag})")
         return
@@ -179,7 +182,11 @@ def patch_launch() -> None:
         "remove leftover airplay tray job",
         optional=True,
     )
-    replace_once(
+    user_launch = (HAIKU / "data" / "launch" / "user").read_text(encoding="utf-8")
+    if "job x-vnd.R5OS-airplay-tray" in user_launch:
+        print("already user (airplay tray user job)")
+    else:
+        replace_once(
         HAIKU / "data" / "launch" / "user",
         """	service x-vnd.Be-TSKB {
 		launch /system/Deskbar
