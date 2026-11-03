@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import shutil
 import sys
 
 HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/haiku")
@@ -294,10 +295,30 @@ job x-vnd.R5OS-cpu-log {
     )
 
 
+def install_usb_stability() -> None:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_root = root / "distro" / "kernel"
+    files = (
+        "src/add-ons/kernel/busses/usb/ehci.cpp",
+        "src/add-ons/kernel/busses/usb/xhci.cpp",
+        "src/add-ons/kernel/busses/usb/xhci.h",
+        "src/add-ons/kernel/bus_managers/usb/Device.cpp",
+    )
+    for relative in files:
+        source = source_root / relative
+        if not source.is_file():
+            raise SystemExit(f"missing {source}")
+        destination = HAIKU / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        print(f"copied {relative}")
+
+
 def main() -> int:
     install_smp_boot()
     patch_tsc_div0()
     install_pstate()
+    install_usb_stability()
     return 0
 
 

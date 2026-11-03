@@ -365,6 +365,8 @@ Stream::OnSetConfiguration(usb_device device,
 	TRACE(INF, "set_alt_interface %x\n", status);
 
 	for (size_t i = 0; i < interface->endpoint_count; i++) {
+		if (interface->endpoint[i].descr == NULL)
+			continue;
 		if (address == interface->endpoint[i].descr->endpoint_address) {
 			fStreamEndpoint = interface->endpoint[i].handle;
 			TRACE(INF, "%s Stream Endpoint [address %#04x] handle is: %#010x.\n",
@@ -463,8 +465,16 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 
 	release_sem_etc(stream->fDevice->fBuffersReadySem, 1, B_DO_NOT_RESCHEDULE);
 
+	// An error that comes straight back (babble, missed service) would
+	// otherwise queue the next packet in a tight loop (Haiku #18842).
+	if (status != B_OK)
+		snooze(1000);
+
 	stream->fCurrentBuffer = (stream->fCurrentBuffer + 1) % kSamplesBufferCount;
-	status = stream->_QueueNextTransfer(stream->fCurrentBuffer, false);
+	status_t queued = stream->_QueueNextTransfer(stream->fCurrentBuffer, false);
+	if (queued != B_OK) {
+		TRACE(ERR, "queue next failed:%#010x\n", queued);
+	}
 
 	atomic_add(&stream->fInsideNotify, -1);
 }
