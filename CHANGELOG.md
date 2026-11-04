@@ -10,7 +10,7 @@ The page table at virtual address 0 was the Linux path for an APU whose memory h
 
 Cezanne `1002:1636` and `1002:1638` load `green_sardine_*.bin`, including MEC and MEC2. Barcelo `1002:15e7` keeps the `renoir` blobs and now also loads `renoir_mec.bin` as MEC and, because Linux ships no separate Renoir MEC2 file, as MEC_ME2. The direct register loader no longer treats a read of `0xffffffff` as success. The device names for `1636` and `1638` are Cezanne.
 
-`jam -q radeon_hd.accelerant` for AMD64 finished at 12:04 Europe/Amsterdam on 4 Nov 2026 with exit 0. It has not been booted. The image has not been rebuilt, and the stick has not been written.
+`jam -q radeon_hd.accelerant` for AMD64 finished at 12:04 Europe/Amsterdam on 4 Nov 2026 with exit 0. `jam -q @r5-anyboot` finished at 12:55 Europe/Amsterdam on 4 Nov 2026 with exit 0 (8401 targets). The image is `r5-os-anyboot.iso`, 2156724224 bytes. The linked accelerant contains `GFX9 aperture`. The image contains `renoir_mec.bin` and `green_sardine_mec2.bin`. It has not been booted, and the stick has not been written.
 
 ### Renoir maps the GFX ring in the APU system VM
 
