@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The doorbell was programmed and the ring did not fetch
+
+The stick written at 15:56 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. PCI BAR 2 is `0xfcf0000000`, `0x200000` bytes, and the accelerant cloned it. `CP_RB_DOORBELL_CONTROL` read back `0x40000458`: enable set, offset `0x458`. The poll slot read back `0x392`. `CP_ME_CNTL` was `0x0`. Both the writeback and `CP_RB0_RPTR` stayed `0x0`. Scratch stayed `0xcafedead`. The registers were restored. `packet` is `no`.
+
+The 15:19 stick, with the doorbell enable clear, fetched 152 dwords after `CP_RB0_WPTR`. This stick did not write that register at the commit, matching `gfx_v9_0_ring_set_wptr_gfx`. The command processor did not move. The doorbell write did not start a fetch. `nbio_v7_0_enable_doorbell_aperture` sets `RCC_DOORBELL_APER_EN` before any doorbell store. This driver does not. PSP, the Green Sardine loads, the MEC body status `0x80000203`, the quiet serdes, and the clear-state buffer are unchanged.
+
 ### The GFX ring publishes its write pointer through the doorbell
 
 The stick written at 15:19 Europe/Amsterdam on 4 Nov 2026 reached the desktop and stopped at the same dword with both command-processor images. `CP_RB0_RPTR` went from `0x0` to `0x98`. Scratch stayed `0xcafedead`. Linux `gfx_v9_0` sets `use_doorbell` on every GFX9 graphics ring, including Renoir. `gfx_v9_0_ring_set_wptr_gfx` stores the 64-bit count in the poll slot and then calls `WDOORBELL64`. It does not write `CP_RB0_WPTR` when the doorbell is enabled. `gfx_v9_0_ring_get_rptr_gfx` reads the writeback, not `mmCP_RB0_RPTR`. Renoir uses `vega10_doorbell_index_init`. `AMDGPU_DOORBELL64_GFX_RING0` is qword `0x8b`. The dword index stored on the ring is `0x116`. The byte offset in PCI BAR 2 is `0x458`. `CP_RB_DOORBELL_RANGE_LOWER` uses that same index. The previous image cleared the enable bit, left the poll slot at 0, and judged progress only from the MMIO read pointer.
