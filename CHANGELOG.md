@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### A write-only CP address register does not reject the firmware
+
+On the 09:00 stick, `renoir_pfp.bin` was written and `CP_PFP_UCODE_ADDR` read back `0xffffffff`. Linux `gfx_v9_0_cp_gfx_load_microcode` writes the version and does not read that register. The load is now accepted when the read is the version or `0xffffffff`. Any other value is still rejected. CE and ME use the same rule. The scratch write of `0xCAFEDEAD` is still required before `CP_RB0_BASE` is programmed. A scratch value other than `0xDEADBEEF` after 100 ms still halts the command processor and restores the ring registers.
+
+`jam -q @r5-anyboot` for AMD64 finished at 09:15 Europe/Amsterdam on 4 Nov 2026 with exit 0. The image is `r5-os-anyboot.iso`, 2156724224 bytes. This image has not been booted.
+
 ### Renoir PFP, ME, and CE load through the CP registers
 
 Linux `amdgpu_ucode_get_load_type` returns PSP for Renoir unless `fw_load_type` is direct. `gfx_v9_0_cp_gfx_load_microcode` is that direct path: halt `CP_ME_CNTL`, write PFP, CE, and ME, then store the header version in the address register. The files are the unmodified linux-firmware blobs `renoir_pfp.bin`, `renoir_me.bin`, and `renoir_ce.bin` from 11 Oct 2025. Each header is version 1.0 and IP 9.3. PFP is ucode `0xc3`, 21376 bytes, sha256 `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`. ME is ucode `0xa7`, 17280 bytes, sha256 `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`. CE is ucode `0x50`, 9088 bytes, sha256 `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`. `LICENSE.amdgpu` ships beside them. They are installed at `system/non-packaged/data/firmware/amdgpu/`.

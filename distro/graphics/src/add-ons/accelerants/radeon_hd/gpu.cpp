@@ -915,11 +915,13 @@ radeon_gfx9_load_engine(const char* fileName, uint32 addrIndex,
 				Write32(OUT, data, radeon_le32(ucode + i));
 			Write32(OUT, addr, version);
 			uint32 seen = Read32(OUT, addr);
+			// gfx_v9_0_cp_gfx_load_microcode writes the version and does not
+			// read it back. On the 5625U this register reads 0xffffffff.
 			ERROR("%s: R5 radeon_hd: GFX9 %s ip %u.%u version 0x%"
 				B_PRIx32 " bytes %" B_PRIu32 " addr 0x%" B_PRIx32 "\n",
 				__func__, fileName, ipMajor, ipMinor, version, ucodeBytes,
 				seen);
-			if (seen == version)
+			if (seen == version || seen == 0xffffffff)
 				result = B_OK;
 		}
 	}
