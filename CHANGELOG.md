@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Green Sardine still stops the ring at dword 152
+
+The stick written at 15:19 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. PSP accepted `green_sardine_rlc.bin` (`0x3c`, 16896 bytes), `green_sardine_pfp.bin` (`0xc5`, 85504 bytes), `green_sardine_ce.bin` (`0x50`, 36352 bytes), and `green_sardine_me.bin` (`0xa7`, 69120 bytes), status `0x0`, fences `0x1` through `0x4`. The MEC body was again `0x80000203` and the jump table was again status `0x0`. The serdes was quiet. `CP_RB0_RPTR` was `0x0` before the write pointer and `0x98` after 100 ms. Scratch stayed `0xcafedead`. The read pointer stopped at the same dword as with the Renoir PFP, ME, and CE. Those files were not the cause. The registers were restored.
+
 ### Barcelo loads the Green Sardine command processor
 
 The stick written at 14:53 Europe/Amsterdam on 4 Nov 2026 fetched 152 dwords and stopped inside the first `SET_CONTEXT`. Scratch stayed `0xcafedead`. The files were `renoir_pfp.bin` version `0xc3` (21376 bytes), `renoir_me.bin` version `0xa7` (17280 bytes), and `renoir_ce.bin` version `0x50` (9088 bytes). `CP_RB0_RPTR` moved from `0x0` to `0x98` with the doorbell enable clear, so the write-pointer register is enough to start the fetch. This image does not switch the ring to the doorbell.
