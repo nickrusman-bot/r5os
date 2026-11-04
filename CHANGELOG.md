@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The GFX ring fetched 152 dwords and then stopped
+
+The stick written at 14:53 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. `SETUP_TMR` was skipped. PSP accepted RLC, PFP, CE, and ME with status `0x0` and fences `0x1` through `0x4`. The loaded files were still `renoir_rlc.bin` (`0x3c`), `renoir_pfp.bin` (`0xc3`, 21376 bytes), `renoir_ce.bin` (`0x50`, 9088 bytes), and `renoir_me.bin` (`0xa7`, 17280 bytes). The MEC body, type 4, finished with fence `0x5` and status `0x80000203`, and the start continued. The MEC jump table, type 5, finished with fence `0x6` and status `0x0`. The RLC serdes read CU `0x0` and non-CU `0x0` on the first poll. The clear-state buffer was programmed at GPU `0x810845000`, 904 dwords. `RLC_CNTL` stayed `0x1`. `RLC_GPM_GENERAL_6` read `0x59`.
+
+`CP_RB0_RPTR` was `0x0` before the write pointer moved, including after the force to 0. The write pointer was 914. After 100 ms the read pointer was `0x98` and scratch was still `0xcafedead`. The command processor fetched 152 dwords and stopped inside the first `SET_CONTEXT` packet. The scratch packet is dword 911. The registers were restored. `packet` is `no`. The doorbell enable stayed clear, so this fetch used `CP_RB0_WPTR`.
+
 ### The GFX ring no longer waits on SETUP_TMR
 
 The stick written at 14:31 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. The aperture low page was again `0x3d0000` against a framebuffer page of `0x20400`. The high page `0x3d0800` already covers `0x20800`. The GPCOM ring came ready as `0x80020000`. The original `SETUP_TMR` at GPU `0x81fc00000`, 4 MiB, finished with fence `0x1` and status `0xffff0006`. The retry with `virt_phy_addr` and CPU physical address `0xfcefc00000` finished with fence `0x2` and the same status. That is `TEE_ERROR_BAD_PARAMETERS` for both forms. No IP firmware was sent. The ring was not submitted. Scratch was not tested. The last ring submit is still the 10:57 stick.
