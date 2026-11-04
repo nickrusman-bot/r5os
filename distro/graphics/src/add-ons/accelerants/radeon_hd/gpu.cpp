@@ -717,9 +717,12 @@ radeon_gpu_ring_setup()
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Linux loads Renoir RLC, PFP, ME, and CE through PSP v12. When C2PMSG_81
 // shows the secure OS, this driver creates the GPCOM ring and sends
-// GFX_CMD_ID_LOAD_IP_FW. It does not load the bootloader, reroute interrupts,
-// or send a mode-1 reset. A missing sign of life uses the direct writes in
-// gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
+// GFX_CMD_ID_LOAD_IP_FW. MEC follows amdgpu_ucode_init_single_fw: the body
+// without the jump table is GFX_FW_TYPE_CP_MEC, and the table is
+// GFX_FW_TYPE_CP_MEC_ME1. gfx_v9_0_load_mec2_fw_bin_support is false for
+// GC 9.3.0, so MEC2 is not sent. It does not load the bootloader, reroute
+// interrupts, or send a mode-1 reset. A missing sign of life uses the
+// direct writes in gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
 // gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
 // gfx_v9_0_cp_gfx_start, then the scratch packet from
 // gfx_v9_0_ring_test_ring. After a PSP load, gfx_v9_0_rlc_resume clears
@@ -1075,6 +1078,10 @@ struct radeon_gfx9_ucode {
 	uint32			version;
 	uint16			headerMajor;
 	uint16			headerMinor;
+	// gfx_firmware_header_v1_0 jt_offset and jt_size, in bytes from the
+	// ucode array. Zero when the header is not 1.0 or the table is empty.
+	uint32			jtOffset;
+	uint32			jtBytes;
 };
 
 
@@ -1103,13 +1110,39 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 			&& offset >= 32 && offset <= bytes
 			&& ucodeBytes <= bytes - offset
 			&& ucodeBytes >= 4 && (ucodeBytes % 4) == 0) {
-			out->blob = blob;
-			out->ucode = blob + offset;
-			out->ucodeBytes = ucodeBytes;
-			out->version = version;
-			out->headerMajor = headerMajor;
-			out->headerMinor = headerMinor;
-			result = B_OK;
+			uint32 jtOffset = 0;
+			uint32 jtBytes = 0;
+			bool jtOk = true;
+			// RLC 2.1 uses a different header after the common fields.
+			// PFP, ME, and CE carry a table that is not a suffix. Only
+			// the MEC submit path requires that suffix.
+			if (headerMajor == 1 && headerMinor == 0) {
+				uint32 jtDwords = radeon_le32(blob + 36);
+				uint32 jtSize = radeon_le32(blob + 40);
+				if (jtDwords != 0 || jtSize != 0) {
+					if (jtSize > (0xffffffffu / 4)
+						|| jtDwords > (0xffffffffu / 4))
+						jtOk = false;
+					else {
+						jtBytes = jtSize * 4;
+						jtOffset = jtDwords * 4;
+						if (jtBytes == 0 || jtOffset > ucodeBytes
+							|| jtBytes > ucodeBytes - jtOffset)
+							jtOk = false;
+					}
+				}
+			}
+			if (jtOk) {
+				out->blob = blob;
+				out->ucode = blob + offset;
+				out->ucodeBytes = ucodeBytes;
+				out->version = version;
+				out->headerMajor = headerMajor;
+				out->headerMinor = headerMinor;
+				out->jtOffset = jtOffset;
+				out->jtBytes = jtBytes;
+				result = B_OK;
+			}
 		}
 	}
 	if (result != B_OK) {
@@ -1222,20 +1255,21 @@ struct radeon_psp_item {
 
 
 static status_t
-radeon_psp_stage(const radeon_gfx9_ucode& fw, radeon_psp_item* item)
+radeon_psp_stage(const uint8* bytes, uint32 size, radeon_psp_item* item)
 {
-	uint64 bytes = (fw.ucodeBytes + 4095ull) & ~4095ull;
-	status_t result = radeon_vram_alloc(bytes, 4096, &item->offset,
+	if (bytes == NULL || size < 4 || (size % 4) != 0)
+		return B_BAD_DATA;
+
+	uint64 padded = ((uint64)size + 4095ull) & ~4095ull;
+	status_t result = radeon_vram_alloc(padded, 4096, &item->offset,
 		&item->address);
 	if (result != B_OK || item->address == NULL)
 		return result == B_OK ? B_ERROR : result;
 
-	memcpy(item->address, fw.ucode, fw.ucodeBytes);
-	if (bytes > fw.ucodeBytes) {
-		memset(item->address + fw.ucodeBytes, 0,
-			(size_t)(bytes - fw.ucodeBytes));
-	}
-	item->bytes = fw.ucodeBytes;
+	memcpy(item->address, bytes, size);
+	if (padded > size)
+		memset(item->address + size, 0, (size_t)(padded - size));
+	item->bytes = size;
 	return B_OK;
 }
 
@@ -1260,51 +1294,93 @@ radeon_psp_load_engines(uint32 frameBase)
 	char ce[32];
 	char me[32];
 	char mec[32];
-	char mec2[32];
 	snprintf(rlc, sizeof(rlc), "%s_rlc.bin", stem);
 	snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
 	snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
 	snprintf(me, sizeof(me), "%s_me.bin", stem);
 	snprintf(mec, sizeof(mec), "%s_mec.bin", stem);
-	snprintf(mec2, sizeof(mec2), "%s_mec2.bin", stem);
-	// GFX_FW_TYPE in psp_gfx_if.h: ME 1, PFP 2, CE 3, MEC 4, MEC_ME2 6,
-	// RLC_G 8. Renoir has no separate mec2 blob; Linux reuses mec.
+	// GFX_FW_TYPE in psp_gfx_if.h: ME 1, PFP 2, CE 3, CP_MEC 4,
+	// CP_MEC_ME1 5, RLC_G 8. jtType 0 sends the whole ucode. A nonzero
+	// jtType splits a suffix table the way amdgpu_ucode_init_single_fw
+	// does. gfx_v9_0_load_mec2_fw_bin_support is false for GC 9.3.0, so
+	// this path does not send CP_MEC_ME2.
 	struct {
 		const char*	name;
-		const char*	fallback;
 		uint32		type;
+		uint32		jtType;
 		bool		required;
-	} files[6] = {
-		{ rlc, NULL, 8, false },
-		{ pfp, NULL, 2, true },
-		{ ce, NULL, 3, true },
-		{ me, NULL, 1, true },
-		{ mec, NULL, 4, true },
-		{ mec2, mec, 6, true },
+	} files[5] = {
+		{ rlc, 8, 0, false },
+		{ pfp, 2, 0, true },
+		{ ce, 3, 0, true },
+		{ me, 1, 0, true },
+		{ mec, 4, 5, true },
 	};
 
-	radeon_psp_item items[6];
+	ERROR("%s: R5 radeon_hd: PSP MEC2 not loaded on GC 9.3\n", __func__);
+
+	radeon_psp_item items[8];
 	uint32 count = 0;
 	memset(items, 0, sizeof(items));
-	for (uint32 i = 0; i < 6; i++) {
+	for (uint32 i = 0; i < 5; i++) {
 		radeon_gfx9_ucode fw;
 		const char* used = files[i].name;
 		status_t opened = radeon_gfx9_open_ucode(used, &fw);
-		if (opened == B_ENTRY_NOT_FOUND && files[i].fallback != NULL) {
-			used = files[i].fallback;
-			opened = radeon_gfx9_open_ucode(used, &fw);
-		}
 		if (opened == B_ENTRY_NOT_FOUND && !files[i].required)
 			continue;
 		if (opened != B_OK)
 			return opened;
 
+		if (files[i].jtType == 0) {
+			items[count].name = used;
+			items[count].type = files[i].type;
+			status_t staged = radeon_psp_stage(fw.ucode, fw.ucodeBytes,
+				&items[count]);
+			ERROR("%s: R5 radeon_hd: PSP %s header %u.%u version 0x%"
+				B_PRIx32 " bytes %" B_PRIu32 "\n", __func__, used,
+				fw.headerMajor, fw.headerMinor, fw.version,
+				fw.ucodeBytes);
+			free(fw.blob);
+			if (staged != B_OK)
+				return staged;
+			count++;
+			continue;
+		}
+
+		uint32 bodyBytes = 0;
+		if (fw.jtBytes < fw.ucodeBytes)
+			bodyBytes = fw.ucodeBytes - fw.jtBytes;
+		// The body length is ucode_size_bytes minus the table. On
+		// these MEC files that length is also jt_offset, a suffix.
+		bool suffix = fw.headerMajor == 1 && fw.headerMinor == 0
+			&& fw.jtBytes >= 4 && bodyBytes >= 4
+			&& bodyBytes == fw.jtOffset
+			&& fw.jtOffset + fw.jtBytes == fw.ucodeBytes
+			&& count + 2 <= 8;
+		if (!suffix) {
+			free(fw.blob);
+			ERROR("%s: R5 radeon_hd: GFX9 MEC %s jump table refused\n",
+				__func__, used);
+			return B_BAD_DATA;
+		}
+		ERROR("%s: R5 radeon_hd: PSP %s header %u.%u version 0x%"
+			B_PRIx32 " body %" B_PRIu32 " jt %" B_PRIu32 "\n",
+			__func__, used, fw.headerMajor, fw.headerMinor, fw.version,
+			bodyBytes, fw.jtBytes);
+
 		items[count].name = used;
 		items[count].type = files[i].type;
-		status_t staged = radeon_psp_stage(fw, &items[count]);
-		ERROR("%s: R5 radeon_hd: PSP %s header %u.%u version 0x%"
-			B_PRIx32 " bytes %" B_PRIu32 "\n", __func__, used,
-			fw.headerMajor, fw.headerMinor, fw.version, fw.ucodeBytes);
+		status_t staged = radeon_psp_stage(fw.ucode, bodyBytes,
+			&items[count]);
+		if (staged != B_OK) {
+			free(fw.blob);
+			return staged;
+		}
+		count++;
+		items[count].name = used;
+		items[count].type = files[i].jtType;
+		staged = radeon_psp_stage(fw.ucode + fw.jtOffset, fw.jtBytes,
+			&items[count]);
 		free(fw.blob);
 		if (staged != B_OK)
 			return staged;
@@ -1405,8 +1481,10 @@ radeon_psp_load_engines(uint32 frameBase)
 		}
 		uint32 status = radeon_le32(cmdAddress + 864);
 		ERROR("%s: R5 radeon_hd: PSP %s type %" B_PRIu32
-			" status 0x%" B_PRIx32 " fence 0x%" B_PRIx32 "\n",
-			__func__, items[i].name, items[i].type, status, fenceSeen);
+			" bytes %" B_PRIu32 " status 0x%" B_PRIx32
+			" fence 0x%" B_PRIx32 "\n",
+			__func__, items[i].name, items[i].type, items[i].bytes,
+			status, fenceSeen);
 		if (!landed)
 			return B_TIMED_OUT;
 		if (status != 0)

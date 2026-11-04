@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Renoir MEC is a body and a jump table
+
+The 13:23 stick reached the desktop. PSP accepted RLC, PFP, CE, and ME, and refused the MEC command, type 4, with status `0x80000203`. `renoir_mec.bin` is header 1.0. Its ucode is 267968 bytes. `jt_offset` is 66768 dwords and `jt_size` is 224 dwords, a suffix of 896 bytes. Linux `amdgpu_ucode_init_single_fw` on a PSP load sends `CP_MEC` as `ucode_size_bytes` minus that table, then `CP_MEC_ME1` as the table at `jt_offset`. That is 267072 bytes as type 4 and 896 bytes as type 5. PFP, ME, and CE also store jump-table fields. Those tables are not suffixes, and those files stay one image. `gfx_v9_0_load_mec2_fw_bin_support` is false for GC 9.3.0, so Renoir, Barcelo, and Cezanne do not send `CP_MEC_ME2`. A MEC table that is not that suffix is refused. A non-zero PSP status still restores the registers and does not program the ring.
+
+`jam -q @r5-anyboot` for AMD64 finished at 13:45 Europe/Amsterdam on 4 Nov 2026 with exit 0 (8401 targets). `gpu.o` was rebuilt at 13:42. The linked accelerant contains `PSP MEC2 not loaded on GC 9.3` and `body %u jt %u`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 13:48 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### PSP refused the Renoir MEC image
 
 The stick written at 13:23 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. The aperture low page was again `0x3d0000` against a framebuffer page of `0x20400`. The reader loaded `renoir_mec.bin`: header 1.0, version `0x1e3`, 267968 ucode bytes. PSP accepted RLC, PFP, CE, and ME with status `0x0` and fences `0x1` through `0x4`. The MEC command, type 4, finished with fence `0x5` and status `0x80000203`. There is no `renoir_mec2.bin`; the fallback open of `renoir_mec.bin` is expected. The start restored the registers and did not submit the ring. Scratch was not tested.
