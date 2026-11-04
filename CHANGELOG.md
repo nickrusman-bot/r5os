@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### PSP refused the Renoir MEC image
+
+The stick written at 13:23 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. The aperture low page was again `0x3d0000` against a framebuffer page of `0x20400`. The reader loaded `renoir_mec.bin`: header 1.0, version `0x1e3`, 267968 ucode bytes. PSP accepted RLC, PFP, CE, and ME with status `0x0` and fences `0x1` through `0x4`. The MEC command, type 4, finished with fence `0x5` and status `0x80000203`. There is no `renoir_mec2.bin`; the fallback open of `renoir_mec.bin` is expected. The start restored the registers and did not submit the ring. Scratch was not tested.
+
+The MEC header carries a jump table at dword `0x104d0`, 224 dwords, 896 bytes at the end of that ucode. Linux `amdgpu_ucode_init_single_fw` sends the PSP the MEC body without that table as `GFX_FW_TYPE_CP_MEC`, then the table itself as `GFX_FW_TYPE_CP_MEC_ME1` and, for the second engine, `GFX_FW_TYPE_CP_MEC_ME2`. This driver sent the body and the table as one type-4 command. ME, PFP, CE, and RLC have no jump table and were accepted.
+
 ### The GFX9 firmware reader accepts the MEC blob
 
 `renoir_mec.bin` is 268224 bytes. The reader allocated 262144 bytes and, once that buffer was full, reported the file missing. The ring was never submitted. The reader now takes the file size from `fstat` and accepts a file up to 1 MiB. A missing file, a bad size, and a short read are logged separately.
