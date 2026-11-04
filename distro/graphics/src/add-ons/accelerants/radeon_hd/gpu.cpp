@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "accelerant_protos.h"
@@ -999,17 +1000,37 @@ radeon_read_named_firmware(const char* fileName, size_t* _bytes)
 		return NULL;
 
 	int fd = open(path, O_RDONLY);
-	if (fd < 0)
+	if (fd < 0) {
+		ERROR("%s: R5 radeon_hd: GFX9 firmware %s missing\n", __func__,
+			fileName);
 		return NULL;
+	}
 
-	size_t capacity = 256 * 1024;
+	// renoir_mec.bin is 268224 bytes. A fixed 256 KiB buffer reported it
+	// missing and the ring was never submitted.
+	struct stat info;
+	const off_t kMaxFirmware = 1024 * 1024;
+	if (fstat(fd, &info) != 0) {
+		ERROR("%s: R5 radeon_hd: GFX9 firmware %s size unread\n", __func__,
+			fileName);
+		close(fd);
+		return NULL;
+	}
+	if (info.st_size <= 0 || info.st_size > kMaxFirmware) {
+		ERROR("%s: R5 radeon_hd: GFX9 firmware %s refused, size %lld\n",
+			__func__, fileName, (long long)info.st_size);
+		close(fd);
+		return NULL;
+	}
+
+	size_t capacity = (size_t)info.st_size;
 	uint8* blob = (uint8*)malloc(capacity);
 	if (blob == NULL) {
 		close(fd);
 		return NULL;
 	}
 	size_t filled = 0;
-	for (;;) {
+	while (filled < capacity) {
 		ssize_t got = read(fd, blob + filled, capacity - filled);
 		if (got < 0) {
 			free(blob);
@@ -1019,13 +1040,14 @@ radeon_read_named_firmware(const char* fileName, size_t* _bytes)
 		if (got == 0)
 			break;
 		filled += (size_t)got;
-		if (filled == capacity) {
-			free(blob);
-			close(fd);
-			return NULL;
-		}
 	}
 	close(fd);
+	if (filled != capacity) {
+		free(blob);
+		ERROR("%s: R5 radeon_hd: GFX9 firmware %s short read\n", __func__,
+			fileName);
+		return NULL;
+	}
 	*_bytes = filled;
 	return blob;
 }
@@ -1062,11 +1084,8 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 	memset(out, 0, sizeof(*out));
 	size_t bytes = 0;
 	uint8* blob = radeon_read_named_firmware(fileName, &bytes);
-	if (blob == NULL) {
-		ERROR("%s: R5 radeon_hd: GFX9 firmware %s missing\n", __func__,
-			fileName);
+	if (blob == NULL)
 		return B_ENTRY_NOT_FOUND;
-	}
 
 	status_t result = B_BAD_DATA;
 	if (bytes >= 44) {
