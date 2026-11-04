@@ -999,10 +999,10 @@ radeon_gfx9_fill_start(uint32* ring, uint32 capacity)
 
 // REMOVE-GFX9-SCRATCH-TEST BEGIN
 // Temporary. Delete this function and the two calls in radeon_gfx9_prepare_ring,
-// and submit radeon_gfx9_fill_start again. gfx_v9_0_ring_test_ring writes one
-// SET_UCONFIG of SCRATCH_REG0 and rings once. The clear-state stream is not
-// placed in this buffer. There is no second doorbell, and the write pointer
-// must not go backwards.
+// and submit radeon_gfx9_fill_start again. The ring is the opening of
+// gfx_v9_0_cp_gfx_start, preamble and context control, then the three dwords
+// of gfx_v9_0_ring_test_ring. The 212 context registers are not included.
+// One doorbell publishes that write pointer. It is not written again.
 static uint32
 radeon_gfx9_fill_scratch_test(uint32* ring, uint32 capacity)
 {
@@ -1011,11 +1011,18 @@ radeon_gfx9_fill_scratch_test(uint32* ring, uint32 capacity)
 		return 0;
 	uint32 n = 0;
 	if (!radeon_gfx9_put(ring, capacity, &n,
+			radeon_packet3(kPacket3Preamble, 0))
+		|| !radeon_gfx9_put(ring, capacity, &n, kPreambleBegin)
+		|| !radeon_gfx9_put(ring, capacity, &n,
+			radeon_packet3(kPacket3ContextControl, 1))
+		|| !radeon_gfx9_put(ring, capacity, &n, 0x80000000)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0x80000000)
+		|| !radeon_gfx9_put(ring, capacity, &n,
 			radeon_packet3(kPacket3SetUconfig, 1))
 		|| !radeon_gfx9_put(ring, capacity, &n, scratchReg)
 		|| !radeon_gfx9_put(ring, capacity, &n, 0xDEADBEEF))
 		return 0;
-	if (n != 3)
+	if (n != 8)
 		return 0;
 	return n;
 }
@@ -1089,7 +1096,7 @@ radeon_gfx9_prepare_ring()
 		" read 0x%" B_PRIx32 "\n", __func__, ringOffset, ringBytes, submitted,
 		headerRead, fenceOffset, fenceRead);
 	// REMOVE-GFX9-SCRATCH-TEST BEGIN
-	ERROR("%s: R5 radeon_hd: GFX9 scratch test only\n", __func__);
+	ERROR("%s: R5 radeon_hd: GFX9 preamble scratch test\n", __func__);
 	// REMOVE-GFX9-SCRATCH-TEST END
 }
 

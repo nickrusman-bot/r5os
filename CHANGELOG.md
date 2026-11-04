@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The scratch packet follows the preamble
+
+The three-dword scratch packet was fetched and `SCRATCH_REG0` stayed `0xcafedead`. Linux submits that packet from `gfx_v9_0_ring_test_ring` only after `gfx_v9_0_cp_gfx_start` has sent the preamble and context control. This ring is those five dwords and then the same three-dword `SET_UCONFIG`. The 212 context registers are not in the buffer. One doorbell publishes write pointer 8 and is not written again. The calls stay inside `REMOVE-GFX9-SCRATCH-TEST`.
+
+`jam -q @r5-anyboot` for AMD64 finished at 17:55 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 17:53. The linked accelerant contains `GFX9 preamble scratch test`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 17:59 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### The ring carries only the scratch packet
 
 The previous probes wrote a doorbell of 0 while the read pointer was already 3, and the 1024-dword ring wrapped. Those probes are gone. This boot submits the three dwords from `gfx_v9_0_ring_test_ring`: `SET_UCONFIG` of `SCRATCH_REG0` to `0xDEADBEEF`. The 914-dword clear-state stream is not written into the ring buffer. One doorbell publishes write pointer 3 and is not written again. The temporary calls are marked `REMOVE-GFX9-SCRATCH-TEST` and go away when this test has answered. `radeon_gfx9_fill_start` stays in the file for that removal.
