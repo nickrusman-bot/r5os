@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### RLC 2.1 save/restore lists go to the PSP before RLC_G
+
+`green_sardine_rlc.bin` and `renoir_rlc.bin` are the same 39928-byte header 2.1. The ucode is 16896 bytes at offset 256. `rlc_firmware_header_v2_1` then holds three lists: CNTL 592 bytes at 26832, GPM 2560 bytes at 27424, SRM 9944 bytes at 29984. Linux `amdgpu_gfx_rlc_init_microcode_v2_1` registers those as PSP types 22, 20 and 21. The ucode id order places them before `RLC_G` (type 8). This driver sent only type 8 and then set `RLC_SRM_CNTL` `SRM_ENABLE`. `gfx_v9_0_init_pg` sets that bit for every RLC 2.1, and on GC 9.3 it does not write the lists through MMIO. The PSP load is how Renoir gets them.
+
+The three lists are now staged from those header offsets and sent before type 8. A non-zero status on a list stops the ring. `SRM_ENABLE` is set only after the three lists were accepted. `RLC_PG_CNTL` bit 15, `CP_PG_DISABLE`, is set with the other power-gating enables cleared. `RLC_JUMP_TABLE_RESTORE` stays unset: Linux writes it only when GFXOFF power-gating flags are on, and this path does not send GFXOFF. Whether the scratch packet then completes has not been booted.
+
+### Renoir gets the Linux mode-2 reset before the ring
+
+`soc15_need_reset_on_init` in Linux 6.12 is true for `CHIP_RENOIR` and false for Raven and Picasso. `soc15_asic_reset` returns before a reset on those Raven chips. PCI `15e7`, `1636`, `1638` and `164c` are `CHIP_RENOIR`. MP1 12.0.1 selects mode 2. `smu_v12_0_mode2_reset` is `PPSMC_MSG_GfxDeviceDriverReset` (`0x1E`) with argument `2` on the MP1 mailbox: message `C2PMSG_66` at dword index `0x16200+0x282`, argument `C2PMSG_82` at `0x292`, response `C2PMSG_90` at `0x29a`. `PPSMC_Result_OK` is `1`. The same function is the decision for this series. Raven and Picasso do not take the message. Lucienne `164c` is in the set and does not get the message, because its firmware stays unloaded and DCN is not programmed again afterwards.
+
+The ring start sends it before any command-processor or aperture write. The mailbox must already hold a non-zero response. That wait is 100 ms. The reset wait is 2 seconds, `usec_timeout * 20` at the Linux default. A timeout does not send the message again. A response other than `1` does not program the ring. `radeon-gfx.txt` records `mode2`, `mode2_before` and `mode2_after`. This is not a mode-1 reset and it is not `GRBM_SOFT_RESET`. The firmware scanout is not rewritten. Whether the panel stays up, and whether scratch then becomes `0xdeadbeef`, has not been booted.
+
+The stall line from the previous stick was misread. `GRBM_STATUS2` `0x50000008` is the ME0 pipe 1 fifo at 8, `CPF_BUSY` and `CPG_BUSY`. `RLC_BUSY` is bit 24 (`0x01000000`). `ME1PIPE2_RQ_PENDING` is bit 8 (`0x100`). Both were clear. The pending RSMU request is the graphics register write. The refused MEC body is not that client.
+
 ### VMID 0 shader memory is set before the ring
 
 The ring of `SET_UCONFIG` plus NOPs stopped at read pointer `0x98` with scratch still `cafedead`, and the read pointer could not be cleared afterwards. That is the same stop as the clear-state stream, so the dword in that stream is not the cause. The micro-engine did not retire the first packet. `gfx_v9_0_constants_init` writes VMID 0 shader memory before any PM4, and this path did not. `GRBM_GFX_CNTL` is now forced to 0, which is ME 0, pipe 0, queue 0 and VMID 0. `SH_MEM_CONFIG` is set to `0x1018`: alignment unaligned is 3 on GFX9, shifted by 3, and `RETRY_DISABLE` is set because GC 9.3 noretry is 1. `SH_MEM_BASES` is 0. Both are restored if scratch stays `cafedead`.

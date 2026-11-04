@@ -725,7 +725,9 @@ radeon_gpu_ring_setup()
 // non-zero MEC status is logged and the GFX ring still starts. A fence
 // timeout still stops the start. gfx_v9_0_load_mec2_fw_bin_support is false
 // for GC 9.3.0, so MEC2 is not sent. It does not load the bootloader,
-// reroute interrupts, or send a mode-1 reset. A missing sign of life uses
+// reroute interrupts, or send a mode-1 reset. Renoir does get the mode-2
+// GFX reset from smu_v12_0_mode2_reset before any of those loads. A missing
+// sign of life uses
 // the direct writes in gfx_v9_0_cp_gfx_load_microcode. The ring setup
 // follows gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
 // gfx_v9_0_cp_gfx_start, then the scratch packet from
@@ -1247,7 +1249,19 @@ struct radeon_gfx9_ucode {
 	// ucode array. Zero when the header is not 1.0 or the table is empty.
 	uint32			jtOffset;
 	uint32			jtBytes;
+	// RLC header 2.1. Offsets are from the start of the file. Linux
+	// amdgpu_gfx_rlc_init_microcode_v2_1 sends these through the PSP
+	// before RLC_G. Zero when the header is not 2.1.
+	uint32			listCntlBytes;
+	uint32			listCntlOffset;
+	uint32			listGpmBytes;
+	uint32			listGpmOffset;
+	uint32			listSrmBytes;
+	uint32			listSrmOffset;
 };
+
+// Set when the three RLC 2.1 lists were accepted. SRM_ENABLE follows that.
+static bool sRlcRestoreLists = false;
 
 
 static status_t
@@ -1297,7 +1311,40 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 					}
 				}
 			}
-			if (jtOk) {
+			bool listsOk = true;
+			uint32 listCntlBytes = 0;
+			uint32 listCntlOffset = 0;
+			uint32 listGpmBytes = 0;
+			uint32 listGpmOffset = 0;
+			uint32 listSrmBytes = 0;
+			uint32 listSrmOffset = 0;
+			// rlc_firmware_header_v2_1. The three sizes sit at bytes
+			// 116, 132 and 148. The offsets follow each size.
+			if (headerMajor == 2 && headerMinor == 1) {
+				uint32 headerBytes = radeon_le32(blob + 4);
+				listsOk = headerBytes >= 156 && headerBytes <= bytes;
+				if (listsOk) {
+					listCntlBytes = radeon_le32(blob + 116);
+					listCntlOffset = radeon_le32(blob + 120);
+					listGpmBytes = radeon_le32(blob + 132);
+					listGpmOffset = radeon_le32(blob + 136);
+					listSrmBytes = radeon_le32(blob + 148);
+					listSrmOffset = radeon_le32(blob + 152);
+					listsOk = listCntlBytes >= 4
+						&& (listCntlBytes % 4) == 0
+						&& listGpmBytes >= 4
+						&& (listGpmBytes % 4) == 0
+						&& listSrmBytes >= 4
+						&& (listSrmBytes % 4) == 0
+						&& listCntlOffset <= bytes
+						&& listCntlBytes <= bytes - listCntlOffset
+						&& listGpmOffset <= bytes
+						&& listGpmBytes <= bytes - listGpmOffset
+						&& listSrmOffset <= bytes
+						&& listSrmBytes <= bytes - listSrmOffset;
+				}
+			}
+			if (jtOk && listsOk) {
 				out->blob = blob;
 				out->ucode = blob + offset;
 				out->ucodeBytes = ucodeBytes;
@@ -1306,6 +1353,12 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 				out->headerMinor = headerMinor;
 				out->jtOffset = jtOffset;
 				out->jtBytes = jtBytes;
+				out->listCntlBytes = listCntlBytes;
+				out->listCntlOffset = listCntlOffset;
+				out->listGpmBytes = listGpmBytes;
+				out->listGpmOffset = listGpmOffset;
+				out->listSrmBytes = listSrmBytes;
+				out->listSrmOffset = listSrmOffset;
 				result = B_OK;
 			}
 		}
@@ -1469,10 +1522,13 @@ radeon_psp_load_engines(uint32 frameBase)
 	snprintf(me, sizeof(me), "%s_me.bin", stem);
 	snprintf(mec, sizeof(mec), "%s_mec.bin", stem);
 	// GFX_FW_TYPE in psp_gfx_if.h: ME 1, PFP 2, CE 3, CP_MEC 4,
-	// CP_MEC_ME1 5, RLC_G 8. jtType 0 sends the whole ucode. A nonzero
-	// jtType splits a suffix table the way amdgpu_ucode_init_single_fw
-	// does. gfx_v9_0_load_mec2_fw_bin_support is false for GC 9.3.0, so
-	// this path does not send CP_MEC_ME2.
+	// CP_MEC_ME1 5, RLC_G 8, GPM list 20, SRM list 21, CNTL list 22.
+	// jtType 0 sends the whole ucode. A nonzero jtType splits a suffix
+	// table the way amdgpu_ucode_init_single_fw does.
+	// gfx_v9_0_load_mec2_fw_bin_support is false for GC 9.3.0, so
+	// this path does not send CP_MEC_ME2. An RLC header 2.1 is sent as
+	// the three lists and then RLC_G. amdgpu_ucode.h orders the lists
+	// before RLC_G.
 	struct {
 		const char*	name;
 		uint32		type;
@@ -1493,7 +1549,9 @@ radeon_psp_load_engines(uint32 frameBase)
 	// memory above that BAR. This pool cannot. GFX does not wait for it.
 	ERROR("%s: R5 radeon_hd: PSP SETUP_TMR skipped\n", __func__);
 
-	radeon_psp_item items[8];
+	sRlcRestoreLists = false;
+	bool listsStaged = false;
+	radeon_psp_item items[12];
 	uint32 count = 0;
 	memset(items, 0, sizeof(items));
 	for (uint32 i = 0; i < 5; i++) {
@@ -1506,6 +1564,44 @@ radeon_psp_load_engines(uint32 frameBase)
 			return opened;
 
 		if (files[i].jtType == 0) {
+			if (files[i].type == 8 && fw.headerMajor == 2
+				&& fw.headerMinor == 1) {
+				struct {
+					const char*	name;
+					uint32		type;
+					uint32		bytes;
+					uint32		offset;
+				} lists[3] = {
+					{ "rlc-cntl", 22, fw.listCntlBytes,
+						fw.listCntlOffset },
+					{ "rlc-gpm", 20, fw.listGpmBytes,
+						fw.listGpmOffset },
+					{ "rlc-srm", 21, fw.listSrmBytes,
+						fw.listSrmOffset },
+				};
+				if (count + 4 > 12) {
+					free(fw.blob);
+					return B_ERROR;
+				}
+				for (uint32 list = 0; list < 3; list++) {
+					items[count].name = lists[list].name;
+					items[count].type = lists[list].type;
+					items[count].optional = false;
+					status_t staged = radeon_psp_stage(
+						fw.blob + lists[list].offset,
+						lists[list].bytes, &items[count]);
+					ERROR("%s: R5 radeon_hd: PSP %s type %"
+						B_PRIu32 " bytes %" B_PRIu32 "\n",
+						__func__, lists[list].name,
+						lists[list].type, lists[list].bytes);
+					if (staged != B_OK) {
+						free(fw.blob);
+						return staged;
+					}
+					count++;
+				}
+				listsStaged = true;
+			}
 			items[count].name = used;
 			items[count].type = files[i].type;
 			items[count].optional = false;
@@ -1531,7 +1627,7 @@ radeon_psp_load_engines(uint32 frameBase)
 			&& fw.jtBytes >= 4 && bodyBytes >= 4
 			&& bodyBytes == fw.jtOffset
 			&& fw.jtOffset + fw.jtBytes == fw.ucodeBytes
-			&& count + 2 <= 8;
+			&& count + 2 <= 12;
 		if (!suffix) {
 			free(fw.blob);
 			ERROR("%s: R5 radeon_hd: GFX9 MEC %s jump table refused\n",
@@ -1665,8 +1761,9 @@ radeon_psp_load_engines(uint32 frameBase)
 		if (!landed)
 			return B_TIMED_OUT;
 		if (status != 0) {
-			// RLC, PFP, CE, and ME stay required. MEC is the
-			// compute engine; its refusal must not skip the ring.
+			// RLC, its three lists, PFP, CE, and ME stay required.
+			// MEC is the compute engine; its refusal must not skip
+			// the ring.
 			if (!items[i].optional)
 				return B_ERROR;
 			ERROR("%s: R5 radeon_hd: MEC left unloaded type %"
@@ -1674,6 +1771,7 @@ radeon_psp_load_engines(uint32 frameBase)
 				__func__, items[i].type, status);
 		}
 	}
+	sRlcRestoreLists = listsStaged;
 	return B_OK;
 }
 
@@ -1773,6 +1871,14 @@ radeon_gfx9_rlc_start(uint32 frameBase, bool loadUcode, uint32* _before,
 }
 
 
+// Result of radeon_smu12_mode2_reset. publish writes these into
+// radeon-gfx.txt. before is the mailbox response seen before the command.
+// after is the response after it, or the last read on a timeout.
+static bool sSoc15ResetSent = false;
+static uint32 sSoc15ResetBefore = 0;
+static uint32 sSoc15ResetAfter = 0;
+
+
 static void
 radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
 	uint32 rlcVersion, uint32 scratch, bool packet, bool programmed,
@@ -1799,6 +1905,9 @@ radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
 	fprintf(file, "rlc_version %08x\n", rlcVersion);
 	fprintf(file, "scratch %08x\n", scratch);
 	fprintf(file, "packet %s\n", packet ? "yes" : "no");
+	fprintf(file, "mode2 %s\n", sSoc15ResetSent ? "yes" : "no");
+	fprintf(file, "mode2_before %08x\n", sSoc15ResetBefore);
+	fprintf(file, "mode2_after %08x\n", sSoc15ResetAfter);
 	if (programmed) {
 		fprintf(file, "dwords %u\n", dwords);
 		fprintf(file, "rptr_before %08x\n", rptrBefore);
@@ -1990,8 +2099,13 @@ radeon_gfx9_prepare_hw(uint32 frameBase)
 		sRadeonGfx9Saved.rlcMem & ~1u);
 	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1079),
 		sRadeonGfx9Saved.cpMem & ~1u);
+	// Gating stays off. Bits 0, 2, 3 and 4 are the GFX and per-CU enables.
+	// gfx_v9_0_enable_cp_power_gating(false) sets CP_PG_DISABLE, bit 15.
+	// The jump table and the SMU handshake stay unset: those belong to
+	// the gfxoff path, and this driver does not send GFXOFF.
 	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c43),
-		sRadeonGfx9Saved.pg & ~((1u << 0) | (1u << 2) | (1u << 3) | (1u << 4)));
+		(sRadeonGfx9Saved.pg & ~((1u << 0) | (1u << 2) | (1u << 3) | (1u << 4)))
+			| (1u << 15));
 	// gfx_v9_0_update_3d_clock_gating clears CGCG_EN and CGLS_EN only.
 	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4cc5),
 		sRadeonGfx9Saved.cgcg3d & ~((1u << 0) | (1u << 1)));
@@ -2041,9 +2155,16 @@ radeon_gfx9_program_csib(uint32 frameBase)
 	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca3), (uint32)(gpu >> 32));
 	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca2), (uint32)gpu & ~3u);
 	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca4), dwords);
-	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c80), sRadeonGfx9Saved.srm | 1u);
+	// gfx_v9_0_enable_save_restore_machine runs for every RLC 2.1 after
+	// the PSP has the three lists. Without those lists the bit stays off.
+	uint32 srm = sRadeonGfx9Saved.srm;
+	if (sRlcRestoreLists)
+		srm |= 1u;
+	else
+		srm &= ~1u;
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c80), srm);
 	ERROR("%s: R5 radeon_hd: GFX9 CSIB 0x%" B_PRIx64 " dwords %" B_PRIu32
-		"\n", __func__, gpu, dwords);
+		" srm 0x%" B_PRIx32 "\n", __func__, gpu, dwords, srm);
 	return true;
 }
 
@@ -2259,6 +2380,86 @@ radeon_gfx9_stall_note()
 }
 
 
+// Linux v6.12 soc15_need_reset_on_init. The only APU in the Raven/Renoir
+// series that returns true is CHIP_RENOIR. Raven and Picasso return false,
+// and soc15_asic_reset returns before sending anything for those chips.
+// amdgpu_drv.c lists 15e7, 1636, 1638 and 164c as CHIP_RENOIR. MP1 12.0.1
+// then selects a mode-2 reset, which is smu_v12_0_mode2_reset: one SMU
+// message, PPSMC_MSG_GfxDeviceDriverReset (0x1E), argument SMU_RESET_MODE_2
+// (2). That is not a mode-1 PCI reset and it is not GRBM_SOFT_RESET.
+// This driver sends it only from the GFX ring start. Lucienne 164c is in
+// the set and is not reset here, because its firmware stays unloaded and
+// DCN is not reprogrammed afterwards.
+static bool
+radeon_soc15_need_reset_on_init(uint32 pciID)
+{
+	return pciID == 0x15e7 || pciID == 0x1636 || pciID == 0x1638
+		|| pciID == 0x164c;
+}
+
+
+// MP1 segment 0 is 0x16200 in vega10_ip_offset.h. The Renoir mailbox in
+// renoir_ppt.c is C2PMSG_66 (message, mm index 0x282), C2PMSG_82 (argument,
+// 0x292) and C2PMSG_90 (response, 0x29a), all BASE_IDX 0. A previous
+// response of 0 means the SMU is still in a command. PPSMC_Result_OK is 1.
+// The wait is usec_timeout * 20, two seconds at the Linux default of 100 ms.
+// A timeout does not send a second message. A response other than 1 does
+// not start the command processor. The firmware scanout is not rewritten:
+// this driver does not program DCN.
+static bool
+radeon_smu12_mode2_reset()
+{
+	const uint32 kMp1 = 0x00016200;
+	const uint32 msg = (kMp1 + 0x0282) * 4;
+	const uint32 arg = (kMp1 + 0x0292) * 4;
+	const uint32 resp = (kMp1 + 0x029a) * 4;
+	sSoc15ResetSent = false;
+	sSoc15ResetBefore = 0xffffffff;
+	sSoc15ResetAfter = 0xffffffff;
+	if (!radeon_mmio_fits(resp)) {
+		ERROR("%s: R5 radeon_hd: SMU mailbox is outside mmio\n", __func__);
+		return false;
+	}
+
+	// Idle means the previous command left a non-zero response. Zero is
+	// still in progress. 100 ms matches the default usec_timeout.
+	uint32 seen = 0;
+	for (int i = 0; i < 100; i++) {
+		seen = Read32(OUT, resp);
+		if (seen != 0)
+			break;
+		snooze(1000);
+	}
+	sSoc15ResetBefore = seen;
+	if (seen == 0) {
+		ERROR("%s: R5 radeon_hd: SMU mailbox stayed 0, mode 2 not sent\n",
+			__func__);
+		return false;
+	}
+
+	Write32(OUT, resp, 0);
+	Write32(OUT, arg, 2);
+	Write32(OUT, msg, 0x1e);
+	sSoc15ResetSent = true;
+	uint32 answer = 0;
+	for (int i = 0; i < 2000; i++) {
+		answer = Read32(OUT, resp);
+		if (answer != 0)
+			break;
+		snooze(1000);
+	}
+	sSoc15ResetAfter = answer;
+	ERROR("%s: R5 radeon_hd: SMU mode 2 before 0x%" B_PRIx32
+		" after 0x%" B_PRIx32 "\n", __func__, seen, answer);
+	if (answer != 1) {
+		ERROR("%s: R5 radeon_hd: SMU mode 2 refused, ring left\n",
+			__func__);
+		return false;
+	}
+	return true;
+}
+
+
 static void
 radeon_gfx9_cp_start()
 {
@@ -2278,6 +2479,14 @@ radeon_gfx9_cp_start()
 		|| !radeon_mmio_fits(radeon_gfx9_byte(kGfx9Seg1, 0x2040))) {
 		ERROR("%s: R5 radeon_hd: GFX9 mmio does not cover CP ucode\n",
 			__func__);
+		return;
+	}
+
+	// Before any CP or aperture write. A refused reset leaves the ring
+	// unprogrammed. The firmware picture is not rewritten.
+	if (radeon_soc15_need_reset_on_init(gInfo->shared_info->pciID)
+		&& !radeon_smu12_mode2_reset()) {
+		radeon_gfx9_publish(false, false, 0, 0, 0, 0, false, false, 0, 0, 0);
 		return;
 	}
 
@@ -2648,8 +2857,8 @@ radeon_gpu_ring_boot(uint32 ringType)
 			if (pciID == 0x15e7 || pciID == 0x1636 || pciID == 0x1638)
 				radeon_gfx9_cp_start();
 			else if (pciID == 0x164c) {
-				ERROR("%s: R5 radeon_hd: Lucienne firmware stays unloaded\n",
-					__func__);
+				ERROR("%s: R5 radeon_hd: Lucienne firmware stays unloaded, "
+					"mode 2 not sent\n", __func__);
 			} else if (sRadeonGfx9Ring.ready) {
 				ERROR("%s: R5 radeon_hd: GFX9 CP not touched, "
 					"fence not submitted\n", __func__);
