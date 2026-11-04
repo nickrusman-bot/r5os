@@ -1,12 +1,24 @@
 # R5OS changelog (lokaal)
 
+### Renoir PFP, ME, and CE load through the CP registers
+
+Linux `amdgpu_ucode_get_load_type` returns PSP for Renoir unless `fw_load_type` is direct. `gfx_v9_0_cp_gfx_load_microcode` is that direct path: halt `CP_ME_CNTL`, write PFP, CE, and ME, then store the header version in the address register. The files are the unmodified linux-firmware blobs `renoir_pfp.bin`, `renoir_me.bin`, and `renoir_ce.bin` from 11 Oct 2025. Each header is version 1.0 and IP 9.3. PFP is ucode `0xc3`, 21376 bytes, sha256 `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`. ME is ucode `0xa7`, 17280 bytes, sha256 `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`. CE is ucode `0x50`, 9088 bytes, sha256 `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`. `LICENSE.amdgpu` ships beside them. They are installed at `system/non-packaged/data/firmware/amdgpu/`.
+
+This runs for PCI `1002:15e7`, `1636`, and `1638`. Lucienne `164c` is the green-sardine firmware and is not loaded. Raven still only allocates the ring. Navi is not programmed with GFX9 registers. RLC is not loaded. There is no PSP ring.
+
+When the three address registers read back the header version, and scratch 0 accepts `0xCAFEDEAD`, the driver follows `gfx_v9_0_cp_gfx_resume`: `CP_RB_WPTR_DELAY`, `CP_RB_VMID`, `CP_RB0_CNTL` (size order 9, block 7), write pointer 0, read-pointer and poll addresses in the fence page, `CP_RB0_BASE` from `MC_VM_FB_OFFSET << 24` plus the ring offset, doorbell disabled, `CP_MAX_CONTEXT` 7, `CP_DEVICE_ID` 1, then the halt bits clear and the write pointer moves to 3. The clear-state preamble is not submitted. Scratch is polled for 100 ms. `0xDEADBEEF` means the packet ran. Any other value halts the command processor and restores the ring registers and `CP_ME_CNTL`. `GRBM_SOFT_RESET` stays unreachable. The scanout is not moved.
+
+`jam -q @r5-anyboot` for AMD64 finished at 08:52 Europe/Amsterdam on 4 Nov 2026 with exit 0. The image is `r5-os-anyboot.iso`, 2156724224 bytes. The image rules copy `system/non-packaged/data/firmware/amdgpu`. This image has not been booted. A missed scratch, or a hang while the GFX block is clock-gated, is still possible.
+
 ### Raven and Renoir keep a GFX9 ring in the visible pool
 
 Linux `gfx_v9_0_cp_gfx_resume` points `CP_RB0_BASE` at a ring only after the ME, PFP, and CE microcode is loaded. `gfx_v9_0_ring_test_ring` then writes scratch register 0 from `0xCAFEDEAD` to `0xDEADBEEF` with `PACKET3_SET_UCONFIG_REG`. The register numbers come from `gc_9_0_offset.h` plus the Vega10 GC bases that `soc15_reg_base_init` uses for Raven and Renoir: segment 0 is `0x2000`, segment 1 is `0xA000`, and scratch 0 is segment 1. Navi is GFX10 and is not programmed with those registers.
 
 On Raven and Renoir, `radeon_gpu_ring_boot` now takes 4 KiB from the visible pool for that ring and another 4 KiB for a fence word. The ring is filled with type-2 NOPs (`0x80000000`). The first three dwords are the scratch packet, index `0x40`, value `0xDEADBEEF`. The fence word is `0xCAFEDEAD`. The CPU reads both back. No `CP_RB0_*` or `CP_ME_CNTL` register is read or written, and `GRBM_SOFT_RESET` stays unreachable. Hainan, Topaz, and Navi log `GFX9 ring stays off`. DCE still returns at the old TODO before the R600 reset. The scanout is not moved. Memory beyond the BAR and GART are not programmed.
 
-`jam -q @r5-anyboot` for AMD64 finished at 00:23 Europe/Amsterdam on 4 Nov 2026 with exit 0. The linked accelerant contains `GFX9 CP not touched, fence not submitted`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It does not contain `refind.conf`. This image has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 00:23 Europe/Amsterdam on 4 Nov 2026 with exit 0. The linked accelerant contains `GFX9 CP not touched, fence not submitted`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It does not contain `refind.conf`.
+
+That stick was booted on the Ryzen 5 5625U and reached the desktop. The syslog, read afterwards on 4 Nov 2026, says `GFX9 ring 0x7e9000+0x1000 packet 0xc0017900 fence 0x7ea000 read 0xcafedead` and `GFX9 CP not touched, fence not submitted`. The pool is still `0x7e9000+0xf817000`. `keep the boot scanout` is 1920x1080. Tracker started. There is no panic. The packet header is the `SET_UCONFIG_REG` encoding. The fence word is the value the CPU stored. The command processor did not write it.
 
 ### The visible VRAM window keeps the firmware picture
 

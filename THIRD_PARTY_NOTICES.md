@@ -71,6 +71,16 @@ Location: `distro/firmware/amd-ucode`. Installed on the boot volume at `system/n
 
 The blob is unmodified. sha256 `c614d6db8056c5c67a9189b225124127d56990a190305bcb3927d50e132de7dd`. `LICENSE.amd-ucode` is the unmodified AMD text and is installed beside the blob. Redistribution of the binary is allowed when that notice stays with it. This is not an open-source license. AMD does not endorse R5OS.
 
+### AMD Renoir graphics firmware
+
+Location: `distro/firmware/amdgpu`. Installed at `system/non-packaged/data/firmware/amdgpu/`.
+
+| Piece | Project | License |
+|---|---|---|
+| `renoir_pfp.bin`, `renoir_me.bin`, `renoir_ce.bin` | Advanced Micro Devices, Inc., 2024, via linux-firmware (11 Oct 2025) | AMD GPU microcode license |
+
+The blobs are unmodified. sha256 `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`, `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`, and `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`. `LICENSE.amdgpu` is the unmodified AMD text and is installed beside them. Redistribution of the binaries is allowed when that notice stays with them. This is not an open-source license. AMD does not endorse R5OS. Linux loads these through the PSP unless the load type is direct.
+
 ## Not included
 
 Linux DRM and `amdgpu` are not imported.
