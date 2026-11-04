@@ -2,7 +2,7 @@
 
 ### Renoir aperture boot stopped before the ring
 
-The stick written at 13:02 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `MC_VM_FB_OFFSET` was `0x810` and the ring GPU address was `0x8107e9000`. The firmware system aperture was low page `0x3d0000` and high page `0x3d0800`. The framebuffer page is `0x20400`, so that low page sits above the visible BAR. The accelerant logged the widen to low `0x20400` and high `0x20800`. PSP then accepted `renoir_rlc.bin`, `renoir_pfp.bin`, `renoir_ce.bin`, and `renoir_me.bin`. `renoir_mec.bin` is on the image at `/system/non-packaged/data/firmware/amdgpu` and is 268224 bytes. The reader stops at 262144 bytes and reports the file missing. The start restored the registers and did not submit the ring. Scratch was not tested. `packet` is `no`.
+The stick written at 13:02 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `MC_VM_FB_OFFSET` was `0x810` and the ring GPU address was `0x8107e9000`. The firmware system aperture was low page `0x3d0000` and high page `0x3d0800`. The framebuffer page is `0x20400`, so that low page sits above the visible BAR. The high page `0x3d0800` already covers the needed `0x20800`, so only the low page is moved. PSP then accepted `renoir_rlc.bin`, `renoir_pfp.bin`, `renoir_ce.bin`, and `renoir_me.bin`. `renoir_mec.bin` is on the image at `/system/non-packaged/data/firmware/amdgpu` and is 268224 bytes. The reader stops at 262144 bytes and reports the file missing. The start restored the registers and did not submit the ring. Scratch was not tested. `packet` is `no`.
 
 ### Renoir uses the GFX9 framebuffer aperture
 
