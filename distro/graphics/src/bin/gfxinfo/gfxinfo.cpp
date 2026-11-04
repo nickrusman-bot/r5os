@@ -24,6 +24,7 @@ static const char* kKeys[] = {
 	"scratch",
 	"packet",
 	"dwords",
+	"rptr_before",
 	"rptr",
 	"wptr",
 };

@@ -723,7 +723,9 @@ radeon_gpu_ring_setup()
 // gfx_v9_0_cp_gfx_start, then the scratch packet from
 // gfx_v9_0_ring_test_ring. After a PSP load, gfx_v9_0_rlc_resume clears
 // clock gating and sets RLC_ENABLE_F32. An APU does not enable the GUI idle
-// interrupt. Navi is not programmed with these registers. The clear-state
+// interrupt. Navi is not programmed with these registers. On this APU the
+// GFXHUB system VM starts at virtual address 0 and the CP ring base is the
+// offset in the framebuffer, not the physical MC address. The clear-state
 // dwords are the AMD MIT table in clearstate_gfx9.h. This file does not
 // relicense that table.
 #include "clearstate_defs.h"
@@ -786,10 +788,9 @@ radeon_mmio_fits(uint32 byteOffset)
 static uint32
 radeon_gfx9_halt_mask()
 {
-	return (1u << 4) | (1u << 6) | (1u << 8)
-		| (1u << 16) | (1u << 17) | (1u << 18) | (1u << 19)
-		| (1u << 20) | (1u << 21)
-		| (1u << 24) | (1u << 26) | (1u << 28);
+	// gfx_v9_0_cp_gfx_enable changes only CE_HALT, PFP_HALT, and ME_HALT.
+	// Bits 4, 6, and 8 are icache invalidates. Bits 16-21 are pipe resets.
+	return (1u << 24) | (1u << 26) | (1u << 28);
 }
 
 
@@ -1388,7 +1389,7 @@ radeon_gfx9_rlc_start(uint32* _before, uint32* _clock, uint32* _after,
 static void
 radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
 	uint32 rlcVersion, uint32 scratch, bool packet, bool programmed,
-	uint32 dwords, uint32 rptr)
+	uint32 dwords, uint32 rptr, uint32 rptrBefore)
 {
 	char path[B_PATH_NAME_LENGTH];
 	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
@@ -1413,10 +1414,157 @@ radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
 	fprintf(file, "packet %s\n", packet ? "yes" : "no");
 	if (programmed) {
 		fprintf(file, "dwords %u\n", dwords);
+		fprintf(file, "rptr_before %08x\n", rptrBefore);
 		fprintf(file, "rptr %08x\n", rptr);
 		fprintf(file, "wptr %08x\n", dwords);
 	}
 	fclose(file);
+}
+
+
+static void radeon_gfx9_flush_visible(uint8* address, uint32 bytes);
+
+
+struct radeon_gfx9_vm {
+	bool	armed;
+	uint32	cntl;
+	uint32	baseLo;
+	uint32	baseHi;
+	uint32	startLo;
+	uint32	startHi;
+	uint32	endLo;
+	uint32	endHi;
+	uint32	l2cntl4;
+};
+
+static radeon_gfx9_vm sRadeonGfx9Vm;
+
+
+static void
+radeon_gfx9_vm_restore()
+{
+	if (!sRadeonGfx9Vm.armed)
+		return;
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0880), sRadeonGfx9Vm.cntl);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x08eb), sRadeonGfx9Vm.baseLo);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x08ec), sRadeonGfx9Vm.baseHi);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x090b), sRadeonGfx9Vm.startLo);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x090c), sRadeonGfx9Vm.startHi);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x092b), sRadeonGfx9Vm.endLo);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x092c), sRadeonGfx9Vm.endHi);
+	Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0857), sRadeonGfx9Vm.l2cntl4);
+	sRadeonGfx9Vm.armed = false;
+}
+
+
+// Renoir is an APU. Linux gmc_v9_0 puts the GFXHUB system VM at virtual
+// address 0 and points the first translation at MC_VM_FB_OFFSET. The CP
+// ring base is that virtual address. A physical framebuffer address is what
+// the PSP DMA uses, and the CP does not fetch it. This installs one page
+// directory and one page table for the ring page and the fence page.
+static bool
+radeon_gfx9_map_ring(uint32 frameBase)
+{
+	const uint32 cntlReg = radeon_gfx9_byte(kGfx9Seg0, 0x0880);
+	const uint32 baseLo = radeon_gfx9_byte(kGfx9Seg0, 0x08eb);
+	const uint32 baseHi = radeon_gfx9_byte(kGfx9Seg0, 0x08ec);
+	const uint32 startLo = radeon_gfx9_byte(kGfx9Seg0, 0x090b);
+	const uint32 startHi = radeon_gfx9_byte(kGfx9Seg0, 0x090c);
+	const uint32 endLo = radeon_gfx9_byte(kGfx9Seg0, 0x092b);
+	const uint32 endHi = radeon_gfx9_byte(kGfx9Seg0, 0x092c);
+	const uint32 l2Reg = radeon_gfx9_byte(kGfx9Seg0, 0x0857);
+	const uint32 invReq = radeon_gfx9_byte(kGfx9Seg0, 0x08a3);
+	const uint32 invAck = radeon_gfx9_byte(kGfx9Seg0, 0x08b5);
+	const uint64 kPte = (1ULL << 0) | (1ULL << 2) | (1ULL << 4)
+		| (1ULL << 5) | (1ULL << 6) | (3ULL << 57);
+
+	memset(&sRadeonGfx9Vm, 0, sizeof(sRadeonGfx9Vm));
+	if (!radeon_mmio_fits(endHi) || !radeon_mmio_fits(invAck)) {
+		ERROR("%s: R5 radeon_hd: GFX9 mmio does not cover the VM\n",
+			__func__);
+		return false;
+	}
+
+	uint64 ringPage = sRadeonGfx9Ring.ringOffset >> 12;
+	uint64 fencePage = sRadeonGfx9Ring.fenceOffset >> 12;
+	if ((sRadeonGfx9Ring.ringOffset & 0xfff) != 0
+		|| (sRadeonGfx9Ring.fenceOffset & 0xfff) != 0
+		|| (ringPage >> 9) != (fencePage >> 9)) {
+		ERROR("%s: R5 radeon_hd: GFX9 ring pages are not one directory\n",
+			__func__);
+		return false;
+	}
+
+	uint64 directoryOffset = 0;
+	uint8* directoryAddress = NULL;
+	status_t result = radeon_vram_alloc(4096, 4096, &directoryOffset,
+		&directoryAddress);
+	uint64 tableOffset = 0;
+	uint8* tableAddress = NULL;
+	if (result == B_OK)
+		result = radeon_vram_alloc(4096, 4096, &tableOffset, &tableAddress);
+	if (result != B_OK || directoryAddress == NULL || tableAddress == NULL) {
+		ERROR("%s: R5 radeon_hd: GFX9 page table alloc failed\n", __func__);
+		return false;
+	}
+
+	uint64* directory = (uint64*)directoryAddress;
+	uint64* table = (uint64*)tableAddress;
+	for (uint32 i = 0; i < 512; i++) {
+		directory[i] = 0;
+		table[i] = 0;
+	}
+	uint64 frame = (uint64)frameBase << 24;
+	uint64 tablePhys = frame + tableOffset;
+	directory[ringPage >> 9] = (tablePhys & 0x0000FFFFFFFFF000ULL)
+		| (1ULL << 0) | (1ULL << 2);
+	table[ringPage & 0x1ff] = ((frame + sRadeonGfx9Ring.ringOffset)
+		& 0x0000FFFFFFFFF000ULL) | kPte;
+	table[fencePage & 0x1ff] = ((frame + sRadeonGfx9Ring.fenceOffset)
+		& 0x0000FFFFFFFFF000ULL) | kPte;
+	radeon_gfx9_flush_visible(directoryAddress, 4096);
+	radeon_gfx9_flush_visible(tableAddress, 4096);
+	radeon_visible_barrier();
+
+	sRadeonGfx9Vm.cntl = Read32(OUT, cntlReg);
+	sRadeonGfx9Vm.baseLo = Read32(OUT, baseLo);
+	sRadeonGfx9Vm.baseHi = Read32(OUT, baseHi);
+	sRadeonGfx9Vm.startLo = Read32(OUT, startLo);
+	sRadeonGfx9Vm.startHi = Read32(OUT, startHi);
+	sRadeonGfx9Vm.endLo = Read32(OUT, endLo);
+	sRadeonGfx9Vm.endHi = Read32(OUT, endHi);
+	sRadeonGfx9Vm.l2cntl4 = Read32(OUT, l2Reg);
+	sRadeonGfx9Vm.armed = true;
+
+	uint64 lastPage = fencePage > ringPage ? fencePage : ringPage;
+	uint64 root = (frame + directoryOffset) | 1ULL;
+	Write32(OUT, l2Reg, sRadeonGfx9Vm.l2cntl4 | (1u << 6) | (1u << 7));
+	Write32(OUT, baseLo, (uint32)root);
+	Write32(OUT, baseHi, (uint32)(root >> 32));
+	Write32(OUT, startLo, 0);
+	Write32(OUT, startHi, 0);
+	Write32(OUT, endLo, (uint32)lastPage);
+	Write32(OUT, endHi, (uint32)(lastPage >> 32));
+	uint32 cntl = sRadeonGfx9Vm.cntl;
+	cntl &= ~((1u << 0) | (3u << 1) | (0xfu << 3) | (1u << 7));
+	cntl |= (1u << 0) | (1u << 1);
+	Write32(OUT, cntlReg, cntl);
+
+	uint32 ackBefore = Read32(OUT, invAck);
+	Write32(OUT, invReq, 1u | (1u << 18) | (1u << 19) | (1u << 20)
+		| (1u << 21) | (1u << 22));
+	uint32 ack = ackBefore;
+	for (int i = 0; i < 100; i++) {
+		ack = Read32(OUT, invAck);
+		if ((ack & 1u) != 0 && ack != ackBefore)
+			break;
+		snooze(1000);
+	}
+	ERROR("%s: R5 radeon_hd: GFX9 vmid0 ring va 0x%" B_PRIx64
+		" pa 0x%" B_PRIx64 " ack 0x%" B_PRIx32 "\n", __func__,
+		sRadeonGfx9Ring.ringOffset, frame + sRadeonGfx9Ring.ringOffset,
+		ack);
+	return true;
 }
 
 
@@ -1467,6 +1615,7 @@ radeon_gfx9_cp_start()
 	const uint32 rbBase = radeon_gfx9_byte(kGfx9Seg0, 0x1040);
 	const uint32 rbBaseHi = radeon_gfx9_byte(kGfx9Seg0, 0x10b1);
 	const uint32 rbRptr = radeon_gfx9_byte(kGfx9Seg0, 0x01c0);
+	const uint32 rbRptrWr = radeon_gfx9_byte(kGfx9Seg0, 0x1042);
 	const uint32 rbDelay = radeon_gfx9_byte(kGfx9Seg0, 0x01c1);
 	const uint32 scratch = radeon_gfx9_byte(kGfx9Seg1, 0x2040);
 	const uint32 haltMask = radeon_gfx9_halt_mask();
@@ -1512,7 +1661,8 @@ radeon_gfx9_cp_start()
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);
-		radeon_gfx9_publish(pspOwnsLoad, false, 0, 0, 0, 0, false, false, 0, 0);
+		radeon_gfx9_publish(pspOwnsLoad, false, 0, 0, 0, 0, false, false, 0,
+			0, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 firmware not running, ring left\n",
 			__func__);
 		return;
@@ -1537,7 +1687,7 @@ radeon_gfx9_cp_start()
 			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
 		}
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
-			rlcVersion, scratchRead, false, false, 0, 0);
+			rlcVersion, scratchRead, false, false, 0, 0, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch read 0x%" B_PRIx32
 			", ring left\n", __func__, scratchRead);
 		return;
@@ -1558,9 +1708,23 @@ radeon_gfx9_cp_start()
 	uint32 savedPollLo = Read32(OUT, rbPollLo);
 	uint32 savedPollHi = Read32(OUT, rbPollHi);
 
-	uint64 fenceGpu = ((uint64)fb << 24) + sRadeonGfx9Ring.fenceOffset;
-	uint64 rptrGpu = fenceGpu + 256;
-	uint64 pollGpu = fenceGpu + 512;
+	if (!radeon_gfx9_map_ring(fb)) {
+		Write32(OUT, meCntl, savedMe);
+		if (rlcStarted) {
+			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
+			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
+		}
+		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
+			rlcVersion, scratchRead, false, false, 0, 0, 0);
+		return;
+	}
+
+	// The APU system VM starts at virtual 0. The PSP still uses the
+	// physical address logged above.
+	uint64 ringVa = sRadeonGfx9Ring.ringOffset;
+	uint64 fenceVa = sRadeonGfx9Ring.fenceOffset;
+	uint64 rptrGpu = fenceVa + 256;
+	uint64 pollGpu = fenceVa + 512;
 	*(volatile uint32*)(sRadeonGfx9Ring.fenceAddress + 256) = 0;
 	*(volatile uint32*)(sRadeonGfx9Ring.fenceAddress + 512) = 0;
 	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress,
@@ -1579,15 +1743,25 @@ radeon_gfx9_cp_start()
 	Write32(OUT, rbPollHi, (uint32)((pollGpu >> 32) & 0xffff));
 	snooze(1000);
 	Write32(OUT, rbCntl, cntl);
-	uint64 base = ringGpu >> 8;
+	uint64 base = ringVa >> 8;
 	Write32(OUT, rbBase, (uint32)base);
 	Write32(OUT, rbBaseHi, (uint32)(base >> 32));
+	uint32 rptrBefore = Read32(OUT, rbRptr);
+	Write32(OUT, rbCntl, cntl | (1u << 31));
+	Write32(OUT, rbRptrWr, 0);
+	Write32(OUT, rbCntl, cntl);
+	uint32 rptrZero = Read32(OUT, rbRptr);
 	uint32 doorbell = Read32(OUT, rbDoorbell);
 	Write32(OUT, rbDoorbell, doorbell & ~(1u << 30));
 	Write32(OUT, maxContext, 7);
 	Write32(OUT, deviceId, 1);
 	Write32(OUT, meCntl, (savedMe | haltMask) & ~haltMask);
 	snooze(1000);
+	uint32 meNow = Read32(OUT, meCntl);
+	ERROR("%s: R5 radeon_hd: GFX9 ring va 0x%" B_PRIx64
+		" CP_ME_CNTL 0x%" B_PRIx32 " rptr 0x%" B_PRIx32
+		" -> 0x%" B_PRIx32 "\n", __func__, ringVa, meNow, rptrBefore,
+		rptrZero);
 	radeon_visible_barrier();
 	Write32(OUT, rbWptr, sRadeonGfx9Ring.submitted);
 	Write32(OUT, rbWptrHi, 0);
@@ -1603,7 +1777,7 @@ radeon_gfx9_cp_start()
 	if (scratchNow == 0xDEADBEEF) {
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 			rlcVersion, scratchNow, true, true, sRadeonGfx9Ring.submitted,
-			rptrNow);
+			rptrNow, rptrBefore);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
 			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", fence landed\n",
 			__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
@@ -1630,9 +1804,10 @@ radeon_gfx9_cp_start()
 		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
 		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
 	}
+	radeon_gfx9_vm_restore();
 	radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 		rlcVersion, scratchNow, false, true, sRadeonGfx9Ring.submitted,
-		rptrNow);
+		rptrNow, rptrBefore);
 	ERROR("%s: R5 radeon_hd: GFX9 scratch stayed 0x%" B_PRIx32
 		" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", ring restored\n",
 		__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
