@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The Renoir golden list writes GCEA_PROBE_MAP
+
+Linux v6.12 `gfx_v9_0.c` defines `mmGCEA_PROBE_MAP` as `0x070c` with base index 0. `golden_settings_gc_9_1_rn` programs that register with mask `0xffffffff` and value `0x0000cccc`. The accelerant now saves, writes and restores that row with the other golden registers. The log line is `GFX9 golden GCEA_PROBE_MAP`.
+
+The same start also reads `CP_STAT`, `GRBM_STATUS`, `GRBM_STATUS2`, `CP_STALLED_STAT1`, `CP_STALLED_STAT2`, `CP_CPF_STATUS`, `CP_PFP_HEADER_DUMP`, `CP_ROQ_RB_STAT`, `CP_RB0_RPTR`, `CP_ME_CNTL` and `RLC_CNTL` at six points: `boot`, `mode2`, `psp`, `rlc`, `unhalt` and `bell`. `gc_9_0_offset.h` defines `mmCP_PFP_HEADER_DUMP` as `0x01a2` and does not say that a read consumes a header. The stall line already read it once. These six reads use that same offset. The syslog line is `GFX9 phase`. `radeon-gfx.txt` stores one `phase` line per point.
+
+The load order from the previous stick is unchanged. The ring is unchanged. This has not been built. It has not been written to a stick. It has not been booted.
+
 ### The PSP loads the CP firmware before it loads the RLC
 
 On the 23:22 stick the PSP accepted RLC before PFP, CE, ME and MEC. Linux `psp_load_non_psp_fw` sends CE, PFP, ME, MEC and the MEC jump table first, then the three RLC lists, and RLC_G last. Its comment says the RLC autoload starts after the PSP has the rest of the GFX firmware. This stick uses that order. The ring, the GFXHUB setup and the clear-state stream are unchanged.
