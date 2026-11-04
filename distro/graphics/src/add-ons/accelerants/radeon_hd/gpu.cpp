@@ -717,24 +717,26 @@ radeon_gpu_ring_setup()
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Linux loads Renoir RLC, PFP, ME, and CE through PSP v12. When C2PMSG_81
 // shows the secure OS, this driver creates the GPCOM ring and sends
-// GFX_CMD_ID_LOAD_IP_FW. PSP v12 on Renoir has no boot-time TMR, so
-// GFX_CMD_ID_SETUP_TMR runs before the firmware. The sOS on this APU
-// rejects virt_phy_addr, so the first command is the original address
-// and size. MEC follows amdgpu_ucode_init_single_fw: the body without
-// the jump table is GFX_FW_TYPE_CP_MEC, and the table is
-// GFX_FW_TYPE_CP_MEC_ME1. gfx_v9_0_load_mec2_fw_bin_support is false for
-// GC 9.3.0, so MEC2 is not sent. It does not load the bootloader, reroute
-// interrupts, or send a mode-1 reset. A missing sign of life uses the
-// direct writes in gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
-// gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
+// GFX_CMD_ID_LOAD_IP_FW. PSP v12 on Renoir has no boot-time TMR. Both
+// SETUP_TMR forms returned TEE_ERROR_BAD_PARAMETERS from the visible BAR,
+// so that command is not sent and it does not block the GFX ring. MEC
+// follows amdgpu_ucode_init_single_fw: the body without the jump table is
+// GFX_FW_TYPE_CP_MEC, and the table is GFX_FW_TYPE_CP_MEC_ME1. A finished
+// non-zero MEC status is logged and the GFX ring still starts. A fence
+// timeout still stops the start. gfx_v9_0_load_mec2_fw_bin_support is false
+// for GC 9.3.0, so MEC2 is not sent. It does not load the bootloader,
+// reroute interrupts, or send a mode-1 reset. A missing sign of life uses
+// the direct writes in gfx_v9_0_cp_gfx_load_microcode. The ring setup
+// follows gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
 // gfx_v9_0_cp_gfx_start, then the scratch packet from
-// gfx_v9_0_ring_test_ring. After a PSP load, gfx_v9_0_rlc_resume clears
-// clock gating and sets RLC_ENABLE_F32. An APU does not enable the GUI idle
-// interrupt. Navi is not programmed with these registers. Renoir and Cezanne
-// are not the later connected-to-CPU parts: the CP ring base is the
-// framebuffer MC address, and the GFXHUB system aperture has to cover that
-// window. The clear-state dwords are the AMD MIT table in clearstate_gfx9.h.
-// This file does not relicense that table.
+// gfx_v9_0_ring_test_ring. After a PSP load, gfx_v9_0_rlc_stop waits for
+// the RLC serdes, then gfx_v9_0_rlc_resume clears clock gating and sets
+// RLC_ENABLE_F32. An APU does not enable the GUI idle interrupt. Navi is
+// not programmed with these registers. Renoir and Cezanne are not the later
+// connected-to-CPU parts: the CP ring base is the framebuffer MC address,
+// and the GFXHUB system aperture has to cover that window. The clear-state
+// dwords are the AMD MIT table in clearstate_gfx9.h. This file does not
+// relicense that table.
 #include "clearstate_defs.h"
 #include "clearstate_gfx9.h"
 
@@ -1200,7 +1202,6 @@ radeon_gfx9_load_engine(const char* fileName, uint32 addrIndex,
 static const uint32 kPspMp0 = 0x00016000;
 static const uint32 kPspRingBytes = 4096;
 static const uint32 kPspCmdBytes = 1024;
-static const uint32 kPspTmrBytes = 0x400000;
 
 
 static uint32
@@ -1255,6 +1256,8 @@ struct radeon_psp_item {
 	uint32		bytes;
 	uint64		offset;
 	uint8*		address;
+	// MEC is compute. A finished PSP refusal does not stop the GFX ring.
+	bool		optional;
 };
 
 
@@ -1286,75 +1289,6 @@ radeon_gfx9_fw_stem()
 	if (pciID == 0x1636 || pciID == 0x1638)
 		return "green_sardine";
 	return "renoir";
-}
-
-
-static status_t
-radeon_psp_reserve_tmr(uint64* _offset, uint8** _address)
-{
-	radeon_shared_info* info = gInfo->shared_info;
-	uint64 end = info->vram_pool_offset + info->vram_pool_bytes;
-	if (end < kPspTmrBytes || info->vram_pool_cursor > end - kPspTmrBytes)
-		return B_NO_MEMORY;
-	// Keep the 4 MiB region at the top of the visible BAR, naturally
-	// aligned, and stop the pool before it.
-	uint64 offset = (end - kPspTmrBytes) & ~((uint64)kPspTmrBytes - 1);
-	if (offset < info->vram_pool_cursor || offset + kPspTmrBytes > end)
-		return B_NO_MEMORY;
-	info->vram_pool_bytes = offset - info->vram_pool_offset;
-
-	uint8* base = (uint8*)info->frame_buffer;
-	if (!radeon_hd_uses_dce(info->chipsetID))
-		base -= info->vram_reserved_offset;
-	*_offset = offset;
-	*_address = base + offset;
-	memset(*_address, 0, kPspTmrBytes);
-	return B_OK;
-}
-
-
-static status_t
-radeon_psp_command(uint8* ringAddress, uint8* cmdAddress, uint8* fenceAddress,
-	uint32 writePtr, uint64 cmdGpu, uint64 fenceGpu, uint32 fenceValue,
-	uint32* _status, uint32* _fence)
-{
-	uint32 wptr = Read32(OUT, writePtr);
-	if (wptr >= (kPspRingBytes / 4) || (wptr % 16) != 0) {
-		ERROR("%s: R5 radeon_hd: PSP wptr 0x%" B_PRIx32 "\n",
-			__func__, wptr);
-		return B_ERROR;
-	}
-
-	uint8* frame = ringAddress + (wptr * 4);
-	memset(frame, 0, 64);
-	radeon_psp_store32(frame + 0, (uint32)cmdGpu);
-	radeon_psp_store32(frame + 4, (uint32)(cmdGpu >> 32));
-	radeon_psp_store32(frame + 12, (uint32)fenceGpu);
-	radeon_psp_store32(frame + 16, (uint32)(fenceGpu >> 32));
-	radeon_psp_store32(frame + 20, fenceValue);
-	volatile uint32* fence = (volatile uint32*)fenceAddress;
-	*fence = 0;
-	radeon_visible_barrier();
-	uint32 next = wptr + 16;
-	if (next >= (kPspRingBytes / 4))
-		next = 0;
-	Write32(OUT, writePtr, next);
-
-	uint32 fenceSeen = 0;
-	bool landed = false;
-	for (int wait = 0; wait < 500; wait++) {
-		fenceSeen = *fence;
-		if (fenceSeen == fenceValue) {
-			landed = true;
-			break;
-		}
-		snooze(1000);
-	}
-	*_fence = fenceSeen;
-	*_status = radeon_le32(cmdAddress + 864);
-	if (!landed)
-		return B_TIMED_OUT;
-	return *_status == 0 ? B_OK : B_ERROR;
 }
 
 
@@ -1391,12 +1325,11 @@ radeon_psp_load_engines(uint32 frameBase)
 	};
 
 	ERROR("%s: R5 radeon_hd: PSP MEC2 not loaded on GC 9.3\n", __func__);
-
-	uint64 tmrOffset = 0;
-	uint8* tmrAddress = NULL;
-	status_t result = radeon_psp_reserve_tmr(&tmrOffset, &tmrAddress);
-	if (result != B_OK)
-		return result;
+	// Both SETUP_TMR forms returned 0xffff0006 from the visible BAR:
+	// the GPU address and size, and virt_phy_addr with the CPU physical
+	// address of the same page. Linux can put the 4 MiB region in stolen
+	// memory above that BAR. This pool cannot. GFX does not wait for it.
+	ERROR("%s: R5 radeon_hd: PSP SETUP_TMR skipped\n", __func__);
 
 	radeon_psp_item items[8];
 	uint32 count = 0;
@@ -1413,6 +1346,7 @@ radeon_psp_load_engines(uint32 frameBase)
 		if (files[i].jtType == 0) {
 			items[count].name = used;
 			items[count].type = files[i].type;
+			items[count].optional = false;
 			status_t staged = radeon_psp_stage(fw.ucode, fw.ucodeBytes,
 				&items[count]);
 			ERROR("%s: R5 radeon_hd: PSP %s header %u.%u version 0x%"
@@ -1449,6 +1383,7 @@ radeon_psp_load_engines(uint32 frameBase)
 
 		items[count].name = used;
 		items[count].type = files[i].type;
+		items[count].optional = true;
 		status_t staged = radeon_psp_stage(fw.ucode, bodyBytes,
 			&items[count]);
 		if (staged != B_OK) {
@@ -1458,6 +1393,7 @@ radeon_psp_load_engines(uint32 frameBase)
 		count++;
 		items[count].name = used;
 		items[count].type = files[i].jtType;
+		items[count].optional = true;
 		staged = radeon_psp_stage(fw.ucode + fw.jtOffset, fw.jtBytes,
 			&items[count]);
 		free(fw.blob);
@@ -1468,7 +1404,7 @@ radeon_psp_load_engines(uint32 frameBase)
 
 	uint64 ringOffset = 0;
 	uint8* ringAddress = NULL;
-	result = radeon_vram_alloc(kPspRingBytes, kPspRingBytes,
+	status_t result = radeon_vram_alloc(kPspRingBytes, kPspRingBytes,
 		&ringOffset, &ringAddress);
 	if (result != B_OK || ringAddress == NULL)
 		return result == B_OK ? B_ERROR : result;
@@ -1511,49 +1447,6 @@ radeon_psp_load_engines(uint32 frameBase)
 	}
 	ERROR("%s: R5 radeon_hd: PSP GPCOM ring ready 0x%" B_PRIx32 "\n",
 		__func__, seen);
-
-	uint64 tmrGpu = ((uint64)frameBase << 24) + tmrOffset;
-	uint64 tmrHost = (uint64)gInfo->shared_info->frame_buffer_phys
-		+ tmrOffset;
-	// The running sOS returned 0xffff0006 (TEE_ERROR_BAD_PARAMETERS) for
-	// virt_phy_addr plus the MC address. The original SETUP_TMR is the
-	// GPU address and the size. A refusal is tried once more with the
-	// CPU physical address of that page.
-	memset(cmdAddress, 0, kPspCmdBytes);
-	radeon_psp_store32(cmdAddress + 0, kPspCmdBytes);
-	radeon_psp_store32(cmdAddress + 4, 1);
-	radeon_psp_store32(cmdAddress + 8, 5);
-	radeon_psp_store32(cmdAddress + 28, (uint32)tmrGpu);
-	radeon_psp_store32(cmdAddress + 32, (uint32)(tmrGpu >> 32));
-	radeon_psp_store32(cmdAddress + 36, kPspTmrBytes);
-	uint32 tmrStatus = 0;
-	uint32 fenceSeen = 0;
-	status_t tmr = radeon_psp_command(ringAddress, cmdAddress, fenceAddress,
-		writePtr, cmdGpu, fenceGpu, 1, &tmrStatus, &fenceSeen);
-	ERROR("%s: R5 radeon_hd: PSP TMR legacy gpu 0x%" B_PRIx64
-		" bytes 0x%" B_PRIx32 " status 0x%" B_PRIx32
-		" fence 0x%" B_PRIx32 "\n",
-		__func__, tmrGpu, kPspTmrBytes, tmrStatus, fenceSeen);
-	if (tmr != B_OK && tmr != B_TIMED_OUT && tmrHost != 0
-		&& tmrHost != tmrGpu) {
-		memset(cmdAddress, 0, kPspCmdBytes);
-		radeon_psp_store32(cmdAddress + 0, kPspCmdBytes);
-		radeon_psp_store32(cmdAddress + 4, 1);
-		radeon_psp_store32(cmdAddress + 8, 5);
-		radeon_psp_store32(cmdAddress + 28, (uint32)tmrGpu);
-		radeon_psp_store32(cmdAddress + 32, (uint32)(tmrGpu >> 32));
-		radeon_psp_store32(cmdAddress + 36, kPspTmrBytes);
-		radeon_psp_store32(cmdAddress + 40, 2);
-		radeon_psp_store32(cmdAddress + 44, (uint32)tmrHost);
-		radeon_psp_store32(cmdAddress + 48, (uint32)(tmrHost >> 32));
-		tmr = radeon_psp_command(ringAddress, cmdAddress, fenceAddress,
-			writePtr, cmdGpu, fenceGpu, 2, &tmrStatus, &fenceSeen);
-		ERROR("%s: R5 radeon_hd: PSP TMR host 0x%" B_PRIx64
-			" status 0x%" B_PRIx32 " fence 0x%" B_PRIx32 "\n",
-			__func__, tmrHost, tmrStatus, fenceSeen);
-	}
-	if (tmr != B_OK)
-		return tmr;
 
 	for (uint32 i = 0; i < count; i++) {
 		uint32 wptr = Read32(OUT, writePtr);
@@ -1609,8 +1502,15 @@ radeon_psp_load_engines(uint32 frameBase)
 			status, fenceSeen);
 		if (!landed)
 			return B_TIMED_OUT;
-		if (status != 0)
-			return B_ERROR;
+		if (status != 0) {
+			// RLC, PFP, CE, and ME stay required. MEC is the
+			// compute engine; its refusal must not skip the ring.
+			if (!items[i].optional)
+				return B_ERROR;
+			ERROR("%s: R5 radeon_hd: MEC left unloaded type %"
+				B_PRIu32 " status 0x%" B_PRIx32 "\n",
+				__func__, items[i].type, status);
+		}
 	}
 	return B_OK;
 }
@@ -1644,6 +1544,32 @@ radeon_gfx9_rlc_start(uint32 frameBase, bool loadUcode, uint32* _before,
 	Write32(OUT, clock, 0);
 	Write32(OUT, cntl, saved & ~1u);
 	snooze(50);
+	// gfx_v9_0_rlc_stop waits for the serdes after F32 is halted.
+	// Barcelo has one shader engine. The current GRBM index is left
+	// alone: a wrong SE select is worse than reading that engine.
+	// mmRLC_SERDES_CU_MASTER_BUSY is 0x4c61 and NONCU is 0x4c62.
+	// The non-CU mask is SE, GC, TC0, and TC1.
+	const uint32 cuBusy = radeon_gfx9_byte(kGfx9Seg1, 0x4c61);
+	const uint32 noncuBusy = radeon_gfx9_byte(kGfx9Seg1, 0x4c62);
+	const uint32 noncuMask = 0x0000ffffu | 0x00010000u | 0x00040000u
+		| 0x00080000u;
+	uint32 cu = 0xffffffff;
+	uint32 noncu = 0xffffffff;
+	bool quiet = false;
+	if (radeon_mmio_fits(noncuBusy)) {
+		for (int wait = 0; wait < 100; wait++) {
+			cu = Read32(OUT, cuBusy);
+			noncu = Read32(OUT, noncuBusy);
+			if (cu == 0 && (noncu & noncuMask) == 0) {
+				quiet = true;
+				break;
+			}
+			snooze(1000);
+		}
+	}
+	ERROR("%s: R5 radeon_hd: RLC serdes cu 0x%" B_PRIx32
+		" noncu 0x%" B_PRIx32 " %s\n", __func__, cu, noncu,
+		quiet ? "quiet" : "busy");
 	// gfx_v9_0_init_pg programs the clear-state buffer while F32 is stopped.
 	// The direct loader then writes RLC ucode. PSP has already done that.
 	if (!radeon_gfx9_program_csib(frameBase)) {

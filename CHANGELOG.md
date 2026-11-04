@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The GFX ring no longer waits on SETUP_TMR
+
+The stick written at 14:31 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. The aperture low page was again `0x3d0000` against a framebuffer page of `0x20400`. The high page `0x3d0800` already covers `0x20800`. The GPCOM ring came ready as `0x80020000`. The original `SETUP_TMR` at GPU `0x81fc00000`, 4 MiB, finished with fence `0x1` and status `0xffff0006`. The retry with `virt_phy_addr` and CPU physical address `0xfcefc00000` finished with fence `0x2` and the same status. That is `TEE_ERROR_BAD_PARAMETERS` for both forms. No IP firmware was sent. The ring was not submitted. Scratch was not tested. The last ring submit is still the 10:57 stick.
+
+The flag and the choice between the MC address and the BAR physical address are not the cause. Linux can place that 4 MiB region in stolen memory above the visible BAR. This pool cannot, and another `SETUP_TMR` would only stop the start again. The command is no longer sent. The top 4 MiB of the BAR is left in the pool. RLC, PFP, CE, and ME stay required. The MEC body, type 4, and its jump table, type 5, are still sent. A finished non-zero MEC status is logged and the GFX ring still starts. A PSP fence timeout still restores the registers and does not program the ring. After F32 is halted, the start waits up to 100 ms for `RLC_SERDES_CU_MASTER_BUSY` to read 0 and for the non-CU busy bits of SE, GC, TC0, and TC1 to clear, then programs the clear-state buffer. A serdes that stays busy is logged and does not abort. The current GRBM index is not rewritten.
+
+`jam -q @r5-anyboot` for AMD64 finished at 14:50 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 14:47. The linked accelerant contains `PSP SETUP_TMR skipped`, `MEC left unloaded`, and `RLC serdes`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 14:53 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### The Renoir TMR command was a bad parameter
 
 The stick written at 14:09 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `SETUP_TMR` finished with fence `0x1` and status `0xffff0006`. That is `TEE_ERROR_BAD_PARAMETERS`. The command had set `virt_phy_addr` and had passed the MC address as the system address. The region was `0x810c00000`, 4 MiB. No IP firmware was sent after that. The ring was not submitted.
