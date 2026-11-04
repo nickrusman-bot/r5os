@@ -6,7 +6,7 @@ Linux v6.12 `gfx_v9_0.c` defines `mmGCEA_PROBE_MAP` as `0x070c` with base index 
 
 The same start also reads `CP_STAT`, `GRBM_STATUS`, `GRBM_STATUS2`, `CP_STALLED_STAT1`, `CP_STALLED_STAT2`, `CP_CPF_STATUS`, `CP_PFP_HEADER_DUMP`, `CP_ROQ_RB_STAT`, `CP_RB0_RPTR`, `CP_ME_CNTL` and `RLC_CNTL` at six points: `boot`, `mode2`, `psp`, `rlc`, `unhalt` and `bell`. `gc_9_0_offset.h` defines `mmCP_PFP_HEADER_DUMP` as `0x01a2` and does not say that a read consumes a header. The stall line already read it once. These six reads use that same offset. The syslog line is `GFX9 phase`. `radeon-gfx.txt` stores one `phase` line per point.
 
-The load order from the previous stick is unchanged. The ring is unchanged. This has not been built. It has not been written to a stick. It has not been booted.
+The load order from the previous stick is unchanged. The ring is unchanged. `jam -q @r5-anyboot` for AMD64 finished at 00:40 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8389 targets). The linked accelerant contains `GFX9 phase` and `GFX9 golden GCEA_PROBE_MAP`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `6bbb653c3bcce41ea2f1cb07f0a1ed427cf71bebda9927f9e167a5d0e5bbb639`. The build package is 41077907 bytes, sha256 `06453be2e0a07926d674dbfb54e223ff2f82993c12ed4fed351cd1931986103d`. It has not been written to a stick. It has not been booted.
 
 ### The PSP loads the CP firmware before it loads the RLC
 
