@@ -284,6 +284,12 @@ struct radeon_shared_info {
 	uint64			vram_pool_offset;
 	uint64			vram_pool_bytes;
 	uint64			vram_pool_cursor;
+	// GFX9 doorbell aperture, PCI BAR 2. doorbell_area is -1 when that
+	// BAR was not mapped. The accelerant clones the area. This is not
+	// the framebuffer and it is not the MMIO BAR.
+	area_id			doorbell_area;
+	uint64			doorbell_phys;
+	uint64			doorbell_bytes;
 // SPDX-SnippetEnd
 };
 
@@ -310,6 +316,11 @@ radeon_hd_uses_dce(uint16 chipsetID)
 // alignment must be a power of two. The pool is not freed.
 status_t radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
 	uint8** _address);
+
+// Clone the GFX9 doorbell BAR into this team. A missing BAR is logged
+// and leaves the ring on the write-pointer register.
+void radeon_gfx9_doorbell_attach(area_id area, uint64 bytes);
+void radeon_gfx9_doorbell_detach();
 // SPDX-SnippetEnd
 
 //----------------- ioctl() interface ----------------

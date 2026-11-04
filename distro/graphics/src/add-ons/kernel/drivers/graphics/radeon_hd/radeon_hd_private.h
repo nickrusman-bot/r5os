@@ -40,6 +40,11 @@ struct radeon_info {
 	area_id			registers_area;
 	area_id			framebuffer_area;
 	area_id			rom_area;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	area_id			doorbell_area;
+// SPDX-SnippetEnd
 
 	struct radeon_shared_info* shared_info;
 	area_id			shared_area;

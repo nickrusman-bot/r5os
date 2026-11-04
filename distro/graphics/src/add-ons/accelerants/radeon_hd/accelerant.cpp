@@ -146,6 +146,13 @@ init_common(int device, bool isClone)
 		return status;
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	radeon_gfx9_doorbell_attach(gInfo->shared_info->doorbell_area,
+		gInfo->shared_info->doorbell_bytes);
+// SPDX-SnippetEnd
+
 	// XXX: We *should* only need B_READ_AREA here, but AtomBIOS calls fail with it RO #19348
 	gInfo->rom_area = clone_area("radeon hd AtomBIOS",
 		(void**)&gInfo->rom, B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA,
@@ -175,6 +182,11 @@ uninit_common(void)
 		delete_area(gInfo->regs_area);
 		delete_area(gInfo->shared_info_area);
 		delete_area(gInfo->rom_area);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		radeon_gfx9_doorbell_detach();
+// SPDX-SnippetEnd
 
 		gInfo->regs_area = gInfo->shared_info_area = -1;
 

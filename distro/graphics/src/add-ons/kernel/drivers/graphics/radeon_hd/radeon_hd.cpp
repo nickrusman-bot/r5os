@@ -655,6 +655,64 @@ radeon_hd_getbios_avivo(radeon_info &info)
 }
 
 
+static uint32 radeon_hd_pci_bar_mmio(uint16 chipsetID);
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// amdgpu_doorbell_init maps PCI BAR 2 for BONAIRE and later. MMIO on
+// those parts is BAR 5. A size outside 0x460 bytes .. 16 MiB is left
+// unmapped and the GFX ring still starts from the write-pointer register.
+static void
+radeon_map_doorbell(radeon_info& info)
+{
+	info.doorbell_area = -1;
+	if (info.shared_info == NULL)
+		return;
+	info.shared_info->doorbell_area = -1;
+	info.shared_info->doorbell_phys = 0;
+	info.shared_info->doorbell_bytes = 0;
+	if (radeon_hd_uses_dce(info.chipsetID))
+		return;
+	if (radeon_hd_pci_bar_mmio(info.chipsetID) != 5)
+		return;
+
+	const uint32 bar = 2;
+	uint32 flags = info.pci->u.h0.base_register_flags[bar];
+	phys_addr_t addr = info.pci->u.h0.base_registers[bar];
+	uint64 bytes = info.pci->u.h0.base_register_sizes[bar];
+	if ((flags & PCI_address_type) == PCI_address_type_64) {
+		addr |= (uint64)info.pci->u.h0.base_registers[bar + 1] << 32;
+		bytes |= (uint64)info.pci->u.h0.base_register_sizes[bar + 1] << 32;
+	}
+	if (bytes < 0x460 || bytes > 16ull * 1024ull * 1024ull) {
+		ERROR("%s: R5 radeon_hd: doorbell BAR2 size 0x%" B_PRIx64
+			" left unmapped\n", __func__, bytes);
+		return;
+	}
+
+	uint8* mapped = NULL;
+	AreaKeeper keeper;
+	area_id area = keeper.Map("radeon hd doorbell", addr, (size_t)bytes,
+		B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA,
+		(void**)&mapped);
+	if (keeper.InitCheck() < B_OK || mapped == NULL || area < 0) {
+		ERROR("%s: R5 radeon_hd: doorbell BAR2 map failed\n", __func__);
+		return;
+	}
+	keeper.Detach();
+	info.doorbell_area = area;
+	info.shared_info->doorbell_area = area;
+	info.shared_info->doorbell_phys = (uint64)addr;
+	info.shared_info->doorbell_bytes = bytes;
+	ERROR("%s: R5 radeon_hd: doorbell BAR2 0x%" B_PRIx64
+		" bytes 0x%" B_PRIx64 "\n", __func__, (uint64)addr, bytes);
+}
+// SPDX-SnippetEnd
+
+
 static uint32
 radeon_hd_pci_bar_mmio(uint16 chipsetID)
 {
@@ -742,6 +800,11 @@ status_t
 radeon_hd_init(radeon_info &info)
 {
 	TRACE("card(%" B_PRId32 "): %s: called\n", info.id, __func__);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	info.doorbell_area = -1;
+// SPDX-SnippetEnd
 
 	ERROR("%s: card(%" B_PRId32 "): "
 		"Radeon %s 1002:%" B_PRIX32 "\n", __func__, info.id,
@@ -765,6 +828,12 @@ radeon_hd_init(radeon_info &info)
 	}
 
 	memset((void*)info.shared_info, 0, sizeof(radeon_shared_info));
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	info.doorbell_area = -1;
+	info.shared_info->doorbell_area = -1;
+// SPDX-SnippetEnd
 	sharedCreator.Detach();
 
 	// *** Map Memory mapped IO
@@ -1112,6 +1181,11 @@ radeon_hd_init(radeon_info &info)
 	TRACE("card(%" B_PRId32 "): GPU thermal status: %" B_PRId32 "C\n",
 		info.id, radeon_thermal_query(info) / 1000);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	radeon_map_doorbell(info);
+// SPDX-SnippetEnd
 	return B_OK;
 }
 
@@ -1125,5 +1199,11 @@ radeon_hd_uninit(radeon_info &info)
 	delete_area(info.registers_area);
 	delete_area(info.framebuffer_area);
 	delete_area(info.rom_area);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (info.doorbell_area >= 0)
+		delete_area(info.doorbell_area);
+// SPDX-SnippetEnd
 }
 

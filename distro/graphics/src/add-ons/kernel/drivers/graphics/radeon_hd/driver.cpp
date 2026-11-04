@@ -882,6 +882,7 @@ init_driver(void)
 // SPDX-License-Identifier: GPL-3.0-or-later
 		if (gDeviceInfo[found]->pciID == 0)
 			gDeviceInfo[found]->pciID = info->device_id;
+		gDeviceInfo[found]->doorbell_area = -1;
 // SPDX-SnippetEnd
 		gDeviceInfo[found]->deviceName = kSupportedDevices[type].deviceName;
 		gDeviceInfo[found]->chipsetID = kSupportedDevices[type].chipsetID;
