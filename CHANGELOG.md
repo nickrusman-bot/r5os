@@ -8,7 +8,7 @@ This runs for PCI `1002:15e7`, `1636`, and `1638`. Lucienne `164c` is the green-
 
 When the three address registers read back the header version, and scratch 0 accepts `0xCAFEDEAD`, the driver follows `gfx_v9_0_cp_gfx_resume`: `CP_RB_WPTR_DELAY`, `CP_RB_VMID`, `CP_RB0_CNTL` (size order 9, block 7), write pointer 0, read-pointer and poll addresses in the fence page, `CP_RB0_BASE` from `MC_VM_FB_OFFSET << 24` plus the ring offset, doorbell disabled, `CP_MAX_CONTEXT` 7, `CP_DEVICE_ID` 1, then the halt bits clear and the write pointer moves to 3. The clear-state preamble is not submitted. Scratch is polled for 100 ms. `0xDEADBEEF` means the packet ran. Any other value halts the command processor and restores the ring registers and `CP_ME_CNTL`. `GRBM_SOFT_RESET` stays unreachable. The scanout is not moved.
 
-`jam -q @r5-anyboot` for AMD64 finished at 08:52 Europe/Amsterdam on 4 Nov 2026 with exit 0. The image is `r5-os-anyboot.iso`, 2156724224 bytes. The image rules copy `system/non-packaged/data/firmware/amdgpu`. This image has not been booted. A missed scratch, or a hang while the GFX block is clock-gated, is still possible.
+`jam -q @r5-anyboot` for AMD64 finished at 08:52 Europe/Amsterdam on 4 Nov 2026 with exit 0. The image is `r5-os-anyboot.iso`, 2156724224 bytes. The image rules copy `system/non-packaged/data/firmware/amdgpu`. It was written raw to the General UDisk at 09:00 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This image has not been booted. A missed scratch, or a hang while the GFX block is clock-gated, is still possible.
 
 ### Raven and Renoir keep a GFX9 ring in the visible pool
 
