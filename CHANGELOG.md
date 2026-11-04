@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The ring carries only the scratch packet
+
+The previous probes wrote a doorbell of 0 while the read pointer was already 3, and the 1024-dword ring wrapped. Those probes are gone. This boot submits the three dwords from `gfx_v9_0_ring_test_ring`: `SET_UCONFIG` of `SCRATCH_REG0` to `0xDEADBEEF`. The 914-dword clear-state stream is not written into the ring buffer. One doorbell publishes write pointer 3 and is not written again. The temporary calls are marked `REMOVE-GFX9-SCRATCH-TEST` and go away when this test has answered. `radeon_gfx9_fill_start` stays in the file for that removal.
+
+The first jam failed because `radeon_gfx9_fill_start` was unused under `-Werror`. A count-only call keeps it compiled and does not store those dwords. `jam -q @r5-anyboot` for AMD64 then finished at 17:33 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 17:31. The linked accelerant contains `GFX9 scratch test only`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 17:37 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### Short rings measure the stalled dword
 
 The 914-dword clear-state stream stops inside the first `SET_CONTEXT`. This image does not guess which dword that is. Before the registers are restored it submits separate rings. Each one halts the command processor, forces `CP_RB0_RPTR` to 0, writes a doorbell of 0, and then rings the real write pointer.
