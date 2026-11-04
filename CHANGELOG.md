@@ -4,7 +4,9 @@
 
 The three-dword scratch packet was fetched and `SCRATCH_REG0` stayed `0xcafedead`. Linux submits that packet from `gfx_v9_0_ring_test_ring` only after `gfx_v9_0_cp_gfx_start` has sent the preamble and context control. This ring is those five dwords and then the same three-dword `SET_UCONFIG`. The 212 context registers are not in the buffer. One doorbell publishes write pointer 8 and is not written again. The calls stay inside `REMOVE-GFX9-SCRATCH-TEST`.
 
-`jam -q @r5-anyboot` for AMD64 finished at 17:55 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 17:53. The linked accelerant contains `GFX9 preamble scratch test`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 17:59 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 17:55 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 17:53. The linked accelerant contains `GFX9 preamble scratch test`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 17:59 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened.
+
+That stick reached the desktop. There is no panic. Tracker started. The log line is `GFX9 preamble scratch test`. The first packet dword is `0xc0004a00`, the preamble. The doorbell control was `0x40000458` and the poll slot read back `0x8`. Immediately after the doorbell `CP_RB0_RPTR` was `0x8`, and it was still `0x8` after the wait. `CP_ME_CNTL` was `0x0` before the doorbell. Scratch stayed `0xcafedead`. The writeback stayed `0x0`. The aperture went from `0x0` to `0x1` and the four doorbell ranges still read `0x0`. The registers were restored. All eight dwords were fetched. The preamble and context control did not make `SET_UCONFIG` change `SCRATCH_REG0`.
 
 ### The ring carries only the scratch packet
 
