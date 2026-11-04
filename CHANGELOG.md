@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Short rings measure the stalled dword
+
+The 914-dword clear-state stream stops inside the first `SET_CONTEXT`. This image does not guess which dword that is. Before the registers are restored it submits separate rings. Each one halts the command processor, forces `CP_RB0_RPTR` to 0, writes a doorbell of 0, and then rings the real write pointer.
+
+The first ring is only the scratch packet. The second is the preamble and context control, then that scratch packet. The third adds one `SET_CONTEXT` value, `DB_RENDER_CONTROL`. When that scratch read is `0xDEADBEEF` and the read pointer has passed the packet, the same preamble is repeated with more values from the first extent, bisecting between 1 and 212. The last ring is the original 914-dword stream. `radeon-gfx.txt` gains one `probe` line per ring: name, register count, write pointer, the MMIO read pointer just after the doorbell, the read pointer after the wait, scratch, and both writeback samples. The syslog lines start with `GFX9 probe`.
+
+`jam -q @r5-anyboot` for AMD64 finished at 17:02 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 17:00. The linked accelerant contains `GFX9 probe`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 17:07 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### The doorbell fetch stops at the same dword
 
 The stick written at 16:22 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. `RCC_DOORBELL_APER_EN` read `0x0` and then `0x1`. `BIF_SDMA0_DOORBELL_RANGE`, `BIF_SDMA1_DOORBELL_RANGE`, `BIF_IH_DOORBELL_RANGE` and `BIF_MMSCH0_DOORBELL_RANGE` all read `0x0`, so none of those ranges covered the GFX doorbell. The doorbell control was `0x40000458` and the poll slot read back `0x392`. Immediately after the doorbell the MMIO read pointer was `0x80`. After 100 ms it was `0x98`. The writeback at the fence plus 256 stayed `0x0` both times. Scratch stayed `0xcafedead`. The registers were restored.
