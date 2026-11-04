@@ -993,7 +993,9 @@ radeon_hd_init(radeon_info &info)
 	// of the window. Nothing here writes a memory-controller register.
 
 	phys_addr_t mapAddr = fbAddr;
-	uint32 mapBytes = info.shared_info->frame_buffer_size * 1024;
+	// frame_buffer_size is KiB. A 4 GiB BAR is 4194304 KiB, and that times
+	// 1024 does not fit in uint32.
+	uint64 mapBytes = (uint64)info.shared_info->frame_buffer_size * 1024;
 	uint64 barPhys = (uint64)fbAddr;
 	uint64 barBytes = (uint64)fbBarSize * 1024;
 	uint64 reservedOffset = 0;
@@ -1040,8 +1042,8 @@ radeon_hd_init(radeon_info &info)
 		// an empty pool, which is the previous DCN mapping.
 		uint64 scanBytes = (reservedBytes + 4095) & ~4095ULL;
 		mapAddr = (phys_addr_t)(barPhys + reservedOffset);
-		mapBytes = (uint32)scanBytes;
-		info.shared_info->frame_buffer_size = mapBytes / 1024;
+		mapBytes = scanBytes;
+		info.shared_info->frame_buffer_size = (uint32)(mapBytes / 1024);
 		reservedOffset = 0;
 		reservedBytes = scanBytes;
 		ERROR("%s: R5 radeon_hd: visible window map failed, mapping the "

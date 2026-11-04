@@ -1982,6 +1982,77 @@ struct radeon_gfx9_saved {
 static radeon_gfx9_saved sRadeonGfx9Saved;
 
 
+static bool
+radeon_gfx9_save_hw()
+{
+	const uint32 highest = radeon_gfx9_byte(kGfx9Seg1, 0x4cc5);
+	if (!radeon_mmio_fits(highest))
+		return false;
+
+	memset(&sRadeonGfx9Saved, 0, sizeof(sRadeonGfx9Saved));
+	sRadeonGfx9Saved.fbBase = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0980));
+	sRadeonGfx9Saved.fbTop = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0981));
+	sRadeonGfx9Saved.aperLow = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0985));
+	sRadeonGfx9Saved.aperHigh = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0986));
+	sRadeonGfx9Saved.defLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x096c));
+	sRadeonGfx9Saved.defHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x096d));
+	sRadeonGfx9Saved.l2 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0857));
+	sRadeonGfx9Saved.grbm = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0000));
+	sRadeonGfx9Saved.mgcg = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c48));
+	sRadeonGfx9Saved.rlcMem = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c06));
+	sRadeonGfx9Saved.cpMem = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1079));
+	sRadeonGfx9Saved.pg = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c43));
+	sRadeonGfx9Saved.cgcg3d = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4cc5));
+	sRadeonGfx9Saved.csibLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca2));
+	sRadeonGfx9Saved.csibHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca3));
+	sRadeonGfx9Saved.csibLen = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca4));
+	sRadeonGfx9Saved.srm = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c80));
+	sRadeonGfx9Saved.mec = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x008d));
+	for (uint32 i = 0; i < 11; i++) {
+		sRadeonGfx9Saved.golden[i] = Read32(OUT,
+			radeon_gfx9_byte(kGfx9Golden[i].segment, kGfx9Golden[i].index));
+	}
+	sRadeonGfx9Saved.armed = true;
+	return true;
+}
+
+
+static void radeon_gfx9_saved_restore();
+
+
+// CSIB and SRM are restored while RLC F32 is stopped. The enable bit goes
+// back afterwards. restoreRlc writes the pair saved around rlc_start.
+// Without that pair, an enable bit that was already set is put back.
+static void
+radeon_gfx9_restore_saved(uint32 rlcCntl, bool restoreRlc, uint32 rlcClock)
+{
+	const uint32 cntl = radeon_gfx9_byte(kGfx9Seg1, 0x4c00);
+	const uint32 clock = radeon_gfx9_byte(kGfx9Seg1, 0x4c49);
+	bool stopped = false;
+	if (radeon_mmio_fits(cntl)) {
+		uint32 now = Read32(OUT, cntl);
+		if ((now & 1u) != 0) {
+			Write32(OUT, cntl, now & ~1u);
+			snooze(50);
+			stopped = true;
+		}
+	}
+	radeon_gfx9_saved_restore();
+	if (!stopped && !restoreRlc)
+		return;
+	if (!radeon_mmio_fits(cntl))
+		return;
+	if (restoreRlc) {
+		Write32(OUT, cntl, rlcCntl);
+		if (radeon_mmio_fits(clock))
+			Write32(OUT, clock, rlcClock);
+		return;
+	}
+	uint32 back = Read32(OUT, cntl);
+	Write32(OUT, cntl, back | 1u);
+}
+
+
 static void
 radeon_gfx9_saved_restore()
 {
@@ -2039,30 +2110,8 @@ radeon_gfx9_prepare_hw(uint32 frameBase)
 	memset(scratchAddress, 0, 4096);
 	radeon_visible_barrier();
 
-	memset(&sRadeonGfx9Saved, 0, sizeof(sRadeonGfx9Saved));
-	sRadeonGfx9Saved.fbBase = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0980));
-	sRadeonGfx9Saved.fbTop = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0981));
-	sRadeonGfx9Saved.aperLow = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0985));
-	sRadeonGfx9Saved.aperHigh = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0986));
-	sRadeonGfx9Saved.defLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x096c));
-	sRadeonGfx9Saved.defHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x096d));
-	sRadeonGfx9Saved.l2 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0857));
-	sRadeonGfx9Saved.grbm = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0000));
-	sRadeonGfx9Saved.mgcg = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c48));
-	sRadeonGfx9Saved.rlcMem = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c06));
-	sRadeonGfx9Saved.cpMem = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1079));
-	sRadeonGfx9Saved.pg = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c43));
-	sRadeonGfx9Saved.cgcg3d = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4cc5));
-	sRadeonGfx9Saved.csibLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca2));
-	sRadeonGfx9Saved.csibHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca3));
-	sRadeonGfx9Saved.csibLen = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4ca4));
-	sRadeonGfx9Saved.srm = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c80));
-	sRadeonGfx9Saved.mec = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x008d));
-	for (uint32 i = 0; i < 11; i++) {
-		sRadeonGfx9Saved.golden[i] = Read32(OUT,
-			radeon_gfx9_byte(kGfx9Golden[i].segment, kGfx9Golden[i].index));
-	}
-	sRadeonGfx9Saved.armed = true;
+	if (!sRadeonGfx9Saved.armed && !radeon_gfx9_save_hw())
+		return false;
 
 	uint32 base = sRadeonGfx9Saved.fbBase & 0x00ffffffu;
 	uint32 top = sRadeonGfx9Saved.fbTop & 0x00ffffffu;
@@ -2269,6 +2318,7 @@ radeon_gfx9_run_try(const char* name, uint32 mode, uint32 fb, uint32 savedMe,
 	Write32(OUT, meCntl, (savedMe | haltMask) & ~haltMask);
 	snooze(1000);
 	*(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512) = wptr;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
 	radeon_visible_barrier();
 	if (ringDoorbell) {
 		*(volatile uint64*)(sGfx9Doorbell + kGfx9DoorbellByte) = wptr;
@@ -2466,6 +2516,15 @@ radeon_gfx9_cp_start()
 	if (!sRadeonGfx9Ring.ready)
 		return;
 
+	// A previous PSP load must not keep SRM on for a later direct load.
+	sRlcRestoreLists = false;
+	sRadeonGfx9Saved.armed = false;
+	if (!radeon_gfx9_save_hw()) {
+		ERROR("%s: R5 radeon_hd: GFX9 register snapshot refused\n",
+			__func__);
+		return;
+	}
+
 	uint32 cntl = radeon_gfx9_rb_cntl(sRadeonGfx9Ring.ringBytes);
 	if (cntl == 0 || sRadeonGfx9Ring.submitted == 0
 		|| sRadeonGfx9Ring.submitted
@@ -2486,6 +2545,8 @@ radeon_gfx9_cp_start()
 	// unprogrammed. The firmware picture is not rewritten.
 	if (radeon_soc15_need_reset_on_init(gInfo->shared_info->pciID)
 		&& !radeon_smu12_mode2_reset()) {
+		if (sSoc15ResetSent)
+			radeon_gfx9_restore_saved(0, false, 0);
 		radeon_gfx9_publish(false, false, 0, 0, 0, 0, false, false, 0, 0, 0);
 		return;
 	}
@@ -2531,7 +2592,7 @@ radeon_gfx9_cp_start()
 	}
 	if (!radeon_gfx9_prepare_hw(fb)) {
 		Write32(OUT, meCntl, savedMe);
-		radeon_gfx9_saved_restore();
+		radeon_gfx9_restore_saved(0, false, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 aperture refused\n", __func__);
 		return;
 	}
@@ -2565,7 +2626,7 @@ radeon_gfx9_cp_start()
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);
-		radeon_gfx9_saved_restore();
+		radeon_gfx9_restore_saved(0, false, 0);
 		radeon_gfx9_publish(pspOwnsLoad, false, 0, 0, 0, 0, false, false, 0,
 			0, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 firmware not running, ring left\n",
@@ -2584,7 +2645,7 @@ radeon_gfx9_cp_start()
 		&rlcAfter, &rlcVersion);
 	if (!rlcStarted) {
 		Write32(OUT, meCntl, savedMe);
-		radeon_gfx9_saved_restore();
+		radeon_gfx9_restore_saved(0, false, 0);
 		radeon_gfx9_publish(pspOwnsLoad, false, rlcBefore, rlcAfter,
 			rlcVersion, 0, false, false, 0, 0, 0);
 		return;
@@ -2594,11 +2655,7 @@ radeon_gfx9_cp_start()
 	uint32 scratchRead = Read32(OUT, scratch);
 	if (scratchRead != 0xCAFEDEAD) {
 		Write32(OUT, meCntl, savedMe);
-		if (rlcStarted) {
-			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
-			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
-		}
-		radeon_gfx9_saved_restore();
+		radeon_gfx9_restore_saved(rlcBefore, rlcStarted, rlcClock);
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 			rlcVersion, scratchRead, false, false, 0, 0, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch read 0x%" B_PRIx32
@@ -2731,6 +2788,7 @@ radeon_gfx9_cp_start()
 	// gfx_v9_0_ring_set_wptr_gfx stores the count in the poll slot
 	// before it rings. One doorbell. The value is not written again.
 	*(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512) = wptr;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
 	radeon_visible_barrier();
 	uint64 pollRead = *(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512);
 	uint32 doorbellNow = Read32(OUT, rbDoorbell);
@@ -2772,16 +2830,27 @@ radeon_gfx9_cp_start()
 		first->scratch = scratchNow;
 		first->me = Read32(OUT, meCntl);
 	}
-	radeon_gfx9_run_try("writedata", 0, fb, savedMe, haltMask, cntl, meCntl,
-		rbCntl, rbWptr, rbWptrHi, rbRptr, rbRptrWr, rbBase, rbBaseHi, scratch,
-		ringDoorbell);
-	radeon_gfx9_run_try("full", 1, fb, savedMe, haltMask, cntl, meCntl, rbCntl,
-		rbWptr, rbWptrHi, rbRptr, rbRptrWr, rbBase, rbBaseHi, scratch,
-		ringDoorbell);
+	if (scratchNow != 0xDEADBEEF) {
+		radeon_gfx9_run_try("writedata", 0, fb, savedMe, haltMask, cntl, meCntl,
+			rbCntl, rbWptr, rbWptrHi, rbRptr, rbRptrWr, rbBase, rbBaseHi,
+			scratch, ringDoorbell);
+		radeon_gfx9_run_try("full", 1, fb, savedMe, haltMask, cntl, meCntl,
+			rbCntl, rbWptr, rbWptrHi, rbRptr, rbRptrWr, rbBase, rbBaseHi,
+			scratch, ringDoorbell);
+	}
+	uint32 landedDwords = sRadeonGfx9Ring.submitted;
+	for (uint32 i = 0; i < sGfx9TryCount; i++) {
+		if (sGfx9Tries[i].scratch == 0xDEADBEEF) {
+			scratchNow = sGfx9Tries[i].scratch;
+			rptrNow = sGfx9Tries[i].rptr;
+			landedDwords = sGfx9Tries[i].wptr;
+			break;
+		}
+	}
 	// REMOVE-GFX9-SCRATCH-TEST END
 	if (scratchNow == 0xDEADBEEF) {
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
-			rlcVersion, scratchNow, true, true, sRadeonGfx9Ring.submitted,
+			rlcVersion, scratchNow, true, true, landedDwords,
 			rptrNow, rptrBefore);
 		radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb,
 			rptrAtBell, rptrWbAtBell, aperBefore, aperAfter, sdma0Range,
@@ -2790,7 +2859,7 @@ radeon_gfx9_cp_start()
 		radeon_gfx9_stall_note();
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
 			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", fence landed\n",
-			__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
+			__func__, scratchNow, rptrNow, landedDwords);
 		return;
 	}
 
@@ -2820,11 +2889,7 @@ radeon_gfx9_cp_start()
 	Write32(OUT, rbPollLo, savedPollLo);
 	Write32(OUT, rbPollHi, savedPollHi);
 	Write32(OUT, meCntl, savedMe);
-	if (rlcStarted) {
-		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
-		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
-	}
-	radeon_gfx9_saved_restore();
+	radeon_gfx9_restore_saved(rlcBefore, rlcStarted, rlcClock);
 	radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 		rlcVersion, scratchNow, false, true, sRadeonGfx9Ring.submitted,
 		rptrNow, rptrBefore);

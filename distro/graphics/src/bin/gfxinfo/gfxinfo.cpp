@@ -14,22 +14,6 @@
 #include <string.h>
 
 
-static const char* kKeys[] = {
-	"device",
-	"psp",
-	"rlc",
-	"rlc_before",
-	"rlc_after",
-	"rlc_version",
-	"scratch",
-	"packet",
-	"dwords",
-	"rptr_before",
-	"rptr",
-	"wptr",
-};
-
-
 static bool
 read_file(const char* path, char* buffer, size_t capacity)
 {
@@ -74,7 +58,7 @@ int
 main()
 {
 	char path[B_PATH_NAME_LENGTH];
-	char text[2048];
+	char text[16384];
 	bool fromCache = false;
 	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, false, path,
 			sizeof(path)) == B_OK) {
@@ -92,11 +76,11 @@ main()
 	}
 
 	printf("gfxinfo: %s\n", path);
-	for (uint32 i = 0; i < sizeof(kKeys) / sizeof(kKeys[0]); i++) {
-		const char* value = value_of(text, kKeys[i]);
-		if (value != NULL)
-			printf("  %s %s\n", kKeys[i], value);
-	}
+	fputs(text, stdout);
+	if (text[0] != '\0' && text[strlen(text) - 1] != '\n')
+		printf("\n");
+	if (strlen(text) + 1 >= sizeof(text))
+		printf("gfxinfo: the record was longer than the buffer\n");
 
 	const char* packet = value_of(text, "packet");
 	if (packet != NULL && strcmp(packet, "yes") == 0) {

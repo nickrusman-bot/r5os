@@ -1,12 +1,18 @@
 # R5OS changelog (lokaal)
 
+### The 21:27 stick reached the desktop, and the ring was not started
+
+The stick written at 21:27 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `radeon-gfx.txt` says `device 15e7`, `psp no`, `rlc no`, `scratch 00000000`, `packet no`, `mode2 no`, `mode2_before 00000000`, `mode2_after ffffffff`. The syslog line is `SMU mailbox stayed 0, mode 2 not sent`. The response register was still 0 after 100 ms, so the reset message was not written and the command processor was left alone. Scratch was not tested.
+
+The same boot does not change the agreed bookkeeping. `sRlcRestoreLists` is cleared at the start of every ring start. The poll slot is flushed after the write pointer is stored. A later ring try that stores `0xdeadbeef` is the result that decides whether the ring stays. CSIB and SRM are written back while RLC F32 is stopped, and the enable bit is restored after that. The register snapshot is taken before the mode-2 message. The framebuffer map size is a 64-bit byte count, so a 4 GiB BAR does not wrap to 0. `gfxinfo` prints the record, up to 16 KiB. This correction has not been built.
+
 ### RLC 2.1 save/restore lists go to the PSP before RLC_G
 
 `green_sardine_rlc.bin` and `renoir_rlc.bin` are the same 39928-byte header 2.1. The ucode is 16896 bytes at offset 256. `rlc_firmware_header_v2_1` then holds three lists: CNTL 592 bytes at 26832, GPM 2560 bytes at 27424, SRM 9944 bytes at 29984. Linux `amdgpu_gfx_rlc_init_microcode_v2_1` registers those as PSP types 22, 20 and 21. The ucode id order places them before `RLC_G` (type 8). This driver sent only type 8 and then set `RLC_SRM_CNTL` `SRM_ENABLE`. `gfx_v9_0_init_pg` sets that bit for every RLC 2.1, and on GC 9.3 it does not write the lists through MMIO. The PSP load is how Renoir gets them.
 
 The three lists are now staged from those header offsets and sent before type 8. A non-zero status on a list stops the ring. `SRM_ENABLE` is set only after the three lists were accepted. `RLC_PG_CNTL` bit 15, `CP_PG_DISABLE`, is set with the other power-gating enables cleared. `RLC_JUMP_TABLE_RESTORE` stays unset: Linux writes it only when GFXOFF power-gating flags are on, and this path does not send GFXOFF.
 
-`jam -q @r5-anyboot` for AMD64 finished at 21:22 Europe/Amsterdam on 4 Nov 2026 with exit 0 (8401 targets). The linked accelerant contains `rlc-cntl`, `rlc-gpm` and `rlc-srm`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `75eb2cd83576234c7b73013f23f7280a8f40debec372e1b27391aa50593e7cfd`. The system package inside it is the build package, 41066214 bytes, at offset 1684320256. It was written raw to the General UDisk at 21:27 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 21:22 Europe/Amsterdam on 4 Nov 2026 with exit 0 (8401 targets). The linked accelerant contains `rlc-cntl`, `rlc-gpm` and `rlc-srm`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `75eb2cd83576234c7b73013f23f7280a8f40debec372e1b27391aa50593e7cfd`. The system package inside it is the build package, 41066214 bytes, at offset 1684320256. It was written raw to the General UDisk at 21:27 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The boot of that stick is the section above.
 
 ### Renoir gets the Linux mode-2 reset before the ring
 
