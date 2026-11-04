@@ -719,8 +719,10 @@ radeon_gpu_ring_setup()
 // GFX_CMD_ID_LOAD_IP_FW. It does not load the bootloader, reroute interrupts,
 // or send a mode-1 reset. A missing sign of life uses the direct writes in
 // gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
-// gfx_v9_0_cp_gfx_resume without the clear-state preamble. RLC_CNTL is not
-// written. Navi is not programmed with these registers.
+// gfx_v9_0_cp_gfx_resume without the clear-state preamble. After a PSP load,
+// gfx_v9_0_rlc_resume clears clock gating and sets RLC_ENABLE_F32. An APU
+// does not enable the GUI idle interrupt. Navi is not programmed with these
+// registers.
 static const uint32 kGfx9Seg0 = 0x2000;
 static const uint32 kGfx9Seg1 = 0xA000;
 static const uint32 kGfx9RingBytes = 4096;
@@ -1192,6 +1194,79 @@ radeon_psp_load_engines(uint32 frameBase)
 }
 
 
+static bool
+radeon_gfx9_rlc_start(uint32* _before, uint32* _clock, uint32* _after,
+	uint32* _version)
+{
+	const uint32 cntl = radeon_gfx9_byte(kGfx9Seg1, 0x4c00);
+	const uint32 clock = radeon_gfx9_byte(kGfx9Seg1, 0x4c49);
+	const uint32 version = radeon_gfx9_byte(kGfx9Seg1, 0x4c69);
+	*_before = 0;
+	*_clock = 0;
+	*_after = 0;
+	*_version = 0;
+	if (!radeon_mmio_fits(version)) {
+		ERROR("%s: R5 radeon_hd: GFX9 mmio does not cover RLC\n",
+			__func__);
+		return false;
+	}
+
+	uint32 saved = Read32(OUT, cntl);
+	uint32 savedClock = Read32(OUT, clock);
+	*_before = saved;
+	*_clock = savedClock;
+	// gfx_v9_0_rlc_resume disables CGCG, halts F32, then starts it.
+	Write32(OUT, clock, 0);
+	Write32(OUT, cntl, saved & ~1u);
+	snooze(50);
+	Write32(OUT, cntl, (saved & ~1u) | 1u);
+	snooze(50);
+	uint32 after = Read32(OUT, cntl);
+	uint32 seenVersion = Read32(OUT, version);
+	*_after = after;
+	*_version = seenVersion;
+	ERROR("%s: R5 radeon_hd: RLC_CNTL 0x%" B_PRIx32 " -> 0x%" B_PRIx32
+		" RLC_GPM_GENERAL_6 0x%" B_PRIx32 "\n", __func__, saved, after,
+		seenVersion);
+	if ((after & 1u) == 0) {
+		Write32(OUT, cntl, saved);
+		Write32(OUT, clock, savedClock);
+		ERROR("%s: R5 radeon_hd: RLC enable did not stick\n", __func__);
+		return false;
+	}
+	return true;
+}
+
+
+static void
+radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
+	uint32 rlcVersion, uint32 scratch, bool packet)
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
+			sizeof(path)) != B_OK)
+		return;
+
+	size_t used = strlen(path);
+	int wrote = snprintf(path + used, sizeof(path) - used, "/radeon-gfx.txt");
+	if (wrote < 0 || (size_t)wrote >= sizeof(path) - used)
+		return;
+
+	FILE* file = fopen(path, "w");
+	if (file == NULL)
+		return;
+	fprintf(file, "device %04x\n", gInfo->shared_info->pciID);
+	fprintf(file, "psp %s\n", psp ? "yes" : "no");
+	fprintf(file, "rlc %s\n", rlc ? "yes" : "no");
+	fprintf(file, "rlc_before %08x\n", rlcBefore);
+	fprintf(file, "rlc_after %08x\n", rlcAfter);
+	fprintf(file, "rlc_version %08x\n", rlcVersion);
+	fprintf(file, "scratch %08x\n", scratch);
+	fprintf(file, "packet %s\n", packet ? "yes" : "no");
+	fclose(file);
+}
+
+
 static void
 radeon_gfx9_flush_visible(uint8* address, uint32 bytes)
 {
@@ -1275,15 +1350,32 @@ radeon_gfx9_cp_start()
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);
+		radeon_gfx9_publish(pspOwnsLoad, false, 0, 0, 0, 0, false);
 		ERROR("%s: R5 radeon_hd: GFX9 firmware not running, ring left\n",
 			__func__);
 		return;
+	}
+
+	bool rlcStarted = false;
+	uint32 rlcBefore = 0;
+	uint32 rlcClock = 0;
+	uint32 rlcAfter = 0;
+	uint32 rlcVersion = 0;
+	if (pspOwnsLoad) {
+		rlcStarted = radeon_gfx9_rlc_start(&rlcBefore, &rlcClock, &rlcAfter,
+			&rlcVersion);
 	}
 
 	Write32(OUT, scratch, 0xCAFEDEAD);
 	uint32 scratchRead = Read32(OUT, scratch);
 	if (scratchRead != 0xCAFEDEAD) {
 		Write32(OUT, meCntl, savedMe);
+		if (rlcStarted) {
+			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
+			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
+		}
+		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
+			rlcVersion, scratchRead, false);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch read 0x%" B_PRIx32
 			", ring left\n", __func__, scratchRead);
 		return;
@@ -1339,6 +1431,8 @@ radeon_gfx9_cp_start()
 		snooze(1000);
 	}
 	if (scratchNow == 0xDEADBEEF) {
+		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
+			rlcVersion, scratchNow, true);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
 			", fence landed\n", __func__, scratchNow);
 		return;
@@ -1354,6 +1448,12 @@ radeon_gfx9_cp_start()
 	Write32(OUT, maxContext, savedContext);
 	Write32(OUT, deviceId, savedDevice);
 	Write32(OUT, meCntl, savedMe);
+	if (rlcStarted) {
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
+	}
+	radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
+		rlcVersion, scratchNow, false);
 	ERROR("%s: R5 radeon_hd: GFX9 scratch stayed 0x%" B_PRIx32
 		", ring restored\n", __func__, scratchNow);
 }

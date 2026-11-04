@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Renoir starts the RLC after the PSP load
+
+The 09:56 boot accepted RLC, PFP, CE, and ME through the PSP and left scratch at `0xcafedead`. `gfx_v9_0_rlc_resume` is the step Linux takes before `gfx_v9_0_cp_gfx_resume` when the firmware load type is PSP. For an APU it does not enable the GUI idle interrupt. This driver now writes `RLC_CGCG_CGLS_CTRL` to 0, clears `RLC_CNTL` bit 0, then sets that bit. `RLC_GPM_GENERAL_6` is logged. If the enable bit does not read back, or the scratch word is not `0xDEADBEEF` after 100 ms, `RLC_CNTL`, the clock-gating register, `CP_ME_CNTL`, and the ring registers are restored. The clear-state preamble from `gfx_v9_0_cp_gfx_start` is still not submitted. `GRBM_SOFT_RESET` stays unreachable.
+
+The same boot writes `/boot/system/cache/radeon-gfx.txt`. `gfxinfo` prints that file and says whether the packet ran. `jam -q radeon_hd.accelerant gfxinfo` for AMD64 finished with exit 0. `gpu.cpp` and `gfxinfo.cpp` compiled with no new warning. The anyboot image was not rebuilt. This RLC start has not been booted.
+
 ### Renoir GFX firmware goes through the PSP when the secure OS is up
 
 The 09:19 stick wrote PFP, CE, and ME through the command-processor registers. Those address registers read `0xffffffff`, scratch stayed `0xcafedead`, and the ring was restored. Linux `amdgpu_ucode_get_load_type` uses the PSP for Renoir. PSP v12 is `psp_v12_0`. On an APU that already shows a picture, `MP0` `C2PMSG_81` is the secure-OS sign of life, and Linux does not load the bootloader again.
