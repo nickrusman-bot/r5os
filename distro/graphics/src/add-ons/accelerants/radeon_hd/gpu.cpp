@@ -2448,9 +2448,10 @@ radeon_soc15_need_reset_on_init(uint32 pciID)
 }
 
 
-// MP1 segment 0 is 0x16200 in vega10_ip_offset.h. The Renoir mailbox in
-// renoir_ppt.c is C2PMSG_66 (message, mm index 0x282), C2PMSG_82 (argument,
-// 0x292) and C2PMSG_90 (response, 0x29a), all BASE_IDX 0. A previous
+// MP1_BASE.instance[0].segment[0] in vega10_ip_offset.h is 0x00016000.
+// mmMP1_SMN_C2PMSG_66 is already 0x0282, so the 0x200 segment step is in
+// that index. Adding 0x0282 to 0x00016200 reads dword 0x1649a, which stayed
+// 0, and the ring never started. The response is dword 0x1629a. A previous
 // response of 0 means the SMU is still in a command. PPSMC_Result_OK is 1.
 // The wait is usec_timeout * 20, two seconds at the Linux default of 100 ms.
 // A timeout does not send a second message. A response other than 1 does
@@ -2459,10 +2460,12 @@ radeon_soc15_need_reset_on_init(uint32 pciID)
 static bool
 radeon_smu12_mode2_reset()
 {
-	const uint32 kMp1 = 0x00016200;
+	const uint32 kMp1 = 0x00016000;
 	const uint32 msg = (kMp1 + 0x0282) * 4;
 	const uint32 arg = (kMp1 + 0x0292) * 4;
 	const uint32 resp = (kMp1 + 0x029a) * 4;
+	ERROR("%s: R5 radeon_hd: SMU mailbox byte 0x%" B_PRIx32 "\n",
+		__func__, resp);
 	sSoc15ResetSent = false;
 	sSoc15ResetBefore = 0xffffffff;
 	sSoc15ResetAfter = 0xffffffff;

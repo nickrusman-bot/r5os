@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The SMU mailbox is MP1 base 0x16000 plus C2PMSG_90
+
+`MP1_BASE.instance[0].segment[0]` in `vega10_ip_offset.h` is `0x00016000`. `mmMP1_SMN_C2PMSG_90` is already `0x029a`, so the dword is `0x1629a` and the byte offset is `0x58a68`. The previous code added `0x029a` to `0x00016200` and read dword `0x1649a`. That read was 0, so mode 2 was not sent and the RLC lists never ran. The 21:27 stick did that. The accelerant now logs `SMU mailbox byte`. This address has not been booted.
+
 ### The first SMU message is sent when the mailbox is still 0
 
 `smu_cmn_send_smc_msg_with_param` polls `C2PMSG_90` only after the SMU has left `SMU_FW_INIT`. The comment there is "Ignore initial smu response register value". Power-on leaves that register at 0. A later 0 means the previous command is still running. The 21:27 stick hit the power-on case: `mode2_before` was 0, the message was not written, and the ring was not programmed. The first mode-2 message is now sent when the register is still 0. A later call still waits. The ring is programmed only when the answer is `1`. This has not been booted.
@@ -20,7 +24,7 @@ The three lists are now staged from those header offsets and sent before type 8.
 
 ### Renoir gets the Linux mode-2 reset before the ring
 
-`soc15_need_reset_on_init` in Linux 6.12 is true for `CHIP_RENOIR` and false for Raven and Picasso. `soc15_asic_reset` returns before a reset on those Raven chips. PCI `15e7`, `1636`, `1638` and `164c` are `CHIP_RENOIR`. MP1 12.0.1 selects mode 2. `smu_v12_0_mode2_reset` is `PPSMC_MSG_GfxDeviceDriverReset` (`0x1E`) with argument `2` on the MP1 mailbox: message `C2PMSG_66` at dword index `0x16200+0x282`, argument `C2PMSG_82` at `0x292`, response `C2PMSG_90` at `0x29a`. `PPSMC_Result_OK` is `1`. The same function is the decision for this series. Raven and Picasso do not take the message. Lucienne `164c` is in the set and does not get the message, because its firmware stays unloaded and DCN is not programmed again afterwards.
+`soc15_need_reset_on_init` in Linux 6.12 is true for `CHIP_RENOIR` and false for Raven and Picasso. `soc15_asic_reset` returns before a reset on those Raven chips. PCI `15e7`, `1636`, `1638` and `164c` are `CHIP_RENOIR`. MP1 12.0.1 selects mode 2. `smu_v12_0_mode2_reset` is `PPSMC_MSG_GfxDeviceDriverReset` (`0x1E`) with argument `2` on the MP1 mailbox: message `C2PMSG_66` at dword index `0x16000+0x282`, argument `C2PMSG_82` at `0x16000+0x292`, response `C2PMSG_90` at `0x16000+0x29a`. `PPSMC_Result_OK` is `1`. The same function is the decision for this series. Raven and Picasso do not take the message. Lucienne `164c` is in the set and does not get the message, because its firmware stays unloaded and DCN is not programmed again afterwards.
 
 The ring start sends it before any command-processor or aperture write. The mailbox must already hold a non-zero response. That wait is 100 ms. The reset wait is 2 seconds, `usec_timeout * 20` at the Linux default. A timeout does not send the message again. A response other than `1` does not program the ring. `radeon-gfx.txt` records `mode2`, `mode2_before` and `mode2_after`. This is not a mode-1 reset and it is not `GRBM_SOFT_RESET`. The firmware scanout is not rewritten. Whether the panel stays up, and whether scratch then becomes `0xdeadbeef`, has not been booted.
 
