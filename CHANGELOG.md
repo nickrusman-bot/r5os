@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The Renoir TMR command was a bad parameter
+
+The stick written at 14:09 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `SETUP_TMR` finished with fence `0x1` and status `0xffff0006`. That is `TEE_ERROR_BAD_PARAMETERS`. The command had set `virt_phy_addr` and had passed the MC address as the system address. The region was `0x810c00000`, 4 MiB. No IP firmware was sent after that. The ring was not submitted.
+
+The original `SETUP_TMR` is the GPU address and the size. The 4 MiB region is now the top of the visible BAR, naturally aligned, and the visible pool stops before it. If that command is refused, one retry sets `virt_phy_addr` and uses the CPU physical address of the same page, the framebuffer BAR plus the offset. A timeout is not retried. `CP_RB_DOORBELL_RANGE_LOWER` and `CP_RB_DOORBELL_RANGE_UPPER` are written the way `gfx_v9_0_cp_gfx_resume` does, and restored when the ring test fails. The MEC split is unchanged.
+
+`jam -q @r5-anyboot` for AMD64 finished at 14:27 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 14:25. The linked accelerant contains `PSP TMR legacy`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 14:31 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### Renoir reserves a PSP trusted memory region before MEC
 
 The stick written at 13:48 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. The split was loaded: `renoir_mec.bin` body 267072 bytes, jump table 896 bytes. PSP accepted RLC, PFP, CE, and ME with status `0x0` and fences `0x1` through `0x4`. The MEC body, type 4, finished with fence `0x5` and status `0x80000203` again. The jump table was not the refusal. The ring was not submitted.

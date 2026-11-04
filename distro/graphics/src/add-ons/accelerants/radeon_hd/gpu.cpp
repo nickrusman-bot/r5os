@@ -718,11 +718,12 @@ radeon_gpu_ring_setup()
 // Linux loads Renoir RLC, PFP, ME, and CE through PSP v12. When C2PMSG_81
 // shows the secure OS, this driver creates the GPCOM ring and sends
 // GFX_CMD_ID_LOAD_IP_FW. PSP v12 on Renoir has no boot-time TMR, so
-// GFX_CMD_ID_SETUP_TMR runs first, the way psp_tmr_load does. MEC follows
-// amdgpu_ucode_init_single_fw: the body without the jump table is
-// GFX_FW_TYPE_CP_MEC, and the table is GFX_FW_TYPE_CP_MEC_ME1.
-// gfx_v9_0_load_mec2_fw_bin_support is false for GC 9.3.0, so MEC2 is not
-// sent. It does not load the bootloader, reroute
+// GFX_CMD_ID_SETUP_TMR runs before the firmware. The sOS on this APU
+// rejects virt_phy_addr, so the first command is the original address
+// and size. MEC follows amdgpu_ucode_init_single_fw: the body without
+// the jump table is GFX_FW_TYPE_CP_MEC, and the table is
+// GFX_FW_TYPE_CP_MEC_ME1. gfx_v9_0_load_mec2_fw_bin_support is false for
+// GC 9.3.0, so MEC2 is not sent. It does not load the bootloader, reroute
 // interrupts, or send a mode-1 reset. A missing sign of life uses the
 // direct writes in gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
 // gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
@@ -1199,6 +1200,7 @@ radeon_gfx9_load_engine(const char* fileName, uint32 addrIndex,
 static const uint32 kPspMp0 = 0x00016000;
 static const uint32 kPspRingBytes = 4096;
 static const uint32 kPspCmdBytes = 1024;
+static const uint32 kPspTmrBytes = 0x400000;
 
 
 static uint32
@@ -1288,6 +1290,75 @@ radeon_gfx9_fw_stem()
 
 
 static status_t
+radeon_psp_reserve_tmr(uint64* _offset, uint8** _address)
+{
+	radeon_shared_info* info = gInfo->shared_info;
+	uint64 end = info->vram_pool_offset + info->vram_pool_bytes;
+	if (end < kPspTmrBytes || info->vram_pool_cursor > end - kPspTmrBytes)
+		return B_NO_MEMORY;
+	// Keep the 4 MiB region at the top of the visible BAR, naturally
+	// aligned, and stop the pool before it.
+	uint64 offset = (end - kPspTmrBytes) & ~((uint64)kPspTmrBytes - 1);
+	if (offset < info->vram_pool_cursor || offset + kPspTmrBytes > end)
+		return B_NO_MEMORY;
+	info->vram_pool_bytes = offset - info->vram_pool_offset;
+
+	uint8* base = (uint8*)info->frame_buffer;
+	if (!radeon_hd_uses_dce(info->chipsetID))
+		base -= info->vram_reserved_offset;
+	*_offset = offset;
+	*_address = base + offset;
+	memset(*_address, 0, kPspTmrBytes);
+	return B_OK;
+}
+
+
+static status_t
+radeon_psp_command(uint8* ringAddress, uint8* cmdAddress, uint8* fenceAddress,
+	uint32 writePtr, uint64 cmdGpu, uint64 fenceGpu, uint32 fenceValue,
+	uint32* _status, uint32* _fence)
+{
+	uint32 wptr = Read32(OUT, writePtr);
+	if (wptr >= (kPspRingBytes / 4) || (wptr % 16) != 0) {
+		ERROR("%s: R5 radeon_hd: PSP wptr 0x%" B_PRIx32 "\n",
+			__func__, wptr);
+		return B_ERROR;
+	}
+
+	uint8* frame = ringAddress + (wptr * 4);
+	memset(frame, 0, 64);
+	radeon_psp_store32(frame + 0, (uint32)cmdGpu);
+	radeon_psp_store32(frame + 4, (uint32)(cmdGpu >> 32));
+	radeon_psp_store32(frame + 12, (uint32)fenceGpu);
+	radeon_psp_store32(frame + 16, (uint32)(fenceGpu >> 32));
+	radeon_psp_store32(frame + 20, fenceValue);
+	volatile uint32* fence = (volatile uint32*)fenceAddress;
+	*fence = 0;
+	radeon_visible_barrier();
+	uint32 next = wptr + 16;
+	if (next >= (kPspRingBytes / 4))
+		next = 0;
+	Write32(OUT, writePtr, next);
+
+	uint32 fenceSeen = 0;
+	bool landed = false;
+	for (int wait = 0; wait < 500; wait++) {
+		fenceSeen = *fence;
+		if (fenceSeen == fenceValue) {
+			landed = true;
+			break;
+		}
+		snooze(1000);
+	}
+	*_fence = fenceSeen;
+	*_status = radeon_le32(cmdAddress + 864);
+	if (!landed)
+		return B_TIMED_OUT;
+	return *_status == 0 ? B_OK : B_ERROR;
+}
+
+
+static status_t
 radeon_psp_load_engines(uint32 frameBase)
 {
 	const char* stem = radeon_gfx9_fw_stem();
@@ -1320,6 +1391,12 @@ radeon_psp_load_engines(uint32 frameBase)
 	};
 
 	ERROR("%s: R5 radeon_hd: PSP MEC2 not loaded on GC 9.3\n", __func__);
+
+	uint64 tmrOffset = 0;
+	uint8* tmrAddress = NULL;
+	status_t result = radeon_psp_reserve_tmr(&tmrOffset, &tmrAddress);
+	if (result != B_OK)
+		return result;
 
 	radeon_psp_item items[8];
 	uint32 count = 0;
@@ -1389,18 +1466,6 @@ radeon_psp_load_engines(uint32 frameBase)
 		count++;
 	}
 
-	// PSP_TMR_SIZE is 4 MiB. The start is naturally aligned to that size.
-	// The pool cursor is already past the scanout, so the next boundary
-	// stays outside the firmware picture.
-	const uint32 kTmrBytes = 0x400000;
-	uint64 tmrOffset = 0;
-	uint8* tmrAddress = NULL;
-	status_t result = radeon_vram_alloc(kTmrBytes, kTmrBytes, &tmrOffset,
-		&tmrAddress);
-	if (result != B_OK || tmrAddress == NULL)
-		return result == B_OK ? B_ERROR : result;
-	memset(tmrAddress, 0, kTmrBytes);
-
 	uint64 ringOffset = 0;
 	uint8* ringAddress = NULL;
 	result = radeon_vram_alloc(kPspRingBytes, kPspRingBytes,
@@ -1448,59 +1513,47 @@ radeon_psp_load_engines(uint32 frameBase)
 		__func__, seen);
 
 	uint64 tmrGpu = ((uint64)frameBase << 24) + tmrOffset;
-	// psp_prep_tmr_cmd_buf. virt_phy_addr is bit 1. On this APU
-	// amdgpu_gmc_vram_mc2pa leaves the MC address unchanged.
+	uint64 tmrHost = (uint64)gInfo->shared_info->frame_buffer_phys
+		+ tmrOffset;
+	// The running sOS returned 0xffff0006 (TEE_ERROR_BAD_PARAMETERS) for
+	// virt_phy_addr plus the MC address. The original SETUP_TMR is the
+	// GPU address and the size. A refusal is tried once more with the
+	// CPU physical address of that page.
 	memset(cmdAddress, 0, kPspCmdBytes);
 	radeon_psp_store32(cmdAddress + 0, kPspCmdBytes);
 	radeon_psp_store32(cmdAddress + 4, 1);
 	radeon_psp_store32(cmdAddress + 8, 5);
 	radeon_psp_store32(cmdAddress + 28, (uint32)tmrGpu);
 	radeon_psp_store32(cmdAddress + 32, (uint32)(tmrGpu >> 32));
-	radeon_psp_store32(cmdAddress + 36, kTmrBytes);
-	radeon_psp_store32(cmdAddress + 40, 2);
-	radeon_psp_store32(cmdAddress + 44, (uint32)tmrGpu);
-	radeon_psp_store32(cmdAddress + 48, (uint32)(tmrGpu >> 32));
-	{
-		uint32 wptr = Read32(OUT, writePtr);
-		if (wptr >= (kPspRingBytes / 4) || (wptr % 16) != 0) {
-			ERROR("%s: R5 radeon_hd: PSP wptr 0x%" B_PRIx32 "\n",
-				__func__, wptr);
-			return B_ERROR;
-		}
-		uint8* frame = ringAddress + (wptr * 4);
-		memset(frame, 0, 64);
-		radeon_psp_store32(frame + 0, (uint32)cmdGpu);
-		radeon_psp_store32(frame + 4, (uint32)(cmdGpu >> 32));
-		radeon_psp_store32(frame + 12, (uint32)fenceGpu);
-		radeon_psp_store32(frame + 16, (uint32)(fenceGpu >> 32));
-		radeon_psp_store32(frame + 20, 1);
-		volatile uint32* fence = (volatile uint32*)fenceAddress;
-		*fence = 0;
-		radeon_visible_barrier();
-		uint32 next = wptr + 16;
-		if (next >= (kPspRingBytes / 4))
-			next = 0;
-		Write32(OUT, writePtr, next);
-		uint32 fenceSeen = 0;
-		bool landed = false;
-		for (int wait = 0; wait < 500; wait++) {
-			fenceSeen = *fence;
-			if (fenceSeen == 1) {
-				landed = true;
-				break;
-			}
-			snooze(1000);
-		}
-		uint32 tmrStatus = radeon_le32(cmdAddress + 864);
-		ERROR("%s: R5 radeon_hd: PSP TMR gpu 0x%" B_PRIx64
-			" bytes 0x%" B_PRIx32 " status 0x%" B_PRIx32
-			" fence 0x%" B_PRIx32 "\n",
-			__func__, tmrGpu, kTmrBytes, tmrStatus, fenceSeen);
-		if (!landed)
-			return B_TIMED_OUT;
-		if (tmrStatus != 0)
-			return B_ERROR;
+	radeon_psp_store32(cmdAddress + 36, kPspTmrBytes);
+	uint32 tmrStatus = 0;
+	uint32 fenceSeen = 0;
+	status_t tmr = radeon_psp_command(ringAddress, cmdAddress, fenceAddress,
+		writePtr, cmdGpu, fenceGpu, 1, &tmrStatus, &fenceSeen);
+	ERROR("%s: R5 radeon_hd: PSP TMR legacy gpu 0x%" B_PRIx64
+		" bytes 0x%" B_PRIx32 " status 0x%" B_PRIx32
+		" fence 0x%" B_PRIx32 "\n",
+		__func__, tmrGpu, kPspTmrBytes, tmrStatus, fenceSeen);
+	if (tmr != B_OK && tmr != B_TIMED_OUT && tmrHost != 0
+		&& tmrHost != tmrGpu) {
+		memset(cmdAddress, 0, kPspCmdBytes);
+		radeon_psp_store32(cmdAddress + 0, kPspCmdBytes);
+		radeon_psp_store32(cmdAddress + 4, 1);
+		radeon_psp_store32(cmdAddress + 8, 5);
+		radeon_psp_store32(cmdAddress + 28, (uint32)tmrGpu);
+		radeon_psp_store32(cmdAddress + 32, (uint32)(tmrGpu >> 32));
+		radeon_psp_store32(cmdAddress + 36, kPspTmrBytes);
+		radeon_psp_store32(cmdAddress + 40, 2);
+		radeon_psp_store32(cmdAddress + 44, (uint32)tmrHost);
+		radeon_psp_store32(cmdAddress + 48, (uint32)(tmrHost >> 32));
+		tmr = radeon_psp_command(ringAddress, cmdAddress, fenceAddress,
+			writePtr, cmdGpu, fenceGpu, 2, &tmrStatus, &fenceSeen);
+		ERROR("%s: R5 radeon_hd: PSP TMR host 0x%" B_PRIx64
+			" status 0x%" B_PRIx32 " fence 0x%" B_PRIx32 "\n",
+			__func__, tmrHost, tmrStatus, fenceSeen);
 	}
+	if (tmr != B_OK)
+		return tmr;
 
 	for (uint32 i = 0; i < count; i++) {
 		uint32 wptr = Read32(OUT, writePtr);
@@ -1941,6 +1994,8 @@ radeon_gfx9_cp_start()
 	const uint32 rbWptr = radeon_gfx9_byte(kGfx9Seg0, 0x1054);
 	const uint32 rbWptrHi = radeon_gfx9_byte(kGfx9Seg0, 0x1055);
 	const uint32 rbDoorbell = radeon_gfx9_byte(kGfx9Seg0, 0x1059);
+	const uint32 rbRangeLo = radeon_gfx9_byte(kGfx9Seg0, 0x105a);
+	const uint32 rbRangeHi = radeon_gfx9_byte(kGfx9Seg0, 0x105b);
 	const uint32 maxContext = radeon_gfx9_byte(kGfx9Seg0, 0x10ae);
 	const uint32 rbBase = radeon_gfx9_byte(kGfx9Seg0, 0x1040);
 	const uint32 rbBaseHi = radeon_gfx9_byte(kGfx9Seg0, 0x10b1);
@@ -2049,6 +2104,8 @@ radeon_gfx9_cp_start()
 	uint32 savedWptr = Read32(OUT, rbWptr);
 	uint32 savedWptrHi = Read32(OUT, rbWptrHi);
 	uint32 savedDoorbell = Read32(OUT, rbDoorbell);
+	uint32 savedRangeLo = Read32(OUT, rbRangeLo);
+	uint32 savedRangeHi = Read32(OUT, rbRangeHi);
 	uint32 savedContext = Read32(OUT, maxContext);
 	uint32 savedDevice = Read32(OUT, deviceId);
 	uint32 savedDelay = Read32(OUT, rbDelay);
@@ -2090,6 +2147,10 @@ radeon_gfx9_cp_start()
 	uint32 rptrZero = Read32(OUT, rbRptr);
 	uint32 doorbell = Read32(OUT, rbDoorbell);
 	Write32(OUT, rbDoorbell, doorbell & ~(1u << 30));
+	// gfx_v9_0_cp_gfx_resume writes the range even when the doorbell
+	// enable is clear. Upper is the full field mask.
+	Write32(OUT, rbRangeLo, 0);
+	Write32(OUT, rbRangeHi, 0x0ffffffc);
 	Write32(OUT, maxContext, 7);
 	Write32(OUT, deviceId, 1);
 	Write32(OUT, meCntl, (savedMe | haltMask) & ~haltMask);
@@ -2128,6 +2189,8 @@ radeon_gfx9_cp_start()
 	Write32(OUT, rbWptr, savedWptr);
 	Write32(OUT, rbWptrHi, savedWptrHi);
 	Write32(OUT, rbDoorbell, savedDoorbell);
+	Write32(OUT, rbRangeLo, savedRangeLo);
+	Write32(OUT, rbRangeHi, savedRangeHi);
 	Write32(OUT, maxContext, savedContext);
 	Write32(OUT, deviceId, savedDevice);
 	Write32(OUT, rbDelay, savedDelay);
