@@ -714,10 +714,13 @@ radeon_gpu_ring_setup()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Linux loads Renoir PFP, ME, and CE through the PSP by default. The direct
-// writes below are gfx_v9_0_cp_gfx_load_microcode, used when fw_load_type is
-// direct. The ring setup follows gfx_v9_0_cp_gfx_resume without the clear-state
-// preamble. RLC is not loaded. Navi is not programmed with these registers.
+// Linux loads Renoir RLC, PFP, ME, and CE through PSP v12. When C2PMSG_81
+// shows the secure OS, this driver creates the GPCOM ring and sends
+// GFX_CMD_ID_LOAD_IP_FW. It does not load the bootloader, reroute interrupts,
+// or send a mode-1 reset. A missing sign of life uses the direct writes in
+// gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
+// gfx_v9_0_cp_gfx_resume without the clear-state preamble. RLC_CNTL is not
+// written. Navi is not programmed with these registers.
 static const uint32 kGfx9Seg0 = 0x2000;
 static const uint32 kGfx9Seg1 = 0xA000;
 static const uint32 kGfx9RingBytes = 4096;
@@ -881,10 +884,20 @@ radeon_le16(const uint8* bytes)
 }
 
 
+struct radeon_gfx9_ucode {
+	uint8*			blob;
+	const uint8*	ucode;
+	uint32			ucodeBytes;
+	uint32			version;
+	uint16			headerMajor;
+	uint16			headerMinor;
+};
+
+
 static status_t
-radeon_gfx9_load_engine(const char* fileName, uint32 addrIndex,
-	uint32 dataIndex)
+radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 {
+	memset(out, 0, sizeof(*out));
 	size_t bytes = 0;
 	uint8* blob = radeon_read_named_firmware(fileName, &bytes);
 	if (blob == NULL) {
@@ -903,34 +916,279 @@ radeon_gfx9_load_engine(const char* fileName, uint32 addrIndex,
 		uint32 version = radeon_le32(blob + 16);
 		uint32 ucodeBytes = radeon_le32(blob + 20);
 		uint32 offset = radeon_le32(blob + 24);
-		if (sizeBytes == bytes && headerMajor == 1 && headerMinor == 0
-			&& ipMajor == 9 && ipMinor == 3
-			&& offset <= bytes && ucodeBytes <= bytes - offset
+		bool headerOk = (headerMajor == 1 && headerMinor == 0)
+			|| (headerMajor == 2 && headerMinor == 1);
+		if (sizeBytes == bytes && headerOk && ipMajor == 9 && ipMinor == 3
+			&& offset >= 32 && offset <= bytes
+			&& ucodeBytes <= bytes - offset
 			&& ucodeBytes >= 4 && (ucodeBytes % 4) == 0) {
-			uint32 addr = radeon_gfx9_byte(kGfx9Seg1, addrIndex);
-			uint32 data = radeon_gfx9_byte(kGfx9Seg1, dataIndex);
-			const uint8* ucode = blob + offset;
-			Write32(OUT, addr, 0);
-			for (uint32 i = 0; i < ucodeBytes; i += 4)
-				Write32(OUT, data, radeon_le32(ucode + i));
-			Write32(OUT, addr, version);
-			uint32 seen = Read32(OUT, addr);
-			// gfx_v9_0_cp_gfx_load_microcode writes the version and does not
-			// read it back. On the 5625U this register reads 0xffffffff.
-			ERROR("%s: R5 radeon_hd: GFX9 %s ip %u.%u version 0x%"
-				B_PRIx32 " bytes %" B_PRIu32 " addr 0x%" B_PRIx32 "\n",
-				__func__, fileName, ipMajor, ipMinor, version, ucodeBytes,
-				seen);
-			if (seen == version || seen == 0xffffffff)
-				result = B_OK;
+			out->blob = blob;
+			out->ucode = blob + offset;
+			out->ucodeBytes = ucodeBytes;
+			out->version = version;
+			out->headerMajor = headerMajor;
+			out->headerMinor = headerMinor;
+			result = B_OK;
 		}
 	}
 	if (result != B_OK) {
 		ERROR("%s: R5 radeon_hd: GFX9 firmware %s rejected\n", __func__,
 			fileName);
+		free(blob);
 	}
-	free(blob);
 	return result;
+}
+
+
+static status_t
+radeon_gfx9_load_engine(const char* fileName, uint32 addrIndex,
+	uint32 dataIndex)
+{
+	radeon_gfx9_ucode fw;
+	status_t result = radeon_gfx9_open_ucode(fileName, &fw);
+	if (result != B_OK)
+		return result;
+
+	uint32 addr = radeon_gfx9_byte(kGfx9Seg1, addrIndex);
+	uint32 data = radeon_gfx9_byte(kGfx9Seg1, dataIndex);
+	Write32(OUT, addr, 0);
+	for (uint32 i = 0; i < fw.ucodeBytes; i += 4)
+		Write32(OUT, data, radeon_le32(fw.ucode + i));
+	Write32(OUT, addr, fw.version);
+	uint32 seen = Read32(OUT, addr);
+	// gfx_v9_0_cp_gfx_load_microcode writes the version and does not
+	// read it back. On the 5625U this register reads 0xffffffff.
+	ERROR("%s: R5 radeon_hd: GFX9 %s header %u.%u version 0x%"
+		B_PRIx32 " bytes %" B_PRIu32 " addr 0x%" B_PRIx32 "\n",
+		__func__, fileName, fw.headerMajor, fw.headerMinor, fw.version,
+		fw.ucodeBytes, seen);
+	free(fw.blob);
+	if (seen == fw.version || seen == 0xffffffff)
+		return B_OK;
+	ERROR("%s: R5 radeon_hd: GFX9 firmware %s rejected\n", __func__,
+		fileName);
+	return B_BAD_DATA;
+}
+
+
+static const uint32 kPspMp0 = 0x00016000;
+static const uint32 kPspRingBytes = 4096;
+static const uint32 kPspCmdBytes = 1024;
+
+
+static uint32
+radeon_psp_byte(uint32 index)
+{
+	return (kPspMp0 + index) * 4;
+}
+
+
+static void
+radeon_visible_barrier()
+{
+#if defined(__x86_64__) || defined(__i386__)
+	asm volatile("sfence" ::: "memory");
+#else
+	__sync_synchronize();
+#endif
+}
+
+
+static void
+radeon_psp_store32(uint8* bytes, uint32 value)
+{
+	bytes[0] = (uint8)value;
+	bytes[1] = (uint8)(value >> 8);
+	bytes[2] = (uint8)(value >> 16);
+	bytes[3] = (uint8)(value >> 24);
+}
+
+
+static bool
+radeon_psp_wait(uint32 byteOffset, uint32 mask, uint32 value, int milliseconds,
+	uint32* _seen)
+{
+	uint32 seen = 0;
+	for (int i = 0; i < milliseconds; i++) {
+		seen = Read32(OUT, byteOffset);
+		if ((seen & mask) == value) {
+			*_seen = seen;
+			return true;
+		}
+		snooze(1000);
+	}
+	*_seen = seen;
+	return false;
+}
+
+
+struct radeon_psp_item {
+	const char*	name;
+	uint32		type;
+	uint32		bytes;
+	uint64		offset;
+	uint8*		address;
+};
+
+
+static status_t
+radeon_psp_stage(const radeon_gfx9_ucode& fw, radeon_psp_item* item)
+{
+	uint64 bytes = (fw.ucodeBytes + 4095ull) & ~4095ull;
+	status_t result = radeon_vram_alloc(bytes, 4096, &item->offset,
+		&item->address);
+	if (result != B_OK || item->address == NULL)
+		return result == B_OK ? B_ERROR : result;
+
+	memcpy(item->address, fw.ucode, fw.ucodeBytes);
+	if (bytes > fw.ucodeBytes) {
+		memset(item->address + fw.ucodeBytes, 0,
+			(size_t)(bytes - fw.ucodeBytes));
+	}
+	item->bytes = fw.ucodeBytes;
+	return B_OK;
+}
+
+
+static status_t
+radeon_psp_load_engines(uint32 frameBase)
+{
+	struct {
+		const char*	name;
+		uint32		type;
+		bool		required;
+	} files[4] = {
+		{ "renoir_rlc.bin", 8, false },
+		{ "renoir_pfp.bin", 2, true },
+		{ "renoir_ce.bin", 3, true },
+		{ "renoir_me.bin", 1, true },
+	};
+
+	radeon_psp_item items[4];
+	uint32 count = 0;
+	memset(items, 0, sizeof(items));
+	for (uint32 i = 0; i < 4; i++) {
+		radeon_gfx9_ucode fw;
+		status_t opened = radeon_gfx9_open_ucode(files[i].name, &fw);
+		if (opened == B_ENTRY_NOT_FOUND && !files[i].required)
+			continue;
+		if (opened != B_OK)
+			return opened;
+
+		items[count].name = files[i].name;
+		items[count].type = files[i].type;
+		status_t staged = radeon_psp_stage(fw, &items[count]);
+		ERROR("%s: R5 radeon_hd: PSP %s header %u.%u version 0x%"
+			B_PRIx32 " bytes %" B_PRIu32 "\n", __func__, files[i].name,
+			fw.headerMajor, fw.headerMinor, fw.version, fw.ucodeBytes);
+		free(fw.blob);
+		if (staged != B_OK)
+			return staged;
+		count++;
+	}
+
+	uint64 ringOffset = 0;
+	uint8* ringAddress = NULL;
+	status_t result = radeon_vram_alloc(kPspRingBytes, kPspRingBytes,
+		&ringOffset, &ringAddress);
+	if (result != B_OK || ringAddress == NULL)
+		return result == B_OK ? B_ERROR : result;
+	memset(ringAddress, 0, kPspRingBytes);
+
+	uint64 cmdOffset = 0;
+	uint8* cmdAddress = NULL;
+	result = radeon_vram_alloc(4096, 4096, &cmdOffset, &cmdAddress);
+	if (result != B_OK || cmdAddress == NULL)
+		return result == B_OK ? B_ERROR : result;
+	memset(cmdAddress, 0, 4096);
+
+	uint64 fenceOffset = 0;
+	uint8* fenceAddress = NULL;
+	result = radeon_vram_alloc(4096, 4096, &fenceOffset, &fenceAddress);
+	if (result != B_OK || fenceAddress == NULL)
+		return result == B_OK ? B_ERROR : result;
+	memset(fenceAddress, 0, 4096);
+	radeon_visible_barrier();
+
+	uint64 ringGpu = ((uint64)frameBase << 24) + ringOffset;
+	uint64 cmdGpu = ((uint64)frameBase << 24) + cmdOffset;
+	uint64 fenceGpu = ((uint64)frameBase << 24) + fenceOffset;
+	ERROR("%s: R5 radeon_hd: PSP ring gpu 0x%" B_PRIx64
+		" cmd 0x%" B_PRIx64 "\n", __func__, ringGpu, cmdGpu);
+
+	const uint32 command = radeon_psp_byte(0x80);
+	const uint32 writePtr = radeon_psp_byte(0x83);
+	Write32(OUT, radeon_psp_byte(0x85), (uint32)ringGpu);
+	Write32(OUT, radeon_psp_byte(0x86), (uint32)(ringGpu >> 32));
+	Write32(OUT, radeon_psp_byte(0x87), kPspRingBytes);
+	Write32(OUT, command, 0x00020000);
+	snooze(20000);
+
+	uint32 seen = 0;
+	if (!radeon_psp_wait(command, 0x8000ffff, 0x80000000, 500, &seen)) {
+		ERROR("%s: R5 radeon_hd: PSP ring init 0x%" B_PRIx32 "\n",
+			__func__, seen);
+		return B_TIMED_OUT;
+	}
+	ERROR("%s: R5 radeon_hd: PSP GPCOM ring ready 0x%" B_PRIx32 "\n",
+		__func__, seen);
+
+	for (uint32 i = 0; i < count; i++) {
+		uint32 wptr = Read32(OUT, writePtr);
+		if (wptr >= (kPspRingBytes / 4) || (wptr % 16) != 0) {
+			ERROR("%s: R5 radeon_hd: PSP wptr 0x%" B_PRIx32 "\n",
+				__func__, wptr);
+			return B_ERROR;
+		}
+
+		uint64 fwGpu = ((uint64)frameBase << 24) + items[i].offset;
+		memset(cmdAddress, 0, kPspCmdBytes);
+		radeon_psp_store32(cmdAddress + 0, kPspCmdBytes);
+		radeon_psp_store32(cmdAddress + 4, 1);
+		radeon_psp_store32(cmdAddress + 8, 6);
+		radeon_psp_store32(cmdAddress + 28, (uint32)fwGpu);
+		radeon_psp_store32(cmdAddress + 32, (uint32)(fwGpu >> 32));
+		radeon_psp_store32(cmdAddress + 36, items[i].bytes);
+		radeon_psp_store32(cmdAddress + 40, items[i].type);
+
+		uint8* frame = ringAddress + (wptr * 4);
+		memset(frame, 0, 64);
+		// psp_ring_cmd_submit leaves cmd_buf_size at 0.
+		radeon_psp_store32(frame + 0, (uint32)cmdGpu);
+		radeon_psp_store32(frame + 4, (uint32)(cmdGpu >> 32));
+		radeon_psp_store32(frame + 12, (uint32)fenceGpu);
+		radeon_psp_store32(frame + 16, (uint32)(fenceGpu >> 32));
+		uint32 fenceValue = i + 1;
+		radeon_psp_store32(frame + 20, fenceValue);
+		volatile uint32* fence = (volatile uint32*)fenceAddress;
+		*fence = 0;
+		radeon_visible_barrier();
+
+		uint32 next = wptr + 16;
+		if (next >= (kPspRingBytes / 4))
+			next = 0;
+		Write32(OUT, writePtr, next);
+
+		uint32 fenceSeen = 0;
+		bool landed = false;
+		for (int wait = 0; wait < 500; wait++) {
+			fenceSeen = *fence;
+			if (fenceSeen == fenceValue) {
+				landed = true;
+				break;
+			}
+			snooze(1000);
+		}
+		uint32 status = radeon_le32(cmdAddress + 864);
+		ERROR("%s: R5 radeon_hd: PSP %s type %" B_PRIu32
+			" status 0x%" B_PRIx32 " fence 0x%" B_PRIx32 "\n",
+			__func__, items[i].name, items[i].type, status, fenceSeen);
+		if (!landed)
+			return B_TIMED_OUT;
+		if (status != 0)
+			return B_ERROR;
+	}
+	return B_OK;
 }
 
 
@@ -983,13 +1241,37 @@ radeon_gfx9_cp_start()
 	Write32(OUT, meCntl, savedMe | haltMask);
 	snooze(1000);
 
-	status_t loaded = radeon_gfx9_load_engine("renoir_pfp.bin", 0x5814,
-		0x5815);
-	if (loaded == B_OK)
-		loaded = radeon_gfx9_load_engine("renoir_ce.bin", 0x5818, 0x5819);
-	if (loaded == B_OK) {
-		loaded = radeon_gfx9_load_engine("renoir_me.bin", 0x5816,
-			0x5817);
+	uint32 fb = Read32(OUT, fbOffset);
+	uint64 ringGpu = ((uint64)fb << 24) + sRadeonGfx9Ring.ringOffset;
+	ERROR("%s: R5 radeon_hd: GFX9 MC_VM_FB_OFFSET 0x%" B_PRIx32
+		" ring gpu 0x%" B_PRIx64 "\n", __func__, fb, ringGpu);
+	if (fb == 0xffffffff || (ringGpu & 0xff) != 0) {
+		Write32(OUT, meCntl, savedMe);
+		ERROR("%s: R5 radeon_hd: GFX9 ring base refused\n", __func__);
+		return;
+	}
+
+	bool pspOwnsLoad = false;
+	if (radeon_mmio_fits(radeon_psp_byte(0x91))
+		&& radeon_mmio_fits(radeon_psp_byte(0x87))) {
+		uint32 sol = Read32(OUT, radeon_psp_byte(0x91));
+		uint32 boot = Read32(OUT, radeon_psp_byte(0x63));
+		ERROR("%s: R5 radeon_hd: PSP C2PMSG_81 0x%" B_PRIx32
+			" C2PMSG_35 0x%" B_PRIx32 "\n", __func__, sol, boot);
+		pspOwnsLoad = sol != 0 && sol != 0xffffffff;
+	}
+
+	status_t loaded = B_ERROR;
+	if (pspOwnsLoad)
+		loaded = radeon_psp_load_engines(fb);
+	else {
+		loaded = radeon_gfx9_load_engine("renoir_pfp.bin", 0x5814, 0x5815);
+		if (loaded == B_OK)
+			loaded = radeon_gfx9_load_engine("renoir_ce.bin", 0x5818, 0x5819);
+		if (loaded == B_OK) {
+			loaded = radeon_gfx9_load_engine("renoir_me.bin", 0x5816,
+				0x5817);
+		}
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);
@@ -1004,16 +1286,6 @@ radeon_gfx9_cp_start()
 		Write32(OUT, meCntl, savedMe);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch read 0x%" B_PRIx32
 			", ring left\n", __func__, scratchRead);
-		return;
-	}
-
-	uint32 fb = Read32(OUT, fbOffset);
-	uint64 ringGpu = ((uint64)fb << 24) + sRadeonGfx9Ring.ringOffset;
-	ERROR("%s: R5 radeon_hd: GFX9 MC_VM_FB_OFFSET 0x%" B_PRIx32
-		" ring gpu 0x%" B_PRIx64 "\n", __func__, fb, ringGpu);
-	if (fb == 0xffffffff || (ringGpu & 0xff) != 0) {
-		Write32(OUT, meCntl, savedMe);
-		ERROR("%s: R5 radeon_hd: GFX9 ring base refused\n", __func__);
 		return;
 	}
 

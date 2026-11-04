@@ -77,9 +77,9 @@ Location: `distro/firmware/amdgpu`. Installed at `system/non-packaged/data/firmw
 
 | Piece | Project | License |
 |---|---|---|
-| `renoir_pfp.bin`, `renoir_me.bin`, `renoir_ce.bin` | Advanced Micro Devices, Inc., 2024, via linux-firmware (11 Oct 2025) | AMD GPU microcode license |
+| `renoir_pfp.bin`, `renoir_me.bin`, `renoir_ce.bin`, `renoir_rlc.bin` | Advanced Micro Devices, Inc., 2024, via linux-firmware (11 Oct 2025) | AMD GPU microcode license |
 
-The blobs are unmodified. sha256 `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`, `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`, and `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`. `LICENSE.amdgpu` is the unmodified AMD text and is installed beside them. Redistribution of the binaries is allowed when that notice stays with them. This is not an open-source license. AMD does not endorse R5OS. Linux loads these through the PSP unless the load type is direct.
+The blobs are unmodified. sha256 `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`, `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`, `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`, and `66f4397c2e9d19af245f9da290c8678eb1a51cc815fa7864a9383c2cd0db319d`. `LICENSE.amdgpu` is the unmodified AMD text and is installed beside them. Redistribution of the binaries is allowed when that notice stays with them. This is not an open-source license. AMD does not endorse R5OS. Linux loads these through the PSP unless the load type is direct. RLC is header 2.1, ucode `0x3c`, 16896 bytes. PFP, ME, and CE stay header 1.0.
 
 ## Not included
 

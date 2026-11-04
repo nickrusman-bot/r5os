@@ -15,6 +15,7 @@ NAMES = (
     "renoir_pfp.bin",
     "renoir_me.bin",
     "renoir_ce.bin",
+    "renoir_rlc.bin",
     "LICENSE.amdgpu",
 )
 
@@ -24,8 +25,9 @@ local r5AmdGpuDir = [ FDirName $(HAIKU_TOP) data firmware amdgpu ] ;
 local r5AmdGpuPfp = <r5amdgpu>renoir_pfp.bin ;
 local r5AmdGpuMe = <r5amdgpu>renoir_me.bin ;
 local r5AmdGpuCe = <r5amdgpu>renoir_ce.bin ;
+local r5AmdGpuRlc = <r5amdgpu>renoir_rlc.bin ;
 local r5AmdGpuLicense = <r5amdgpu>LICENSE.amdgpu ;
-SEARCH on $(r5AmdGpuPfp) $(r5AmdGpuMe) $(r5AmdGpuCe) $(r5AmdGpuLicense)
+SEARCH on $(r5AmdGpuPfp) $(r5AmdGpuMe) $(r5AmdGpuCe) $(r5AmdGpuRlc) $(r5AmdGpuLicense)
 	= $(r5AmdGpuDir) ;
 
 AddDirectoryToHaikuImage system non-packaged data firmware amdgpu ;
@@ -35,6 +37,8 @@ AddFilesToHaikuImage system non-packaged data firmware amdgpu
 	: $(r5AmdGpuMe) ;
 AddFilesToHaikuImage system non-packaged data firmware amdgpu
 	: $(r5AmdGpuCe) ;
+AddFilesToHaikuImage system non-packaged data firmware amdgpu
+	: $(r5AmdGpuRlc) ;
 AddFilesToHaikuImage system non-packaged data firmware amdgpu
 	: $(r5AmdGpuLicense) ;
 """
@@ -58,8 +62,37 @@ def main() -> int:
 
     jam = HAIKU / "build/jam/images/definitions/regular"
     text = jam.read_text(encoding="utf-8")
-    if MARK in text:
+    if MARK in text and "renoir_rlc.bin" in text:
         print(f"already {jam.name} (amdgpu firmware)")
+        return 0
+    if MARK in text:
+        ce = "local r5AmdGpuCe = <r5amdgpu>renoir_ce.bin ;\n"
+        search = (
+            "SEARCH on $(r5AmdGpuPfp) $(r5AmdGpuMe) $(r5AmdGpuCe)"
+            " $(r5AmdGpuLicense)\n"
+        )
+        add = (
+            "AddFilesToHaikuImage system non-packaged data firmware amdgpu\n"
+            "\t: $(r5AmdGpuCe) ;\n"
+        )
+        if ce not in text or search not in text or add not in text:
+            raise SystemExit(f"amdgpu jam block in {jam} has no RLC slot")
+        text = text.replace(ce, ce + "local r5AmdGpuRlc = <r5amdgpu>renoir_rlc.bin ;\n", 1)
+        text = text.replace(
+            search,
+            "SEARCH on $(r5AmdGpuPfp) $(r5AmdGpuMe) $(r5AmdGpuCe)"
+            " $(r5AmdGpuRlc) $(r5AmdGpuLicense)\n",
+            1,
+        )
+        text = text.replace(
+            add,
+            add
+            + "AddFilesToHaikuImage system non-packaged data firmware amdgpu\n"
+            + "\t: $(r5AmdGpuRlc) ;\n",
+            1,
+        )
+        jam.write_text(text, encoding="utf-8", newline="\n")
+        print(f"patched {jam} (amdgpu RLC firmware)")
         return 0
     anchor = "AddFilesToHaikuImage home config settings : $(shortcutsSettingsFile) ;\n"
     if anchor not in text:
