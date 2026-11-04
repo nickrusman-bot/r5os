@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Three rings in one boot
+
+A ring of three or eight dwords reaches its write pointer while `SCRATCH_REG0` stays `0xcafedead`. The read pointer on those rings is the fetcher. One fetch block is 128 dwords, so a short ring cannot show whether the micro-engine retired the packet. This image runs three rings in one boot. Each ring has its own buffer. The calls stay inside `REMOVE-GFX9-SCRATCH-TEST`.
+
+The first ring is `SET_UCONFIG` of `SCRATCH_REG0` to `0xDEADBEEF`, then type-2 NOPs. The doorbell publishes write pointer 256. The second is `PACKET3` `WRITE_DATA` (opcode `0x37`, count 3) with engine 0, destination a register, `WR_CONFIRM`, register `0xC040`, and the same value, then NOPs, write pointer 256. The third is the 914-dword clear-state stream. Between rings the command processor is halted, the write pointer is cleared, and `CP_RB0_RPTR` is forced to 0 through `RB_RPTR_WR_ENA`. A doorbell of 0 is written only when that readback is 0. If the reset readback is not 0, that ring is logged and the next ring is still attempted. `radeon-gfx.txt` gains one `try` line per ring: name, write pointer, the reset read pointer, the read pointer just after the doorbell, the read pointer after the wait, scratch, and `CP_ME_CNTL`. The first line is `uconfig` and its reset field is 0 because that ring is the one programmed at start. The syslog line is `GFX9 ring tests`.
+
+Linux runs `gfx_v9_0_ring_test_ring` only after `gfx_v9_0_cp_gfx_start` has finished the clear-state. That clear-state is the stream that stops here. This boot does not copy the rest of `gfx_v9_0_hw_init`. `SH_MEM`, the tiling table, and the RLC CP jump table are still not programmed. The Renoir golden `GB_ADDR_CONFIG` value `0x24000042` is already written.
+
+`jam -q @r5-anyboot` for AMD64 finished at 18:18 Europe/Amsterdam on 4 Nov 2026 with exit 0. The linked accelerant contains `GFX9 ring tests`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 18:23 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This stick has not been booted.
+
 ### The scratch packet follows the preamble
 
 The three-dword scratch packet was fetched and `SCRATCH_REG0` stayed `0xcafedead`. Linux submits that packet from `gfx_v9_0_ring_test_ring` only after `gfx_v9_0_cp_gfx_start` has sent the preamble and context control. This ring is those five dwords and then the same three-dword `SET_UCONFIG`. The 212 context registers are not in the buffer. One doorbell publishes write pointer 8 and is not written again. The calls stay inside `REMOVE-GFX9-SCRATCH-TEST`.

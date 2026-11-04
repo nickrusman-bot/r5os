@@ -998,33 +998,85 @@ radeon_gfx9_fill_start(uint32* ring, uint32 capacity)
 
 
 // REMOVE-GFX9-SCRATCH-TEST BEGIN
-// Temporary. Delete this function and the two calls in radeon_gfx9_prepare_ring,
-// and submit radeon_gfx9_fill_start again. The ring is the opening of
-// gfx_v9_0_cp_gfx_start, preamble and context control, then the three dwords
-// of gfx_v9_0_ring_test_ring. The 212 context registers are not included.
-// One doorbell publishes that write pointer. It is not written again.
+// Temporary. Delete this whole block and submit radeon_gfx9_fill_start from
+// radeon_gfx9_prepare_ring again. One boot runs three rings. Each has its own
+// buffer. The command processor is halted and the read pointer is forced to
+// 0 before the next doorbell. A doorbell of 0 is written only after that
+// readback is 0, so the ring cannot wrap. The write pointer of a ring is
+// 256 except the clear-state ring, whose pointer is its own length. 256 is
+// past one fetch block of 128 dwords.
+static const uint32 kGfx9TestWptr = 256;
+
+struct radeon_gfx9_ring_try {
+	char	name[12];
+	uint32	wptr;
+	uint32	reset;
+	uint32	rptrAt;
+	uint32	rptr;
+	uint32	scratch;
+	uint32	me;
+};
+
+static radeon_gfx9_ring_try sGfx9Tries[4];
+static uint32 sGfx9TryCount = 0;
+
+
+static void
+radeon_gfx9_try_note()
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (sGfx9TryCount == 0
+		|| find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
+			sizeof(path)) != B_OK)
+		return;
+	size_t used = strlen(path);
+	int wrote = snprintf(path + used, sizeof(path) - used, "/radeon-gfx.txt");
+	if (wrote < 0 || (size_t)wrote >= sizeof(path) - used)
+		return;
+	FILE* file = fopen(path, "a");
+	if (file == NULL)
+		return;
+	for (uint32 i = 0; i < sGfx9TryCount; i++) {
+		const radeon_gfx9_ring_try* item = &sGfx9Tries[i];
+		fprintf(file, "try %s wptr %u reset %08x rptr_at %08x rptr %08x"
+			" scratch %08x me %08x\n", item->name, item->wptr, item->reset,
+			item->rptrAt, item->rptr, item->scratch, item->me);
+	}
+	fclose(file);
+}
+
+
 static uint32
-radeon_gfx9_fill_scratch_test(uint32* ring, uint32 capacity)
+radeon_gfx9_fill_uconfig(uint32* ring, uint32 capacity)
 {
 	uint32 scratchReg = (kGfx9Seg1 + kScratchReg0) - kUconfigRegStart;
-	if (scratchReg >= 0x400u)
+	if (scratchReg >= 0x400u || capacity < kGfx9TestWptr)
 		return 0;
 	uint32 n = 0;
 	if (!radeon_gfx9_put(ring, capacity, &n,
-			radeon_packet3(kPacket3Preamble, 0))
-		|| !radeon_gfx9_put(ring, capacity, &n, kPreambleBegin)
-		|| !radeon_gfx9_put(ring, capacity, &n,
-			radeon_packet3(kPacket3ContextControl, 1))
-		|| !radeon_gfx9_put(ring, capacity, &n, 0x80000000)
-		|| !radeon_gfx9_put(ring, capacity, &n, 0x80000000)
-		|| !radeon_gfx9_put(ring, capacity, &n,
 			radeon_packet3(kPacket3SetUconfig, 1))
 		|| !radeon_gfx9_put(ring, capacity, &n, scratchReg)
 		|| !radeon_gfx9_put(ring, capacity, &n, 0xDEADBEEF))
 		return 0;
-	if (n != 8)
+	return kGfx9TestWptr;
+}
+
+
+static uint32
+radeon_gfx9_fill_write_data(uint32* ring, uint32 capacity)
+{
+	// gfx_v9_0_write_data_to_reg, engine ME, destination a register.
+	uint32 reg = kGfx9Seg1 + kScratchReg0;
+	if (capacity < kGfx9TestWptr)
 		return 0;
-	return n;
+	uint32 n = 0;
+	if (!radeon_gfx9_put(ring, capacity, &n, radeon_packet3(0x37, 3))
+		|| !radeon_gfx9_put(ring, capacity, &n, 1u << 20)
+		|| !radeon_gfx9_put(ring, capacity, &n, reg)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0xDEADBEEF))
+		return 0;
+	return kGfx9TestWptr;
 }
 // REMOVE-GFX9-SCRATCH-TEST END
 
@@ -1040,7 +1092,7 @@ radeon_gfx9_prepare_ring()
 	// Counted so radeon_gfx9_fill_start stays compiled. Those dwords are
 	// not written into the ring.
 	(void)radeon_gfx9_fill_start(NULL, 0xffffffffu);
-	uint32 submitted = radeon_gfx9_fill_scratch_test(NULL, 0xffffffffu);
+	uint32 submitted = radeon_gfx9_fill_uconfig(NULL, 0xffffffffu);
 	// REMOVE-GFX9-SCRATCH-TEST END
 	uint32 ringBytes = radeon_gfx9_ring_bytes(submitted);
 	if (submitted == 0 || ringBytes == 0 || radeon_gfx9_rb_cntl(ringBytes) == 0
@@ -1072,7 +1124,7 @@ radeon_gfx9_prepare_ring()
 	for (uint32 i = 0; i < dwords; i++)
 		ring[i] = kType2Nop;
 	// REMOVE-GFX9-SCRATCH-TEST BEGIN
-	if (radeon_gfx9_fill_scratch_test(ring, dwords) != submitted) {
+	if (radeon_gfx9_fill_uconfig(ring, dwords) != submitted) {
 	// REMOVE-GFX9-SCRATCH-TEST END
 		ERROR("%s: R5 radeon_hd: GFX9 clear state refused\n", __func__);
 		return;
@@ -1096,7 +1148,7 @@ radeon_gfx9_prepare_ring()
 		" read 0x%" B_PRIx32 "\n", __func__, ringOffset, ringBytes, submitted,
 		headerRead, fenceOffset, fenceRead);
 	// REMOVE-GFX9-SCRATCH-TEST BEGIN
-	ERROR("%s: R5 radeon_hd: GFX9 preamble scratch test\n", __func__);
+	ERROR("%s: R5 radeon_hd: GFX9 ring tests\n", __func__);
 	// REMOVE-GFX9-SCRATCH-TEST END
 }
 
@@ -2032,6 +2084,99 @@ radeon_gfx9_note_doorbell(bool rang, uint32 control, uint64 poll,
 
 
 
+// REMOVE-GFX9-SCRATCH-TEST BEGIN
+static bool
+radeon_gfx9_run_try(const char* name, uint32 mode, uint32 fb, uint32 savedMe,
+	uint32 haltMask, uint32 cntl, uint32 meCntl, uint32 rbCntl, uint32 rbWptr,
+	uint32 rbWptrHi, uint32 rbRptr, uint32 rbRptrWr, uint32 rbBase,
+	uint32 rbBaseHi, uint32 scratchReg, bool ringDoorbell)
+{
+	if (sGfx9TryCount >= sizeof(sGfx9Tries) / sizeof(sGfx9Tries[0]))
+		return false;
+	radeon_gfx9_ring_try* item = &sGfx9Tries[sGfx9TryCount];
+	memset(item, 0, sizeof(*item));
+	snprintf(item->name, sizeof(item->name), "%s", name);
+	item->reset = 0xffffffff;
+
+	uint64 offset = 0;
+	uint8* address = NULL;
+	if (radeon_vram_alloc(4096, 4096, &offset, &address) != B_OK
+		|| address == NULL) {
+		sGfx9TryCount++;
+		return false;
+	}
+	uint32* ring = (uint32*)address;
+	uint32 dwords = 4096 / sizeof(uint32);
+	for (uint32 i = 0; i < dwords; i++)
+		ring[i] = kType2Nop;
+	uint32 wptr = 0;
+	if (mode == 0)
+		wptr = radeon_gfx9_fill_write_data(ring, dwords);
+	else
+		wptr = radeon_gfx9_fill_start(ring, dwords);
+	item->wptr = wptr;
+	if (wptr == 0 || wptr > dwords) {
+		sGfx9TryCount++;
+		return false;
+	}
+
+	Write32(OUT, meCntl, savedMe | haltMask);
+	snooze(1000);
+	Write32(OUT, rbWptr, 0);
+	Write32(OUT, rbWptrHi, 0);
+	Write32(OUT, rbCntl, cntl | (1u << 31));
+	Write32(OUT, rbRptrWr, 0);
+	Write32(OUT, rbCntl, cntl);
+	item->reset = Read32(OUT, rbRptr);
+	if (item->reset != 0) {
+		item->scratch = Read32(OUT, scratchReg);
+		item->me = Read32(OUT, meCntl);
+		sGfx9TryCount++;
+		ERROR("%s: R5 radeon_hd: GFX9 try %s reset rptr 0x%" B_PRIx32
+			"\n", __func__, name, item->reset);
+		return false;
+	}
+	Write32(OUT, scratchReg, 0xCAFEDEAD);
+	if (ringDoorbell)
+		*(volatile uint64*)(sGfx9Doorbell + kGfx9DoorbellByte) = 0;
+	uint64 gpu = ((uint64)fb << 24) + offset;
+	uint64 base = gpu >> 8;
+	Write32(OUT, rbBase, (uint32)base);
+	Write32(OUT, rbBaseHi, (uint32)(base >> 32));
+	radeon_gfx9_flush_visible(address, 4096);
+	radeon_visible_barrier();
+	Write32(OUT, meCntl, (savedMe | haltMask) & ~haltMask);
+	snooze(1000);
+	*(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512) = wptr;
+	radeon_visible_barrier();
+	if (ringDoorbell) {
+		*(volatile uint64*)(sGfx9Doorbell + kGfx9DoorbellByte) = wptr;
+		radeon_visible_barrier();
+	} else {
+		Write32(OUT, rbWptr, wptr);
+		Write32(OUT, rbWptrHi, 0);
+	}
+	item->rptrAt = Read32(OUT, rbRptr);
+	uint32 scratchNow = 0xCAFEDEAD;
+	for (int i = 0; i < 100; i++) {
+		scratchNow = Read32(OUT, scratchReg);
+		if (scratchNow == 0xDEADBEEF)
+			break;
+		snooze(1000);
+	}
+	item->rptr = Read32(OUT, rbRptr);
+	item->scratch = scratchNow;
+	item->me = Read32(OUT, meCntl);
+	sGfx9TryCount++;
+	ERROR("%s: R5 radeon_hd: GFX9 try %s wptr %" B_PRIu32
+		" rptr 0x%" B_PRIx32 " -> 0x%" B_PRIx32 " scratch 0x%" B_PRIx32
+		" me 0x%" B_PRIx32 "\n", __func__, name, wptr, item->rptrAt,
+		item->rptr, scratchNow, item->me);
+	return true;
+}
+// REMOVE-GFX9-SCRATCH-TEST END
+
+
 static void
 radeon_gfx9_cp_start()
 {
@@ -2298,6 +2443,25 @@ radeon_gfx9_cp_start()
 		" poll 0x%" B_PRIx64 " rptr wb 0x%" B_PRIx32 " mmio 0x%" B_PRIx32
 		"\n", __func__, ringDoorbell ? "yes" : "no", doorbellNow, pollRead,
 		rptrWb, rptrNow);
+	// REMOVE-GFX9-SCRATCH-TEST BEGIN
+	sGfx9TryCount = 0;
+	if (sGfx9TryCount < sizeof(sGfx9Tries) / sizeof(sGfx9Tries[0])) {
+		radeon_gfx9_ring_try* first = &sGfx9Tries[sGfx9TryCount++];
+		memset(first, 0, sizeof(*first));
+		snprintf(first->name, sizeof(first->name), "uconfig");
+		first->wptr = sRadeonGfx9Ring.submitted;
+		first->rptrAt = rptrAtBell;
+		first->rptr = rptrNow;
+		first->scratch = scratchNow;
+		first->me = Read32(OUT, meCntl);
+	}
+	radeon_gfx9_run_try("writedata", 0, fb, savedMe, haltMask, cntl, meCntl,
+		rbCntl, rbWptr, rbWptrHi, rbRptr, rbRptrWr, rbBase, rbBaseHi, scratch,
+		ringDoorbell);
+	radeon_gfx9_run_try("full", 1, fb, savedMe, haltMask, cntl, meCntl, rbCntl,
+		rbWptr, rbWptrHi, rbRptr, rbRptrWr, rbBase, rbBaseHi, scratch,
+		ringDoorbell);
+	// REMOVE-GFX9-SCRATCH-TEST END
 	if (scratchNow == 0xDEADBEEF) {
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 			rlcVersion, scratchNow, true, true, sRadeonGfx9Ring.submitted,
@@ -2305,6 +2469,7 @@ radeon_gfx9_cp_start()
 		radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb,
 			rptrAtBell, rptrWbAtBell, aperBefore, aperAfter, sdma0Range,
 			sdma1Range, ihRange, mmschRange);
+		radeon_gfx9_try_note();
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
 			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", fence landed\n",
 			__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
@@ -2342,6 +2507,7 @@ radeon_gfx9_cp_start()
 	radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb,
 		rptrAtBell, rptrWbAtBell, aperBefore, aperAfter, sdma0Range,
 		sdma1Range, ihRange, mmschRange);
+	radeon_gfx9_try_note();
 	ERROR("%s: R5 radeon_hd: GFX9 scratch stayed 0x%" B_PRIx32
 		" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", ring restored\n",
 		__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
