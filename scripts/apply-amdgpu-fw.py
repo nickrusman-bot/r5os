@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Install GFX 9.3 firmware where the accelerant can read it.
 
-The blobs and AMD's license stay unmodified. Barcelo and Renoir use the
-renoir files. Cezanne uses green_sardine. The image path is
+The blobs and AMD's license stay unmodified. Renoir 1636 and Lucienne 164c
+map to the renoir files. Barcelo 15e7 and Cezanne 1638 use green_sardine.
+The image path is
 system/non-packaged/data/firmware/amdgpu.
 """
 from __future__ import annotations
