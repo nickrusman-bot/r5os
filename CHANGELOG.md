@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### Renoir uses the GFX9 framebuffer aperture
+
+The page table at virtual address 0 was the Linux path for an APU whose memory hub is `connected_to_cpu` (XGMI 6.1.0). Renoir, Barcelo and Cezanne are not that part. `gfxhub_v1_0_init_system_aperture_regs` keeps the framebuffer aperture and, for `AMD_APU_IS_RENOIR` and `AMD_APU_IS_GREEN_SARDINE`, sets the system-aperture high page to one past the end of VRAM. A VRAM address above that register faults and hangs. The accelerant now only widens `MC_VM_FB_LOCATION` and `MC_VM_SYSTEM_APERTURE` so the visible BAR is inside them. The CP ring base stays `(MC_VM_FB_OFFSET << 24) + offset`. `VM_L2_CNTL4` does not force physical page-table requests.
+
+`RLC_CSIB_ADDR` and `RLC_CSIB_LENGTH` now point at the clear-state buffer from `gfx_v9_0_get_csb_buffer` (the preamble through `CLEAR_STATE`, 904 dwords for this table). F32 is stopped before that write, including on the direct loader. That loader then writes `renoir_rlc.bin` or `green_sardine_rlc.bin` at `RLCG_UCODE_LOADING_START_ADDRESS` (`0x2000`) and only then sets `RLC_ENABLE_F32`. The CE partition base, `VGT_INDEX_TYPE` and the scratch packet stay on the ring. The save/restore machine is enabled. `GRBM_CNTL` read timeout is `0xff`. The MGCG override bits are set and the RLC, CP and GFX power-gating enables are cleared, which is the Linux path for gating off. `RLC_CGCG_CGLS_CTRL_3D` clears only `CGCG_EN` and `CGLS_EN`. There is no SMU `DisableGfxOff` message. `GCEA_PROBE_MAP` from the Renoir golden list is not a `gc_9_0` register here and is not written. The other GC 9.3 golden values are. A miss restores those registers with the ring.
+
+`MC_VM_SYSTEM_APERTURE_DEFAULT_ADDR` is a zeroed framebuffer page. On Renoir `amdgpu_gmc_vram_mc2pa` leaves that MC address unchanged, which is the value Linux takes from `mem_scratch`. The fence page is not that redirect. `VM_L2_PROTECTION_FAULT_DEFAULT_ADDR` stays as the firmware left it: Linux fills it from a system DMA page, and this driver does not invent one. `CP_MEC_CNTL` keeps ME1 and ME2 halted. No compute ring is submitted.
+
+Cezanne `1002:1636` and `1002:1638` load `green_sardine_*.bin`, including MEC and MEC2. Barcelo `1002:15e7` keeps the `renoir` blobs and now also loads `renoir_mec.bin` as MEC and, because Linux ships no separate Renoir MEC2 file, as MEC_ME2. The direct register loader no longer treats a read of `0xffffffff` as success. The device names for `1636` and `1638` are Cezanne.
+
+`jam -q radeon_hd.accelerant` for AMD64 finished at 12:04 Europe/Amsterdam on 4 Nov 2026 with exit 0. It has not been booted. The image has not been rebuilt, and the stick has not been written.
+
 ### Renoir maps the GFX ring in the APU system VM
 
 The 11:03 boot submitted 914 dwords at physical `0x8107e9000` and left scratch at `0xcafedead`. `CP_RB0_RPTR` read `0x98`. Linux `gmc_v9_0` for an APU (`connected_to_cpu`, Renoir is GC 9.3) puts the GFXHUB system VM at virtual address 0. `amdgpu_gmc_init_pdb0` points that translation at `MC_VM_FB_OFFSET << 24`. The CP ring base is the virtual address. The PSP DMA keeps the physical address. This driver was giving the CP the physical address, which is outside that VM.
