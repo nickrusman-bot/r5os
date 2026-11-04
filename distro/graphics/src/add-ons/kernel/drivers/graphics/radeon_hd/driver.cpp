@@ -614,10 +614,10 @@ const struct supported_device {
 	// Raven and Picasso: DCN 1.0. Linux lists both as CHIP_RAVEN.
 	{0x15dd, 0, 0, RADEON_RAVEN, CHIP_APU, "Radeon Raven", RHD_DISPLAY_DCN, 1, 0, 0},
 	{0x15d8, 0, 0, RADEON_RAVEN, CHIP_APU, "Radeon Picasso", RHD_DISPLAY_DCN, 1, 0, 0},
-	// Renoir, Lucienne and Barcelo use renoir firmware. Cezanne uses
+	// Linux: 1636 and 164c load renoir firmware. 15e7 and 1638 load
 	// green_sardine. All four are DCN 2.1. 0x15e7 is the Ryzen 5 5625U.
 	{0x15e7, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir (Barcelo)", RHD_DISPLAY_DCN, 2, 1, 0},
-	{0x1636, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Cezanne", RHD_DISPLAY_DCN, 2, 1, 0},
+	{0x1636, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir", RHD_DISPLAY_DCN, 2, 1, 0},
 	{0x1638, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Cezanne", RHD_DISPLAY_DCN, 2, 1, 0},
 	{0x164c, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Lucienne", RHD_DISPLAY_DCN, 2, 1, 0},
 	// Navi 10: DCN 2.0.

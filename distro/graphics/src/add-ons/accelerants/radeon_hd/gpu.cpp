@@ -1285,10 +1285,12 @@ static const char*
 radeon_gfx9_fw_stem()
 {
 	uint16 pciID = gInfo->shared_info->pciID;
-	// Cezanne uses the green_sardine blobs. Barcelo 15e7 uses renoir.
-	if (pciID == 0x1636 || pciID == 0x1638)
-		return "green_sardine";
-	return "renoir";
+	// amdgpu_device_init_apu_flags: 1636 and 164c are AMD_APU_IS_RENOIR.
+	// 15e7 Barcelo and 1638 Cezanne are AMD_APU_IS_GREEN_SARDINE.
+	// The PFP, ME, and CE blobs differ. RLC and MEC are the same bytes.
+	if (pciID == 0x1636 || pciID == 0x164c)
+		return "renoir";
+	return "green_sardine";
 }
 
 

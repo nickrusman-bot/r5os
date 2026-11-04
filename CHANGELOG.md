@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Barcelo loads the Green Sardine command processor
+
+The stick written at 14:53 Europe/Amsterdam on 4 Nov 2026 fetched 152 dwords and stopped inside the first `SET_CONTEXT`. Scratch stayed `0xcafedead`. The files were `renoir_pfp.bin` version `0xc3` (21376 bytes), `renoir_me.bin` version `0xa7` (17280 bytes), and `renoir_ce.bin` version `0x50` (9088 bytes). `CP_RB0_RPTR` moved from `0x0` to `0x98` with the doorbell enable clear, so the write-pointer register is enough to start the fetch. This image does not switch the ring to the doorbell.
+
+Linux `amdgpu_device_init_apu_flags` marks `1636` and `164c` as `AMD_APU_IS_RENOIR` and `15e7` and `1638` as `AMD_APU_IS_GREEN_SARDINE`. Barcelo now loads `green_sardine_pfp.bin` (`0xc5`, 85504 bytes), `green_sardine_me.bin` (69120 bytes), and `green_sardine_ce.bin` (36352 bytes). RLC and MEC are the same bytes in both sets. `1636` is named Renoir. Lucienne `164c` still does not start the command processor. `SETUP_TMR` stays skipped, and a finished MEC refusal still does not stop the GFX ring.
+
+`jam -q @r5-anyboot` for AMD64 finished at 15:16 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 15:13. The linked accelerant contains `green_sardine`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 15:19 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### The GFX ring fetched 152 dwords and then stopped
 
 The stick written at 14:53 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. `SETUP_TMR` was skipped. PSP accepted RLC, PFP, CE, and ME with status `0x0` and fences `0x1` through `0x4`. The loaded files were still `renoir_rlc.bin` (`0x3c`), `renoir_pfp.bin` (`0xc3`, 21376 bytes), `renoir_ce.bin` (`0x50`, 9088 bytes), and `renoir_me.bin` (`0xa7`, 17280 bytes). The MEC body, type 4, finished with fence `0x5` and status `0x80000203`, and the start continued. The MEC jump table, type 5, finished with fence `0x6` and status `0x0`. The RLC serdes read CU `0x0` and non-CU `0x0` on the first poll. The clear-state buffer was programmed at GPU `0x810845000`, 904 dwords. `RLC_CNTL` stayed `0x1`. `RLC_GPM_GENERAL_6` read `0x59`.
