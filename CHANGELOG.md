@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### VMID 0 shader memory is set before the ring
+
+The ring of `SET_UCONFIG` plus NOPs stopped at read pointer `0x98` with scratch still `cafedead`, and the read pointer could not be cleared afterwards. That is the same stop as the clear-state stream, so the dword in that stream is not the cause. The micro-engine did not retire the first packet. `gfx_v9_0_constants_init` writes VMID 0 shader memory before any PM4, and this path did not. `GRBM_GFX_CNTL` is now forced to 0, which is ME 0, pipe 0, queue 0 and VMID 0. `SH_MEM_CONFIG` is set to `0x1018`: alignment unaligned is 3 on GFX9, shifted by 3, and `RETRY_DISABLE` is set because GC 9.3 noretry is 1. `SH_MEM_BASES` is 0. Both are restored if scratch stays `cafedead`.
+
+After the wait, and before a later ring is attempted, the log records `GRBM_STATUS`, `GRBM_STATUS2`, `CP_STAT`, `CP_CPC_STATUS`, `CP_INT_STATUS`, `VM_L2_PROTECTION_FAULT_STATUS` and its address, `RLC_SAFE_MODE`, `GRBM_GFX_CNTL` and `SH_MEM_CONFIG`. In `CP_STAT`, bit 14 is the VM walker, bit 15 the PFP and bit 17 the ME. In `CP_INT_STATUS`, bit 24 is an opcode error and bit 23 a privileged register. A non-zero VM fault status is a translation fault. `GCEA_PROBE_MAP` from the Renoir golden list is still not programmed. Its offset is not in the GC 9.0 header. `jam -q @r5-anyboot` for AMD64 finished at 19:20 Europe/Amsterdam on 4 Nov 2026 with exit 0. The linked accelerant contains `GFX9 stall`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was not written to the USB stick. This image has not been booted.
+
 ### Three rings in one boot
 
 A ring of three or eight dwords reaches its write pointer while `SCRATCH_REG0` stays `0xcafedead`. The read pointer on those rings is the fetcher. One fetch block is 128 dwords, so a short ring cannot show whether the micro-engine retired the packet. This image runs three rings in one boot. Each ring has its own buffer. The calls stay inside `REMOVE-GFX9-SCRATCH-TEST`.
