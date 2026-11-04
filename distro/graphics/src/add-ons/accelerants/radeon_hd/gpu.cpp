@@ -717,10 +717,12 @@ radeon_gpu_ring_setup()
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Linux loads Renoir RLC, PFP, ME, and CE through PSP v12. When C2PMSG_81
 // shows the secure OS, this driver creates the GPCOM ring and sends
-// GFX_CMD_ID_LOAD_IP_FW. MEC follows amdgpu_ucode_init_single_fw: the body
-// without the jump table is GFX_FW_TYPE_CP_MEC, and the table is
-// GFX_FW_TYPE_CP_MEC_ME1. gfx_v9_0_load_mec2_fw_bin_support is false for
-// GC 9.3.0, so MEC2 is not sent. It does not load the bootloader, reroute
+// GFX_CMD_ID_LOAD_IP_FW. PSP v12 on Renoir has no boot-time TMR, so
+// GFX_CMD_ID_SETUP_TMR runs first, the way psp_tmr_load does. MEC follows
+// amdgpu_ucode_init_single_fw: the body without the jump table is
+// GFX_FW_TYPE_CP_MEC, and the table is GFX_FW_TYPE_CP_MEC_ME1.
+// gfx_v9_0_load_mec2_fw_bin_support is false for GC 9.3.0, so MEC2 is not
+// sent. It does not load the bootloader, reroute
 // interrupts, or send a mode-1 reset. A missing sign of life uses the
 // direct writes in gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
 // gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
@@ -1387,9 +1389,21 @@ radeon_psp_load_engines(uint32 frameBase)
 		count++;
 	}
 
+	// PSP_TMR_SIZE is 4 MiB. The start is naturally aligned to that size.
+	// The pool cursor is already past the scanout, so the next boundary
+	// stays outside the firmware picture.
+	const uint32 kTmrBytes = 0x400000;
+	uint64 tmrOffset = 0;
+	uint8* tmrAddress = NULL;
+	status_t result = radeon_vram_alloc(kTmrBytes, kTmrBytes, &tmrOffset,
+		&tmrAddress);
+	if (result != B_OK || tmrAddress == NULL)
+		return result == B_OK ? B_ERROR : result;
+	memset(tmrAddress, 0, kTmrBytes);
+
 	uint64 ringOffset = 0;
 	uint8* ringAddress = NULL;
-	status_t result = radeon_vram_alloc(kPspRingBytes, kPspRingBytes,
+	result = radeon_vram_alloc(kPspRingBytes, kPspRingBytes,
 		&ringOffset, &ringAddress);
 	if (result != B_OK || ringAddress == NULL)
 		return result == B_OK ? B_ERROR : result;
@@ -1432,6 +1446,61 @@ radeon_psp_load_engines(uint32 frameBase)
 	}
 	ERROR("%s: R5 radeon_hd: PSP GPCOM ring ready 0x%" B_PRIx32 "\n",
 		__func__, seen);
+
+	uint64 tmrGpu = ((uint64)frameBase << 24) + tmrOffset;
+	// psp_prep_tmr_cmd_buf. virt_phy_addr is bit 1. On this APU
+	// amdgpu_gmc_vram_mc2pa leaves the MC address unchanged.
+	memset(cmdAddress, 0, kPspCmdBytes);
+	radeon_psp_store32(cmdAddress + 0, kPspCmdBytes);
+	radeon_psp_store32(cmdAddress + 4, 1);
+	radeon_psp_store32(cmdAddress + 8, 5);
+	radeon_psp_store32(cmdAddress + 28, (uint32)tmrGpu);
+	radeon_psp_store32(cmdAddress + 32, (uint32)(tmrGpu >> 32));
+	radeon_psp_store32(cmdAddress + 36, kTmrBytes);
+	radeon_psp_store32(cmdAddress + 40, 2);
+	radeon_psp_store32(cmdAddress + 44, (uint32)tmrGpu);
+	radeon_psp_store32(cmdAddress + 48, (uint32)(tmrGpu >> 32));
+	{
+		uint32 wptr = Read32(OUT, writePtr);
+		if (wptr >= (kPspRingBytes / 4) || (wptr % 16) != 0) {
+			ERROR("%s: R5 radeon_hd: PSP wptr 0x%" B_PRIx32 "\n",
+				__func__, wptr);
+			return B_ERROR;
+		}
+		uint8* frame = ringAddress + (wptr * 4);
+		memset(frame, 0, 64);
+		radeon_psp_store32(frame + 0, (uint32)cmdGpu);
+		radeon_psp_store32(frame + 4, (uint32)(cmdGpu >> 32));
+		radeon_psp_store32(frame + 12, (uint32)fenceGpu);
+		radeon_psp_store32(frame + 16, (uint32)(fenceGpu >> 32));
+		radeon_psp_store32(frame + 20, 1);
+		volatile uint32* fence = (volatile uint32*)fenceAddress;
+		*fence = 0;
+		radeon_visible_barrier();
+		uint32 next = wptr + 16;
+		if (next >= (kPspRingBytes / 4))
+			next = 0;
+		Write32(OUT, writePtr, next);
+		uint32 fenceSeen = 0;
+		bool landed = false;
+		for (int wait = 0; wait < 500; wait++) {
+			fenceSeen = *fence;
+			if (fenceSeen == 1) {
+				landed = true;
+				break;
+			}
+			snooze(1000);
+		}
+		uint32 tmrStatus = radeon_le32(cmdAddress + 864);
+		ERROR("%s: R5 radeon_hd: PSP TMR gpu 0x%" B_PRIx64
+			" bytes 0x%" B_PRIx32 " status 0x%" B_PRIx32
+			" fence 0x%" B_PRIx32 "\n",
+			__func__, tmrGpu, kTmrBytes, tmrStatus, fenceSeen);
+		if (!landed)
+			return B_TIMED_OUT;
+		if (tmrStatus != 0)
+			return B_ERROR;
+	}
 
 	for (uint32 i = 0; i < count; i++) {
 		uint32 wptr = Read32(OUT, writePtr);

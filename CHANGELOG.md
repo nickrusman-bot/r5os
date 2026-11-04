@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Renoir reserves a PSP trusted memory region before MEC
+
+The stick written at 13:48 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. The split was loaded: `renoir_mec.bin` body 267072 bytes, jump table 896 bytes. PSP accepted RLC, PFP, CE, and ME with status `0x0` and fences `0x1` through `0x4`. The MEC body, type 4, finished with fence `0x5` and status `0x80000203` again. The jump table was not the refusal. The ring was not submitted.
+
+That status is the same `LOAD_IP_FW` failure Linux logs when `SETUP_TMR` has not reserved a region. PSP v12 for Renoir (`MP0` 11.0.3 and 12.0.1) sets `boot_time_tmr` and `autoload_supported` to false, so `psp_hw_start` calls `psp_tmr_load` before any IP firmware. The accelerant now does that. The region is `PSP_TMR_SIZE`, 4 MiB, naturally aligned, in the visible pool past the scanout. `virt_phy_addr` is set. `amdgpu_gmc_vram_mc2pa` is the identity on this APU, so the system address is the same MC address. A non-zero TMR status restores the registers and does not program the ring. The MEC split is unchanged.
+
+`jam -q @r5-anyboot` for AMD64 finished at 14:05 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 14:03. The linked accelerant contains `PSP TMR`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 14:09 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### Renoir MEC is a body and a jump table
 
 The 13:23 stick reached the desktop. PSP accepted RLC, PFP, CE, and ME, and refused the MEC command, type 4, with status `0x80000203`. `renoir_mec.bin` is header 1.0. Its ucode is 267968 bytes. `jt_offset` is 66768 dwords and `jt_size` is 224 dwords, a suffix of 896 bytes. Linux `amdgpu_ucode_init_single_fw` on a PSP load sends `CP_MEC` as `ucode_size_bytes` minus that table, then `CP_MEC_ME1` as the table at `jt_offset`. That is 267072 bytes as type 4 and 896 bytes as type 5. PFP, ME, and CE also store jump-table fields. Those tables are not suffixes, and those files stay one image. `gfx_v9_0_load_mec2_fw_bin_support` is false for GC 9.3.0, so Renoir, Barcelo, and Cezanne do not send `CP_MEC_ME2`. A MEC table that is not that suffix is refused. A non-zero PSP status still restores the registers and does not program the ring.
