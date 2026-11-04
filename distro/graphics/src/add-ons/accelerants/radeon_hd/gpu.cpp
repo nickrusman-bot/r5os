@@ -732,8 +732,9 @@ radeon_gpu_ring_setup()
 // gfx_v9_0_ring_test_ring. GFX9 always sets use_doorbell. The 64-bit
 // write pointer is stored at the poll address and then written with
 // WDOORBELL64 at AMDGPU_DOORBELL64_GFX_RING0 (qword 0x8b, dword index
-// 0x116, byte 0x458). CP_RB0_WPTR is the fallback when that BAR is not
-// mapped. The read pointer Linux trusts is the writeback at the fence
+// 0x116, byte 0x458). soc15_common_hw_init sets RCC_DOORBELL_APER_EN
+// first. CP_RB0_WPTR is the fallback when that BAR is not mapped. The
+// read pointer Linux trusts is the writeback at the fence
 // page plus 256. After a PSP load, gfx_v9_0_rlc_stop waits for
 // the RLC serdes, then gfx_v9_0_rlc_resume clears clock gating and sets
 // RLC_ENABLE_F32. An APU does not enable the GUI idle interrupt. Navi is
@@ -785,6 +786,15 @@ static radeon_gfx9_ring_info sRadeonGfx9Ring;
 // offset is 0x458.
 static const uint32 kGfx9DoorbellIndex = 0x8bu << 1;
 static const uint32 kGfx9DoorbellByte = kGfx9DoorbellIndex << 2;
+// vega10_ip_offset.h NBIO instance 0, segment 2, is 0xD20.
+// nbio_7_0_offset.h puts these registers in that segment.
+// Renoir uses nbio_v7_0. The byte address is (base + index) * 4.
+// A read of 0xffffffff means this window does not decode the register.
+static const uint32 kNbioDoorbellAper = (0xD20u + 0x00C0u) * 4u;
+static const uint32 kNbioSdma0Range = (0xD20u + 0x01D0u) * 4u;
+static const uint32 kNbioSdma1Range = (0xD20u + 0x01D1u) * 4u;
+static const uint32 kNbioIhRange = (0xD20u + 0x01D2u) * 4u;
+static const uint32 kNbioMmschRange = (0xD20u + 0x01D3u) * 4u;
 
 static uint8* sGfx9Doorbell;
 static area_id sGfx9DoorbellArea = -1;
@@ -1946,7 +1956,9 @@ radeon_gfx9_program_csib(uint32 frameBase)
 
 static void
 radeon_gfx9_note_doorbell(bool rang, uint32 control, uint64 poll,
-	uint32 rptrWb)
+	uint32 rptrWb, uint32 rptrAtBell, uint32 rptrWbAtBell,
+	uint32 aperBefore, uint32 aperAfter, uint32 sdma0, uint32 sdma1,
+	uint32 ihRange, uint32 mmsch)
 {
 	char path[B_PATH_NAME_LENGTH];
 	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
@@ -1964,7 +1976,15 @@ radeon_gfx9_note_doorbell(bool rang, uint32 control, uint64 poll,
 	fprintf(file, "doorbell %s\n", rang ? "yes" : "no");
 	fprintf(file, "doorbell_ctl %08x\n", control);
 	fprintf(file, "poll %016" B_PRIx64 "\n", poll);
+	fprintf(file, "rptr_at_bell %08x\n", rptrAtBell);
+	fprintf(file, "rptr_wb_at_bell %08x\n", rptrWbAtBell);
 	fprintf(file, "rptr_wb %08x\n", rptrWb);
+	fprintf(file, "aperture_before %08x\n", aperBefore);
+	fprintf(file, "aperture_after %08x\n", aperAfter);
+	fprintf(file, "sdma0_range %08x\n", sdma0);
+	fprintf(file, "sdma1_range %08x\n", sdma1);
+	fprintf(file, "ih_range %08x\n", ihRange);
+	fprintf(file, "mmsch_range %08x\n", mmsch);
 	fclose(file);
 }
 
@@ -2154,6 +2174,32 @@ radeon_gfx9_cp_start()
 	Write32(OUT, rbRptrWr, 0);
 	Write32(OUT, rbCntl, cntl);
 	uint32 rptrZero = Read32(OUT, rbRptr);
+	uint32 aperBefore = 0xffffffff;
+	uint32 aperAfter = 0xffffffff;
+	uint32 sdma0Range = 0xffffffff;
+	uint32 sdma1Range = 0xffffffff;
+	uint32 ihRange = 0xffffffff;
+	uint32 mmschRange = 0xffffffff;
+	// soc15_common_hw_init enables RCC_DOORBELL_APER_EN before the CP
+	// ring test. nbio_v7_0_init_registers is empty. The SDMA, IH and
+	// VCN ranges are only read here: a write inside those ranges is not
+	// routed to the CP, and their current values are not known yet.
+	if (radeon_mmio_fits(kNbioMmschRange)) {
+		aperBefore = Read32(OUT, kNbioDoorbellAper);
+		sdma0Range = Read32(OUT, kNbioSdma0Range);
+		sdma1Range = Read32(OUT, kNbioSdma1Range);
+		ihRange = Read32(OUT, kNbioIhRange);
+		mmschRange = Read32(OUT, kNbioMmschRange);
+		if (aperBefore != 0xffffffff) {
+			Write32(OUT, kNbioDoorbellAper, aperBefore | 1u);
+			aperAfter = Read32(OUT, kNbioDoorbellAper);
+		}
+	}
+	ERROR("%s: R5 radeon_hd: NBIO aperture 0x%" B_PRIx32
+		" -> 0x%" B_PRIx32 " sdma0 0x%" B_PRIx32 " sdma1 0x%" B_PRIx32
+		" ih 0x%" B_PRIx32 " mmsch 0x%" B_PRIx32 "\n", __func__,
+		aperBefore, aperAfter, sdma0Range, sdma1Range, ihRange,
+		mmschRange);
 	bool ringDoorbell = sGfx9Doorbell != NULL
 		&& sGfx9DoorbellBytes >= (uint64)kGfx9DoorbellByte + sizeof(uint64);
 	uint32 doorbell = Read32(OUT, rbDoorbell);
@@ -2192,6 +2238,10 @@ radeon_gfx9_cp_start()
 		Write32(OUT, rbWptr, (uint32)wptr);
 		Write32(OUT, rbWptrHi, (uint32)(wptr >> 32));
 	}
+	uint32 rptrAtBell = Read32(OUT, rbRptr);
+	uint32 rptrWbAtBell = *(volatile uint32*)(sRadeonGfx9Ring.fenceAddress + 256);
+	ERROR("%s: R5 radeon_hd: GFX9 after doorbell rptr wb 0x%" B_PRIx32
+		" mmio 0x%" B_PRIx32 "\n", __func__, rptrWbAtBell, rptrAtBell);
 
 	uint32 scratchNow = 0xCAFEDEAD;
 	for (int i = 0; i < 100; i++) {
@@ -2210,7 +2260,9 @@ radeon_gfx9_cp_start()
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 			rlcVersion, scratchNow, true, true, sRadeonGfx9Ring.submitted,
 			rptrNow, rptrBefore);
-		radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb);
+		radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb,
+			rptrAtBell, rptrWbAtBell, aperBefore, aperAfter, sdma0Range,
+			sdma1Range, ihRange, mmschRange);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
 			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", fence landed\n",
 			__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
@@ -2218,6 +2270,8 @@ radeon_gfx9_cp_start()
 	}
 
 	Write32(OUT, meCntl, savedMe | haltMask);
+	if (aperBefore != 0xffffffff)
+		Write32(OUT, kNbioDoorbellAper, aperBefore);
 	Write32(OUT, rbBase, savedBase);
 	Write32(OUT, rbBaseHi, savedBaseHi);
 	Write32(OUT, rbCntl, savedCntl);
@@ -2243,7 +2297,9 @@ radeon_gfx9_cp_start()
 	radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
 		rlcVersion, scratchNow, false, true, sRadeonGfx9Ring.submitted,
 		rptrNow, rptrBefore);
-	radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb);
+	radeon_gfx9_note_doorbell(ringDoorbell, doorbellNow, pollRead, rptrWb,
+		rptrAtBell, rptrWbAtBell, aperBefore, aperAfter, sdma0Range,
+		sdma1Range, ihRange, mmschRange);
 	ERROR("%s: R5 radeon_hd: GFX9 scratch stayed 0x%" B_PRIx32
 		" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", ring restored\n",
 		__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
