@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The doorbell fetch stops at the same dword
+
+The stick written at 16:22 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. `RCC_DOORBELL_APER_EN` read `0x0` and then `0x1`. `BIF_SDMA0_DOORBELL_RANGE`, `BIF_SDMA1_DOORBELL_RANGE`, `BIF_IH_DOORBELL_RANGE` and `BIF_MMSCH0_DOORBELL_RANGE` all read `0x0`, so none of those ranges covered the GFX doorbell. The doorbell control was `0x40000458` and the poll slot read back `0x392`. Immediately after the doorbell the MMIO read pointer was `0x80`. After 100 ms it was `0x98`. The writeback at the fence plus 256 stayed `0x0` both times. Scratch stayed `0xcafedead`. The registers were restored.
+
+The 15:56 stick, with the aperture clear, left the read pointer at `0x0`. The 15:19 stick, writing `CP_RB0_WPTR` with the doorbell disabled, also stopped at `0x98`. The aperture lets the doorbell start the fetch. The command processor still stops 152 dwords in, inside the first `SET_CONTEXT`. The scratch packet at dword 911 is not reached.
+
 ### The NBIO doorbell aperture is enabled before the ring
 
 Linux 6.12 `soc15_common_hw_init` enables the doorbell aperture before the CP ring test. GC 9.3.0, which is Renoir, Barcelo and Cezanne, uses `soc15_asic_funcs`. An APU binds `nbio_v7_0`. `nbio_v7_0_enable_doorbell_aperture` sets `RCC_DOORBELL_APER_EN` bit 0. In `vega10_ip_offset.h` NBIO segment 2 is `0xD20`, and `mmRCC_DOORBELL_APER_EN` is `0xC0` in that segment, so the byte offset is `0x3780`. `nbio_v7_0_init_registers` is empty. `nbio_v7_0_enable_doorbell_selfring_aperture` is empty. The same init then programs the SDMA doorbell ranges and says a write inside the SDMA, IH or multimedia range is not routed to the CP. Those ranges are not written here. They are read and logged: `BIF_SDMA0_DOORBELL_RANGE` at byte `0x3BC0`, SDMA1 at `0x3BC4`, IH at `0x3BC8`, and `BIF_MMSCH0_DOORBELL_RANGE` at `0x3BCC`. A read of `0xffffffff` means the register did not decode, and the aperture bit is left alone. After the doorbell store the log records the MMIO read pointer and the writeback at once, and again after the 100 ms wait. A missed scratch test restores the aperture register.
