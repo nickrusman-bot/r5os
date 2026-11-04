@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The GFX9 firmware reader accepts the MEC blob
+
+`renoir_mec.bin` is 268224 bytes. The reader allocated 262144 bytes and, once that buffer was full, reported the file missing. The ring was never submitted. The reader now takes the file size from `fstat` and accepts a file up to 1 MiB. A missing file, a bad size, and a short read are logged separately.
+
+`jam -q @r5-anyboot` for AMD64 finished at 13:19 Europe/Amsterdam on 4 Nov 2026 with exit 0. The linked accelerant contains `GFX9 firmware %s refused, size`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 13:23 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
+
 ### Renoir aperture boot stopped before the ring
 
 The stick written at 13:02 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `MC_VM_FB_OFFSET` was `0x810` and the ring GPU address was `0x8107e9000`. The firmware system aperture was low page `0x3d0000` and high page `0x3d0800`. The framebuffer page is `0x20400`, so that low page sits above the visible BAR. The high page `0x3d0800` already covers the needed `0x20800`, so only the low page is moved. PSP then accepted `renoir_rlc.bin`, `renoir_pfp.bin`, `renoir_ce.bin`, and `renoir_me.bin`. `renoir_mec.bin` is on the image at `/system/non-packaged/data/firmware/amdgpu` and is 268224 bytes. The reader stops at 262144 bytes and reports the file missing. The start restored the registers and did not submit the ring. Scratch was not tested. `packet` is `no`.
