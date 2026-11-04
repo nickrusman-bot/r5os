@@ -2471,8 +2471,12 @@ radeon_smu12_mode2_reset()
 		return false;
 	}
 
-	// Idle means the previous command left a non-zero response. Zero is
-	// still in progress. 100 ms matches the default usec_timeout.
+	// After the first command, idle means the previous response is
+	// non-zero. Zero is still in progress. 100 ms matches the default
+	// usec_timeout. The first command is different: smu_cmn treats
+	// SMU_FW_INIT as "ignore the initial response", because power-on
+	// leaves C2PMSG_90 at 0.
+	static bool mailboxUsed = false;
 	uint32 seen = 0;
 	for (int i = 0; i < 100; i++) {
 		seen = Read32(OUT, resp);
@@ -2481,11 +2485,15 @@ radeon_smu12_mode2_reset()
 		snooze(1000);
 	}
 	sSoc15ResetBefore = seen;
-	if (seen == 0) {
+	if (seen == 0 && mailboxUsed) {
 		ERROR("%s: R5 radeon_hd: SMU mailbox stayed 0, mode 2 not sent\n",
 			__func__);
 		return false;
 	}
+	if (seen == 0)
+		ERROR("%s: R5 radeon_hd: SMU mailbox initial 0, mode 2 sent\n",
+			__func__);
+	mailboxUsed = true;
 
 	Write32(OUT, resp, 0);
 	Write32(OUT, arg, 2);

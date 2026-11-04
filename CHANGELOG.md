@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The first SMU message is sent when the mailbox is still 0
+
+`smu_cmn_send_smc_msg_with_param` polls `C2PMSG_90` only after the SMU has left `SMU_FW_INIT`. The comment there is "Ignore initial smu response register value". Power-on leaves that register at 0. A later 0 means the previous command is still running. The 21:27 stick hit the power-on case: `mode2_before` was 0, the message was not written, and the ring was not programmed. The first mode-2 message is now sent when the register is still 0. A later call still waits. The ring is programmed only when the answer is `1`. This has not been booted.
+
 ### The 21:27 stick reached the desktop, and the ring was not started
 
 The stick written at 21:27 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. `radeon-gfx.txt` says `device 15e7`, `psp no`, `rlc no`, `scratch 00000000`, `packet no`, `mode2 no`, `mode2_before 00000000`, `mode2_after ffffffff`. The syslog line is `SMU mailbox stayed 0, mode 2 not sent`. The response register was still 0 after 100 ms, so the reset message was not written and the command processor was left alone. Scratch was not tested.
