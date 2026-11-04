@@ -2,7 +2,9 @@
 
 ### The SMU mailbox is MP1 base 0x16000 plus C2PMSG_90
 
-`MP1_BASE.instance[0].segment[0]` in `vega10_ip_offset.h` is `0x00016000`. `mmMP1_SMN_C2PMSG_90` is already `0x029a`, so the dword is `0x1629a` and the byte offset is `0x58a68`. The previous code added `0x029a` to `0x00016200` and read dword `0x1649a`. That read was 0, so mode 2 was not sent and the RLC lists never ran. The 21:27 stick did that. The accelerant now logs `SMU mailbox byte`. This address has not been booted.
+`MP1_BASE.instance[0].segment[0]` in `vega10_ip_offset.h` is `0x00016000`. `mmMP1_SMN_C2PMSG_90` is already `0x029a`, so the dword is `0x1629a` and the byte offset is `0x58a68`. The previous code added `0x029a` to `0x00016200` and read dword `0x1649a`. That read was 0, so mode 2 was not sent and the RLC lists never ran. The 21:27 stick did that. The accelerant now logs `SMU mailbox byte`.
+
+`jam -q @r5-anyboot` for AMD64 finished at 21:59 Europe/Amsterdam on 4 Nov 2026 with exit 0 (8401 targets). The linked accelerant contains `SMU mailbox byte`, `SMU mailbox initial 0`, and `rlc-cntl`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `12032b0cecd85982f957d46c0da92ae2621b4b0cc58f519be82ef8dc70fa3ba8`. The system package inside it is the build package, 41067049 bytes, at offset 1684320256. It was written raw to the General UDisk at 22:03 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. It has not been booted.
 
 ### The first SMU message is sent when the mailbox is still 0
 
