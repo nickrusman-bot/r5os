@@ -81,9 +81,19 @@ Location: `distro/firmware/amdgpu`. Installed at `system/non-packaged/data/firmw
 
 The blobs are unmodified. sha256 `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`, `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`, `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`, and `66f4397c2e9d19af245f9da290c8678eb1a51cc815fa7864a9383c2cd0db319d`. `LICENSE.amdgpu` is the unmodified AMD text and is installed beside them. Redistribution of the binaries is allowed when that notice stays with them. This is not an open-source license. AMD does not endorse R5OS. Linux loads these through the PSP unless the load type is direct. RLC is header 2.1, ucode `0x3c`, 16896 bytes. PFP, ME, and CE stay header 1.0.
 
+### AMD GFX9 clear-state table
+
+Location: `distro/graphics/src/add-ons/accelerants/radeon_hd/clearstate_defs.h` and `clearstate_gfx9.h`. Compiled into the `radeon_hd` accelerant. Not installed as a separate file.
+
+| Piece | Project | License |
+|---|---|---|
+| `clearstate_defs.h`, `clearstate_gfx9.h` | Advanced Micro Devices, Inc., 2012 and 2017, via Linux v6.12 `drivers/gpu/drm/amd/amdgpu/` | MIT |
+
+The files are unmodified. sha256 `70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285` and `e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5`. The permission text stays in each file. AMD does not endorse R5OS.
+
 ## Not included
 
-Linux DRM and `amdgpu` are not imported.
+The Linux `amdgpu` driver is not imported. The clear-state table above is the only file taken from that tree.
 
 ## Not done
 

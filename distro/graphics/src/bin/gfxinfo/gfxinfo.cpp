@@ -23,6 +23,9 @@ static const char* kKeys[] = {
 	"rlc_version",
 	"scratch",
 	"packet",
+	"dwords",
+	"rptr",
+	"wptr",
 };
 
 
@@ -70,7 +73,7 @@ int
 main()
 {
 	char path[B_PATH_NAME_LENGTH];
-	char text[1024];
+	char text[2048];
 	bool fromCache = false;
 	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, false, path,
 			sizeof(path)) == B_OK) {

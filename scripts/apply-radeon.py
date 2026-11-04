@@ -17,6 +17,8 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/display.cpp",
     "src/add-ons/accelerants/radeon_hd/mode.cpp",
     "src/add-ons/accelerants/radeon_hd/gpu.cpp",
+    "src/add-ons/accelerants/radeon_hd/clearstate_defs.h",
+    "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h",
     "src/add-ons/accelerants/radeon_hd/pll.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd.cpp",

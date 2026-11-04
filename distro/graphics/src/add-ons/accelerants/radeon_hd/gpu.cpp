@@ -719,17 +719,43 @@ radeon_gpu_ring_setup()
 // GFX_CMD_ID_LOAD_IP_FW. It does not load the bootloader, reroute interrupts,
 // or send a mode-1 reset. A missing sign of life uses the direct writes in
 // gfx_v9_0_cp_gfx_load_microcode. The ring setup follows
-// gfx_v9_0_cp_gfx_resume without the clear-state preamble. After a PSP load,
-// gfx_v9_0_rlc_resume clears clock gating and sets RLC_ENABLE_F32. An APU
-// does not enable the GUI idle interrupt. Navi is not programmed with these
-// registers.
+// gfx_v9_0_cp_gfx_resume, then the clear-state sequence from
+// gfx_v9_0_cp_gfx_start, then the scratch packet from
+// gfx_v9_0_ring_test_ring. After a PSP load, gfx_v9_0_rlc_resume clears
+// clock gating and sets RLC_ENABLE_F32. An APU does not enable the GUI idle
+// interrupt. Navi is not programmed with these registers. The clear-state
+// dwords are the AMD MIT table in clearstate_gfx9.h. This file does not
+// relicense that table.
+#include "clearstate_defs.h"
+#include "clearstate_gfx9.h"
+
 static const uint32 kGfx9Seg0 = 0x2000;
 static const uint32 kGfx9Seg1 = 0xA000;
-static const uint32 kGfx9RingBytes = 4096;
+// gfx_v9_0_get_csb_size is 904 for this table. SET_BASE is 4 dwords,
+// VGT_INDEX_TYPE is 3, and the scratch packet is 3.
+static const uint32 kGfx9StartDwords = 914;
+static const uint32 kPacket3Preamble = 0x4A;
+static const uint32 kPacket3ContextControl = 0x28;
+static const uint32 kPacket3SetContext = 0x69;
+static const uint32 kPacket3ClearState = 0x12;
+static const uint32 kPacket3SetBase = 0x11;
+static const uint32 kPacket3SetUconfig = 0x79;
+static const uint32 kContextRegStart = 0x0000a000;
+static const uint32 kContextRegEnd = 0x0000a400;
+static const uint32 kUconfigRegStart = 0x0000c000;
+static const uint32 kPreambleBegin = 2u << 28;
+static const uint32 kPreambleEnd = 3u << 28;
+static const uint32 kUconfigIndexType = 2u << 28;
+static const uint32 kCePartitionBase = 3;
+static const uint32 kVgtIndexType = 0x2243;
+static const uint32 kScratchReg0 = 0x2040;
+static const uint32 kType2Nop = 0x80000000;
 
 struct radeon_gfx9_ring_info {
 	uint64	ringOffset;
 	uint8*	ringAddress;
+	uint32	ringBytes;
+	uint32	submitted;
 	uint64	fenceOffset;
 	uint8*	fenceAddress;
 	bool	ready;
@@ -767,23 +793,141 @@ radeon_gfx9_halt_mask()
 }
 
 
+static uint32
+radeon_packet3(uint32 opcode, uint32 count)
+{
+	return (3u << 30) | ((count & 0x3fffu) << 16) | ((opcode & 0xffu) << 8);
+}
+
+
+static bool
+radeon_gfx9_put(uint32* ring, uint32 capacity, uint32* n, uint32 value)
+{
+	if (*n >= capacity)
+		return false;
+	if (ring != NULL)
+		ring[*n] = value;
+	*n += 1;
+	return true;
+}
+
+
+static uint32
+radeon_gfx9_ring_bytes(uint32 dwords)
+{
+	uint64 need = (uint64)dwords * sizeof(uint32);
+	uint32 size = 4096;
+	while ((uint64)size < need) {
+		if (size >= 64 * 1024)
+			return 0;
+		size *= 2;
+	}
+	return size;
+}
+
+
+static uint32
+radeon_gfx9_rb_cntl(uint32 ringBytes)
+{
+	uint32 qwords = ringBytes / 8;
+	uint32 bufsz = 0;
+	uint32 bit = 1;
+	while (bit < qwords && bufsz < 31) {
+		bit <<= 1;
+		bufsz++;
+	}
+	if (bit != qwords || bufsz < 2)
+		return 0;
+	return bufsz | ((bufsz - 2) << 8);
+}
+
+
+// Walks gfx9_cs_data the way gfx_v9_0_get_csb_buffer does, then the SET_BASE
+// and VGT_INDEX_TYPE packets from gfx_v9_0_cp_gfx_start, then the scratch
+// packet. A NULL ring only counts. A bad extent or a count other than
+// kGfx9StartDwords returns 0 so the ring is never programmed.
+static uint32
+radeon_gfx9_fill_start(uint32* ring, uint32 capacity)
+{
+	uint32 n = 0;
+	if (!radeon_gfx9_put(ring, capacity, &n, radeon_packet3(kPacket3Preamble, 0))
+		|| !radeon_gfx9_put(ring, capacity, &n, kPreambleBegin)
+		|| !radeon_gfx9_put(ring, capacity, &n,
+			radeon_packet3(kPacket3ContextControl, 1))
+		|| !radeon_gfx9_put(ring, capacity, &n, 0x80000000)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0x80000000))
+		return 0;
+
+	for (const cs_section_def* sect = gfx9_cs_data; sect->section != NULL;
+		++sect) {
+		for (const cs_extent_def* ext = sect->section; ext->extent != NULL;
+			++ext) {
+			if (sect->id != SECT_CONTEXT)
+				return 0;
+			if (ext->reg_count == 0 || ext->reg_count > 0x3fffu)
+				return 0;
+			if (ext->reg_index < kContextRegStart
+				|| ext->reg_index > kContextRegEnd - ext->reg_count)
+				return 0;
+			if (!radeon_gfx9_put(ring, capacity, &n,
+					radeon_packet3(kPacket3SetContext, ext->reg_count))
+				|| !radeon_gfx9_put(ring, capacity, &n,
+					ext->reg_index - kContextRegStart))
+				return 0;
+			for (uint32 i = 0; i < ext->reg_count; i++) {
+				if (!radeon_gfx9_put(ring, capacity, &n, ext->extent[i]))
+					return 0;
+			}
+		}
+	}
+
+	uint32 vgt = (kGfx9Seg1 + kVgtIndexType) - kUconfigRegStart;
+	uint32 scratch = (kGfx9Seg1 + kScratchReg0) - kUconfigRegStart;
+	if (vgt >= 0x400u || scratch >= 0x400u)
+		return 0;
+	if (!radeon_gfx9_put(ring, capacity, &n, radeon_packet3(kPacket3Preamble, 0))
+		|| !radeon_gfx9_put(ring, capacity, &n, kPreambleEnd)
+		|| !radeon_gfx9_put(ring, capacity, &n,
+			radeon_packet3(kPacket3ClearState, 0))
+		|| !radeon_gfx9_put(ring, capacity, &n, 0)
+		|| !radeon_gfx9_put(ring, capacity, &n, radeon_packet3(kPacket3SetBase, 2))
+		|| !radeon_gfx9_put(ring, capacity, &n, kCePartitionBase)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0x8000)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0x8000)
+		|| !radeon_gfx9_put(ring, capacity, &n,
+			radeon_packet3(kPacket3SetUconfig, 1))
+		|| !radeon_gfx9_put(ring, capacity, &n, kUconfigIndexType | vgt)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0)
+		|| !radeon_gfx9_put(ring, capacity, &n,
+			radeon_packet3(kPacket3SetUconfig, 1))
+		|| !radeon_gfx9_put(ring, capacity, &n, scratch)
+		|| !radeon_gfx9_put(ring, capacity, &n, 0xDEADBEEF))
+		return 0;
+	if (n != kGfx9StartDwords)
+		return 0;
+	return n;
+}
+
+
 static void
 radeon_gfx9_prepare_ring()
 {
 	const uint32 kFenceBytes = 4096;
-	// PACKET3(SET_UCONFIG_REG, 1). Type 3, count 1, opcode 0x79.
-	const uint32 kSetUconfig = (3u << 30) | (1u << 16) | (0x79u << 8);
-	// GC segment 1 is 0xA000 and SCRATCH_REG0 is 0x2040 there. The packet
-	// index is that dword offset minus SET_UCONFIG_REG_START (0xC000).
-	const uint32 kScratchIndex = (0xA000u + 0x2040u) - 0xC000u;
-	const uint32 kNop = 0x80000000;
 
 	memset(&sRadeonGfx9Ring, 0, sizeof(sRadeonGfx9Ring));
 
+	uint32 submitted = radeon_gfx9_fill_start(NULL, 0xffffffffu);
+	uint32 ringBytes = radeon_gfx9_ring_bytes(submitted);
+	if (submitted == 0 || ringBytes == 0 || radeon_gfx9_rb_cntl(ringBytes) == 0
+		|| submitted >= ringBytes / sizeof(uint32)) {
+		ERROR("%s: R5 radeon_hd: GFX9 clear state refused\n", __func__);
+		return;
+	}
+
 	uint64 ringOffset = 0;
 	uint8* ringAddress = NULL;
-	status_t result = radeon_vram_alloc(kGfx9RingBytes, kGfx9RingBytes,
-		&ringOffset, &ringAddress);
+	status_t result = radeon_vram_alloc(ringBytes, ringBytes, &ringOffset,
+		&ringAddress);
 	if (result != B_OK || ringAddress == NULL) {
 		ERROR("%s: R5 radeon_hd: GFX9 ring alloc failed\n", __func__);
 		return;
@@ -799,12 +943,13 @@ radeon_gfx9_prepare_ring()
 	}
 
 	uint32* ring = (uint32*)ringAddress;
-	uint32 dwords = kGfx9RingBytes / sizeof(uint32);
+	uint32 dwords = ringBytes / sizeof(uint32);
 	for (uint32 i = 0; i < dwords; i++)
-		ring[i] = kNop;
-	ring[0] = kSetUconfig;
-	ring[1] = kScratchIndex;
-	ring[2] = 0xDEADBEEF;
+		ring[i] = kType2Nop;
+	if (radeon_gfx9_fill_start(ring, dwords) != submitted) {
+		ERROR("%s: R5 radeon_hd: GFX9 clear state refused\n", __func__);
+		return;
+	}
 
 	volatile uint32* fence = (volatile uint32*)fenceAddress;
 	*fence = 0xCAFEDEAD;
@@ -813,14 +958,16 @@ radeon_gfx9_prepare_ring()
 
 	sRadeonGfx9Ring.ringOffset = ringOffset;
 	sRadeonGfx9Ring.ringAddress = ringAddress;
+	sRadeonGfx9Ring.ringBytes = ringBytes;
+	sRadeonGfx9Ring.submitted = submitted;
 	sRadeonGfx9Ring.fenceOffset = fenceOffset;
 	sRadeonGfx9Ring.fenceAddress = fenceAddress;
 	sRadeonGfx9Ring.ready = true;
 
 	ERROR("%s: R5 radeon_hd: GFX9 ring 0x%" B_PRIx64 "+0x%" B_PRIx32
-		" packet 0x%" B_PRIx32 " fence 0x%" B_PRIx64 " read 0x%" B_PRIx32
-		"\n", __func__, ringOffset, kGfx9RingBytes, headerRead,
-		fenceOffset, fenceRead);
+		" dwords %" B_PRIu32 " packet 0x%" B_PRIx32 " fence 0x%" B_PRIx64
+		" read 0x%" B_PRIx32 "\n", __func__, ringOffset, ringBytes, submitted,
+		headerRead, fenceOffset, fenceRead);
 }
 
 
@@ -1240,7 +1387,8 @@ radeon_gfx9_rlc_start(uint32* _before, uint32* _clock, uint32* _after,
 
 static void
 radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
-	uint32 rlcVersion, uint32 scratch, bool packet)
+	uint32 rlcVersion, uint32 scratch, bool packet, bool programmed,
+	uint32 dwords, uint32 rptr)
 {
 	char path[B_PATH_NAME_LENGTH];
 	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
@@ -1263,6 +1411,11 @@ radeon_gfx9_publish(bool psp, bool rlc, uint32 rlcBefore, uint32 rlcAfter,
 	fprintf(file, "rlc_version %08x\n", rlcVersion);
 	fprintf(file, "scratch %08x\n", scratch);
 	fprintf(file, "packet %s\n", packet ? "yes" : "no");
+	if (programmed) {
+		fprintf(file, "dwords %u\n", dwords);
+		fprintf(file, "rptr %08x\n", rptr);
+		fprintf(file, "wptr %08x\n", dwords);
+	}
 	fclose(file);
 }
 
@@ -1281,6 +1434,14 @@ radeon_gfx9_cp_start()
 {
 	if (!sRadeonGfx9Ring.ready)
 		return;
+
+	uint32 cntl = radeon_gfx9_rb_cntl(sRadeonGfx9Ring.ringBytes);
+	if (cntl == 0 || sRadeonGfx9Ring.submitted == 0
+		|| sRadeonGfx9Ring.submitted
+			>= sRadeonGfx9Ring.ringBytes / sizeof(uint32)) {
+		ERROR("%s: R5 radeon_hd: GFX9 ring size refused\n", __func__);
+		return;
+	}
 
 	uint32 highest = radeon_gfx9_byte(kGfx9Seg1, 0x5819);
 	if (!radeon_mmio_fits(highest)
@@ -1305,6 +1466,7 @@ radeon_gfx9_cp_start()
 	const uint32 maxContext = radeon_gfx9_byte(kGfx9Seg0, 0x10ae);
 	const uint32 rbBase = radeon_gfx9_byte(kGfx9Seg0, 0x1040);
 	const uint32 rbBaseHi = radeon_gfx9_byte(kGfx9Seg0, 0x10b1);
+	const uint32 rbRptr = radeon_gfx9_byte(kGfx9Seg0, 0x01c0);
 	const uint32 rbDelay = radeon_gfx9_byte(kGfx9Seg0, 0x01c1);
 	const uint32 scratch = radeon_gfx9_byte(kGfx9Seg1, 0x2040);
 	const uint32 haltMask = radeon_gfx9_halt_mask();
@@ -1350,7 +1512,7 @@ radeon_gfx9_cp_start()
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);
-		radeon_gfx9_publish(pspOwnsLoad, false, 0, 0, 0, 0, false);
+		radeon_gfx9_publish(pspOwnsLoad, false, 0, 0, 0, 0, false, false, 0, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 firmware not running, ring left\n",
 			__func__);
 		return;
@@ -1375,7 +1537,7 @@ radeon_gfx9_cp_start()
 			Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
 		}
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
-			rlcVersion, scratchRead, false);
+			rlcVersion, scratchRead, false, false, 0, 0);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch read 0x%" B_PRIx32
 			", ring left\n", __func__, scratchRead);
 		return;
@@ -1389,17 +1551,23 @@ radeon_gfx9_cp_start()
 	uint32 savedDoorbell = Read32(OUT, rbDoorbell);
 	uint32 savedContext = Read32(OUT, maxContext);
 	uint32 savedDevice = Read32(OUT, deviceId);
+	uint32 savedDelay = Read32(OUT, rbDelay);
+	uint32 savedVmid = Read32(OUT, rbVmid);
+	uint32 savedRptrAddr = Read32(OUT, rbRptrAddr);
+	uint32 savedRptrAddrHi = Read32(OUT, rbRptrAddrHi);
+	uint32 savedPollLo = Read32(OUT, rbPollLo);
+	uint32 savedPollHi = Read32(OUT, rbPollHi);
 
 	uint64 fenceGpu = ((uint64)fb << 24) + sRadeonGfx9Ring.fenceOffset;
 	uint64 rptrGpu = fenceGpu + 256;
 	uint64 pollGpu = fenceGpu + 512;
 	*(volatile uint32*)(sRadeonGfx9Ring.fenceAddress + 256) = 0;
 	*(volatile uint32*)(sRadeonGfx9Ring.fenceAddress + 512) = 0;
-	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress, kGfx9RingBytes);
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress,
+		sRadeonGfx9Ring.ringBytes);
 	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
+	radeon_visible_barrier();
 
-	// 4096-byte ring: order_base_2(size/8) is 9, and BLKSZ is that minus 2.
-	uint32 cntl = 9 | (7 << 8);
 	Write32(OUT, rbDelay, 0);
 	Write32(OUT, rbVmid, 0);
 	Write32(OUT, rbCntl, cntl);
@@ -1420,7 +1588,8 @@ radeon_gfx9_cp_start()
 	Write32(OUT, deviceId, 1);
 	Write32(OUT, meCntl, (savedMe | haltMask) & ~haltMask);
 	snooze(1000);
-	Write32(OUT, rbWptr, 3);
+	radeon_visible_barrier();
+	Write32(OUT, rbWptr, sRadeonGfx9Ring.submitted);
 	Write32(OUT, rbWptrHi, 0);
 
 	uint32 scratchNow = 0xCAFEDEAD;
@@ -1430,11 +1599,14 @@ radeon_gfx9_cp_start()
 			break;
 		snooze(1000);
 	}
+	uint32 rptrNow = Read32(OUT, rbRptr);
 	if (scratchNow == 0xDEADBEEF) {
 		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
-			rlcVersion, scratchNow, true);
+			rlcVersion, scratchNow, true, true, sRadeonGfx9Ring.submitted,
+			rptrNow);
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
-			", fence landed\n", __func__, scratchNow);
+			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", fence landed\n",
+			__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
 		return;
 	}
 
@@ -1447,15 +1619,23 @@ radeon_gfx9_cp_start()
 	Write32(OUT, rbDoorbell, savedDoorbell);
 	Write32(OUT, maxContext, savedContext);
 	Write32(OUT, deviceId, savedDevice);
+	Write32(OUT, rbDelay, savedDelay);
+	Write32(OUT, rbVmid, savedVmid);
+	Write32(OUT, rbRptrAddr, savedRptrAddr);
+	Write32(OUT, rbRptrAddrHi, savedRptrAddrHi);
+	Write32(OUT, rbPollLo, savedPollLo);
+	Write32(OUT, rbPollHi, savedPollHi);
 	Write32(OUT, meCntl, savedMe);
 	if (rlcStarted) {
 		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00), rlcBefore);
 		Write32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c49), rlcClock);
 	}
 	radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
-		rlcVersion, scratchNow, false);
+		rlcVersion, scratchNow, false, true, sRadeonGfx9Ring.submitted,
+		rptrNow);
 	ERROR("%s: R5 radeon_hd: GFX9 scratch stayed 0x%" B_PRIx32
-		", ring restored\n", __func__, scratchNow);
+		" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", ring restored\n",
+		__func__, scratchNow, rptrNow, sRadeonGfx9Ring.submitted);
 }
 // SPDX-SnippetEnd
 
