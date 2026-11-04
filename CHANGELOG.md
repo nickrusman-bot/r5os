@@ -4,7 +4,9 @@
 
 On the 09:00 stick, `renoir_pfp.bin` was written and `CP_PFP_UCODE_ADDR` read back `0xffffffff`. Linux `gfx_v9_0_cp_gfx_load_microcode` writes the version and does not read that register. The load is now accepted when the read is the version or `0xffffffff`. Any other value is still rejected. CE and ME use the same rule. The scratch write of `0xCAFEDEAD` is still required before `CP_RB0_BASE` is programmed. A scratch value other than `0xDEADBEEF` after 100 ms still halts the command processor and restores the ring registers.
 
-`jam -q @r5-anyboot` for AMD64 finished at 09:15 Europe/Amsterdam on 4 Nov 2026 with exit 0. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 09:19. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This image has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 09:15 Europe/Amsterdam on 4 Nov 2026 with exit 0. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 09:19. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened.
+
+That stick booted on the Ryzen 5 5625U and reached the desktop. The syslog accepts all three files with address `0xffffffff`: PFP version `0xc3`, 21376 bytes; CE version `0x50`, 9088 bytes; ME version `0xa7`, 17280 bytes. `CP_ME_CNTL` was `0x15000000` before the load. `MC_VM_FB_OFFSET` was `0x810`, so the ring GPU address was `0x8107e9000`. Scratch stayed `0xcafedead`. The log says `ring restored`. `keep the boot scanout` is 1920x1080. Tracker started. There is no panic. The command processor did not run the packet. The address registers still do not read back.
 
 ### Renoir PFP, ME, and CE load through the CP registers
 
