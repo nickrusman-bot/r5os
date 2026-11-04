@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The NBIO doorbell aperture is enabled before the ring
+
+Linux 6.12 `soc15_common_hw_init` enables the doorbell aperture before the CP ring test. GC 9.3.0, which is Renoir, Barcelo and Cezanne, uses `soc15_asic_funcs`. An APU binds `nbio_v7_0`. `nbio_v7_0_enable_doorbell_aperture` sets `RCC_DOORBELL_APER_EN` bit 0. In `vega10_ip_offset.h` NBIO segment 2 is `0xD20`, and `mmRCC_DOORBELL_APER_EN` is `0xC0` in that segment, so the byte offset is `0x3780`. `nbio_v7_0_init_registers` is empty. `nbio_v7_0_enable_doorbell_selfring_aperture` is empty. The same init then programs the SDMA doorbell ranges and says a write inside the SDMA, IH or multimedia range is not routed to the CP. Those ranges are not written here. They are read and logged: `BIF_SDMA0_DOORBELL_RANGE` at byte `0x3BC0`, SDMA1 at `0x3BC4`, IH at `0x3BC8`, and `BIF_MMSCH0_DOORBELL_RANGE` at `0x3BCC`. A read of `0xffffffff` means the register did not decode, and the aperture bit is left alone. After the doorbell store the log records the MMIO read pointer and the writeback at once, and again after the 100 ms wait. A missed scratch test restores the aperture register.
+
+The stick written at 15:56 Europe/Amsterdam on 4 Nov 2026 had the doorbell control at `0x40000458` and the poll slot at `0x392`, and both pointers stayed `0x0`. This image has not been booted.
+
+`jam -q @r5-anyboot` for AMD64 finished at 16:18 Europe/Amsterdam on 4 Nov 2026 with exit 0. `gpu.o` was rebuilt at 16:16. The linked accelerant contains `NBIO aperture`. The image is `r5-os-anyboot.iso`, 2156724224 bytes. It was written raw to the General UDisk at 16:22 Europe/Amsterdam on 4 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened.
+
 ### The doorbell was programmed and the ring did not fetch
 
 The stick written at 15:56 Europe/Amsterdam on 4 Nov 2026 reached the desktop on the Ryzen 5 5625U. There is no panic. The scanout stayed 1920x1080. Tracker started. PCI BAR 2 is `0xfcf0000000`, `0x200000` bytes, and the accelerant cloned it. `CP_RB_DOORBELL_CONTROL` read back `0x40000458`: enable set, offset `0x458`. The poll slot read back `0x392`. `CP_ME_CNTL` was `0x0`. Both the writeback and `CP_RB0_RPTR` stayed `0x0`. Scratch stayed `0xcafedead`. The registers were restored. `packet` is `no`.
