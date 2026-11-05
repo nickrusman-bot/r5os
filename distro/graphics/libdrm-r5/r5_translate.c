@@ -548,6 +548,41 @@ r5_sync_one(int fd, unsigned long op, uint32_t handle, uint64_t point,
 
 
 static int
+r5_sync_wait(int fd, uint32_t *handles, uint64_t *points, uint32_t count,
+	uint32_t drmFlags, int binary, int64_t timeout_nsec, uint32_t *first)
+{
+	r5_gpu_syncobj_wait wait;
+	memset(&wait, 0, sizeof(wait));
+	wait.size = (uint32_t)sizeof(wait);
+	wait.version = 1;
+	wait.count = count;
+	wait.handles = (uint64_t)(uintptr_t)handles;
+	wait.points = (uint64_t)(uintptr_t)points;
+	wait.timeout_us = r5_timeout_us(timeout_nsec);
+	if ((drmFlags & DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL) != 0)
+		wait.flags |= R5_GPU_WAIT_ALL;
+	if ((drmFlags & DRM_SYNCOBJ_WAIT_FLAGS_WAIT_AVAILABLE) != 0)
+		wait.flags |= R5_GPU_WAIT_AVAILABLE;
+	if ((drmFlags & DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT) != 0)
+		wait.flags |= R5_GPU_WAIT_FOR_SUBMIT;
+	if (binary)
+		wait.flags |= R5_GPU_WAIT_BINARY;
+	if (r5_call(fd, R5_GPU_SYNCOBJ_WAIT_LIST, &wait, sizeof(wait)) != 0) {
+		if (errno == ETIMEDOUT
+#if defined(__HAIKU__)
+			|| errno == B_TIMED_OUT
+#endif
+			)
+			errno = ETIME;
+		return -1;
+	}
+	if (first != NULL)
+		*first = wait.first_signaled;
+	return 0;
+}
+
+
+static int
 r5_get_cap(struct drm_get_cap *cap)
 {
 	cap->value = 0;
@@ -622,7 +657,7 @@ r5_device_new(const char *path, const r5_gpu_info *info)
 	device->businfo.pci->bus = (uint8_t)info->bus;
 	device->businfo.pci->dev = (uint8_t)info->dev;
 	device->businfo.pci->func = (uint8_t)info->func;
-	device->deviceinfo.pci->vendor_id = 0x1002;
+	device->deviceinfo.pci->vendor_id = (uint16_t)info->vendor;
 	device->deviceinfo.pci->device_id = (uint16_t)info->device;
 	device->deviceinfo.pci->revision_id = (uint8_t)info->revision;
 	device->deviceinfo.pci->subvendor_id = (uint16_t)info->subsystem_vendor;
@@ -638,8 +673,11 @@ r5_device_from_fd(int fd, const char *path)
 	r5_gpu_amd_info amd;
 	memset(&info, 0, sizeof(info));
 	memset(&amd, 0, sizeof(amd));
-	if (r5_info(fd, &info, &amd) != 0)
+	if (r5_info(fd, &info, &amd) != 0) {
+		fprintf(stderr, "r5 libdrm: R5_GPU_GET_INFO failed: %s\n",
+			strerror(errno));
 		return NULL;
+	}
 	return r5_device_new(path, &info);
 }
 
@@ -784,30 +822,22 @@ r5_drm_ioctl(int fd, unsigned long request, void *arg, size_t size)
 	if (nr == R5_IOC_NR(DRM_IOCTL_SYNCOBJ_WAIT)) {
 		struct drm_syncobj_wait *wait = arg;
 		uint32_t *handles = (uint32_t *)(uintptr_t)wait->handles;
-		uint32_t i;
-		uint64_t timeout = r5_timeout_us(wait->timeout_nsec);
 		if (handles == NULL)
 			return r5_fail(EINVAL);
-		for (i = 0; i < wait->count_handles; i++) {
-			if (r5_sync_one(fd, R5_GPU_SYNCOBJ_WAIT, handles[i], 0,
-				R5_GPU_SYNCOBJ_BINARY, timeout) != 0)
-				return -1;
-		}
+		if (r5_sync_wait(fd, handles, NULL, wait->count_handles, wait->flags,
+			1, wait->timeout_nsec, &wait->first_signaled) != 0)
+			return -1;
 		return 0;
 	}
 	if (nr == R5_IOC_NR(DRM_IOCTL_SYNCOBJ_TIMELINE_WAIT)) {
 		struct drm_syncobj_timeline_wait *wait = arg;
 		uint32_t *handles = (uint32_t *)(uintptr_t)wait->handles;
 		uint64_t *points = (uint64_t *)(uintptr_t)wait->points;
-		uint32_t i;
-		uint64_t timeout = r5_timeout_us(wait->timeout_nsec);
 		if (handles == NULL || points == NULL)
 			return r5_fail(EINVAL);
-		for (i = 0; i < wait->count_handles; i++) {
-			if (r5_sync_one(fd, R5_GPU_SYNCOBJ_WAIT, handles[i], points[i],
-				0, timeout) != 0)
-				return -1;
-		}
+		if (r5_sync_wait(fd, handles, points, wait->count_handles, wait->flags,
+			0, wait->timeout_nsec, &wait->first_signaled) != 0)
+			return -1;
 		return 0;
 	}
 	if (nr == R5_IOC_NR(DRM_IOCTL_SYNCOBJ_TIMELINE_SIGNAL)) {

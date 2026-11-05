@@ -963,6 +963,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;
 	r5_gfx9_prepare(&sHost, vramBytes);
 	bool ok = r5_gfx9_start(&sHost, pci, vramBytes, workload, compute, &sResults);
+	r5_gfx9_copy_firmware(info.fw_version, info.fw_feature, 32);
 	knote("k0 %s fence", ok ? "ok" : "fail");
 	if (ok && irq)
 		run_k1();

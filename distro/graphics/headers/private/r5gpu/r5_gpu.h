@@ -38,7 +38,8 @@ enum {
 	R5_GPU_SYNCOBJ_RESET = R5_GPU_OP_BASE + 15,
 	R5_GPU_SYNCOBJ_QUERY = R5_GPU_OP_BASE + 16,
 	R5_GPU_BO_EXPORT = R5_GPU_OP_BASE + 17,
-	R5_GPU_BO_IMPORT = R5_GPU_OP_BASE + 18
+	R5_GPU_BO_IMPORT = R5_GPU_OP_BASE + 18,
+	R5_GPU_SYNCOBJ_WAIT_LIST = R5_GPU_OP_BASE + 19
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -270,6 +271,29 @@ typedef struct {
 
 #define R5_GPU_SYNCOBJ_SIGNALED 1u
 #define R5_GPU_SYNCOBJ_BINARY 2u
+
+/* One wait covers the whole list. ALL waits for every handle. Without it
+ * the first finished handle is enough and first_signaled is its index.
+ * AVAILABLE waits for the submitted point, not the finished point.
+ * BINARY waits until the point is greater than 0. FOR_SUBMIT blocks
+ * until the point has been submitted. Without it an unsubmitted point
+ * times out at once. */
+#define R5_GPU_WAIT_ALL 1u
+#define R5_GPU_WAIT_AVAILABLE 2u
+#define R5_GPU_WAIT_BINARY 4u
+#define R5_GPU_WAIT_FOR_SUBMIT 8u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	count;
+	uint32_t	flags;
+	uint64_t	handles;
+	uint64_t	points;
+	uint64_t	timeout_us;
+	uint32_t	first_signaled;
+	uint32_t	_pad;
+} r5_gpu_syncobj_wait;
 
 typedef struct {
 	uint32_t	size;

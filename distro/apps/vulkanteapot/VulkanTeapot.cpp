@@ -303,9 +303,26 @@ main(int argc, char** argv)
 		die("no device", VK_ERROR_INITIALIZATION_FAILED);
 	VkPhysicalDevice* gpus = (VkPhysicalDevice*)calloc(count, sizeof(*gpus));
 	vkEnumeratePhysicalDevices(instance, &count, gpus);
-	VkPhysicalDevice gpu = gpus[0];
+	VkPhysicalDevice gpu = VK_NULL_HANDLE;
 	VkPhysicalDeviceProperties properties;
-	vkGetPhysicalDeviceProperties(gpu, &properties);
+	uint32_t driverID = 0;
+	memset(&properties, 0, sizeof(properties));
+	for (uint32_t i = 0; i < count; i++) {
+		VkPhysicalDeviceDriverProperties driver = {};
+		driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+		VkPhysicalDeviceProperties2 props2 = {};
+		props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+		props2.pNext = &driver;
+		vkGetPhysicalDeviceProperties2(gpus[i], &props2);
+		bool cpu = props2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+		if (gpu != VK_NULL_HANDLE && cpu)
+			continue;
+		gpu = gpus[i];
+		properties = props2.properties;
+		driverID = driver.driverID;
+		if (!cpu)
+			break;
+	}
 
 	uint32_t family = 0;
 	uint32_t families = 0;
@@ -622,7 +639,8 @@ main(int argc, char** argv)
 	vkMapMemory(device, readMemory, 0, kSize * kSize * 4, 0, (void**)&pixels);
 	const int sampleAt[][2] = {{64, 40}, {64, 64}, {64, 90}, {40, 70}, {90, 70}, {64, 20}};
 	printf("device %s\n", properties.deviceName);
-	printf("driver %s\n", properties.deviceName);
+	printf("deviceType %u\n", (unsigned)properties.deviceType);
+	printf("driverID %u\n", driverID);
 	printf("frames 1\n");
 	printf("fps 0\n");
 	int mismatch = 0;

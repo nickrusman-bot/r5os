@@ -69,6 +69,9 @@ struct radeon_info {
 	uint8			displayMajor;
 	uint8			displayMinor;
 	uint8			displayStepping;
+	/* Filled once, when the PSP load reads the ucode headers. */
+	uint32			fw_version[32];
+	uint32			fw_feature[32];
 // SPDX-SnippetEnd
 };
 

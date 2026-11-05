@@ -56,6 +56,7 @@ static size_t gBytes[64];
 static void *gArea[32];
 static int gAreaLive[32];
 static uint64_t gSyncPoint[128];
+static uint64_t gSyncSubmitted[128];
 static int gSyncLive[128];
 
 void *
@@ -255,6 +256,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 					gSyncPoint[handle - 1] = gSequence == 0 ? 1 : gSequence;
 				else if (signal[i].point > gSyncPoint[handle - 1])
 					gSyncPoint[handle - 1] = signal[i].point;
+				if (gSyncPoint[handle - 1] > gSyncSubmitted[handle - 1])
+					gSyncSubmitted[handle - 1] = gSyncPoint[handle - 1];
 			}
 		}
 		cs->sequence = gSequence;
@@ -287,6 +290,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 				return -ENOMEM;
 			gSyncLive[slot] = 1;
 			gSyncPoint[slot] = (sync->flags & R5_GPU_SYNCOBJ_SIGNALED) ? 1 : 0;
+			gSyncSubmitted[slot] = gSyncPoint[slot];
 			sync->handle = (uint32_t)slot + 1u;
 			if (live + 1 > gSyncPeak)
 				gSyncPeak = live + 1;
@@ -298,10 +302,12 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		if (op == R5_GPU_SYNCOBJ_DESTROY) {
 			gSyncLive[index] = 0;
 			gSyncPoint[index] = 0;
+			gSyncSubmitted[index] = 0;
 			return 0;
 		}
 		if (op == R5_GPU_SYNCOBJ_RESET) {
 			gSyncPoint[index] = 0;
+			gSyncSubmitted[index] = 0;
 			return 0;
 		}
 		if (op == R5_GPU_SYNCOBJ_QUERY) {
@@ -314,6 +320,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 				point = 1;
 			if (point > gSyncPoint[index])
 				gSyncPoint[index] = point;
+			if (point > gSyncSubmitted[index])
+				gSyncSubmitted[index] = point;
 			return 0;
 		}
 		{
@@ -323,6 +331,46 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 				return -ETIMEDOUT;
 			return 0;
 		}
+	}
+	if (op == R5_GPU_SYNCOBJ_WAIT_LIST) {
+		r5_gpu_syncobj_wait *wait = buf;
+		uint32_t *handles;
+		uint64_t *points;
+		uint32_t i;
+		int found = -1;
+		uint32_t met = 0;
+		if (bytes < sizeof(*wait) || wait->count == 0 || wait->handles == 0)
+			return -EINVAL;
+		handles = (uint32_t *)(uintptr_t)wait->handles;
+		points = (uint64_t *)(uintptr_t)wait->points;
+		for (i = 0; i < wait->count; i++) {
+			uint64_t value;
+			uint64_t target;
+			int ready;
+			if (handles[i] == 0 || handles[i] > 128 || !gSyncLive[handles[i] - 1])
+				return -EINVAL;
+			value = (wait->flags & R5_GPU_WAIT_AVAILABLE) != 0
+				? gSyncSubmitted[handles[i] - 1] : gSyncPoint[handles[i] - 1];
+			target = points == NULL ? 0 : points[i];
+			ready = (wait->flags & R5_GPU_WAIT_BINARY) != 0
+				? value > 0 : value >= target;
+			if (!ready)
+				continue;
+			met++;
+			if (found < 0)
+				found = (int)i;
+			if ((wait->flags & R5_GPU_WAIT_ALL) == 0)
+				break;
+		}
+		if ((wait->flags & R5_GPU_WAIT_ALL) != 0 && met == wait->count) {
+			wait->first_signaled = 0;
+			return 0;
+		}
+		if ((wait->flags & R5_GPU_WAIT_ALL) == 0 && found >= 0) {
+			wait->first_signaled = (uint32_t)found;
+			return 0;
+		}
+		return -ETIMEDOUT;
 	}
 	gEnosys++;
 	return -ENOSYS;
@@ -705,7 +753,7 @@ radv_replay(int fd)
 		binaryWait.count_handles = 1;
 		binaryWait.timeout_nsec = 0;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &binaryWait) != 0);
-		CHECK(errno == ETIMEDOUT);
+		CHECK(errno == ETIME);
 	}
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_SIGNAL, &list) == 0);
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_QUERY, &timeline) == 0);
@@ -714,6 +762,21 @@ radv_replay(int fd)
 	memset(&create, 0, sizeof(create));
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &create) == 0);
 	handles[1] = create.handle;
+	{
+		uint32_t both[2];
+		struct drm_syncobj_wait anyWait;
+		both[0] = handles[1];
+		both[1] = handles[0];
+		memset(&anyWait, 0, sizeof(anyWait));
+		anyWait.handles = (uint64_t)(uintptr_t)both;
+		anyWait.count_handles = 2;
+		anyWait.timeout_nsec = 0;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) == 0);
+		CHECK(anyWait.first_signaled == 1);
+		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
+		CHECK(errno == ETIME);
+	}
 	ret = amdgpu_device_initialize(node, &major, &minor, &dev);
 	CHECK(ret == 0);
 	CHECK(minor >= 42);

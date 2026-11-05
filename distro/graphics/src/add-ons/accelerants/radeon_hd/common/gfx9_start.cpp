@@ -407,6 +407,7 @@ struct radeon_gfx9_ucode {
 	const uint8*	ucode;
 	uint32			ucodeBytes;
 	uint32			version;
+	uint32			feature;
 	uint16			headerMajor;
 	uint16			headerMinor;
 	// gfx_firmware_header_v1_0 jt_offset and jt_size, in bytes from the
@@ -423,6 +424,45 @@ struct radeon_gfx9_ucode {
 	uint32			listSrmBytes;
 	uint32			listSrmOffset;
 };
+
+// Filled once, when the PSP load parses a header. GET_INFO copies these.
+static uint32 sFwVersion[32];
+static uint32 sFwFeature[32];
+
+
+void
+r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count)
+{
+	uint32 n = count < 32 ? count : 32;
+	if (version != NULL)
+		memcpy(version, sFwVersion, n * sizeof(uint32));
+	if (feature != NULL)
+		memcpy(feature, sFwFeature, n * sizeof(uint32));
+}
+
+
+static void
+radeon_gfx9_note_fw(const char* name, const radeon_gfx9_ucode* fw)
+{
+	uint32 index = 32;
+	if (name == NULL || fw == NULL)
+		return;
+	if (strstr(name, "_mec.bin") != NULL)
+		index = 0x08;
+	else if (strstr(name, "_me.bin") != NULL)
+		index = 0x04;
+	else if (strstr(name, "_pfp.bin") != NULL)
+		index = 0x05;
+	else if (strstr(name, "_ce.bin") != NULL)
+		index = 0x06;
+	else if (strstr(name, "_rlc.bin") != NULL)
+		index = 0x07;
+	if (index >= 32)
+		return;
+	sFwVersion[index] = fw->version;
+	sFwFeature[index] = fw->feature;
+}
+
 
 // Set when the three RLC 2.1 lists were accepted. SRM_ENABLE follows that.
 static bool sRlcRestoreLists = false;
@@ -514,6 +554,7 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 				out->ucode = blob + offset;
 				out->ucodeBytes = ucodeBytes;
 				out->version = version;
+				out->feature = radeon_le32(blob + 32);
 				out->headerMajor = headerMajor;
 				out->headerMinor = headerMinor;
 				out->jtOffset = jtOffset;
@@ -793,6 +834,7 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 			continue;
 		if (opened != B_OK)
 			return opened;
+		radeon_gfx9_note_fw(used, &fw);
 
 		if (files[i].jtType == 0) {
 			if (files[i].type == 8 && fw.headerMajor == 2

@@ -56,7 +56,8 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | `AMDGPU_INFO_VRAM_GTT` | translated |
 | `AMDGPU_INFO_READ_MMR_REG` `0x263e` | translated as `0x063e` |
 | `DRM_CAP_SYNCOBJ` and `DRM_CAP_SYNCOBJ_TIMELINE` | translated, value 1 |
-| syncobj create, wait, reset, signal, query | translated |
+| syncobj create, reset, signal, query | translated |
+| syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point |
 | `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE`, `TRANSFER` | ENOSYS on purpose |
 | `PRIME` | ENOSYS on purpose |
 | `CS` binary `chunk_sem` | translated |
