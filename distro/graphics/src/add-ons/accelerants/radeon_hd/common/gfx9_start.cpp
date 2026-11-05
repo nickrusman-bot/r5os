@@ -2052,9 +2052,9 @@ r5_gfx9_ring_ready()
 
 
 bool
-r5_gfx9_user_room()
+r5_gfx9_user_room(uint32 dwords)
 {
-	return r5_gfx9_ring_ready() && r5_ring_has_room(12);
+	return r5_gfx9_ring_ready() && r5_ring_has_room(dwords);
 }
 
 
@@ -2077,27 +2077,56 @@ r5_gfx9_user_seen()
 }
 
 
-/* Appends one VMID 1 indirect buffer and a 64-bit RELEASE_MEM. The write
- * pointer moves before the fence lands. The caller waits on the interrupt.
- * A full ring returns false and leaves the pointer where it was. */
-bool
-r5_gfx9_user_submit(uint64 ibVa, uint32 ibDwords, uint64* _sequence)
+uint64
+r5_gfx9_user_fence_mc()
 {
-	if (!r5_gfx9_user_room())
+	if (!r5_gfx9_ring_ready())
+		return 0;
+	uint32 location = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0980));
+	return radeon_gfx9_mc_addr(location,
+		sRadeonGfx9Ring.fenceOffset + kR5UserFenceOffset);
+}
+
+
+/* Appends VMID 1 indirect buffers and one 64-bit RELEASE_MEM. The fence
+ * address is the kernel MC address. The ring runs in VMID 0. The write
+ * pointer moves before the fence lands. A full ring returns false. */
+bool
+r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
+{
+	if (ibs == NULL || count == 0 || count > 8)
 		return false;
-	if ((ibVa & 3ull) != 0 || ibDwords == 0 || ibDwords > 0xfffffu)
+	uint32 total = 8;
+	for (uint32 i = 0; i < count; i++) {
+		if ((ibs[i].va & 3ull) != 0 || ibs[i].dwords == 0
+			|| ibs[i].dwords > 0xfffffu)
+			return false;
+		total += 4;
+	}
+	if (!r5_gfx9_user_room(total))
 		return false;
-	if (((uint64)kR5UserFenceVa & 7ull) != 0)
+	uint64 fenceMc = r5_gfx9_user_fence_mc();
+	if (fenceMc == 0 || (fenceMc & 7ull) != 0)
 		return false;
 	uint64 sequence = sUserSequence + 1;
-	uint32 packets[12];
-	r5_cs_gfx_ib(packets, ibVa, ibDwords, 1, kR5UserFenceVa, sequence);
+	uint32 packets[40];
+	uint32 filled = 0;
+	for (uint32 i = 0; i < count; i++) {
+		uint32 one[12];
+		r5_cs_gfx_ib(one, ibs[i].va, ibs[i].dwords, 1, fenceMc, sequence);
+		for (uint32 dword = 0; dword < 4; dword++)
+			packets[filled++] = one[dword];
+	}
+	uint32 one[12];
+	r5_cs_gfx_ib(one, ibs[0].va, ibs[0].dwords, 1, fenceMc, sequence);
+	for (uint32 dword = 4; dword < 12; dword++)
+		packets[filled++] = one[dword];
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint32 dwords = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
 	uint32* ring = (uint32*)sRadeonGfx9Ring.ringAddress;
-	for (uint32 i = 0; i < 12; i++)
+	for (uint32 i = 0; i < filled; i++)
 		ring[r5_gfx9_ring_index(wptr, i, dwords)] = packets[i];
-	uint64 newWptr = wptr + 12;
+	uint64 newWptr = wptr + filled;
 	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress,
 		sRadeonGfx9Ring.ringBytes);
 	radeon_visible_barrier();

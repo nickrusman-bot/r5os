@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * GFX IB and RELEASE_MEM for VMID 1. The dword layout follows Linux v6.12
- * gfx_v9_0_ring_emit_ib_gfx and gfx_v9_0_ring_emit_fence. The upper address
- * is the full 32 bits: a high VA does not fit in 16 bits.
+ * gfx_v9_0_ring_emit_ib_gfx and gfx_v9_0_ring_emit_fence. IB_BASE_HI is
+ * upper_32_bits masked with 0xffff, as Linux writes it. The RELEASE_MEM
+ * address is a VMID 0 MC address. The fence page is not mapped in VMID 1.
  */
 
 #ifndef R5_CS_H
@@ -12,9 +13,7 @@
 
 #include <stdint.h>
 
-/* The kernel fence page is mapped here. The 64-bit sequence is at +2048,
- * past the K0/K2 fence words, and 8-byte aligned. */
-static const uint64_t kR5UserFenceVa = 0x10000ull + 2048ull;
+/* 64-bit sequence on the kernel fence page, past the K0/K2 words. */
 static const uint32_t kR5UserFenceOffset = 2048u;
 
 static inline uint32_t
@@ -40,7 +39,7 @@ r5_cs_gfx_ib(uint32_t packet[12], uint64_t ib, uint32_t dwords,
 {
 	packet[0] = r5_cs_packet3(0x3f, 2);
 	packet[1] = (uint32_t)ib;
-	packet[2] = (uint32_t)(ib >> 32);
+	packet[2] = (uint32_t)(ib >> 32) & 0xffffu;
 	packet[3] = r5_cs_ib_control(dwords, vmid);
 	packet[4] = r5_cs_packet3(0x49, 6);
 	/* EOP_TCL1 | EOP_TC | EOP_TC_WB | EOP_TC_MD | CACHE_FLUSH_AND_INV_TS | EVENT_INDEX 5 */

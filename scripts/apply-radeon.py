@@ -42,6 +42,8 @@ FILES = (
     "src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
     "headers/private/r5gpu/r5_gpu.h",
+    "headers/private/r5gpu/r5_span.h",
+    "headers/private/r5gpu/r5_wait.h",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/Jamfile",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd_private.h",
     "headers/private/graphics/radeon_hd/radeon_hd.h",

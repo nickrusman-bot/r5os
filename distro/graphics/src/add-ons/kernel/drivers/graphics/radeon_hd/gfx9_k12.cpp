@@ -10,6 +10,7 @@
 #include "gfx9_start.h"
 #include "r5_vm.h"
 #include "r5_gpu.h"
+#include "r5_span.h"
 #include "radeon_hd_private.h"
 
 #include <PCI.h>
@@ -28,6 +29,8 @@ extern "C" status_t vm_set_area_memory_type(area_id id,
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+
+extern "C" void r5_gpu_eop();
 
 
 static radeon_info* sInfo = NULL;
@@ -252,8 +255,10 @@ ih_handler(void* data)
 		sLastSource = entry.source;
 		sLastRing = entry.ring;
 		if (entry.client == kClientCp && entry.source == kSourceEop
-			&& entry.ring == 0 && sEopSem >= 0) {
-			release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
+			&& entry.ring == 0) {
+			if (sEopSem >= 0)
+				release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
+			r5_gpu_eop();
 			sEopCount++;
 			woke = true;
 		}
@@ -771,6 +776,36 @@ r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset, uint8** address)
 }
 
 
+static r5_span sUserSpans[64];
+
+
+status_t
+r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset)
+{
+	if (offset == NULL || bytes == 0)
+		return B_BAD_VALUE;
+	bytes = (bytes + 4095ull) & ~4095ull;
+	if (r5_span_take(sUserSpans, 64, bytes, offset))
+		return B_OK;
+	uint8* address = NULL;
+	uint64 bumped = 0;
+	status_t status = r5_gfx9_alloc_vram(bytes, 4096, &bumped, &address);
+	if (status != B_OK)
+		return status;
+	if (!r5_span_add(sUserSpans, 64, bumped, bytes))
+		return B_NO_MEMORY;
+	*offset = bumped;
+	return B_OK;
+}
+
+
+void
+r5_gfx9_free_user_vram(uint64 offset)
+{
+	r5_span_free(sUserSpans, 64, offset);
+}
+
+
 bool
 r5_gfx9_vmid1_flush()
 {
@@ -803,18 +838,8 @@ r5_gfx9_vmid1_setup()
 	sVm.pages = sVmPages;
 	sVm.capacity = 1024;
 	sVm.alloc = vm_page_alloc;
-	uint64 fenceOffset = 0;
-	if (!r5_gfx9_fence_offset(&fenceOffset))
+	if (!r5_vm_new_page(&sVm))
 		return false;
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
-	uint64 fencePa = ((uint64)(fb & 0x00ffffffu) << 24) + fenceOffset;
-	uint64 pte = r5_gfx9_gart_pte(fencePa,
-		(uint64)R5_GFX9_PTE_VALID | (uint64)R5_GFX9_PTE_EXECUTABLE
-		| (uint64)R5_GFX9_PTE_READABLE | (uint64)R5_GFX9_PTE_WRITEABLE);
-	if (!r5_vm_map_page(&sVm, R5_GPU_VA_OFFSET, pte)) {
-		knote("vmid1 fail fence map");
-		return false;
-	}
 	asm volatile("sfence" ::: "memory");
 	uint64 rootPa = sVm.pages[0].physical;
 	if (!r5_gfx9_pde_aligned(rootPa))
@@ -872,7 +897,9 @@ r5_gfx9_vmid1_lookup(uint64 va)
 	uint64 pte = 0;
 	if (!sVmid1)
 		return false;
-	return r5_vm_lookup(&sVm, va & ~0xfffull, &pte) != 0;
+	if (r5_vm_lookup(&sVm, va & ~0xfffull, &pte) == 0)
+		return false;
+	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
 }
 
 

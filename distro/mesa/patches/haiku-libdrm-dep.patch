@@ -1,0 +1,19 @@
+Haiku is not a KMS platform, so Mesa skips dep_libdrm. RADV still calls
+drmGetVersion and the drm syncobj helpers. Look the dependency up when
+the amd driver is enabled. This does not add Haiku to the KMS list.
+
+--- a/meson.build
++++ b/meson.build
+@@ -1693,10 +1693,10 @@ endif
+ allow_fallback_for_libdrm = get_option('allow-fallback-for').contains('libdrm')
+ 
+ with_gallium_drisw_kms = false
+-if system_has_kms_drm
++if system_has_kms_drm or with_amd_vk
+   dep_libdrm = dependency(
+     'libdrm', version : '>=' + _drm_ver,
+-    required : with_dri2 or with_dri or with_gbm,
++    required : with_dri2 or with_dri or with_gbm or with_amd_vk,
+     allow_fallback: allow_fallback_for_libdrm,
+   )
+ else

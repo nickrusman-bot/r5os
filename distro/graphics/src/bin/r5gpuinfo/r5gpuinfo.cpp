@@ -46,8 +46,9 @@ main()
 		(unsigned long long)info->high_va_max);
 	if (sizeof(bytes) >= sizeof(r5_gpu_info) + sizeof(r5_gpu_amd_info)) {
 		r5_gpu_amd_info* amd = (r5_gpu_amd_info*)(bytes + sizeof(r5_gpu_info));
-		printf("r5gpuinfo: cu %u gb %08x external %x\n",
-			amd->active_cu, amd->gb_addr_config, amd->external_revision);
+		printf("r5gpuinfo: family %u cu %u external %x\n",
+			amd->device.family, amd->device.cu_active_number,
+			amd->device.external_rev);
 	}
 	return 0;
 }

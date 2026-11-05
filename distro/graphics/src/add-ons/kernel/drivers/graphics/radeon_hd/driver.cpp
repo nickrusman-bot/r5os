@@ -32,6 +32,9 @@
 #include <PCI.h>
 #include <SupportDefs.h>
 
+extern "C" void r5_gpu_init();
+extern "C" void r5_gpu_uninit();
+
 
 #define TRACE_DRIVER
 #ifdef TRACE_DRIVER
@@ -878,6 +881,7 @@ init_driver(void)
 	}
 
 	mutex_init(&gLock, "radeon hd ksync");
+	r5_gpu_init();
 
 	// find devices
 
@@ -965,6 +969,7 @@ init_driver(void)
 // SPDX-SnippetEnd
 
 	if (found == 0) {
+		r5_gpu_uninit();
 		mutex_destroy(&gLock);
 		put_module(B_AGP_GART_MODULE_NAME);
 		put_module(B_PCI_MODULE_NAME);
@@ -981,6 +986,7 @@ uninit_driver(void)
 {
 	TRACE("%s\n", __func__);
 
+	r5_gpu_uninit();
 	mutex_destroy(&gLock);
 
 	// free device related structures

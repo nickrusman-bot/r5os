@@ -12,7 +12,9 @@
 
 #include "r5_gpu.h"
 #include "r5_cs.h"
+#include "r5_span.h"
 #include "r5_vm.h"
+#include "r5_wait.h"
 
 #include <string.h>
 
@@ -32,7 +34,22 @@ main()
 	static_assert(offsetof(r5_gpu_info, size) == 0, "info size");
 	static_assert(offsetof(r5_gpu_info, version) == 4, "info version");
 	static_assert(offsetof(r5_gpu_info, va_offset) == 48, "va offset");
-	static_assert(offsetof(r5_gpu_cs, sequence) == 32, "cs sequence");
+	static_assert(offsetof(r5_gpu_cs, ibs) == 32, "cs ibs");
+	static_assert(offsetof(r5_gpu_cs, sequence) == 56, "cs sequence");
+	static_assert(offsetof(r5_gpu_va, bo_offset) == 24, "va bo offset");
+	static_assert(offsetof(r5_gpu_va, map_bytes) == 32, "va bytes");
+	static_assert(offsetof(r5_amdgpu_info_device, external_rev) == 8, "rev");
+	static_assert(offsetof(r5_amdgpu_info_device, family) == 16, "family");
+	static_assert(offsetof(r5_amdgpu_info_device, high_va_offset) == 336,
+		"high va");
+	static_assert(sizeof(r5_amdgpu_info_device) == 440, "device block");
+	static_assert(sizeof(r5_amdgpu_info_firmware) == 8, "fw");
+	static_assert(sizeof(r5_amdgpu_info_hw_ip) == 32, "hw ip");
+	static_assert(R5_AMDGPU_FAMILY_RV == 142u, "raven family");
+	if (r5_amd_external_rev(0x15e7u, 2u) != 0xa3u)
+		return fail("barcelo rev");
+	if (r5_amd_external_rev(0x1636u, 1u) != 0x92u)
+		return fail("renoir rev");
 	static_assert(R5_GPU_VA_OFFSET == 0x10000ull, "va bottom");
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");
 	static_assert(R5_GPU_HIGH_VA_OFFSET == 0xffff800000000000ull, "high");
@@ -110,8 +127,9 @@ main()
 
 	uint32_t packet[12];
 	const uint64_t ib = 0xffff800000001000ull;
-	r5_cs_gfx_ib(packet, ib, 16, 1, kR5UserFenceVa, 7);
-	if (packet[2] != 0xffff8000u)
+	const uint64_t fenceMc = 0x812c18000ull + kR5UserFenceOffset;
+	r5_cs_gfx_ib(packet, ib, 16, 1, fenceMc, 7);
+	if (packet[2] != 0x8000u)
 		return fail("ib high");
 	if ((packet[3] & (0xfu << 24)) != (1u << 24))
 		return fail("vmid");
@@ -121,10 +139,30 @@ main()
 		return fail("ib length");
 	if (packet[6] != ((2u << 29) | (2u << 24)))
 		return fail("fence sel");
-	if (packet[7] != (uint32_t)kR5UserFenceVa || packet[9] != 7u)
+	if (packet[7] != (uint32_t)fenceMc || packet[8] != (uint32_t)(fenceMc >> 32)
+		|| packet[9] != 7u)
 		return fail("sequence");
-	if ((kR5UserFenceVa & 7ull) != 0)
+	if ((fenceMc & 7ull) != 0)
 		return fail("fence align");
+	if (r5_range_overlap(0, 4096, 4096, 4096))
+		return fail("no overlap");
+	if (!r5_range_overlap(0, 8192, 4096, 4096))
+		return fail("overlap");
+	r5_span spans[4];
+	memset(spans, 0, sizeof(spans));
+	if (!r5_span_add(spans, 4, 0x1000, 0x3000))
+		return fail("span add");
+	r5_span_free(spans, 4, 0x1000);
+	uint64_t taken = 0;
+	if (!r5_span_take(spans, 4, 0x1000, &taken) || taken != 0x1000)
+		return fail("span take");
+	r5_span_free(spans, 4, taken);
+	if (r5_wait_step(5, 5, 10, 0) != R5_WAIT_DONE)
+		return fail("wait done");
+	if (r5_wait_step(1, 5, 0, 0) != R5_WAIT_POLL)
+		return fail("wait poll");
+	if (r5_wait_step(1, 5, 10, 1) != R5_WAIT_TIMEOUT)
+		return fail("wait timeout");
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;

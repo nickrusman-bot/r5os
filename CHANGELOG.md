@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### M4 review: the interface is still 1.0 and has not shipped
+
+API 1.0 has not been booted, so `r5_gpu.h` can still change. This pass is the review of the render node. It has not been booted.
+
+Every ioctl copies with `user_memcpy` after `is_user_address_range`. The kernel does not dereference a user pointer. The fourth ioctl argument is checked against the struct `size` field. `GET_INFO` still accepts a short buffer. The AMD block that follows the common info is `drm_amdgpu_info_device` from libdrm 2.4.124, then 32 firmware slots and 10 `HW_IP` slots. `family` is `AMDGPU_FAMILY_RV` (142). `external_rev` comes from NBIO `RCC_DEV0_EPF0_STRAP0` (`nbio` segment 2, index `0x000f`, mask `0x0F000000`), the same register as `nbio_v7_0_get_rev_id`. Barcelo and Cezanne (`0x15e7`, `0x1638`) add `0xa1`. Renoir (`0x1636`) adds `0x91`. The PCI revision is stored separately and is not that input. Firmware versions are 0: this driver does not read a PSP version yet. GFX and compute `HW_IP` are 9.3, with IB start alignment 32 and size alignment 4.
+
+`CS_SUBMIT` takes user lists of IBs, wait syncobjs and signal syncobjs. The whole IB must already be mapped. `IB_BASE_HI` is `upper_32_bits & 0xffff`. The `RELEASE_MEM` address is the kernel MC address of the fence page plus 2048. That page is not mapped in VMID 1. The end-of-pipe interrupt signals the job's syncobjs and wakes one condition variable. `FENCE_WAIT`, the ring-full wait and syncobj waits loop on that variable and compare the sequence or the point. A timeout of 0 does not mark the device lost. A fence timeout still does, and does not reset the GPU.
+
+`VA_MAP` and `VA_UNMAP` take a BO offset and a size. Each BO records its ranges and rejects an overlap. A GTT BO is a kernel area (`B_FULL_LOCK`, kernel read/write, cloneable) and `BO_MAP` clones it into the caller, the same way as VRAM. User VRAM comes from a free list. Kernel page tables stay on the bump allocator. `BO_FREE` and the last close wait for that client's last sequence, clear the PTEs, flush the TLB, and only then free the pages. The lock is created in `init_driver`. Syncobjs belong to the client and are dropped on close. VMID 1 is still built once and reused.
+
+The host test printed `ok gpu api 1.0 walk`, including the IB high mask `0x8000`, the strap revision, the free list and the overlap check. `jam -q radeon_hd` exited 0. The libdrm Haiku edits are `distro/graphics/libdrm-r5/patches/haiku-xf86drm.patch`. The Mesa `unistd.h` include is a unified diff in `distro/mesa/patches/haiku-os-drm-ioctl.patch`. AMDGPU ioctl translation is not done. This has not been booted. VirtualBox was not started.
+
 ### M4 programs VMID 1 and does not ship RADV yet
 
 `origin/main` contains M3 (`71d5144efd`, pull request #4098) and `claude/m4-plan` (`d6b1bc09c6`, pull request #4099).
