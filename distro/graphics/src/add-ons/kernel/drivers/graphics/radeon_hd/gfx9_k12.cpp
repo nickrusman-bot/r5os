@@ -483,11 +483,21 @@ run_k2()
 	uint64 aperEnd = (uint64)aperHi << 18;
 	uint32 agpBot = kread(sInfo, gc_byte(0x0983));
 	uint32 agpTop = kread(sInfo, gc_byte(0x0982));
-	knote("k2 agp bot %08lx top %08lx %s", (unsigned long)agpBot,
-		(unsigned long)agpTop, agpBot > agpTop ? "off" : "on");
+	uint64 agpStart = 0;
+	uint64 agpEnd = 0;
+	int agpOn = r5_gfx9_agp_window(agpBot, agpTop, &agpStart, &agpEnd);
+	if (agpOn) {
+		knote("k2 agp bot %08lx top %08lx %016llx-%016llx",
+			(unsigned long)agpBot, (unsigned long)agpTop,
+			(unsigned long long)agpStart, (unsigned long long)agpEnd);
+	} else {
+		knote("k2 agp bot %08lx top %08lx off",
+			(unsigned long)agpBot, (unsigned long)agpTop);
+	}
 	uint64 gartStart = 0;
 	uint64 gartEnd = 0;
-	if (!r5_gfx9_gart_range(fbStart, aperStart, aperEnd, &gartStart, &gartEnd)) {
+	if (!r5_gfx9_gart_range(fbStart, aperStart, aperEnd, agpOn, agpStart,
+			agpEnd, &gartStart, &gartEnd)) {
 		knote("k2 fail range");
 		return;
 	}
@@ -525,13 +535,16 @@ run_k2()
 	}
 	physical_entry entries[256];
 	memset(entries, 0, sizeof(entries));
-	int32 got = get_memory_map(system, 1024 * 1024, entries, 256);
-	if (got <= 0) {
-		knote("k2 fail memory map");
+	uint32 count = 256;
+	status_t mapped = get_memory_map_etc(B_CURRENT_TEAM, system,
+		1024 * 1024, entries, &count);
+	if (mapped != B_OK) {
+		knote("k2 fail memory map %ld count %lu", (long)mapped,
+			(unsigned long)count);
 		return;
 	}
 	uint32 page = 0;
-	for (int32 slot = 0; slot < got && page < 256; slot++) {
+	for (uint32 slot = 0; slot < count; slot++) {
 		uint64 address = entries[slot].address;
 		uint64 bytes = entries[slot].size;
 		while (bytes >= 4096 && page < 256) {
@@ -541,6 +554,8 @@ run_k2()
 			page++;
 		}
 	}
+	knote("k2 map count %lu pages %lu", (unsigned long)count,
+		(unsigned long)page);
 	if (page != 256) {
 		knote("k2 fail pages %lu", (unsigned long)page);
 		return;

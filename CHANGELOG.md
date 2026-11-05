@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### The kernel asks for the GART translation count
+
+K2 on the 5625U stopped at `k2 fail memory map` because `get_memory_map` returns `B_OK` (0) on success. The next image calls `get_memory_map_etc(B_CURRENT_TEAM, …, &count)` and walks exactly `count` entries. It logs `k2 map count` and `pages`. `MC_VM_AGP_BOT` and `MC_VM_AGP_TOP` are 16 MiB units and `TOP` is inclusive, so bot 0 and top 0 are `0`-`0x1000000`. The log prints that window, or `off` when bot is above top. The registers are not written. `r5_gfx9_gart_range` refuses a GART block that overlaps that window. The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`, including the 16 MiB window and an overlap refusal. K0 and K1 are the same packets.
+
+`jam -q @r5-anyboot` for AMD64 finished at 14:13 Europe/Amsterdam on 5 Nov 2026 with exit 0 (1189 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `deecfb928e6f74d806cf2d45dd58f6a866e1caf6915558d11e5dea9282796984`. The stick copy is the same size, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`. The kernel driver contains `k2 map count`, `k2 agp bot`, `k0` and `k1_wait_us`. It was written raw to the General UDisk at 14:19 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This image has not been booted.
+
 ### The kernel GFX9 start reached the desktop
 
 The stick written at 13:46 Europe/Amsterdam on 5 Nov 2026, sha256 `1e98f708cb8036b84410e041a764c6cb70a46193b1474fe1a20e7e31a963712b`, booted on the 5625U. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel` and did not start the command processor again.
@@ -8,7 +14,7 @@ The pool mapping is `gfx9 pool 0xfce07e9000+0xf817000`. K0 matches the earlier f
 
 K1 arrived on MSI. The syslog lines are `allocate_io_interrupt_vectors: allocated 1 vectors starting from 61`, `msi enabled: 0x0085`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1130`. Client 20 is `0x14` and source 181 is the CP end-of-pipe on ring 0. The wait was 1130 µs.
 
-K2 stopped before a page table or a DMA. The syslog lines are `k2 agp bot 00000000 top 00000000 on` and `k2 fail memory map`. `get_memory_map` returns `B_OK`, which is 0, and ends the list with a zero entry. The check treats 0 as failure, so the translation was dropped. AGP bot and top are both 0, so the log says `on`; that is a zero-length aperture, and the range check did not fail. The command processor was not halted. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row in `docs/GPU-ARCHITECTURE.md` stay as they are until K2 lands.
+K2 stopped before a page table or a DMA. The syslog lines are `k2 agp bot 00000000 top 00000000 on` and `k2 fail memory map`. `get_memory_map` returns `B_OK`, which is 0, and ends the list with a zero entry. The check treats 0 as failure, so the translation was dropped. AGP bot and top are both 0. `MC_VM_AGP_TOP` is inclusive and the unit is 16 MiB, so that register pair is the window `0`-`0x1000000`, not a zero-length aperture. The boot logged `on` because the check was only `bot > top`, and the range check did not look at AGP. The command processor was not halted. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row in `docs/GPU-ARCHITECTURE.md` stay as they are until K2 lands.
 
 ### The kernel writes the GFX9 ring through a kernel mapping
 

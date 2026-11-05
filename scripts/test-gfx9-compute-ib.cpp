@@ -201,7 +201,16 @@ main(void)
 	const uint64_t kFb = 0xf400000000ull;
 	const uint64_t kAperStart = 0x3d0000ull << 18;
 	const uint64_t kAperEnd = 0x3d0800ull << 18;
-	if (!r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, &gartStart, &gartEnd))
+	uint64_t agpStart = 0;
+	uint64_t agpEnd = 0;
+	if (r5_gfx9_agp_window(1u, 0u, &agpStart, &agpEnd))
+		return fail("agp off");
+	if (!r5_gfx9_agp_window(0u, 0u, &agpStart, &agpEnd))
+		return fail("agp on");
+	if (agpStart != 0 || agpEnd != 0x1000000ull)
+		return fail("agp 16m");
+	if (!r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, 0, 0, 0,
+			&gartStart, &gartEnd))
 		return fail("gart range");
 	if (gartStart != 0xf3f0000000ull || gartEnd != 0xf400000000ull)
 		return fail("gart place");
@@ -209,6 +218,12 @@ main(void)
 		return fail("gart overlap");
 	if (gartEnd > kFb)
 		return fail("gart fb");
+	if (!r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, 1, agpStart, agpEnd,
+			&gartStart, &gartEnd))
+		return fail("gart agp clear");
+	if (r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, 1, gartStart, gartEnd,
+			&gartStart, &gartEnd))
+		return fail("gart agp hit");
 
 	uint8_t raw[32];
 	memset(raw, 0, sizeof(raw));
