@@ -13,7 +13,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 ## What works today
 
 ### Desktop
-- R5OS Operating System branding throughout: Deskbar, installer, boot splash, About.
+- R5 Operating System branding throughout: Deskbar, installer, boot splash, About.
 - Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
 - **Settings** is one window, with a list on the left, search, and pages for Appearance, Display, Desktop and Deskbar, Wallpaper, Notifications, Virtual memory and more. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
 - Notifications, with a choice of where they appear on screen.
@@ -56,7 +56,7 @@ Where the project is heading: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Hardware
 
-R5OS is **64-bit only**.
+R5 Operating System is **64-bit only**.
 
 | Architecture | Status |
 |---|---|
@@ -66,7 +66,7 @@ R5OS is **64-bit only**.
 
 ## Trying it
 
-R5OS is built from source; there are no downloads yet. After a build (see below) you can:
+R5 Operating System is built from source; there are no downloads yet. After a build (see below) you can:
 
 - **Run it in VirtualBox.** Use [`scripts/run-vbox-r5.ps1`](scripts/run-vbox-r5.ps1) on Windows, and see [`docs/vbox.md`](docs/vbox.md). With a bridged network adapter this is the way to test real home-network features such as IPv6 and printer discovery.
 - **Run it in QEMU.** Use [`scripts/run-qemu-r5.sh`](scripts/run-qemu-r5.sh). QEMU's default user-mode network is not a real home network.
@@ -104,7 +104,7 @@ Build an image:
 ./scripts/build-image.sh r5-raw
 ```
 
-`build-image.sh` copies the R5OS changes from `distro/` into the Haiku tree, configures the build on the first run, and runs `jam`. The result lands in `haiku/generated.x86_64/`.
+`build-image.sh` copies the R5 Operating System changes from `distro/` into the Haiku tree, configures the build on the first run, and runs `jam`. The result lands in `haiku/generated.x86_64/`.
 
 | Profile | Use it for |
 |---|---|
@@ -116,17 +116,17 @@ Build an image:
 
 | Path | What it holds |
 |---|---|
-| `distro/` | Everything R5OS adds or changes: version, What's new, artwork, apps, drivers and system components. These files are copied into the Haiku tree at build time. |
-| `haiku/` | The Haiku source tree that R5OS builds on. |
+| `distro/` | Everything R5 Operating System adds or changes: version, What's new, artwork, apps, drivers and system components. These files are copied into the Haiku tree at build time. |
+| `haiku/` | The Haiku source tree that R5 Operating System builds on. |
 | `docs/` | Design notes and contracts: [roadmap](docs/ROADMAP.md), [graphics](docs/GRAPHICS.md), [multi-user](docs/MULTIUSER.md), [Settings](docs/SETTINGS.md), [icons](docs/ICONS.md), [shared libraries](docs/LIBR5.md), [licensing](docs/LICENSING.md), and more. |
 | `scripts/` | Build, image, virtual-machine and tracker scripts. |
-| `tracker/` | Which open Haiku tickets R5OS has fixed. The overview is [`tracker/STATUS.md`](tracker/STATUS.md). |
+| `tracker/` | Which open Haiku tickets R5 Operating System has fixed. The overview is [`tracker/STATUS.md`](tracker/STATUS.md). |
 | `tools/r5-befs/` | A small read-only BeFS reader for Windows. |
 | `LICENSES/` | The unmodified license texts. |
 
 ## Relationship with Haiku
 
-Haiku is the foundation, and its source is where R5OS gets many of its fixes. R5OS does not send changes back. Haiku does not accept AI-generated or AI-modified contributions, and R5OS work is AI-assisted. So:
+Haiku is the foundation, and its source is where R5OS gets many of its fixes. R5OS does not send changes back. Haiku does not accept AI-generated or AI-modified contributions, and R5 Operating System work is AI-assisted. So:
 
 - Do not open pull requests against Haiku. Do not push to Haiku's servers.
 - Haiku's repositories are only fetched from.
@@ -134,7 +134,7 @@ Haiku is the foundation, and its source is where R5OS gets many of its fixes. R5
 
 ## Licensing
 
-R5OS is **multi-license**:
+R5 Operating System is **multi-license**:
 
 - Files that come from Haiku keep their original license and copyright, mostly MIT.
 - New files that R5OS owns are GPL-3.0-or-later.
@@ -153,4 +153,4 @@ AI-assisted work is welcome here. It is held to the same bar as any other change
 
 ## Versions
 
-Releases will be called **R5OS 2026.1**, **2026.2**, and so on; a new year starts again at `.1`. Development trees carry `-dev`, and About R5OS shows the version together with an increasing build number. The sources for those are [`distro/VERSION`](distro/VERSION) and [`distro/BUILD`](distro/BUILD).
+Releases will be called **R5 Operating System 2026.1**, **2026.2**, and so on; a new year starts again at `.1`. Development trees carry `-dev`, and About R5OS shows the version together with an increasing build number. The sources for those are [`distro/VERSION`](distro/VERSION) and [`distro/BUILD`](distro/BUILD).
