@@ -39,7 +39,8 @@ enum {
 	R5_GPU_SYNCOBJ_QUERY = R5_GPU_OP_BASE + 16,
 	R5_GPU_BO_EXPORT = R5_GPU_OP_BASE + 17,
 	R5_GPU_BO_IMPORT = R5_GPU_OP_BASE + 18,
-	R5_GPU_SYNCOBJ_WAIT_LIST = R5_GPU_OP_BASE + 19
+	R5_GPU_SYNCOBJ_WAIT_LIST = R5_GPU_OP_BASE + 19,
+	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -303,5 +304,19 @@ typedef struct {
 	uint64_t	point;
 	uint64_t	timeout_us;
 } r5_gpu_syncobj;
+
+/* dst is signalled when src reaches src_point. src_point 0 is the binary
+ * fence (reached when the point is greater than 0). dst_point 0 is a
+ * binary signal, the same rule as R5_GPU_SYNCOBJ_BINARY. flags must be 0. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	src_handle;
+	uint32_t	dst_handle;
+	uint64_t	src_point;
+	uint64_t	dst_point;
+	uint32_t	flags;
+	uint32_t	_pad;
+} r5_gpu_syncobj_transfer;
 
 #endif

@@ -29,8 +29,9 @@ including gang submit, GPUVM faults and conformant trunc.
 A binary syncobj is a timeline. Create with `DRM_SYNCOBJ_CREATE_SIGNALED`
 sets the point to 1. Reset sets it to 0. A binary wait waits until the point
 is greater than 0. A binary signal on a job sets the point to that job's
-sequence. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE`, `TRANSFER` and
-`PRIME` return ENOSYS. Any other untranslated ioctl returns ENOSYS and is
+sequence. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
+`PRIME` return ENOSYS. `SYNCOBJ_TRANSFER` is `R5_GPU_SYNCOBJ_TRANSFER`.
+Any other untranslated ioctl returns ENOSYS and is
 named once on stderr. `GEM_MMAP` is one of those: CPU mapping uses `BO_MAP`.
 
 Compute is reported with `available_rings` 0. A command submission whose
@@ -58,7 +59,8 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | `DRM_CAP_SYNCOBJ` and `DRM_CAP_SYNCOBJ_TIMELINE` | translated, value 1 |
 | syncobj create, reset, signal, query | translated |
 | syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point |
-| `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE`, `TRANSFER` | ENOSYS on purpose |
+| `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` | ENOSYS on purpose |
+| `SYNCOBJ_TRANSFER` | translated. `src_point` 0 is the binary fence. `dst_point` 0 signals binary, the same rule as `gpu_sync_signal`. A reached source signals immediately. A live job that will reach the source gains the destination and raises `submitted` at once. No fence and no such job is `EINVAL` (`drm_syncobj_find_fence` in Linux 6.12 returns `-EINVAL` when the syncobj has no fence). A missing handle is `ENOENT` (`drm_syncobj_find`). A full job list (`kMaxList`) is `ENOMEM`. `flags` and `pad` must be 0. Sync-file export and import stay ENOSYS |
 | `PRIME` | ENOSYS on purpose |
 | `CS` binary `chunk_sem` | translated |
 | `CS` timeline chunk | translated |
@@ -68,22 +70,23 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 
 ## Error signs on Haiku
 
-POSIX codes are negative (`ENOENT` is `B_ENTRY_NOT_FOUND`). `return -errno` and `return -ENOENT` then become positive. A test `r < 0` misses the error. `r == -ETIME` still matches, because both sides flip. A constant `-ENOMEM` overflows in the Haiku compiler to `INT_MIN`, which is still `< 0`, so that form does not cause the device crash.
+POSIX codes are negative. `return -errno` becomes positive. `r == -ETIME`, `-ECANCELED` and `-ENOMEM` still match that positive value, so the `return -errno` sites in `xf86drm.c` and `amdgpu_*.c` stay as they are. `r5_neg()` is only on returns Mesa does not compare with a specific `-E` code.
 
-`drmGetDevices2` is `vk_instance.c:418`. Line 420 continues when the count is `>= 1` and walks `devices[]`. A missing `/dev/gpu/radeon_hd` now returns 0, and no slot past that count is written. `r5_neg()` keeps every R5 `return -errno` negative. The Linux `return -errno` in `haiku-bo-map.patch` is the `#else` of the CPU map and is not built.
+| Return | Caller | Comparison | `r5_neg` |
+|---|---|---|---|
+| `r5_drm_get_devices2` missing directory returns 0 | `vk_instance.c:418` | `< 1` | no. A negated errno was a device count |
+| `r5_drm_get_device2` | device match | `!= 0` and `< 0` in the host test | yes. No `== -E` in Mesa |
+| `r5_bo_cpu_map` / `unmap` | `amdgpu_bo_cpu_map` returns that value. `radv_amdgpu_bo.c:730` tests it with `if (ac_drm_bo_cpu_map(...))` | any non-zero | yes |
+| `drmSyncobjWait` / `TimelineWait` `xf86drm.c:5042` and `:5109` | `vk_drm_syncobj.c` | `== -ETIME` and `errno == ETIME` | no. libdrm keeps `-errno` |
+| `amdgpu_cs.c` submit `== -ENOMEM`, `-ECANCELED`, `-ETIME` | `radv_amdgpu_cs.c:1966`–`:1984` | exact code | no |
 
-These `return -errno` sites are in the RADV path and are not wrapped yet:
+`drm_ioctl` in Mesa `os_drm.h` also returns `-errno`. `ac_drm_query_info` uses it. The syncobj helpers `drmSyncobjCreate`, `Transfer`, `ExportSyncFile`, `ImportSyncFile` and `Query2` return `drmIoctl`, which is `-1`.
 
-- `amdgpu_cs.c:473` and `:540`
-- `ac_linux_drm.c:410`
-- `xf86drm.c` (the device and ioctl helpers that still return `-errno`, including 975, 1006, 1565, 2670, 2774, 4645, 4689, 4770, 4825, 5042 and 5109)
+| Test | Value | Change |
+|---|---|---|
+| `vk_drm_syncobj.c:59`, `:67`, `:663` | `drmSyncobjCreate` / timeline signal, `drmIoctl` returns `-1` | left |
+| `vk_drm_syncobj.c:498` | `sync_merge`, not a libdrm `-errno` | left |
+| `radv_amdgpu_cs.c:1280`, `:1286`, `:1298`, `:1318`, `:1330`, `:1335`, `:1340`, `:1347` | export, import and transfer return `drmIoctl`'s `-1` | left |
+| `radv_amdgpu_winsys.c:106` | `ac_drm_query_info` returns `-errno` | `!= 0`. Patch `distro/mesa/patches/haiku-errno-nonzero.patch` |
 
-These tests use `< 0` on a libdrm result:
-
-- `vk_drm_syncobj.c:59`, `:67` and `:663` (`sync->create` / `timeline_signal`). Our ioctl returns -1, so this branch still runs.
-- `vk_drm_syncobj.c:498` (`sync_merge`). Sync-file export is ENOSYS.
-- `radv_amdgpu_winsys.c:106` (`ac_drm_query_info` of `GPUVM_FAULT`)
-- `radv_amdgpu_cs.c:1280`, `:1286`, `:1298`, `:1318`, `:1330`, `:1335`, `:1340` and `:1347` (syncobj export, import and transfer)
-- `ac_linux_drm.c` has `return -errno` at 410 and no `< 0` test of its own in that file
-
-`libposix_error_mapper` is a static library. Its `_errnop` is `.hidden`, then `dlsym`s the real `_errnop` and, when that cell is negative, writes the positive code back into it (`misc.cpp` lines 21–28). Errno is one cell per thread. VulkanTeapot and libbe read that same cell. Option (b) would change errno for the whole process, so it is not allowed. Option (a) is the remaining choice. It is not in this image. The host replay was also compiled with negative `ENOENT`, `EINVAL`, `ENODEV`, `ENOMEM` and `ETIME`.
+The error mapper stays out. Its hidden `_errnop` writes a positive code into the thread's errno cell, which VulkanTeapot and libbe share.

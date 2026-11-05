@@ -892,8 +892,20 @@ r5_drm_ioctl(int fd, unsigned long request, void *arg, size_t size)
 		return r5_fail(ENOSYS);
 	}
 	if (nr == R5_IOC_NR(DRM_IOCTL_SYNCOBJ_TRANSFER)) {
-		r5_unknown(nr, "DRM_IOCTL_SYNCOBJ_TRANSFER");
-		return r5_fail(ENOSYS);
+		struct drm_syncobj_transfer *transfer = arg;
+		r5_gpu_syncobj_transfer call;
+		if (transfer->pad != 0 || transfer->flags != 0)
+			return r5_fail(EINVAL);
+		memset(&call, 0, sizeof(call));
+		call.size = (uint32_t)sizeof(call);
+		call.version = 1;
+		call.src_handle = transfer->src_handle;
+		call.dst_handle = transfer->dst_handle;
+		call.src_point = transfer->src_point;
+		call.dst_point = transfer->dst_point;
+		if (r5_call(fd, R5_GPU_SYNCOBJ_TRANSFER, &call, sizeof(call)) != 0)
+			return -1;
+		return 0;
 	}
 	if (nr == R5_IOC_NR(DRM_IOCTL_PRIME_HANDLE_TO_FD)
 		|| nr == R5_IOC_NR(DRM_IOCTL_PRIME_FD_TO_HANDLE)) {

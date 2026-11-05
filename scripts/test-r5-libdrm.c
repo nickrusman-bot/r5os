@@ -51,6 +51,17 @@ static uint32_t gCsContext;
 static uint32_t gSyncPeak;
 static uint32_t gBoPeak;
 static int gEnosys;
+static int gDeferRetire;
+
+struct host_job {
+	int		live;
+	uint64_t	sequence;
+	uint32_t	count;
+	uint32_t	handle[8];
+	uint64_t	point[8];
+};
+
+static struct host_job gJob;
 
 #define CHECK(cond) do { \
 	if (!(cond)) { \
@@ -66,6 +77,23 @@ static int gAreaLive[32];
 static uint64_t gSyncPoint[128];
 static uint64_t gSyncSubmitted[128];
 static int gSyncLive[128];
+
+
+void
+r5_host_retire(void)
+{
+	uint32_t i;
+	if (!gJob.live)
+		return;
+	for (i = 0; i < gJob.count; i++) {
+		uint32_t handle = gJob.handle[i];
+		if (handle == 0 || handle > 128 || !gSyncLive[handle - 1])
+			continue;
+		if (gJob.point[i] > gSyncPoint[handle - 1])
+			gSyncPoint[handle - 1] = gJob.point[i];
+	}
+	gJob.live = 0;
+}
 
 void *
 r5_area_address(int area)
@@ -262,16 +290,37 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			}
 		}
 		gSequence = gSequence == 0 ? 11 : gSequence + 1;
+		if (gDeferRetire) {
+			if (gJob.live)
+				return host_err(EBUSY);
+			gJob.live = 1;
+			gJob.sequence = gSequence;
+			gJob.count = 0;
+		}
 		if (cs->signals != 0 && cs->signal_count > 0) {
 			r5_gpu_cs_sync *signal = (r5_gpu_cs_sync *)(uintptr_t)cs->signals;
 			for (uint32_t i = 0; i < cs->signal_count; i++) {
 				uint32_t handle = signal[i].handle;
+				uint64_t point;
 				if (handle == 0 || handle > 128 || !gSyncLive[handle - 1])
 					continue;
 				if ((signal[i].flags & R5_GPU_CS_SYNC_BINARY) != 0)
-					gSyncPoint[handle - 1] = gSequence == 0 ? 1 : gSequence;
-				else if (signal[i].point > gSyncPoint[handle - 1])
-					gSyncPoint[handle - 1] = signal[i].point;
+					point = gSequence == 0 ? 1 : gSequence;
+				else
+					point = signal[i].point;
+				if (gDeferRetire) {
+					if (gJob.count >= 8)
+						return host_err(ENOMEM);
+					gJob.handle[gJob.count] = handle;
+					gJob.point[gJob.count] = point;
+					gJob.count++;
+					if (point > gSyncSubmitted[handle - 1])
+						gSyncSubmitted[handle - 1] = point;
+					continue;
+				}
+				if ((signal[i].flags & R5_GPU_CS_SYNC_BINARY) != 0
+					|| point > gSyncPoint[handle - 1])
+					gSyncPoint[handle - 1] = point;
 				if (gSyncPoint[handle - 1] > gSyncSubmitted[handle - 1])
 					gSyncSubmitted[handle - 1] = gSyncPoint[handle - 1];
 			}
@@ -387,6 +436,62 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			return 0;
 		}
 		return host_err(ETIMEDOUT);
+	}
+	if (op == R5_GPU_SYNCOBJ_TRANSFER) {
+		r5_gpu_syncobj_transfer *transfer = buf;
+		uint32_t src;
+		uint32_t dst;
+		uint64_t dstPoint;
+		uint32_t n;
+		int reached;
+		int will = 0;
+		if (bytes < sizeof(*transfer) || transfer->flags != 0)
+			return host_err(EINVAL);
+		src = transfer->src_handle;
+		dst = transfer->dst_handle;
+		if (src == 0 || dst == 0 || src > 128 || dst > 128
+			|| !gSyncLive[src - 1] || !gSyncLive[dst - 1])
+			return host_err(ENOENT);
+		dstPoint = transfer->dst_point == 0 ? 1 : transfer->dst_point;
+		reached = transfer->src_point == 0
+			? gSyncPoint[src - 1] > 0
+			: gSyncPoint[src - 1] >= transfer->src_point;
+		if (reached) {
+			if (dstPoint > gSyncPoint[dst - 1])
+				gSyncPoint[dst - 1] = dstPoint;
+			if (dstPoint > gSyncSubmitted[dst - 1])
+				gSyncSubmitted[dst - 1] = dstPoint;
+			return 0;
+		}
+		if (gJob.live) {
+			for (n = 0; n < gJob.count; n++) {
+				if (gJob.handle[n] != src)
+					continue;
+				will = transfer->src_point == 0
+					? gJob.point[n] > 0
+					: gJob.point[n] >= transfer->src_point;
+				break;
+			}
+		}
+		if (!will)
+			return host_err(EINVAL);
+		for (n = 0; n < gJob.count; n++) {
+			if (gJob.handle[n] != dst)
+				continue;
+			if (dstPoint > gJob.point[n])
+				gJob.point[n] = dstPoint;
+			if (dstPoint > gSyncSubmitted[dst - 1])
+				gSyncSubmitted[dst - 1] = dstPoint;
+			return 0;
+		}
+		if (gJob.count >= 8)
+			return host_err(ENOMEM);
+		gJob.handle[gJob.count] = dst;
+		gJob.point[gJob.count] = dstPoint;
+		gJob.count++;
+		if (dstPoint > gSyncSubmitted[dst - 1])
+			gSyncSubmitted[dst - 1] = dstPoint;
+		return 0;
 	}
 	gEnosys++;
 	return host_err(ENOSYS);
@@ -638,6 +743,89 @@ info_query(int fd, uint32_t query, uint32_t hw, void *out, size_t bytes)
 		info.read_mmr_reg.count = 1;
 	}
 	return drmCommandWriteRead(fd, DRM_AMDGPU_INFO, &info, sizeof(info));
+}
+
+
+static void
+submit_zero(int node)
+{
+	struct drm_syncobj_create created;
+	struct drm_syncobj_transfer transfer;
+	struct drm_syncobj_wait waited;
+	struct drm_amdgpu_cs_chunk_ib ib;
+	struct drm_amdgpu_cs_chunk_sem sem;
+	struct drm_amdgpu_cs_chunk chunks[2];
+	uint64_t chunkPtr[2];
+	union drm_amdgpu_cs cs;
+	uint32_t queue;
+	uint32_t fresh;
+	uint32_t running;
+	uint32_t dst;
+
+	memset(&created, 0, sizeof(created));
+	created.flags = DRM_SYNCOBJ_CREATE_SIGNALED;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	queue = created.handle;
+	memset(&created, 0, sizeof(created));
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	dst = created.handle;
+	memset(&transfer, 0, sizeof(transfer));
+	transfer.src_handle = queue;
+	transfer.dst_handle = dst;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_TRANSFER, &transfer) == 0);
+	memset(&waited, 0, sizeof(waited));
+	waited.handles = (uintptr_t)&dst;
+	waited.count_handles = 1;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) == 0);
+
+	memset(&created, 0, sizeof(created));
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	fresh = created.handle;
+	memset(&transfer, 0, sizeof(transfer));
+	transfer.src_handle = fresh;
+	transfer.dst_handle = dst;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_TRANSFER, &transfer) != 0);
+	CHECK(errno == EINVAL);
+
+	memset(&created, 0, sizeof(created));
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	running = created.handle;
+	memset(&ib, 0, sizeof(ib));
+	ib.va_start = 0x1000;
+	ib.ib_bytes = 4;
+	ib.ip_type = AMDGPU_HW_IP_GFX;
+	memset(&sem, 0, sizeof(sem));
+	sem.handle = running;
+	memset(chunks, 0, sizeof(chunks));
+	chunks[0].chunk_id = AMDGPU_CHUNK_ID_IB;
+	chunks[0].length_dw = (uint32_t)(sizeof(ib) / 4);
+	chunks[0].chunk_data = (uint64_t)(uintptr_t)&ib;
+	chunks[1].chunk_id = AMDGPU_CHUNK_ID_SYNCOBJ_OUT;
+	chunks[1].length_dw = (uint32_t)(sizeof(sem) / 4);
+	chunks[1].chunk_data = (uint64_t)(uintptr_t)&sem;
+	chunkPtr[0] = (uint64_t)(uintptr_t)&chunks[0];
+	chunkPtr[1] = (uint64_t)(uintptr_t)&chunks[1];
+	memset(&cs, 0, sizeof(cs));
+	cs.in.ctx_id = 1;
+	cs.in.num_chunks = 2;
+	cs.in.chunks = (uint64_t)(uintptr_t)chunkPtr;
+	gDeferRetire = 1;
+	CHECK(drmCommandWriteRead(node, DRM_AMDGPU_CS, &cs, sizeof(cs)) == 0);
+	gDeferRetire = 0;
+	memset(&created, 0, sizeof(created));
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	dst = created.handle;
+	memset(&transfer, 0, sizeof(transfer));
+	transfer.src_handle = running;
+	transfer.dst_handle = dst;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_TRANSFER, &transfer) == 0);
+	memset(&waited, 0, sizeof(waited));
+	waited.handles = (uintptr_t)&dst;
+	waited.count_handles = 1;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+	CHECK(errno == ETIME);
+	r5_host_retire();
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) == 0);
 }
 
 
@@ -917,6 +1105,7 @@ radv_replay(int fd)
 		CHECK(drmIoctl(node, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) != 0);
 		CHECK(errno == ENOSYS);
 	}
+	submit_zero(node);
 	printf("replay peaks bo %u sync %u\n", gBoPeak, gSyncPeak);
 	close(node);
 	return gFail;

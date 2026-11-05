@@ -1114,6 +1114,17 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 }
 
 
+static void
+gpu_sync_set(gpu_sync* sync, uint64 point)
+{
+	if (point > sync->submitted)
+		sync->submitted = point;
+	if (point > sync->point)
+		sync->point = point;
+	sEop.NotifyAll();
+}
+
+
 static status_t
 gpu_sync_signal(gpu_client* client, void* buffer, size_t length)
 {
@@ -1127,11 +1138,79 @@ gpu_sync_signal(gpu_client* client, void* buffer, size_t length)
 	uint64 point = in.point;
 	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0 && point == 0)
 		point = 1;
-	if (point > sync->submitted)
-		sync->submitted = point;
-	if (point > sync->point)
-		sync->point = point;
-	sEop.NotifyAll();
+	gpu_sync_set(sync, point);
+	return B_OK;
+}
+
+
+static bool
+gpu_src_reached(const gpu_sync* sync, uint64 srcPoint)
+{
+	if (srcPoint == 0)
+		return sync->point > 0;
+	return sync->point >= srcPoint;
+}
+
+
+static bool
+gpu_job_will_reach(const gpu_job* job, const gpu_sync* src, uint64 srcPoint)
+{
+	for (uint32 n = 0; n < job->count; n++) {
+		if (job->syncs[n] != src)
+			continue;
+		if (srcPoint == 0)
+			return job->points[n] > 0;
+		return job->points[n] >= srcPoint;
+	}
+	return false;
+}
+
+
+static status_t
+gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_syncobj_transfer in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return status;
+	if (in.flags != 0)
+		return B_BAD_VALUE;
+	gpu_sync* src = gpu_sync_get(client, in.src_handle);
+	gpu_sync* dst = gpu_sync_get(client, in.dst_handle);
+	if (src == NULL || dst == NULL)
+		return B_ENTRY_NOT_FOUND;
+	uint64 dstPoint = in.dst_point == 0 ? 1 : in.dst_point;
+	if (gpu_src_reached(src, in.src_point)) {
+		gpu_sync_set(dst, dstPoint);
+		return B_OK;
+	}
+	gpu_job* job = NULL;
+	for (uint32 i = 0; i < kMaxJob; i++) {
+		if (!sJobs[i].live)
+			continue;
+		if (!gpu_job_will_reach(&sJobs[i], src, in.src_point))
+			continue;
+		job = &sJobs[i];
+		break;
+	}
+	if (job == NULL)
+		return B_BAD_VALUE;
+	for (uint32 n = 0; n < job->count; n++) {
+		if (job->syncs[n] != dst)
+			continue;
+		if (dstPoint > job->points[n])
+			job->points[n] = dstPoint;
+		if (dstPoint > dst->submitted)
+			dst->submitted = dstPoint;
+		return B_OK;
+	}
+	if (job->count >= kMaxList)
+		return B_NO_MEMORY;
+	job->syncs[job->count] = dst;
+	job->points[job->count] = dstPoint;
+	job->count++;
+	if (dstPoint > dst->submitted)
+		dst->submitted = dstPoint;
 	return B_OK;
 }
 
@@ -1299,6 +1378,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		status = gpu_sync_wait_list(client, buffer, length);
 	else if (op == R5_GPU_SYNCOBJ_SIGNAL)
 		status = gpu_sync_signal(client, buffer, length);
+	else if (op == R5_GPU_SYNCOBJ_TRANSFER)
+		status = gpu_sync_transfer(client, buffer, length);
 	else if (op == R5_GPU_SYNCOBJ_RESET || op == R5_GPU_SYNCOBJ_QUERY) {
 		r5_gpu_syncobj in;
 		status = gpu_copy_in(buffer, length, &in, sizeof(in));

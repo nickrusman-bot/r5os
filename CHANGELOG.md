@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### M4 review 5: syncobj transfer, and one Mesa sign test
+
+`vkQueueWaitIdle` submits no command buffer. RADV then calls `DRM_IOCTL_SYNCOBJ_TRANSFER` because `DRM_CAP_SYNCOBJ_TIMELINE` is 1. That ioctl was ENOSYS, so the wait became `VK_ERROR_DEVICE_LOST` on a GPU and was invisible on Lavapipe. `R5_GPU_SYNCOBJ_TRANSFER` is appended after `WAIT_LIST`. A source that has already reached its point signals the destination immediately, with the same rule as `gpu_sync_signal` (`dst_point` 0 means binary). A live job that will reach the source gains the destination, and `submitted` is raised at once. Linux 6.12 `drm_syncobj_find_fence` returns `-EINVAL` when there is no fence, and `drm_syncobj_find` returns `-ENOENT` for a missing handle. Those are the two errors here. A full job list returns `ENOMEM`. Sync-file export and import stay ENOSYS. `flags` and `pad` must be 0.
+
+`return -errno` in `xf86drm.c` and `amdgpu_*.c` is unchanged. Mesa compares those results with `== -ETIME` and the other `-E` codes, which are positive on Haiku. `r5_neg()` stays on `drmGetDevice2` and the CPU map, where Mesa tests `< 1` or any non-zero value. `ac_drm_query_info` returns `-errno` through `os_drm.h`. `radv_amdgpu_winsys.c` now tests that result with `!= 0`. The syncobj helpers return `drmIoctl`'s `-1`, so their `< 0` tests stay.
+
+The host replay printed `ok libdrm ioctl` with Linux errno and again with negative errno. `submit_zero` waited on a transfer from a signalled queue syncobj and the wait returned signalled. A transfer with no fence returned `EINVAL`. A transfer while the queue job was still running returned `ETIME`, then signalled after retire. `check-libdrm-symbols.py` printed `ok libdrm symbols`. `jam -q @r5-raw` on 5 Nov 2026 at 21:09 Europe/Amsterdam exited 0 and updated 1169 targets. `install-mesa-packages.sh` printed `mesa_packages_ok` and `ok egl vendor`. VirtualBox was not started for this image. The VDI from 20:58 is the 20:50 image. Build stays 10048.
+
 ### M4 review 4: negative errno and the EGL vendor path
 
 Haiku errno values are already negative. `r5_drm_get_devices2` returned `-errno` for a missing `/dev/gpu/radeon_hd`, which is a large positive count. `vk_instance.c:420` then walked `devices[]` slots that were never filled, and `vulkaninfo` and VulkanTeapot faulted on a NULL `drmDevice`. A missing directory now returns 0 devices. `r5_neg()` keeps the other R5 error returns negative. The host replay passed with Linux errno and again with negative `ENOENT`, `EINVAL`, `ENODEV`, `ENOMEM` and `ETIME`.
