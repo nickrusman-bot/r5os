@@ -2706,8 +2706,16 @@ static const uint32 kWlWriteDstMemory = 5u << 8;
 static const uint32 kWlWrConfirm = 1u << 20;
 static const uint32 kWlIbValid = 1u << 23;
 static const uint32 kWlCacheFlushTs = 0x14;
+static const uint32 kWlDmaData = 0x50;
+static const uint32 kWlDmaCpSync = 1u << 31;
+static const uint32 kWlDmaSrcData = 2u << 29;
+static const uint32 kWlDmaRawWait = 1u << 30;
+static const uint32 kWlDataSelCounter = 3u << 29;
 static const uint32 kFenceIbWord = 1024;
 static const uint32 kFenceSequence = 1088;
+static const uint32 kFenceTsStart = 1152;
+static const uint32 kFenceTsEnd = 1216;
+static const uint32 kDmaChunk = 0x100000;
 
 
 static void
@@ -2804,6 +2812,196 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 }
 
 
+static uint32
+radeon_gfx9_mismatch(volatile uint32* words, uint32 count, uint32 expect,
+	uint32* firstOffset)
+{
+	uint32 bad = 0;
+	for (uint32 i = 0; i < count; i++) {
+		if (words[i] == expect)
+			continue;
+		if (bad == 0 && firstOffset != NULL)
+			*firstOffset = i * 4;
+		bad++;
+	}
+	return bad;
+}
+
+
+static void
+radeon_gfx9_dma_note(uint32 bad1, uint64 ticks1, uint32 bad8, uint64 ticks8,
+	bool have8)
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
+			sizeof(path)) != B_OK)
+		return;
+	size_t used = strlen(path);
+	int wrote = snprintf(path + used, sizeof(path) - used, "/radeon-gfx.txt");
+	if (wrote < 0 || (size_t)wrote >= sizeof(path) - used)
+		return;
+	FILE* file = fopen(path, "a");
+	if (file == NULL)
+		return;
+	fprintf(file, "dma_1m_bad %" B_PRIu32 " ticks_1m %" B_PRIu64 "\n",
+		bad1, ticks1);
+	if (have8) {
+		uint32 whole = 0;
+		uint32 tenth = 0;
+		if (ticks1 != 0) {
+			whole = (uint32)(ticks8 / ticks1);
+			tenth = (uint32)(((ticks8 % ticks1) * 10) / ticks1);
+		}
+		fprintf(file, "dma_8m_bad %" B_PRIu32 " ticks_8m %" B_PRIu64 "\n",
+			bad8, ticks8);
+		if (ticks1 == 0)
+			fprintf(file, "dma_ratio na\n");
+		else
+			fprintf(file, "dma_ratio %" B_PRIu32 ".%" B_PRIu32 "\n",
+				whole, tenth);
+	}
+	fclose(file);
+}
+
+
+static uint32
+radeon_gfx9_dma_ib(uint32* ib, uint64 fenceGpu, uint64 dstGpu, uint32 chunks)
+{
+	const uint32 eop = (1u << 16) | (1u << 17) | (1u << 15) | (1u << 21)
+		| kWlCacheFlushTs | (5u << 8);
+	uint32 n = 0;
+	uint64 startGpu = fenceGpu + kFenceTsStart;
+	ib[n++] = radeon_packet3(kWlReleaseMem, 6);
+	ib[n++] = eop;
+	ib[n++] = kWlDataSelCounter;
+	ib[n++] = (uint32)startGpu;
+	ib[n++] = (uint32)(startGpu >> 32);
+	ib[n++] = 0;
+	ib[n++] = 0;
+	ib[n++] = 0;
+	for (uint32 chunk = 0; chunk < chunks; chunk++) {
+		uint64 dest = dstGpu + (uint64)chunk * kDmaChunk;
+		ib[n++] = radeon_packet3(kWlDmaData, 5);
+		ib[n++] = kWlDmaCpSync | kWlDmaSrcData;
+		ib[n++] = 0xA5A5A5A5;
+		ib[n++] = 0;
+		ib[n++] = (uint32)dest;
+		ib[n++] = (uint32)(dest >> 32);
+		ib[n++] = kWlDmaRawWait | kDmaChunk;
+	}
+	uint64 endGpu = fenceGpu + kFenceTsEnd;
+	ib[n++] = radeon_packet3(kWlReleaseMem, 6);
+	ib[n++] = eop;
+	ib[n++] = kWlDataSelCounter;
+	ib[n++] = (uint32)endGpu;
+	ib[n++] = (uint32)(endGpu >> 32);
+	ib[n++] = 0;
+	ib[n++] = 0;
+	ib[n++] = 0;
+	return n;
+}
+
+
+static void
+radeon_gfx9_dma(uint32 location, uint64 fenceGpu, bool ringDoorbell,
+	uint32 meCntl, uint32 haltMask, uint8* ibAddress, uint64 ibGpu)
+{
+	uint64 targetOffset = 0;
+	uint8* target = NULL;
+	const uint32 bytes8 = 8u * 1024u * 1024u;
+	const uint32 bytes1 = 1024u * 1024u;
+	const uint32 dwords1 = bytes1 / sizeof(uint32);
+	if (radeon_vram_alloc(bytes8, 4096, &targetOffset, &target) != B_OK
+		|| target == NULL) {
+		ERROR("%s: R5 radeon_hd: GFX9 workload failed: dma alloc\n",
+			__func__);
+		return;
+	}
+	memset(target, 0, bytes8);
+	radeon_gfx9_flush_visible(target, bytes8);
+	radeon_visible_barrier();
+	uint64 dstGpu = radeon_gfx9_mc_addr(location, targetOffset);
+	uint64 sequenceGpu = fenceGpu + kFenceSequence;
+	volatile uint64* tsStart = (volatile uint64*)
+		(sRadeonGfx9Ring.fenceAddress + kFenceTsStart);
+	volatile uint64* tsEnd = (volatile uint64*)
+		(sRadeonGfx9Ring.fenceAddress + kFenceTsEnd);
+
+	uint32* ib = (uint32*)ibAddress;
+	uint32 ibDwords = radeon_gfx9_dma_ib(ib, fenceGpu, dstGpu, 1);
+	radeon_gfx9_flush_visible(ibAddress, 4096);
+	radeon_visible_barrier();
+	*tsStart = 0;
+	*tsEnd = 0;
+	uint32 packets[12];
+	uint64 sequence = 2;
+	packets[0] = radeon_packet3(kWlIndirectBuffer, 2);
+	packets[1] = (uint32)ibGpu & ~3u;
+	packets[2] = (uint32)((ibGpu >> 32) & 0xffffu);
+	packets[3] = kWlIbValid | ibDwords;
+	packets[4] = radeon_packet3(kWlReleaseMem, 6);
+	packets[5] = (1u << 16) | (1u << 17) | (1u << 15) | (1u << 21)
+		| kWlCacheFlushTs | (5u << 8);
+	packets[6] = 1u << 29;
+	packets[7] = (uint32)sequenceGpu;
+	packets[8] = (uint32)(sequenceGpu >> 32);
+	packets[9] = (uint32)sequence;
+	packets[10] = (uint32)(sequence >> 32);
+	packets[11] = 0;
+	if (!radeon_gfx9_submit(packets, 12, sequence, ringDoorbell, meCntl,
+			haltMask))
+		return;
+
+	uint32 off1 = 0;
+	uint32 bad1 = radeon_gfx9_mismatch((volatile uint32*)target, dwords1,
+		0xA5A5A5A5, &off1);
+	uint32 tail = radeon_gfx9_mismatch(
+		(volatile uint32*)(target + bytes1), dwords1, 0, NULL);
+	uint64 ticks1 = *tsEnd - *tsStart;
+	if (bad1 != 0 || tail != 0) {
+		radeon_gfx9_dma_note(bad1, ticks1, 0, 0, false);
+		ERROR("%s: R5 radeon_hd: GFX9 workload dma 1m bad %" B_PRIu32
+			" off 0x%" B_PRIx32 " tail %" B_PRIu32 " ticks %" B_PRIu64
+			"\n", __func__, bad1, off1, tail, ticks1);
+		radeon_gfx9_workload_fail("dma_1m", meCntl, haltMask, sequence,
+			bad1);
+		return;
+	}
+
+	ibDwords = radeon_gfx9_dma_ib(ib, fenceGpu, dstGpu, 8);
+	radeon_gfx9_flush_visible(ibAddress, 4096);
+	radeon_visible_barrier();
+	*tsStart = 0;
+	*tsEnd = 0;
+	sequence = 3;
+	packets[3] = kWlIbValid | ibDwords;
+	packets[9] = (uint32)sequence;
+	packets[10] = (uint32)(sequence >> 32);
+	if (!radeon_gfx9_submit(packets, 12, sequence, ringDoorbell, meCntl,
+			haltMask))
+		return;
+
+	uint32 off8 = 0;
+	uint32 bad8 = radeon_gfx9_mismatch((volatile uint32*)target,
+		bytes8 / sizeof(uint32), 0xA5A5A5A5, &off8);
+	uint64 ticks8 = *tsEnd - *tsStart;
+	radeon_gfx9_dma_note(bad1, ticks1, bad8, ticks8, true);
+	if (bad8 != 0 || ticks1 == 0 || ticks8 <= ticks1) {
+		ERROR("%s: R5 radeon_hd: GFX9 workload dma 8m bad %" B_PRIu32
+			" off 0x%" B_PRIx32 " ticks %" B_PRIu64 " ticks1 %" B_PRIu64
+			"\n", __func__, bad8, off8, ticks8, ticks1);
+		radeon_gfx9_workload_fail("dma_8m", meCntl, haltMask, sequence,
+			bad8);
+		return;
+	}
+	uint32 whole = (uint32)(ticks8 / ticks1);
+	uint32 tenth = (uint32)(((ticks8 % ticks1) * 10) / ticks1);
+	ERROR("%s: R5 radeon_hd: GFX9 workload dma 1m bad 0 ticks %" B_PRIu64
+		" 8m bad 0 ticks %" B_PRIu64 " ratio %" B_PRIu32 ".%" B_PRIu32
+		"\n", __func__, ticks1, ticks8, whole, tenth);
+}
+
+
 static void
 radeon_gfx9_workload(uint32 location, uint64 ringGpu, uint64 fenceGpu,
 	bool ringDoorbell, uint32 meCntl, uint32 haltMask)
@@ -2877,6 +3075,8 @@ radeon_gfx9_workload(uint32 location, uint64 ringGpu, uint64 fenceGpu,
 		" seq %" B_PRIu64 " seen %" B_PRIx64 " rptr 0x%" B_PRIx32
 		" wptr 0x%" B_PRIx32 "\n", __func__, writeback, sequence, seen,
 		rptr, wptr);
+	radeon_gfx9_dma(location, fenceGpu, ringDoorbell, meCntl, haltMask,
+		ibAddress, ibGpu);
 }
 // SPDX-SnippetEnd
 
