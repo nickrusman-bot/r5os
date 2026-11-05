@@ -89,13 +89,6 @@ Kernel, MMU, scheduler, drivers, filesystems: inspect the path and fail cases. C
 
 Choose the correct solution, not the quickest or the one that only passes the test in front of you.
 
-- No stubs, hardcoded values, or "0 because the value is unknown" in code that ships. If a value can be read or derived (from a register, a firmware header, a table), read it. If something cannot work yet, return a clear error and list it as open in `CHANGELOG.md`.
-- A temporary solution carries `TODO(M<n>)`, the milestone where it goes away, and a line in the CHANGELOG. It must still be correct under load: no single-slot shortcuts, no allocator that never frees, no shared semaphore as an event.
-- "Done" means it works for the goal of the milestone (for example RADV, or a real application), not only for the smallest test.
-- "Prefer small diffs" and "no drive-by refactors" are about unrelated code. They are not a reason to build less than the part you are working on needs.
-- For a design choice, first give two or three options with their trade-offs and your recommendation, and wait for the user. Then build the chosen one completely.
-- Host-side build and compile errors are not a reason to stop. Work through them. Stop only for a design choice, a licence question, or something that needs hardware.
-
 ## Kernel and GPU checklist
 
 Go through this before every report on kernel or GPU code. Say per item: ok, not applicable, or what is still open.
