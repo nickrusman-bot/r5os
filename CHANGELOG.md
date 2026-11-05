@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### The page table base is the framebuffer offset
+
+The 14:19 boot faulted a write on the first GART page with `WALKER_ERROR` and `MAPPING_ERROR`. `VM_L2_PROTECTION_FAULT_ADDR` holds a page number, so the byte address is that register shifted left by 12. For `0x0f3f0000` that is the GART start `0xf3f0000000`. The walker did not read the table. K2 now writes `VM_CONTEXT0_PAGE_TABLE_BASE_ADDR` as `(MC_VM_FB_OFFSET << 24) + tableOffset`, then `AMDGPU_PTE_VALID`, the same value as `amdgpu_gmc_pd_addr` plus `gmc_v9_0_get_vm_pde`. The physical address is rejected when it fails the Linux `BUG_ON` mask `0xFFFF00000000003F`. The written value and the read-back are logged as `k2 ptb`.
+
+`gmc_v9_0_gart_init` sets `gart_pte_flags` to `AMDGPU_PTE_MTYPE_VG10(0, MTYPE_UC) | AMDGPU_PTE_EXECUTABLE`. `MTYPE_UC` is 3 in `vega10_enum.h` and the field sits at bit 57 in `amdgpu_vm.h`. A system page is now `0x0600000123450077` for physical `0x123450000`. After the table is filled, K2 issues the same `sfence` as `radeon_visible_barrier` and reads the last mapped PTE and the tail PTE back before `VM_CONTEXT0_CNTL` and before the TLB flush.
+
+`VM_INVALIDATE_ENG0_REQ` in `gc_9_0_sh_mask.h` has `FLUSH_TYPE` as two bits at 16, then `INVALIDATE_L2_PTES`, `INVALIDATE_L2_PDE0`, `INVALIDATE_L2_PDE1`, `INVALIDATE_L2_PDE2` and `INVALIDATE_L1_PTES`. `gmc_v9_0_get_invalidate_req` for VMID 0 and flush type 0 is `0x007c0001`. K2 logs that value as `k2 inv`. A fault log now names `MORE_FAULTS`, `WALKER_ERROR`, `PERMISSION_FAULTS`, `MAPPING_ERROR`, `CID` and `RW`, and prints the byte address. The host test covers the PTE, the alignment, the invalidate word and the previous fault status `0x00040d5b`. K0 and K1 are unchanged.
+
+The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`. Jam `@r5-anyboot` exited 0. The driver inside `haiku-r1~beta6_r5_2026.1_dev-1-x86_64.hpkg` contains `k2 fail ptb readback`. The image was written to the General UDisk at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. This image has not been booted.
+
 ### The GART DMA faulted at the start of the window
 
 The stick written at 14:19 Europe/Amsterdam on 5 Nov 2026, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`, booted on the 5625U. The desktop came up. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`.

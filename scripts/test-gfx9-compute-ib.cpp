@@ -180,21 +180,39 @@ main(void)
 
 	const uint64_t kPhys = 0x0000000123450000ull;
 	const uint64_t kFlags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM
-		| R5_GFX9_PTE_SNOOPED | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
-	const uint64_t kExpectPte = 0x0000000123450067ull;
+		| R5_GFX9_PTE_SNOOPED | R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE
+		| R5_GFX9_PTE_WRITEABLE;
+	const uint64_t kExpectPte = 0x0600000123450077ull;
 	uint64_t pte = r5_gfx9_gart_pte(kPhys, kFlags);
 	if (pte != kExpectPte)
 		return fail("pte value");
 	if ((pte & 1ull) == 0 || (pte & 2ull) == 0 || (pte & 4ull) == 0)
 		return fail("pte low");
-	if ((pte & (1ull << 4)) != 0)
+	if ((pte & (1ull << 4)) == 0)
 		return fail("pte exec");
 	if ((pte & (1ull << 5)) == 0 || (pte & (1ull << 6)) == 0)
 		return fail("pte rw");
-	if (((pte >> 57) & 3ull) != 0)
+	if (((pte >> 57) & 3ull) != 3ull)
 		return fail("pte mtype");
-	if ((pte & ~0xfffull) != kPhys)
+	if ((pte & ~0xfffull) != (kPhys | (3ull << 57)))
 		return fail("pte phys");
+	const uint64_t kTablePa = (0x810ull << 24) + 0x800000ull;
+	if (!r5_gfx9_pde_aligned(kTablePa) || r5_gfx9_pde_aligned(kTablePa + 32ull))
+		return fail("pde align");
+	if (r5_gfx9_page_table_base(0x810u, 0x800000ull) != (kTablePa | 1ull))
+		return fail("ptb");
+	if (r5_gfx9_tlb_req(0, 0) != 0x007c0001u)
+		return fail("tlb req");
+	if ((r5_gfx9_tlb_req(0, 3) & 0x00030000u) != 0x00030000u)
+		return fail("flush type");
+	if ((r5_gfx9_tlb_req(0, 4) & 0x00070000u) != 0x00040000u)
+		return fail("flush width");
+	r5_gfx9_fault decoded = r5_gfx9_fault_decode(0x00040d5bu);
+	if (decoded.more != 1 || decoded.walker != 5 || decoded.permission != 5
+		|| decoded.mapping != 1 || decoded.cid != 6u || decoded.rw != 1)
+		return fail("fault decode");
+	if (r5_gfx9_fault_address(0x0f3f0000u, 0) != 0xf3f0000000ull)
+		return fail("fault addr");
 
 	uint64_t gartStart = 0;
 	uint64_t gartEnd = 0;

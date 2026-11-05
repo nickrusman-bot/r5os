@@ -519,7 +519,7 @@ run_k2()
 	uint32 fb = kread(sInfo, gc_byte(0x096b));
 	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
 	uint64 flags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM | R5_GFX9_PTE_SNOOPED
-		| R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
+		| R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
 	uint64 dummyPte = r5_gfx9_gart_pte(dummyPa, flags);
 	uint64* pte = (uint64*)table;
 	uint32 pteCount = (uint32)(tableBytes / sizeof(uint64));
@@ -544,11 +544,13 @@ run_k2()
 		return;
 	}
 	uint32 page = 0;
+	uint64 lastExpect = 0;
 	for (uint32 slot = 0; slot < count; slot++) {
 		uint64 address = entries[slot].address;
 		uint64 bytes = entries[slot].size;
 		while (bytes >= 4096 && page < 256) {
-			pte[page] = r5_gfx9_gart_pte(address, flags);
+			lastExpect = r5_gfx9_gart_pte(address, flags);
+			pte[page] = lastExpect;
 			address += 4096;
 			bytes -= 4096;
 			page++;
@@ -561,10 +563,37 @@ run_k2()
 		return;
 	}
 
-	uint64 tableMc = ((uint64)(location & 0x00ffffffu) << 24) + tableOffset;
+	// Same instruction as radeon_visible_barrier. That function is static
+	// in the accelerant, so the kernel issues the fence itself.
+	asm volatile("sfence" ::: "memory");
+	uint64 lastGot = *(volatile uint64*)(pte + 255);
+	uint64 tailGot = *(volatile uint64*)(pte + (pteCount - 1));
+	knote("k2 pte last %016llx got %016llx tail %016llx",
+		(unsigned long long)lastExpect, (unsigned long long)lastGot,
+		(unsigned long long)tailGot);
+	if (lastGot != lastExpect || tailGot != dummyPte) {
+		knote("k2 fail pte readback");
+		return;
+	}
+
+	uint64 tablePa = ((uint64)(fb & 0x00ffffffu) << 24) + tableOffset;
+	if (!r5_gfx9_pde_aligned(tablePa)) {
+		knote("k2 fail table align %016llx", (unsigned long long)tablePa);
+		return;
+	}
+	uint64 tableBase = r5_gfx9_page_table_base(fb, tableOffset);
 	uint32 savedCntl = kread(sInfo, gc_byte(0x0880));
-	kwrite(sInfo, gc_byte(0x08eb), (uint32)tableMc);
-	kwrite(sInfo, gc_byte(0x08ec), (uint32)(tableMc >> 32));
+	kwrite(sInfo, gc_byte(0x08eb), (uint32)tableBase);
+	kwrite(sInfo, gc_byte(0x08ec), (uint32)(tableBase >> 32));
+	uint32 baseLo = kread(sInfo, gc_byte(0x08eb));
+	uint32 baseHi = kread(sInfo, gc_byte(0x08ec));
+	knote("k2 ptb %016llx got %08lx %08lx",
+		(unsigned long long)tableBase, (unsigned long)baseLo,
+		(unsigned long)baseHi);
+	if (baseLo != (uint32)tableBase || baseHi != (uint32)(tableBase >> 32)) {
+		knote("k2 fail ptb readback");
+		return;
+	}
 	kwrite(sInfo, gc_byte(0x090b), (uint32)(gartStart >> 12));
 	kwrite(sInfo, gc_byte(0x090c), (uint32)(gartStart >> 44));
 	kwrite(sInfo, gc_byte(0x092b), (uint32)((gartEnd - 1) >> 12));
@@ -581,8 +610,8 @@ run_k2()
 	const uint32 eng = 17;
 	uint32 req = gc_byte(0x08a3 + eng);
 	uint32 ack = gc_byte(0x08b5 + eng);
-	uint32 inv = 1u | (1u << 18) | (1u << 19) | (1u << 20) | (1u << 21)
-		| (1u << 22);
+	uint32 inv = r5_gfx9_tlb_req(0, 0);
+	knote("k2 inv %08lx", (unsigned long)inv);
 	kwrite(sInfo, req, inv);
 	(void)kread(sInfo, req);
 	bool flushed = false;
@@ -624,10 +653,18 @@ run_k2()
 	knote("k2_ib wb %08lx seq %lu seen %lu", (unsigned long)seenWord,
 		(unsigned long)ibSequence, (unsigned long)seenSeq);
 	if (!(dma && bad == 0 && ib)) {
-		knote("k2 fault %08lx addr %08lx %08lx cntl %08lx cp %08lx grbm %08lx",
-			(unsigned long)kread(sInfo, gc_byte(0x084b)),
-			(unsigned long)kread(sInfo, gc_byte(0x084c)),
-			(unsigned long)kread(sInfo, gc_byte(0x084d)),
+		uint32 faultStatus = kread(sInfo, gc_byte(0x084b));
+		uint32 faultLo = kread(sInfo, gc_byte(0x084c));
+		uint32 faultHi = kread(sInfo, gc_byte(0x084d));
+		r5_gfx9_fault fault = r5_gfx9_fault_decode(faultStatus);
+		knote("k2 fault %08lx MORE_FAULTS %lu WALKER_ERROR %lu "
+			"PERMISSION_FAULTS %lu MAPPING_ERROR %lu CID %lu RW %lu "
+			"addr %016llx cntl %08lx cp %08lx grbm %08lx",
+			(unsigned long)faultStatus, (unsigned long)fault.more,
+			(unsigned long)fault.walker, (unsigned long)fault.permission,
+			(unsigned long)fault.mapping, (unsigned long)fault.cid,
+			(unsigned long)fault.rw,
+			(unsigned long long)r5_gfx9_fault_address(faultLo, faultHi),
 			(unsigned long)kread(sInfo, gc_byte(0x0880)),
 			(unsigned long)kread(sInfo, gc_byte(0x01a0)),
 			(unsigned long)kread(sInfo, gc_byte(0x0004)));
