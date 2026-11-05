@@ -89,7 +89,8 @@ Kernel, MMU, scheduler, drivers, filesystems: inspect the path and fail cases. C
 
 Choose the correct solution, not the quickest or the one that only passes the test in front of you.
 
-- The reference is how Linux or Mesa does the same thing. Before you write a part, look up that path. In the report, say per part how the reference does it, how you did it, and why you differ where you do. A difference without a reason is a bug.
+- **GPU work** has a fixed reference: Linux `amdgpu`/`i915` and Mesa. Before you write a part, look up that path. In the report, say per part how the reference does it, how you did it, and why you differ where you do. A difference without a reason is a bug. Linux is a source of facts (registers, values, order); code is taken over only from a file whose own license allows it (see "Licensing").
+- **Other work** has no fixed reference. Name the implementation you followed (for example FreeBSD, Haiku, or the upstream project) and why, and apply the same rule: explain where you differ.
 - No stubs, hardcoded values, or "0 because the value is unknown" in code that ships. If a value can be read or derived (from a register, a firmware header, a table), read it. If something cannot work yet, return a clear error and list it as open in `CHANGELOG.md`.
 - A temporary solution carries `TODO(M<n>)`, the milestone where it goes away, and a line in the CHANGELOG. It must still be correct under load: no single-slot shortcuts, no allocator that never frees, no shared semaphore as an event.
 - "Done" means it works for the goal of the milestone (for example RADV, or a real application), not only for the smallest test.
