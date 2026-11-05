@@ -162,9 +162,9 @@ These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not th
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, written at 15:29 Europe/Amsterdam, reached the desktop. The lines are `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, `k1_wait_us 1132`, `k2 map count 8 pages 256`, `k2 ptb 0000000812c18001 got 12c18001 00000008`, `k2 inv 007c0001`, `k2 ok gart`, `k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 10 seen 10`. There is no `k2 fault` line. The user shut that session down and reported no panic. The syslog exported while the desktop was up does not contain the stop lines. A boot with `gfx9_kernel` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
 
-## GFX9 user address space (M4, not fixed)
+## GFX9 user address space (draft, not proven on the stick)
 
-This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is written down before the page-table code. It is not a fixed sequence: no boot has programmed VMID 1 yet.
+This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is not a fixed sequence. The stick of 6 Nov 2026 built VMID 1 far enough to flush, then `vmid1 fail tlb` because the poll waited on ack bit 0. The success line `vmid1 ptb` was not logged. Do not treat the register list below as proven.
 
 `amdgpu_vm_adjust_size(adev, 256 * 1024, 9, 3, 48)` asks for 256 TiB, 9-bit blocks, at most 3 levels above the page table, and 48 VA bits. The minimum and the maximum are the same 262144 GiB, so the VM size does not depend on the RAM size. `max_pfn` is `262144 << 18` (2^36 pages). The byte size minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`: 8 KiB trap, 2 MiB seq64, 2 MiB CSA) is `0xffffffbfe000`.
 
@@ -179,7 +179,21 @@ The high range contains `address32_hi` `0xffff8000`. The walk is four levels: ro
 
 `MC_VM_MX_L1_TLB_CNTL` `SYSTEM_ACCESS_MODE` is 3 in `gfxhub_v1_0_init_tlb_regs`, and `SYSTEM_APERTURE_UNMAPPED_ACCESS` is 0. `VM_L2_CNTL` `CONTEXT1_IDENTITY_ACCESS_MODE` is 1, and the identity aperture is then programmed to an empty range (`LOW` `0xffffffff`/`0xf`, `HIGH` 0). A user indirect buffer uses VMID 1 page tables, not the VMID 0 tables. With the identity aperture empty, an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. That is the recorded check. M4 does not change `SYSTEM_ACCESS_MODE`.
 
-The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. No boot has confirmed these writes yet.
+The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. The 6 Nov 2026 stick did not print `vmid1 ptb`, so these writes are not confirmed. The TLB poll for VMID 1 now waits on ack bit 1. That change has not been booted.
+
+## Render node (draft, not proven on the stick)
+
+The node is `/dev/gpu/radeon_hd/<n>`. The interface is API 1.0 (`R5_GPU_API_MAJOR` 1, `R5_GPU_API_MINOR` 0). The calls, from `R5_GPU_OP_BASE` 30479, are `GET_INFO`, `READ_REG`, `CTX_CREATE`, `CTX_DESTROY`, `BO_CREATE`, `BO_FREE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP`, `CS_SUBMIT`, `FENCE_WAIT`, and the syncobj calls through `SYNCOBJ_TRANSFER`. A shipped call does not change.
+
+The 6 Nov 2026 self-test printed `stage render node: api 1.0 device 15e7 cu 7` and the firmware versions me 167, pfp 197, mec 483. `CTX_CREATE` then returned `B_NO_INIT`. No later call in that list ran.
+
+## Submission (draft, not proven on the stick)
+
+A user submission is `CS_SUBMIT`: a context, one ring, and indirect buffers whose flags are 0. The translator and the kernel reject any other IB flag, including `AMDGPU_IB_FLAG_PREAMBLE`. VMID 1 is bits 24–27 of the indirect-buffer packet. The 6 Nov 2026 stick returned from `CTX_CREATE` before any submission, so preamble flags, `QUERY_STATE2`, `GEM_CREATE` and a high `VA_MAP` were not seen.
+
+## Fence by interrupt (draft, not proven on the stick)
+
+`FENCE_WAIT` waits on the sequence `CS_SUBMIT` returned. The user fence word is the kernel MC address of the fence page plus 2048, with `INT_SEL` 2, as in the address-space section above. The K1 interrupt in `GFX9 kernel on GC 9.3 (fixed)` is a different fence and stays as it is. No user submission reached this fence on the 6 Nov 2026 stick.
 
 ## Known GFX9 differences
 

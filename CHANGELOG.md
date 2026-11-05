@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### M4 drafts after the second stick
+
+`docs/GRAPHICS.md` records the render node, the VMID 1 layout, the submission format and the user fence as drafts. Each section says it is not proven on the stick. The 6 Nov 2026 boot answered `GET_INFO` and stopped in `CTX_CREATE`. `docs/GPU-ARCHITECTURE.md` marks M4 not done, with that result. The design is unchanged. `AGENTS.md` and What's new are unchanged. `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md` name libdrm 2.4.124 and the Mesa RADV, Lavapipe and Zink files that were read. The packages were not audited file by file.
+
 ### Syncobj wait, VRAM sizes, and the package root
 
 A wait without `FOR_SUBMIT` on an unsubmitted syncobj returns `B_BAD_VALUE`. On Haiku that is `EINVAL`, which is what Linux `drm_syncobj_array_wait` returns. A timeout stays for a point that was submitted and has not retired. The host replay `ok libdrm ioctl` covers a fresh syncobj, a reset syncobj, and a list that mixes a fresh syncobj with a signalled one. `FOR_SUBMIT` still waits, and that wait times out.
