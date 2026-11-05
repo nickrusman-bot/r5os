@@ -1,4 +1,4 @@
-# R5OS multi-user and overlay migration
+# R5 multi-user and overlay migration
 
 Architecture and order of work. Not a claim that login or isolation ships yet.
 
@@ -267,7 +267,7 @@ Checked in the jammed AMD64 tree (2026-10-29):
 | Deskbar | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DESKBAR_DIRECTORY` | no |
 | Tracker | `B_USER_SETTINGS_DIRECTORY`, `B_USER_DIRECTORY` (cwd) | comments/examples only |
 | app_server colours/fonts | `DesktopSettings` / `DecorManager` `B_USER_SETTINGS_DIRECTORY` | unused `#define DECORATORS_DIR` still hardcodes a home add-on path |
-| R5OS AirPlay log | now `B_USER_LOG_DIRECTORY` | was `/boot/home/airplay_deskbar.log` |
+| R5 AirPlay log | now `B_USER_LOG_DIRECTORY` | was `/boot/home/airplay_deskbar.log` |
 | Joysticks preflet | `B_USER_SETTINGS_DIRECTORY` / `joysticks` | native copy `distro/user-paths` |
 | Users / HomeLock | first-home layout | `/boot/home` on purpose (parent of `users/`) |
 | Extra-home create | `passwd` home + `config/settings` | layout only, not the live session |
@@ -276,7 +276,7 @@ Appearance follows the signed-in uid (build 10008): `user` writes `/boot/home/co
 
 ### Bundled applications
 
-First audit pass was desktop prefs only. 2026-10-29 14:47 Europe/Amsterdam: `src/apps` and `src/preferences` in the jammed AMD64 tree, plus R5OS `distro/` apps.
+First audit pass was desktop prefs only. 2026-10-29 14:47 Europe/Amsterdam: `src/apps` and `src/preferences` in the jammed AMD64 tree, plus R5 `distro/` apps.
 
 Most image apps already call `find_directory` for settings or folders (Mail, Terminal, Screenshot, ShowImage, Clock, DeskCalc, HaikuDepot, People, ProcessController, Workspaces, …). Same uid-0 limit as the desktop prefs.
 
@@ -292,7 +292,7 @@ Hardcoded `/boot/home` in app code, grouped:
 | PackageInstaller | `/boot/home/config` rewrite | BeOS path migration |
 | MediaPlayer, Tracker `PROFILE` | Desktop dump paths | debug leftovers |
 | Login, Users, HomeLock | `/boot/home` and `users/` | layout on purpose |
-| AirPlay log | `B_USER_LOG_DIRECTORY` | R5OS overlay, already switched |
+| AirPlay log | `B_USER_LOG_DIRECTORY` | R5 overlay, already switched |
 
 Not in this git: **Pe** and **Vision** (optional image packages). Demos without settings (GLTeapot, Mandelbrot, …) have no home path.
 

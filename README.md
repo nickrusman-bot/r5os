@@ -127,7 +127,7 @@ Build an image:
 
 ## Relationship with Haiku
 
-Haiku is the foundation, and its source is where R5OS gets many of its fixes. R5OS does not send changes back. Haiku does not accept AI-generated or AI-modified contributions, and R5 Operating System work is AI-assisted. So:
+Haiku is the foundation, and its source is where R5 gets many of its fixes. R5 does not send changes back. Haiku does not accept AI-generated or AI-modified contributions, and R5 Operating System work is AI-assisted. So:
 
 - Do not open pull requests against Haiku. Do not push to Haiku's servers.
 - Haiku's repositories are only fetched from.
@@ -138,11 +138,11 @@ Haiku is the foundation, and its source is where R5OS gets many of its fixes. R5
 R5 Operating System is **multi-license**:
 
 - Files that come from Haiku keep their original license and copyright, mostly MIT.
-- New files that R5OS owns are GPL-3.0-or-later.
+- New files that R5 owns are GPL-3.0-or-later.
 - The combined system is distributed under GPL-3.0-or-later.
 - Third-party components keep their own licenses. They are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Examples are the VirtualBox Guest Additions (GPL-3.0-only), the AMD firmware and Mesa.
 
-The full policy is in [`docs/LICENSING.md`](docs/LICENSING.md). About R5OS shows the licenses and credits on the system itself.
+The full policy is in [`docs/LICENSING.md`](docs/LICENSING.md). About R5 shows the licenses and credits on the system itself.
 
 ## Contributing
 
@@ -150,8 +150,8 @@ AI-assisted work is welcome here. It is held to the same bar as any other change
 
 - Pull requests target `main`.
 - User-visible changes get a What's new entry in plain language. Technical details go in `CHANGELOG.md`.
-- Use the name **R5OS** only. Do not use Haiku or BeOS names or logos on the image.
+- Use the name **R5 Operating System**, short **R5** (see "Name" in `AGENTS.md`). Do not use Haiku or BeOS names or logos on the image.
 
 ## Versions
 
-Releases will be called **R5 Operating System 2026.1**, **2026.2**, and so on; a new year starts again at `.1`. Development trees carry `-dev`, and About R5OS shows the version together with an increasing build number. The sources for those are [`distro/VERSION`](distro/VERSION) and [`distro/BUILD`](distro/BUILD).
+Releases will be called **R5 Operating System 2026.1**, **2026.2**, and so on; a new year starts again at `.1`. Development trees carry `-dev`, and About R5 shows the version together with an increasing build number. The sources for those are [`distro/VERSION`](distro/VERSION) and [`distro/BUILD`](distro/BUILD).

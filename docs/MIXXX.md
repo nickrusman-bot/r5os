@@ -1,4 +1,4 @@
-# Mixxx op R5OS (side quest)
+# Mixxx op R5 (side quest)
 
 GitHub: [#55](https://github.com/nickrusman-bot/r5os/issues/55) (#56–#62 in volgorde).
 
@@ -8,7 +8,7 @@ Upstream-app: [mixxxdj/mixxx](https://github.com/mixxxdj/mixxx). Haiku-port: Hai
 
 Doel per niveau: **installeren → speakers → MIDI → USB-audio → HID → UAC2/cue**. Club-ready (`<10 ms`, vinyl/timecode) is het laatste, niet het eerste.
 
-## Klaar (op Haiku, niet op R5OS gezien)
+## Klaar (op Haiku, niet op R5 gezien)
 
 - [x] Recipe Mixxx 2.5.4 in HaikuPorts (skins `/boot/system/data/mixxx`, settings `config/settings/mixxx`, `BATTERY=OFF`).
 - [x] PortAudio 19.07 met Haiku Media Kit host API.
@@ -17,7 +17,7 @@ Doel per niveau: **installeren → speakers → MIDI → USB-audio → HID → U
 
 ## Open, in deze volgorde
 
-- [ ] **1. Pakket op R5OS AMD64** ([#56](https://github.com/nickrusman-bot/r5os/issues/56))  
+- [ ] **1. Pakket op R5 AMD64** ([#56](https://github.com/nickrusman-bot/r5os/issues/56))  
   `pkgman` of `haikuporter mixxx`. Qt6 + FFmpeg6 mee. Start, LateNight-skin, MP3/FLAC uit de bibliotheek, mixen met toetsenbord op de default output. Niet in `distro/`, geen eigen fork tot een Haiku-patch vastloopt.
 
 - [ ] **2. Interne audio (Envy HDA)** ([#57](https://github.com/nickrusman-bot/r5os/issues/57))  
@@ -33,7 +33,7 @@ Doel per niveau: **installeren → speakers → MIDI → USB-audio → HID → U
   Pioneer/NI-achtig dat geen standaard MIDI is, tegen hidapi/libusb. Werkt het niet: afschrijven tot er een native HID-pad is. Geen collectie mappings gokken.
 
 - [ ] **6. UAC2 + meer dan 2 kanalen** ([#61](https://github.com/nickrusman-bot/r5os/issues/61))  
-  Kernel: `usb_audio` + xHCI isochroon. Stock weigert UAC2. Community-fork (`rations/haiku-kernel-usb`) is **niet** R5OS tot die in onze tree zit, op onze hrev bouwt, en op echte hardware is gezien. Pas daarna cue + master in Mixxx.
+  Kernel: `usb_audio` + xHCI isochroon. Stock weigert UAC2. Community-fork (`rations/haiku-kernel-usb`) is **niet** R5 tot die in onze tree zit, op onze hrev bouwt, en op echte hardware is gezien. Pas daarna cue + master in Mixxx.
 
 - [ ] **7. Latency / vinyl** ([#62](https://github.com/nickrusman-bot/r5os/issues/62))  
   PortAudio abort/complete is deels stub. Timecode en `<10 ms` pas ná stap 6 en een gemeten callback. JACK2 in HaikuPorts staat uit (`ARCHITECTURES=!all`); Mixxx gebruikt het in dit recipe niet.

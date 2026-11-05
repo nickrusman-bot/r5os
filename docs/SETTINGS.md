@@ -1,6 +1,6 @@
 # Settings
 
-One Settings window for R5OS. Existing preference programs stay separate and keep their own files.
+One Settings window for R5. Existing preference programs stay separate and keep their own files.
 
 ## Host
 
@@ -16,7 +16,7 @@ A new page adds its icon signature in `module_icon()` in `SettingsWindow.cpp`. H
 
 Display is a page under System. The separate Screen program stays installed. The page is locked until an administrator opens the lock. The left box shows the screen picture from `r5_screen_draw()` (`docs/LIBR5.md`), the size, and the graphics device. Workspaces change the column and row count immediately. Resolution, colors, and refresh wait for Apply. Apply asks to keep the picture. After 12 seconds without a choice the previous picture returns. Revert restores the mode and the workspace layout from when the page was opened. Notifications and Desktop and Deskbar draw the same screen picture.
 
-Information is a page under System. It shows the computer and the R5OS version in two boxes. The labels are left-aligned. Copy sits under the rows of its box. There is no device id to show. Storage is the boot volume. The build date is the Europe/Amsterdam time of the image jam.
+Information is a page under System. It shows the computer and the R5 version in two boxes. The labels are left-aligned. Copy sits under the rows of its box. There is no device id to show. Storage is the boot volume. The build date is the Europe/Amsterdam time of the image jam.
 
 The sidebar and the home cards are filled from the module list. Pages under a category are alphabetical by name. Information stays first under System. A category card and the subtitle of an open page use that page's description. Leave that order, and these five descriptions, as they are until the user explicitly asks to change them. Another Settings task does not include reordering the list or rewriting these lines. Information is "View system details". Virtual memory is "Extra memory stored on disk". Wallpaper is "Set the background of your desktop". Desktop and Deskbar is "Adjust desktop and Deskbar settings". Notifications is "Manage alerts and notifications". Category names for `personalization`, `system`, `devices`, `network`, and `accounts` live in one table in `SettingsWindow.cpp`. Personalization's summary is fonts, look and feel, wallpaper, and the Deskbar. System's summary is display, sound, notifications, virtual memory, and this computer. A module with another category id is still shown. A category page uses the same cards as Home and does not repeat the category summary under the title. Back and Home sit with the lock, Revert, and Defaults.
 
@@ -54,7 +54,7 @@ Adding a row there is how an old preference shows up before it is rewritten. A n
 
 ## Storage and the administrator lock
 
-New R5OS values are `BMessage` files under `~/config/settings/r5-settings/<module id>`. The id is checked so one module cannot name another's file. Haiku files such as `Appearance`, `Keyboard`, and `Network` are not moved.
+New R5 values are `BMessage` files under `~/config/settings/r5-settings/<module id>`. The id is checked so one module cannot name another's file. Haiku files such as `Appearance`, `Keyboard`, and `Network` are not moved.
 
 `SettingsHost::AdminChangeAllowed()` calls `r5_admin_change_allowed()` from Users & Accounts. The window refuses the write when the module says `RequiresAdmin()` and that call is false. The module repeats the check in `SaveSettings()` before a privileged write. The lock button uses `r5_admin_query()`, `r5_admin_prompt_unlock()`, and `r5_admin_relock()`. The picture is `r5_button_set_lock()` in `libr5icons.so`.
 
