@@ -89,8 +89,6 @@ Kernel, MMU, scheduler, drivers, filesystems: inspect the path and fail cases. C
 
 Choose the correct solution, not the quickest or the one that only passes the test in front of you.
 
-- **GPU work** has a fixed reference: Linux `amdgpu`/`i915` and Mesa. Before you write a part, look up that path. In the report, say per part how the reference does it, how you did it, and why you differ where you do. A difference without a reason is a bug. Linux is a source of facts (registers, values, order); code is taken over only from a file whose own license allows it (see "Licensing").
-- **Other work** has no fixed reference. Name the implementation you followed (for example FreeBSD, Haiku, or the upstream project) and why, and apply the same rule: explain where you differ.
 - No stubs, hardcoded values, or "0 because the value is unknown" in code that ships. If a value can be read or derived (from a register, a firmware header, a table), read it. If something cannot work yet, return a clear error and list it as open in `CHANGELOG.md`.
 - A temporary solution carries `TODO(M<n>)`, the milestone where it goes away, and a line in the CHANGELOG. It must still be correct under load: no single-slot shortcuts, no allocator that never frees, no shared semaphore as an event.
 - "Done" means it works for the goal of the milestone (for example RADV, or a real application), not only for the smallest test.
@@ -107,7 +105,7 @@ Go through this before every report on kernel or GPU code. Say per item: ok, not
 3. **Teardown order.** Quiesce the GPU (halt, or wait for the last fence), remove the mappings, flush the TLB, then free memory. Interrupts off and the handler removed before the registers or areas go. Close and uninit follow the same order.
 4. **Waiting.** Use a condition variable (`Add()` before the check), and re-check the sequence or point in a loop. Every wait has a finite timeout unless there is a written reason. An interrupt handler only signals; it does not change shared tables. That work runs in a thread under the lock.
 5. **One source for a value.** The producer and the check use the same constant or function. Sizes, offsets and return values follow the API documentation (`get_memory_map` returns `B_OK`).
-6. **Reference for every field.** Every packet field and register value names the Linux or Mesa function it follows, and it is checked against that source. Masks and shifts come from the headers, not from memory.
+6. **Source for every field.** Every packet field and register value names its source (the vendor documentation, or the driver code it follows), and it is checked against that source. Masks and shifts come from the documentation or the headers, not from memory.
 
 Every bug found in review is added to this list or to a check script, so it cannot come back.
 
