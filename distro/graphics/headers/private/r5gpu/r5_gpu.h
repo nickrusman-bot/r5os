@@ -143,6 +143,7 @@ typedef struct {
 	uint32_t	version;
 	uint32_t	handle;
 	uint64_t	point;
+	uint64_t	timeout_us;
 } r5_gpu_syncobj;
 
 #endif

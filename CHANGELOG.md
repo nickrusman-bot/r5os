@@ -1,14 +1,18 @@
 # R5OS changelog (lokaal)
 
-### M4 records the GC 9.3 address space and does not add teapot data
+### M4 programs VMID 1 and does not ship RADV yet
 
 `origin/main` contains M3 (`71d5144efd`, pull request #4098) and `claude/m4-plan` (`d6b1bc09c6`, pull request #4099).
 
 The user address space for GC 9.3 is the Linux v6.12 layout: low range `0x10000`–`0x800000000000`, high range `0xffff800000000000`–`0xffffffffffbfe000`. The walk is four levels with 9-bit indexes. That section in `docs/GRAPHICS.md` is not fixed. No boot has programmed VMID 1.
 
-The render node name is `gpu/radeon_hd/0`, next to the existing graphics node. `GET_INFO` returns the common fields and an AMD vendor block whose shader counts stay 0 until the registers are read. `CS_SUBMIT` returns `B_NOT_ALLOWED` unless `gpu_render true`. With that key it returns `B_UNSUPPORTED`, because the VMID 1 tables are not programmed yet. The host test printed `ok gpu api 1.0 walk`.
+The render node name is `gpu/radeon_hd/0`. `GET_INFO` reads the shader-array registers, masks the inactive CUs to 8, and logs the bitmap. It does not hardcode 7. Without `gpu_render true` every other call returns `B_NOT_ALLOWED`. With that key, creating a context builds the VMID 1 tables: root in `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR`, depth 3, block size 0, end page `2^36-1`, and an empty identity aperture. `SYSTEM_ACCESS_MODE` is not written. The TLB flush uses engine 0. `CS_SUBMIT` appends an indirect buffer with VMID 1 in bits 24–27 and a 64-bit `RELEASE_MEM` with `INT_SEL` 2. `FENCE_WAIT` sleeps on the end-of-pipe semaphore. A timeout marks the device lost and does not reset the GPU. `BO_EXPORT` and `BO_IMPORT` return `B_UNSUPPORTED`.
 
-The teapot control points are freeglut 3.8.0 `src/fg_teapot_data.h`. The file's permission text is the X11/MIT grant. Copyright 1999-2000 Pawel W. Olszta. The header is `distro/apps/vulkanteapot/fg_teapot_data.h`. Haiku `glut_teapot.c` is not used. `GET_INFO` reads `CC_GC_SHADER_ARRAY_CONFIG` and `GC_USER_SHADER_ARRAY_CONFIG`, masks the inactive CUs to 8, and logs the bitmap. The kernel driver linked. Two Mesa configures for RADV and Zink failed: the first could not find `glslangValidator`, the second could not import mako. libdrm is not in the Haiku sysroot, and that check was not reached. There is no new stick. This image has not been booted.
+The teapot control points are freeglut 3.8.0 `src/fg_teapot_data.h`. The file's permission text is the X11/MIT grant. Copyright 1999-2000 Pawel W. Olszta. The header is `distro/apps/vulkanteapot/fg_teapot_data.h`. Haiku `glut_teapot.c` is not used. VulkanTeapot itself is not built.
+
+libdrm 2.4.124, sha256 `ac36293f61ca4aafaf4b16a2a7afff312aa4f5c37c9fbd797de9e3c0863ca379`, is installed in `/home/nickr/r5os/r5-sysroot`. The Haiku edit defines `makedev` and opens `/dev/gpu/radeon_hd/<n>`. AMDGPU ioctls are not translated. Mesa 25.3.6 configured with Vulkan `amd,swrast` and Gallium `llvmpipe,zink`, and found libdrm 2.4.124. The compile stops in two Haiku gaps. `radv_physical_device.c:2143` calls `major` and `minor`, which Haiku does not declare. `libsync.h:57` uses `_IOWR`, which the Haiku headers do not define, while compiling `radv_amdgpu_cs.c`. RADV is not in this image. VulkanTeapot is not built.
+
+The host test printed `ok gpu api 1.0 walk`. The kernel driver and `r5gpuinfo` linked. There is no new stick yet in this note until the image is written. This image has not been booted.
 
 ### M3 is the fixed kernel sequence
 

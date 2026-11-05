@@ -1,0 +1,4 @@
+Haiku declares ioctl in unistd.h. Mesa 25.3.6 src/util/os_drm.h called ioctl
+before that header was included, so the later declaration conflicted.
+The edit adds `#include <unistd.h>` above `#include <sys/ioctl.h>`.
+Upstream status: not sent.

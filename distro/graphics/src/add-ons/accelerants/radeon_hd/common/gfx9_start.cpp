@@ -1982,6 +1982,7 @@ radeon_gfx9_workload_fail(const char* step, uint32 meCntl, uint32 haltMask,
 
 static uint64 r5_ring_rptr();
 static bool r5_ring_has_room(uint32 count);
+static bool r5_ring_doorbell();
 
 
 static bool
@@ -2034,6 +2035,87 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 		return false;
 	}
 	sRadeonGfx9Ring.submitted = newWptr;
+	return true;
+}
+
+
+static uint64 sUserSequence = 0;
+
+
+bool
+r5_gfx9_ring_ready()
+{
+	return sK0Ok && sRadeonGfx9Ring.ready
+		&& sRadeonGfx9Ring.fenceAddress != NULL
+		&& sRadeonGfx9Ring.ringAddress != NULL;
+}
+
+
+bool
+r5_gfx9_user_room()
+{
+	return r5_gfx9_ring_ready() && r5_ring_has_room(12);
+}
+
+
+bool
+r5_gfx9_fence_offset(uint64* offset)
+{
+	if (!r5_gfx9_ring_ready() || offset == NULL)
+		return false;
+	*offset = sRadeonGfx9Ring.fenceOffset;
+	return true;
+}
+
+
+uint64
+r5_gfx9_user_seen()
+{
+	if (sRadeonGfx9Ring.fenceAddress == NULL)
+		return 0;
+	return *(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + kR5UserFenceOffset);
+}
+
+
+/* Appends one VMID 1 indirect buffer and a 64-bit RELEASE_MEM. The write
+ * pointer moves before the fence lands. The caller waits on the interrupt.
+ * A full ring returns false and leaves the pointer where it was. */
+bool
+r5_gfx9_user_submit(uint64 ibVa, uint32 ibDwords, uint64* _sequence)
+{
+	if (!r5_gfx9_user_room())
+		return false;
+	if ((ibVa & 3ull) != 0 || ibDwords == 0 || ibDwords > 0xfffffu)
+		return false;
+	if (((uint64)kR5UserFenceVa & 7ull) != 0)
+		return false;
+	uint64 sequence = sUserSequence + 1;
+	uint32 packets[12];
+	r5_cs_gfx_ib(packets, ibVa, ibDwords, 1, kR5UserFenceVa, sequence);
+	uint64 wptr = sRadeonGfx9Ring.submitted;
+	uint32 dwords = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
+	uint32* ring = (uint32*)sRadeonGfx9Ring.ringAddress;
+	for (uint32 i = 0; i < 12; i++)
+		ring[r5_gfx9_ring_index(wptr, i, dwords)] = packets[i];
+	uint64 newWptr = wptr + 12;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress,
+		sRadeonGfx9Ring.ringBytes);
+	radeon_visible_barrier();
+	*(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512) = newWptr;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
+	radeon_visible_barrier();
+	if (r5_ring_doorbell()) {
+		*(volatile uint64*)(sHost->doorbell + kGfx9DoorbellByte) = newWptr;
+		radeon_visible_barrier();
+	} else {
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1054), (uint32)newWptr);
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1055),
+			(uint32)(newWptr >> 32));
+	}
+	sRadeonGfx9Ring.submitted = newWptr;
+	sUserSequence = sequence;
+	if (_sequence != NULL)
+		*_sequence = sequence;
 	return true;
 }
 

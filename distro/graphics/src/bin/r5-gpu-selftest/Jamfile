@@ -1,0 +1,8 @@
+SubDir HAIKU_TOP src bin r5-gpu-selftest ;
+
+UsePrivateHeaders r5gpu ;
+
+Application r5-gpu-selftest :
+	r5-gpu-selftest.cpp
+	: be [ TargetLibsupc++ ]
+	;
