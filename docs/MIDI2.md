@@ -69,7 +69,7 @@ The base `Data` still calls the MIDI 1.0 hooks. A type 0x4 note-off calls `NoteO
 
 A type 0x2 packet is turned back into MIDI 1.0 bytes and passed through `Data` again, so the existing `NoteOn` / `ControlChange` / `ProgramChange` hooks run.
 
-A type 0x3 packet is SysEx7. Status 0 is the whole message. Status 1 starts it, 2 continues it, and 3 ends it. The base `Data` calls `SystemExclusive` once, with the bytes between `F0` and `F7`, when the message is complete. `SpraySystemExclusive` is still the MIDI 1.0 call: the consumer sees `F0`, the payload, and `F7`.
+A type 0x3 packet is SysEx7. Status 0 is the whole message. Status 1 starts it, 2 continues it, and 3 ends it. The bytes are assembled per consumer and per group (bits 27..24 of word 0). Two groups sending to the same consumer do not share one buffer. The base `Data` calls `SystemExclusive` once, with the bytes between `F0` and `F7`, when the message is complete. `SpraySystemExclusive` is still the MIDI 1.0 call: the consumer sees `F0`, the payload, and `F7`.
 
 An application that wants the full value overrides `Data`, calls `midi2_ump_from_payload`, and returns without the base when it handled the packet. Calling the base as well runs the 7-bit hooks and `SystemExclusive`.
 

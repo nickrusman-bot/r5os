@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### SysEx7 is assembled per group
+
+`BMidiLocalConsumer` kept one SysEx buffer per consumer. Two groups that start a message at the same time overwrote that buffer. The buffer is now keyed by the consumer and the group in bits 27..24 of the first word. Closing the consumer frees every group. `midi2test` does not send two groups. This is not run on a device.
+
 ### A quiet MIDI 2.0 note-on stays a note-on
 
 `value >> 9` turned a MIDI 2.0 velocity below 512 into MIDI 1.0 velocity 0, which is a note-off. `midi2_note_on_midi1_velocity` returns at least 1 when the 16-bit velocity is not 0. Velocity 0 stays 0. Note-off is unchanged. The same rule is in `expand_ump_to_midi1`, `send_ump_as_midi1`, and the `NoteOn` hook. `midi2test` checks 1, 511 and 512. That program was not run. A cross compile of the helper with `static_assert` is the host check.

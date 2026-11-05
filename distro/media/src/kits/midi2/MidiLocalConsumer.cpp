@@ -20,6 +20,7 @@
 
 struct SysexAssembly {
 	BMidiLocalConsumer*	consumer;
+	uint8				group;
 	uint8*				data;
 	size_t				size;
 	size_t				used;
@@ -33,10 +34,10 @@ static SysexAssembly* sSysex = NULL;
 
 
 static SysexAssembly*
-sysex_find(BMidiLocalConsumer* consumer)
+sysex_find(BMidiLocalConsumer* consumer, uint8 group)
 {
 	for (SysexAssembly* node = sSysex; node != NULL; node = node->next) {
-		if (node->consumer == consumer)
+		if (node->consumer == consumer && node->group == group)
 			return node;
 	}
 	return NULL;
@@ -54,7 +55,7 @@ sysex_forget(BMidiLocalConsumer* consumer)
 			*link = node->next;
 			free(node->data);
 			free(node);
-			break;
+			continue;
 		}
 		link = &(*link)->next;
 	}
@@ -98,8 +99,9 @@ dispatch_sysex(BMidiLocalConsumer* consumer, const uint32* words,
 	uint8* owned = NULL;
 	size_t ownedCount = 0;
 
+	uint8 group = (uint8)((words[0] >> 24) & 0x0f);
 	sSysexLock.Lock();
-	SysexAssembly* node = sysex_find(consumer);
+	SysexAssembly* node = sysex_find(consumer, group);
 	if (node == NULL) {
 		node = (SysexAssembly*)calloc(1, sizeof(SysexAssembly));
 		if (node == NULL) {
@@ -107,6 +109,7 @@ dispatch_sysex(BMidiLocalConsumer* consumer, const uint32* words,
 			return;
 		}
 		node->consumer = consumer;
+		node->group = group;
 		node->next = sSysex;
 		sSysex = node;
 	}
