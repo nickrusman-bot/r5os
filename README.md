@@ -1,122 +1,156 @@
 # R5OS
 
-Independent desktop OS based on [Haiku](https://www.haiku-os.org/). The name nods to BeOS R5 as history, not as a product claim.
+R5OS is a desktop operating system built on [Haiku](https://www.haiku-os.org/). It keeps what makes Haiku pleasant: one fast, coherent system with a clean desktop. On top of that it adds what a daily computer needs: accounts with sign-in, modern networking, better sound, and support for current laptops.
 
-This is **not** the official Haiku distribution and **not** BeOS. See `distro/DISCLAIMER.txt`.
+The name is a nod to BeOS R5, as history. It is not a product claim.
 
-R5OS is **multi-license**, not an MIT-only tree. Haiku files keep their original license and copyright. New files that R5OS owns default to GPL-3.0-or-later when R5OS can license that whole file. Policy: `docs/LICENSING.md`. Identified components: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`. The Haiku tree has not been audited file by file. About has What’s new, Credits, and Licenses. VirtualBox 7.2.22 Guest Additions are GPL-3.0-only. The binaries are not in git. The image installs the guest modules, `VBoxService`, `VBoxTray`, and `VBoxControl`, with the GPL-3.0 text and the matching source. Assessment: `docs/LICENSING.md` and `docs/VBOX-GUEST.md`.
+> R5OS is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
 
-Current tree: **R5OS 2026.1-dev Build 10038** (`distro/VERSION` + `distro/BUILD`). About R5OS shows that string, What’s new (`distro/WHATSNEW`), Credits, and Licenses.
+**Status:** in development. The current tree is **R5OS 2026.1-dev, build 10047**. There is no public release yet.
 
-## What is in the image now
+---
 
-User-visible pieces that are in this tree (limits in What’s new and `CHANGELOG.md`):
+## What works today
 
-- Branding as R5OS (Deskbar, installer, splash, About).
-- Dark appearance, desktop/Deskbar layout fixes.
-- Wi-Fi join/remember, IPv6 SLAAC/DAD on a home LAN, AirPrint/IPP add, AirPlay 1 to speakers (not AirPlay 2 pairing).
-- Shutdown no longer waits forever on IPv6 SLAAC or the VirtualBox COM1 clipboard helper.
-- **Users & Accounts** opens on your own card (picture, name, username, email, password). Other people stay hidden until an administrator unlocks the list. A new account needs a password. New people get user id 1000 or higher and a folder under `/boot/home/users`. The first account stays `user` at `/boot/home`, now a normal user id (1000 or higher), not 0. Sign in still shows everyone who can sign in.
-- **Settings** is one window. The list and Search are 200 wide. A home card is at least 280. The window opens at 1030 by 610. A change is applied at once. The bottom row is Back, Home, the lock, Revert, and Defaults. A locked page stays gray until an administrator opens it. Information is first under System. The other pages are alphabetical. Pages include Appearance, Desktop and Deskbar, Wallpaper, Notifications, Display, and Virtual memory. Appearance has tabs for fonts, colors, the window look, and antialiasing. Colors and fonts is no longer its own list item. Display waits for Apply before it changes the picture. The separate preference programs stay installed. Frame: `docs/SETTINGS.md`.
-- **Printers and Repositories** stay visible as their own programs. An administrator changes them. Another account uses that program's lock. Printer queues are for the computer. Swap is the Virtual memory page in Settings. The separate VirtualMemory program stays installed.
-- **Sign-in screen** before Tracker/Deskbar. The leaf menu says **Log out** and the account name, then returns to Sign in. **Lock screen** in the leaf menu covers that same session; apps stay open until you unlock with your password or log out. Restart and a cold boot also return to Sign in. After a valid password, Tracker and Deskbar run as that account: a standard person uses `/boot/home/users/<name>`, their own Trash, and their own MIME database. Folder icons (including the leaf menu) are the same yellow folders for everyone. There is still **one screen**.
-- **Locked machine settings.** Preferences are not hidden by role. Network, Screen, Time, and Users stay in the list. An administrator changes them immediately. A standard account looks, then unlocks with an administrator name and password (checked by Sign in, uid 0). In Settings that lock sits between Home and Revert. The separate programs keep their own lock. That lasts a few minutes. Personal prefs (Appearance, Backgrounds, …) stay with the signed-in person.
+### Desktop
+- R5OS branding throughout: Deskbar, installer, boot splash, About.
+- Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
+- **Settings** is one window, with a list on the left, search, and pages for Appearance, Display, Desktop and Deskbar, Wallpaper, Notifications, Virtual memory and more. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
+- Notifications, with a choice of where they appear on screen.
 
-Home folders of extra accounts are private (`0700`). `user` is in group `admin` and cannot list another person’s home. Appearance/Deskbar/Tracker/background and most bundled apps already use `find_directory`. MidiPlayer, Joysticks, and PoorMan follow that in `distro/user-paths`. Printers and Repositories are machine-wide and locked. Swap is machine-wide, on the Virtual memory page. Not done: guest and Public/Shared, and `StartSession` (that would start a second app_server). Plan: `docs/MULTIUSER.md`. Product direction: `docs/ROADMAP.md`.
+### Accounts
+- A **sign-in screen** before the desktop starts. **Log out** and **Lock screen** are in the leaf menu.
+- **Users & Accounts** to add and remove people. Every person gets a private home folder.
+- The administrator is a normal account, not root. Machine-wide settings (network, display, time, users, printers, repositories) are locked. A standard account can still view them, and unlocks them with an administrator's password.
 
-## Layout
+### Network
+- Wi-Fi: join a network, and it is remembered.
+- IPv6 on a home network (SLAAC).
+- Printing to AirPrint/IPP printers.
+- Sound to AirPlay 1 speakers. AirPlay 2 is not supported.
 
-| Path | Role |
+### Sound
+- Clearer resampling, and a mixer that recovers from late sound.
+- A latency choice: Normal, Low latency, or Pro audio.
+- USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
+- Virtual surround for headphones.
+- Finer MIDI velocity and controller values. Existing MIDI programs keep working.
+
+### Graphics
+- OpenGL through Mesa, and Vulkan through Lavapipe. Both run on the CPU, not on the GPU.
+- On AMD Renoir laptops (such as the Ryzen 5 5625U) the `radeon_hd` driver shows the firmware picture. It can also start the GPU command ring, as an opt-in. That is the first step toward acceleration; it is not acceleration yet. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
+
+### Virtual machines
+- VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
+
+The full list, build by build, is in About R5OS → What's new ([`distro/WHATSNEW`](distro/WHATSNEW)). The technical details and the known limits are in [`CHANGELOG.md`](CHANGELOG.md).
+
+## Not there yet
+
+- No GPU acceleration. The desktop is still drawn by the CPU.
+- One graphical session at a time. There is no fast user switching and no guest account.
+- The bundled browser (WebPositive) is weak for today's web.
+- Sleep, backlight and HiDPI on the reference laptop are still open.
+
+Where the project is heading: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+## Hardware
+
+R5OS is **64-bit only**.
+
+| Architecture | Status |
 |---|---|
-| `distro/` | Overlay: version, What’s new, Jam profile, branding, extra apps (Users, Wi-Fi, AirPlay, …) |
-| `distro/ui` | `libr5ui.so`, the shared screen picture (`docs/LIBR5.md`) |
-| `docs/` | Roadmap, multi-user, Settings, IPv6, VirtualBox, licensing (`docs/LICENSING.md`, `docs/SETTINGS.md`) |
-| `LICENSES/` | Unmodified license texts (SPDX filenames) |
-| `THIRD_PARTY_NOTICES.md` | Components that have actually been identified |
-| `tracker/` | Open Haiku tickets and whether R5OS already fixed them |
-| `scripts/` | Clone, overlay, jam, QEMU/VBox, ticket sync |
-| `tools/r5-befs` | Read-only BeFS reader for Windows. Lists a volume and exports a file. `tools/r5-befs/README.md` |
-| `haiku/` | R5OS fork of the OS sources (`r5` branch; not in *this* git) |
-| `buildtools/` | Haiku build tools (after setup, fetch-only) |
+| AMD64 (`x86_64`) | Primary target. The reference machine is a laptop with a Ryzen 5 5625U. Also runs in VirtualBox and QEMU. |
+| ARM64 (`aarch64`) | Planned. QEMU first, then real hardware. |
+| RISC-V 64 | Planned, after AMD64 and ARM64. |
 
-`haiku/` is our fork. We merge bugfixes into `r5` and push only to our git. We do not push to Haiku: their policy refuses AI-generated or AI-modified contributions.
+## Trying it
 
-## First build (WSL Ubuntu)
+R5OS is built from source; there are no downloads yet. After a build (see below) you can:
 
-Haiku does not build natively on Windows. In WSL:
+- **Run it in VirtualBox.** Use [`scripts/run-vbox-r5.ps1`](scripts/run-vbox-r5.ps1) on Windows, and see [`docs/vbox.md`](docs/vbox.md). With a bridged network adapter this is the way to test real home-network features such as IPv6 and printer discovery.
+- **Run it in QEMU.** Use [`scripts/run-qemu-r5.sh`](scripts/run-qemu-r5.sh). QEMU's default user-mode network is not a real home network.
+- **Boot it from USB.** Build the `r5-anyboot` image and write it to a USB stick. Check the target disk twice before writing.
+
+## Building
+
+Haiku does not build natively on Windows. Use Linux, or WSL with Ubuntu on Windows. Keep the checkout on the Linux file system (for example `~/Projects/R5OS`), not under `/mnt/c`: the Windows file system is case-insensitive and slow for this.
+
+Install the build tools:
 
 ```bash
 sudo apt update
 sudo apt install git nasm autoconf automake texinfo flex bison gawk \
-  build-essential unzip wget zip xorriso mtools python3
+  build-essential unzip wget zip xorriso mtools python3 \
+  zlib1g-dev libzstd-dev
+```
 
-cd /mnt/c/Users/nickr/Projects/R5OS
-chmod +x scripts/*.sh
-./scripts/setup-wsl.sh
+The full list of what Haiku needs is in [`haiku/ReadMe.Compiling.md`](haiku/ReadMe.Compiling.md).
+
+Get the sources and Haiku's build tools, and install `jam`:
+
+```bash
+git clone https://github.com/nickrusman-bot/r5os.git ~/Projects/R5OS
+cd ~/Projects/R5OS
+git clone https://review.haiku-os.org/buildtools
+make -C buildtools/jam
+(cd buildtools/jam && ./jam0 -sBINDIR="$HOME/bin" install)
+export PATH="$HOME/bin:$PATH"
+```
+
+Build an image:
+
+```bash
 ./scripts/build-image.sh r5-raw
 ```
 
-Jam AMD64 with overlays applied (`scripts/apply-overlay.sh`, then `scripts/jam-r5-raw.sh` in WSL). `jam-r5-raw.sh` does not apply overlays by itself.
+`build-image.sh` copies the R5OS changes from `distro/` into the Haiku tree, configures the build on the first run, and runs `jam`. The result lands in `haiku/generated.x86_64/`.
 
-LAN tests (IPv6, mDNS): VirtualBox bridged — `scripts/run-vbox-r5.ps1` and `docs/vbox.md`. The script rebuilds the VDI when the raw image is newer. `-ForceConvert` forces that. The image includes the 7.2.22 guest modules (`docs/VBOX-GUEST.md`). The script leaves VirtualBox clipboard mode and drag-and-drop disabled, and it does not define a shared folder. Text clipboard is COM1. Window resize follows for the administrator. A standard account does not: [issue #4055](https://github.com/nickrusman-bot/r5os/issues/4055). QEMU usernet is not a LAN.
+| Profile | Use it for |
+|---|---|
+| `r5-raw` | A disk image for QEMU, or for converting to a VirtualBox disk |
+| `r5-anyboot` | A bootable ISO or USB stick |
+| `r5-vmware` | VMware |
 
-Then boot the image in QEMU, for example:
+## How the repository is organized
 
-```bash
-# WSL: scripts/run-qemu-r5.sh (TCG or KVM, IDE disk, virtio-net, USB tablet, HDA)
-qemu-system-x86_64 -machine pc,accel=kvm -m 2048 -smp 2 \
-  -drive file=haiku/generated.x86_64/r5-os.image,format=raw,if=ide \
-  -vga std -usb -device usb-tablet \
-  -netdev user,id=net0 -device virtio-net-pci,netdev=net0 \
-  -device intel-hda -device hda-duplex
-```
+| Path | What it holds |
+|---|---|
+| `distro/` | Everything R5OS adds or changes: version, What's new, artwork, apps, drivers and system components. These files are copied into the Haiku tree at build time. |
+| `haiku/` | The Haiku source tree that R5OS builds on. |
+| `docs/` | Design notes and contracts: [roadmap](docs/ROADMAP.md), [graphics](docs/GRAPHICS.md), [multi-user](docs/MULTIUSER.md), [Settings](docs/SETTINGS.md), [icons](docs/ICONS.md), [shared libraries](docs/LIBR5.md), [licensing](docs/LICENSING.md), and more. |
+| `scripts/` | Build, image, virtual-machine and tracker scripts. |
+| `tracker/` | Which open Haiku tickets R5OS has fixed. The overview is [`tracker/STATUS.md`](tracker/STATUS.md). |
+| `tools/r5-befs/` | A small read-only BeFS reader for Windows. |
+| `LICENSES/` | The unmodified license texts. |
 
-Profiles: `r5-raw` (QEMU/disk), `r5-anyboot` (ISO/USB), `r5-vmware`.
+## Relationship with Haiku
 
-`--distro-compatibility compatible` stays on until we deliberately change the system API.
+Haiku is the foundation, and its source is where R5OS gets many of its fixes. R5OS does not send changes back. Haiku does not accept AI-generated or AI-modified contributions, and R5OS work is AI-assisted. So:
 
-## Architectures
+- Do not open pull requests against Haiku. Do not push to Haiku's servers.
+- Haiku's repositories are only fetched from.
+- Open Haiku bugs are tracked in [`tracker/`](tracker/) and as GitHub issues with the `haiku` label. The Haiku ticket number is only used as an id.
 
-R5OS is **64-bit only**: **AMD64** first (reference machine: Ryzen 5 5625U), then **ARM64**, then **RISC-V 64**. No focus on 32-bit or the other Haiku ports. See `distro/TODO.md` and `AGENTS.md`.
+## Licensing
 
-Do **not** clone onto `/mnt/c/...` if you build in WSL: NTFS is case-insensitive and slow. The overlay may live on Windows; keep `haiku/` and `buildtools/` on the Linux filesystem (`~/Projects/R5OS`).
+R5OS is **multi-license**:
 
-## Git: R5OS is the source of truth
+- Files that come from Haiku keep their original license and copyright, mostly MIT.
+- New files that R5OS owns are GPL-3.0-or-later.
+- The combined system is distributed under GPL-3.0-or-later.
+- Third-party components keep their own licenses. They are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Examples are the VirtualBox Guest Additions (GPL-3.0-only), the AMD firmware and Mesa.
 
-```text
-origin     our product repo (this tree)        push/pull
-upstream   https://review.haiku-os.org/haiku   fetch only
-branch     r5   (Haiku sources, separate clone)
-```
+The full policy is in [`docs/LICENSING.md`](docs/LICENSING.md). About R5OS shows the licenses and credits on the system itself.
 
-GitHub pull requests on `origin` target **`main`**.
+## Contributing
 
-1. Create an empty repo for the Haiku-source fork if you still use one (GitHub, Codeberg, or Origin).
-2. `export R5OS_HAIKU_ORIGIN=git@github.com:<you>/r5os-haiku.git`
-3. `./scripts/setup-wsl.sh`, then `git -C haiku push -u origin r5`
-4. Fix: `./scripts/new-bugfix.sh 12345 short-slug` → commit → merge to `r5` → `./scripts/publish-bugfix.sh` → `python3 scripts/tracker-set.py 12345 fixed --commit <sha>`
-5. Optional Haiku commits: `./scripts/sync-upstream.sh`
+AI-assisted work is welcome here. It is held to the same bar as any other change: it has to build, boot and be tested before it counts as done. Before you start, read [`AGENTS.md`](AGENTS.md). It covers the development loop, the fixed parts of the system, versioning, and how to record changes.
 
-## Tracking open Haiku bugs
+- Pull requests target `main`.
+- User-visible changes get a What's new entry in plain language. Technical details go in `CHANGELOG.md`.
+- Use the name **R5OS** only. Do not use Haiku or BeOS names or logos on the image.
 
-Haiku’s Trac is the list of open bugs; **`tracker/`** is our workbook. Per ticket: `open`, `in-progress`, `fixed`, `wontfix`, or `not-applicable`. Import never overwrites an R5 status.
+## Versions
 
-Trac blocks automated downloads. Once (and now and then) save CSV in a browser:
-
-1. [Open tickets (CSV query)](https://dev.haiku-os.org/query?status=new&status=assigned&status=reopened&col=id&col=summary&col=status&col=type&col=priority&col=component&col=milestone&order=id&max=10000)
-2. Download **Comma-delimited Text** at the bottom
-3. `./scripts/tracker-sync.sh ~/Downloads/query.csv`
-
-`tracker/STATUS.md` is the overview: how many open, in progress, fixed. We do not send patches to Haiku; their ticket number is only the id in our fork.
-
-## Branding
-
-Do not use Haiku or BeOS names or logos on the image or website. Our name is **R5OS**. About R5OS must show the disclaimer from `distro/DISCLAIMER.txt`.
-
-## Version
-
-Public releases: **R5OS 2026.1**, **2026.2**, … (year, then +1 per release; a new year starts at `.1` again).
-
-Unreleased trees use a `-dev` suffix. About shows **R5OS YYYY.N-dev Build N**. Jam uses `HAIKU_REVISION=r5-<VERSION>`, not the build number. Bump `distro/BUILD` only when adding a What’s new section.
-
-Open distro tasks (including leftover Haiku wording in the UI): `distro/TODO.md`.
+Releases will be called **R5OS 2026.1**, **2026.2**, and so on; a new year starts again at `.1`. Development trees carry `-dev`, and About R5OS shows the version together with an increasing build number. The sources for those are [`distro/VERSION`](distro/VERSION) and [`distro/BUILD`](distro/BUILD).
