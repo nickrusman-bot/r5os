@@ -154,6 +154,7 @@ struct gpu_client {
 
 static gpu_bo sBo[kMaxBo];
 static gpu_job sJobs[kMaxJob];
+static uint64 sHighestSequence;
 static lock sGpuLock;
 static ConditionVariable sEop;
 static bool sReady = false;
@@ -232,6 +233,7 @@ gpu_copy_user(void* local, uint64 address, size_t bytes)
 
 
 static void r5_gpu_eop();
+static void gpu_sync_host(gpu_sync* sync);
 
 
 static status_t
@@ -806,11 +808,19 @@ gpu_wait_room(radeon_info* info, uint32 dwords)
 
 
 static bool
+gpu_sync_signalled(uint64 value, uint64 submitted, uint64 target, bool binary)
+{
+	if (binary)
+		return submitted > 0 && value >= submitted;
+	return value >= target;
+}
+
+
+static bool
 gpu_wait_ready(const gpu_sync* sync, const r5_gpu_cs_sync* wait)
 {
-	if ((wait->flags & R5_GPU_CS_SYNC_BINARY) != 0)
-		return sync->point > 0;
-	return sync->point >= wait->point;
+	bool binary = (wait->flags & R5_GPU_CS_SYNC_BINARY) != 0;
+	return gpu_sync_signalled(sync->point, sync->submitted, wait->point, binary);
 }
 
 
@@ -914,9 +924,11 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, &sequence))
 		return B_ERROR;
 	job->sequence = sequence;
+	if (sequence > sHighestSequence)
+		sHighestSequence = sequence;
 	for (uint32 i = 0; i < in.signal_count; i++) {
 		if ((signalFlags[i] & R5_GPU_CS_SYNC_BINARY) != 0)
-			job->points[i] = sequence == 0 ? 1 : sequence;
+			job->points[i] = sequence;
 		gpu_sync* sync = job->syncs[i];
 		if (sync != NULL && job->points[i] > sync->submitted)
 			sync->submitted = job->points[i];
@@ -1015,10 +1027,13 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 	gpu_sync* sync = gpu_sync_get(client, in.handle);
 	if (sync == NULL)
 		return B_BAD_VALUE;
-	uint64 target = in.point;
-	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0)
-		target = 1;
-	return gpu_wait_value(client->info, &sync->point, target, in.timeout_us,
+	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0) {
+		if (sync->submitted == 0)
+			return B_TIMED_OUT;
+		return gpu_wait_value(client->info, &sync->point, sync->submitted,
+			in.timeout_us, false);
+	}
+	return gpu_wait_value(client->info, &sync->point, in.point, in.timeout_us,
 		false);
 }
 
@@ -1029,9 +1044,7 @@ gpu_list_ready(const gpu_sync* sync, uint64 target, uint32 flags)
 	bool binary = (flags & R5_GPU_WAIT_BINARY) != 0;
 	bool available = (flags & R5_GPU_WAIT_AVAILABLE) != 0;
 	uint64 value = available ? sync->submitted : sync->point;
-	if (binary)
-		return value > 0;
-	return value >= target;
+	return gpu_sync_signalled(value, sync->submitted, target, binary);
 }
 
 
@@ -1135,34 +1148,39 @@ gpu_sync_signal(gpu_client* client, void* buffer, size_t length)
 	gpu_sync* sync = gpu_sync_get(client, in.handle);
 	if (sync == NULL)
 		return B_BAD_VALUE;
-	uint64 point = in.point;
-	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0 && point == 0)
-		point = 1;
-	gpu_sync_set(sync, point);
+	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0) {
+		gpu_sync_host(sync);
+		return B_OK;
+	}
+	gpu_sync_set(sync, in.point);
 	return B_OK;
 }
+
+
+static void
+gpu_sync_host(gpu_sync* sync);
 
 
 static bool
 gpu_src_reached(const gpu_sync* sync, uint64 srcPoint)
 {
-	if (srcPoint == 0)
-		return sync->point > 0;
-	return sync->point >= srcPoint;
+	bool binary = srcPoint == 0;
+	return gpu_sync_signalled(sync->point, sync->submitted, srcPoint, binary);
 }
 
 
-static bool
-gpu_job_will_reach(const gpu_job* job, const gpu_sync* src, uint64 srcPoint)
+static void
+gpu_sync_host(gpu_sync* sync)
 {
-	for (uint32 n = 0; n < job->count; n++) {
-		if (job->syncs[n] != src)
-			continue;
-		if (srcPoint == 0)
-			return job->points[n] > 0;
-		return job->points[n] >= srcPoint;
-	}
-	return false;
+	uint64 stamp = sync->submitted;
+	if (sync->point > stamp)
+		stamp = sync->point;
+	uint64 high = sHighestSequence == 0 ? 1 : sHighestSequence;
+	if (high > stamp)
+		stamp = high;
+	sync->submitted = stamp;
+	sync->point = stamp;
+	sEop.NotifyAll();
 }
 
 
@@ -1179,22 +1197,38 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 	gpu_sync* dst = gpu_sync_get(client, in.dst_handle);
 	if (src == NULL || dst == NULL)
 		return B_ENTRY_NOT_FOUND;
-	uint64 dstPoint = in.dst_point == 0 ? 1 : in.dst_point;
+	bool srcBinary = in.src_point == 0;
+	bool dstBinary = in.dst_point == 0;
+	if (srcBinary && src->submitted == 0)
+		return B_BAD_VALUE;
 	if (gpu_src_reached(src, in.src_point)) {
-		gpu_sync_set(dst, dstPoint);
+		if (dstBinary)
+			gpu_sync_host(dst);
+		else
+			gpu_sync_set(dst, in.dst_point);
 		return B_OK;
 	}
 	gpu_job* job = NULL;
+	uint64 lowest = 0;
 	for (uint32 i = 0; i < kMaxJob; i++) {
 		if (!sJobs[i].live)
 			continue;
-		if (!gpu_job_will_reach(&sJobs[i], src, in.src_point))
-			continue;
-		job = &sJobs[i];
-		break;
+		for (uint32 n = 0; n < sJobs[i].count; n++) {
+			if (sJobs[i].syncs[n] != src)
+				continue;
+			if (srcBinary) {
+				if (sJobs[i].points[n] == src->submitted)
+					job = &sJobs[i];
+			} else if (sJobs[i].points[n] >= in.src_point
+				&& (job == NULL || sJobs[i].points[n] < lowest)) {
+				job = &sJobs[i];
+				lowest = sJobs[i].points[n];
+			}
+		}
 	}
 	if (job == NULL)
 		return B_BAD_VALUE;
+	uint64 dstPoint = dstBinary ? job->sequence : in.dst_point;
 	for (uint32 n = 0; n < job->count; n++) {
 		if (job->syncs[n] != dst)
 			continue;

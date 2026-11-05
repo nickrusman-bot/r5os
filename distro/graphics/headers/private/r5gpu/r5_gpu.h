@@ -237,9 +237,11 @@ typedef struct {
 	uint32_t	flags;
 } r5_gpu_ib;
 
-/* A binary syncobj is a timeline. A signal sets the point to the job
- * sequence. A reset sets it to 0. A binary wait waits until the point
- * is greater than 0. R5_GPU_CS_SYNC_BINARY marks that wait or signal. */
+/* A binary syncobj follows the latest submit. Signalled means submitted
+ * is greater than 0 and point has caught up. submitted 0 means it was
+ * reset or never submitted. A job stores its own sequence, and submitted
+ * rises at submit time. point rises at retire. R5_GPU_CS_SYNC_BINARY
+ * marks that wait or signal. */
 #define R5_GPU_CS_SYNC_BINARY 1u
 
 typedef struct {
@@ -305,9 +307,9 @@ typedef struct {
 	uint64_t	timeout_us;
 } r5_gpu_syncobj;
 
-/* dst is signalled when src reaches src_point. src_point 0 is the binary
- * fence (reached when the point is greater than 0). dst_point 0 is a
- * binary signal, the same rule as R5_GPU_SYNCOBJ_BINARY. flags must be 0. */
+/* dst follows src. src_point 0 is the binary fence: reached when that
+ * syncobj is signalled. dst_point 0 attaches dst as binary, with the
+ * job sequence. flags must be 0. */
 typedef struct {
 	uint32_t	size;
 	uint32_t	version;

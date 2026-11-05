@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### M4 review 6: a binary syncobj follows the latest submit
+
+A binary syncobj stayed signalled after the first retire, because the wait treated any `point > 0` as done. RADV's queue syncobj is signalled again by the next job. `vkQueueWaitIdle` then transferred that syncobj and woke the waiter while the new job was still running. Signalled now means `submitted > 0` and `point >= submitted`. A job stores its own sequence. `submitted` rises at submit and `point` rises at retire. `CREATE_SIGNALED` sets both to 1. Reset sets both to 0. A host signal sets both to the greater of the current values and the highest sequence, or 1 when nothing has been submitted. Transfer uses that rule. A binary destination on a live job is attached with `job->sequence`.
+
+The host replay printed `ok libdrm ioctl` with Linux errno and again with negative errno. After a retired signal, a second live signal made the transfer wait return `ETIME` until retire. A second command submission that waited on the reused semaphore timed out while that job was live. A reset followed by a wait without `FOR_SUBMIT` returned `ETIME`.
+
+VulkanTeapot asked for Vulkan 1.0, so `VkPhysicalDeviceDriverProperties` stayed zero and `--selftest` printed `driverID 0`. It now asks for 1.2 when `vkEnumerateInstanceVersion` reports that, and prints `driverID` only when the device is 1.2 or offers `VK_KHR_driver_properties`. Otherwise it prints `driverID unknown`.
+
+VirtualBox, image of 20:50 (VDI of 20:58), software path: GLTeapot works. `vulkaninfo` shows one device, llvmpipe, CPU, Mesa llvmpipe. RADV finds no node. `VulkanTeapot --selftest` prints `device llvmpipe`, `deviceType 4`, `driverID 0`, and six pixels (background `262e38ff`, teapot `251006ff`). That `driverID` is the 1.0 query above. `jam -q @r5-raw` on 5 Nov 2026 at 21:29 Europe/Amsterdam exited 0 and updated 1169 targets. `install-mesa-packages.sh` printed `mesa_packages_ok` and `ok egl vendor`. The image package `vulkanteapot-1.0.0-1` is the rebuilt binary. This image has not been booted. `vulkaninfo`, VulkanTeapot and GLTeapot were not started on it. Build stays 10048.
+
 ### M4 review 5: syncobj transfer, and one Mesa sign test
 
 `vkQueueWaitIdle` submits no command buffer. RADV then calls `DRM_IOCTL_SYNCOBJ_TRANSFER` because `DRM_CAP_SYNCOBJ_TIMELINE` is 1. That ioctl was ENOSYS, so the wait became `VK_ERROR_DEVICE_LOST` on a GPU and was invisible on Lavapipe. `R5_GPU_SYNCOBJ_TRANSFER` is appended after `WAIT_LIST`. A source that has already reached its point signals the destination immediately, with the same rule as `gpu_sync_signal` (`dst_point` 0 means binary). A live job that will reach the source gains the destination, and `submitted` is raised at once. Linux 6.12 `drm_syncobj_find_fence` returns `-EINVAL` when there is no fence, and `drm_syncobj_find` returns `-ENOENT` for a missing handle. Those are the two errors here. A full job list returns `ENOMEM`. Sync-file export and import stay ENOSYS. `flags` and `pad` must be 0.

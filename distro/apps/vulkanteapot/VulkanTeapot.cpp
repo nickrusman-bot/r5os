@@ -285,10 +285,15 @@ main(int argc, char** argv)
 	float matrix[16];
 	mvp(matrix);
 
+	uint32_t instanceVersion = 0;
+	uint32_t apiVersion = VK_API_VERSION_1_0;
+	if (vkEnumerateInstanceVersion(&instanceVersion) == VK_SUCCESS
+		&& instanceVersion >= VK_API_VERSION_1_2)
+		apiVersion = VK_API_VERSION_1_2;
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "VulkanTeapot";
-	appInfo.apiVersion = VK_API_VERSION_1_0;
+	appInfo.apiVersion = apiVersion;
 	VkInstanceCreateInfo instanceInfo = {};
 	instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceInfo.pApplicationInfo = &appInfo;
@@ -306,6 +311,7 @@ main(int argc, char** argv)
 	VkPhysicalDevice gpu = VK_NULL_HANDLE;
 	VkPhysicalDeviceProperties properties;
 	uint32_t driverID = 0;
+	int driverKnown = 0;
 	memset(&properties, 0, sizeof(properties));
 	for (uint32_t i = 0; i < count; i++) {
 		VkPhysicalDeviceDriverProperties driver = {};
@@ -319,7 +325,26 @@ main(int argc, char** argv)
 			continue;
 		gpu = gpus[i];
 		properties = props2.properties;
-		driverID = driver.driverID;
+		driverKnown = 0;
+		driverID = 0;
+		if (props2.properties.apiVersion >= VK_API_VERSION_1_2)
+			driverKnown = 1;
+		else {
+			uint32_t extensions = 0;
+			vkEnumerateDeviceExtensionProperties(gpus[i], NULL, &extensions, NULL);
+			if (extensions > 0) {
+				VkExtensionProperties* names = (VkExtensionProperties*)calloc(
+					extensions, sizeof(*names));
+				vkEnumerateDeviceExtensionProperties(gpus[i], NULL, &extensions, names);
+				for (uint32_t n = 0; n < extensions; n++) {
+					if (strcmp(names[n].extensionName, "VK_KHR_driver_properties") == 0)
+						driverKnown = 1;
+				}
+				free(names);
+			}
+		}
+		if (driverKnown)
+			driverID = driver.driverID;
 		if (!cpu)
 			break;
 	}
@@ -640,7 +665,10 @@ main(int argc, char** argv)
 	const int sampleAt[][2] = {{64, 40}, {64, 64}, {64, 90}, {40, 70}, {90, 70}, {64, 20}};
 	printf("device %s\n", properties.deviceName);
 	printf("deviceType %u\n", (unsigned)properties.deviceType);
-	printf("driverID %u\n", driverID);
+	if (driverKnown)
+		printf("driverID %u\n", driverID);
+	else
+		printf("driverID unknown\n");
 	printf("frames 1\n");
 	printf("fps 0\n");
 	int mismatch = 0;

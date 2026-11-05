@@ -26,10 +26,13 @@ DRM version reported to RADV is 3.42.0. That is the oldest version
 `ac_gpu_info.c` accepts. Every `drm_minor >= 45` gate in that file stays off,
 including gang submit, GPUVM faults and conformant trunc.
 
-A binary syncobj is a timeline. Create with `DRM_SYNCOBJ_CREATE_SIGNALED`
-sets the point to 1. Reset sets it to 0. A binary wait waits until the point
-is greater than 0. A binary signal on a job sets the point to that job's
-sequence. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
+A binary syncobj follows the latest submit. It is signalled when `submitted`
+is greater than 0 and `point` has caught up with `submitted`. `submitted` 0
+means it was never submitted, or it was reset. A job signals it with that
+job's sequence, never with 1. `submitted` rises when the job is queued.
+`point` rises when the job retires. `CREATE_SIGNALED` sets both to 1. A host
+signal sets both to the greater of the current values and the highest
+sequence, or 1 when no job has run. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
 `PRIME` return ENOSYS. `SYNCOBJ_TRANSFER` is `R5_GPU_SYNCOBJ_TRANSFER`.
 Any other untranslated ioctl returns ENOSYS and is
 named once on stderr. `GEM_MMAP` is one of those: CPU mapping uses `BO_MAP`.
@@ -41,8 +44,8 @@ has no context field, so that call uses context 1. A dependency chunk waits
 on that sequence for five seconds and is not dropped. `WAIT_CS` uses the same
 fence wait. The submit wait is five seconds and returns a timeout.
 
-The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 2`) used one
-buffer and two syncobjs. The kernel tables are 256 buffers, 256 buffers per
+The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 10`) used one
+buffer and ten syncobjs. The kernel tables are 256 buffers, 256 buffers per
 client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 
 | Call | Result |
@@ -60,7 +63,7 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | syncobj create, reset, signal, query | translated |
 | syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point |
 | `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` | ENOSYS on purpose |
-| `SYNCOBJ_TRANSFER` | translated. `src_point` 0 is the binary fence. `dst_point` 0 signals binary, the same rule as `gpu_sync_signal`. A reached source signals immediately. A live job that will reach the source gains the destination and raises `submitted` at once. No fence and no such job is `EINVAL` (`drm_syncobj_find_fence` in Linux 6.12 returns `-EINVAL` when the syncobj has no fence). A missing handle is `ENOENT` (`drm_syncobj_find`). A full job list (`kMaxList`) is `ENOMEM`. `flags` and `pad` must be 0. Sync-file export and import stay ENOSYS |
+| `SYNCOBJ_TRANSFER` | translated. `src_point` 0 is the binary fence and is reached only when that syncobj is signalled. A reached source signals the destination the way a host signal does. Otherwise the live job that brings the source to its latest value gets the destination: `job->sequence` when `dst_point` is 0, otherwise `dst_point`, and `submitted` rises at once. No such job is `EINVAL` (`drm_syncobj_find_fence` in Linux 6.12 returns `-EINVAL` when the syncobj has no fence). A missing handle is `ENOENT`. A full job list is `ENOMEM`. `flags` and `pad` must be 0. Sync-file export and import stay ENOSYS |
 | `PRIME` | ENOSYS on purpose |
 | `CS` binary `chunk_sem` | translated |
 | `CS` timeline chunk | translated |
