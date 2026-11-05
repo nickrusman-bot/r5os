@@ -1,6 +1,6 @@
-# R5OS
+# R5 Operating System
 
-Independent Haiku-based OS. AI-assisted work is allowed here.
+R5 Operating System (R5) is an independent Haiku-based OS. AI-assisted work is allowed here.
 
 Haiku is a codebase and a source of fixes, not the product owner. Do not open PRs against `haiku/haiku`. Do not push to `git.haiku-os.org` or `review.haiku-os.org`. Haiku does not accept AI-generated or AI-modified contributions.
 
@@ -12,9 +12,17 @@ Create PRs with Cursor `ManagePullRequest`. If that fails (GitHub App missing), 
 
 Roadmap (R5 Hub, Store, Vulkan, …): `docs/ROADMAP.md`. Do not implement unrelated roadmap items during a focused fix.
 
+## Name
+
+The product is **R5 Operating System**, short **R5**. Use those names in user-facing text, documentation, What's new, and pull request text. `R5OS` stays only where it is an identifier: the repository, file and directory names, macros such as `R5_OS_VERSION`, branch names, and existing log strings. Do not rename identifiers in bulk. Do not use Haiku or BeOS names or logos as the product name.
+
+## GPU
+
+`docs/GPU-ARCHITECTURE.md` is the plan for 2D and 3D on the GPU. Haiku applications keep their APIs and `libbe` ABI. The software path (app_server Painter, llvmpipe, Lavapipe) always stays installed and working. When a supported GPU passes its checks, rendering uses the GPU by default; otherwise software. The kernel side is a small R5 interface in `radeon_hd`, not a port of Linux `amdgpu`. Vulkan is RADV through the R5 DRM library. The R5 GPU interface is additive: a call that shipped does not change. A Mesa update follows the steps in that document, including the libdrm symbol check.
+
 ## GFX9 ring (Renoir)
 
-The sequence that landed the fence is `docs/GRAPHICS.md`, section `GFX9 ring on GC 9.3 (fixed)`. Do not change that order, those registers, the PSP load, the firmware blobs, or the ring contents unless the user asks. MEC is started before the GFX ring. A change needs a boot on the 5625U that writes scratch `0xDEADBEEF`, recorded in `CHANGELOG.md`, and an update of that contract. The readback check stays. The ring stays off until the radeon_hd driver settings say `gfx9_ring true`, until the user says otherwise. The workload after the first fence (`docs/GRAPHICS.md`, `GFX9 workload on GC 9.3 (fixed)`) follows the same rule, and stays off until the settings say `gfx9_workload true`.
+The sequence that landed the fence is `docs/GRAPHICS.md`, section `GFX9 ring on GC 9.3 (fixed)`. Do not change that order, those registers, the PSP load, the firmware blobs, or the ring contents unless the user asks. MEC is started before the GFX ring. A change needs a boot on the 5625U that writes scratch `0xDEADBEEF`, recorded in `CHANGELOG.md`, and an update of that contract. The readback check stays. The ring stays off until the radeon_hd driver settings say `gfx9_ring true`. It becomes the default for a GPU family only when that family meets "From opt-in to default" in `docs/GPU-ARCHITECTURE.md`. The workload after the first fence (`docs/GRAPHICS.md`, `GFX9 workload on GC 9.3 (fixed)`) follows the same rule, and stays off until the settings say `gfx9_workload true`.
 
 ## Settings window
 
