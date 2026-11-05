@@ -1,5 +1,27 @@
 # R5OS changelog (lokaal)
 
+### The GART DMA and the GART indirect buffer landed
+
+The stick written at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, booted on the 5625U. The desktop came up. The syslog has no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`. The log ends on the running desktop. There is no `radeon_hd_uninit`, no `GFX9 kernel start already done this boot`, and no shutdown. MSI vector 61 is not freed. The stop order and a second open in the same boot were not exercised.
+
+K0 and K1 landed again. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `fence landed`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16656`, `compute_c3 ok bad 0 ticks 63750`, `compute_ratio 3.8`, `dma_1m_bad 0 ticks_1m 8464`, `dma_8m_bad 0 ticks_8m 54854`, `dma_ratio 6.4`, `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1132`.
+
+K2 programmed the table, the DMA matched `kK2Pattern`, and the indirect buffer in the GART area completed. The syslog lines are:
+
+```
+k2 agp bot 00000000 top 00000000 0000000000000000-0000000001000000
+k2 map count 8 pages 256
+k2 pte last 060000001b6cc077 got 060000001b6cc077 tail 0600000812c98077
+k2 ptb 0000000812c18001 got 12c18001 00000008
+k2 inv 007c0001
+k2 ok gart 000000f3f0000000-000000f400000000 pte0 060000001b78d077
+k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5
+k2 dma pattern 262144 cafe 0 other 0
+k2_ib wb deadbeef seq 10 seen 10
+```
+
+`k2 ok` is logged only when the DMA submission returned and every one of the 262144 dwords is `0xA5A5A5A5`, and the GART indirect buffer submission returned. `wb deadbeef` is the word that buffer writes. Sequence 10 is that buffer's fence, and `seen 10` is the same value read back. There is no `k2 fault` line and no `GFX9 workload failed` line. The command processor was not halted. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row stay as they are.
+
 ### The GFX ring wraps and the kernel stops the GPU before it unmaps
 
 K2 still uses one constant, `kK2Pattern` (`0xA5A5A5A5`), for the DMA packet and the readback. The log is the first four dwords, then `k2 dma pattern`, `cafe` and `other`. The first dword that is neither the pattern nor `0xCAFEDEAD` is logged with its index. The GART indirect buffer runs only when the submission landed and every dword matches.
@@ -8,7 +30,7 @@ Later submissions no longer refuse when the write pointer plus the packet would 
 
 `radeon_hd_uninit` calls `r5_gfx9_kernel_stop` before any `delete_area`. Stop halts the command processor (ME, PFP and CE) and the MEC, writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the same TLB invalidate as K2, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the system area and the pool mapping. A second open in the same boot logs `GFX9 kernel start already done this boot` and does not start the GPU again. K0 and K1 packets are unchanged.
 
-`jam -q @r5-anyboot` exited 0 (1189 targets). The kernel driver contains `k2 dma pattern`, `k2 dma other` and `GFX9 kernel start already done this boot`. The image was written to the General UDisk at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. This image has not been booted. Shutdown has not been run.
+`jam -q @r5-anyboot` exited 0 (1189 targets). The kernel driver contains `k2 dma pattern`, `k2 dma other` and `GFX9 kernel start already done this boot`. The image was written to the General UDisk at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. The boot is the section above. The syslog from that boot has no shutdown.
 
 ### K2 checks the same pattern the DMA packet writes
 
