@@ -1,5 +1,18 @@
 # R5OS changelog (lokaal)
 
+### Second M4 stick: context create stops on the VMID 1 ack
+
+The stick written at 00:21 Europe/Amsterdam on 6 Nov 2026 was booted on the Ryzen 5 5625U. The self-test file records the render node (`api 1.0 device 15e7 cu 7`, firmware me 167, pfp 197, mec 483) and then:
+
+```
+radv/amdgpu: radv_amdgpu_cs_ctx_create2 failed. (2147483635)
+vkCreateDevice failed with ERROR_OUT_OF_HOST_MEMORY
+```
+
+2147483635 is `-B_NO_INIT`. libdrm's `drm_ioctl` returns `-errno`, and Haiku's `B_NO_INIT` is already negative. RADV treats any context-create result other than `-EACCES` as `VK_ERROR_OUT_OF_HOST_MEMORY`. vulkaninfo throws that and `abort()`s. The syslog has no panic. It has `radeon_hd: vmid1 fail tlb` immediately before that debugger stop. K0, K1 and K2 completed on the same boot (`k2 inv 007c0001`). There are no teapot pixels, no `driverID 3`, and no `r5 libdrm: ioctl nr … is not translated`. IB flags, `QUERY_STATE2`, `GEM_CREATE`, the BO and syncobj limits, and a high `VA_MAP` were not reached: context create returns before any of those.
+
+`r5_gfx9_vmid1_flush` wrote `r5_gfx9_tlb_req(1, 0)` and polled ack bit 0. That bit is VMID 0. Linux `gmc_v9_0_flush_gpu_tlb` waits on `ack & (1 << vmid)`. The VMID 1 poll now waits on bit 1 (`r5_gfx9_tlb_ack_mask`). The VMID 0 poll in the K2 sequence and in the stop path still waits on bit 0. The K2 invalidate word is unchanged. A failed setup clears `sVm` and names the path (`ring`, `retry`, `page`, `align`, `info`, `tlb`), so a later open does not stay stuck on `sVm.used`. `gpu_counter_freq` for PCI 15e7 is 100000 kHz, the value in Mesa's captured amdgpu query for that device. The host check `ok pte gart ih` covers the ack mask. This is not booted. No third stick was written.
+
 ### Lavapipe teapot reference
 
 VirtualBox of the image jammed at 23:46 Europe/Amsterdam on 5 Nov 2026 wrote `~/config/cache/r5-gpu-selftest.txt`. The render node and vulkaninfo lines both say `not available, no supported GPU`. `vulkaninfo --summary` lists only llvmpipe and has no `failed` line. GLTeapot runs. VulkanTeapot shows a turning teapot. `VulkanTeapot --selftest` on Lavapipe printed:
@@ -13,6 +26,8 @@ pixel 192 134 a64a1cff
 pixel 90 192 873c17ff
 pixel 280 192 692e11ff
 ```
+
+`jam -q @r5-anyboot` from `446d138551` started at 23:59 Europe/Amsterdam on 5 Nov 2026 and finished at 00:02 on 6 Nov 2026, `jam_exit=0`, 1199 targets. The anyboot is 2156724224 bytes. A copy gained `/boot/home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. It does not set `gfx9_workload` or `gfx9_compute`. That stick image is sha256 `58fe0fc5e88b4cdda150b659294b4afbf3961cbf466f40b27873bd51b260d14b`. Python wrote it to the General UDisk at 00:21 Europe/Amsterdam on 6 Nov 2026. The device hash matched at 00:22. Read-back matched at 0, at 6291456 and at 2153775104. Disk 0, the NVMe, was not opened. The boot of this stick is the section above.
 
 ### RADV ioctl path, package paths, and the self-test launch
 

@@ -203,6 +203,14 @@ main(void)
 		return fail("ptb");
 	if (r5_gfx9_tlb_req(0, 0) != 0x007c0001u)
 		return fail("tlb req");
+	if (r5_gfx9_tlb_ack_mask(0) != 1u)
+		return fail("tlb ack 0");
+	if (r5_gfx9_tlb_ack_mask(1) != 2u)
+		return fail("tlb ack 1");
+	if ((r5_gfx9_tlb_req(1, 0) & r5_gfx9_tlb_ack_mask(1)) != 2u)
+		return fail("tlb req 1");
+	if (r5_gfx9_tlb_ack_mask(16) != 0)
+		return fail("tlb ack wide");
 	if ((r5_gfx9_tlb_req(0, 3) & 0x00030000u) != 0x00030000u)
 		return fail("flush type");
 	if ((r5_gfx9_tlb_req(0, 4) & 0x00070000u) != 0x00040000u)

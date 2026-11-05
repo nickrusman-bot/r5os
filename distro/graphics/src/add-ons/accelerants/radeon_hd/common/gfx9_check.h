@@ -79,6 +79,17 @@ r5_gfx9_tlb_req(uint32_t vmid, uint32_t flushType)
 }
 
 
+/* Bit in VM_INVALIDATE_ENG*_ACK. Linux gmc_v9_0_flush_gpu_tlb waits on
+ * ack & (1 << vmid). VMID 0 is bit 0, so the K2 poll of bit 0 stays. */
+static inline uint32_t
+r5_gfx9_tlb_ack_mask(uint32_t vmid)
+{
+	if (vmid >= 16)
+		return 0;
+	return 1u << vmid;
+}
+
+
 struct r5_gfx9_fault {
 	uint32_t	more;
 	uint32_t	walker;

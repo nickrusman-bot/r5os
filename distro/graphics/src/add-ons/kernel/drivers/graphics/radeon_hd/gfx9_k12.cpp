@@ -809,14 +809,17 @@ r5_gfx9_free_user_vram(uint64 offset)
 bool
 r5_gfx9_vmid1_flush()
 {
-	if (sInfo == NULL)
+	if (sInfo == NULL) {
+		knote("vmid1 fail info");
 		return false;
+	}
 	const uint32 eng = 0;
 	uint32 inv = r5_gfx9_tlb_req(1, 0);
 	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
 	(void)kread(sInfo, gc_byte(0x08a3 + eng));
+	const uint32 ackBit = r5_gfx9_tlb_ack_mask(1);
 	for (int i = 0; i < 10000; i++) {
-		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & 1u) != 0)
+		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & ackBit) != 0)
 			return true;
 		snooze(10);
 	}
@@ -832,18 +835,29 @@ r5_gfx9_vmid1_setup()
 	 * tables. Closing the last client does not rebuild them. */
 	if (sVmid1)
 		return true;
-	if (sVm.used != 0 || !r5_gfx9_ring_ready() || sInfo == NULL)
+	if (!r5_gfx9_ring_ready() || sInfo == NULL) {
+		knote("vmid1 fail ring");
+		memset(&sVm, 0, sizeof(sVm));
 		return false;
+	}
+	if (sVm.used != 0)
+		knote("vmid1 fail retry");
 	memset(&sVm, 0, sizeof(sVm));
 	sVm.pages = sVmPages;
 	sVm.capacity = 1024;
 	sVm.alloc = vm_page_alloc;
-	if (!r5_vm_new_page(&sVm))
+	if (!r5_vm_new_page(&sVm)) {
+		knote("vmid1 fail page");
+		memset(&sVm, 0, sizeof(sVm));
 		return false;
+	}
 	asm volatile("sfence" ::: "memory");
 	uint64 rootPa = sVm.pages[0].physical;
-	if (!r5_gfx9_pde_aligned(rootPa))
+	if (!r5_gfx9_pde_aligned(rootPa)) {
+		knote("vmid1 fail align");
+		memset(&sVm, 0, sizeof(sVm));
 		return false;
+	}
 	uint64 tableBase = rootPa | (uint64)R5_GFX9_PTE_VALID;
 	kwrite(sInfo, gc_byte(0x0851), 0xffffffffu);
 	kwrite(sInfo, gc_byte(0x0852), 0xfu);
@@ -864,8 +878,10 @@ r5_gfx9_vmid1_setup()
 	cntl |= (1u << 19) | (1u << 20);
 	cntl |= (1u << 21) | (1u << 22);
 	kwrite(sInfo, gc_byte(0x0881), cntl);
-	if (!r5_gfx9_vmid1_flush())
+	if (!r5_gfx9_vmid1_flush()) {
+		memset(&sVm, 0, sizeof(sVm));
 		return false;
+	}
 	sVmid1 = true;
 	knote("vmid1 ptb %016llx cntl %08lx pages %lu",
 		(unsigned long long)tableBase, (unsigned long)cntl,

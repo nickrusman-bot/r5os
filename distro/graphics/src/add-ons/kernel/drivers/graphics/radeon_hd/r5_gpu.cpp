@@ -420,6 +420,11 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	amd.device.cu_bitmap[0][0] = bitmap;
 	amd.device.num_cu_per_sh = kCuPerSh;
 	amd.device.ids_flags = R5_AMDGPU_IDS_FLAGS_FUSION;
+	/* kHz. Mesa's captured amdgpu query for PCI 15e7 (Renoir) reports
+	 * gpu_counter_freq 100000. Linux copies adev->clock.xclk into that
+	 * field. A zero makes RADV warn that timestamps will be wrong. */
+	if (info->pci->device_id == 0x15e7)
+		amd.device.gpu_counter_freq = 100000;
 	amd.device.virtual_address_offset = R5_GPU_VA_OFFSET;
 	amd.device.virtual_address_max = R5_GPU_VA_MAX;
 	amd.device.virtual_address_alignment = 4096;
