@@ -10,7 +10,7 @@ The phase snapshot also reads `GRBM_READ_ERROR` (`0x0016`), `GRBM_READ_ERROR2` (
 
 From the previous boot, now named from that header: `CP_STALLED_STAT2` `0x20` is `PFP_RCIU_READ_PENDING` (bit 5). `CP_STALLED_STAT1` `0xc00` is `ME_HAS_ACTIVE_CE_BUFFER_FLAG` (bit 10) and `ME_HAS_ACTIVE_DE_BUFFER_FLAG` (bit 11). `CP_CPF_STATUS` `0x10000000` is `GRBM_CPF_STAT_BUSY` (bit 28). `GRBM_STATUS` bit 5 is `RSMU_RQ_PENDING`. It is already set in the `boot` value `0x3028`, with the command processor halted, so it does not explain the stall. `CP_PFP_HEADER_DUMP` is not a header readout. The earlier conclusion that `0xdef0def0` showed the absence of a PM4 header does not hold. The PFP is already busy at `unhalt`, before a packet is fetched.
 
-This has not been built. It has not been written to a stick. It has not been booted.
+This has not been booted. `jam -q @r5-anyboot` for AMD64 finished at 08:06 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8389 targets). The linked accelerant contains `GFX9 CP_MEC_CNTL` and `rerr`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `73a9a97a5cc06a789baec24befa83cf8523be2a43c8d3209914a426fe22cc1c2`. The build package is 41073319 bytes, sha256 `9074df93b7730b3e155c348832e03a6cfdda0deae314d6fd543ef67f46d13017`. It was written raw to the General UDisk at 08:11 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened.
 
 ### The Renoir golden list writes GCEA_PROBE_MAP
 
