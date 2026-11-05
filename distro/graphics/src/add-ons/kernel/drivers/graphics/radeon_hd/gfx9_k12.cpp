@@ -137,14 +137,12 @@ kvram(void* cookie, uint64 bytes, uint64 align, uint64* offset, uint8** address)
 	uint64 aligned = (cursor + align - 1) & ~(align - 1);
 	if (aligned < cursor || aligned > end || bytes > end - aligned)
 		return B_NO_MEMORY;
+	if (info->kernel_window == NULL)
+		return B_NO_MEMORY;
 	shared->vram_pool_cursor = aligned + bytes;
 	*offset = aligned;
-	if (address != NULL) {
-		uint8* base = (uint8*)shared->frame_buffer;
-		if (!radeon_hd_uses_dce(shared->chipsetID))
-			base -= shared->vram_reserved_offset;
-		*address = base + aligned;
-	}
+	if (address != NULL)
+		*address = info->kernel_window + aligned;
 	return B_OK;
 }
 

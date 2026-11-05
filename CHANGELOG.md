@@ -1,8 +1,14 @@
 # R5OS changelog (lokaal)
 
+### The kernel writes the GFX9 ring through a kernel mapping
+
+The stick from 13:11 Europe/Amsterdam on 5 Nov 2026 reached the desktop loader and then stopped in the kernel debugger. The panic is `SMAP violation: user-mapped address`, in `r5_gfx9_prepare`, called from `r5_gfx9_kernel_start` and `radeon_hd_init` while `app_server` opened the device. The visible VRAM window is mapped with `B_READ_AREA | B_WRITE_AREA`, so the page has the user bit set. The accelerant writes that pointer from user mode. The kernel store of the ring fill hits SMAP. No K0, K1 or K2 line was reached. The syslog was not read; the machine was still in the debugger and the stick was not on this host.
+
+The driver now maps that same physical window a second time, with `B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA` and write combining. The pool allocator in the kernel returns that pointer. If the second map fails, the allocator fails and the GFX9 start does not write the user mapping. The cloneable window is unchanged. This fix has not been built into an image and has not been booted.
+
 ### The kernel starts the GFX9 command processor
 
-This is milestone M3 for R5. The image has not been booted.
+This is milestone M3 for R5. The stick below was booted and panicked in `r5_gfx9_prepare` before the command processor started. See the section above.
 
 The fixed sequences now live in one file, `gfx9_start.cpp`, and both the accelerant and the kernel driver link it. The packet bytes are the ones that landed the fence, the indirect buffer, the DMA fill and the compute dispatches. The user chose GPL-3.0-or-later for that file on 5 Nov 2026. `docs/LICENSING.md` says the kernel add-on contains that code, the combined add-on follows GPL-3.0-or-later, and the Haiku parts stay MIT. The `r5_pstate` kernel line is unchanged.
 

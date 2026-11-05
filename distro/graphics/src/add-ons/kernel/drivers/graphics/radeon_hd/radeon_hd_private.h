@@ -45,6 +45,11 @@ struct radeon_info {
 // SPDX-License-Identifier: GPL-3.0-or-later
 	area_id			doorbell_area;
 	uint8*			doorbell;
+	// Same physical window as the cloneable framebuffer, with kernel
+	// protection. The cloneable mapping has the user bit set, and SMAP
+	// rejects a kernel store through that pointer.
+	area_id			kernel_window_area;
+	uint8*			kernel_window;
 // SPDX-SnippetEnd
 
 	struct radeon_shared_info* shared_info;
