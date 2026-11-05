@@ -1,19 +1,19 @@
-# R5OS
+# R5 Operating System
 
-R5OS is a desktop operating system built on [Haiku](https://www.haiku-os.org/). It keeps what makes Haiku pleasant: one fast, coherent system with a clean desktop. On top of that it adds what a daily computer needs: accounts with sign-in, modern networking, better sound, and support for current laptops.
+R5 is a desktop operating system built on [Haiku](https://www.haiku-os.org/). It keeps what makes Haiku pleasant: one fast, coherent system with a clean desktop. On top of that it adds what a daily computer needs: accounts with sign-in, modern networking, better sound, and support for current laptops.
 
 The name is a nod to BeOS R5, as history. It is not a product claim.
 
 > R5OS is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
 
-**Status:** in development. The current tree is **R5OS 2026.1-dev, build 10047**. There is no public release yet.
+**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10047**. There is no public release yet.
 
 ---
 
 ## What works today
 
 ### Desktop
-- R5OS branding throughout: Deskbar, installer, boot splash, About.
+- R5OS Operating System branding throughout: Deskbar, installer, boot splash, About.
 - Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
 - **Settings** is one window, with a list on the left, search, and pages for Appearance, Display, Desktop and Deskbar, Wallpaper, Notifications, Virtual memory and more. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
 - Notifications, with a choice of where they appear on screen.
