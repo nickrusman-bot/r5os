@@ -5,6 +5,7 @@ SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src add-ons accelerants radeon_hd commo
 UsePrivateHeaders [ FDirName graphics radeon_hd ] ;
 UsePrivateHeaders [ FDirName graphics common ] ;
 UsePrivateHeaders graphics kernel ;
+UsePrivateHeaders r5gpu ;
 UsePrivateHeaders shared ;
 UsePrivateKernelHeaders ;
 
@@ -14,6 +15,7 @@ KernelAddon radeon_hd :
 	radeon_hd.cpp
 	gfx9_start.cpp
 	gfx9_k12.cpp
+	r5_gpu.cpp
 	sensors.cpp
 	: libgraphicscommon.a
 ;

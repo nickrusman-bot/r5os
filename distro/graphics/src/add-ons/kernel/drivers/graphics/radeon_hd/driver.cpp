@@ -734,6 +734,13 @@ int32 api_version = B_CUR_DRIVER_API_VERSION;
 
 char* gDeviceNames[MAX_CARDS + 1];
 radeon_info* gDeviceInfo[MAX_CARDS];
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static char* sR5GpuName = NULL;
+static const char* sR5Published[3];
+extern device_hooks gR5GpuHooks;
+// SPDX-SnippetEnd
 pci_module_info* gPCI;
 mutex gLock;
 
@@ -828,6 +835,12 @@ extern "C" const char**
 publish_devices(void)
 {
 	TRACE("%s\n", __func__);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (sR5Published[0] != NULL)
+		return sR5Published;
+// SPDX-SnippetEnd
 	return (const char**)gDeviceNames;
 }
 
@@ -940,6 +953,17 @@ init_driver(void)
 
 	gDeviceNames[found] = NULL;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (found > 0) {
+		sR5GpuName = strdup("gpu/radeon_hd/0");
+		sR5Published[0] = gDeviceNames[0];
+		sR5Published[1] = sR5GpuName;
+		sR5Published[2] = NULL;
+	}
+// SPDX-SnippetEnd
+
 	if (found == 0) {
 		mutex_destroy(&gLock);
 		put_module(B_AGP_GART_MODULE_NAME);
@@ -961,6 +985,13 @@ uninit_driver(void)
 
 	// free device related structures
 	char* name;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	free(sR5GpuName);
+	sR5GpuName = NULL;
+	sR5Published[0] = NULL;
+// SPDX-SnippetEnd
 	for (int32 index = 0; (name = gDeviceNames[index]) != NULL; index++) {
 		free(gDeviceInfo[index]);
 		free(name);
@@ -981,6 +1012,13 @@ find_device(const char* name)
 		if (!strcmp(name, gDeviceNames[index]))
 			return &gDeviceHooks;
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (sR5GpuName != NULL && !strcmp(name, sR5GpuName))
+		return &gR5GpuHooks;
+// SPDX-SnippetEnd
 
 	ERROR("%s: %s wasn't found!\n", __func__, name);
 	return NULL;

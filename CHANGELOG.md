@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### M4 records the GC 9.3 address space and does not add teapot data
+
+`origin/main` contains M3 (`71d5144efd`, pull request #4098) and `claude/m4-plan` (`d6b1bc09c6`, pull request #4099).
+
+The user address space for GC 9.3 is the Linux v6.12 layout: low range `0x10000`–`0x800000000000`, high range `0xffff800000000000`–`0xffffffffffbfe000`. The walk is four levels with 9-bit indexes. That section in `docs/GRAPHICS.md` is not fixed. No boot has programmed VMID 1.
+
+The render node name is `gpu/radeon_hd/0`, next to the existing graphics node. `GET_INFO` returns the common fields and an AMD vendor block whose shader counts stay 0 until the registers are read. `CS_SUBMIT` returns `B_NOT_ALLOWED` unless `gpu_render true`. With that key it returns `B_UNSUPPORTED`, because the VMID 1 tables are not programmed yet. The host test printed `ok gpu api 1.0 walk`.
+
+The Utah teapot control points were drawn by Martin Newell in 1975. No formal license was ever attached. The University of Utah redistributes the historical patches, and PyVista records them as conventionally public domain (`LicenseRef-UtahTeapot-PublicDomainByConvention`). Apache LEGAL-525 was closed without a license. That data is not in the tree. VulkanTeapot, libdrm and the Mesa RADV package are not built. There is no new stick. This image has not been booted.
+
 ### M3 is the fixed kernel sequence
 
 The user shut down the 15:29 session from the desktop and reported no panic. The syslog exported while that desktop was up still ends before `radeon_hd_uninit`, so the stop registers are not in that file. Milestone M3 in `docs/GPU-ARCHITECTURE.md` is done. The sequence is `GFX9 kernel on GC 9.3 (fixed)` in `docs/GRAPHICS.md`, and `AGENTS.md` locks it the same way as the ring, the workload and compute. `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` stay off until the settings file says so. GC 9.3 is not the default. The next milestone is M4.
