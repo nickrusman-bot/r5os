@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 spray calls have their own names
+
+`SprayNoteOn(uchar, uchar, uchar)` and `SprayControlChange(uchar, uchar, uchar)` are again the only candidates for a bare integer. `SprayNoteOn(0, 60, 100)` compiles and is a MIDI 1.0 note. The 16-bit velocity call is `SprayNoteOn2`. The 32-bit controller call is `SprayControlChange2`. The methods stay non-virtual. A cross compile of those four calls with the Haiku g++ succeeded (`n1_compile_ok`). `midi2test` was not run: it needs the MIDI server.
+
 ### Teapot patches follow freeglut
 
 The mesh no longer turns the raw data around Y. Each control point is converted first, the way freeglut 3.4 `fghTeaset` does for `glutSolidTeapot`: GL `(x, z - 1.575, -y)` times `size / 2`, with `size` 1. Patches 0–5 are copied four times by a turn around that GL Y axis: `(x, y, z)`, `(z, y, -x)`, `(-x, y, -z)`, `(-z, y, x)`. Patches 6–9 are copied twice. The copy negates GL Z, which is the data Y, and reverses the row order. Normals take the same turn or mirror. The first row of patch 3 is forced to `(0, 1, 0)` and the first row of patch 5 to `(0, -1, 0)`. A solid patch is 8 by 8 points (`GLUT_SOLID_N_SUBDIV`). The camera looks at the origin from `(0, 0.15, 7.2)`.

@@ -8,19 +8,16 @@ The check program is `midi2test` in `/system/bin`. This file is the contract for
 
 Include `<MidiProducer.h>` and `<MidiConsumer.h>`. Link `be` and `libmidi2.so`.
 
-A `uchar` velocity or controller value is still a MIDI 1.0 channel message: two or three bytes, status in the first byte. A `uint16` velocity or a `uint32` controller value is one MIDI 2.0 channel-voice packet (message type 0x4, two 32-bit words). The numeric range does not choose the path. The argument type does. `SprayNoteOn(0, 60, (uint16)100)` is a MIDI 2.0 packet whose velocity is 100, not a MIDI 1.0 note.
-
-A bare integer is ambiguous between `uchar` and `uint16`, and between `uchar` and `uint32`. The call does not compile until it is cast, or stored in a variable of the type you mean.
+A `uchar` velocity or controller value is still a MIDI 1.0 channel message: two or three bytes, status in the first byte. `SprayNoteOn2` takes a `uint16` velocity and `SprayControlChange2` takes a `uint32` controller value. Each sends one MIDI 2.0 channel-voice packet (message type 0x4, two 32-bit words). `SprayNoteOn(0, 60, 100)` is the MIDI 1.0 call. A bare integer is not ambiguous.
 
 ```cpp
-uchar classic = 100;
-producer->SprayNoteOn(0, 60, classic);
+producer->SprayNoteOn(0, 60, 100);
 
 uint16 velocity = 0x8000;
-producer->SprayNoteOn(0, 60, velocity);
+producer->SprayNoteOn2(0, 60, velocity);
 
 uint32 level = 0x80000000;
-producer->SprayControlChange(0, B_MAIN_VOLUME, level);
+producer->SprayControlChange2(0, B_MAIN_VOLUME, level);
 
 uint32 words[2];
 midi2_encode_note_on(0, 60, velocity, words);

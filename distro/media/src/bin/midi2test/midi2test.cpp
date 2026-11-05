@@ -602,8 +602,14 @@ test_spray()
 		"MIDI 1.0 NoteOn keeps channel, note, and velocity");
 
 	probe->Reset();
+	producer->SprayNoteOn(0, 60, 100);
+	expect(probe->Wait() == B_OK, "bare integer note arrives");
+	uchar bare[3] = { (uchar)(B_NOTE_ON + 0), 60, 100 };
+	expect(probe->HasMidi(bare, 3), "bare integer note is MIDI 1.0");
+
+	probe->Reset();
 	uint16 wide = 0x8000;
-	producer->SprayNoteOn(2, 64, wide);
+	producer->SprayNoteOn2(2, 64, wide);
 	expect(probe->Wait() == B_OK, "16-bit note arrives");
 	uint32 note[2];
 	midi2_encode_note_on(2, 64, wide, note);
@@ -635,8 +641,14 @@ test_spray()
 		"ControlChange keeps controller 7 and value 90");
 
 	probe->Reset();
+	producer->SprayControlChange(0, 7, 100);
+	expect(probe->Wait() == B_OK, "bare integer control arrives");
+	uchar bareControl[3] = { (uchar)(B_CONTROL_CHANGE + 0), 7, 100 };
+	expect(probe->HasMidi(bareControl, 3), "bare integer control is MIDI 1.0");
+
+	probe->Reset();
 	uint32 wideControl = 0x80000000;
-	producer->SprayControlChange(4, B_MAIN_VOLUME, wideControl);
+	producer->SprayControlChange2(4, B_MAIN_VOLUME, wideControl);
 	expect(probe->Wait() == B_OK, "32-bit control arrives");
 	uint32 control[2];
 	midi2_encode_control_change(4, B_MAIN_VOLUME, wideControl, control);

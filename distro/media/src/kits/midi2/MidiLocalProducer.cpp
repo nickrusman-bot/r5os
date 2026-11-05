@@ -100,7 +100,7 @@ BMidiLocalProducer::SprayNoteOn(uchar channel, uchar note,
 
 
 void
-BMidiLocalProducer::SprayNoteOn(uchar channel, uchar note,
+BMidiLocalProducer::SprayNoteOn2(uchar channel, uchar note,
 	uint16 velocity, bigtime_t time) const
 {
 	if (channel >= 16) {
@@ -149,7 +149,7 @@ BMidiLocalProducer::SprayControlChange(uchar channel,
 
 
 void
-BMidiLocalProducer::SprayControlChange(uchar channel, uchar controller,
+BMidiLocalProducer::SprayControlChange2(uchar channel, uchar controller,
 	uint32 value, bigtime_t time) const
 {
 	if (channel >= 16) {
