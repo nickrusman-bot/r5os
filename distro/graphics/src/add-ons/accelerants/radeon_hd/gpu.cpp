@@ -2716,6 +2716,15 @@ static const uint32 kFenceSequence = 1088;
 static const uint32 kFenceTsStart = 1152;
 static const uint32 kFenceTsEnd = 1216;
 static const uint32 kDmaChunk = 0x100000;
+static const uint32 kWlSubmitDwords = 12;
+static_assert(kFenceIbWord < 4096, "GFX9 workload fence");
+static_assert(kFenceSequence < 4096, "GFX9 workload fence");
+static_assert(kFenceTsStart < 4096, "GFX9 workload fence");
+static_assert(kFenceTsEnd < 4096, "GFX9 workload fence");
+static_assert(kFenceSequence - kFenceIbWord == 64, "GFX9 workload fence");
+static_assert(kFenceTsStart - kFenceSequence == 64, "GFX9 workload fence");
+static_assert(kFenceTsEnd - kFenceTsStart == 64, "GFX9 workload fence");
+static_assert(kWlSubmitDwords == 12, "GFX9 workload submission");
 
 
 static void
@@ -2933,7 +2942,7 @@ radeon_gfx9_dma(uint32 location, uint64 fenceGpu, bool ringDoorbell,
 	radeon_visible_barrier();
 	*tsStart = 0;
 	*tsEnd = 0;
-	uint32 packets[12];
+	uint32 packets[kWlSubmitDwords];
 	uint64 sequence = 2;
 	packets[0] = radeon_packet3(kWlIndirectBuffer, 2);
 	packets[1] = (uint32)ibGpu & ~3u;
@@ -2948,7 +2957,7 @@ radeon_gfx9_dma(uint32 location, uint64 fenceGpu, bool ringDoorbell,
 	packets[9] = (uint32)sequence;
 	packets[10] = (uint32)(sequence >> 32);
 	packets[11] = 0;
-	if (!radeon_gfx9_submit(packets, 12, sequence, ringDoorbell, meCntl,
+	if (!radeon_gfx9_submit(packets, kWlSubmitDwords, sequence, ringDoorbell, meCntl,
 			haltMask))
 		return;
 
@@ -2977,7 +2986,7 @@ radeon_gfx9_dma(uint32 location, uint64 fenceGpu, bool ringDoorbell,
 	packets[3] = kWlIbValid | ibDwords;
 	packets[9] = (uint32)sequence;
 	packets[10] = (uint32)(sequence >> 32);
-	if (!radeon_gfx9_submit(packets, 12, sequence, ringDoorbell, meCntl,
+	if (!radeon_gfx9_submit(packets, kWlSubmitDwords, sequence, ringDoorbell, meCntl,
 			haltMask))
 		return;
 
@@ -3029,7 +3038,7 @@ radeon_gfx9_workload(uint32 location, uint64 ringGpu, uint64 fenceGpu,
 	radeon_visible_barrier();
 
 	uint64 sequence = 1;
-	uint32 packets[12];
+	uint32 packets[kWlSubmitDwords];
 	packets[0] = radeon_packet3(kWlIndirectBuffer, 2);
 	packets[1] = (uint32)ibGpu & ~3u;
 	packets[2] = (uint32)((ibGpu >> 32) & 0xffffu);
@@ -3044,7 +3053,7 @@ radeon_gfx9_workload(uint32 location, uint64 ringGpu, uint64 fenceGpu,
 	packets[10] = (uint32)(sequence >> 32);
 	packets[11] = 0;
 
-	if (!radeon_gfx9_submit(packets, 12, sequence, ringDoorbell, meCntl,
+	if (!radeon_gfx9_submit(packets, kWlSubmitDwords, sequence, ringDoorbell, meCntl,
 			haltMask)) {
 		uint32 writeback = *(volatile uint32*)
 			(sRadeonGfx9Ring.fenceAddress + kFenceIbWord);

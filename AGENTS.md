@@ -14,7 +14,7 @@ Roadmap (R5 Hub, Store, Vulkan, …): `docs/ROADMAP.md`. Do not implement unrela
 
 ## GFX9 ring (Renoir)
 
-The sequence that landed the fence is `docs/GRAPHICS.md`, section `GFX9 ring on GC 9.3 (fixed)`. Do not change that order, those registers, the PSP load, the firmware blobs, or the ring contents unless the user asks. MEC is started before the GFX ring. A change needs a boot on the 5625U that writes scratch `0xDEADBEEF`, recorded in `CHANGELOG.md`, and an update of that contract. The readback check stays. The ring stays off until the radeon_hd driver settings say `gfx9_ring true`, until the user says otherwise.
+The sequence that landed the fence is `docs/GRAPHICS.md`, section `GFX9 ring on GC 9.3 (fixed)`. Do not change that order, those registers, the PSP load, the firmware blobs, or the ring contents unless the user asks. MEC is started before the GFX ring. A change needs a boot on the 5625U that writes scratch `0xDEADBEEF`, recorded in `CHANGELOG.md`, and an update of that contract. The readback check stays. The ring stays off until the radeon_hd driver settings say `gfx9_ring true`, until the user says otherwise. The workload after the first fence (`docs/GRAPHICS.md`, `GFX9 workload on GC 9.3 (fixed)`) follows the same rule, and stays off until the settings say `gfx9_workload true`.
 
 ## Settings window
 
