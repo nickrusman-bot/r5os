@@ -133,13 +133,10 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
         "\t\tno_safemode\n"
         "\t}\n"
     )
-    if "x-vnd.R5OS-gpu-selftest" not in text:
-        anchor = "\tjob x-vnd.R5OS-vbox-clip {\n"
-        if anchor not in text:
-            raise SystemExit("selftest anchor missing in launch user")
-        launch.write_text(text.replace(anchor, job + "\n" + anchor, 1),
+    if job in text:
+        launch.write_text(text.replace(job + "\n", "", 1).replace(job, "", 1),
             encoding="utf-8")
-        print("patched launch user selftest")
+        print("removed launch user selftest")
 
 
 def main() -> None:

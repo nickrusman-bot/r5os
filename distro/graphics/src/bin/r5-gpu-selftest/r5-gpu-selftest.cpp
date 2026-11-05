@@ -2,8 +2,8 @@
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Writes one result file after Sign in. The launch job runs it only when
- * the radeon_hd driver settings say gpu_selftest.
+ * Login starts this after Deskbar. The result file is written even when
+ * the render node is absent.
  */
 
 

@@ -21,6 +21,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+int ac_drm_replay(int fd);
+
+
 static int
 host_err(int err)
 {
@@ -1376,6 +1379,9 @@ main(void)
 	CHECK(gCalls > 0);
 	CHECK(gShort == 0);
 	radv_replay(fd);
+
+	if (ac_drm_replay(fd) != 0)
+		gFail++;
 
 	if (gFail == 0)
 		printf("ok libdrm ioctl\n");

@@ -1,5 +1,23 @@
 # R5OS changelog (lokaal)
 
+### RADV ioctl path, package paths, and the self-test launch
+
+RADV's `ac_drm_query_gpu_info` failed on the 5625U because Mesa's `drm_ioctl()` in `src/util/os_drm.h` calls `ioctl()` and never reaches `r5_drm_ioctl()`. The missing `amdgpu.ids` line is only libdrm's ASIC-name warning. `patches/haiku-os-drm-ioctl.patch` makes `drm_ioctl()` call libdrm's `drmIoctl` on Haiku, and also when `R5_HOST_TEST` is set so the host replay uses the same branch. `drm_ioctl_write` and `drm_ioctl_write_read` go through that helper. A search of `src/amd` and `src/vulkan` found no other `ioctl()` on the DRM fd. The virtio path already uses `drmIoctl`.
+
+`scripts/check-libdrm-symbols.py` fails if `libvulkan_radeon.so` or `libvulkan_lvp.so` has an undefined `ioctl` or `__ioctl`. The one allow-list entry is `__ioctl` for `SYNC_IOC_MERGE` (`0xc0303e03`) on a sync-file descriptor, in `radv_amdgpu_winsys_cs_submit`, `wsi_create_sync_for_image_syncobj`, and `vk_drm_syncobj_copy_payloads`. That fd is not the render node. The check reads the request immediate and rejects any other value. It printed `ok libdrm symbols`.
+
+The host replay compiles the real `ac_linux_drm.c` against the patched header and the fake kernel. It printed `ok ac drm family RV cu 7 firmware` and `ok libdrm ioctl`. Family RV, 7 CUs, ME `0x11`, PFP `0xc5`, MEC `0x1e3`. The shared libdrm link still fails under `--no-undefined` because `r5_host_ioctl` is supplied by the test; the replay links the objects instead.
+
+libdrm is built with prefix `/boot/system` and datadir `/boot/system/data`. `libdrm_amdgpu.so` now contains `/boot/system/data/libdrm/amdgpu.ids`. The unmodified `amdgpu.ids` from libdrm 2.4.124 is shipped at `data/libdrm/amdgpu.ids` in the libdrm package. Shipped binaries are stripped, and a build-machine RPATH is rewritten to `/boot/system/lib`. `scripts/install-mesa-packages.sh` extracts libdrm, mesa, mesa_radv, mesa_lavapipe, and vulkanteapot and fails if any file still contains `/home/nickr`. The package tool path in that script pointed at `bfs_shell/package`. It is `tools/package/package`.
+
+Login starts `/system/bin/r5-gpu-selftest` after `dstcheck`. The launch job `x-vnd.R5OS-gpu-selftest` is removed, so it cannot start twice. The program writes `~/config/cache/r5-gpu-selftest.txt` even when `/dev/gpu/radeon_hd/0` is absent. That file is the VirtualBox check. This image has not been booted.
+
+Jam of `@r5-raw` started at 23:44 CET on 5 Nov 2026 and finished at 23:46 CET, `jam_exit=0`, 1184 targets. The image is `generated.x86_64/r5-os.image`. The package check then printed `mesa_packages_ok`, `ok package paths`, and `ok egl vendor`. No VirtualBox boot and no second stick.
+
+### Why chown of /boot/home/config returns EROFS
+
+`r5-session.log` from the 5625U stick repeats `settings chown /boot/home/config: Read-only file system` and the same for `chmod`. `package_daemon` registers a volume at `/boot/home/config`. That directory is the packagefs root. packagefs does not implement `write_stat`, so `chown` and `chmod` of the mount return `B_READ_ONLY_DEVICE`. `r5-desktop` runs that call before every session program, which is why the line repeats. `config/settings` and `config/cache` are the writable directories packagefs stitches in. On the stick those two are uid 1001 mode 0700, and Mesa created `mesa_shader_cache` there as uid 1001. `config` itself stayed uid 0 mode 0755. A session user can write settings and cache. Creating a file directly in `config` fails. The same packagefs mount is how every boot, including VirtualBox, exposes `~/config`. A VirtualBox session log was not read. No code change.
+
 ### Teapot patches follow freeglut
 
 The mesh no longer turns the raw data around Y. Each control point is converted first, the way freeglut 3.4 `fghTeaset` does for `glutSolidTeapot`: GL `(x, z - 1.575, -y)` times `size / 2`, with `size` 1. Patches 0–5 are copied four times by a turn around that GL Y axis: `(x, y, z)`, `(z, y, -x)`, `(-x, y, -z)`, `(-z, y, x)`. Patches 6–9 are copied twice. The copy negates GL Z, which is the data Y, and reverses the row order. Normals take the same turn or mirror. The first row of patch 3 is forced to `(0, 1, 0)` and the first row of patch 5 to `(0, -1, 0)`. A solid patch is 8 by 8 points (`GLUT_SOLID_N_SUBDIV`). The camera looks at the origin from `(0, 0.15, 7.2)`.
