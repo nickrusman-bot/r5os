@@ -1,4 +1,4 @@
-# MIDI 2.0 on R5OS
+# MIDI 2.0 on R5
 
 `libmidi2.so` can send and receive a Universal MIDI Packet (UMP). The MIDI 1.0 calls stay. There is no second MIDI kit. Property Exchange, Profiles, per-note controllers, and Endpoint and Function Block discovery are in this same kit.
 
