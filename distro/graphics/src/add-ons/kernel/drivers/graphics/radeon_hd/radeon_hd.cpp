@@ -1211,6 +1211,12 @@ radeon_hd_uninit(radeon_info &info)
 {
 	TRACE("card(%" B_PRId32 "): %s called\n", info.id, __func__);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	void r5_gfx9_kernel_stop();
+	r5_gfx9_kernel_stop();
+// SPDX-SnippetEnd
 	delete_area(info.shared_area);
 	delete_area(info.registers_area);
 	delete_area(info.framebuffer_area);
@@ -1220,8 +1226,6 @@ radeon_hd_uninit(radeon_info &info)
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (info.doorbell_area >= 0)
 		delete_area(info.doorbell_area);
-	void r5_gfx9_kernel_stop();
-	r5_gfx9_kernel_stop();
 // SPDX-SnippetEnd
 }
 

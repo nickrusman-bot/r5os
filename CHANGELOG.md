@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### The GFX ring wraps and the kernel stops the GPU before it unmaps
+
+K2 still uses one constant, `kK2Pattern` (`0xA5A5A5A5`), for the DMA packet and the readback. The log is the first four dwords, then `k2 dma pattern`, `cafe` and `other`. The first dword that is neither the pattern nor `0xCAFEDEAD` is logged with its index. The GART indirect buffer runs only when the submission landed and every dword matches.
+
+Later submissions no longer refuse when the write pointer plus the packet would pass 1024. `r5_gfx9_ring_space` is `ringDwords - (wptr - rptr) - 1`. The read pointer comes from the 64-bit writeback at the fence plus 256 when that word is non-zero, otherwise from `CP_RB0_RPTR`. Each dword is stored at `(wptr + i) & (dwords - 1)`. The doorbell and the poll slot receive the write pointer that keeps counting. The first fill of 914 dwords is the same packet. The host test checks the twelve indexes from 1022: 1022, 1023, then 0 through 9. It printed `ok dwords 73 submit 12` and `ok pte gart ih`.
+
+`radeon_hd_uninit` calls `r5_gfx9_kernel_stop` before any `delete_area`. Stop halts the command processor (ME, PFP and CE) and the MEC, writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the same TLB invalidate as K2, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the system area and the pool mapping. A second open in the same boot logs `GFX9 kernel start already done this boot` and does not start the GPU again. K0 and K1 packets are unchanged.
+
+`jam -q @r5-anyboot` exited 0 (1189 targets). The kernel driver contains `k2 dma pattern`, `k2 dma other` and `GFX9 kernel start already done this boot`. The image was written to the General UDisk at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. This image has not been booted. Shutdown has not been run.
+
 ### K2 checks the same pattern the DMA packet writes
 
 The K2 readback compared with `0x5A5A5A5A` while `radeon_gfx9_dma_ib` writes `0xA5A5A5A5`. Both the K2 packet and the K2 check now use `kK2Pattern`, which is `0xA5A5A5A5`. The K0 calls keep the previous packet bytes. After the DMA, the log is the first four dwords, then the count equal to the pattern, the count still `0xCAFEDEAD`, and the count of anything else. A value that is neither logs its first index and the dword. The GART indirect buffer runs when the submission landed and every dword matches the pattern. K0 and K1 are unchanged.

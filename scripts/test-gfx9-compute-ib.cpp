@@ -213,6 +213,22 @@ main(void)
 		return fail("fault decode");
 	if (r5_gfx9_fault_address(0x0f3f0000u, 0) != 0xf3f0000000ull)
 		return fail("fault addr");
+	const uint64_t kWrap = 914ull + 9ull * 12ull;
+	if (kWrap != 1022ull)
+		return fail("wrap base");
+	const uint32_t kWrapIndex[12] = {
+		1022, 1023, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+	};
+	for (uint32_t i = 0; i < 12; i++) {
+		if (r5_gfx9_ring_index(kWrap, i, 1024) != kWrapIndex[i])
+			return fail("wrap index");
+	}
+	if (r5_gfx9_ring_space(1024, kWrap, kWrap) < 12)
+		return fail("wrap space");
+	if (r5_gfx9_ring_space(1024, 914, 914) < 12)
+		return fail("first space");
+	if (r5_gfx9_ring_space(1024, kWrap, 0) != 1)
+		return fail("full space");
 
 	uint64_t gartStart = 0;
 	uint64_t gartEnd = 0;

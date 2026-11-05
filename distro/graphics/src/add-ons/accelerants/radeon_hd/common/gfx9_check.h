@@ -110,6 +110,30 @@ r5_gfx9_fault_address(uint32_t lo, uint32_t hi)
 	return (((uint64_t)(hi & 0xfu) << 32) | (uint64_t)lo) << 12;
 }
 
+
+/* amdgpu_ring_write with support_64bit_ptrs. wptr keeps counting.
+ * The ring slot is that count masked to the dword buffer. dwords is
+ * a power of two. */
+static inline uint32_t
+r5_gfx9_ring_index(uint64_t wptr, uint32_t i, uint32_t dwords)
+{
+	return (uint32_t)((wptr + i) & (uint64_t)(dwords - 1u));
+}
+
+
+/* Free dwords, leaving one slot so the write pointer does not land on
+ * the read pointer. rptr and wptr are both the continuing dword count. */
+static inline uint64_t
+r5_gfx9_ring_space(uint32_t ringDwords, uint64_t wptr, uint64_t rptr)
+{
+	if (wptr < rptr)
+		return 0;
+	uint64_t used = wptr - rptr;
+	if (used + 1u >= ringDwords)
+		return 0;
+	return (uint64_t)ringDwords - used - 1u;
+}
+
 /* MC_VM_AGP_BOT and MC_VM_AGP_TOP count 16 MiB units. TOP is inclusive.
  * BOT > TOP means the window is off. BOT = TOP = 0 is the first 16 MiB. */
 static inline int

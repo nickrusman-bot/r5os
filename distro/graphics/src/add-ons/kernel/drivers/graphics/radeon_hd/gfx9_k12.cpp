@@ -45,6 +45,9 @@ static uint32 sLastSource = 0;
 static uint32 sLastRing = 0;
 static uint8 sFirstRaw[4][32];
 static area_id sSystemArea = -1;
+static bool sGfx9Started = false;
+static bool sVmCntlSavedValid = false;
+static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
 
 static const uint32 kIhBytes = 64 * 1024;
@@ -313,14 +316,27 @@ map_pool(radeon_info& info)
 void
 r5_gfx9_kernel_stop()
 {
-	ih_off();
-	if (sEopSem >= 0) {
-		delete_sem(sEopSem);
-		sEopSem = -1;
-	}
-	if (sSystemArea >= 0) {
-		delete_area(sSystemArea);
-		sSystemArea = -1;
+	if (sInfo != NULL && sInfo->registers_area >= 0 && sInfo->registers != 0) {
+		uint32 me = gc_byte(0x01b6);
+		uint32 mec = gc_byte(0x008d);
+		kwrite(sInfo, me, kread(sInfo, me)
+			| (1u << 24) | (1u << 26) | (1u << 28));
+		kwrite(sInfo, mec, kread(sInfo, mec) | (1u << 30) | (1u << 28));
+		if (sVmCntlSavedValid)
+			kwrite(sInfo, gc_byte(0x0880), sVmCntlSaved);
+		const uint32 eng = 17;
+		kwrite(sInfo, gc_byte(0x08a3 + eng), r5_gfx9_tlb_req(0, 0));
+		for (int i = 0; i < 1000; i++) {
+			if ((kread(sInfo, gc_byte(0x08b5 + eng)) & 1u) != 0)
+				break;
+			snooze(10);
+		}
+		*(volatile uint32*)(sInfo->registers + oss_byte(0x0080)) = 0;
+		*(volatile uint32*)(sInfo->registers + gc_byte(0x106a)) = 0;
+		if (sIhInstalled) {
+			remove_io_interrupt_handler(sIrq, ih_handler, sInfo);
+			sIhInstalled = false;
+		}
 	}
 	if (sMsi && gPCI != NULL && sInfo != NULL && sInfo->pci != NULL) {
 		gPCI->disable_msi(sInfo->pci->bus, sInfo->pci->device,
@@ -328,6 +344,14 @@ r5_gfx9_kernel_stop()
 		gPCI->unconfigure_msi(sInfo->pci->bus, sInfo->pci->device,
 			sInfo->pci->function);
 		sMsi = false;
+	}
+	if (sEopSem >= 0) {
+		delete_sem(sEopSem);
+		sEopSem = -1;
+	}
+	if (sSystemArea >= 0) {
+		delete_area(sSystemArea);
+		sSystemArea = -1;
 	}
 	if (sInfo != NULL && sInfo->kernel_window_area >= 0) {
 		delete_area(sInfo->kernel_window_area);
@@ -583,6 +607,8 @@ run_k2()
 	}
 	uint64 tableBase = r5_gfx9_page_table_base(fb, tableOffset);
 	uint32 savedCntl = kread(sInfo, gc_byte(0x0880));
+	sVmCntlSaved = savedCntl;
+	sVmCntlSavedValid = true;
 	kwrite(sInfo, gc_byte(0x08eb), (uint32)tableBase);
 	kwrite(sInfo, gc_byte(0x08ec), (uint32)(tableBase >> 32));
 	uint32 baseLo = kread(sInfo, gc_byte(0x08eb));
@@ -708,6 +734,10 @@ void
 r5_gfx9_kernel_start(radeon_info& info)
 {
 	sInfo = &info;
+	if (sGfx9Started) {
+		knote("GFX9 kernel start already done this boot");
+		return;
+	}
 	info.kernel_window_area = -1;
 	info.kernel_window = NULL;
 	if (info.shared_info == NULL || info.pci == NULL)
@@ -739,6 +769,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 		return;
 	if (pci != 0x15e7 && pci != 0x1636 && pci != 0x1638)
 		return;
+	sGfx9Started = true;
 	if (!map_pool(info))
 		return;
 
