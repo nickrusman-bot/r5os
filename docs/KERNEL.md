@@ -1,13 +1,13 @@
 # Kernel and CPU
 
-Audit of the AMD64 kernel and boot loader that R5OS actually builds. Source of the limits is the Haiku tree at `/home/nickr/r5os/haiku`. `scripts/apply-kernel-bugs.py` copies `distro/boot/bios_ia32/smp.cpp`, `distro/kernel/src/system/kernel/arch/x86/arch_timer.cpp`, and `arch_cpu.cpp` over that tree. Those two kernel files keep the Haiku MIT header and the NewOS notice. The R5OS edits are GPL-3.0-or-later `SPDX-Snippet` blocks: TSC divide guards (Haiku #20400), the `r5_pstate` publish call, and the microcode match on `installed_cpu`. A successful boot logs `R5 kernel: arch_timer TSC guards active` and `R5 kernel: arch_cpu from distro, microcode match uses installed_cpu`. The combined kernel is distributed under GPL-3.0-or-later. Haiku, Inc. and the original authors keep the credit on the unmodified portions. This is source inspection and the boots already recorded in `CHANGELOG.md` and `docs/vbox.md`. It is not a 64-CPU test, a 128-CPU test, or a bare-metal boot of the Ryzen 5 5625U.
+Audit of the AMD64 kernel and boot loader that R5 actually builds. Source of the limits is the Haiku tree at `/home/nickr/r5os/haiku`. `scripts/apply-kernel-bugs.py` copies `distro/boot/bios_ia32/smp.cpp`, `distro/kernel/src/system/kernel/arch/x86/arch_timer.cpp`, and `arch_cpu.cpp` over that tree. Those two kernel files keep the Haiku MIT header and the NewOS notice. The R5 edits are GPL-3.0-or-later `SPDX-Snippet` blocks: TSC divide guards (Haiku #20400), the `r5_pstate` publish call, and the microcode match on `installed_cpu`. A successful boot logs `R5 kernel: arch_timer TSC guards active` and `R5 kernel: arch_cpu from distro, microcode match uses installed_cpu`. The combined kernel is distributed under GPL-3.0-or-later. Haiku, Inc. and the original authors keep the credit on the unmodified portions. This is source inspection and the boots already recorded in `CHANGELOG.md` and `docs/vbox.md`. It is not a 64-CPU test, a 128-CPU test, or a bare-metal boot of the Ryzen 5 5625U.
 
 No kernel source was changed for this audit. The read-only snapshot
 further down was added later. It does not write a P-state.
 
 ## What already works
 
-R5OS AMD64 defaults to the BIOS boot platform and also builds the EFI loader.
+R5 AMD64 defaults to the BIOS boot platform and also builds the EFI loader.
 
 `build/jam/ArchitectureRules` (x86_64 case): `HAIKU_KERNEL_PLATFORM ?= bios_ia32`, and boot targets `bios_ia32`, `efi`, `pxe_ia32`. The kernel sources live under `src/system/kernel/arch/x86`.
 
@@ -40,7 +40,7 @@ A 6-core / 12-thread Ryzen 5 5625U sits inside all three, if its firmware leaves
 
 ## Findings
 
-### 1. BIOS SMP startup could wait forever — fixed in the R5OS loader, seen on 2 vCPUs
+### 1. BIOS SMP startup could wait forever — fixed in the R5 loader, seen on 2 vCPUs
 
 Severity: was a boot hang. The current distro copy bounds it. User impact on the old loader: cold start with 2 CPUs stays on gray splash icons. Implementation risk of the existing fix: low. It is already in tree.
 
@@ -58,7 +58,7 @@ Authoritative defines:
 
 - `headers/private/kernel/boot/platform/bios_ia32/platform_kernel_args.h` line 18: `#define SMP_MAX_CPUS 64`
 - `headers/private/kernel/boot/platform/efi/platform_kernel_args.h` line 21: `#define SMP_MAX_CPUS 64`
-- amiga, atari, open firmware, u-boot, and routerboard headers: `1` (those platforms are not R5OS targets)
+- amiga, atari, open firmware, u-boot, and routerboard headers: `1` (those platforms are not R5 targets)
 
 Consumers that grow with the constant (39 files under `src/` and `headers/` reference the macro):
 
@@ -115,7 +115,7 @@ Minimal fix: use ECX bits 7:0 for the legacy count, and prefer leaf `0x8000001E`
 
 ### 6. Intel hybrid CPUs are named and then ignored
 
-Severity: none on the 5625U (one core type). On Alder Lake and newer, thread placement can prefer an efficiency core with no policy saying otherwise. Not reproduced. R5OS has no hybrid test machine in the logs.
+Severity: none on the 5625U (one core type). On Alder Lake and newer, thread placement can prefer an efficiency core with no policy saying otherwise. Not reproduced. R5 has no hybrid test machine in the logs.
 
 `get_hybrid_cpu_type()` (line 1170) returns 0 when the hybrid feature bit is clear. Otherwise it shifts CPUID leaf `0x1A` EAX by 24. `get_hybrid_cpu_type_string()` maps that to a name such as `"Atom"`. `cpu->arch.hybrid_type` is stored and printed (lines 1357–1366). A tree search finds `hybrid` only in `arch_cpu.cpp`. The scheduler does not read it.
 
@@ -137,13 +137,13 @@ Severity: laptops run at firmware-chosen P-states. No confirmed bug. Not a scala
 
 `r5_pstate.cpp` reads AMD hardware P-states and CPPC, and Intel HWP capabilities, when those CPUID bits are set and the hypervisor bit is clear. It does not write an MSR. The write hook on `/dev/misc/r5_pstate` returns `B_NOT_ALLOWED`. Nothing in this tree programs `IA32_PM_ENABLE`. `arch_timer.cpp` reads AMD `MSR_F10H_PSTATEDEF(0)` to estimate TSC frequency. `apply-kernel-bugs.py` `patch_tsc_div0()` guards the CPUID TSC conversion against a zero divisor (Haiku #20400). That is a panic fix in the timer, not a power driver.
 
-Invariant TSC is a named feature bit. C-state policy and a userspace power preference are not in this tree as an R5OS component.
+Invariant TSC is a named feature bit. C-state policy and a userspace power preference are not in this tree as an R5 component.
 
 Where it belongs: MSRs and idle (kernel). A “balanced / performance” control, if one is added later, is a preference program talking to the kernel, not a new APIC path.
 
 ### 9. This pass did not certify the kernel free of races
 
-The SMP boot stall in finding 1 is the CPU bug reproduced on R5OS. The TSC divisor guard is in the apply script so a zero CPUID frequency does not divide. No other race, deadlock, leak, or bad error path was executed for this audit. Absence from this document is not a clean bill of health.
+The SMP boot stall in finding 1 is the CPU bug reproduced on R5. The TSC divisor guard is in the apply script so a zero CPUID frequency does not divide. No other race, deadlock, leak, or bad error path was executed for this audit. Absence from this document is not a clean bill of health.
 
 ## Test record
 
@@ -159,7 +159,7 @@ Not executed, and not claimed:
 - Topology printout on the Ryzen 5 5625U
 - Intel hybrid, NUMA, HWP
 - Parallel stress, reboot, and shutdown across those CPU counts
-- EFI boot of an R5OS image (the scripts force BIOS)
+- EFI boot of an R5 image (the scripts force BIOS)
 
 Proposed, in order, before any constant change:
 
@@ -186,7 +186,7 @@ Scalability and hardware, after the QEMU steps above:
 
 Later modernization, not required for the reference machine:
 
-7. Scheduler input from `hybrid_type` (Intel only; no R5OS machine yet).
+7. Scheduler input from `hybrid_type` (Intel only; no R5 machine yet).
 8. SRAT/SLIT and a scheduler domain, for multi-CCD and multi-socket.
 9. HWP or AMD P-state requests. The frequency readout is the snapshot below. Requests are still not written. Safemode must leave the registers alone.
 
@@ -194,7 +194,7 @@ Do not start that work until this report has been reviewed. Do not import a Linu
 
 ## Read-only frequency snapshot
 
-This is the readout for GitHub issue 86. It does not change a P-state. The Ryzen 5 5625U was booted from USB on 3 Nov 2026. The kernel enumerated CPUs 0 through 11. `/home/r5-cpu.txt` on that volume says family `0x19`, model `0x50`, name `AMD Ryzen 5 5625U with Radeon Graphics`, `tsc_hz` 2295732986. Hardware P-state and CPPC are present. The three enabled P-states are 2300, 1800 and 1600 MHz, and the current index stayed 0. The log ends with `no msr write`. The same boot did not find a FAT boot sector, so that file is on the BeFS volume, not on the EFI partition. The logger now scans again later in boot. On the next stick, written at 14:48 Europe/Amsterdam, it preferred the FAT32 Windows EFI partition (`/dev/disk/nvme/0/0`) over the FAT12 USB partition and wrote the three log files there. Those three files were removed from Windows after the boot. That version skipped `/dev/disk/nvme` and then mounted the stick's own EFI partition. The boots at 16:14 and 16:23 Europe/Amsterdam stayed on the rocket after that mount. The logger no longer mounts a FAT partition. That program is `distro/cpu/r5_pstate_log.cpp`, GPL-3.0-or-later, copied by `scripts/apply-kernel-bugs.py`. The Radeon kernel files `driver.cpp` and `radeon_hd.cpp` are copied from `distro/graphics` with the Haiku MIT header kept and the R5OS edits marked GPL-3.0-or-later. See `docs/GRAPHICS.md`. Windows can also read the BeFS file with `tools/r5-befs/r5_befs.py` without waiting for that copy.
+This is the readout for GitHub issue 86. It does not change a P-state. The Ryzen 5 5625U was booted from USB on 3 Nov 2026. The kernel enumerated CPUs 0 through 11. `/home/r5-cpu.txt` on that volume says family `0x19`, model `0x50`, name `AMD Ryzen 5 5625U with Radeon Graphics`, `tsc_hz` 2295732986. Hardware P-state and CPPC are present. The three enabled P-states are 2300, 1800 and 1600 MHz, and the current index stayed 0. The log ends with `no msr write`. The same boot did not find a FAT boot sector, so that file is on the BeFS volume, not on the EFI partition. The logger now scans again later in boot. On the next stick, written at 14:48 Europe/Amsterdam, it preferred the FAT32 Windows EFI partition (`/dev/disk/nvme/0/0`) over the FAT12 USB partition and wrote the three log files there. Those three files were removed from Windows after the boot. That version skipped `/dev/disk/nvme` and then mounted the stick's own EFI partition. The boots at 16:14 and 16:23 Europe/Amsterdam stayed on the rocket after that mount. The logger no longer mounts a FAT partition. That program is `distro/cpu/r5_pstate_log.cpp`, GPL-3.0-or-later, copied by `scripts/apply-kernel-bugs.py`. The Radeon kernel files `driver.cpp` and `radeon_hd.cpp` are copied from `distro/graphics` with the Haiku MIT header kept and the R5 edits marked GPL-3.0-or-later. See `docs/GRAPHICS.md`. Windows can also read the BeFS file with `tools/r5-befs/r5_befs.py` without waiting for that copy.
 
 `distro/kernel/x86/r5_pstate.cpp` runs from `arch_cpu_init_post_modules()`. It prints the vendor, family, model, brand string, and `gCPUClockSpeed`, then publishes the same text at `/dev/misc/r5_pstate`. Opening that device takes a new sample on the CPU that handles the open. The read hook copies it out with `user_memcpy`. A plain `memcpy` into that user buffer panics when SMAP is on (Ryzen 5 5625U, 3 Nov 2026, thread `r5_pstate_log`). The write hook returns `B_NOT_ALLOWED`.
 

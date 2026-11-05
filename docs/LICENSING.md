@@ -1,31 +1,31 @@
-# R5OS licensing
+# R5 licensing
 
-R5OS is an independent, multi-license operating system based on Haiku. It is not an MIT-only project. Different open-source licenses may sit in the same repository, image, and release. One license in the tree does not pull every other component under it.
+R5 is an independent, multi-license operating system based on Haiku. It is not an MIT-only project. Different open-source licenses may sit in the same repository, image, and release. One license in the tree does not pull every other component under it.
 
 This file is the policy. `AGENTS.md` points here. `THIRD_PARTY_NOTICES.md` is the readable list of components we have actually identified. `LICENSES/` holds unmodified license texts for licenses this repository declares.
 
 A file-by-file audit of the Haiku tree, the build packages, firmware, and generated files has **not** been done. Unknown components stay unresolved. A later REUSE check would not by itself mean the distribution is compliant.
 
-## Default for new R5OS code
+## Default for new R5 code
 
-New source that R5OS owns — applications, services, and drivers — defaults to **GPL-3.0-or-later**, when R5OS has the rights to license that file.
+New source that R5 owns — applications, services, and drivers — defaults to **GPL-3.0-or-later**, when R5 has the rights to license that file.
 
 ```cpp
 // SPDX-FileCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 ```
 
-Use that header only for a file R5OS can license as a whole. Do not put it on a Haiku file, on third-party code, or on a file whose origin is unclear.
+Use that header only for a file R5 can license as a whole. Do not put it on a Haiku file, on third-party code, or on a file whose origin is unclear.
 
 Existing Haiku code keeps its original license and copyright notices. Do not relicense the Haiku tree, and do not strip MIT, BSD, GPL, or other notices.
 
 ## Kernel and drivers
 
-GPL-3.0-or-later is the default for new R5OS-owned code. It is not a rule that every kernel or driver file must use that license.
+GPL-3.0-or-later is the default for new R5-owned code. It is not a rule that every kernel or driver file must use that license.
 
 - GPL-2.0-only code stays GPL-2.0-only. Do not relicense it as GPL-3.0.
 - GPL-2.0-or-later may be offered under GPL-3.0 only when that grant is what the original license actually says.
-- A new R5OS component uses the license that fits a legal integration. Record which license and why.
+- A new R5 component uses the license that fits a legal integration. Record which license and why.
 - Do not drop a suitable driver only to keep one GPL version across the tree.
 - Do not combine GPL-2.0-only code with GPL-3.0-only or GPL-3.0-or-later code into one combined work.
 - GPL-2.0-only code may be shipped beside GPL-3.0 code when it stays an independent work and its own terms are met.
@@ -64,16 +64,16 @@ Starting point, not a substitute for the license text:
 
 `OR` in an SPDX expression means the recipient may choose. `AND` means every listed license applies. Do not write `OR` to skip a question.
 
-## Haiku files and R5OS edits
+## Haiku files and R5 edits
 
 When changing an existing Haiku file:
 
 - Keep the original copyright lines and license header.
-- Do not replace an MIT header with a GPL header because R5OS code was added.
+- Do not replace an MIT header with a GPL header because R5 code was added.
 - Do not claim ownership of the Haiku work.
 - Add a copyright line only where there is a real basis for it.
 
-When a clearly separate R5OS piece is added inside a differently licensed file, mark it with the REUSE snippet tags. Example:
+When a clearly separate R5 piece is added inside a differently licensed file, mark it with the REUSE snippet tags. Example:
 
 ```cpp
 // SPDX-SnippetBegin
@@ -111,15 +111,15 @@ Firmware and other blobs are a separate question. An open driver does not licens
 
 ## AI-assisted code
 
-AI-assisted development is allowed. Generated code is not assumed to be public domain, and it is not assumed to be original. Review substantial generated kernel, graphics, network, and protocol code for a match to existing third-party work. If it follows an existing implementation, name that source and keep its license. Do not assign copyright to R5OS for code R5OS does not own. Do not list AI output as a human author. For new R5OS-owned work, use GPL-3.0-or-later when the rights are there. Note the origin of a large assisted implementation when that helps a later license review.
+AI-assisted development is allowed. Generated code is not assumed to be public domain, and it is not assumed to be original. Review substantial generated kernel, graphics, network, and protocol code for a match to existing third-party work. If it follows an existing implementation, name that source and keep its license. Do not assign copyright to R5 for code R5 does not own. Do not list AI output as a human author. For new R5-owned work, use GPL-3.0-or-later when the rights are there. Note the origin of a large assisted implementation when that helps a later license review.
 
 ## SPDX, REUSE, and license texts
 
-New R5OS files and other files we deliberately cover follow the [REUSE specification](https://reuse.software/).
+New R5 files and other files we deliberately cover follow the [REUSE specification](https://reuse.software/).
 
 `LICENSES/` contains the unmodified text for each license a covered file actually uses. The filenames are SPDX identifiers. Today:
 
-- `LICENSES/GPL-3.0-or-later.txt` — GNU GPL version 3. The “or later” is the grant on new R5OS code, not a different document.
+- `LICENSES/GPL-3.0-or-later.txt` — GNU GPL version 3. The “or later” is the grant on new R5 code, not a different document.
 - `LICENSES/MIT.txt` — MIT, used by Haiku and by components already in this tree.
 - `LICENSES/OFL-1.1.txt` — SIL Open Font License 1.1, used by Manrope. The font directory also keeps the upstream `OFL.txt`, which adds the copyright line.
 
@@ -147,7 +147,7 @@ A line that starts with `# ` is the heading. `Source: ` is followed by one URL. 
 
 Planned for the release checklist, not running now: `reuse lint`, an SPDX bill of materials, and a scan for missing notices. Those tools check metadata shape. They do not decide whether two components form one work.
 
-No Developer Certificate of Origin is in place. Do not state that R5OS owns everything in the repository.
+No Developer Certificate of Origin is in place. Do not state that R5 owns everything in the repository.
 
 ## Inventory
 
@@ -164,16 +164,16 @@ Not a file-by-file audit. Read the header of the component you touch. Haiku itse
 
 Add a row when a component is introduced. Update the row when its license or integration changes.
 
-### R5OS files in `distro/`
+### R5 files in `distro/`
 
-Checked file by file on 2026-10-31. A header was added only where the file is one work we can name. Haiku copies keep the copyright and license already in the file. R5OS edits that run through those functions were not wrapped in SPDX snippets and were not relicensed.
+Checked file by file on 2026-10-31. A header was added only where the file is one work we can name. Haiku copies keep the copyright and license already in the file. R5 edits that run through those functions were not wrapped in SPDX snippets and were not relicensed.
 
 | Path | SPDX | Why |
 |---|---|---|
-| `distro/login/LockWindow.*`, `R5Desktop.cpp`, `SessionLog.h`, `TrayApp.cpp`, `default_deskbar_items.sh` | GPL-3.0-or-later | New R5OS files. They link into Login. The other Login sources stay MIT (François Revol, 2008). The Login binary is one combined work; the MIT notices stay on those files |
+| `distro/login/LockWindow.*`, `R5Desktop.cpp`, `SessionLog.h`, `TrayApp.cpp`, `default_deskbar_items.sh` | GPL-3.0-or-later | New R5 files. They link into Login. The other Login sources stay MIT (François Revol, 2008). The Login binary is one combined work; the MIT notices stay on those files |
 | `distro/login/Login*.cpp`, `Login*.h`, `DesktopWindow.*`, `main.cpp`, `Login.rdef` | MIT, unchanged | Haiku Login |
 | `distro/users/` | GPL-3.0-or-later | New Users & Accounts preference |
-| `distro/network/` | GPL-3.0-or-later | New IPv6 and Wi-Fi code. Four headers had said “Copyright 2026, R5OS” and MIT. That was R5OS’s own grant; those files are now GPL-3.0-or-later. They are compiled into `net_server`. Haiku’s `net_server` files stay MIT. The linked server is one combined work |
+| `distro/network/` | GPL-3.0-or-later | New IPv6 and Wi-Fi code. Four headers had said “Copyright 2026, R5OS” and MIT. That was R5’s own grant; those files are now GPL-3.0-or-later. They are compiled into `net_server`. Haiku’s `net_server` files stay MIT. The linked server is one combined work |
 | `distro/print/airprint/` | GPL-3.0-or-later | New print add-on, loaded by the print server |
 | `distro/vboxclip/` | GPL-3.0-or-later | Separate COM1 clipboard program |
 | `distro/zeroconf/` | GPL-3.0-or-later | New mDNS code |
@@ -184,25 +184,25 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 | `distro/app_server/`, `distro/boot/`, `distro/debugger/`, `distro/user-paths/` | unchanged | Haiku files. Headers were not rewritten |
 | `distro/kernel/x86/r5_pstate.cpp`, `r5_pstate.h` | MIT | New readout, compiled into the kernel. The kernel is a combined work with Haiku's MIT sources. A GPL-3.0 kernel combination was not reviewed, so this file stays MIT |
 | `distro/cpu/r5_pstate_log.cpp` | GPL-3.0-or-later | Separate log program. It only reads `/dev/misc/r5_pstate` |
-| `distro/graphics/` `radeon_hd` `accelerant.cpp`, `connector.cpp`, `display.cpp`, `gpu.cpp`, `mode.cpp`, `pll.cpp`, `driver.cpp`, `radeon_hd.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of Haiku’s accelerant and kernel driver. Copyright Haiku, Inc., MIT header kept. R5OS edits (Barcelo object table, EDID fallback, PLL 2.2, VRAM size, DCN init that leaves the firmware scanout, DPMS skip, PSP load, opt-in GFX9 start, MEC start, scratch test, and the GFX ring submission) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The copied file is one combined work; shipping it follows GPL-3.0-or-later and the MIT notices stay. The kernel add-on `radeon_hd` contains GPL-3.0-or-later R5 code (`gfx9_start.cpp`, by the user's decision on 5 Nov 2026). The combined add-on follows GPL-3.0-or-later. The Haiku parts stay MIT. `1002:15e7` is claimed. DCN does not run the DCE encoder, clock, AUX, modeset, or encoder DPMS. Renoir may program the GFX ring for the clear-state preamble and one scratch packet, and restores those registers if the packet does not land |
-| `distro/graphics/` `radeon_hd` `clearstate_defs.h`, `clearstate_gfx9.h` | MIT | Unmodified from Linux v6.12 `drivers/gpu/drm/amd/amdgpu/`. Copyright 2012 and 2017 Advanced Micro Devices, Inc. The permission text stays in the files. sha256 `70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285` and `e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5`. `gpu.cpp` includes them. The combined accelerant follows GPL-3.0-or-later and these MIT notices stay. AMD does not endorse R5OS |
+| `distro/graphics/` `radeon_hd` `accelerant.cpp`, `connector.cpp`, `display.cpp`, `gpu.cpp`, `mode.cpp`, `pll.cpp`, `driver.cpp`, `radeon_hd.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of Haiku’s accelerant and kernel driver. Copyright Haiku, Inc., MIT header kept. R5 edits (Barcelo object table, EDID fallback, PLL 2.2, VRAM size, DCN init that leaves the firmware scanout, DPMS skip, PSP load, opt-in GFX9 start, MEC start, scratch test, and the GFX ring submission) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The copied file is one combined work; shipping it follows GPL-3.0-or-later and the MIT notices stay. The kernel add-on `radeon_hd` contains GPL-3.0-or-later R5 code (`gfx9_start.cpp`, by the user's decision on 5 Nov 2026). The combined add-on follows GPL-3.0-or-later. The Haiku parts stay MIT. `1002:15e7` is claimed. DCN does not run the DCE encoder, clock, AUX, modeset, or encoder DPMS. Renoir may program the GFX ring for the clear-state preamble and one scratch packet, and restores those registers if the packet does not land |
+| `distro/graphics/` `radeon_hd` `clearstate_defs.h`, `clearstate_gfx9.h` | MIT | Unmodified from Linux v6.12 `drivers/gpu/drm/amd/amdgpu/`. Copyright 2012 and 2017 Advanced Micro Devices, Inc. The permission text stays in the files. sha256 `70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285` and `e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5`. `gfx9_start.cpp` includes them. The combined accelerant follows GPL-3.0-or-later and these MIT notices stay. AMD does not endorse R5 |
 | `distro/firmware/amd-ucode/microcode_amd_fam19h.bin` and `LICENSE.amd-ucode` | AMD microcode license (binary redistribution) | Unmodified container from linux-firmware. Copyright 2010-2025 Advanced Micro Devices, Inc. Not an open-source license. The license text ships next to the blob. Installed at `system/non-packaged/data/firmware/amd-ucode/` so the bootloader can read it |
 | `distro/firmware/amdgpu/renoir_pfp.bin`, `renoir_me.bin`, `renoir_ce.bin`, `renoir_rlc.bin`, `renoir_mec.bin`, `green_sardine_pfp.bin`, `green_sardine_me.bin`, `green_sardine_ce.bin`, `green_sardine_rlc.bin`, `green_sardine_mec.bin`, `green_sardine_mec2.bin`, and `LICENSE.amdgpu` | AMD GPU microcode license (binary redistribution) | Unmodified blobs from linux-firmware. `1636` and `164c` use the `renoir` set. Barcelo `15e7` and Cezanne `1638` use `green_sardine`. Copyright 2024 Advanced Micro Devices, Inc. Not an open-source license. The license text ships next to the blobs. Installed at `system/non-packaged/data/firmware/amdgpu/`. Linux sends these through the PSP |
-| `distro/kernel/src/system/kernel/arch/x86/arch_timer.cpp` and `arch_cpu.cpp` | MIT and NewOS, with GPL-3.0-or-later snippets | Copies of the Haiku kernel files. Original copyright and MIT/NewOS headers stay. R5OS edits (TSC divide guards, Haiku #20400, `r5_pstate_publish`, microcode `installed_cpu` match) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-kernel-bugs.py` copies the files. The combined kernel follows GPL-3.0-or-later and the original notices stay |
-| `distro/desktop/` interface, Tracker, Deskbar, locale, control look, preferences, `Desktop.cpp`, `DefaultDecorator.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of the Haiku sources. Copyright and MIT header stay. R5OS edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-desktop-native.py` copies them. The combined libraries and programs follow GPL-3.0-or-later and the MIT notices stay |
-| `distro/rest/` except `getaddrinfo.c` and `ping6.c` | MIT, or MIT and NewOS, with GPL-3.0-or-later snippets | Copies of the remaining Haiku sources: network stack, net server, package volume, input, DriveSetup, accounts, locked preferences, LaunchDaemon, Installer, boot prompt, About, Deskbar `icons.rdef`, the home desktop resource, `ServerApp.cpp`, `runtime_loader.cpp`, and the interface and locale headers. Original copyright and MIT/NewOS headers stay. `runtime_loader.cpp` also keeps the NewOS notice. R5OS edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-rest-native.py` copies them. The combined binaries follow GPL-3.0-or-later and the original notices stay. The IPP sources had no license header; the Takagi date line stays |
-| `distro/rest/src/system/libnetwork/netresolv/net/getaddrinfo.c` and `src/bin/network/ping/ping6.c` | BSD-3-Clause, with GPL-3.0-or-later snippets | WIDE Project copyright, and for `ping6.c` also the Regents of the University of California. Those license texts stay. R5OS edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The combined `libnetwork.so` and `ping` follow GPL-3.0-or-later and the BSD notices stay |
-| `distro/package/.../CommitTransactionHandler.cpp` | MIT, with GPL-3.0-or-later snippets | Haiku package daemon, copyright Haiku, Inc. The two script-start and script-finish log lines are R5OS snippets |
+| `distro/kernel/src/system/kernel/arch/x86/arch_timer.cpp` and `arch_cpu.cpp` | MIT and NewOS, with GPL-3.0-or-later snippets | Copies of the Haiku kernel files. Original copyright and MIT/NewOS headers stay. R5 edits (TSC divide guards, Haiku #20400, `r5_pstate_publish`, microcode `installed_cpu` match) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-kernel-bugs.py` copies the files. The combined kernel follows GPL-3.0-or-later and the original notices stay |
+| `distro/desktop/` interface, Tracker, Deskbar, locale, control look, preferences, `Desktop.cpp`, `DefaultDecorator.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of the Haiku sources. Copyright and MIT header stay. R5 edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-desktop-native.py` copies them. The combined libraries and programs follow GPL-3.0-or-later and the MIT notices stay |
+| `distro/rest/` except `getaddrinfo.c` and `ping6.c` | MIT, or MIT and NewOS, with GPL-3.0-or-later snippets | Copies of the remaining Haiku sources: network stack, net server, package volume, input, DriveSetup, accounts, locked preferences, LaunchDaemon, Installer, boot prompt, About, Deskbar `icons.rdef`, the home desktop resource, `ServerApp.cpp`, `runtime_loader.cpp`, and the interface and locale headers. Original copyright and MIT/NewOS headers stay. `runtime_loader.cpp` also keeps the NewOS notice. R5 edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-rest-native.py` copies them. The combined binaries follow GPL-3.0-or-later and the original notices stay. The IPP sources had no license header; the Takagi date line stays |
+| `distro/rest/src/system/libnetwork/netresolv/net/getaddrinfo.c` and `src/bin/network/ping/ping6.c` | BSD-3-Clause, with GPL-3.0-or-later snippets | WIDE Project copyright, and for `ping6.c` also the Regents of the University of California. Those license texts stay. R5 edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The combined `libnetwork.so` and `ping` follow GPL-3.0-or-later and the BSD notices stay |
+| `distro/package/.../CommitTransactionHandler.cpp` | MIT, with GPL-3.0-or-later snippets | Haiku package daemon, copyright Haiku, Inc. The two script-start and script-finish log lines are R5 snippets |
 
-`scripts/` is R5OS build tooling and still has no SPDX headers. This was not a pass over the Haiku tree, the packages, or the image.
+`scripts/` is R5 build tooling and still has no SPDX headers. This was not a pass over the Haiku tree, the packages, or the image.
 
 ### VirtualBox 7.2.22, assessed against this policy
 
 Source: Oracle VirtualBox 7.2.22, built from the Haiku guest additions in that tarball, plus `distro/vbox-guest/virtualbox-7.2.22-r5os.patch`. Not from HaikuPorts 6.1.26. The tarball itself is not in git. How to build: `distro/vbox-guest/README.md`.
 
-The additions are GPL-3.0-only. That matches the default direction for new R5OS code. It is not MIT, and it must not be pasted into MIT sources or relicensed. Files that say GPL-3.0-only OR CDDL-1.0 can be used under the GPL-3.0-only choice; the CDDL terms are then not the ones we take.
+The additions are GPL-3.0-only. That matches the default direction for new R5 code. It is not MIT, and it must not be pasted into MIT sources or relicensed. Files that say GPL-3.0-only OR CDDL-1.0 can be used under the GPL-3.0-only choice; the CDDL terms are then not the ones we take.
 
-Userspace `VBoxService`, `VBoxTray`, and `VBoxControl` are separate programs. Shipping them next to the rest of R5OS is aggregation if they are not linked into Haiku applications. A binary image that includes them must ship this GPL-3.0 text and the corresponding 7.2.22 source, including our build fixes.
+Userspace `VBoxService`, `VBoxTray`, and `VBoxControl` are separate programs. Shipping them next to the rest of R5 is aggregation if they are not linked into Haiku applications. A binary image that includes them must ship this GPL-3.0 text and the corresponding 7.2.22 source, including our build fixes.
 
 Kernel modules (`vboxguest`, `vboxdev`, `vboxsf`, `vboxvideo`, and the accelerant) load into the kernel and call kernel exports. MIT allows that kernel to be distributed in a GPL-3.0 combination. An image that contains one of these modules ships under GPL-3.0-only for the combination: the unmodified GNU GPL version 3 in `LICENSES/GPL-3.0-or-later.txt`, and the corresponding 7.2.22 source, including the build fixes. The “or later” grant on that filename is not added to the VirtualBox sources. Haiku's copyright lines and MIT notices stay on the Haiku files. Those files are not relicensed, and the modules are not pasted into them.
 

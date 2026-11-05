@@ -1,4 +1,4 @@
-# IPv6 on R5OS
+# IPv6 on R5
 
 Network preferences already has **IPv6 → Mode**: Automatic (SLAAC / DHCPv6), Static, Disabled. Automatic is the default for a new NIC. Disabled stops SLAAC and DHCPv6; link-local `fe80::` can still appear.
 

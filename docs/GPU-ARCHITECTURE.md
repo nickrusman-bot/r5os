@@ -174,7 +174,7 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 |---|---|---|---|
 | M0 | GFX9 ring and fence | Scratch `0xDEADBEEF` on the 5625U | done (#4090) |
 | M1 | IB and DMA fill | Pattern correct, time grows with the work | done (#4092) |
-| M2 | Compute shader | Waves compute and write; time scales | brief ready |
+| M2 | Compute shader | Waves compute and write; time scales | done on the 5625U: every checked dword correct, 16 MiB took 3.9× as long as 4 MiB (#4094) |
 | M3 | Kernel driver owns the GPU, plus interrupts and GART | The fixed sequences run from the kernel; a fence arrives by interrupt; the GPU writes into system memory | |
 | M4 | R5 GPU interface v1 and the R5 DRM library | `vulkaninfo` names the 5625U GPU as RADV, next to Lavapipe | |
 | M5 | Address space per context | Two programs submit at the same time, separated from each other | |
