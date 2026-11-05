@@ -85,6 +85,31 @@ Use AI to read code, patch, port, test, review races/overflows, and write change
 
 Kernel, MMU, scheduler, drivers, filesystems: inspect the path and fail cases. Compile success is not a kernel fix.
 
+## Quality bar
+
+Choose the correct solution, not the quickest or the one that only passes the test in front of you.
+
+- The reference is how Linux or Mesa does the same thing. Before you write a part, look up that path. In the report, say per part how the reference does it, how you did it, and why you differ where you do. A difference without a reason is a bug.
+- No stubs, hardcoded values, or "0 because the value is unknown" in code that ships. If a value can be read or derived (from a register, a firmware header, a table), read it. If something cannot work yet, return a clear error and list it as open in `CHANGELOG.md`.
+- A temporary solution carries `TODO(M<n>)`, the milestone where it goes away, and a line in the CHANGELOG. It must still be correct under load: no single-slot shortcuts, no allocator that never frees, no shared semaphore as an event.
+- "Done" means it works for the goal of the milestone (for example RADV, or a real application), not only for the smallest test.
+- "Prefer small diffs" and "no drive-by refactors" are about unrelated code. They are not a reason to build less than the part you are working on needs.
+- For a design choice, first give two or three options with their trade-offs and your recommendation, and wait for the user. Then build the chosen one completely.
+- Host-side build and compile errors are not a reason to stop. Work through them. Stop only for a design choice, a licence question, or something that needs hardware.
+
+## Kernel and GPU checklist
+
+Go through this before every report on kernel or GPU code. Say per item: ok, not applicable, or what is still open.
+
+1. **User and kernel memory.** The kernel touches user memory only with `user_memcpy` after `IS_USER_ADDRESS` / `is_user_address_range`. It never writes through an area with user protection; with SMAP that panics. Memory the GPU uses belongs to a kernel area; a user gets a clone.
+2. **Address kinds.** Every GPU address states which kind it is: MC address (`FB_LOCATION`), physical address (`FB_OFFSET` carveout or system RAM), or a GPU VA in a VMID. It also states which VMID the GPU uses for that access. Ring packets run in VMID 0; IB contents run in the IB's VMID. Page-table bases and PDEs are physical addresses with `VALID`.
+3. **Teardown order.** Quiesce the GPU (halt, or wait for the last fence), remove the mappings, flush the TLB, then free memory. Interrupts off and the handler removed before the registers or areas go. Close and uninit follow the same order.
+4. **Waiting.** Use a condition variable (`Add()` before the check), and re-check the sequence or point in a loop. Every wait has a finite timeout unless there is a written reason. An interrupt handler only signals; it does not change shared tables. That work runs in a thread under the lock.
+5. **One source for a value.** The producer and the check use the same constant or function. Sizes, offsets and return values follow the API documentation (`get_memory_map` returns `B_OK`).
+6. **Reference for every field.** Every packet field and register value names the Linux or Mesa function it follows, and it is checked against that source. Masks and shifts come from the headers, not from memory.
+
+Every bug found in review is added to this list or to a check script, so it cannot come back.
+
 ## Architectures
 
 Official targets are **64-bit only**:
