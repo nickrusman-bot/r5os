@@ -161,7 +161,7 @@ radeon_dpms_set(uint8 id, int mode)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (gInfo->shared_info->chipsetID >= RADEON_RAVEN) {
+	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
 		ERROR("%s: R5 radeon_hd: DCN, skip encoder DPMS\n", __func__);
 		gInfo->dpms_mode = mode;
 		return;
@@ -212,7 +212,7 @@ radeon_set_display_mode(display_mode* mode)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (gInfo->shared_info->chipsetID >= RADEON_RAVEN) {
+	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
 		// Do not program a DCE CRTC, PLL, or encoder on DCN.
 		ERROR("%s: R5 radeon_hd: DCN, keep the boot scanout\n", __func__);
 		memcpy(&gDisplay[crtcID]->currentMode, mode, sizeof(display_mode));

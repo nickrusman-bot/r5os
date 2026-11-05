@@ -71,9 +71,29 @@ Location: `distro/firmware/amd-ucode`. Installed on the boot volume at `system/n
 
 The blob is unmodified. sha256 `c614d6db8056c5c67a9189b225124127d56990a190305bcb3927d50e132de7dd`. `LICENSE.amd-ucode` is the unmodified AMD text and is installed beside the blob. Redistribution of the binary is allowed when that notice stays with it. This is not an open-source license. AMD does not endorse R5OS.
 
+### AMD Renoir graphics firmware
+
+Location: `distro/firmware/amdgpu`. Installed at `system/non-packaged/data/firmware/amdgpu/`.
+
+| Piece | Project | License |
+|---|---|---|
+| `renoir_pfp.bin`, `renoir_me.bin`, `renoir_ce.bin`, `renoir_rlc.bin`, `renoir_mec.bin`, `green_sardine_pfp.bin`, `green_sardine_me.bin`, `green_sardine_ce.bin`, `green_sardine_rlc.bin`, `green_sardine_mec.bin`, `green_sardine_mec2.bin` | Advanced Micro Devices, Inc., 2024, via linux-firmware | AMD GPU microcode license |
+
+The blobs are unmodified. sha256: `renoir_pfp.bin` `0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4`, `renoir_me.bin` `38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189`, `renoir_ce.bin` `b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72`, `green_sardine_pfp.bin` `94e1474b3c8d422e35661d2d584297d891464c173ebf4ad45536277bdf7bdcdc`, `green_sardine_me.bin` `671af908c8d631e659895d62db2e6bffc1d2c87d6db4c08246be0216f468fb9c`, `green_sardine_ce.bin` `3bba10cff48ec51eb63e78078456596258c9fea2e8b38d91d02be66c0aca70fd`. `renoir_rlc.bin` and `green_sardine_rlc.bin` are the same file, `66f4397c2e9d19af245f9da290c8678eb1a51cc815fa7864a9383c2cd0db319d`. `renoir_mec.bin`, `green_sardine_mec.bin` and `green_sardine_mec2.bin` are the same file, `0e4c6712f75af494c3fd70386bc07739cab3aafd77c4fe8efb46c0bc1ae4eba6`. `LICENSE.amdgpu` is the unmodified AMD text and is installed beside them. Redistribution of the binaries is allowed when that notice stays with them. This is not an open-source license. AMD does not endorse R5OS. Linux loads these through the PSP unless the load type is direct. RLC is header 2.1, ucode `0x3c`, 16896 bytes. PFP, ME, and CE stay header 1.0.
+
+### AMD GFX9 clear-state table
+
+Location: `distro/graphics/src/add-ons/accelerants/radeon_hd/clearstate_defs.h` and `clearstate_gfx9.h`. Compiled into the `radeon_hd` accelerant. Not installed as a separate file.
+
+| Piece | Project | License |
+|---|---|---|
+| `clearstate_defs.h`, `clearstate_gfx9.h` | Advanced Micro Devices, Inc., 2012 and 2017, via Linux v6.12 `drivers/gpu/drm/amd/amdgpu/` | MIT |
+
+The files are unmodified. sha256 `70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285` and `e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5`. The permission text stays in each file. AMD does not endorse R5OS.
+
 ## Not included
 
-Linux DRM and `amdgpu` are not imported.
+The Linux `amdgpu` driver is not imported. The clear-state table above is the only file taken from that tree.
 
 ## Not done
 

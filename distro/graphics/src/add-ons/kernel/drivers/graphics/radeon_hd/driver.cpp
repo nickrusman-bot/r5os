@@ -50,11 +50,16 @@
 // list of supported devices
 const struct supported_device {
 	uint32		pciID;
-	uint8		dceMajor;	// Display block family
-	uint8		dceMinor;	// Display block family
+	uint8		dceMajor;	// DCE register generation. 0 when the engine is not DCE.
+	uint8		dceMinor;
 	uint16		chipsetID;
 	uint32		chipsetFlags;
 	const char*	deviceName;
+	// Older rows leave these at the defaults and keep dceMajor/dceMinor.
+	uint8		displayClass = RHD_DISPLAY_DCE;
+	uint8		displayMajor = 0;
+	uint8		displayMinor = 0;
+	uint8		displayStepping = 0;
 } kSupportedDevices[] = {
 	// Marketing Names: Radeon X?00
 	// Intorduced: 2004
@@ -509,172 +514,217 @@ const struct supported_device {
 	{0x67ba, 8, 5, RADEON_HAWAII, CHIP_STD, "Radeon HD Hawaii"},
 	{0x67be, 8, 5, RADEON_HAWAII, CHIP_STD, "Radeon HD Hawaii"},
 
-	// WARN: DCE versions below here get sketchy
-
-#if 0 /* disabled for R1/beta5 */
-	// Introduced: 2014
-	// Codename: Volcanic Islands
-	// Process: 28 nm
-	// Iceland (aka topaz) NO DCE
-	//{0x6900, 99, 0, RADEON_TOPAZ, CHIP_STD, "Radeon HD Topaz"},
-	//{0x6901, 99, 0, RADEON_TOPAZ, CHIP_STD, "Radeon HD Topaz"},
-	//{0x6902, 99, 0, RADEON_TOPAZ, CHIP_STD, "Radeon HD Topaz"},
-	//{0x6903, 99, 0, RADEON_TOPAZ, CHIP_STD, "Radeon HD Topaz"},
-	//{0x6907, 99, 0, RADEON_TOPAZ, CHIP_STD, "Radeon HD Topaz"},
-	// Tonga DCE 10.0
-	{0x6920, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 M395/M395X"},
-	{0x6921, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 M295/M390X"},
-	{0x6928, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon HD Tonga"},
-	{0x6929, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon FirePro S7150"},
-	{0x692b, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon FirePro W7100"},
-	{0x692f, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon FirePro S7150V"},
-	{0x6930, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon HD 6930"},
-	{0x6938, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 380X/M295X"},
-	{0x6939, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 285/380"},
-	// Fiji DCE 10.1?
-	{0x7300, 10, 1, RADEON_FIJI, CHIP_STD, "Radeon R9 Fury"},
-	{0x730f, 10, 1, RADEON_FIJI, CHIP_STD, "Radeon HD Fiji"},
-	// Carrizo DCE 11.0
-	{0x9870, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon HD Carrizo"},
-	{0x9874, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon HD Carrizo"},
-	{0x9875, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon HD Carrizo"},
-	{0x9876, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon HD Carrizo"},
-	{0x9877, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon HD Carrizo"},
-	// Stoney Ridge 11.1?
-	{0x98e4, 11, 1, RADEON_STONEY, CHIP_APU, "Radeon HD Stoney Ridge"},
-
-	// Introduced: 2016
-	// Codename: Artic Islands / Polaris
-	// Process: 14 nm
-	// Polaris 10
-	{0x67c0, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro WX 7100 Mobile"},
-	{0x67c1, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10"},
-	{0x67c2, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro V7300X"},
-	{0x67c4, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro WX 7100"},
-	{0x67c7, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro WX 5100"},
-	{0x67c8, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10"},
-	{0x67c9, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10"},
-	{0x67ca, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10"},
-	{0x67cc, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10"},
-	{0x67cf, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10"},
-	{0x67d0, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro V7300X"},
-	{0x67df, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon RX 470/480/570/580/590"},
-	// Polaris 11
-	{0x67e0, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro WX 4170"},
-	{0x67e3, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro WX 4100"},
-	{0x67e8, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro WX 4130"},
-	{0x67eb, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro V5300X"},
-	{0x67ef, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon RX 460"},
-	{0x67ff, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon RX 560"},
-	{0x67e1, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Polaris 11"},
-	{0x67e7, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Polaris 11"},
-	{0x67e9, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Polaris 11"},
-	// Polaris 12
-	{0x6980, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Polaris 12"},
-	{0x6981, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Pro WX 3200"},
-	{0x6985, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Pro WX 3100"},
-	{0x6986, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Polaris 12"},
-	{0x6987, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon 540X/550X/RX 640"},
-	{0x6995, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Pro WX 2100"},
-	{0x6997, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Polaris 12"},
-	{0x699f, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon 540/540X/RX 540X"},
-
-	// Introduced: 2017
-	// Codename: Vega
-	// Process: 14nm
-	{0x694c, 12, 0, RADEON_VEGAM, CHIP_MOBILE, "Radeon RX Vega M GH"},
-	{0x694e, 12, 0, RADEON_VEGAM, CHIP_MOBILE, "Radeon RX Vega M GL"},
-	{0x694f, 12, 0, RADEON_VEGAM, CHIP_MOBILE, "Radeon Pro WX Vega M GL"},
-	// Vega 10
-	{0x6860, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Instinct MI25"},
-	{0x6861, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro WX 9100"},
-	{0x6862, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro SSG"},
-	{0x6863, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega Frontier"},
-	{0x6864, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro V340"},
-	{0x6867, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro Vega 56"},
-	{0x6868, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro WX 8100/8200"},
-	{0x6869, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10"},
-	{0x686a, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10"},
-	{0x686b, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10"},
-	{0x686c, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Instinct MI25 MxGPU"},
-	{0x686d, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10"},
-	{0x686e, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10"},
-	{0x686f, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10"},
-	{0x687f, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 56/64"},
-	// Vega 12
-	{0x69a0, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12"},
-	{0x69a1, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12"},
-	{0x69a2, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12"},
-	{0x69a3, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12"},
-	{0x69af, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Pro Vega 12"},
-	// Vega 20
-	{0x66a0, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20"},
-	{0x66a1, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20"},
-	{0x66a2, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20"},
-	{0x66a3, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20"},
-	{0x66a4, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20"},
-	{0x66a7, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Pro Vega 20"},
-	{0x66af, 12, 2, RADEON_VEGA20, CHIP_STD, "Radeon Pro Vega 20"},
-	// Raven (APU)
-	{0x15dd, 12, 0, RADEON_RAVEN, CHIP_APU, "Radeon Vega Raven"},
-	{0x15d8, 12, 0, RADEON_RAVEN, CHIP_APU, "Radeon Vega Raven"},
-
-	// TODO: We might need to split NAVI into NAVI10, NAVI12, etc
-
-	// Introduced: 2019
-	// Codename: Navi
-	// Process: 7nm FinFET
-	// Navi 10
-	{0x7310, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x7312, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x7318, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x7319, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x731a, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x731b, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x731e, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x731f, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX 5600 / 5700"},
-	// Renoir?
-	{0x1636, 13, 3, RADEON_NAVI, CHIP_APU, "Radeon Renoir"},
-	{0x1638, 13, 3, RADEON_NAVI, CHIP_APU, "Radeon Renoir"},
-#if 0
-	// Not working: #17516
-	{0x164c, 13, 3, RADEON_NAVI, CHIP_APU, "Radeon Renoir"},
-	// Navi 14
-	// Not working: #17473
-	{0x7340, 13, 3, RADEON_NAVI, CHIP_STD, "Radeon RX 5500"},
-#endif
-	// Navi 21/22 aka "Sienna Cichlid"?
-	{0x73a0, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x73a1, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x73a2, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x73a3, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x73ab, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x73ae, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	{0x73bf, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX 6800 / 6900 XT"},
-	{0x73cf, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi"},
-	// Van Gogh?
-	{0x163f, 13, 4, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Van Gogh)"},
-	// Navy Flounder?
-	{0x73c0, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Navy)"},
-	{0x73c1, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Navy)"},
-	{0x73c3, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Navy)"},
-	{0x73df, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX 6700 XT"},
-	// Dimgrey Cavefish?
-	{0x73e0, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Dimgrey)"},
-	{0x73e1, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Dimgrey)"},
-	{0x73e2, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Dimgrey)"},
-	{0x73ff, 13, 5, RADEON_NAVI, CHIP_STD, "Radeon RX Navi (Dimgrey)"},
-#endif
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	// Ryzen 5 5625U, read from the USB boot on 3 Nov 2026.
-	// Picasso 0x15d8 is the same Raven path, but that line is inside
-	// `#if 0 /* disabled for R1/beta5 */` and is not compiled.
-	// Claiming this id used to run the DCE clock and encoder setup
-	// and the picture stayed on the rocket. Those commands are skipped
-	// for DCN. The firmware scanout stays in place.
-	{0x15e7, 12, 0, RADEON_RAVEN, CHIP_APU, "Radeon Vega Barcelo"},
+	// Families from here were inside `#if 0` for Haiku R1/beta5.
+	// PCI IDs follow Linux amdgpu_drv.c v6.12, except 0x163f which that
+	// file no longer lists and which Linux v5.15 calls CHIP_VANGOGH.
+	// Display versions follow Linux vi.c IP blocks and
+	// dc_resource.c resource_parse_asic_id (v6.12). dceMajor stays 0
+	// on DCN and on engines with no display, so the DCE register paths
+	// do not treat those versions as DCE 12 or 13.
+	// Topaz: no display. vi.c does not add a DCE block.
+	{0x6900, 0, 0, RADEON_TOPAZ, CHIP_STD, "Radeon Topaz", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6901, 0, 0, RADEON_TOPAZ, CHIP_STD, "Radeon Topaz", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6902, 0, 0, RADEON_TOPAZ, CHIP_STD, "Radeon Topaz", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6903, 0, 0, RADEON_TOPAZ, CHIP_STD, "Radeon Topaz", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6907, 0, 0, RADEON_TOPAZ, CHIP_STD, "Radeon Topaz", RHD_DISPLAY_NONE, 0, 0, 0},
+	// Tonga: DCE 10.0 (dce_v10_0).
+	{0x6920, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 M395/M395X", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x6921, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 M295/M390X", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x6928, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon Tonga", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x6929, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon FirePro S7150", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x692b, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon FirePro W7100", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x692f, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon FirePro S7150V", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x6930, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon Tonga", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x6938, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 380X/M295X", RHD_DISPLAY_DCE, 10, 0, 0},
+	{0x6939, 10, 0, RADEON_TONGA, CHIP_STD, "Radeon R9 285/380", RHD_DISPLAY_DCE, 10, 0, 0},
+	// Fiji: DCE 10.1 (dce_v10_1). The DC parser groups it with Tonga as 10.0.
+	{0x7300, 10, 1, RADEON_FIJI, CHIP_STD, "Radeon R9 Fury", RHD_DISPLAY_DCE, 10, 1, 0},
+	{0x730f, 10, 1, RADEON_FIJI, CHIP_STD, "Radeon Fiji", RHD_DISPLAY_DCE, 10, 1, 0},
+	// Carrizo and Stoney: vi.c registers dce_v11_0 for both.
+	{0x9870, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon Carrizo", RHD_DISPLAY_DCE, 11, 0, 0},
+	{0x9874, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon Carrizo", RHD_DISPLAY_DCE, 11, 0, 0},
+	{0x9875, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon Carrizo", RHD_DISPLAY_DCE, 11, 0, 0},
+	{0x9876, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon Carrizo", RHD_DISPLAY_DCE, 11, 0, 0},
+	{0x9877, 11, 0, RADEON_CARRIZO, CHIP_APU, "Radeon Carrizo", RHD_DISPLAY_DCE, 11, 0, 0},
+	{0x98e4, 11, 0, RADEON_STONEY, CHIP_APU, "Radeon Stoney Ridge", RHD_DISPLAY_DCE, 11, 0, 0},
+	// Polaris 10/11/12 and Vega M: dce_v11_2. Vega M is DCE 11.22 in the DC enum.
+	{0x67c0, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro WX 7100 Mobile", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67c1, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67c2, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro V7300X", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67c4, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro WX 7100", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67c7, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro WX 5100", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67c8, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67c9, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67ca, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67cc, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67cf, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67d0, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Pro V7300X", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67df, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon RX 470/480/570/580/590", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67e0, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro WX 4170", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67e3, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro WX 4100", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67e8, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro WX 4130", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67eb, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Pro V5300X", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67ef, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon RX 460", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67ff, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon RX 560", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67e1, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Polaris 11", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67e7, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Polaris 11", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x67e9, 11, 2, RADEON_POLARIS11, CHIP_STD, "Radeon Polaris 11", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6980, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Polaris 12", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6981, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Pro WX 3200", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6985, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Pro WX 3100", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6986, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Polaris 12", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6987, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon 540X/550X/RX 640", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6995, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Pro WX 2100", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x6997, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon Polaris 12", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x699f, 11, 2, RADEON_POLARIS12, CHIP_STD, "Radeon 540/540X/RX 540X", RHD_DISPLAY_DCE, 11, 2, 0},
+	{0x694c, 11, 2, RADEON_VEGAM, CHIP_MOBILE, "Radeon RX Vega M GH", RHD_DISPLAY_DCE, 11, 2, 2},
+	{0x694e, 11, 2, RADEON_VEGAM, CHIP_MOBILE, "Radeon RX Vega M GL", RHD_DISPLAY_DCE, 11, 2, 2},
+	{0x694f, 11, 2, RADEON_VEGAM, CHIP_MOBILE, "Radeon Pro WX Vega M GL", RHD_DISPLAY_DCE, 11, 2, 2},
+	// Vega 10 and 12: DCE 12.0. Vega 20: DCE 12.1.
+	{0x6860, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Instinct MI25", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6861, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro WX 9100", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6862, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro SSG", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6863, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega Frontier", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6864, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro V340", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6867, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro Vega 56", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6868, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Pro WX 8100/8200", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x6869, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x686a, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x686b, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x686c, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Instinct MI25 MxGPU", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x686d, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x686e, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x686f, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 10", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x687f, 12, 0, RADEON_VEGA10, CHIP_STD, "Radeon Vega 56/64", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x69a0, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x69a1, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x69a2, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x69a3, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Vega 12", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x69af, 12, 0, RADEON_VEGA12, CHIP_STD, "Radeon Pro Vega 12", RHD_DISPLAY_DCE, 12, 0, 0},
+	{0x66a0, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	{0x66a1, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	{0x66a2, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	{0x66a3, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	{0x66a4, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	{0x66a7, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Pro Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	{0x66af, 12, 1, RADEON_VEGA20, CHIP_STD, "Radeon Pro Vega 20", RHD_DISPLAY_DCE, 12, 1, 0},
+	// Raven and Picasso: DCN 1.0. Linux lists both as CHIP_RAVEN.
+	{0x15dd, 0, 0, RADEON_RAVEN, CHIP_APU, "Radeon Raven", RHD_DISPLAY_DCN, 1, 0, 0},
+	{0x15d8, 0, 0, RADEON_RAVEN, CHIP_APU, "Radeon Picasso", RHD_DISPLAY_DCN, 1, 0, 0},
+	// Linux v6.12 lists 15e7, 1636, 1638 and 164c as CHIP_RENOIR.
+	// soc15_need_reset_on_init is true for that chip and false for
+	// Raven and Picasso above. 1636 and 164c load renoir firmware.
+	// 15e7 and 1638 load green_sardine. All four are DCN 2.1.
+	// 0x15e7 is the Ryzen 5 5625U.
+	{0x15e7, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir (Barcelo)", RHD_DISPLAY_DCN, 2, 1, 0},
+	{0x1636, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir", RHD_DISPLAY_DCN, 2, 1, 0},
+	{0x1638, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Cezanne", RHD_DISPLAY_DCN, 2, 1, 0},
+	{0x164c, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Lucienne", RHD_DISPLAY_DCN, 2, 1, 0},
+	// Navi 10: DCN 2.0.
+	{0x7310, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x7312, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x7318, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x7319, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x731a, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x731b, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x731e, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 10", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x731f, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon RX 5600/5700", RHD_DISPLAY_DCN, 2, 0, 0},
+	// Navi 14: DCN 2.0. 0x7340 was Haiku #17473.
+	{0x7340, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon RX 5500", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x7341, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 14", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x7347, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 14", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x734f, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 14", RHD_DISPLAY_DCN, 2, 0, 0},
+	// Sienna Cichlid, Navi 21: DCN 3.0. 0x73cf is not in Linux 5.15 or 6.12.
+	{0x73a0, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73a1, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73a2, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73a3, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73ab, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73ae, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73bf, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon RX 6800/6900 XT", RHD_DISPLAY_DCN, 3, 0, 0},
+	// Navy Flounder, Navi 22. resource_parse_asic_id has no separate case.
+	{0x73c0, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73c1, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73c3, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73df, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon RX 6700 XT", RHD_DISPLAY_DCN, 3, 0, 0},
+	// Dimgrey Cavefish, Navi 23: DCN 3.02.
+	{0x73e0, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73e1, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73e2, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73ff, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	// Remaining explicit IDs from Linux amdgpu_drv.c v6.12. The name is the
+	// chip comment in that file. One ID covers many retail cards.
+	// Tahiti, Oland, Verde: same DCE generation as the rows above.
+	{0x6791, 6, 0, RADEON_TAHITI, CHIP_STD, "Radeon HD Tahiti", RHD_DISPLAY_DCE, 6, 0, 0},
+	{0x6792, 6, 0, RADEON_TAHITI, CHIP_STD, "Radeon HD Tahiti", RHD_DISPLAY_DCE, 6, 0, 0},
+	{0x679b, 6, 0, RADEON_TAHITI, CHIP_STD, "Radeon HD Tahiti", RHD_DISPLAY_DCE, 6, 0, 0},
+	{0x6617, 6, 4, RADEON_OLAND, CHIP_STD, "Radeon HD Oland", RHD_DISPLAY_DCE, 6, 4, 0},
+	{0x6822, 6, 0, RADEON_CAPEVERDE, CHIP_STD, "Radeon HD Verde", RHD_DISPLAY_DCE, 6, 0, 0},
+	// Hainan: no display. Linux marks these mobile.
+	{0x6660, 0, 0, RADEON_HAINAN, CHIP_MOBILE, "Radeon Hainan", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6663, 0, 0, RADEON_HAINAN, CHIP_MOBILE, "Radeon Hainan", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6664, 0, 0, RADEON_HAINAN, CHIP_MOBILE, "Radeon Hainan", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6665, 0, 0, RADEON_HAINAN, CHIP_MOBILE, "Radeon Hainan", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6667, 0, 0, RADEON_HAINAN, CHIP_MOBILE, "Radeon Hainan", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x666f, 0, 0, RADEON_HAINAN, CHIP_MOBILE, "Radeon Hainan", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x6fdf, 11, 2, RADEON_POLARIS10, CHIP_STD, "Radeon Polaris 10", RHD_DISPLAY_DCE, 11, 2, 0},
+	// Arcturus and Aldebaran: no display. chipsetID is Navi so the DCE
+	// paths stay off. The display class is none.
+	{0x738c, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Arcturus", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x7388, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Arcturus", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x738e, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Arcturus", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x7390, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Arcturus", RHD_DISPLAY_NONE, 0, 0, 0},
+	// Navi 12: DCN 2.0.
+	{0x7360, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 12", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x7362, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navi 12", RHD_DISPLAY_DCN, 2, 0, 0},
+	{0x73a5, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73a8, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73a9, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73ac, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73ad, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73af, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Sienna Cichlid", RHD_DISPLAY_DCN, 3, 0, 0},
+	// Yellow Carp: DCN 3.1 APU.
+	{0x164d, 0, 0, RADEON_NAVI, CHIP_APU, "Radeon Yellow Carp", RHD_DISPLAY_DCN, 3, 1, 0},
+	{0x1681, 0, 0, RADEON_NAVI, CHIP_APU, "Radeon Yellow Carp", RHD_DISPLAY_DCN, 3, 1, 0},
+	{0x73da, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73db, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73dc, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73dd, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73de, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Navy Flounder", RHD_DISPLAY_DCN, 3, 0, 0},
+	{0x73e3, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73e8, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73e9, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73ea, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73eb, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73ec, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73ed, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x73ef, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Dimgrey Cavefish", RHD_DISPLAY_DCN, 3, 0, 2},
+	{0x7408, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Aldebaran", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x740c, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Aldebaran", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x740f, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Aldebaran", RHD_DISPLAY_NONE, 0, 0, 0},
+	{0x7410, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Aldebaran", RHD_DISPLAY_NONE, 0, 0, 0},
+	// Cyan Skillfish: DCN 2.01.
+	{0x13fe, 0, 0, RADEON_NAVI, CHIP_APU, "Radeon Cyan Skillfish", RHD_DISPLAY_DCN, 2, 0, 1},
+	{0x143f, 0, 0, RADEON_NAVI, CHIP_APU, "Radeon Cyan Skillfish", RHD_DISPLAY_DCN, 2, 0, 1},
+	// Beige Goby: DCN 3.03. Last family with its own IDs in Linux v6.12.
+	{0x7420, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Beige Goby", RHD_DISPLAY_DCN, 3, 0, 3},
+	{0x7421, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Beige Goby", RHD_DISPLAY_DCN, 3, 0, 3},
+	{0x7422, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Beige Goby", RHD_DISPLAY_DCN, 3, 0, 3},
+	{0x7423, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Beige Goby", RHD_DISPLAY_DCN, 3, 0, 3},
+	{0x7424, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Beige Goby", RHD_DISPLAY_DCN, 3, 0, 3},
+	{0x743f, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon Beige Goby", RHD_DISPLAY_DCN, 3, 0, 3},
+	// pciID 0 is not a device. A later AMD display or accelerator uses this
+	// row. Linux calls that CHIP_IP_DISCOVERY and reads the version from
+	// the GPU. This driver does not read that table yet, so the version
+	// stays 0 and the DCE registers stay off.
+	// R5OS: claims every AMD display device, including old Radeons and
+	// dGPUs that do not drive the panel. Off until the GPU IP table is read.
+#if 0
+	{0x0000, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon IP discovery", RHD_DISPLAY_DCN, 0, 0, 0},
+#endif
 // SPDX-SnippetEnd
 };
 
@@ -688,6 +738,38 @@ pci_module_info* gPCI;
 mutex gLock;
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static bool
+radeon_hd_pci_class(const pci_info& info)
+{
+	if (info.vendor_id != VENDOR_ID_ATI)
+		return false;
+
+	// Linux CHIP_IP_DISCOVERY matches these three classes. 0x80 is
+	// PCI_CLASS_DISPLAY_OTHER. 0x12 is PCI_CLASS_ACCELERATOR_PROCESSING.
+	if (info.class_base == PCI_display
+		&& (info.class_sub == PCI_vga || info.class_sub == 0x80))
+		return true;
+	if (info.class_base == 0x12 && info.class_sub == 0x00)
+		return true;
+	return false;
+}
+// SPDX-SnippetEnd
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static bool
+radeon_hd_family_untested(uint16 chipsetID)
+{
+	return chipsetID >= RADEON_TONGA && chipsetID <= RADEON_VEGA20;
+}
+// SPDX-SnippetEnd
+
+
 static status_t
 get_next_radeon_hd(int32* _cookie, pci_info &info, uint32 &type)
 {
@@ -696,21 +778,46 @@ get_next_radeon_hd(int32* _cookie, pci_info &info, uint32 &type)
 	// find devices
 
 	for (; gPCI->get_nth_pci_info(index, &info) == B_OK; index++) {
-		// check vendor
-		if (info.vendor_id != VENDOR_ID_ATI
-			|| info.class_base != PCI_display
-			|| info.class_sub != PCI_vga)
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// VGA, display-other, or a processing accelerator. The zero row
+		// is the IP-discovery fallback, not a real PCI ID.
+		if (!radeon_hd_pci_class(info))
 			continue;
 
-		// check device
+		uint32 discovery = ~(uint32)0;
+		bool skipped = false;
 		for (uint32 i = 0; i < sizeof(kSupportedDevices)
 				/ sizeof(kSupportedDevices[0]); i++) {
+			if (kSupportedDevices[i].pciID == 0) {
+				discovery = i;
+				continue;
+			}
 			if (info.device_id == kSupportedDevices[i].pciID) {
+				if (radeon_hd_family_untested(
+						kSupportedDevices[i].chipsetID)) {
+					dprintf(DEVICE_NAME ": 1002:%04x %s is not claimed,"
+						" this family is untested\n", info.device_id,
+						kSupportedDevices[i].deviceName);
+					skipped = true;
+					break;
+				}
 				type = i;
 				*_cookie = index + 1;
 				return B_OK;
 			}
 		}
+
+		if (skipped)
+			continue;
+
+		if (discovery != ~(uint32)0) {
+			type = discovery;
+			*_cookie = index + 1;
+			return B_OK;
+		}
+// SPDX-SnippetEnd
 	}
 
 	return B_ENTRY_NOT_FOUND;
@@ -800,14 +907,33 @@ init_driver(void)
 		gDeviceInfo[found]->pci = info;
 		gDeviceInfo[found]->registers = info->u.h0.base_registers[0];
 		gDeviceInfo[found]->pciID = kSupportedDevices[type].pciID;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (gDeviceInfo[found]->pciID == 0)
+			gDeviceInfo[found]->pciID = info->device_id;
+		gDeviceInfo[found]->doorbell_area = -1;
+// SPDX-SnippetEnd
 		gDeviceInfo[found]->deviceName = kSupportedDevices[type].deviceName;
 		gDeviceInfo[found]->chipsetID = kSupportedDevices[type].chipsetID;
 		gDeviceInfo[found]->dceMajor = kSupportedDevices[type].dceMajor;
 		gDeviceInfo[found]->dceMinor = kSupportedDevices[type].dceMinor;
+		gDeviceInfo[found]->displayClass = kSupportedDevices[type].displayClass;
+		gDeviceInfo[found]->displayMajor = kSupportedDevices[type].displayMajor;
+		gDeviceInfo[found]->displayMinor = kSupportedDevices[type].displayMinor;
+		gDeviceInfo[found]->displayStepping = kSupportedDevices[type].displayStepping;
 		gDeviceInfo[found]->chipsetFlags = kSupportedDevices[type].chipsetFlags;
 
 		ERROR("%s: GPU(%" B_PRId32 ") %s, revision = 0x%x\n", __func__, found,
 			kSupportedDevices[type].deviceName, info->revision);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (kSupportedDevices[type].pciID == 0) {
+			ERROR("%s: pci 1002:%04x claimed by IP discovery, "
+				"display version unknown\n", __func__, info->device_id);
+		}
+// SPDX-SnippetEnd
 
 		found++;
 	}
