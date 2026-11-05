@@ -41,6 +41,9 @@ enum {
 	R5_GFX9_OWNER_KERNEL = 1
 };
 
+/* The K2 DMA packet and the K2 readback use this one value. */
+static const uint32 kK2Pattern = 0xA5A5A5A5;
+
 void r5_gfx9_prepare(r5_gfx9_host* host, uint64 vramBytes);
 bool r5_gfx9_start(r5_gfx9_host* host, uint32 pciId, uint64 vramBytes,
 	bool workload, bool compute, r5_gfx9_results* results);

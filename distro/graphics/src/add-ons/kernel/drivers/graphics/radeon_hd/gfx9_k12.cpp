@@ -627,32 +627,58 @@ run_k2()
 		return;
 	}
 
+	const uint32 dwordCount = (1024 * 1024) / 4;
 	uint32* words = (uint32*)system;
-	for (uint32 i = 0; i < (1024 * 1024) / 4; i++)
+	for (uint32 i = 0; i < dwordCount; i++)
 		words[i] = 0xCAFEDEAD;
 	uint32 sequence = 0;
 	bool dma = r5_gfx9_k2_dma(gartStart, &sequence);
-	uint32 bad = 0;
-	if (dma) {
-		for (uint32 i = 0; i < (1024 * 1024) / 4; i++) {
-			if (words[i] != 0x5A5A5A5Au)
-				bad++;
+	uint32 patternCount = 0;
+	uint32 cafe = 0;
+	uint32 other = 0;
+	uint32 otherIndex = 0;
+	uint32 otherValue = 0;
+	uint32 first[4] = { 0, 0, 0, 0 };
+	for (uint32 i = 0; i < dwordCount; i++) {
+		uint32 word = words[i];
+		if (i < 4)
+			first[i] = word;
+		if (word == kK2Pattern)
+			patternCount++;
+		else if (word == 0xCAFEDEADu)
+			cafe++;
+		else {
+			if (other == 0) {
+				otherIndex = i;
+				otherValue = word;
+			}
+			other++;
 		}
 	}
+	bool dmaOk = dma && patternCount == dwordCount;
 	uint32 ibSequence = 0;
 	bool ib = false;
-	if (dma && bad == 0)
+	if (dmaOk)
 		ib = r5_gfx9_k2_gart_ib(gartStart, (uint8*)system, &ibSequence);
 	uint32 seenWord = r5_gfx9_last_word();
 	uint64 seenSeq = r5_gfx9_last_sequence();
 	knote("k2 %s gart %016llx-%016llx pte0 %016llx",
-		(dma && bad == 0 && ib) ? "ok" : "fail",
+		(dmaOk && ib) ? "ok" : "fail",
 		(unsigned long long)gartStart, (unsigned long long)gartEnd,
 		(unsigned long long)pte[0]);
-	knote("k2_dma_bad %lu", (unsigned long)(dma ? bad : 0xffffffffu));
+	knote("k2 dma %08lx %08lx %08lx %08lx",
+		(unsigned long)first[0], (unsigned long)first[1],
+		(unsigned long)first[2], (unsigned long)first[3]);
+	knote("k2 dma pattern %lu cafe %lu other %lu",
+		(unsigned long)patternCount, (unsigned long)cafe,
+		(unsigned long)other);
+	if (other != 0) {
+		knote("k2 dma other %lu %08lx", (unsigned long)otherIndex,
+			(unsigned long)otherValue);
+	}
 	knote("k2_ib wb %08lx seq %lu seen %lu", (unsigned long)seenWord,
 		(unsigned long)ibSequence, (unsigned long)seenSeq);
-	if (!(dma && bad == 0 && ib)) {
+	if (!(dmaOk && ib)) {
 		uint32 faultStatus = kread(sInfo, gc_byte(0x084b));
 		uint32 faultLo = kread(sInfo, gc_byte(0x084c));
 		uint32 faultHi = kread(sInfo, gc_byte(0x084d));

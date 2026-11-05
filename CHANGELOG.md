@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### K2 checks the same pattern the DMA packet writes
+
+The K2 readback compared with `0x5A5A5A5A` while `radeon_gfx9_dma_ib` writes `0xA5A5A5A5`. Both the K2 packet and the K2 check now use `kK2Pattern`, which is `0xA5A5A5A5`. The K0 calls keep the previous packet bytes. After the DMA, the log is the first four dwords, then the count equal to the pattern, the count still `0xCAFEDEAD`, and the count of anything else. A value that is neither logs its first index and the dword. The GART indirect buffer runs when the submission landed and every dword matches the pattern. K0 and K1 are unchanged.
+
+`jam -q @r5-anyboot` exited 0. The kernel driver contains `k2 dma pattern`. The image was written to the General UDisk at 15:14 Europe/Amsterdam on 5 Nov 2026, sha256 `fc3ae076f41407362fbbd555de7867521b9c4c5dc056fe1b877b9dc143ef4575`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. This image has not been booted.
+
 ### The GART DMA fence landed and the dword check missed
 
 The stick written at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`, booted on the 5625U. The desktop came up. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`.

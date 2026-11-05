@@ -2075,7 +2075,8 @@ radeon_gfx9_dma_note(uint32 bad1, uint64 ticks1, uint32 bad8, uint64 ticks8,
 
 
 static uint32
-radeon_gfx9_dma_ib(uint32* ib, uint64 fenceGpu, uint64 dstGpu, uint32 chunks)
+radeon_gfx9_dma_ib(uint32* ib, uint64 fenceGpu, uint64 dstGpu, uint32 chunks,
+	uint32 pattern = 0xA5A5A5A5)
 {
 	const uint32 eop = (1u << 16) | (1u << 17) | (1u << 15) | (1u << 21)
 		| kWlCacheFlushTs | (5u << 8);
@@ -2093,7 +2094,7 @@ radeon_gfx9_dma_ib(uint32* ib, uint64 fenceGpu, uint64 dstGpu, uint32 chunks)
 		uint64 dest = dstGpu + (uint64)chunk * kDmaChunk;
 		ib[n++] = radeon_packet3(kWlDmaData, 5);
 		ib[n++] = kWlDmaCpSync | kWlDmaSrcData;
-		ib[n++] = 0xA5A5A5A5;
+		ib[n++] = pattern;
 		ib[n++] = 0;
 		ib[n++] = (uint32)dest;
 		ib[n++] = (uint32)(dest >> 32);
@@ -3293,7 +3294,7 @@ r5_gfx9_k2_dma(uint64 destMc, uint32* _sequence)
 	if (r5_vram(4096, 4096, &ibOffset, &ibAddress) != B_OK || ibAddress == NULL)
 		return false;
 	uint32* ib = (uint32*)ibAddress;
-	uint32 ibDwords = radeon_gfx9_dma_ib(ib, fenceGpu, destMc, 1);
+	uint32 ibDwords = radeon_gfx9_dma_ib(ib, fenceGpu, destMc, 1, kK2Pattern);
 	radeon_gfx9_flush_visible(ibAddress, 4096);
 	radeon_visible_barrier();
 	uint64 ibGpu = radeon_gfx9_mc_addr(location, ibOffset);
