@@ -668,6 +668,7 @@ static void
 radeon_map_doorbell(radeon_info& info)
 {
 	info.doorbell_area = -1;
+	info.doorbell = NULL;
 	if (info.shared_info == NULL)
 		return;
 	info.shared_info->doorbell_area = -1;
@@ -704,6 +705,7 @@ radeon_map_doorbell(radeon_info& info)
 	}
 	keeper.Detach();
 	info.doorbell_area = area;
+	info.doorbell = mapped;
 	info.shared_info->doorbell_area = area;
 	info.shared_info->doorbell_phys = (uint64)addr;
 	info.shared_info->doorbell_bytes = bytes;
@@ -1197,6 +1199,8 @@ radeon_hd_init(radeon_info &info)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	radeon_map_doorbell(info);
+	void r5_gfx9_kernel_start(radeon_info& info);
+	r5_gfx9_kernel_start(info);
 // SPDX-SnippetEnd
 	return B_OK;
 }
@@ -1207,6 +1211,12 @@ radeon_hd_uninit(radeon_info &info)
 {
 	TRACE("card(%" B_PRId32 "): %s called\n", info.id, __func__);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	void r5_gfx9_kernel_stop();
+	r5_gfx9_kernel_stop();
+// SPDX-SnippetEnd
 	delete_area(info.shared_area);
 	delete_area(info.registers_area);
 	delete_area(info.framebuffer_area);

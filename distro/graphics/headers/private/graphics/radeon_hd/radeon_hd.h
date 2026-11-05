@@ -290,6 +290,11 @@ struct radeon_shared_info {
 	area_id			doorbell_area;
 	uint64			doorbell_phys;
 	uint64			doorbell_bytes;
+	// Set by the kernel when it has started the GPU. The accelerant
+	// then writes the text and does not start a second time.
+	uint32			gfx9_owner;
+	char			gfx9_text[8192];
+	uint32			gfx9_text_used;
 // SPDX-SnippetEnd
 };
 

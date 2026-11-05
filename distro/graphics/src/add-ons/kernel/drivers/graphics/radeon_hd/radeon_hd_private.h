@@ -44,6 +44,12 @@ struct radeon_info {
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	area_id			doorbell_area;
+	uint8*			doorbell;
+	// Kernel view of the VRAM pool only. r5_gfx9_kernel_start creates it
+	// when gfx9_ring and gfx9_kernel are on, and r5_gfx9_kernel_stop
+	// deletes it. The cloneable framebuffer keeps the user bit.
+	area_id			kernel_window_area;
+	uint8*			kernel_window;
 // SPDX-SnippetEnd
 
 	struct radeon_shared_info* shared_info;

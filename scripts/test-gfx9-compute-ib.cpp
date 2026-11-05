@@ -5,6 +5,7 @@
  * written out here. They are not produced by calling the builder.
  */
 #include "gfx9_compute_ib.h"
+#include "gfx9_check.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -176,5 +177,96 @@ main(void)
 		return fail("release");
 	printf("ok dwords %u submit %u\n",
 		(unsigned)(sizeof(kExpectOne) / sizeof(kExpectOne[0])), submitCount);
+
+	const uint64_t kPhys = 0x0000000123450000ull;
+	const uint64_t kFlags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM
+		| R5_GFX9_PTE_SNOOPED | R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE
+		| R5_GFX9_PTE_WRITEABLE;
+	const uint64_t kExpectPte = 0x0600000123450077ull;
+	uint64_t pte = r5_gfx9_gart_pte(kPhys, kFlags);
+	if (pte != kExpectPte)
+		return fail("pte value");
+	if ((pte & 1ull) == 0 || (pte & 2ull) == 0 || (pte & 4ull) == 0)
+		return fail("pte low");
+	if ((pte & (1ull << 4)) == 0)
+		return fail("pte exec");
+	if ((pte & (1ull << 5)) == 0 || (pte & (1ull << 6)) == 0)
+		return fail("pte rw");
+	if (((pte >> 57) & 3ull) != 3ull)
+		return fail("pte mtype");
+	if ((pte & ~0xfffull) != (kPhys | (3ull << 57)))
+		return fail("pte phys");
+	const uint64_t kTablePa = (0x810ull << 24) + 0x800000ull;
+	if (!r5_gfx9_pde_aligned(kTablePa) || r5_gfx9_pde_aligned(kTablePa + 32ull))
+		return fail("pde align");
+	if (r5_gfx9_page_table_base(0x810u, 0x800000ull) != (kTablePa | 1ull))
+		return fail("ptb");
+	if (r5_gfx9_tlb_req(0, 0) != 0x007c0001u)
+		return fail("tlb req");
+	if ((r5_gfx9_tlb_req(0, 3) & 0x00030000u) != 0x00030000u)
+		return fail("flush type");
+	if ((r5_gfx9_tlb_req(0, 4) & 0x00070000u) != 0x00040000u)
+		return fail("flush width");
+	r5_gfx9_fault decoded = r5_gfx9_fault_decode(0x00040d5bu);
+	if (decoded.more != 1 || decoded.walker != 5 || decoded.permission != 5
+		|| decoded.mapping != 1 || decoded.cid != 6u || decoded.rw != 1)
+		return fail("fault decode");
+	if (r5_gfx9_fault_address(0x0f3f0000u, 0) != 0xf3f0000000ull)
+		return fail("fault addr");
+	const uint64_t kWrap = 914ull + 9ull * 12ull;
+	if (kWrap != 1022ull)
+		return fail("wrap base");
+	const uint32_t kWrapIndex[12] = {
+		1022, 1023, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+	};
+	for (uint32_t i = 0; i < 12; i++) {
+		if (r5_gfx9_ring_index(kWrap, i, 1024) != kWrapIndex[i])
+			return fail("wrap index");
+	}
+	if (r5_gfx9_ring_space(1024, kWrap, kWrap) < 12)
+		return fail("wrap space");
+	if (r5_gfx9_ring_space(1024, 914, 914) < 12)
+		return fail("first space");
+	if (r5_gfx9_ring_space(1024, kWrap, 0) != 1)
+		return fail("full space");
+
+	uint64_t gartStart = 0;
+	uint64_t gartEnd = 0;
+	const uint64_t kFb = 0xf400000000ull;
+	const uint64_t kAperStart = 0x3d0000ull << 18;
+	const uint64_t kAperEnd = 0x3d0800ull << 18;
+	uint64_t agpStart = 0;
+	uint64_t agpEnd = 0;
+	if (r5_gfx9_agp_window(1u, 0u, &agpStart, &agpEnd))
+		return fail("agp off");
+	if (!r5_gfx9_agp_window(0u, 0u, &agpStart, &agpEnd))
+		return fail("agp on");
+	if (agpStart != 0 || agpEnd != 0x1000000ull)
+		return fail("agp 16m");
+	if (!r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, 0, 0, 0,
+			&gartStart, &gartEnd))
+		return fail("gart range");
+	if (gartStart != 0xf3f0000000ull || gartEnd != 0xf400000000ull)
+		return fail("gart place");
+	if (!(gartEnd <= kAperStart || gartStart >= kAperEnd))
+		return fail("gart overlap");
+	if (gartEnd > kFb)
+		return fail("gart fb");
+	if (!r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, 1, agpStart, agpEnd,
+			&gartStart, &gartEnd))
+		return fail("gart agp clear");
+	if (r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, 1, gartStart, gartEnd,
+			&gartStart, &gartEnd))
+		return fail("gart agp hit");
+
+	uint8_t raw[32];
+	memset(raw, 0, sizeof(raw));
+	raw[0] = 0x14;
+	raw[1] = 181;
+	raw[2] = 0;
+	r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(raw);
+	if (entry.client != 0x14u || entry.source != 181u || entry.ring != 0)
+		return fail("ih parse");
+	printf("ok pte gart ih\n");
 	return 0;
 }

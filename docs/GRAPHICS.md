@@ -96,7 +96,7 @@ Tested: the 08:11 stick, the repeat boot, boot 1 on 5 Nov 2026 with `gfx9_ring t
 
 ## GFX9 workload on GC 9.3 (fixed)
 
-This runs only after the fence above is `0xDEADBEEF`. The first ring, its registers, the PSP load and the firmware blobs stay as they are. The next packets are written at the current write pointer, over the type-2 padding, and a submission that would pass the end of the 4 KiB ring is refused.
+This runs only after the fence above is `0xDEADBEEF`. The first ring, its registers, the PSP load and the firmware blobs stay as they are. The next packets are written at the current write pointer, over the type-2 padding. A submission that passes the end of the 4 KiB ring wraps. The index and the space check are in `GFX9 kernel on GC 9.3 (fixed)`.
 
 The same settings file has to contain `gfx9_workload true`. The image does not ship that file. With the ring on and this key absent, the log is `GFX9 workload off` and the first ring is unchanged. `gfx9_paint` is not a setting. Nothing is drawn into the firmware picture.
 
@@ -132,7 +132,7 @@ Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `2a5cb8dbc5cfcd52af5d7
 
 ## GFX9 compute on GC 9.3 (fixed)
 
-This is milestone M2. It runs only after the fence and the indirect-buffer check above. The first ring, its registers, the PSP load, the firmware blobs, and the workload packets stay as they are. The new packets are written at the current write pointer. A submission that would pass the end of the 4 KiB ring is refused.
+This is milestone M2. It runs only after the fence and the indirect-buffer check above. The first ring, its registers, the PSP load, the firmware blobs, and the workload packets stay as they are. The new packets are written at the current write pointer. A submission that passes the end of the 4 KiB ring wraps, as in `GFX9 kernel on GC 9.3 (fixed)`.
 
 The same settings file has to contain `gfx9_compute true`. The image does not ship that file. With the ring on and this key absent, the log is `GFX9 compute off`. `gfx9_workload` is independent. This stick does not set it, so the DMA fill does not run. If both are set, the fill runs only after the four dispatches and uses sequences 6 and 7. The workload-only path still uses sequences 2 and 3.
 
@@ -144,11 +144,29 @@ Sequence 1 is the indirect-buffer check. Sequence 2 is one group of `r5_empty`. 
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `e978a0c67f23d3d3104c1ad641e55e906373f5d6a53cdf87a334fe0a4f5de410`, written at 12:03 Europe/Amsterdam, reached Tracker with `GFX9 ring contract verified`, scratch `0xdeadbeef`, read pointer `0x392`, `ib_wb deadbeef`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16664`, `compute_c3 ok bad 0 ticks 65426` and `compute_ratio 3.9`. The readback was `pgm f4010030 00000000`, `rsrc 000c0000 00000084`, `threads 64`, `user 01004000 000000f4`, `se0 ffffffff`. There is one boot-loader welcome and no panic. The scanout was not changed. A boot with `gfx9_compute` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
 
+## GFX9 kernel on GC 9.3 (fixed)
+
+This is milestone M3. The first ring, the workload packets and the compute packets stay as they are. The same settings file has to contain `gfx9_kernel true` together with `gfx9_ring true`. The image does not ship that file. The PCI id has to be `15e7`, `1636` or `1638`. The kernel maps only the visible pool, with kernel protection and write combining, and the accelerant then logs `GFX9 owned by the kernel` and does not start the command processor. A second open in the same boot logs `GFX9 kernel start already done this boot` and does not start it again. `gfx9_irq` and `gfx9_gart` default to false. With `gfx9_kernel` off, the driver maps nothing extra.
+
+`gfx9_irq true` asks for one MSI vector and enables the Vega10 interrupt ring 0 and `CP_INT_CNTL_RING0`. The K1 packet is the same 12 dwords as the workload, with `INT_SEL(2)`. Success is an end-of-pipe interrupt, client `0x14`, source 181, ring 0.
+
+`gfx9_gart true` places a 256 MiB window immediately under the framebuffer. `MC_VM_AGP_BOT` and `MC_VM_AGP_TOP` are read and not written. Bot 0 and top 0 are the window `0`-`0x1000000`. A GART block that overlaps that window is refused. The page-table base is `(MC_VM_FB_OFFSET << 24) + tableOffset`, then `AMDGPU_PTE_VALID`. The address is rejected when it fails the mask `0xFFFF00000000003F`. A system page is valid, system, snooped, executable, readable and writable, with `MTYPE_UC` (3) at bit 57. After the table is filled, the CPU issues an `sfence` and reads the last mapped PTE back before `VM_CONTEXT0_CNTL` and before the TLB flush. The invalidate request for VMID 0 and flush type 0 is `0x007c0001`.
+
+The DMA packet and the check both use `kK2Pattern` (`0xA5A5A5A5`). The CPU first fills the 1 MiB buffer with `0xCAFEDEAD`. The log is the first four dwords, then the count equal to the pattern, the count still `0xCAFEDEAD`, and the count of anything else. The GART indirect buffer runs only when the submission landed and every dword matches. That buffer is five dwords of `WRITE_DATA` of `0xDEADBEEF`.
+
+The ring is 1024 dwords. The write pointer keeps counting. Dword `i` of a submission is stored at `(wptr + i) & (dwords - 1)`. The doorbell and the poll slot receive that continuing write pointer. Space is `ringDwords - (wptr - rptr) - 1`. The read pointer is the 64-bit writeback at the fence page plus 256 when that word is not zero, otherwise `CP_RB0_RPTR`. The first fill of 914 dwords is not rewritten. The host test checks the twelve indexes from 1022: 1022, 1023, then 0 through 9.
+
+`radeon_hd_uninit` calls `r5_gfx9_kernel_stop` before any `delete_area`. Stop halts the command processor (ME, PFP and CE) and the MEC, writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the same TLB invalidate, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the system area and the pool mapping.
+
+These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not the default.
+
+Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, written at 15:29 Europe/Amsterdam, reached the desktop. The lines are `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, `k1_wait_us 1132`, `k2 map count 8 pages 256`, `k2 ptb 0000000812c18001 got 12c18001 00000008`, `k2 inv 007c0001`, `k2 ok gart`, `k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 10 seen 10`. There is no `k2 fault` line. The user shut that session down and reported no panic. The syslog exported while the desktop was up does not contain the stop lines. A boot with `gfx9_kernel` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
+
 ## Known GFX9 differences
 
 `MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.
 
-The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, which is `0xFFFF1000`, and aligns the ring to 256 dwords. The padding after write pointer 914 is not executed. That has to be fixed before any submission that runs through the padding.
+The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, which is `0xFFFF1000`, and aligns the ring to 256 dwords. Later packets overwrite that padding. A submission that crosses 1024 uses the wrap in `GFX9 kernel on GC 9.3 (fixed)`. The 15:29 boot ran that submission: `k2_ib` sequence 10 was seen.
 
 ## Fallback
 

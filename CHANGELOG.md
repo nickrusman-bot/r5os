@@ -1,5 +1,144 @@
 # R5OS changelog (lokaal)
 
+### M3 is the fixed kernel sequence
+
+The user shut down the 15:29 session from the desktop and reported no panic. The syslog exported while that desktop was up still ends before `radeon_hd_uninit`, so the stop registers are not in that file. Milestone M3 in `docs/GPU-ARCHITECTURE.md` is done. The sequence is `GFX9 kernel on GC 9.3 (fixed)` in `docs/GRAPHICS.md`, and `AGENTS.md` locks it the same way as the ring, the workload and compute. `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` stay off until the settings file says so. GC 9.3 is not the default. The next milestone is M4.
+
+### The GART DMA and the GART indirect buffer landed
+
+The stick written at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, booted on the 5625U. The desktop came up. The syslog has no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`. The log ends on the running desktop. There is no `radeon_hd_uninit`, no `GFX9 kernel start already done this boot`, and no shutdown. MSI vector 61 is not freed. The stop order and a second open in the same boot were not exercised.
+
+K0 and K1 landed again. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `fence landed`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16656`, `compute_c3 ok bad 0 ticks 63750`, `compute_ratio 3.8`, `dma_1m_bad 0 ticks_1m 8464`, `dma_8m_bad 0 ticks_8m 54854`, `dma_ratio 6.4`, `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1132`.
+
+K2 programmed the table, the DMA matched `kK2Pattern`, and the indirect buffer in the GART area completed. The syslog lines are:
+
+```
+k2 agp bot 00000000 top 00000000 0000000000000000-0000000001000000
+k2 map count 8 pages 256
+k2 pte last 060000001b6cc077 got 060000001b6cc077 tail 0600000812c98077
+k2 ptb 0000000812c18001 got 12c18001 00000008
+k2 inv 007c0001
+k2 ok gart 000000f3f0000000-000000f400000000 pte0 060000001b78d077
+k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5
+k2 dma pattern 262144 cafe 0 other 0
+k2_ib wb deadbeef seq 10 seen 10
+```
+
+`k2 ok` is logged only when the DMA submission returned and every one of the 262144 dwords is `0xA5A5A5A5`, and the GART indirect buffer submission returned. `wb deadbeef` is the word that buffer writes. Sequence 10 is that buffer's fence, and `seen 10` is the same value read back. There is no `k2 fault` line and no `GFX9 workload failed` line. The command processor was not halted. The contract update is the section above.
+
+### The GFX ring wraps and the kernel stops the GPU before it unmaps
+
+K2 still uses one constant, `kK2Pattern` (`0xA5A5A5A5`), for the DMA packet and the readback. The log is the first four dwords, then `k2 dma pattern`, `cafe` and `other`. The first dword that is neither the pattern nor `0xCAFEDEAD` is logged with its index. The GART indirect buffer runs only when the submission landed and every dword matches.
+
+Later submissions no longer refuse when the write pointer plus the packet would pass 1024. `r5_gfx9_ring_space` is `ringDwords - (wptr - rptr) - 1`. The read pointer comes from the 64-bit writeback at the fence plus 256 when that word is non-zero, otherwise from `CP_RB0_RPTR`. Each dword is stored at `(wptr + i) & (dwords - 1)`. The doorbell and the poll slot receive the write pointer that keeps counting. The first fill of 914 dwords is the same packet. The host test checks the twelve indexes from 1022: 1022, 1023, then 0 through 9. It printed `ok dwords 73 submit 12` and `ok pte gart ih`.
+
+`radeon_hd_uninit` calls `r5_gfx9_kernel_stop` before any `delete_area`. Stop halts the command processor (ME, PFP and CE) and the MEC, writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the same TLB invalidate as K2, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the system area and the pool mapping. A second open in the same boot logs `GFX9 kernel start already done this boot` and does not start the GPU again. K0 and K1 packets are unchanged.
+
+`jam -q @r5-anyboot` exited 0 (1189 targets). The kernel driver contains `k2 dma pattern`, `k2 dma other` and `GFX9 kernel start already done this boot`. The image was written to the General UDisk at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. The boot is the section above. The syslog from that boot has no shutdown.
+
+### K2 checks the same pattern the DMA packet writes
+
+The K2 readback compared with `0x5A5A5A5A` while `radeon_gfx9_dma_ib` writes `0xA5A5A5A5`. Both the K2 packet and the K2 check now use `kK2Pattern`, which is `0xA5A5A5A5`. The K0 calls keep the previous packet bytes. After the DMA, the log is the first four dwords, then the count equal to the pattern, the count still `0xCAFEDEAD`, and the count of anything else. A value that is neither logs its first index and the dword. The GART indirect buffer runs when the submission landed and every dword matches the pattern. K0 and K1 are unchanged.
+
+`jam -q @r5-anyboot` exited 0. The kernel driver contains `k2 dma pattern`. The image was written to the General UDisk at 15:14 Europe/Amsterdam on 5 Nov 2026, sha256 `fc3ae076f41407362fbbd555de7867521b9c4c5dc056fe1b877b9dc143ef4575`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. This image has not been booted.
+
+### The GART DMA fence landed and the dword check missed
+
+The stick written at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`, booted on the 5625U. The desktop came up. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`.
+
+K0 and K1 landed again. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16682`, `compute_c3 ok bad 0 ticks 58876`, `compute_ratio 3.5`, `dma_1m_bad 0 ticks_1m 8468`, `dma_8m_bad 0 ticks_8m 48908`, `dma_ratio 5.7`, `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1130`.
+
+K2 programmed the table and the DMA submission completed. The syslog lines are:
+
+```
+k2 agp bot 00000000 top 00000000 0000000000000000-0000000001000000
+k2 map count 8 pages 256
+k2 pte last 060000001b74f077 got 060000001b74f077 tail 0600000812c98077
+k2 ptb 0000000812c18001 got 12c18001 00000008
+k2 inv 007c0001
+k2 fail gart 000000f3f0000000-000000f400000000 pte0 060000001b810077
+k2_dma_bad 262144
+k2_ib wb deadbeef seq 0 seen 9
+k2 fault 00000000 MORE_FAULTS 0 WALKER_ERROR 0 PERMISSION_FAULTS 0 MAPPING_ERROR 0 CID 0 RW 0 addr 0000000000000000 cntl 007ffe01 cp 00000000 grbm 00003028
+```
+
+The page-table base read back as written: physical `0x812c18000` with the valid bit. The last PTE read back as written, including `MTYPE_UC` and the executable bit. The invalidate request was `0x007c0001`. There is no `GFX9 workload failed` line for this DMA. `seen 9` is the fence sequence, so the release completed. The fault status is zero. `k2_dma_bad 262144` is every dword of the 1 MiB buffer. The DMA packet writes `0xA5A5A5A5`, which is the value the K0 check accepts. The K2 check compares with `0x5A5A5A5A`. The log does not record the dword the CPU read, so a buffer that stayed `0xCAFEDEAD` is still possible. The GART indirect buffer was not submitted. The failure path then halted the command processor. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row stay as they are.
+
+### The page table base is the framebuffer offset
+
+The 14:19 boot faulted a write on the first GART page with `WALKER_ERROR` and `MAPPING_ERROR`. `VM_L2_PROTECTION_FAULT_ADDR` holds a page number, so the byte address is that register shifted left by 12. For `0x0f3f0000` that is the GART start `0xf3f0000000`. The walker did not read the table. K2 now writes `VM_CONTEXT0_PAGE_TABLE_BASE_ADDR` as `(MC_VM_FB_OFFSET << 24) + tableOffset`, then `AMDGPU_PTE_VALID`, the same value as `amdgpu_gmc_pd_addr` plus `gmc_v9_0_get_vm_pde`. The physical address is rejected when it fails the Linux `BUG_ON` mask `0xFFFF00000000003F`. The written value and the read-back are logged as `k2 ptb`.
+
+`gmc_v9_0_gart_init` sets `gart_pte_flags` to `AMDGPU_PTE_MTYPE_VG10(0, MTYPE_UC) | AMDGPU_PTE_EXECUTABLE`. `MTYPE_UC` is 3 in `vega10_enum.h` and the field sits at bit 57 in `amdgpu_vm.h`. A system page is now `0x0600000123450077` for physical `0x123450000`. After the table is filled, K2 issues the same `sfence` as `radeon_visible_barrier` and reads the last mapped PTE and the tail PTE back before `VM_CONTEXT0_CNTL` and before the TLB flush.
+
+`VM_INVALIDATE_ENG0_REQ` in `gc_9_0_sh_mask.h` has `FLUSH_TYPE` as two bits at 16, then `INVALIDATE_L2_PTES`, `INVALIDATE_L2_PDE0`, `INVALIDATE_L2_PDE1`, `INVALIDATE_L2_PDE2` and `INVALIDATE_L1_PTES`. `gmc_v9_0_get_invalidate_req` for VMID 0 and flush type 0 is `0x007c0001`. K2 logs that value as `k2 inv`. A fault log now names `MORE_FAULTS`, `WALKER_ERROR`, `PERMISSION_FAULTS`, `MAPPING_ERROR`, `CID` and `RW`, and prints the byte address. The host test covers the PTE, the alignment, the invalidate word and the previous fault status `0x00040d5b`. K0 and K1 are unchanged.
+
+The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`. Jam `@r5-anyboot` exited 0. The driver inside `haiku-r1~beta6_r5_2026.1_dev-1-x86_64.hpkg` contains `k2 fail ptb readback`. The image was written to the General UDisk at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. The boot is the section above.
+
+### The GART DMA faulted at the start of the window
+
+The stick written at 14:19 Europe/Amsterdam on 5 Nov 2026, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`, booted on the 5625U. The desktop came up. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`.
+
+K0 and K1 match the previous boot. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `fence landed`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16680`, `compute_c3 ok bad 0 ticks 60033`, `compute_ratio 3.5`, `dma_ratio 7.9`, `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1129`.
+
+K2 programmed the page table and then the DMA fence did not land. The syslog lines are:
+
+```
+k2 agp bot 00000000 top 00000000 0000000000000000-0000000001000000
+k2 map count 8 pages 256
+GFX9 workload failed: fence CP_STAT 0x80018200 GRBM_STATUS 0xa0003028 rptr 0x3fe fence 0x0 wb 0x0
+GFX9 stall grbm 0xa0003028 grbm2 0x50000008 cp 0x80018200 cpc 0x0 int 0x0 vm 0x40d5b vmlo 0xf3f0000 vmhi 0x0
+k2 fail gart 000000f3f0000000-000000f400000000 pte0 000000001b755067
+k2_dma_bad 4294967295
+k2_ib wb deadbeef seq 0 seen 0
+k2 fault 00040d5b addr 0f3f0000 00000000 cntl 007ffe01 cp 80018200 grbm a0003028
+```
+
+`0xf3f0000` is the GART start `0xf3f0000000` shifted by 16. The first page-table entry is physical `0x1b755000` with valid, system, snooped, readable and writable. The command processor had consumed the packet (`rptr 0x3fe`) and the fence writeback stayed 0. The failure path halted the command processor. The indirect buffer in the GART area was not submitted. `k2_dma_bad 4294967295` is that sentinel, not a dword count. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row stay as they are.
+
+### The kernel asks for the GART translation count
+
+K2 on the 5625U stopped at `k2 fail memory map` because `get_memory_map` returns `B_OK` (0) on success. The next image calls `get_memory_map_etc(B_CURRENT_TEAM, …, &count)` and walks exactly `count` entries. It logs `k2 map count` and `pages`. `MC_VM_AGP_BOT` and `MC_VM_AGP_TOP` are 16 MiB units and `TOP` is inclusive, so bot 0 and top 0 are `0`-`0x1000000`. The log prints that window, or `off` when bot is above top. The registers are not written. `r5_gfx9_gart_range` refuses a GART block that overlaps that window. The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`, including the 16 MiB window and an overlap refusal. K0 and K1 are the same packets.
+
+`jam -q @r5-anyboot` for AMD64 finished at 14:13 Europe/Amsterdam on 5 Nov 2026 with exit 0 (1189 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `deecfb928e6f74d806cf2d45dd58f6a866e1caf6915558d11e5dea9282796984`. The stick copy is the same size, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`. The kernel driver contains `k2 map count`, `k2 agp bot`, `k0` and `k1_wait_us`. It was written raw to the General UDisk at 14:19 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The boot is the section above.
+
+### The kernel GFX9 start reached the desktop
+
+The stick written at 13:46 Europe/Amsterdam on 5 Nov 2026, sha256 `1e98f708cb8036b84410e041a764c6cb70a46193b1474fe1a20e7e31a963712b`, booted on the 5625U. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel` and did not start the command processor again.
+
+The pool mapping is `gfx9 pool 0xfce07e9000+0xf817000`. K0 matches the earlier fence, workload and compute. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16652`, `compute_c3 ok bad 0 ticks 59194`, `compute_ratio 3.5`, `dma_1m_bad 0 ticks_1m 8468`, `dma_8m_bad 0 ticks_8m 67216`, `dma_ratio 7.9`, and `k0 ok fence`.
+
+K1 arrived on MSI. The syslog lines are `allocate_io_interrupt_vectors: allocated 1 vectors starting from 61`, `msi enabled: 0x0085`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1130`. Client 20 is `0x14` and source 181 is the CP end-of-pipe on ring 0. The wait was 1130 µs.
+
+K2 stopped before a page table or a DMA. The syslog lines are `k2 agp bot 00000000 top 00000000 on` and `k2 fail memory map`. `get_memory_map` returns `B_OK`, which is 0, and ends the list with a zero entry. The check treats 0 as failure, so the translation was dropped. AGP bot and top are both 0. `MC_VM_AGP_TOP` is inclusive and the unit is 16 MiB, so that register pair is the window `0`-`0x1000000`, not a zero-length aperture. The boot logged `on` because the check was only `bot > top`, and the range check did not look at AGP. The command processor was not halted. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row in `docs/GPU-ARCHITECTURE.md` stay as they are until K2 lands.
+
+### The kernel writes the GFX9 ring through a kernel mapping
+
+The stick from 13:11 Europe/Amsterdam on 5 Nov 2026 reached the desktop loader and then stopped in the kernel debugger. The panic is `SMAP violation: user-mapped address`, in `r5_gfx9_prepare`, called from `r5_gfx9_kernel_start` and `radeon_hd_init` while `app_server` opened the device. The visible VRAM window is mapped with `B_READ_AREA | B_WRITE_AREA`, so the page has the user bit set. The accelerant writes that pointer from user mode. The kernel store of the ring fill hits SMAP. No K0, K1 or K2 line was reached. The syslog was not read; the machine was still in the debugger and the stick was not on this host.
+
+`radeon_hd_init` does not map a second window. After `gfx9_ring` and `gfx9_kernel` are both on, and the PCI id is `15e7`, `1636` or `1638`, `r5_gfx9_kernel_start` maps only the pool, from `vram_window_phys + vram_pool_offset` for `vram_pool_bytes`, with `B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA` and write combining. The kernel allocator returns `kernel_window + (aligned - vram_pool_offset)`. `r5_gfx9_kernel_stop` deletes that area. With `gfx9_kernel` off, the driver maps nothing extra. A refused or failed map leaves `gfx9_owner` unset and does not start the command processor. The cloneable window is unchanged.
+
+`jam -q @r5-anyboot` for AMD64 finished at 13:42 Europe/Amsterdam on 5 Nov 2026 with exit 0 (7041 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `34ef7d6e47c6baa6349b5f7e46cfc3af7168b0907af535d4fb3b199b9dbb5929`. The stick copy is the same size, sha256 `1e98f708cb8036b84410e041a764c6cb70a46193b1474fe1a20e7e31a963712b`. It was written raw to the General UDisk at 13:46 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The kernel driver contains `gfx9 pool`, `k0`, `k1_wait_us`, `k2_dma_bad` and `k2_ib`. The boot of this stick is the section above.
+
+### The kernel starts the GFX9 command processor
+
+This is milestone M3 for R5. The stick below was booted and panicked in `r5_gfx9_prepare` before the command processor started. See the section above.
+
+The fixed sequences now live in one file, `gfx9_start.cpp`, and both the accelerant and the kernel driver link it. The packet bytes are the ones that landed the fence, the indirect buffer, the DMA fill and the compute dispatches. The user chose GPL-3.0-or-later for that file on 5 Nov 2026. `docs/LICENSING.md` says the kernel add-on contains that code, the combined add-on follows GPL-3.0-or-later, and the Haiku parts stay MIT. The `r5_pstate` kernel line is unchanged.
+
+The doorbell clone, the visible-pool allocator, the firmware read and the MMIO size check stay in each host. `radeon_gpu_ring_boot` stays in the accelerant: it reads the settings and calls the shared start. No function that mixes Haiku and R5 code was moved. The kernel does not write a file. It stores the same lines in `radeon_shared_info`, and the accelerant writes `radeon-gfx.txt` from that text. When `gfx9_owner` is the kernel, the accelerant logs `GFX9 owned by the kernel` and does not start the GPU again.
+
+Both hosts read one settings file, `/boot/home/config/settings/kernel/drivers/radeon_hd`. `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` default to false. This stick sets `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` to true.
+
+The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`. The page-table check expects `0x12345000` with valid, system, snooped, readable and writable, and with the Vega MTYPE clear. Linux v6.12 `amdgpu_vm.h` puts that MTYPE at bits 58:57. `gmc_v9_0.c` uses `MTYPE_NC` (0) for GC 9.3 system memory, so those bits stay clear. The range under framebuffer `0xf400000000` is `0xf3f0000000`-`0xf400000000`. It does not overlap the system aperture `0xf400000000`-`0xf420000000` (`0x3d0000`-`0x3d0800` in 256 KiB units). The interrupt entry matches `amdgpu_ih_decode_iv_helper`: client in bits 7:0, source in 15:8, ring in 23:16. CP end-of-pipe is client `0x14` (`SOC15_IH_CLIENTID_GRBM_CP`) and source 181 (`GFX_9_0__SRCID__CP_EOP_INTERRUPT`).
+
+`soc15d.h` defines `DATA_SEL(x)` as `x << 29` and `INT_SEL(x)` as `x << 24`. The K1 release writes `INT_SEL(2)` into that same dword. The K0 packets are unchanged. The interrupt ring is the Vega10 ring 0: 64 KiB, writeback on, rings 1 and 2 left off. OSSSYS base `0x10A0`, GC base `0x2000`, NBIO segment 2 `0xD20`. MSI uses `pci_module_info` through `B_PCI_MODULE_NAME`, the same `get_msi_count`, `configure_msi` and `enable_msi` the HDA driver uses. This tree has no `pci_x86` type with that signature. A miss turns the ring and `CP_INT_CNTL_RING0` off and removes the handler. The GART test still runs from the K0 fence, whether or not the interrupt landed.
+
+The ring holds 1024 dwords. K0 with the workload and the compute path writes 998. The interrupt submission and the GART DMA submission fit (1022). The following indirect buffer, the one that lives in the GART area, does not. That submit is refused before it touches the command processor. That is the existing ring limit.
+
+Both hosts built with `-Wall -Werror`. The only warning is the existing unused `igpLaneInfo` in `connector.cpp`. `jam -q @r5-anyboot` for AMD64 finished at 13:06 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8392 targets). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `e51c404cef57f5bd4fcb8e53e9539e717876eff0a16e39fdfc7d4913a6dfb8c8`. The stick copy is the same size, sha256 `df6b5cbf887cb4d36162e11c14b2137d530bd2d0d3f0ace7fe1eeaeab7c991a6`. It was written raw to the General UDisk at 13:11 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The kernel driver contains `k0`, `k1`, `k1_wait_us`, `k2`, `k2_dma_bad` and `k2_ib`. The accelerant contains `GFX9 owned by the kernel` and `fence landed`.
+
+What's new and `distro/BUILD` are unchanged. `docs/GRAPHICS.md`, `AGENTS.md` and `docs/GPU-ARCHITECTURE.md` stay as they are until a boot confirms the result.
+
 ### The GFX9 command processor dispatches compute
 
 This is milestone M2 for R5. The fence and the indirect-buffer check stay, and the check still runs first. After that fence, and only when the same `radeon_hd` settings file says `gfx9_compute true`, the command processor runs four compute dispatches. The image does not ship the file. With the ring on and this key absent, the log line is `GFX9 compute off`. This stick sets `gfx9_ring true` and `gfx9_compute true`. It does not set `gfx9_workload`, so the DMA fill does not run. If both keys are set, the fill runs only after the four dispatches and uses sequences 6 and 7. The workload-only path still uses sequences 2 and 3, and its packets are unchanged.
