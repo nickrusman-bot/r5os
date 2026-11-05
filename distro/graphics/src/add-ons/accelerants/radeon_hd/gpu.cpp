@@ -1267,6 +1267,8 @@ struct radeon_gfx9_ucode {
 
 // Set when the three RLC 2.1 lists were accepted. SRM_ENABLE follows that.
 static bool sRlcRestoreLists = false;
+// Both MEC items, type 4 and type 5, returned PSP status 0.
+static bool sGfx9MecLoaded = false;
 
 
 static status_t
@@ -1617,6 +1619,9 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 	ERROR("%s: R5 radeon_hd: PSP MEC2 not loaded on GC 9.3\n", __func__);
 
 	sRlcRestoreLists = false;
+	sGfx9MecLoaded = false;
+	bool mecBodyOk = false;
+	bool mecJtOk = false;
 	bool listsStaged = false;
 	radeon_psp_item items[12];
 	uint32 count = 0;
@@ -1853,6 +1858,10 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 		if (sent != B_OK)
 			return sent;
 		fenceValue++;
+		if (status == 0 && items[i].type == 4)
+			mecBodyOk = true;
+		if (status == 0 && items[i].type == 5)
+			mecJtOk = true;
 		if (status != 0) {
 			// RLC, its three lists, PFP, CE, and ME stay required.
 			// MEC is the compute engine; its refusal must not skip
@@ -1865,6 +1874,7 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 		}
 	}
 	sRlcRestoreLists = listsStaged;
+	sGfx9MecLoaded = mecBodyOk && mecJtOk;
 	return B_OK;
 }
 
@@ -2631,9 +2641,15 @@ struct radeon_gfx9_phase {
 	uint32	rptr;
 	uint32	meCntl;
 	uint32	rlcCntl;
+	uint32	readErr;
+	uint32	readErr2;
+	uint32	gfxIndex;
+	uint32	mecCntl;
+	uint32	cpcStatus;
+	uint32	rlcGpmStat;
 };
 
-static radeon_gfx9_phase sGfx9Phases[6];
+static radeon_gfx9_phase sGfx9Phases[8];
 static uint32 sGfx9PhaseCount = 0;
 
 
@@ -2656,14 +2672,23 @@ radeon_gfx9_phase_snap(const char* name)
 	item->rptr = radeon_gfx9_read_reg(kGfx9Seg0, 0x01c0);
 	item->meCntl = radeon_gfx9_read_reg(kGfx9Seg0, 0x01b6);
 	item->rlcCntl = radeon_gfx9_read_reg(kGfx9Seg1, 0x4c00);
+	item->readErr = radeon_gfx9_read_reg(kGfx9Seg0, 0x0016);
+	item->readErr2 = radeon_gfx9_read_reg(kGfx9Seg0, 0x0017);
+	item->gfxIndex = radeon_gfx9_read_reg(kGfx9Seg1, 0x2200);
+	item->mecCntl = radeon_gfx9_read_reg(kGfx9Seg0, 0x008d);
+	item->cpcStatus = radeon_gfx9_read_reg(kGfx9Seg0, 0x0084);
+	item->rlcGpmStat = radeon_gfx9_read_reg(kGfx9Seg1, 0x4c40);
 	ERROR("%s: R5 radeon_hd: GFX9 phase %s cp 0x%" B_PRIx32
 		" grbm 0x%" B_PRIx32 " grbm2 0x%" B_PRIx32 " stalled1 0x%" B_PRIx32
 		" stalled2 0x%" B_PRIx32 " cpf 0x%" B_PRIx32 " pfp 0x%" B_PRIx32
 		" roq 0x%" B_PRIx32 " rptr 0x%" B_PRIx32 " me 0x%" B_PRIx32
-		" rlc 0x%" B_PRIx32 "\n", __func__, item->name, item->cpStat,
+		" rlc 0x%" B_PRIx32 " rerr 0x%" B_PRIx32 " rerr2 0x%" B_PRIx32
+		" gfxidx 0x%" B_PRIx32 " mec 0x%" B_PRIx32 " cpc 0x%" B_PRIx32
+		" rlcstat 0x%" B_PRIx32 "\n", __func__, item->name, item->cpStat,
 		item->grbm, item->grbm2, item->stalled1, item->stalled2, item->cpf,
 		item->pfpHeader, item->roq, item->rptr, item->meCntl,
-		item->rlcCntl);
+		item->rlcCntl, item->readErr, item->readErr2, item->gfxIndex,
+		item->mecCntl, item->cpcStatus, item->rlcGpmStat);
 }
 
 
@@ -2686,10 +2711,12 @@ radeon_gfx9_phase_note()
 		const radeon_gfx9_phase* item = &sGfx9Phases[i];
 		fprintf(file, "phase %s cp %08x grbm %08x grbm2 %08x stalled1 %08x"
 			" stalled2 %08x cpf %08x pfp %08x roq %08x rptr %08x me %08x"
-			" rlc %08x\n", item->name, item->cpStat, item->grbm,
+			" rlc %08x rerr %08x rerr2 %08x gfxidx %08x mec %08x cpc %08x"
+			" rlcstat %08x\n", item->name, item->cpStat, item->grbm,
 			item->grbm2, item->stalled1, item->stalled2, item->cpf,
 			item->pfpHeader, item->roq, item->rptr, item->meCntl,
-			item->rlcCntl);
+			item->rlcCntl, item->readErr, item->readErr2, item->gfxIndex,
+			item->mecCntl, item->cpcStatus, item->rlcGpmStat);
 	}
 	fclose(file);
 }
@@ -3043,10 +3070,31 @@ radeon_gfx9_cp_start()
 	}
 	radeon_gfx9_phase_snap("rlc");
 
+	// gfx_v9_0_cp_compute_enable(adev, true) runs in gfx_v9_0_kiq_resume,
+	// before gfx_v9_0_cp_gfx_resume. No KIQ queue and no MQD here: the
+	// MEC only runs idle. mmCP_MEC_CNTL is 0x008d, base index 0.
+	// MEC_ME1_HALT is bit 30 and MEC_ME2_HALT is bit 28.
+	uint32 savedMec = 0;
+	bool mecStarted = false;
+	const uint32 mecCntl = radeon_gfx9_byte(kGfx9Seg0, 0x008d);
+	if (!sGfx9MecLoaded) {
+		ERROR("%s: R5 radeon_hd: MEC not started, not loaded\n", __func__);
+	} else {
+		savedMec = Read32(OUT, mecCntl);
+		Write32(OUT, mecCntl, 0);
+		snooze(50);
+		ERROR("%s: R5 radeon_hd: GFX9 CP_MEC_CNTL 0x%" B_PRIx32 " -> 0x%"
+			B_PRIx32 "\n", __func__, savedMec, Read32(OUT, mecCntl));
+		mecStarted = true;
+	}
+	radeon_gfx9_phase_snap("mec");
+
 	Write32(OUT, scratch, 0xCAFEDEAD);
 	uint32 scratchRead = Read32(OUT, scratch);
 	if (scratchRead != 0xCAFEDEAD) {
 		Write32(OUT, meCntl, savedMe);
+		if (mecStarted)
+			Write32(OUT, mecCntl, savedMec);
 		radeon_gfx9_restore_saved(rlcTouched ? rlcBios : rlcBefore,
 			rlcTouched || rlcStarted,
 			rlcTouched ? rlcClockBios : rlcClock);
@@ -3287,6 +3335,8 @@ radeon_gfx9_cp_start()
 	Write32(OUT, rbPollLo, savedPollLo);
 	Write32(OUT, rbPollHi, savedPollHi);
 	Write32(OUT, meCntl, savedMe);
+	if (mecStarted)
+		Write32(OUT, mecCntl, savedMec);
 	radeon_gfx9_restore_saved(rlcTouched ? rlcBios : rlcBefore,
 		rlcTouched || rlcStarted, rlcTouched ? rlcClockBios : rlcClock);
 	radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,

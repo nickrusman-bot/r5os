@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### The MEC is started before the GFX ring
+
+Linux v6.12 `gfx_v9_0_cp_compute_enable(true)` writes `CP_MEC_CNTL` to 0 and waits 50 µs. `mmCP_MEC_CNTL` is `0x008d`, base index 0. `MEC_ME1_HALT` is bit 30 and `MEC_ME2_HALT` is bit 28. The accelerant does that write after the `rlc` snapshot and before the ring registers, and only when both MEC PSP items (type 4 and type 5) returned status 0. There is no KIQ queue and no MQD. A failure path writes that saved value back before `radeon_gfx9_restore_saved`. Two such calls sit after the new code. The log line is `GFX9 CP_MEC_CNTL`.
+
+The phase snapshot also reads `GRBM_READ_ERROR` (`0x0016`), `GRBM_READ_ERROR2` (`0x0017`), `GRBM_GFX_INDEX` (`0x2200`, base index 1), `CP_MEC_CNTL`, `CP_CPC_STATUS` (`0x0084`) and `RLC_GPM_STAT` (`0x4c40`, base index 1). A seventh point, `mec`, follows the write. The file line adds `rerr`, `rerr2`, `gfxidx`, `mec`, `cpc` and `rlcstat`.
+
+`GRBM_READ_ERROR` in `gc_9_0_sh_mask.h`: `READ_ERROR` is bit 31, `READ_MEID` is bits 23:22, `READ_PIPEID` is bits 21:20, and `READ_ADDRESS` is bits 17:2 (mask `0x0003fffc`, shift 2). The dword offset is that field shifted right by 2. `RLC_GPM_STAT` has `GFX_POWER_STATUS` at bit 1 and `GFX_CLOCK_STATUS` at bit 2. `GRBM_GFX_INDEX` broadcast is `SE_BROADCAST_WRITES`, `INSTANCE_BROADCAST_WRITES` and `SH_BROADCAST_WRITES`, together `0xe0000000`.
+
+From the previous boot, now named from that header: `CP_STALLED_STAT2` `0x20` is `PFP_RCIU_READ_PENDING` (bit 5). `CP_STALLED_STAT1` `0xc00` is `ME_HAS_ACTIVE_CE_BUFFER_FLAG` (bit 10) and `ME_HAS_ACTIVE_DE_BUFFER_FLAG` (bit 11). `CP_CPF_STATUS` `0x10000000` is `GRBM_CPF_STAT_BUSY` (bit 28). `GRBM_STATUS` bit 5 is `RSMU_RQ_PENDING`. It is already set in the `boot` value `0x3028`, with the command processor halted, so it does not explain the stall. `CP_PFP_HEADER_DUMP` is not a header readout. The earlier conclusion that `0xdef0def0` showed the absence of a PM4 header does not hold. The PFP is already busy at `unhalt`, before a packet is fetched.
+
+This has not been built. It has not been written to a stick. It has not been booted.
+
 ### The Renoir golden list writes GCEA_PROBE_MAP
 
 Linux v6.12 `gfx_v9_0.c` defines `mmGCEA_PROBE_MAP` as `0x070c` with base index 0. `golden_settings_gc_9_1_rn` programs that register with mask `0xffffffff` and value `0x0000cccc`. The accelerant now saves, writes and restores that row with the other golden registers. The log line is `GFX9 golden GCEA_PROBE_MAP`.
