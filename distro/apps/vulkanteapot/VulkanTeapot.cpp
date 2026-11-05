@@ -27,7 +27,7 @@ typedef float GLfloat;
 
 
 static const int kSize = 384;
-static const int kGrid = 10;
+static const int kSubDiv = 8;
 
 
 struct Vertex {
@@ -67,119 +67,155 @@ check(const char* text, VkResult result)
 }
 
 
-static float
-bernstein(int index, float t)
+static void
+bernstein3(int index, float x, float* value, float* deriv)
 {
-	float u = 1.0f - t;
-	if (index == 0)
-		return u * u * u;
-	if (index == 1)
-		return 3.0f * u * u * t;
-	if (index == 2)
-		return 3.0f * u * t * t;
-	return t * t * t;
+	float inv = 1.0f - x;
+	float temp;
+	if (index == 0) {
+		temp = inv * inv;
+		*value = inv * temp;
+		*deriv = -3.0f * temp;
+	} else if (index == 1) {
+		temp = inv * inv;
+		*value = 3.0f * x * temp;
+		*deriv = 3.0f * temp - 6.0f * x * inv;
+	} else if (index == 2) {
+		temp = x * x;
+		*value = 3.0f * temp * inv;
+		*deriv = 6.0f * x * inv - 3.0f * temp;
+	} else {
+		temp = x * x;
+		*value = x * temp;
+		*deriv = 3.0f * temp;
+	}
 }
 
 
 static void
-eval_point(const int patch[16], float u, float v, int flip, float angle,
-	float out[3])
+load_patch(const int patch[16], float cp[4][4][3])
 {
-	out[0] = out[1] = out[2] = 0;
-	for (int j = 0; j < 4; j++) {
-		for (int i = 0; i < 4; i++) {
-			const GLfloat* cp = cpdata_teapot[patch[j * 4 + i]];
-			float bu = bernstein(i, u);
-			float bv = bernstein(j, v);
-			float x = cp[0];
-			float y = cp[1];
-			float z = flip ? -cp[2] : cp[2];
-			float c = cosf(angle);
-			float s = sinf(angle);
-			out[0] += bu * bv * (c * x + s * z);
-			out[1] += bu * bv * y;
-			out[2] += bu * bv * (-s * x + c * z);
+	const float scale = 0.5f;
+	for (int i = 0; i < 16; i++) {
+		const GLfloat* src = cpdata_teapot[patch[i]];
+		cp[i / 4][i % 4][0] = src[0] * scale;
+		cp[i / 4][i % 4][1] = (src[2] - 1.575f) * scale;
+		cp[i / 4][i % 4][2] = -src[1] * scale;
+	}
+}
+
+
+static void
+rotate_or_mirror(float* values, int count, int copies)
+{
+	if (copies == 4) {
+		for (int o = 0; o < count; o += 3) {
+			float x = values[o];
+			float y = values[o + 1];
+			float z = values[o + 2];
+			float* turn90 = values + count + o;
+			float* turn180 = values + count * 2 + o;
+			float* turn270 = values + count * 3 + o;
+			turn90[0] = z;
+			turn90[1] = y;
+			turn90[2] = -x;
+			turn180[0] = -x;
+			turn180[1] = y;
+			turn180[2] = -z;
+			turn270[0] = -z;
+			turn270[1] = y;
+			turn270[2] = x;
+		}
+		return;
+	}
+	for (int row = 0; row < kSubDiv; row++) {
+		int source = (kSubDiv - row - 1) * kSubDiv * 3;
+		int dest = count + row * kSubDiv * 3;
+		for (int col = 0; col < kSubDiv; col++) {
+			values[dest] = values[source];
+			values[dest + 1] = values[source + 1];
+			values[dest + 2] = -values[source + 2];
+			source += 3;
+			dest += 3;
 		}
 	}
 }
 
 
 static void
-eval_patch(const int patch[16], float u, float v, int flip, float angle,
-	float out[3], float normal[3])
+eval_bezier(const float cp[4][4][3], const float bern[8][4],
+	const float deriv[8][4], int normalFix, float* verts, float* norms)
 {
-	float point[3];
-	float du[3];
-	float dv[3];
-	eval_point(patch, u, v, flip, angle, point);
-	float step = 1.0f / kGrid;
-	float u2 = u + step > 1.0f ? u - step : u + step;
-	float v2 = v + step > 1.0f ? v - step : v + step;
-	float other[3];
-	eval_point(patch, u2, v, flip, angle, other);
-	for (int n = 0; n < 3; n++)
-		du[n] = other[n] - point[n];
-	eval_point(patch, u, v2, flip, angle, other);
-	for (int n = 0; n < 3; n++)
-		dv[n] = other[n] - point[n];
-	normal[0] = du[1] * dv[2] - du[2] * dv[1];
-	normal[1] = du[2] * dv[0] - du[0] * dv[2];
-	normal[2] = du[0] * dv[1] - du[1] * dv[0];
-	float length = sqrtf(normal[0] * normal[0] + normal[1] * normal[1]
-		+ normal[2] * normal[2]);
-	if (length > 0.0001f) {
-		normal[0] /= length;
-		normal[1] /= length;
-		normal[2] /= length;
-	}
-	out[0] = point[0] * 0.5f;
-	out[1] = point[1] * 0.5f;
-	out[2] = point[2] * 0.5f;
-}
-
-
-static void
-add_vertex(Mesh* mesh, const float point[3], const float normal[3])
-{
-	mesh->vertices = (Vertex*)realloc(mesh->vertices,
-		(mesh->vertexCount + 1) * sizeof(Vertex));
-	Vertex* vertex = &mesh->vertices[mesh->vertexCount++];
-	memcpy(vertex->position, point, sizeof(vertex->position));
-	memcpy(vertex->normal, normal, sizeof(vertex->normal));
-}
-
-
-static void
-add_patch(Mesh* mesh, const int patch[16], int flip, float angle)
-{
-	uint32_t base = mesh->vertexCount;
-	for (int y = 0; y <= kGrid; y++) {
-		for (int x = 0; x <= kGrid; x++) {
-			float point[3];
-			float normal[3];
-			eval_patch(patch, (float)x / kGrid, (float)y / kGrid, flip, angle,
-				point, normal);
-			add_vertex(mesh, point, normal);
+	int offset = 0;
+	for (int u = 0; u < kSubDiv; u++) {
+		for (int v = 0; v < kSubDiv; v++, offset += 3) {
+			float tangentV[3] = {0, 0, 0};
+			float tangentU[3] = {0, 0, 0};
+			verts[offset] = verts[offset + 1] = verts[offset + 2] = 0;
+			for (int i = 0; i < 4; i++) {
+				float point[3] = {0, 0, 0};
+				float alongV[3] = {0, 0, 0};
+				for (int j = 0; j < 4; j++) {
+					point[0] += bern[v][j] * cp[i][j][0];
+					point[1] += bern[v][j] * cp[i][j][1];
+					point[2] += bern[v][j] * cp[i][j][2];
+					alongV[0] += deriv[v][j] * cp[i][j][0];
+					alongV[1] += deriv[v][j] * cp[i][j][1];
+					alongV[2] += deriv[v][j] * cp[i][j][2];
+				}
+				verts[offset] += bern[u][i] * point[0];
+				verts[offset + 1] += bern[u][i] * point[1];
+				verts[offset + 2] += bern[u][i] * point[2];
+				tangentV[0] += bern[u][i] * alongV[0];
+				tangentV[1] += bern[u][i] * alongV[1];
+				tangentV[2] += bern[u][i] * alongV[2];
+				tangentU[0] += deriv[u][i] * point[0];
+				tangentU[1] += deriv[u][i] * point[1];
+				tangentU[2] += deriv[u][i] * point[2];
+			}
+			norms[offset] = tangentV[1] * tangentU[2] - tangentV[2] * tangentU[1];
+			norms[offset + 1] = tangentV[2] * tangentU[0] - tangentV[0] * tangentU[2];
+			norms[offset + 2] = tangentV[0] * tangentU[1] - tangentV[1] * tangentU[0];
+			float length = sqrtf(norms[offset] * norms[offset]
+				+ norms[offset + 1] * norms[offset + 1]
+				+ norms[offset + 2] * norms[offset + 2]);
+			if (length > 0.000001f) {
+				norms[offset] /= length;
+				norms[offset + 1] /= length;
+				norms[offset + 2] /= length;
+			} else {
+				norms[offset] = norms[offset + 1] = norms[offset + 2] = 0;
+			}
 		}
 	}
-	int stride = kGrid + 1;
-	for (int y = 0; y < kGrid; y++) {
-		for (int x = 0; x < kGrid; x++) {
-			uint32_t i0 = base + y * stride + x;
-			uint32_t i1 = i0 + 1;
-			uint32_t i2 = i0 + stride;
-			uint32_t i3 = i2 + 1;
-			uint32_t extra = 6;
+	if (normalFix != 0) {
+		float up = normalFix == 1 ? 1.0f : -1.0f;
+		for (int n = 0; n < kSubDiv; n++) {
+			norms[n * 3] = 0;
+			norms[n * 3 + 1] = up;
+			norms[n * 3 + 2] = 0;
+		}
+	}
+}
+
+
+static void
+add_patch_indices(Mesh* mesh, uint32_t base)
+{
+	for (int row = 0; row < kSubDiv - 1; row++) {
+		for (int col = 0; col < kSubDiv - 1; col++) {
+			uint32_t row1 = base + row * kSubDiv + col;
+			uint32_t row2 = row1 + kSubDiv;
 			mesh->indices = (uint32_t*)realloc(mesh->indices,
-				(mesh->indexCount + extra) * sizeof(uint32_t));
+				(mesh->indexCount + 6) * sizeof(uint32_t));
 			uint32_t* out = mesh->indices + mesh->indexCount;
-			out[0] = i0;
-			out[1] = i2;
-			out[2] = i1;
-			out[3] = i1;
-			out[4] = i2;
-			out[5] = i3;
-			mesh->indexCount += extra;
+			out[0] = row1;
+			out[1] = row2;
+			out[2] = row2 + 1;
+			out[3] = row1;
+			out[4] = row2 + 1;
+			out[5] = row1 + 1;
+			mesh->indexCount += 6;
 		}
 	}
 }
@@ -190,14 +226,43 @@ build_teapot(void)
 {
 	Mesh mesh;
 	memset(&mesh, 0, sizeof(mesh));
+	float bern[kSubDiv][4];
+	float deriv[kSubDiv][4];
+	for (int s = 0; s < kSubDiv; s++) {
+		float x = s / (float)(kSubDiv - 1);
+		for (int i = 0; i < 4; i++)
+			bernstein3(i, x, &bern[s][i], &deriv[s][i]);
+	}
+	const int points = kSubDiv * kSubDiv;
+	const int values = points * 3;
+	float verts[4 * 8 * 8 * 3];
+	float norms[4 * 8 * 8 * 3];
 	for (int patch = 0; patch < GLUT_TEAPOT_N_INPUT_PATCHES; patch++) {
-		if (patch < 6) {
-			for (int turn = 0; turn < 4; turn++)
-				add_patch(&mesh, patchdata_teapot[patch], 0, turn * 1.5707963f);
-		} else {
-			add_patch(&mesh, patchdata_teapot[patch], 0, 0);
-			add_patch(&mesh, patchdata_teapot[patch], 1, 0);
+		float cp[4][4][3];
+		load_patch(patchdata_teapot[patch], cp);
+		int copies = patch < 6 ? 4 : 2;
+		int normalFix = 0;
+		if (patch == 3)
+			normalFix = 1;
+		else if (patch == 5)
+			normalFix = 2;
+		eval_bezier(cp, bern, deriv, normalFix, verts, norms);
+		rotate_or_mirror(verts, values, copies);
+		rotate_or_mirror(norms, values, copies);
+		uint32_t base = mesh.vertexCount;
+		for (int copy = 0; copy < copies; copy++) {
+			for (int n = 0; n < points; n++) {
+				mesh.vertices = (Vertex*)realloc(mesh.vertices,
+					(mesh.vertexCount + 1) * sizeof(Vertex));
+				Vertex* vertex = &mesh.vertices[mesh.vertexCount++];
+				memcpy(vertex->position, verts + (copy * points + n) * 3,
+					sizeof(vertex->position));
+				memcpy(vertex->normal, norms + (copy * points + n) * 3,
+					sizeof(vertex->normal));
+			}
 		}
+		for (int copy = 0; copy < copies; copy++)
+			add_patch_indices(&mesh, base + copy * points);
 	}
 	return mesh;
 }
@@ -207,7 +272,7 @@ static void
 mvp(float out[16])
 {
 	float eye[3] = {0, 0.15f, 7.2f};
-	float center[3] = {0, -0.5f, 0};
+	float center[3] = {0, 0, 0};
 	float up[3] = {0, 1, 0};
 	float f[3] = {center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]};
 	float fl = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
@@ -845,7 +910,7 @@ main(int argc, char** argv)
 	if (selftest) {
 		draw_frame(&draw, matrix);
 		const int sampleAt[][2] = {
-			{24, 24}, {192, 24}, {192, 192}, {192, 300}, {48, 192}, {336, 192}
+			{24, 24}, {192, 80}, {192, 192}, {192, 134}, {90, 192}, {280, 192}
 		};
 		printf("device %s\n", properties.deviceName);
 		printf("deviceType %u\n", (unsigned)properties.deviceType);

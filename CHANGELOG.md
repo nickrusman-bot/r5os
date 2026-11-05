@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Teapot patches follow freeglut
+
+The mesh no longer turns the raw data around Y. Each control point is converted first, the way freeglut 3.4 `fghTeaset` does for `glutSolidTeapot`: GL `(x, z - 1.575, -y)` times `size / 2`, with `size` 1. Patches 0–5 are copied four times by a turn around that GL Y axis: `(x, y, z)`, `(z, y, -x)`, `(-x, y, -z)`, `(-z, y, x)`. Patches 6–9 are copied twice. The copy negates GL Z, which is the data Y, and reverses the row order. Normals take the same turn or mirror. The first row of patch 3 is forced to `(0, 1, 0)` and the first row of patch 5 to `(0, -1, 0)`. A solid patch is 8 by 8 points (`GLUT_SOLID_N_SUBDIV`). The camera looks at the origin from `(0, 0.15, 7.2)`.
+
+A host projection of that mesh, not a guest frame, puts the lid top at pixel `(192, 134)` and the bottom center at `(192, 249)`. The side view at row 192 runs `x` 83–95, then the body 123–260, then 273–291. `--selftest` samples `(24, 24)`, `(192, 80)`, `(192, 192)`, `(192, 134)`, `(90, 192)` and `(280, 192)`. Those are background, background, body, lid edge, and the two side pieces. No Lavapipe colors exist for this mesh yet. [#4104](https://github.com/nickrusman-bot/r5os/issues/4104) stays open until a picture shows the teapot.
+
 ### M4 stick boot on the 5625U
 
 The stick sha256 `58bb5273e8271eb144b191879ea69e92f20af751b7f53d4bb02aa8fcf640cbbc` reached the desktop. The photo of `vulkaninfo` shows RADV failing and the loader continuing. The lines are:
