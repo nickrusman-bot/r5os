@@ -806,8 +806,6 @@ radeon_hd_init(radeon_info &info)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	info.doorbell_area = -1;
-	info.kernel_window_area = -1;
-	info.kernel_window = NULL;
 // SPDX-SnippetEnd
 
 	ERROR("%s: card(%" B_PRId32 "): "
@@ -1102,21 +1100,6 @@ radeon_hd_init(radeon_info &info)
 		radeon_publish_vram_window(info.shared_info, barPhys, barBytes,
 			(uint64)mapAddr, (uint64)mapBytes, reservedOffset, reservedBytes);
 	}
-
-	AreaKeeper kernelWindow;
-	info.kernel_window_area = kernelWindow.Map("radeon hd kernel window",
-		mapAddr, mapBytes, B_ANY_KERNEL_ADDRESS,
-		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA,
-		(void**)&info.kernel_window);
-	if (kernelWindow.InitCheck() < B_OK) {
-		ERROR("%s: R5 radeon_hd: kernel window map failed\n", __func__);
-		info.kernel_window_area = -1;
-		info.kernel_window = NULL;
-	} else {
-		vm_set_area_memory_type(info.kernel_window_area, mapAddr,
-			B_WRITE_COMBINING_MEMORY);
-		kernelWindow.Detach();
-	}
 // SPDX-SnippetEnd
 
 	// Pass common information to accelerant
@@ -1237,8 +1220,6 @@ radeon_hd_uninit(radeon_info &info)
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (info.doorbell_area >= 0)
 		delete_area(info.doorbell_area);
-	if (info.kernel_window_area >= 0)
-		delete_area(info.kernel_window_area);
 	void r5_gfx9_kernel_stop();
 	r5_gfx9_kernel_stop();
 // SPDX-SnippetEnd

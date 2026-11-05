@@ -14,6 +14,12 @@
 #include <KernelExport.h>
 #include <driver_settings.h>
 
+// The kernel exports this with C linkage. The private vm.h declaration
+// pulls in thread types before the mutex type is defined, so it is not
+// included here.
+extern "C" status_t vm_set_area_memory_type(area_id id,
+	phys_addr_t physicalBase, uint32 type);
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -137,12 +143,14 @@ kvram(void* cookie, uint64 bytes, uint64 align, uint64* offset, uint8** address)
 	uint64 aligned = (cursor + align - 1) & ~(align - 1);
 	if (aligned < cursor || aligned > end || bytes > end - aligned)
 		return B_NO_MEMORY;
-	if (info->kernel_window == NULL)
+	if (info->kernel_window == NULL || aligned < shared->vram_pool_offset)
 		return B_NO_MEMORY;
 	shared->vram_pool_cursor = aligned + bytes;
 	*offset = aligned;
-	if (address != NULL)
-		*address = info->kernel_window + aligned;
+	if (address != NULL) {
+		*address = info->kernel_window
+			+ (aligned - shared->vram_pool_offset);
+	}
 	return B_OK;
 }
 
@@ -267,6 +275,41 @@ ih_off()
 }
 
 
+static bool
+map_pool(radeon_info& info)
+{
+	radeon_shared_info* shared = info.shared_info;
+	uint64 bytes = shared->vram_pool_bytes;
+	uint64 phys = shared->vram_window_phys + shared->vram_pool_offset;
+	if (bytes == 0
+		|| (shared->vram_pool_offset & 4095) != 0 || (bytes & 4095) != 0
+		|| (shared->vram_window_phys & 4095) != 0
+		|| phys < shared->vram_window_phys) {
+		dprintf("radeon_hd: gfx9 pool refused\n");
+		return false;
+	}
+	void* address = NULL;
+	area_id area = map_physical_memory("radeon hd gfx9 pool",
+		(phys_addr_t)phys, (size_t)bytes, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, &address);
+	if (area < B_OK || address == NULL) {
+		dprintf("radeon_hd: gfx9 pool map failed\n");
+		return false;
+	}
+	if (vm_set_area_memory_type(area, (phys_addr_t)phys,
+		B_WRITE_COMBINING_MEMORY) != B_OK) {
+		delete_area(area);
+		dprintf("radeon_hd: gfx9 pool type failed\n");
+		return false;
+	}
+	info.kernel_window_area = area;
+	info.kernel_window = (uint8*)address;
+	dprintf("radeon_hd: gfx9 pool 0x%" B_PRIx64 "+0x%" B_PRIx64 "\n",
+		phys, bytes);
+	return true;
+}
+
+
 void
 r5_gfx9_kernel_stop()
 {
@@ -285,6 +328,11 @@ r5_gfx9_kernel_stop()
 		gPCI->unconfigure_msi(sInfo->pci->bus, sInfo->pci->device,
 			sInfo->pci->function);
 		sMsi = false;
+	}
+	if (sInfo != NULL && sInfo->kernel_window_area >= 0) {
+		delete_area(sInfo->kernel_window_area);
+		sInfo->kernel_window_area = -1;
+		sInfo->kernel_window = NULL;
 	}
 }
 
@@ -582,6 +630,8 @@ void
 r5_gfx9_kernel_start(radeon_info& info)
 {
 	sInfo = &info;
+	info.kernel_window_area = -1;
+	info.kernel_window = NULL;
 	if (info.shared_info == NULL || info.pci == NULL)
 		return;
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_NONE;
@@ -610,6 +660,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 	if (!ring || !kernel)
 		return;
 	if (pci != 0x15e7 && pci != 0x1636 && pci != 0x1638)
+		return;
+	if (!map_pool(info))
 		return;
 
 	memset(&sHost, 0, sizeof(sHost));
