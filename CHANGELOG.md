@@ -1,5 +1,25 @@
 # R5OS changelog (lokaal)
 
+### The kernel starts the GFX9 command processor
+
+This is milestone M3 for R5. The image has not been booted.
+
+The fixed sequences now live in one file, `gfx9_start.cpp`, and both the accelerant and the kernel driver link it. The packet bytes are the ones that landed the fence, the indirect buffer, the DMA fill and the compute dispatches. The user chose GPL-3.0-or-later for that file on 5 Nov 2026. `docs/LICENSING.md` says the kernel add-on contains that code, the combined add-on follows GPL-3.0-or-later, and the Haiku parts stay MIT. The `r5_pstate` kernel line is unchanged.
+
+The doorbell clone, the visible-pool allocator, the firmware read and the MMIO size check stay in each host. `radeon_gpu_ring_boot` stays in the accelerant: it reads the settings and calls the shared start. No function that mixes Haiku and R5 code was moved. The kernel does not write a file. It stores the same lines in `radeon_shared_info`, and the accelerant writes `radeon-gfx.txt` from that text. When `gfx9_owner` is the kernel, the accelerant logs `GFX9 owned by the kernel` and does not start the GPU again.
+
+Both hosts read one settings file, `/boot/home/config/settings/kernel/drivers/radeon_hd`. `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` default to false. This stick sets `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` to true.
+
+The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`. The page-table check expects `0x12345000` with valid, system, snooped, readable and writable, and with the Vega MTYPE clear. Linux v6.12 `amdgpu_vm.h` puts that MTYPE at bits 58:57. `gmc_v9_0.c` uses `MTYPE_NC` (0) for GC 9.3 system memory, so those bits stay clear. The range under framebuffer `0xf400000000` is `0xf3f0000000`-`0xf400000000`. It does not overlap the system aperture `0xf400000000`-`0xf420000000` (`0x3d0000`-`0x3d0800` in 256 KiB units). The interrupt entry matches `amdgpu_ih_decode_iv_helper`: client in bits 7:0, source in 15:8, ring in 23:16. CP end-of-pipe is client `0x14` (`SOC15_IH_CLIENTID_GRBM_CP`) and source 181 (`GFX_9_0__SRCID__CP_EOP_INTERRUPT`).
+
+`soc15d.h` defines `DATA_SEL(x)` as `x << 29` and `INT_SEL(x)` as `x << 24`. The K1 release writes `INT_SEL(2)` into that same dword. The K0 packets are unchanged. The interrupt ring is the Vega10 ring 0: 64 KiB, writeback on, rings 1 and 2 left off. OSSSYS base `0x10A0`, GC base `0x2000`, NBIO segment 2 `0xD20`. MSI uses `pci_module_info` through `B_PCI_MODULE_NAME`, the same `get_msi_count`, `configure_msi` and `enable_msi` the HDA driver uses. This tree has no `pci_x86` type with that signature. A miss turns the ring and `CP_INT_CNTL_RING0` off and removes the handler. The GART test still runs from the K0 fence, whether or not the interrupt landed.
+
+The ring holds 1024 dwords. K0 with the workload and the compute path writes 998. The interrupt submission and the GART DMA submission fit (1022). The following indirect buffer, the one that lives in the GART area, does not. That submit is refused before it touches the command processor. That is the existing ring limit.
+
+Both hosts built with `-Wall -Werror`. The only warning is the existing unused `igpLaneInfo` in `connector.cpp`. `jam -q @r5-anyboot` for AMD64 finished at 13:06 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8392 targets). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `e51c404cef57f5bd4fcb8e53e9539e717876eff0a16e39fdfc7d4913a6dfb8c8`. The stick copy is the same size, sha256 `df6b5cbf887cb4d36162e11c14b2137d530bd2d0d3f0ace7fe1eeaeab7c991a6`. It was written raw to the General UDisk at 13:11 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The kernel driver contains `k0`, `k1`, `k1_wait_us`, `k2`, `k2_dma_bad` and `k2_ib`. The accelerant contains `GFX9 owned by the kernel` and `fence landed`.
+
+What's new and `distro/BUILD` are unchanged. `docs/GRAPHICS.md`, `AGENTS.md` and `docs/GPU-ARCHITECTURE.md` stay as they are until a boot confirms the result.
+
 ### The GFX9 command processor dispatches compute
 
 This is milestone M2 for R5. The fence and the indirect-buffer check stay, and the check still runs first. After that fence, and only when the same `radeon_hd` settings file says `gfx9_compute true`, the command processor runs four compute dispatches. The image does not ship the file. With the ring on and this key absent, the log line is `GFX9 compute off`. This stick sets `gfx9_ring true` and `gfx9_compute true`. It does not set `gfx9_workload`, so the DMA fill does not run. If both keys are set, the fill runs only after the four dispatches and uses sequences 6 and 7. The workload-only path still uses sequences 2 and 3, and its packets are unchanged.

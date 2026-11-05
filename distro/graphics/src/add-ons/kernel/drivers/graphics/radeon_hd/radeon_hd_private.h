@@ -44,6 +44,7 @@ struct radeon_info {
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	area_id			doorbell_area;
+	uint8*			doorbell;
 // SPDX-SnippetEnd
 
 	struct radeon_shared_info* shared_info;

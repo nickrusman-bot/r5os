@@ -5,6 +5,7 @@
  * written out here. They are not produced by calling the builder.
  */
 #include "gfx9_compute_ib.h"
+#include "gfx9_check.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -176,5 +177,47 @@ main(void)
 		return fail("release");
 	printf("ok dwords %u submit %u\n",
 		(unsigned)(sizeof(kExpectOne) / sizeof(kExpectOne[0])), submitCount);
+
+	const uint64_t kPhys = 0x0000000123450000ull;
+	const uint64_t kFlags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM
+		| R5_GFX9_PTE_SNOOPED | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
+	const uint64_t kExpectPte = 0x0000000123450067ull;
+	uint64_t pte = r5_gfx9_gart_pte(kPhys, kFlags);
+	if (pte != kExpectPte)
+		return fail("pte value");
+	if ((pte & 1ull) == 0 || (pte & 2ull) == 0 || (pte & 4ull) == 0)
+		return fail("pte low");
+	if ((pte & (1ull << 4)) != 0)
+		return fail("pte exec");
+	if ((pte & (1ull << 5)) == 0 || (pte & (1ull << 6)) == 0)
+		return fail("pte rw");
+	if (((pte >> 57) & 3ull) != 0)
+		return fail("pte mtype");
+	if ((pte & ~0xfffull) != kPhys)
+		return fail("pte phys");
+
+	uint64_t gartStart = 0;
+	uint64_t gartEnd = 0;
+	const uint64_t kFb = 0xf400000000ull;
+	const uint64_t kAperStart = 0x3d0000ull << 18;
+	const uint64_t kAperEnd = 0x3d0800ull << 18;
+	if (!r5_gfx9_gart_range(kFb, kAperStart, kAperEnd, &gartStart, &gartEnd))
+		return fail("gart range");
+	if (gartStart != 0xf3f0000000ull || gartEnd != 0xf400000000ull)
+		return fail("gart place");
+	if (!(gartEnd <= kAperStart || gartStart >= kAperEnd))
+		return fail("gart overlap");
+	if (gartEnd > kFb)
+		return fail("gart fb");
+
+	uint8_t raw[32];
+	memset(raw, 0, sizeof(raw));
+	raw[0] = 0x14;
+	raw[1] = 181;
+	raw[2] = 0;
+	r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(raw);
+	if (entry.client != 0x14u || entry.source != 181u || entry.ring != 0)
+		return fail("ih parse");
+	printf("ok pte gart ih\n");
 	return 0;
 }
