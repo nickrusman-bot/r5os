@@ -3169,7 +3169,7 @@ radeon_gfx9_compute_shader(uint32 location, const uint32* code, uint32 bytes,
 {
 	uint64 offset = 0;
 	uint8* address = NULL;
-	if (radeon_vram_alloc(4096, 256, &offset, &address) != B_OK
+	if (radeon_vram_alloc(4096, kGfx9ShaderAlign, &offset, &address) != B_OK
 		|| address == NULL)
 		return false;
 	memset(address, 0, 4096);
@@ -3235,7 +3235,7 @@ radeon_gfx9_compute_dispatch(uint8* ibAddress, uint64 ibGpu, uint64 fenceGpu,
 	uint32* ib = (uint32*)ibAddress;
 	uint32 ibDwords = r5_gfx9_ib_compute(ib, shaderMc, rsrc1, rsrc2, bufferMc,
 		groups, fenceGpu + kFenceTsStart, fenceGpu + kFenceTsEnd);
-	if (ibDwords == 0 || ibDwords > 1024) {
+	if (ibDwords != kGfx9ComputeIbDwords) {
 		ERROR("%s: R5 radeon_hd: GFX9 compute failed: %s ib %" B_PRIu32
 			"\n", __func__, stage, ibDwords);
 		return false;

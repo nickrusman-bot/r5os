@@ -130,6 +130,20 @@ The fill comes after that check. The CPU zeros 8 MiB. The first fill submission 
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `2a5cb8dbc5cfcd52af5d74a6e1149b0f563ba313876ce3ff6a2909786ff6295a`, written at 10:05 Europe/Amsterdam, reached the desktop with `ib_wb deadbeef`, `ib_seq 1 seen 1` and `ib_rptr 0000039e wptr 0000039e`. The stick sha256 `221a4837006941b4f23981db9ef35bb831bb05404a1b70ebb247fba1f252e9a4`, written at 10:59 Europe/Amsterdam, repeated that and then recorded `dma_1m_bad 0 ticks_1m 8470`, `dma_8m_bad 0 ticks_8m 67209` and `dma_ratio 7.9`. A boot with the ring on and `gfx9_workload` absent was not repeated after this fill.
 
+## GFX9 compute on GC 9.3 (fixed)
+
+This is milestone M2. It runs only after the fence and the indirect-buffer check above. The first ring, its registers, the PSP load, the firmware blobs, and the workload packets stay as they are. The new packets are written at the current write pointer. A submission that would pass the end of the 4 KiB ring is refused.
+
+The same settings file has to contain `gfx9_compute true`. The image does not ship that file. With the ring on and this key absent, the log is `GFX9 compute off`. `gfx9_workload` is independent. This stick does not set it, so the DMA fill does not run. If both are set, the fill runs only after the four dispatches and uses sequences 6 and 7. The workload-only path still uses sequences 2 and 3.
+
+The shader source is `gfx9_compute.s`. `gfx9_compute_shader.h` is generated from that file and is not edited by hand. The recorded command is Ubuntu LLVM 18.1.8: `llvm-mc -triple=amdgcn-amd-amdhsa -mcpu=gfx90c -mattr=-xnack -filetype=obj gfx9_compute.s -o gfx9_compute.o`. `r5_empty` is `s_endpgm` (4 bytes, `0xbf810000`). `r5_fill` is 36 bytes. Both kernel descriptors have `COMPUTE_PGM_RSRC1` `0x000c0000` and `COMPUTE_PGM_RSRC2` `0x00000084` (`USER_SGPR` 2, `TGID_X_EN` 1, `TIDIG_COMP_CNT` 0). The shader address is 256-byte aligned. `COMPUTE_PGM_LO` is that address shifted right by 8.
+
+One compute indirect buffer is 73 dwords. The order is `ACQUIRE_MEM`, `SET_UCONFIG_REG` of `GRBM_GFX_INDEX` to broadcast `0xe0000000` (offset `0x200`), the `SET_SH_REG` block, a GPU-counter `RELEASE_MEM`, `DISPATCH_DIRECT` with `COMPUTE_SHADER_EN`, `EVENT_WRITE` of `CS_PARTIAL_FLUSH` (7, event index 4), and a second GPU-counter `RELEASE_MEM`. `GRBM_GFX_INDEX` is not read over MMIO. The submission is the same 12 dwords as the workload, including `INDIRECT_BUFFER_VALID`.
+
+Sequence 1 is the indirect-buffer check. Sequence 2 is one group of `r5_empty`. Sequence 3 is one group of `r5_fill` (64 threads) into 4 KiB that the CPU filled with `0xCAFEDEAD`. Sequence 4 is 16384 groups (1,048,576 threads, 4 MiB). Sequence 5 is 65536 groups (4,194,304 threads, 16 MiB). Thread `i` stores `i * 3 + 7`. The rest of the 4 KiB buffer stays `0xCAFEDEAD`. Timestamps reuse `+1152` and `+1216`. A miss logs the stage and halts `CP_ME_CNTL`. It does not run a later stage and does not restore the stage-1 registers. The ring use is 914 + 12 + four times 12 = 974 dwords.
+
+Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `e978a0c67f23d3d3104c1ad641e55e906373f5d6a53cdf87a334fe0a4f5de410`, written at 12:03 Europe/Amsterdam, reached Tracker with `GFX9 ring contract verified`, scratch `0xdeadbeef`, read pointer `0x392`, `ib_wb deadbeef`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16664`, `compute_c3 ok bad 0 ticks 65426` and `compute_ratio 3.9`. The readback was `pgm f4010030 00000000`, `rsrc 000c0000 00000084`, `threads 64`, `user 01004000 000000f4`, `se0 ffffffff`. There is one boot-loader welcome and no panic. The scanout was not changed. A boot with `gfx9_compute` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
+
 ## Known GFX9 differences
 
 `MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.

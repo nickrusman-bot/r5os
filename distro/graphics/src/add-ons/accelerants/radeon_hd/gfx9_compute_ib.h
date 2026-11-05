@@ -9,6 +9,12 @@
 
 #include <stdint.h>
 
+/* The builder below emits this many dwords. The host test checks the bytes. */
+static constexpr uint32_t kGfx9ComputeIbDwords = 73;
+static_assert(kGfx9ComputeIbDwords <= 1024, "GFX9 compute IB fits in 4 KiB");
+static constexpr uint32_t kGfx9ShaderAlign = 256;
+static_assert((kGfx9ShaderAlign & 255u) == 0, "GFX9 compute shader alignment");
+
 static inline uint32_t
 r5_packet3(uint32_t opcode, uint32_t count)
 {
