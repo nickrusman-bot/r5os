@@ -3917,7 +3917,7 @@ id	r5_status	branch	commit	notes
 20418	fixed			BButton SetViewColor is the face color (apply-darkmode.py)
 20419	fixed			Keep Arrange by on the Desktop menu; lazily create it so DeskWindow context menu does not SIGSEGV
 20422	open			
-20423	open			
+20423	fixed	cursor/audio-latency	671ef01ec2	MIDI 2.0 in libmidi2 (UMP, MIDI-CI, Property Exchange, profiles, discovery, USB MIDI 2.0 descriptors); midi2test passed in VirtualBox; no USB MIDI 2.0 device tested
 20425	fixed	cursor/media-no-output	245585e854	LateNoticeReceived and CreateBufferGroup no longer follow a missing mixer output. jam -q mixer.media_addon exited 0 on 3 Nov 2026. No guest without a sound device was booted.
 20426	open			
 20429	open			

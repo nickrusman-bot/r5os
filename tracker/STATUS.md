@@ -4,29 +4,29 @@ Gegenereerd door `scripts/tracker-report.py`. Niet met de hand bewerken.
 
 | R5-status | Aantal |
 |---|---|
-| open | 3807 |
+| open | 3806 |
 | in-progress | 8 |
-| fixed | 121 |
+| fixed | 122 |
 | wontfix | 0 |
 | not-applicable | 0 |
 | **totaal in tracker** | **3936** |
 | open bij Haiku (laatste import) | 3936 |
 
-Nog open in R5OS: **2467** bugs, **1288** enhancements, rest overig (van 3815 open/bezig).
+Nog open in R5OS: **2467** bugs, **1287** enhancements, rest overig (van 3814 open/bezig).
 
 ## Type
 
 | Type | Aantal |
 |---|---|
 | bug | 2467 |
-| enhancement | 1288 |
+| enhancement | 1287 |
 | task | 60 |
 
 ## Priority
 
 | Priority | Aantal |
 |---|---|
-| normal | 3521 |
+| normal | 3520 |
 | low | 258 |
 | high | 34 |
 | critical | 1 |
@@ -36,7 +36,7 @@ Nog open in R5OS: **2467** bugs, **1288** enhancements, rest overig (van 3815 op
 
 | Milestone | Aantal |
 |---|---|
-| Unscheduled | 3027 |
+| Unscheduled | 3026 |
 | R1 | 419 |
 | R1.1 | 298 |
 | — | 29 |
@@ -165,7 +165,7 @@ Nog open in R5OS: **2467** bugs, **1288** enhancements, rest overig (van 3815 op
 | [#17664](https://dev.haiku-os.org/ticket/17664) | new | Drivers/Graphics/radeon_hd | radeon_hd "Cedar": app_server crashes writing to 0MB tiny framebuffer |  |
 | [#17901](https://dev.haiku-os.org/ticket/17901) | new | Applications/Tracker | [Tracker] count view drawing glitches |  |
 | [#18057](https://dev.haiku-os.org/ticket/18057) | new | User Interface | Misaligned scrollbars and resize knob |  |
-| … | | | *41 meer in r5-status.tsv* | |
+| … | | | *42 meer in r5-status.tsv* | |
 
 ## Nog open (eerste 80)
 
@@ -251,5 +251,5 @@ Nog open in R5OS: **2467** bugs, **1288** enhancements, rest overig (van 3815 op
 | [#2490](https://dev.haiku-os.org/ticket/2490) | new | File Systems/BFS | File version as on VMS (DEC VAX) |  |
 | [#2499](https://dev.haiku-os.org/ticket/2499) | assigned | Kits/Interface Kit | [Keymap] shortcuts don't work with some keymaps |  |
 | [#2505](https://dev.haiku-os.org/ticket/2505) | reopened | Network & Internet/Bluetooth | bluetooth_server provokes vm_page_fault in h2generic |  |
-| … | | | *3727 meer in r5-status.tsv* | |
+| … | | | *3726 meer in r5-status.tsv* | |
 
