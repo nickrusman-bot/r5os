@@ -763,6 +763,7 @@ struct radeon_gfx9_ring_info {
 };
 
 static radeon_gfx9_ring_info sRadeonGfx9Ring;
+static bool sGfx9Workload = false;
 
 // AMDGPU_DOORBELL64_GFX_RING0 is qword 0x8b. gfx_v9_0 stores
 // doorbell_index as that value shifted left by 1. The control register
@@ -2693,6 +2694,193 @@ radeon_gfx9_verify_ring_config(uint32 cntl, uint64 ringGpu, uint32 location,
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// The first fence has already landed. This submits one indirect buffer.
+// The constants are the Linux v6.12 names in soc15d.h and vega10_enum.h.
+static const uint32 kWlWriteData = 0x37;
+static const uint32 kWlIndirectBuffer = 0x3f;
+static const uint32 kWlReleaseMem = 0x49;
+static const uint32 kWlWriteDstMemory = 5u << 8;
+static const uint32 kWlWrConfirm = 1u << 20;
+static const uint32 kWlIbValid = 1u << 23;
+static const uint32 kWlCacheFlushTs = 0x14;
+static const uint32 kFenceIbWord = 1024;
+static const uint32 kFenceSequence = 1088;
+
+
+static void
+radeon_gfx9_workload_note(uint32 writeback, uint32 sequence, uint64 seen,
+	uint32 rptr, uint32 wptr)
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (find_directory(B_SYSTEM_CACHE_DIRECTORY, -1, true, path,
+			sizeof(path)) != B_OK)
+		return;
+	size_t used = strlen(path);
+	int wrote = snprintf(path + used, sizeof(path) - used, "/radeon-gfx.txt");
+	if (wrote < 0 || (size_t)wrote >= sizeof(path) - used)
+		return;
+	FILE* file = fopen(path, "a");
+	if (file == NULL)
+		return;
+	fprintf(file, "ib_wb %08" B_PRIx32 "\n", writeback);
+	fprintf(file, "ib_seq %" B_PRIu32 " seen %" B_PRIu64 "\n", sequence,
+		seen);
+	fprintf(file, "ib_rptr %08" B_PRIx32 " wptr %08" B_PRIx32 "\n", rptr,
+		wptr);
+	fclose(file);
+}
+
+
+static void
+radeon_gfx9_workload_fail(const char* step, uint32 meCntl, uint32 haltMask,
+	uint64 fenceGpuSeen, uint32 writeback)
+{
+	const uint32 rptrReg = radeon_gfx9_byte(kGfx9Seg0, 0x01c0);
+	Write32(OUT, meCntl, haltMask);
+	uint32 cpStat = radeon_gfx9_read_reg(kGfx9Seg0, 0x01a0);
+	uint32 grbm = radeon_gfx9_read_reg(kGfx9Seg0, 0x0004);
+	uint32 rptr = Read32(OUT, rptrReg);
+	ERROR("%s: R5 radeon_hd: GFX9 workload failed: %s CP_STAT 0x%"
+		B_PRIx32 " GRBM_STATUS 0x%" B_PRIx32 " rptr 0x%" B_PRIx32
+		" fence 0x%" B_PRIx64 " wb 0x%" B_PRIx32 "\n", __func__, step,
+		cpStat, grbm, rptr, fenceGpuSeen, writeback);
+	radeon_gfx9_capture_stall();
+}
+
+
+static bool
+radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
+	bool ringDoorbell, uint32 meCntl, uint32 haltMask)
+{
+	uint32 wptr = sRadeonGfx9Ring.submitted;
+	uint32 capacity = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
+	if (sRadeonGfx9Ring.ringAddress == NULL || wptr + count >= capacity) {
+		radeon_gfx9_workload_fail("ring", meCntl, haltMask, 0, 0);
+		return false;
+	}
+
+	uint32* ring = (uint32*)sRadeonGfx9Ring.ringAddress;
+	for (uint32 i = 0; i < count; i++)
+		ring[wptr + i] = packets[i];
+	uint32 newWptr = wptr + count;
+	volatile uint64* sequenceSlot = (volatile uint64*)
+		(sRadeonGfx9Ring.fenceAddress + kFenceSequence);
+	*sequenceSlot = 0;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress,
+		sRadeonGfx9Ring.ringBytes);
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
+	radeon_visible_barrier();
+
+	*(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512) = newWptr;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
+	radeon_visible_barrier();
+	if (ringDoorbell) {
+		*(volatile uint64*)(sGfx9Doorbell + kGfx9DoorbellByte) = newWptr;
+		radeon_visible_barrier();
+	} else {
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1054), newWptr);
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1055), 0);
+	}
+
+	uint64 seen = 0;
+	bool landed = false;
+	for (int i = 0; i < 200; i++) {
+		seen = *sequenceSlot;
+		if (seen == sequence) {
+			landed = true;
+			break;
+		}
+		snooze(1000);
+	}
+	if (!landed) {
+		radeon_gfx9_workload_fail("fence", meCntl, haltMask, seen, 0);
+		return false;
+	}
+	sRadeonGfx9Ring.submitted = newWptr;
+	return true;
+}
+
+
+static void
+radeon_gfx9_workload(uint32 location, uint64 ringGpu, uint64 fenceGpu,
+	bool ringDoorbell, uint32 meCntl, uint32 haltMask)
+{
+	(void)ringGpu;
+	uint64 ibOffset = 0;
+	uint8* ibAddress = NULL;
+	if (radeon_vram_alloc(4096, 4096, &ibOffset, &ibAddress) != B_OK
+		|| ibAddress == NULL) {
+		ERROR("%s: R5 radeon_hd: GFX9 workload failed: alloc\n", __func__);
+		return;
+	}
+	uint64 ibGpu = radeon_gfx9_mc_addr(location, ibOffset);
+	uint64 wordGpu = fenceGpu + kFenceIbWord;
+	uint64 sequenceGpu = fenceGpu + kFenceSequence;
+	uint32* ib = (uint32*)ibAddress;
+	ib[0] = radeon_packet3(kWlWriteData, 3);
+	ib[1] = kWlWriteDstMemory | kWlWrConfirm;
+	ib[2] = (uint32)wordGpu;
+	ib[3] = (uint32)(wordGpu >> 32);
+	ib[4] = 0xDEADBEEF;
+	*(volatile uint32*)(sRadeonGfx9Ring.fenceAddress + kFenceIbWord)
+		= 0xCAFEDEAD;
+	radeon_gfx9_flush_visible(ibAddress, 4096);
+	radeon_visible_barrier();
+
+	uint64 sequence = 1;
+	uint32 packets[12];
+	packets[0] = radeon_packet3(kWlIndirectBuffer, 2);
+	packets[1] = (uint32)ibGpu & ~3u;
+	packets[2] = (uint32)((ibGpu >> 32) & 0xffffu);
+	packets[3] = kWlIbValid | 5u;
+	packets[4] = radeon_packet3(kWlReleaseMem, 6);
+	packets[5] = (1u << 16) | (1u << 17) | (1u << 15) | (1u << 21)
+		| kWlCacheFlushTs | (5u << 8);
+	packets[6] = (1u << 29);
+	packets[7] = (uint32)sequenceGpu;
+	packets[8] = (uint32)(sequenceGpu >> 32);
+	packets[9] = (uint32)sequence;
+	packets[10] = (uint32)(sequence >> 32);
+	packets[11] = 0;
+
+	if (!radeon_gfx9_submit(packets, 12, sequence, ringDoorbell, meCntl,
+			haltMask)) {
+		uint32 writeback = *(volatile uint32*)
+			(sRadeonGfx9Ring.fenceAddress + kFenceIbWord);
+		uint64 seen = *(volatile uint64*)
+			(sRadeonGfx9Ring.fenceAddress + kFenceSequence);
+		uint32 rptr = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01c0));
+		uint64 published = *(volatile uint64*)
+			(sRadeonGfx9Ring.fenceAddress + 512);
+		radeon_gfx9_workload_note(writeback, (uint32)sequence, seen, rptr,
+			(uint32)published);
+		return;
+	}
+
+	uint32 writeback = *(volatile uint32*)
+		(sRadeonGfx9Ring.fenceAddress + kFenceIbWord);
+	uint64 seen = *(volatile uint64*)
+		(sRadeonGfx9Ring.fenceAddress + kFenceSequence);
+	uint32 rptr = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01c0));
+	uint32 wptr = sRadeonGfx9Ring.submitted;
+	radeon_gfx9_workload_note(writeback, (uint32)sequence, seen, rptr, wptr);
+	if (writeback != 0xDEADBEEF || seen != sequence || rptr != wptr) {
+		sRadeonGfx9Ring.submitted = wptr - 12;
+		radeon_gfx9_workload_fail("check", meCntl, haltMask, seen,
+			writeback);
+		return;
+	}
+	ERROR("%s: R5 radeon_hd: GFX9 workload ib wb 0x%" B_PRIx32
+		" seq %" B_PRIu64 " seen %" B_PRIx64 " rptr 0x%" B_PRIx32
+		" wptr 0x%" B_PRIx32 "\n", __func__, writeback, sequence, seen,
+		rptr, wptr);
+}
+// SPDX-SnippetEnd
+
+
 static void
 radeon_gfx9_cp_start()
 {
@@ -3111,6 +3299,10 @@ radeon_gfx9_cp_start()
 		ERROR("%s: R5 radeon_hd: GFX9 scratch 0x%" B_PRIx32
 			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", fence landed\n",
 			__func__, scratchNow, rptrNow, landedDwords);
+		if (sGfx9Workload) {
+			radeon_gfx9_workload(location, ringGpu, fenceGpu, ringDoorbell,
+				meCntl, haltMask);
+		}
 		return;
 	}
 
@@ -3171,16 +3363,22 @@ radeon_gpu_ring_boot(uint32 ringType)
 		// through the PSP. Off unless the radeon_hd driver settings
 		// say gfx9_ring true.
 		bool gfx9Ring = false;
+		sGfx9Workload = false;
 		void* settings = load_driver_settings("radeon_hd");
 		if (settings != NULL) {
 			gfx9Ring = get_driver_boolean_parameter(settings, "gfx9_ring",
 				false, true);
+			sGfx9Workload = get_driver_boolean_parameter(settings,
+				"gfx9_workload", false, true);
 			unload_driver_settings(settings);
 		}
 		if (!gfx9Ring) {
 			ERROR("%s: R5 radeon_hd: GFX9 ring off, set gfx9_ring in the"
 				" radeon_hd driver settings\n", __func__);
 			return B_OK;
+		}
+		if (!sGfx9Workload) {
+			ERROR("%s: R5 radeon_hd: GFX9 workload off\n", __func__);
 		}
 		uint16 chipsetID = gInfo->shared_info->chipsetID;
 		if (ringType == RADEON_QUEUE_TYPE_GFX_INDEX

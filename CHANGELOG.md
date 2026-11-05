@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### A GPU write after the GFX9 fence
+
+The fence that landed is a scratch word the command processor stores. This step asks the GPU to write ordinary memory. It runs only after that fence is `0xdeadbeef`, and only when the same `radeon_hd` settings file also says `gfx9_workload true`. The image does not ship the file. With the ring on and this key absent, the log line is `GFX9 workload off` and the first ring is unchanged.
+
+The submission is 12 dwords at the write pointer 914: `INDIRECT_BUFFER` of a 5-dword `WRITE_DATA`, then `RELEASE_MEM`. The indirect buffer writes `0xdeadbeef` at fence+1024. The release writes the sequence at fence+1088. The CPU stores `0xcafedead` and 0 in those slots first. The sequence starts at 1. The new write pointer is 926 (`0x39e`). A miss writes `CP_ME_CNTL` with the halt mask and does not restore the stage-1 registers. The scanout stays the firmware picture.
+
+The packet names match Linux v6.12 `soc15d.h` and `vega10_enum.h`. `CACHE_FLUSH_AND_INV_TS_EVENT` is `0x14`. `PACKET3_WRITE_DATA` is `0x37`, `PACKET3_INDIRECT_BUFFER` is `0x3f`, and `PACKET3_RELEASE_MEM` is `0x49`. Linux `gfx_v9_0_ring_emit_ib_gfx` does not set `INDIRECT_BUFFER_VALID`. This packet does, because that is the bit the test sequence asks for. The high half of the indirect-buffer address is kept in 16 bits, the same mask as the existing writeback. On this machine that half is `0xf4`, so the stored value is the full address.
+
+What's new and `distro/BUILD` are unchanged.
+
+`jam -q @r5-anyboot` for AMD64 finished at 09:57 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8390 targets). The linked accelerant contains `GFX9 workload off`, `GFX9 workload failed:` and `GFX9 workload ib`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `a15c2db4d8df82e6e837b138a504d72ae81248302b13779f305f3df7468d407a`. A copy gained `home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true` and `gfx9_workload true`. That stick image is 2156724224 bytes, sha256 `2a5cb8dbc5cfcd52af5d74a6e1149b0f563ba313876ce3ff6a2909786ff6295a`. It was written to the General UDisk at 10:05 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0 was not opened. The settings file read back as those two lines. This image has not been booted. Other AMD GPUs were not tested. VirtualBox was not tested. ARM64 and RISC-V were not tested. QEMU does not have this GPU.
+
 ### The first GFX9 packet lands on the 5625U
 
 The GFX ring fetched 152 dwords and stopped, scratch stayed `0xcafedead`, and `CP_MEC_CNTL` was `0x50000000`. Linux starts the MEC in `gfx_v9_0_kiq_resume` before the GFX ring. Writing `CP_MEC_CNTL` to 0 and waiting 50 µs, only after both MEC PSP items return status 0, makes the PFP idle before the doorbell. The 914-dword clear-state stream then runs, and scratch becomes `0xdeadbeef`.
