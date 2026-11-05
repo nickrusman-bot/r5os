@@ -1,12 +1,22 @@
 # R5OS changelog (lokaal)
 
+### The kernel GFX9 start reached the desktop
+
+The stick written at 13:46 Europe/Amsterdam on 5 Nov 2026, sha256 `1e98f708cb8036b84410e041a764c6cb70a46193b1474fe1a20e7e31a963712b`, booted on the 5625U. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel` and did not start the command processor again.
+
+The pool mapping is `gfx9 pool 0xfce07e9000+0xf817000`. K0 matches the earlier fence, workload and compute. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16652`, `compute_c3 ok bad 0 ticks 59194`, `compute_ratio 3.5`, `dma_1m_bad 0 ticks_1m 8468`, `dma_8m_bad 0 ticks_8m 67216`, `dma_ratio 7.9`, and `k0 ok fence`.
+
+K1 arrived on MSI. The syslog lines are `allocate_io_interrupt_vectors: allocated 1 vectors starting from 61`, `msi enabled: 0x0085`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1130`. Client 20 is `0x14` and source 181 is the CP end-of-pipe on ring 0. The wait was 1130 µs.
+
+K2 stopped before a page table or a DMA. The syslog lines are `k2 agp bot 00000000 top 00000000 on` and `k2 fail memory map`. `get_memory_map` returns `B_OK`, which is 0, and ends the list with a zero entry. The check treats 0 as failure, so the translation was dropped. AGP bot and top are both 0, so the log says `on`; that is a zero-length aperture, and the range check did not fail. The command processor was not halted. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row in `docs/GPU-ARCHITECTURE.md` stay as they are until K2 lands.
+
 ### The kernel writes the GFX9 ring through a kernel mapping
 
 The stick from 13:11 Europe/Amsterdam on 5 Nov 2026 reached the desktop loader and then stopped in the kernel debugger. The panic is `SMAP violation: user-mapped address`, in `r5_gfx9_prepare`, called from `r5_gfx9_kernel_start` and `radeon_hd_init` while `app_server` opened the device. The visible VRAM window is mapped with `B_READ_AREA | B_WRITE_AREA`, so the page has the user bit set. The accelerant writes that pointer from user mode. The kernel store of the ring fill hits SMAP. No K0, K1 or K2 line was reached. The syslog was not read; the machine was still in the debugger and the stick was not on this host.
 
 `radeon_hd_init` does not map a second window. After `gfx9_ring` and `gfx9_kernel` are both on, and the PCI id is `15e7`, `1636` or `1638`, `r5_gfx9_kernel_start` maps only the pool, from `vram_window_phys + vram_pool_offset` for `vram_pool_bytes`, with `B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA` and write combining. The kernel allocator returns `kernel_window + (aligned - vram_pool_offset)`. `r5_gfx9_kernel_stop` deletes that area. With `gfx9_kernel` off, the driver maps nothing extra. A refused or failed map leaves `gfx9_owner` unset and does not start the command processor. The cloneable window is unchanged.
 
-`jam -q @r5-anyboot` for AMD64 finished at 13:42 Europe/Amsterdam on 5 Nov 2026 with exit 0 (7041 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `34ef7d6e47c6baa6349b5f7e46cfc3af7168b0907af535d4fb3b199b9dbb5929`. The stick copy is the same size, sha256 `1e98f708cb8036b84410e041a764c6cb70a46193b1474fe1a20e7e31a963712b`. It was written raw to the General UDisk at 13:46 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The kernel driver contains `gfx9 pool`, `k0`, `k1_wait_us`, `k2_dma_bad` and `k2_ib`. This image has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 13:42 Europe/Amsterdam on 5 Nov 2026 with exit 0 (7041 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `34ef7d6e47c6baa6349b5f7e46cfc3af7168b0907af535d4fb3b199b9dbb5929`. The stick copy is the same size, sha256 `1e98f708cb8036b84410e041a764c6cb70a46193b1474fe1a20e7e31a963712b`. It was written raw to the General UDisk at 13:46 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The kernel driver contains `gfx9 pool`, `k0`, `k1_wait_us`, `k2_dma_bad` and `k2_ib`. The boot of this stick is the section above.
 
 ### The kernel starts the GFX9 command processor
 
