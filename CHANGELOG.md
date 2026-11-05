@@ -1,10 +1,31 @@
 # R5OS changelog (lokaal)
 
+### The GART DMA faulted at the start of the window
+
+The stick written at 14:19 Europe/Amsterdam on 5 Nov 2026, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`, booted on the 5625U. The desktop came up. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`.
+
+K0 and K1 match the previous boot. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `fence landed`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16680`, `compute_c3 ok bad 0 ticks 60033`, `compute_ratio 3.5`, `dma_ratio 7.9`, `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1129`.
+
+K2 programmed the page table and then the DMA fence did not land. The syslog lines are:
+
+```
+k2 agp bot 00000000 top 00000000 0000000000000000-0000000001000000
+k2 map count 8 pages 256
+GFX9 workload failed: fence CP_STAT 0x80018200 GRBM_STATUS 0xa0003028 rptr 0x3fe fence 0x0 wb 0x0
+GFX9 stall grbm 0xa0003028 grbm2 0x50000008 cp 0x80018200 cpc 0x0 int 0x0 vm 0x40d5b vmlo 0xf3f0000 vmhi 0x0
+k2 fail gart 000000f3f0000000-000000f400000000 pte0 000000001b755067
+k2_dma_bad 4294967295
+k2_ib wb deadbeef seq 0 seen 0
+k2 fault 00040d5b addr 0f3f0000 00000000 cntl 007ffe01 cp 80018200 grbm a0003028
+```
+
+`0xf3f0000` is the GART start `0xf3f0000000` shifted by 16. The first page-table entry is physical `0x1b755000` with valid, system, snooped, readable and writable. The command processor had consumed the packet (`rptr 0x3fe`) and the fence writeback stayed 0. The failure path halted the command processor. The indirect buffer in the GART area was not submitted. `k2_dma_bad 4294967295` is that sentinel, not a dword count. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row stay as they are.
+
 ### The kernel asks for the GART translation count
 
 K2 on the 5625U stopped at `k2 fail memory map` because `get_memory_map` returns `B_OK` (0) on success. The next image calls `get_memory_map_etc(B_CURRENT_TEAM, …, &count)` and walks exactly `count` entries. It logs `k2 map count` and `pages`. `MC_VM_AGP_BOT` and `MC_VM_AGP_TOP` are 16 MiB units and `TOP` is inclusive, so bot 0 and top 0 are `0`-`0x1000000`. The log prints that window, or `off` when bot is above top. The registers are not written. `r5_gfx9_gart_range` refuses a GART block that overlaps that window. The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`, including the 16 MiB window and an overlap refusal. K0 and K1 are the same packets.
 
-`jam -q @r5-anyboot` for AMD64 finished at 14:13 Europe/Amsterdam on 5 Nov 2026 with exit 0 (1189 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `deecfb928e6f74d806cf2d45dd58f6a866e1caf6915558d11e5dea9282796984`. The stick copy is the same size, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`. The kernel driver contains `k2 map count`, `k2 agp bot`, `k0` and `k1_wait_us`. It was written raw to the General UDisk at 14:19 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. This image has not been booted.
+`jam -q @r5-anyboot` for AMD64 finished at 14:13 Europe/Amsterdam on 5 Nov 2026 with exit 0 (1189 targets updated). The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `deecfb928e6f74d806cf2d45dd58f6a866e1caf6915558d11e5dea9282796984`. The stick copy is the same size, sha256 `d022bbed0832034b0c39698b4bed89ec5e0648b12d74c90f278e2a4f34896ca5`. The kernel driver contains `k2 map count`, `k2 agp bot`, `k0` and `k1_wait_us`. It was written raw to the General UDisk at 14:19 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The boot is the section above.
 
 ### The kernel GFX9 start reached the desktop
 
