@@ -52,7 +52,7 @@ Do not open Tracker’s private resources, and do not read `libtracker.so`, to d
 
 These libraries sit next to `libbe`. They do not replace it. A Haiku program that links only `libbe` keeps that ABI. Do not add these calls to `libbe`. Do not add a function here only to rename a `libbe` call.
 
-A helper written for R5OS, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is GPL-3.0-or-later. A program that links one of these libraries combines with that license. A program that does not link it is unchanged.
+A helper written for R5, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is GPL-3.0-or-later. A program that links one of these libraries combines with that license. A program that does not link it is unchanged.
 
 - `libr5icons.so`, header `R5Icons.h`, source `distro/icons`. Icons. `docs/ICONS.md`.
 - `libr5ui.so`, header `R5UI.h`, source `distro/ui`. The screen picture. `docs/LIBR5.md`.
@@ -63,7 +63,7 @@ The regular image and the minimum image both install them in `/system/lib`. The 
 
 Keep Haiku APIs and, where practical, ABI for the same CPU architecture. Prefer additive APIs. Do not replace a working component only to look modern.
 
-R5OS may add APIs, services, and desktop features without upstream approval. Do not revert R5OS behavior just to match Haiku. Do not merge `upstream` blindly: check overlays, APIs, and supported arches.
+R5 may add APIs, services, and desktop features without upstream approval. Do not revert R5 behavior just to match Haiku. Do not merge `upstream` blindly: check overlays, APIs, and supported arches.
 
 If a break is required: document why, what it hits, and the migration path.
 
@@ -71,11 +71,11 @@ If a break is required: document why, what it hits, and the migration path.
 
 Full policy, inventory, and the VirtualBox 7.2.22 assessment: `docs/LICENSING.md`. User-facing list: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`.
 
-R5OS is multi-license. New R5OS-owned files default to `GPL-3.0-or-later` with an SPDX header, when R5OS has the rights to that whole file. Haiku files keep their original license and copyright. Do not replace an MIT header with GPL. Do not relicense GPL-2.0-only code as GPL-3.0. Do not combine GPL-2.0-only with GPL-3.0 in one work. A separate kernel module does not by itself make GPL code independent of the kernel.
+R5 is multi-license. New R5-owned files default to `GPL-3.0-or-later` with an SPDX header, when R5 has the rights to that whole file. Haiku files keep their original license and copyright. Do not replace an MIT header with GPL. Do not relicense GPL-2.0-only code as GPL-3.0. Do not combine GPL-2.0-only with GPL-3.0 in one work. A separate kernel module does not by itself make GPL code independent of the kernel.
 
 Do not assume the Haiku tree is all MIT. Do not drop a suitable driver only to keep a single license. Do not rewrite license headers in bulk. The file-by-file audit, REUSE lint, and About credits view are not done.
 
-When a file contains both original Haiku code and R5OS changes, keep the MIT header and copyright. Mark only the R5OS portions with SPDX-Snippet tags and a GPL-3.0-or-later notice. Do not relicense the entire file. The combined binary is distributed under GPL-3.0-or-later.
+When a file contains both original Haiku code and R5 changes, keep the MIT header and copyright. Mark only the R5 portions with SPDX-Snippet tags and a GPL-3.0-or-later notice. Do not relicense the entire file. The combined binary is distributed under GPL-3.0-or-later.
 
 Before adding a component, report project, SPDX license (`-only` or `-or-later`), copyright, integration, source-offer duties, and combination questions. Uncertain kernel integration stays out of the image until reviewed. Credit shipped third-party code from `THIRD_PARTY_NOTICES.md` (AirPlay detail: `distro/airplay/THIRD_PARTY.md`). Do not invent copyright holders.
 
@@ -110,23 +110,23 @@ Support levels (do not skip): **buildable → bootable → functional → deskto
 7. Update `CHANGELOG.md` (newest first) for user-visible behavior, chosen paths, mistakes, and limits.
 8. Ask before `git push` / PR to `main`.
 
-Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is not a LAN** (no mDNS multicast, no Wi-Fi device, no AirPlay speakers). For LAN on Windows use VirtualBox bridged (`scripts/run-vbox-r5.ps1`); no Guest Additions (no vboxsf, no auto-resize, no VBox drag-and-drop). Text clipboard is COM1, not VBox Shared Clipboard.
+Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is not a LAN** (no mDNS multicast, no Wi-Fi device, no AirPlay speakers). For LAN on Windows use VirtualBox bridged (`scripts/run-vbox-r5.ps1`). The image has the 7.2.22 Guest Additions (`docs/VBOX-GUEST.md`): `vboxsf` is present but the script adds no share, the display follows the window for the administrator only ([#4055](https://github.com/nickrusman-bot/r5os/issues/4055)), and there is no VirtualBox drag-and-drop. VirtualBox clipboard mode stays off. Text clipboard is COM1 (`docs/vbox.md`), not VBox Shared Clipboard.
 
 If a test cannot run, say which one and why.
 
 ## Overlays and native source
 
-R5OS is an independent Haiku fork. `origin` is the product. `upstream` is fetch-only. Do not push to Haiku remotes or open PRs against Haiku.
+R5 is an independent Haiku fork. `origin` is the product. `upstream` is fetch-only. Do not push to Haiku remotes or open PRs against Haiku.
 
-All OS behavior and R5OS changes belong in native source under `distro/` (copied into the Haiku tree at apply time). Do not add new overlays. Do not add Python whose purpose is a string patch of Haiku C++.
+All OS behavior and R5 changes belong in native source under `distro/` (copied into the Haiku tree at apply time). Do not add new overlays. Do not add Python whose purpose is a string patch of Haiku C++.
 
-Copy relevant Haiku files into `distro/` when you need to change them. Keep the original MIT license and copyright notice. Apply R5OS changes on top and mark those changes with SPDX-Snippet tags and a GPL-3.0-or-later notice. The original Haiku portions remain MIT. The combined binary is distributed under GPL-3.0-or-later.
+Copy relevant Haiku files into `distro/` when you need to change them. Keep the original MIT license and copyright notice. Apply R5 changes on top and mark those changes with SPDX-Snippet tags and a GPL-3.0-or-later notice. The original Haiku portions remain MIT. The combined binary is distributed under GPL-3.0-or-later.
 
 Existing `apply-*.py` may only copy `distro/` files, Jam `SubInclude`, launch jobs, or other idempotent hooks. Fail loudly if a required pattern is missing. New features go in `distro/users`, `distro/login`, `distro/graphics`, `distro/media`, `distro/kernel`, and the other `distro/` trees — not `replace_once`.
 
 `replace_once` matching a short substring can insert duplicates. After apply, grep for doubled `SYSTEM_SERVERS`, `SYSTEM_PREFERENCES`, launch jobs, and includes.
 
-Hook new `apply-*.py` into `scripts/apply-overlay.sh`. Keep upstream imports distinct from R5OS-only changes. Temporary overlays must not become silent architecture.
+Hook new `apply-*.py` into `scripts/apply-overlay.sh`. Keep upstream imports distinct from R5-only changes. Temporary overlays must not become silent architecture.
 
 To retire an overlay: land the native replacement in `distro/`, jam, boot, compare behavior, then remove the old patch. Do not delete overlays wholesale. Keep Python for jam, image, tracker, and tests.
 
@@ -136,7 +136,7 @@ Older string patches are still in some `apply-*.py` scripts. Do not add more. Re
 
 Product accounts: one **administrator** (login name `user`, home `/boot/home`) and optional **standard** people under `/boot/home/users/<name>`. Names like `nicky` in tests are fixtures from Users & Accounts, not image users. System logins (`sshd`, `ftp`, `nobody`) are not people.
 
-First interactive session is still that administrator, often uid 0 until migration. Sign in gates Tracker/Deskbar; Log out returns to Sign in on the same session. Extra homes are mode `0700`. Uid 0 still reads them. Do not claim a per-user desktop, or that the administrator cannot read other homes, until that is implemented **and** tested.
+The image still ships `user` as uid 0. On the first Sign in, Login moves that account to the first free uid ≥ 1000 and keeps a locked `root` at uid 0 (build 10007, `docs/MULTIUSER.md`). Login, launch_daemon, and the registrar stay uid 0. Sign in gates Tracker/Deskbar, which then run as the signed-in account and home; Log out returns to Sign in on the same session. Extra homes are mode `0700`. Uid 0 still reads them. Tested in VirtualBox: `user` cannot list a standard person's home. Do not claim a second graphical session, fast user switching, or that uid 0 cannot read homes.
 
 Keep `/boot/home` as the administrator’s home (Haiku apps and `find_directory`). Do not hardcode home paths in apps; use `find_directory` / POSIX `getpwuid`.
 
@@ -158,7 +158,7 @@ Do not claim AirPlay 2 pairing/PTP, mirroring, or LAN discovery unless implement
 
 Keep `tracker/STATUS.md` current. After any ticket-status change, run `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Implemented ≠ tested ≠ verified.
 
-`CHANGELOG.md`: problem, what changed, upstream ticket if any, limits, how/where tested. Newest first. Record mistakes and the fix. Do not claim working behavior without evidence. Distinguish compile, test, and confirmed R5OS/LAN results. Never invent test results.
+`CHANGELOG.md`: problem, what changed, upstream ticket if any, limits, how/where tested. Newest first. Record mistakes and the fix. Do not claim working behavior without evidence. Distinguish compile, test, and confirmed R5/LAN results. Never invent test results.
 
 After a task, report **Veranderd / Getest / Onbewezen / Documentatie**. Tracker edits: `python3 scripts/tracker-report.py` and commit `tracker/r5-status.tsv` with `STATUS.md`. Code, changelog, and tracker must not contradict each other.
 
@@ -166,9 +166,9 @@ GitHub issues on `origin` are the lead, including open Haiku Trac tickets. Those
 
 ## Versioning
 
-Public: **R5OS YYYY.N** (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`.
+Public: **R5 YYYY.N**, in full R5 Operating System YYYY.N (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`.
 
-Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `R5OS YYYY.N-dev Build N` from `r5_os_version.h` generated at apply/jam (`R5_OS_VERSION`, `R5_OS_BUILD`). Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
+Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `Version YYYY.N-dev Build N` from `r5_os_version.h` generated at apply/jam (`R5_OS_VERSION`, `R5_OS_BUILD`). Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
 
 Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh --revision`), not the build number. Do not use Haiku `hrev` as the distro version. Keep upstream hrev only where it is still needed for debugging.
 
