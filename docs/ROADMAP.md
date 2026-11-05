@@ -80,6 +80,22 @@ Do not start these during an unrelated bugfix.
 
 Levels: buildable → bootable → functional → desktop-capable → release-supported. See `AGENTS.md`, "Architectures".
 
+## Platform (CPU, power and firmware)
+
+What the kernel knows and does about the processor and the firmware. The audit of the current state is `docs/KERNEL.md`. Each item starts only when there is hardware to test it on.
+
+| Item | Where R5 stands | What it takes | Test hardware |
+|---|---|---|---|
+| **P-states (CPU frequency)** | Haiku has `amd_pstates` and `intel_pstates` (cpufreq) and two C-state drivers. Whether they load and change the frequency on the 5625U and the X1 Carbon has not been checked. R5's `r5_pstate` only reads the state; it does not write one | First measure what the existing drivers do on both machines. Then the modern paths: AMD CPPC (as amd-pstate) and Intel HWP, where the CPU chooses its own frequency within limits the OS sets. A power profile (balanced, performance, saver) on top | Ryzen 5 5625U, X1 Carbon Gen 8 |
+| **Sleep and resume** | Open (see "Near term", item 3) | Many current laptops have no classic S3 any more, only S0ix ("Modern Standby"). Find out which the two machines offer, then make that path work, including the GPU, Wi-Fi and USB coming back | Ryzen 5 5625U, X1 Carbon Gen 8 |
+| **Battery, thermal, backlight, embedded controller** | Partly through Haiku's ACPI drivers; not checked on the two machines | The ordinary laptop functions, read from ACPI: charge level, temperatures and fan, brightness keys | Ryzen 5 5625U, X1 Carbon Gen 8 |
+| **CPU topology (ACPI PPTT)** | The kernel reads SMT and core levels from CPUID (`docs/KERNEL.md`) | Read which cores share a cache or a cluster, and let the scheduler use that | Any current CPU |
+| **Hybrid cores (P and E)** | `get_hybrid_cpu_type()` reads the core type; the scheduler does not use it (`docs/KERNEL.md`, item 7) | Heavy threads on performance cores, background work on efficient cores. Later Intel Thread Director (HFI). AMD has "preferred cores" through CPPC and dense Zen 5c cores | A 12th-generation Intel or newer. The X1 Carbon Gen 8 has no E-cores |
+| **More than 64 logical CPUs** | `SMP_MAX_CPUS` is 64 on both AMD64 boot platforms (`docs/KERNEL.md`, finding 2). The BIOS loader cannot start x2APIC processors (finding 3) | Larger CPU sets and per-CPU tables in the kernel, x2APIC on every boot path, and a check of the public API for structs with a fixed CPU count | QEMU with many virtual CPUs first, then a large Ryzen, Threadripper or EPYC |
+| **NUMA (ACPI SRAT and SLIT)** | Not present | Keep a program and its memory on the same node, in the allocator and the scheduler. Only useful on machines with more than one memory node | Multi-socket or Threadripper/EPYC hardware |
+
+The order follows what R5 is today, a laptop and desktop system: first P-states, sleep and the laptop functions, then topology, then hybrid cores, and only for workstation or server use more than 64 CPUs and NUMA.
+
 ## Upstream
 
 Fetch `upstream` when a Haiku fix is useful. Inspect the `distro/` changes and R5 behavior before a merge. Record imports, local patches, and intentional differences in `CHANGELOG.md`. Do not send changes back to Haiku (`AGENTS.md`).
