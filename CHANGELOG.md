@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### Lavapipe teapot reference
+
+VirtualBox of the image jammed at 23:46 Europe/Amsterdam on 5 Nov 2026 wrote `~/config/cache/r5-gpu-selftest.txt`. The render node and vulkaninfo lines both say `not available, no supported GPU`. `vulkaninfo --summary` lists only llvmpipe and has no `failed` line. GLTeapot runs. VulkanTeapot shows a turning teapot. `VulkanTeapot --selftest` on Lavapipe printed:
+
+```
+device llvmpipe (LLVM 21.1.8, 256 bits), deviceType 4, driverID 13
+pixel 24 24 262e38ff
+pixel 192 80 262e38ff
+pixel 192 192 853b16ff
+pixel 192 134 a64a1cff
+pixel 90 192 873c17ff
+pixel 280 192 692e11ff
+```
+
 ### RADV ioctl path, package paths, and the self-test launch
 
 RADV's `ac_drm_query_gpu_info` failed on the 5625U because Mesa's `drm_ioctl()` in `src/util/os_drm.h` calls `ioctl()` and never reaches `r5_drm_ioctl()`. The missing `amdgpu.ids` line is only libdrm's ASIC-name warning. `patches/haiku-os-drm-ioctl.patch` makes `drm_ioctl()` call libdrm's `drmIoctl` on Haiku, and also when `R5_HOST_TEST` is set so the host replay uses the same branch. `drm_ioctl_write` and `drm_ioctl_write_read` go through that helper. A search of `src/amd` and `src/vulkan` found no other `ioctl()` on the DRM fd. The virtio path already uses `drmIoctl`.
