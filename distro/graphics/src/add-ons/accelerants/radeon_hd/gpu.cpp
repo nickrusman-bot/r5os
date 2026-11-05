@@ -21,6 +21,11 @@
 #include <Debug.h>
 #include <FindDirectory.h>
 #include <OS.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <driver_settings.h>
+// SPDX-SnippetEnd
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -765,6 +770,10 @@ static radeon_gfx9_ring_info sRadeonGfx9Ring;
 // offset is 0x458.
 static const uint32 kGfx9DoorbellIndex = 0x8bu << 1;
 static const uint32 kGfx9DoorbellByte = kGfx9DoorbellIndex << 2;
+static_assert(kGfx9StartDwords == 914, "GFX9 ring contract: 914 dwords");
+static_assert(kGfx9DoorbellByte == 0x458, "GFX9 ring contract: doorbell 0x458");
+static_assert(kGfx9Seg0 == 0x2000 && kGfx9Seg1 == 0xA000,
+	"GFX9 ring contract: GC segments");
 // vega10_ip_offset.h NBIO instance 0, segment 2, is 0xD20.
 // nbio_7_0_offset.h puts these registers in that segment.
 // Renoir uses nbio_v7_0. The byte address is (base + index) * 4.
@@ -1024,6 +1033,15 @@ radeon_gfx9_prepare_ring()
 	*fence = 0xCAFEDEAD;
 	uint32 fenceRead = *fence;
 	uint32 headerRead = ring[0];
+	uint32 scratchIndex = (kGfx9Seg1 + kScratchReg0) - kUconfigRegStart;
+	if (submitted < 3 || headerRead != 0xc0004a00
+		|| ring[submitted - 3] != radeon_packet3(kPacket3SetUconfig, 1)
+		|| ring[submitted - 2] != scratchIndex
+		|| ring[submitted - 1] != 0xDEADBEEF) {
+		ERROR("%s: R5 radeon_hd: GFX9 ring contract: stream mismatch\n",
+			__func__);
+		return;
+	}
 
 	sRadeonGfx9Ring.ringOffset = ringOffset;
 	sRadeonGfx9Ring.ringAddress = ringAddress;
@@ -1304,6 +1322,7 @@ static const uint32 kPspRingBytes = 4096;
 static const uint32 kPspCmdBytes = 1024;
 // PSP_TMR_SIZE for GC 9.3 is 4 MiB. The start is naturally aligned.
 static const uint32 kPspTmrBytes = 4u * 1024u * 1024u;
+static_assert(kPspTmrBytes == 4u * 1024u * 1024u, "GFX9 ring contract: TMR");
 
 
 static uint32
@@ -2027,7 +2046,7 @@ static const radeon_gfx9_golden kGfx9Golden[] = {
 };
 
 static_assert(sizeof(kGfx9Golden) / sizeof(kGfx9Golden[0]) == 12,
-	"GFX9 golden save slot count");
+	"GFX9 ring contract: golden save slot count");
 
 
 struct radeon_gfx9_saved {
@@ -2582,6 +2601,99 @@ radeon_smu12_mode2_reset()
 
 
 static void
+radeon_gfx9_contract_check(bool* ok, const char* name, uint32 value,
+	uint32 mask, uint32 expected)
+{
+	if ((value & mask) == expected)
+		return;
+	*ok = false;
+	ERROR("%s: R5 radeon_hd: GFX9 ring contract: %s 0x%" B_PRIx32
+		" expected 0x%" B_PRIx32 " mask 0x%" B_PRIx32 "\n", __func__,
+		name, value, expected, mask);
+}
+
+
+// The values are the ones this file writes. VM_L2_CNTL forces bits 0 and 1
+// on, bit 8 and bit 18 off, bits 19-20 to 1, and bits 21-25 off. That is
+// mask 0x03fc0103 and expected 0x00080003. A mismatch logs every line
+// and then refuses the unhalt.
+static bool
+radeon_gfx9_verify_ring_config(uint32 cntl, uint64 ringGpu, uint32 location,
+	uint32 top, bool ringDoorbell, bool mecStarted, bool pipePrepared,
+	uint32 aperBefore)
+{
+	bool ok = true;
+	radeon_gfx9_contract_check(&ok, "CP_RB0_CNTL",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1041)), 0xffffffffu, cntl);
+	uint64 base = ringGpu >> 8;
+	radeon_gfx9_contract_check(&ok, "CP_RB0_BASE",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1040)), 0xffffffffu,
+		(uint32)base);
+	radeon_gfx9_contract_check(&ok, "CP_RB0_BASE_HI",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x10b1)), 0xffffffffu,
+		(uint32)(base >> 32));
+	uint32 doorbellExpected = kGfx9DoorbellByte;
+	if (ringDoorbell)
+		doorbellExpected |= 1u << 30;
+	radeon_gfx9_contract_check(&ok, "CP_RB_DOORBELL_CONTROL",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1059)), 0x4ffffffcu,
+		doorbellExpected);
+	radeon_gfx9_contract_check(&ok, "CP_RB_DOORBELL_RANGE_LOWER",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x105a)), 0xffffffffu,
+		kGfx9DoorbellByte);
+	radeon_gfx9_contract_check(&ok, "CP_RB0_VMID",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1051)), 0xffffffffu, 0);
+	radeon_gfx9_contract_check(&ok, "CP_ME0_PIPE0_MAX_CONTEXT",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x10ae)), 0xffffffffu, 7);
+	radeon_gfx9_contract_check(&ok, "CP_ME0_PIPE0_DEVICE_ID",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x104b)), 0xffffffffu, 1);
+	if (pipePrepared) {
+		radeon_gfx9_contract_check(&ok, "GRBM_GFX_CNTL",
+			Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0022)), 0xffffffffu, 0);
+		radeon_gfx9_contract_check(&ok, "SH_MEM_CONFIG",
+			Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x030d)), 0xffffffffu,
+			0x1018);
+		radeon_gfx9_contract_check(&ok, "SH_MEM_BASES",
+			Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x030a)), 0xffffffffu, 0);
+	} else {
+		ok = false;
+		ERROR("%s: R5 radeon_hd: GFX9 ring contract: GRBM_GFX_CNTL"
+			" not written\n", __func__);
+	}
+	if (mecStarted) {
+		radeon_gfx9_contract_check(&ok, "CP_MEC_CNTL",
+			Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x008d)), 0x50000000u, 0);
+	}
+	radeon_gfx9_contract_check(&ok, "RLC_CNTL",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x4c00)), 0x1u, 1);
+	radeon_gfx9_contract_check(&ok, "MC_VM_MX_L1_TLB_CNTL",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0987)), 0x00003879u,
+		0x00003859u);
+	radeon_gfx9_contract_check(&ok, "VM_L2_CNTL",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0840)), 0x03fc0103u,
+		0x00080003u);
+	radeon_gfx9_contract_check(&ok, "VM_L2_CNTL3",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0842)), 0xffffffffu,
+		0x80130009u);
+	radeon_gfx9_contract_check(&ok, "GCEA_PROBE_MAP",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x070c)), 0xffffffffu,
+		0x0000ccccu);
+	if (aperBefore != 0xffffffff) {
+		radeon_gfx9_contract_check(&ok, "RCC_DOORBELL_APER_EN",
+			Read32(OUT, kNbioDoorbellAper), 0x1u, 1);
+	}
+	radeon_gfx9_contract_check(&ok, "MC_VM_FB_LOCATION_BASE",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0980)), 0xffffffffu,
+		location);
+	radeon_gfx9_contract_check(&ok, "MC_VM_FB_LOCATION_TOP",
+		Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0981)), 0xffffffffu, top);
+	if (ok)
+		ERROR("%s: R5 radeon_hd: GFX9 ring contract verified\n", __func__);
+	return ok;
+}
+
+
+static void
 radeon_gfx9_cp_start()
 {
 	if (!sRadeonGfx9Ring.ready)
@@ -2901,6 +3013,50 @@ radeon_gfx9_cp_start()
 			" bases 0x%" B_PRIx32 "\n", __func__, savedGrbmGfx, savedShMem,
 			Read32(OUT, shMem), savedShBases);
 	}
+	if (!radeon_gfx9_verify_ring_config(cntl, ringGpu, location, top,
+			ringDoorbell, mecStarted, pipePrepared, aperBefore)) {
+		Write32(OUT, meCntl, savedMe | haltMask);
+		if (pipePrepared) {
+			Write32(OUT, grbmGfx, 0);
+			Write32(OUT, shMem, savedShMem);
+			Write32(OUT, shBases, savedShBases);
+			Write32(OUT, grbmGfx, savedGrbmGfx);
+		}
+		if (aperBefore != 0xffffffff)
+			Write32(OUT, kNbioDoorbellAper, aperBefore);
+		Write32(OUT, rbBase, savedBase);
+		Write32(OUT, rbBaseHi, savedBaseHi);
+		Write32(OUT, rbCntl, savedCntl);
+		Write32(OUT, rbWptr, savedWptr);
+		Write32(OUT, rbWptrHi, savedWptrHi);
+		Write32(OUT, rbDoorbell, savedDoorbell);
+		Write32(OUT, rbRangeLo, savedRangeLo);
+		Write32(OUT, rbRangeHi, savedRangeHi);
+		Write32(OUT, maxContext, savedContext);
+		Write32(OUT, deviceId, savedDevice);
+		Write32(OUT, rbDelay, savedDelay);
+		Write32(OUT, rbVmid, savedVmid);
+		Write32(OUT, rbRptrAddr, savedRptrAddr);
+		Write32(OUT, rbRptrAddrHi, savedRptrAddrHi);
+		Write32(OUT, rbPollLo, savedPollLo);
+		Write32(OUT, rbPollHi, savedPollHi);
+		Write32(OUT, meCntl, savedMe);
+		if (mecStarted)
+			Write32(OUT, mecCntl, savedMec);
+		radeon_gfx9_restore_saved(rlcTouched ? rlcBios : rlcBefore,
+			rlcTouched || rlcStarted, rlcTouched ? rlcClockBios : rlcClock);
+		radeon_gfx9_publish(pspOwnsLoad, rlcStarted, rlcBefore, rlcAfter,
+			rlcVersion, scratchRead, false, true, sRadeonGfx9Ring.submitted,
+			rptrBefore, rptrBefore);
+		radeon_gfx9_note_doorbell(ringDoorbell, Read32(OUT, rbDoorbell), 0, 0,
+			0, 0, aperBefore, aperAfter, sdma0Range, sdma1Range, ihRange,
+			mmschRange);
+		radeon_gfx9_stall_note();
+		ERROR("%s: R5 radeon_hd: GFX9 scratch stayed 0x%" B_PRIx32
+			" rptr 0x%" B_PRIx32 " dwords %" B_PRIu32 ", ring restored\n",
+			__func__, scratchRead, rptrBefore, sRadeonGfx9Ring.submitted);
+		return;
+	}
 	Write32(OUT, meCntl, (savedMe | haltMask) & ~haltMask);
 	snooze(1000);
 	uint32 meNow = Read32(OUT, meCntl);
@@ -3011,6 +3167,21 @@ radeon_gpu_ring_boot(uint32 ringType)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
+		// The GFX9 start resets GFX through the SMU and loads firmware
+		// through the PSP. Off unless the radeon_hd driver settings
+		// say gfx9_ring true.
+		bool gfx9Ring = false;
+		void* settings = load_driver_settings("radeon_hd");
+		if (settings != NULL) {
+			gfx9Ring = get_driver_boolean_parameter(settings, "gfx9_ring",
+				false, true);
+			unload_driver_settings(settings);
+		}
+		if (!gfx9Ring) {
+			ERROR("%s: R5 radeon_hd: GFX9 ring off, set gfx9_ring in the"
+				" radeon_hd driver settings\n", __func__);
+			return B_OK;
+		}
 		uint16 chipsetID = gInfo->shared_info->chipsetID;
 		if (ringType == RADEON_QUEUE_TYPE_GFX_INDEX
 			&& chipsetID >= RADEON_RAVEN && chipsetID <= RADEON_RENOIR) {

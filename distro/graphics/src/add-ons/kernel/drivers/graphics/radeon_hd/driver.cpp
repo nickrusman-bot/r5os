@@ -720,7 +720,11 @@ const struct supported_device {
 	// row. Linux calls that CHIP_IP_DISCOVERY and reads the version from
 	// the GPU. This driver does not read that table yet, so the version
 	// stays 0 and the DCE registers stay off.
+	// R5OS: claims every AMD display device, including old Radeons and
+	// dGPUs that do not drive the panel. Off until the GPU IP table is read.
+#if 0
 	{0x0000, 0, 0, RADEON_NAVI, CHIP_STD, "Radeon IP discovery", RHD_DISPLAY_DCN, 0, 0, 0},
+#endif
 // SPDX-SnippetEnd
 };
 
@@ -755,6 +759,17 @@ radeon_hd_pci_class(const pci_info& info)
 // SPDX-SnippetEnd
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static bool
+radeon_hd_family_untested(uint16 chipsetID)
+{
+	return chipsetID >= RADEON_TONGA && chipsetID <= RADEON_VEGA20;
+}
+// SPDX-SnippetEnd
+
+
 static status_t
 get_next_radeon_hd(int32* _cookie, pci_info &info, uint32 &type)
 {
@@ -772,6 +787,7 @@ get_next_radeon_hd(int32* _cookie, pci_info &info, uint32 &type)
 			continue;
 
 		uint32 discovery = ~(uint32)0;
+		bool skipped = false;
 		for (uint32 i = 0; i < sizeof(kSupportedDevices)
 				/ sizeof(kSupportedDevices[0]); i++) {
 			if (kSupportedDevices[i].pciID == 0) {
@@ -779,11 +795,22 @@ get_next_radeon_hd(int32* _cookie, pci_info &info, uint32 &type)
 				continue;
 			}
 			if (info.device_id == kSupportedDevices[i].pciID) {
+				if (radeon_hd_family_untested(
+						kSupportedDevices[i].chipsetID)) {
+					dprintf(DEVICE_NAME ": 1002:%04x %s is not claimed,"
+						" this family is untested\n", info.device_id,
+						kSupportedDevices[i].deviceName);
+					skipped = true;
+					break;
+				}
 				type = i;
 				*_cookie = index + 1;
 				return B_OK;
 			}
 		}
+
+		if (skipped)
+			continue;
 
 		if (discovery != ~(uint32)0) {
 			type = discovery;

@@ -77,6 +77,23 @@ QEMU and VirtualBox may test the software path and `virtio_gpu` / VESA / `vboxvi
 
 OpenGL apps keep the Mesa 25 / libglvnd path. Experimental ICDs are not required to boot.
 
+## GFX9 ring on GC 9.3 (fixed)
+
+This is the sequence in the code after the test scaffolding came out. The 08:11 boot and the repeat boot are the evidence. A step that differs from an earlier outline is the step the code writes.
+
+1. Mode 2. `smu_v12_0_mode2_reset`. Message `PPSMC_MSG_GfxDeviceDriverReset` (`0x1E`), argument 2, through MP1 `C2PMSG_90`. The mailbox has to answer 1.
+2. PSP v12, `GFX_CMD_ID_LOAD_IP_FW`, after `GFX_CMD_ID_SETUP_TMR` (command 5, 4 MiB). Order: CE type 3, PFP type 2, ME type 1, MEC body type 4, MEC jump table type 5, RLC list 22, list 20, list 21, then RLC_G type 8. RLC_G is what starts the RLC. MEC2 is not sent on GC 9.3.
+3. RLC stop, clear-state buffer, F32 start. `gfx_v9_0_rlc_stop`, `gfx_v9_0_rlc_resume`. `RLC_CNTL` bit 0 is left set.
+4. MEC start. `CP_MEC_CNTL` (`0x008d`) is written 0 and the driver waits 50 µs, the same as `gfx_v9_0_cp_compute_enable(true)` inside `gfx_v9_0_kiq_resume` before `gfx_v9_0_cp_gfx_resume`. Both MEC PSP items have to return status 0. This step stays.
+5. `FB_LOCATION` is read and not written. The system aperture is widened only when it does not already cover the framebuffer. `MC_VM_MX_L1_TLB_CNTL` becomes `(read & ~0x00003879) | 0x00003859`. `VM_L2_CNTL` sets bits 0 and 1, clears bit 8 and bit 18, sets bits 19–20 to 1, and clears bits 21–25. `VM_L2_CNTL3` is `0x80130009`. The twelve golden rows are written, and the last is `GCEA_PROBE_MAP` `0x070c` = `0x0000cccc`.
+6. The ring is 914 dwords: the clear-state stream, then one `SET_UCONFIG` of scratch `0xDEADBEEF`. Doorbell qword byte `0x458`. Poll slot at the fence page plus 512. Writeback rptr at the fence page plus 256. `CP_RB0_CNTL` is the buffer-size encoding for that ring (4 KiB, value `0x709`). `GRBM_GFX_CNTL` is 0. `SH_MEM_CONFIG` is `0x1018`. `SH_MEM_BASES` is 0. `CP_RB0_VMID` is 0. Max context is 7. Device id is 1.
+7. Before the ME is unhalted, the driver reads those registers back. Every mismatch is logged as `GFX9 ring contract:`. A mismatch restores the ring and does not ring the doorbell. `VM_L2_CNTL` is compared with mask `0x03fc0103` and expected `0x00080003`, which is the set of bits step 5 writes. `SH_MEM_BASES` is in that readback as well. The doorbell range upper is written `0x0ffffffc` and is not part of the readback mask.
+8. One doorbell of write pointer 914. Success leaves the CP and MEC running.
+
+The ring is off unless `/boot/home/config/settings/kernel/drivers/radeon_hd` contains `gfx9_ring true`. Userland `load_driver_settings("radeon_hd")` opens `B_USER_SETTINGS_DIRECTORY` plus `/kernel/drivers/` plus the driver name (`src/system/libroot/os/driver_settings.cpp`). The image does not ship that file. Tonga through Vega 20 are not claimed. The IP-discovery row is not compiled in. A DCN chip with no boot framebuffer returns `B_ERROR` from `radeon_hd_init`. `device_open` returns that error. `AccelerantHWInterface` then asks for the next graphics device, and once the index passes the published devices it opens VESA or the framebuffer.
+
+Tested: the 08:11 stick and the repeat boot. Boot 1, with the settings file, is still to be run. Changing this sequence requires a new boot on the 5625U that lands the fence, recorded in CHANGELOG.md.
+
 ## Known GFX9 differences
 
 `MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.

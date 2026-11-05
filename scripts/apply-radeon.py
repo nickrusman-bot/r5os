@@ -7,9 +7,17 @@ in the Haiku tree. A missing source file fails the apply.
 """
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import shutil
 import sys
+
+CLEARSTATE_SHA256 = {
+    "src/add-ons/accelerants/radeon_hd/clearstate_defs.h":
+        "70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285",
+    "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h":
+        "e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5",
+}
 
 FILES = (
     "src/add-ons/accelerants/radeon_hd/accelerant.cpp",
@@ -72,6 +80,13 @@ def main() -> None:
         source = source_root / relative
         if not source.is_file():
             raise SystemExit(f"missing {source}")
+        expected = CLEARSTATE_SHA256.get(relative)
+        if expected is not None:
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            print(f"sha256 {relative} {digest}")
+            if digest != expected:
+                raise SystemExit(
+                    f"{relative} sha256 {digest} expected {expected}")
         destination = haiku / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)

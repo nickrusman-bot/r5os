@@ -12,6 +12,10 @@ Create PRs with Cursor `ManagePullRequest`. If that fails (GitHub App missing), 
 
 Roadmap (R5 Hub, Store, Vulkan, …): `docs/ROADMAP.md`. Do not implement unrelated roadmap items during a focused fix.
 
+## GFX9 ring (Renoir)
+
+The sequence that landed the fence is `docs/GRAPHICS.md`, section `GFX9 ring on GC 9.3 (fixed)`. Do not change that order, those registers, the PSP load, the firmware blobs, or the ring contents unless the user asks. MEC is started before the GFX ring. A change needs a boot on the 5625U that writes scratch `0xDEADBEEF`, recorded in `CHANGELOG.md`, and an update of that contract. The readback check stays. The ring stays off until the radeon_hd driver settings say `gfx9_ring true`, until the user says otherwise.
+
 ## Settings window
 
 This layout is fixed. Do not move it.

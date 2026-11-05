@@ -1027,6 +1027,16 @@ radeon_hd_init(radeon_info &info)
 	}
 // SPDX-SnippetEnd
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (!radeon_hd_uses_dce(info.chipsetID) && reservedBytes == 0) {
+		ERROR("%s: R5 radeon_hd: DCN without the boot framebuffer, "
+			"not claimed\n", __func__);
+		return B_ERROR;
+	}
+// SPDX-SnippetEnd
+
 	TRACE("framebuffer paddr: %#" B_PRIxPHYSADDR "\n", mapAddr);
 	AreaKeeper frambufferMapper;
 	info.framebuffer_area = frambufferMapper.Map("radeon hd frame buffer",
