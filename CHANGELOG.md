@@ -1,5 +1,32 @@
 # R5OS changelog (lokaal)
 
+### VulkanTeapot frame, and the M4 stick
+
+The mesh is still the wrong shape: separate quarters, squashed. The first six patches are turned a quarter turn around Y, and the later patches are mirrored on Z. freeglut 3.8.0 `fg_teapot.c` mirrors those quarters in X and Y, then rotates 270 degrees around X, scales by 0.5 and translates Z by -1.5, so the height axis stands up. That is [#4104](https://github.com/nickrusman-bot/r5os/issues/4104). It is not fixed in this image. The same shape on the Ryzen 5 5625U is expected.
+
+The window renders at 384 and shows that bitmap 1:1. The grid is 10. Positions are scaled by 0.5. The light uses the absolute value of the dot product, so both sides of a patch are lit. VirtualBox on Lavapipe, 5 Nov 2026: the window turns that shape. The title was `llvmpipe (LLVM 21.1.8, 256 bits) 13` and an fps count. `VulkanTeapot --selftest` printed:
+
+```
+device llvmpipe (LLVM 21.1.8, 256 bits)
+deviceType 4
+driverID 13
+frames 1
+fps 0
+pixel 24 24 262e38ff
+pixel 192 24 262e38ff
+pixel 192 192 431e0bff
+pixel 192 300 262e38ff
+pixel 48 192 262e38ff
+pixel 336 192 262e38ff
+pixels recorded
+```
+
+Those pixels are the Lavapipe reference for this mesh. `r5gpuinfo` still only prints `GET_INFO`. It does not submit `0xDEADBEEF`. `r5-gpu-selftest` prints the render node, then `vulkaninfo --summary`, then `VulkanTeapot --selftest`. It does not run that submit.
+
+`jam -q @r5-anyboot` for AMD64 started at 22:30 and finished at 22:32 Europe/Amsterdam on 5 Nov 2026, exit 0, 1227 targets. The anyboot is 2156724224 bytes, sha256 `48f2e88911dc066dbdba47821610243e9eff1b85ed1d30ccb600e6c53b3630a5`. `install-mesa-packages.sh` printed `mesa_packages_ok` and `ok egl vendor`. The image packages include `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1`, `mesa_lavapipe-25.3.6-1`, `vulkan_loader-1.4.367-1`, `vulkan_tools-1.4.367-1` and `vulkanteapot-1.0.0-1`. That teapot package is the rebuilt binary, 73833 bytes, and its Deskbar link is `data/deskbar/menu/Demos/VulkanTeapot` to `../../../../bin/VulkanTeapot`. The launch job `x-vnd.R5OS-gpu-selftest` is in the user launch file that this jam packaged. Build stays 10048.
+
+A copy of that anyboot gained `/boot/home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. It does not set `gfx9_workload` or `gfx9_compute`. That stick image is 2156724224 bytes, sha256 `58bb5273e8271eb144b191879ea69e92f20af751b7f53d4bb02aa8fcf640cbbc`. It was written to the General UDisk at 22:51 Europe/Amsterdam on 5 Nov 2026. Read-back matched the stick image at 0, at 6291456 and at 2153775104, and the whole device hash matched. Disk 0, the NVMe, was not opened. This image has not been booted.
+
 ### VulkanTeapot keeps drawing
 
 A double-click showed an empty window. `show_window()` drew the bitmap once, straight after `Show()`, and the first update cleared it. The program also rendered a single frame, and the title repeated the device name.

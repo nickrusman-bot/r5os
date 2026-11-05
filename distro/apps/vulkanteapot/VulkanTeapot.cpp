@@ -26,8 +26,8 @@ typedef float GLfloat;
 #include <string.h>
 
 
-static const int kSize = 128;
-static const int kGrid = 4;
+static const int kSize = 384;
+static const int kGrid = 10;
 
 
 struct Vertex {
@@ -132,7 +132,9 @@ eval_patch(const int patch[16], float u, float v, int flip, float angle,
 		normal[1] /= length;
 		normal[2] /= length;
 	}
-	memcpy(out, point, sizeof(point));
+	out[0] = point[0] * 0.5f;
+	out[1] = point[1] * 0.5f;
+	out[2] = point[2] * 0.5f;
 }
 
 
@@ -204,8 +206,8 @@ build_teapot(void)
 static void
 mvp(float out[16])
 {
-	float eye[3] = {0, 2.2f, 6.0f};
-	float center[3] = {0, 0.8f, 0};
+	float eye[3] = {0, 0.15f, 7.2f};
+	float center[3] = {0, -0.5f, 0};
 	float up[3] = {0, 1, 0};
 	float f[3] = {center[0] - eye[0], center[1] - eye[1], center[2] - eye[2]};
 	float fl = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
@@ -398,7 +400,7 @@ class TeapotWindow : public BWindow {
 public:
 	TeapotWindow(DrawState* draw, const char* name, const char* driver)
 		:
-		BWindow(BRect(80, 80, 80 + kSize * 3, 80 + kSize * 3),
+		BWindow(BRect(80, 80, 80 + kSize - 1, 80 + kSize - 1),
 			"VulkanTeapot", B_TITLED_WINDOW, B_QUIT_ON_WINDOW_CLOSE),
 		fView(new TeapotView(Bounds())),
 		fDraw(draw),
@@ -842,7 +844,9 @@ main(int argc, char** argv)
 
 	if (selftest) {
 		draw_frame(&draw, matrix);
-		const int sampleAt[][2] = {{64, 40}, {64, 64}, {64, 90}, {40, 70}, {90, 70}, {64, 20}};
+		const int sampleAt[][2] = {
+			{24, 24}, {192, 24}, {192, 192}, {192, 300}, {48, 192}, {336, 192}
+		};
 		printf("device %s\n", properties.deviceName);
 		printf("deviceType %u\n", (unsigned)properties.deviceType);
 		if (driverKnown)
