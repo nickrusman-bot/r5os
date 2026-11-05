@@ -35,6 +35,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
 - Virtual surround for headphones.
 - Finer MIDI velocity and controller values. Existing MIDI programs keep working.
+- Complete Midi 2.0 support
 
 ### Graphics
 - OpenGL through Mesa, and Vulkan through Lavapipe. Both run on the CPU, not on the GPU.
