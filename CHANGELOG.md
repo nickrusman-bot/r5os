@@ -8,7 +8,7 @@ The user address space for GC 9.3 is the Linux v6.12 layout: low range `0x10000`
 
 The render node name is `gpu/radeon_hd/0`, next to the existing graphics node. `GET_INFO` returns the common fields and an AMD vendor block whose shader counts stay 0 until the registers are read. `CS_SUBMIT` returns `B_NOT_ALLOWED` unless `gpu_render true`. With that key it returns `B_UNSUPPORTED`, because the VMID 1 tables are not programmed yet. The host test printed `ok gpu api 1.0 walk`.
 
-The Utah teapot control points were drawn by Martin Newell in 1975. No formal license was ever attached. The University of Utah redistributes the historical patches, and PyVista records them as conventionally public domain (`LicenseRef-UtahTeapot-PublicDomainByConvention`). Apache LEGAL-525 was closed without a license. That data is not in the tree. VulkanTeapot, libdrm and the Mesa RADV package are not built. There is no new stick. This image has not been booted.
+The teapot control points are freeglut 3.8.0 `src/fg_teapot_data.h`. The file's permission text is the X11/MIT grant. Copyright 1999-2000 Pawel W. Olszta. The header is `distro/apps/vulkanteapot/fg_teapot_data.h`. Haiku `glut_teapot.c` is not used. `GET_INFO` reads `CC_GC_SHADER_ARRAY_CONFIG` and `GC_USER_SHADER_ARRAY_CONFIG`, masks the inactive CUs to 8, and logs the bitmap. The kernel driver linked. Two Mesa configures for RADV and Zink failed: the first could not find `glslangValidator`, the second could not import mako. libdrm is not in the Haiku sysroot, and that check was not reached. There is no new stick. This image has not been booted.
 
 ### M3 is the fixed kernel sequence
 

@@ -19,6 +19,49 @@
 extern radeon_info* gDeviceInfo[];
 
 
+/* gc_9_0_offset.h indexes. Byte address is (0x2000 + index) * 4.
+ * INACTIVE_CUS is 16 bits at bit 16. Renoir's shader array has 8 CUs. */
+static const uint32 kGcSegment = 0x2000;
+static const uint32 kShaderArrayConfig = 0x026f;
+static const uint32 kUserShaderArrayConfig = 0x0270;
+static const uint32 kGbAddrConfig = 0x063e;
+static const uint32 kInactiveShift = 16;
+static const uint32 kInactiveMask = 0xffff0000u;
+static const uint32 kCuPerSh = 8;
+
+
+static uint32
+gpu_mmio(radeon_info* info, uint32 index)
+{
+	uint32 byte = (kGcSegment + index) * 4u;
+	if (info == NULL || info->registers_area < 0 || info->registers == 0)
+		return 0xffffffffu;
+	return *(volatile uint32*)(info->registers + byte);
+}
+
+
+static uint32
+gpu_active_cus(radeon_info* info, uint32* _bitmap, uint32* _gb)
+{
+	uint32 cc = gpu_mmio(info, kShaderArrayConfig);
+	uint32 user = gpu_mmio(info, kUserShaderArrayConfig);
+	uint32 inactive = ((cc | user) & kInactiveMask) >> kInactiveShift;
+	uint32 mask = (1u << kCuPerSh) - 1u;
+	uint32 bitmap = (~inactive) & mask;
+	uint32 count = 0;
+	for (uint32 bit = bitmap; bit != 0; bit >>= 1)
+		count += bit & 1u;
+	if (_bitmap != NULL)
+		*_bitmap = bitmap;
+	if (_gb != NULL)
+		*_gb = gpu_mmio(info, kGbAddrConfig);
+	dprintf("radeon_hd: gfx9 cu cc %08lx user %08lx active %lu bitmap %08lx\n",
+		(unsigned long)cc, (unsigned long)user, (unsigned long)count,
+		(unsigned long)bitmap);
+	return count;
+}
+
+
 static bool
 gpu_render_enabled()
 {
@@ -125,6 +168,12 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		memset(&amd, 0, sizeof(amd));
 		amd.size = (uint32)sizeof(amd);
 		amd.version = 1;
+		amd.max_shader_engines = 1;
+		amd.max_shader_arrays = 1;
+		uint32 bitmap = 0;
+		uint32 gb = 0;
+		amd.active_cu = gpu_active_cus(info, &bitmap, &gb);
+		amd.gb_addr_config = gb;
 		uint32 revision = info->pci->revision;
 		if (info->pci->device_id == 0x15e7 || info->pci->device_id == 0x1638)
 			amd.external_revision = revision + 0xa1;

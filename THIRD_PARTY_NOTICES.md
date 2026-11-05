@@ -12,6 +12,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### Teapot control points
+
+Location: `distro/apps/vulkanteapot/fg_teapot_data.h`.
+
+The file is the freeglut 3.8.0 header `src/fg_teapot_data.h`, with the copyright line the permission text requires written above that text. The data are Martin Newell's patches as redistributed by freeglut. Copyright 1999-2000 Pawel W. Olszta. License: MIT (the X11 permission grant in the file). The control points stay under that notice. The Haiku `glut_teapot.c` file that says GPL licensing is not permitted is not used.
+
 ### AirPlay receiver
 
 Location: `distro/airplay`.
