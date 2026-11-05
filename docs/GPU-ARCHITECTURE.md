@@ -109,9 +109,9 @@ Today the GFX9 ring is **opt-in**. The GPU becomes the default per GPU family, a
 
 These tasks move from the accelerant into the kernel driver:
 
-- **Owning the GPU.** Today the accelerant starts the GPU inside app_server. After that, only the kernel driver programs the rings and the memory controller. The fixed sequences from `GRAPHICS.md` move along unchanged and keep their readback check.
-- **Interrupts** through the IH ring: fences report themselves, without polling.
-- **GART:** the GPU can read and write ordinary system memory.
+- **Owning the GPU.** With `gfx9_kernel true`, the kernel driver programs the rings and the memory controller. The accelerant logs `GFX9 owned by the kernel` and does not start the command processor. The fixed sequences from `GRAPHICS.md` stay unchanged and keep their readback check. Without that key, the accelerant still starts the GPU inside app_server.
+- **Interrupts** through the IH ring: with `gfx9_irq true`, the end-of-pipe fence reports itself. The 5625U boot used MSI irq 61.
+- **GART:** with `gfx9_gart true`, the GPU reads and writes a 1 MiB buffer in system memory. The 5625U boot matched all 262144 dwords and then ran an indirect buffer from that window.
 - **Address space per context** (VMID 1–15, page tables). VMID 0 stays for the kernel.
 - **Simple scheduling** per ring: FIFO with time limits, plus hang detection and reset.
 - **Memory accounting** per team, released when a team ends.
@@ -178,7 +178,7 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 | M0 | GFX9 ring and fence | Scratch `0xDEADBEEF` on the 5625U | done (#4090) |
 | M1 | IB and DMA fill | Pattern correct, time grows with the work | done (#4092) |
 | M2 | Compute shader | Waves compute and write; time scales | done on the 5625U: every checked dword correct, 16 MiB took 3.9× as long as 4 MiB (#4094) |
-| M3 | Kernel driver owns the GPU, plus interrupts and GART | The fixed sequences run from the kernel; a fence arrives by interrupt; the GPU writes into system memory | |
+| M3 | Kernel driver owns the GPU, plus interrupts and GART | The fixed sequences run from the kernel; a fence arrives by interrupt; the GPU writes into system memory | done on the 5625U: kernel runs the sequences, MSI irq 61 client 20 source 181, GART DMA 262144 dwords of `0xA5A5A5A5`, GART IB sequence 10, Shutdown without a panic (`docs/GRAPHICS.md`, `GFX9 kernel on GC 9.3 (fixed)`) |
 | M4 | R5 GPU interface v1, the R5 DRM library, the Mesa build with RADV, and VulkanTeapot | `vulkaninfo` names the 5625U GPU as RADV, next to Lavapipe. **VulkanTeapot** (a fork of GLTeapot) draws the teapot through RADV, offscreen with a copy into a `BBitmap`, and shows the device name; on a machine without a supported GPU it draws through Lavapipe | |
 | M5 | Address space per context | Two programs submit at the same time, separated from each other | |
 | M6 | RADV workload | VulkanTeapot and `vkcube` offscreen with a correct image (checked pixels against Lavapipe), GPU time measured | |

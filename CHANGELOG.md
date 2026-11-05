@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### M3 is the fixed kernel sequence
+
+The user shut down the 15:29 session from the desktop and reported no panic. The syslog exported while that desktop was up still ends before `radeon_hd_uninit`, so the stop registers are not in that file. Milestone M3 in `docs/GPU-ARCHITECTURE.md` is done. The sequence is `GFX9 kernel on GC 9.3 (fixed)` in `docs/GRAPHICS.md`, and `AGENTS.md` locks it the same way as the ring, the workload and compute. `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` stay off until the settings file says so. GC 9.3 is not the default. The next milestone is M4.
+
 ### The GART DMA and the GART indirect buffer landed
 
 The stick written at 15:29 Europe/Amsterdam on 5 Nov 2026, sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, booted on the 5625U. The desktop came up. The syslog has no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`. The log ends on the running desktop. There is no `radeon_hd_uninit`, no `GFX9 kernel start already done this boot`, and no shutdown. MSI vector 61 is not freed. The stop order and a second open in the same boot were not exercised.
@@ -20,7 +24,7 @@ k2 dma pattern 262144 cafe 0 other 0
 k2_ib wb deadbeef seq 10 seen 10
 ```
 
-`k2 ok` is logged only when the DMA submission returned and every one of the 262144 dwords is `0xA5A5A5A5`, and the GART indirect buffer submission returned. `wb deadbeef` is the word that buffer writes. Sequence 10 is that buffer's fence, and `seen 10` is the same value read back. There is no `k2 fault` line and no `GFX9 workload failed` line. The command processor was not halted. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row stay as they are.
+`k2 ok` is logged only when the DMA submission returned and every one of the 262144 dwords is `0xA5A5A5A5`, and the GART indirect buffer submission returned. `wb deadbeef` is the word that buffer writes. Sequence 10 is that buffer's fence, and `seen 10` is the same value read back. There is no `k2 fault` line and no `GFX9 workload failed` line. The command processor was not halted. The contract update is the section above.
 
 ### The GFX ring wraps and the kernel stops the GPU before it unmaps
 
