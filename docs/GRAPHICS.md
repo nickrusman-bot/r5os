@@ -77,6 +77,12 @@ QEMU and VirtualBox may test the software path and `virtio_gpu` / VESA / `vboxvi
 
 OpenGL apps keep the Mesa 25 / libglvnd path. Experimental ICDs are not required to boot.
 
+## Known GFX9 differences
+
+`MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.
+
+The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, which is `0xFFFF1000`, and aligns the ring to 256 dwords. The padding after write pointer 914 is not executed. That has to be fixed before any submission that runs through the padding.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

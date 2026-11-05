@@ -2183,7 +2183,7 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 	uint64 frame = radeon_gfx9_mc_addr(location, 0);
 	uint64 fbEnd = frame + gInfo->fb.vramSize - 1;
 	if (!radeon_mmio_fits(highest) || gInfo->fb.vramSize < 0x1000
-		|| fbEnd < frame || (fbEnd >> 18) > 0xffffffffull)
+		|| fbEnd < frame || (fbEnd >> 18) >= 0xffffffffull)
 		return false;
 
 	// The fence page stays out of the fault redirect.
