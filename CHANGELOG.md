@@ -1,5 +1,31 @@
 # R5OS changelog (lokaal)
 
+### M4 review 2: devices, syncobjs, retire thread, mesa package
+
+RADV found no device because `drmGetDevices2` does not scan `/dev/gpu/radeon_hd` on Haiku. The translator now fills one PCI `drmDevice` from `R5_GPU_GET_INFO`, including bus, device, function and subsystem. `drmGetDevice2` matches an open fd by `st_dev` and `st_ino`. The DRM version is 3.42.0, the oldest minor `ac_gpu_info.c` accepts. Later minor gates stay off. `AMDGPU_INFO_MEMORY` fills the three heaps and caps `max_allocation` at 64 MiB. Syncobj create, destroy, wait, timeline wait, reset, signal, timeline signal and query are translated. `HANDLE_TO_FD`, `FD_TO_HANDLE`, `TRANSFER`, `PRIME` and `GEM_MMAP` return ENOSYS and are named once. An unknown ioctl does the same and is not passed to the node. A binary syncobj chunk is 4 bytes. A timeline chunk is 16 bytes. A binary syncobj is a timeline whose signal stores the job sequence and whose wait waits for a point greater than 0. `CREATE_SIGNALED` sets the point to 1. `drmGetVersion` copies `min(buffer, strlen)` and always reports the real length.
+
+Compute `available_rings` is 0. A submission that is not GFX, or that sets an IB flag, returns EINVAL. Dependency chunks wait on that sequence for five seconds before submit. `WAIT_CS` uses `FENCE_WAIT` with the call's timeout. `CS` passes `ctx_id`. `drm_amdgpu_gem_va` in libdrm 2.4.124 has no context field, so VA uses context 1. The shared VMID stays 1. The CPU-map area id is stored on `struct amdgpu_bo`. The global area table is gone. Kernel limits are 256 buffers, 256 per client, 128 syncobjs and 64 jobs. Hitting a limit prints `bo limit` or `syncobj limit`.
+
+The end-of-pipe interrupt only wakes the `r5 gpu retire` thread. That thread retires jobs while holding the lock. Closing a client retires finished jobs and clears that client's sync pointers on jobs that are still live. A submit wait uses a five-second timeout. Firmware versions for PFP, ME, CE, RLC and MEC are read from the ucode header of `green_sardine` or `renoir`, chosen the same way as `radeon_gfx9_fw_stem`. A missing file leaves that slot 0 and does not fail `GET_INFO`.
+
+The host replay printed `ok libdrm ioctl` and `replay peaks bo 1 sync 2`. AddressSanitizer reported no overflow. The replay is the ioctl list from `ac_linux_drm.c` and the amdgpu winsys, not a RADV process. `scripts/check-libdrm-symbols.py` printed `ok libdrm symbols` after the libdrm rebuild.
+
+The EGL package is `mesa-25.3.6-2`. It provides `mesa`, `mesa_zink` and `mesa_eglvnd`. `BuildFeatures` fetches `file: base mesa`. The sed in `jam-r5-raw.sh` is gone. `mesa-25.3.6-1` stays out of the pin and the download directory. The selftest lines are English: `not available, no supported GPU`. VulkanTeapot `--selftest` still prints six pixels and does not compare them. There is no GPU image to record.
+
+`jam -q @r5-raw` on 5 Nov 2026 at 19:46 Europe/Amsterdam exited 0 and updated 1269 targets. `scripts/install-mesa-packages.sh` printed `mesa_packages_ok`. The image contains `mesa-25.3.6-2` and does not contain `mesa_zink` or `mesa-25.3.6-1`. VirtualBox was not started. This has not been booted. GC 9.3 is not the default. `distro/BUILD` stays 10048.
+
+### M4 userspace: libdrm translation, RADV, Zink, VulkanTeapot
+
+The AMDGPU ioctls libdrm issues are translated in `distro/graphics/libdrm-r5/r5_translate.c`. `drmIoctl` on Haiku calls the four-argument ioctl. `AMDGPU_INFO` reads one `R5_GPU_GET_INFO` and copies `drm_amdgpu_info_device`, the firmware slot and the HW_IP slot straight through. Register `0x263e` is sent as `R5_GPU_READ_REG` offset `0x063e`. `amdgpu_cs_submit_raw2` chunks become the `CS_SUBMIT` lists. `GEM_VA` passes `offset_in_bo` and `map_size`. `amdgpu_bo_cpu_map` uses `BO_MAP` and `get_area_info`. `cpu_unmap` deletes that clone. The host test against a fake kernel printed `ok libdrm ioctl` (`amdgpu_device_initialize`, `amdgpu_query_info`, `amdgpu_bo_alloc` plus `cpu_map`, a low VA and a 32-bit high VA, and one `amdgpu_cs_submit_raw2`). The Haiku libdrm rebuild installed into `/home/nickr/r5os/r5-sysroot`. `scripts/check-libdrm-symbols.py` printed `ok libdrm symbols`. No symbol was missing.
+
+Mesa 25.3.6 was already linked. Zink was only `libzink.a`. `distro/mesa/patches/haiku-zink-link.patch` links it into the Haiku EGL library, with `idep_xmlconfig` because `driParseConfigFiles` was otherwise undefined. `GALLIUM_DRIVER=zink` selects it. llvmpipe stays the default. The relink of `libEGL_mesa.so.0.0.0` exited 0. The error list is `distro/mesa/COMPAT.md`.
+
+Packages, vendor R5OS: `libdrm-2.4.124-1`, `mesa_radv-25.3.6-1` (ICD at `add-ons/vulkan/icd.d/radeon_icd.json`), `mesa_zink-25.3.6-1` (provides `mesa`, so the image installs it instead of the llvmpipe-only `mesa` package), and `vulkanteapot-1.0.0-1`. `distro/BUILD` is 10048. What's new is "Vulkan teapot". The selftest text when the render node is absent is `niet beschikbaar, geen ondersteunde GPU`. `amd->device.cu_active_number` replaces the removed `active_cu` field.
+
+`jam -q @r5-raw` on 5 Nov 2026 at 19:01 Europe/Amsterdam exited 0 and updated 1242 targets. `scripts/install-mesa-packages.sh` printed `mesa_packages_ok`. The image has libdrm 2.4.124, mesa_zink, mesa_devel, mesa_lavapipe, mesa_radv, the LLVM 21 runtime, the Vulkan loader, vulkan_tools and vulkanteapot. It does not have `mesa-25.3.6-1`: that package owns the same EGL file as mesa_zink. `haiku/build/jam/BuildFeatures` fetches a package named `mesa`, so `scripts/jam-r5-raw.sh` points that fetch at `mesa_zink`. `mesa_devel` and `mesa_lavapipe` require `mesa_zink == 25.3.6`.
+
+VirtualBox was not started. There is no guest channel to sign in and run a command: the image has no VirtualBox Guest Additions. The teapot reference pixels are not recorded. `--selftest` prints six pixels and does not compare them. This has not been booted. GC 9.3 is not the default.
+
 ### M4 review: the interface is still 1.0 and has not shipped
 
 API 1.0 has not been booted, so `r5_gpu.h` can still change. This pass is the review of the render node. It has not been booted.

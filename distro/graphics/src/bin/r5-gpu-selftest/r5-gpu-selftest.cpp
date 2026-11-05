@@ -65,7 +65,8 @@ main()
 			r5_gpu_info* info = (r5_gpu_info*)bytes;
 			r5_gpu_amd_info* amd = (r5_gpu_amd_info*)(bytes + sizeof(r5_gpu_info));
 			fprintf(out, "stage render node: api %u.%u device %04x cu %u\n",
-				info->api_major, info->api_minor, info->device, amd->active_cu);
+				info->api_major, info->api_minor, info->device,
+				amd->device.cu_active_number);
 		}
 		close(fd);
 		write_command(out, "vulkaninfo",

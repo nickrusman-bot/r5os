@@ -30,7 +30,7 @@ extern "C" status_t vm_set_area_memory_type(area_id id,
 #include <unistd.h>
 #include <stdarg.h>
 
-extern "C" void r5_gpu_eop();
+extern "C" void r5_gpu_retire_wake();
 
 
 static radeon_info* sInfo = NULL;
@@ -258,7 +258,7 @@ ih_handler(void* data)
 			&& entry.ring == 0) {
 			if (sEopSem >= 0)
 				release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
-			r5_gpu_eop();
+			r5_gpu_retire_wake();
 			sEopCount++;
 			woke = true;
 		}

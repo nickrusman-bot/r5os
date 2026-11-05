@@ -1,0 +1,66 @@
+# GPU packages on the image
+
+The software path stays installed. A supported GPU uses these packages when the
+render node is present. VirtualBox has no render node, so Lavapipe remains the
+Vulkan device there.
+
+| Package | What it is |
+|---|---|
+| libdrm 2.4.124 | `libdrm.so.2` and `libdrm_amdgpu.so.1`. AMDGPU ioctls become R5 GPU calls |
+| mesa_zink 25.3.6 | EGL vendor. llvmpipe by default. `GALLIUM_DRIVER=zink` selects Zink. Provides `mesa` |
+| mesa_lavapipe 25.3.6 | Vulkan software driver |
+| mesa_radv 25.3.6 | `libvulkan_radeon.so` and `add-ons/vulkan/icd.d/radeon_icd.json` |
+| vulkan_loader 1.4.367 | Khronos loader. Haiku Project package |
+| VulkanTeapot | Offscreen Newell teapot. `--selftest` prints the device and sample pixels |
+
+RADV is not the default for GC 9.3. The ring, the workload, and compute stay
+off until the radeon_hd driver settings say so.
+
+The package is named `mesa`, version `25.3.6-2`. It provides `mesa`,
+`mesa_zink` and `mesa_eglvnd`. `haiku/build/jam/BuildFeatures` fetches
+`file: base mesa`. `mesa-25.3.6-1` is not in the pin and not in the download
+directory: it owns the same EGL file. `mesa_devel` and `mesa_lavapipe` require
+`mesa == 25.3.6`.
+
+DRM version reported to RADV is 3.42.0. That is the oldest version
+`ac_gpu_info.c` accepts. Every `drm_minor >= 45` gate in that file stays off,
+including gang submit, GPUVM faults and conformant trunc.
+
+A binary syncobj is a timeline. Create with `DRM_SYNCOBJ_CREATE_SIGNALED`
+sets the point to 1. Reset sets it to 0. A binary wait waits until the point
+is greater than 0. A binary signal on a job sets the point to that job's
+sequence. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE`, `TRANSFER` and
+`PRIME` return ENOSYS. Any other untranslated ioctl returns ENOSYS and is
+named once on stderr. `GEM_MMAP` is one of those: CPU mapping uses `BO_MAP`.
+
+Compute is reported with `available_rings` 0. A command submission whose
+`ip_type` is not GFX, or whose IB flags are not 0, returns EINVAL. VMID 1 is
+one shared address space. `CS` passes `ctx_id`. `GEM_VA` in libdrm 2.4.124
+has no context field, so that call uses context 1. A dependency chunk waits
+on that sequence for five seconds and is not dropped. `WAIT_CS` uses the same
+fence wait. The submit wait is five seconds and returns a timeout.
+
+The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 2`) used one
+buffer and two syncobjs. The kernel tables are 256 buffers, 256 buffers per
+client, 128 syncobjs and 64 jobs. A full RADV device was not run.
+
+| Call | Result |
+|---|---|
+| `drmGetDevices2` / `drmGetDevice2` | translated, PCI from `GET_INFO` |
+| `drmGetVersion` | translated, 3.42.0 |
+| `AMDGPU_INFO_DEV_INFO` | translated |
+| `AMDGPU_INFO_HW_IP` GFX | translated, rings 1 |
+| `AMDGPU_INFO_HW_IP` compute | translated, rings 0 |
+| `AMDGPU_INFO_FW_VERSION` ME, MEC, PFP | translated, from the ucode header |
+| `AMDGPU_INFO_MEMORY` | translated, max allocation 64 MiB |
+| `AMDGPU_INFO_VRAM_GTT` | translated |
+| `AMDGPU_INFO_READ_MMR_REG` `0x263e` | translated as `0x063e` |
+| `DRM_CAP_SYNCOBJ` and `DRM_CAP_SYNCOBJ_TIMELINE` | translated, value 1 |
+| syncobj create, wait, reset, signal, query | translated |
+| `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE`, `TRANSFER` | ENOSYS on purpose |
+| `PRIME` | ENOSYS on purpose |
+| `CS` binary `chunk_sem` | translated |
+| `CS` timeline chunk | translated |
+| `CS` dependencies | translated, fence wait before submit |
+| `WAIT_CS` | translated |
+| `GEM_MMAP` | ENOSYS on purpose |

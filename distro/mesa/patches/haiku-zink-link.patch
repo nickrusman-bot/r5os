@@ -1,0 +1,26 @@
+--- a/src/egl/meson.build
++++ b/src/egl/meson.build
+@@ -149,6 +149,11 @@
+ 
+   link_for_egl += [libmesa, libgallium, libswhgl, libsthgl, libglapi]
+   deps_for_egl += [cpp.find_library('be'), driver_swrast]
++  # Zink is built with the gallium drivers. Haiku EGL did not link it,
++  # so the driver never reached the image.
++  if with_gallium_zink
++    deps_for_egl += [driver_zink, idep_xmlconfig]
++  endif
+ elif with_platform_windows
+   c_args_for_egl += [
+     '-DEGLAPI=', '-DPUBLIC='
+--- a/src/egl/drivers/haiku/egl_haiku.cpp
++++ b/src/egl/drivers/haiku/egl_haiku.cpp
+@@ -52,6 +52,9 @@
+ #include <Bitmap.h>
+ 
+ extern "C" {
++#ifdef GALLIUM_ZINK
++#include "zink/zink_public.h"
++#endif
+ #include "target-helpers/inline_sw_helper.h"
+ }
+ 

@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10048 - Vulkan teapot
+Demos includes VulkanTeapot. It draws a teapot with Vulkan. On a machine without a supported graphics chip it uses the software driver. The window title shows the device.
+
 R5 2026.1-dev Build 10047 - Virtual surround
 Audio settings can play multi-channel sound in headphones as a simple spatial mix. Virtual surround is Off or On. Restart media services to apply it.
 

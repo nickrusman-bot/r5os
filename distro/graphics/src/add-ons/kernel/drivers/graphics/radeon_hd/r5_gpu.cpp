@@ -19,8 +19,11 @@
 #include <kernel.h>
 
 #include <driver_settings.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 
 extern radeon_info* gDeviceInfo[];
@@ -37,11 +40,11 @@ static const uint32 kGbAddrConfig = 0x063e;
 static const uint32 kInactiveShift = 16;
 static const uint32 kInactiveMask = 0xffff0000u;
 static const uint32 kCuPerSh = 8;
-static const uint32 kMaxBo = 64;
-static const uint32 kMaxClientBo = 32;
-static const uint32 kMaxSync = 32;
+static const uint32 kMaxBo = 256;
+static const uint32 kMaxClientBo = 256;
+static const uint32 kMaxSync = 128;
 static const uint32 kMaxRange = 8;
-static const uint32 kMaxJob = 32;
+static const uint32 kMaxJob = 64;
 static const uint32 kMaxList = 8;
 static const uint64 kMaxBoBytes = 64ull * 1024ull * 1024ull;
 static const uint64 kRoomWaitUs = 100000;
@@ -158,6 +161,8 @@ static ConditionVariable sEop;
 static bool sReady = false;
 static bool sLost = false;
 static int32 sContexts = 0;
+static sem_id sRetireSem = -1;
+static thread_id sRetireThread = -1;
 
 
 static void
@@ -228,6 +233,32 @@ gpu_copy_user(void* local, uint64 address, size_t bytes)
 }
 
 
+static void r5_gpu_eop();
+
+
+static status_t
+gpu_retire_thread(void* data)
+{
+	(void)data;
+	while (acquire_sem(sRetireSem) == B_OK) {
+		if (!sReady)
+			break;
+		gpu_lock();
+		r5_gpu_eop();
+		gpu_unlock();
+	}
+	return B_OK;
+}
+
+
+extern "C" void
+r5_gpu_retire_wake()
+{
+	if (sRetireSem >= 0)
+		release_sem_etc(sRetireSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
 extern "C" void
 r5_gpu_init()
 {
@@ -235,7 +266,14 @@ r5_gpu_init()
 		return;
 	init_lock(&sGpuLock, "r5 gpu");
 	sEop.Init(&sEop, "r5 gpu eop");
+	sRetireSem = create_sem(0, "r5 gpu retire");
 	sReady = true;
+	if (sRetireSem >= 0) {
+		sRetireThread = spawn_kernel_thread(gpu_retire_thread,
+			"r5 gpu retire", B_NORMAL_PRIORITY, NULL);
+		if (sRetireThread >= 0)
+			resume_thread(sRetireThread);
+	}
 }
 
 
@@ -243,10 +281,21 @@ extern "C" void
 r5_gpu_uninit()
 {
 	sReady = false;
+	if (sRetireSem >= 0)
+		release_sem(sRetireSem);
+	if (sRetireThread >= 0) {
+		status_t result = B_OK;
+		wait_for_thread(sRetireThread, &result);
+		sRetireThread = -1;
+	}
+	if (sRetireSem >= 0) {
+		delete_sem(sRetireSem);
+		sRetireSem = -1;
+	}
 }
 
 
-extern "C" void
+static void
 r5_gpu_eop()
 {
 	if (!sReady)
@@ -307,6 +356,41 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 }
 
 
+static void
+gpu_fw_slot(const char* stem, const char* kind, r5_amdgpu_info_firmware* slot)
+{
+	char path[256];
+	uint8 header[36];
+	snprintf(path, sizeof(path),
+		"/boot/system/non-packaged/data/firmware/amdgpu/%s_%s.bin",
+		stem, kind);
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return;
+	ssize_t got = read(fd, header, sizeof(header));
+	close(fd);
+	if (got != (ssize_t)sizeof(header))
+		return;
+	memcpy(&slot->ver, header + 16, sizeof(slot->ver));
+	memcpy(&slot->feature, header + 32, sizeof(slot->feature));
+}
+
+
+static void
+gpu_read_firmware(radeon_info* info, r5_gpu_amd_info* amd)
+{
+	uint16 pci = info->pci->device_id;
+	const char* stem = (pci == 0x1636 || pci == 0x164c)
+		? "renoir" : "green_sardine";
+	/* Same indices as AMDGPU_INFO_FW_GFX_ME/PFP/CE/RLC/MEC. */
+	gpu_fw_slot(stem, "pfp", &amd->firmware[0x05]);
+	gpu_fw_slot(stem, "me", &amd->firmware[0x04]);
+	gpu_fw_slot(stem, "ce", &amd->firmware[0x06]);
+	gpu_fw_slot(stem, "rlc", &amd->firmware[0x07]);
+	gpu_fw_slot(stem, "mec", &amd->firmware[0x08]);
+}
+
+
 static status_t
 gpu_get_info(radeon_info* info, void* buffer, size_t length)
 {
@@ -337,6 +421,15 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	out.high_va_max = R5_GPU_HIGH_VA_MAX;
 	out.vendor_block_size = (uint32)sizeof(r5_gpu_amd_info);
 	out.vendor_block_version = 1;
+	out.bus = info->pci->bus;
+	out.dev = info->pci->device;
+	out.func = info->pci->function;
+	out.subsystem_vendor = info->pci->u.h0.subsystem_vendor_id;
+	out.subsystem_device = info->pci->u.h0.subsystem_id;
+	if (info->shared_info != NULL) {
+		out.vram_bytes = (uint64)info->shared_info->frame_buffer_size * 1024ull;
+		out.gtt_bytes = out.vram_bytes;
+	}
 	size_t copy = sizeof(out);
 	if (length < copy)
 		copy = length;
@@ -375,6 +468,8 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].ib_size_alignment = 4;
 	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].available_rings = 1;
 	amd.hw_ip[R5_AMDGPU_HW_IP_COMPUTE] = amd.hw_ip[R5_AMDGPU_HW_IP_GFX];
+	amd.hw_ip[R5_AMDGPU_HW_IP_COMPUTE].available_rings = 0;
+	gpu_read_firmware(info, &amd);
 	if (user_memcpy((uint8*)buffer + sizeof(out), &amd, sizeof(amd)) != B_OK)
 		return B_BAD_ADDRESS;
 	return B_OK;
@@ -430,8 +525,10 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		return B_BAD_VALUE;
 	if (in.domain != R5_GPU_DOMAIN_VRAM && in.domain != R5_GPU_DOMAIN_GTT)
 		return B_BAD_VALUE;
-	if (client->handleCount >= kMaxClientBo)
+	if (client->handleCount >= kMaxClientBo) {
+		dprintf("radeon_hd: bo limit\n");
 		return B_NO_MEMORY;
+	}
 	uint64 bytes = (in.bytes + 4095ull) & ~4095ull;
 	int slot = -1;
 	for (uint32 i = 0; i < kMaxBo; i++) {
@@ -440,8 +537,10 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 			break;
 		}
 	}
-	if (slot < 0)
+	if (slot < 0) {
+		dprintf("radeon_hd: bo limit\n");
 		return B_NO_MEMORY;
+	}
 	gpu_bo* bo = &sBo[slot];
 	memset(bo, 0, sizeof(*bo));
 	bo->area = -1;
@@ -740,6 +839,15 @@ gpu_wait_room(radeon_info* info, uint32 dwords)
 }
 
 
+static bool
+gpu_wait_ready(const gpu_sync* sync, const r5_gpu_cs_sync* wait)
+{
+	if ((wait->flags & R5_GPU_CS_SYNC_BINARY) != 0)
+		return sync->point > 0;
+	return sync->point >= wait->point;
+}
+
+
 static status_t
 gpu_submit(gpu_client* client, void* buffer, size_t length)
 {
@@ -768,6 +876,8 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (status != B_OK)
 		return status;
 	for (uint32 i = 0; i < in.ib_count; i++) {
+		if (ibs[i].flags != 0)
+			return B_BAD_VALUE;
 		if (!gpu_ib_mapped(ibs[i].gpu_va, ibs[i].dwords))
 			return B_BAD_ADDRESS;
 	}
@@ -777,20 +887,26 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		gpu_sync* sync = &client->syncs[waits[i].handle - 1u];
 		if (!sync->live)
 			return B_BAD_VALUE;
-		while (sync->point < waits[i].point) {
+		bigtime_t deadline = system_time() + (bigtime_t)kFreeWaitUs;
+		while (!gpu_wait_ready(sync, &waits[i])) {
 			if (sLost)
 				return B_ERROR;
+			bigtime_t now = system_time();
+			if (now >= deadline)
+				return B_TIMED_OUT;
 			ConditionVariableEntry entry;
 			sEop.Add(&entry);
-			if (sync->point >= waits[i].point)
+			if (gpu_wait_ready(sync, &waits[i]))
 				break;
 			gpu_unlock();
-			status_t waited = entry.Wait(B_CAN_INTERRUPT, B_INFINITE_TIMEOUT);
+			status_t waited = entry.Wait(B_RELATIVE_TIMEOUT, deadline - now);
 			gpu_lock();
 			if (!sync->live)
 				return B_BAD_VALUE;
 			if (waited == B_INTERRUPTED || waited == B_WOULD_BLOCK)
 				return waited;
+			if (waited == B_TIMED_OUT && !gpu_wait_ready(sync, &waits[i]))
+				return B_TIMED_OUT;
 		}
 	}
 	int jobSlot = -1;
@@ -814,6 +930,8 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		return status;
 	gpu_job* job = &sJobs[jobSlot];
 	memset(job, 0, sizeof(*job));
+	uint32 signalFlags[kMaxList];
+	memset(signalFlags, 0, sizeof(signalFlags));
 	for (uint32 i = 0; i < in.signal_count; i++) {
 		if (signals[i].handle == 0 || signals[i].handle > kMaxSync)
 			return B_BAD_VALUE;
@@ -822,12 +940,18 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 			return B_BAD_VALUE;
 		job->syncs[i] = sync;
 		job->points[i] = signals[i].point;
+		signalFlags[i] = signals[i].flags;
 	}
 	job->count = in.signal_count;
 	uint64 sequence = 0;
 	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, &sequence))
 		return B_ERROR;
 	job->sequence = sequence;
+	for (uint32 i = 0; i < in.signal_count; i++) {
+		if ((signalFlags[i] & R5_GPU_CS_SYNC_BINARY) == 0)
+			continue;
+		job->points[i] = sequence == 0 ? 1 : sequence;
+	}
 	job->live = true;
 	client->lastSequence = sequence;
 	if (r5_gfx9_user_seen() >= sequence)
@@ -874,10 +998,13 @@ gpu_sync_create(gpu_client* client, void* buffer, size_t length)
 			break;
 		}
 	}
-	if (slot < 0)
+	if (slot < 0) {
+		dprintf("radeon_hd: syncobj limit\n");
 		return B_NO_MEMORY;
+	}
 	client->syncs[slot].live = true;
-	client->syncs[slot].point = 0;
+	client->syncs[slot].point = (in.flags & R5_GPU_SYNCOBJ_SIGNALED) != 0
+		? 1 : 0;
 	client->syncs[slot].owner = client;
 	in.handle = (uint32)slot + 1u;
 	return gpu_copy_out(buffer, length, &in, sizeof(in));
@@ -918,7 +1045,10 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 	gpu_sync* sync = gpu_sync_get(client, in.handle);
 	if (sync == NULL)
 		return B_BAD_VALUE;
-	return gpu_wait_value(client->info, &sync->point, in.point, in.timeout_us,
+	uint64 target = in.point;
+	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0)
+		target = 1;
+	return gpu_wait_value(client->info, &sync->point, target, in.timeout_us,
 		false);
 }
 
@@ -933,8 +1063,11 @@ gpu_sync_signal(gpu_client* client, void* buffer, size_t length)
 	gpu_sync* sync = gpu_sync_get(client, in.handle);
 	if (sync == NULL)
 		return B_BAD_VALUE;
-	if (in.point > sync->point)
-		sync->point = in.point;
+	uint64 point = in.point;
+	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0 && point == 0)
+		point = 1;
+	if (point > sync->point)
+		sync->point = point;
 	sEop.NotifyAll();
 	return B_OK;
 }
@@ -973,6 +1106,16 @@ gpu_free(void* cookie)
 		return B_OK;
 	gpu_lock();
 	status_t status = gpu_wait_client(client);
+	r5_gpu_eop();
+	for (uint32 i = 0; i < kMaxJob; i++) {
+		if (!sJobs[i].live)
+			continue;
+		for (uint32 n = 0; n < sJobs[i].count; n++) {
+			gpu_sync* sync = sJobs[i].syncs[n];
+			if (sync != NULL && sync->owner == client)
+				sJobs[i].syncs[n] = NULL;
+		}
+	}
 	for (uint32 i = 0; i < client->handleCount; i++) {
 		uint32 handle = client->handles[i];
 		if (handle > 0 && handle <= kMaxBo)

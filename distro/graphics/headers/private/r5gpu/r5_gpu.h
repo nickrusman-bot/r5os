@@ -74,6 +74,11 @@ typedef struct {
 	uint64_t	timestamp_hz;
 	uint32_t	vendor_block_size;
 	uint32_t	vendor_block_version;
+	uint32_t	bus;
+	uint32_t	dev;
+	uint32_t	func;
+	uint32_t	subsystem_vendor;
+	uint32_t	subsystem_device;
 } r5_gpu_info;
 
 /* AMDGPU_FAMILY_RV from libdrm amdgpu_drm.h. The vendor block below is that
@@ -230,9 +235,14 @@ typedef struct {
 	uint32_t	flags;
 } r5_gpu_ib;
 
+/* A binary syncobj is a timeline. A signal sets the point to the job
+ * sequence. A reset sets it to 0. A binary wait waits until the point
+ * is greater than 0. R5_GPU_CS_SYNC_BINARY marks that wait or signal. */
+#define R5_GPU_CS_SYNC_BINARY 1u
+
 typedef struct {
 	uint32_t	handle;
-	uint32_t	_pad;
+	uint32_t	flags;
 	uint64_t	point;
 } r5_gpu_cs_sync;
 
@@ -258,10 +268,14 @@ typedef struct {
 	uint64_t	timeout_us;
 } r5_gpu_fence;
 
+#define R5_GPU_SYNCOBJ_SIGNALED 1u
+#define R5_GPU_SYNCOBJ_BINARY 2u
+
 typedef struct {
 	uint32_t	size;
 	uint32_t	version;
 	uint32_t	handle;
+	uint32_t	flags;
 	uint64_t	point;
 	uint64_t	timeout_us;
 } r5_gpu_syncobj;

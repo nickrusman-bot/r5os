@@ -11,6 +11,7 @@
 !distro/packages/
 !distro/packages/**
 !distro/packages/**/*.hpkg
+__pycache__/
 .DS_Store
 Thumbs.db
 /query.csv
