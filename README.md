@@ -35,6 +35,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
 - Virtual surround for headphones.
 - Finer MIDI velocity and controller values. Existing MIDI programs keep working.
+- Full Midi 2.0 support
 
 ### Graphics
 - OpenGL through Mesa, and Vulkan through Lavapipe. Both run on the CPU, not on the GPU.
@@ -43,7 +44,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
 
-The full list, build by build, is in About R5OS → What's new ([`distro/WHATSNEW`](distro/WHATSNEW)). The technical details and the known limits are in [`CHANGELOG.md`](CHANGELOG.md).
+The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`](distro/WHATSNEW)). The technical details and the known limits are in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Not there yet
 
