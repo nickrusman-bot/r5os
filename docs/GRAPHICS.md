@@ -92,7 +92,7 @@ This is the sequence in the code after the test scaffolding came out. The 08:11 
 
 The ring is off unless `/boot/home/config/settings/kernel/drivers/radeon_hd` contains `gfx9_ring true`. Userland `load_driver_settings("radeon_hd")` opens `B_USER_SETTINGS_DIRECTORY` plus `/kernel/drivers/` plus the driver name (`src/system/libroot/os/driver_settings.cpp`). The image does not ship that file. Tonga through Vega 20 are not claimed. The IP-discovery row is not compiled in. A DCN chip with no boot framebuffer returns `B_ERROR` from `radeon_hd_init`. `device_open` returns that error. `AccelerantHWInterface` then asks for the next graphics device, and once the index passes the published devices it opens VESA or the framebuffer.
 
-Tested: the 08:11 stick, the repeat boot, and boot 1 on 5 Nov 2026 with `gfx9_ring true`. That boot logged `GFX9 ring contract verified` and `fence landed`. Changing this sequence requires a new boot on the 5625U that lands the fence, recorded in CHANGELOG.md.
+Tested: the 08:11 stick, the repeat boot, boot 1 on 5 Nov 2026 with `gfx9_ring true` (`GFX9 ring contract verified`, `fence landed`), and boot 2 the same morning without that file (`GFX9 ring off`, no mode 2, no PSP load). Changing this sequence requires a new boot on the 5625U that lands the fence, recorded in CHANGELOG.md.
 
 ## Known GFX9 differences
 
