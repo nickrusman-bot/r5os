@@ -12,7 +12,7 @@ The teapot control points are freeglut 3.8.0 `src/fg_teapot_data.h`. The file's 
 
 libdrm 2.4.124, sha256 `ac36293f61ca4aafaf4b16a2a7afff312aa4f5c37c9fbd797de9e3c0863ca379`, is installed in `/home/nickr/r5os/r5-sysroot`. The Haiku edit defines `makedev` and opens `/dev/gpu/radeon_hd/<n>`. AMDGPU ioctls are not translated. Mesa 25.3.6 configured with Vulkan `amd,swrast` and Gallium `llvmpipe,zink`, and found libdrm 2.4.124. The compile stops in two Haiku gaps. `radv_physical_device.c:2143` calls `major` and `minor`, which Haiku does not declare. `libsync.h:57` uses `_IOWR`, which the Haiku headers do not define, while compiling `radv_amdgpu_cs.c`. RADV is not in this image. VulkanTeapot is not built.
 
-The host test printed `ok gpu api 1.0 walk`. The kernel driver and `r5gpuinfo` linked. There is no new stick yet in this note until the image is written. This image has not been booted.
+The host test printed `ok gpu api 1.0 walk`. The kernel driver, `r5gpuinfo` and `r5-gpu-selftest` linked. `jam -q @r5-anyboot` exited 0. The anyboot image is 2156724224 bytes, sha256 `06ed2b06583fe314a71f0eef7d3dc453c8ee22a079b512b3a6231fb69d69c216`. The stick copy, with `gfx9_ring`, `gfx9_kernel`, `gfx9_irq`, `gfx9_gart`, `gpu_render` and `gpu_selftest` set, is sha256 `19b5d9d9b9194ad186b5bb4b4ee949b95a04a3c60a01c9702124aaaea29c6d3c`. It was written at 17:24 Europe/Amsterdam on 5 Nov 2026. Read-back matched at 0, 6291456 and 2153775104. Disk 0 was not opened. This image has not been booted. VirtualBox was not started. VulkanTeapot is not in the image.
 
 ### M3 is the fixed kernel sequence
 
