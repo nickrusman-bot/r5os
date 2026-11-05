@@ -1,5 +1,27 @@
 # R5OS changelog (lokaal)
 
+### The GART DMA fence landed and the dword check missed
+
+The stick written at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`, booted on the 5625U. The desktop came up. There was no panic. Tracker logged `R5 tracker: Tracker from distro` and Deskbar logged `R5 deskbar: BarApp from distro`. The accelerant logged `GFX9 owned by the kernel`.
+
+K0 and K1 landed again. The syslog lines are `scratch deadbeef`, `rptr 00000392`, `dwords 914`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `compute_c0 ok seq 2 seen 2`, `compute_c1 ok bad 0`, `compute_c2 ok bad 0 ticks 16682`, `compute_c3 ok bad 0 ticks 58876`, `compute_ratio 3.5`, `dma_1m_bad 0 ticks_1m 8468`, `dma_8m_bad 0 ticks_8m 48908`, `dma_ratio 5.7`, `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, and `k1_wait_us 1130`.
+
+K2 programmed the table and the DMA submission completed. The syslog lines are:
+
+```
+k2 agp bot 00000000 top 00000000 0000000000000000-0000000001000000
+k2 map count 8 pages 256
+k2 pte last 060000001b74f077 got 060000001b74f077 tail 0600000812c98077
+k2 ptb 0000000812c18001 got 12c18001 00000008
+k2 inv 007c0001
+k2 fail gart 000000f3f0000000-000000f400000000 pte0 060000001b810077
+k2_dma_bad 262144
+k2_ib wb deadbeef seq 0 seen 9
+k2 fault 00000000 MORE_FAULTS 0 WALKER_ERROR 0 PERMISSION_FAULTS 0 MAPPING_ERROR 0 CID 0 RW 0 addr 0000000000000000 cntl 007ffe01 cp 00000000 grbm 00003028
+```
+
+The page-table base read back as written: physical `0x812c18000` with the valid bit. The last PTE read back as written, including `MTYPE_UC` and the executable bit. The invalidate request was `0x007c0001`. There is no `GFX9 workload failed` line for this DMA. `seen 9` is the fence sequence, so the release completed. The fault status is zero. `k2_dma_bad 262144` is every dword of the 1 MiB buffer. The DMA packet writes `0xA5A5A5A5`, which is the value the K0 check accepts. The K2 check compares with `0x5A5A5A5A`. The log does not record the dword the CPU read, so a buffer that stayed `0xCAFEDEAD` is still possible. The GART indirect buffer was not submitted. The failure path then halted the command processor. `docs/GRAPHICS.md`, `AGENTS.md` and the M3 row stay as they are.
+
 ### The page table base is the framebuffer offset
 
 The 14:19 boot faulted a write on the first GART page with `WALKER_ERROR` and `MAPPING_ERROR`. `VM_L2_PROTECTION_FAULT_ADDR` holds a page number, so the byte address is that register shifted left by 12. For `0x0f3f0000` that is the GART start `0xf3f0000000`. The walker did not read the table. K2 now writes `VM_CONTEXT0_PAGE_TABLE_BASE_ADDR` as `(MC_VM_FB_OFFSET << 24) + tableOffset`, then `AMDGPU_PTE_VALID`, the same value as `amdgpu_gmc_pd_addr` plus `gmc_v9_0_get_vm_pde`. The physical address is rejected when it fails the Linux `BUG_ON` mask `0xFFFF00000000003F`. The written value and the read-back are logged as `k2 ptb`.
@@ -8,7 +30,7 @@ The 14:19 boot faulted a write on the first GART page with `WALKER_ERROR` and `M
 
 `VM_INVALIDATE_ENG0_REQ` in `gc_9_0_sh_mask.h` has `FLUSH_TYPE` as two bits at 16, then `INVALIDATE_L2_PTES`, `INVALIDATE_L2_PDE0`, `INVALIDATE_L2_PDE1`, `INVALIDATE_L2_PDE2` and `INVALIDATE_L1_PTES`. `gmc_v9_0_get_invalidate_req` for VMID 0 and flush type 0 is `0x007c0001`. K2 logs that value as `k2 inv`. A fault log now names `MORE_FAULTS`, `WALKER_ERROR`, `PERMISSION_FAULTS`, `MAPPING_ERROR`, `CID` and `RW`, and prints the byte address. The host test covers the PTE, the alignment, the invalidate word and the previous fault status `0x00040d5b`. K0 and K1 are unchanged.
 
-The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`. Jam `@r5-anyboot` exited 0. The driver inside `haiku-r1~beta6_r5_2026.1_dev-1-x86_64.hpkg` contains `k2 fail ptb readback`. The image was written to the General UDisk at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. This image has not been booted.
+The host test printed `ok dwords 73 submit 12` and `ok pte gart ih`. Jam `@r5-anyboot` exited 0. The driver inside `haiku-r1~beta6_r5_2026.1_dev-1-x86_64.hpkg` contains `k2 fail ptb readback`. The image was written to the General UDisk at 14:56 Europe/Amsterdam on 5 Nov 2026, sha256 `313e46d73a6dccdd85734a9ca01f2a662c8d7d6d7dcb2f88dc8664cd79ada770`. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0, the NVMe, was not opened. The settings are `gfx9_ring`, `gfx9_workload`, `gfx9_compute`, `gfx9_kernel`, `gfx9_irq` and `gfx9_gart`. The boot is the section above.
 
 ### The GART DMA faulted at the start of the window
 
