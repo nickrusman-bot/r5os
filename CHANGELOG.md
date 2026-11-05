@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### The first GFX9 packet lands on the 5625U
+
+The GFX ring fetched 152 dwords and stopped, scratch stayed `0xcafedead`, and `CP_MEC_CNTL` was `0x50000000`. Linux starts the MEC in `gfx_v9_0_kiq_resume` before the GFX ring. Writing `CP_MEC_CNTL` to 0 and waiting 50 µs, only after both MEC PSP items return status 0, makes the PFP idle before the doorbell. The 914-dword clear-state stream then runs, and scratch becomes `0xdeadbeef`.
+
+The same 08:11 image was booted a second time with no code change and reproduced that result. The phase snapshot that read `GRBM_GFX_INDEX` through segment `0xA000` is gone, so that `0xc200` read error is gone with it. The short test rings are gone. The clear-state stream, the scratch packet, the MEC start, and the stall note on a miss stay. `MC_VM_MX_L1_TLB_CNTL` still keeps `ECO_BITS`. The type-2 NOP padding is unchanged and is not executed. The aperture high check now refuses a value that would overflow after adding 1.
+
+The ring is off unless `~/config/settings/kernel/drivers/radeon_hd` says `gfx9_ring true`. Userland looks up `B_USER_SETTINGS_DIRECTORY` and then `/kernel/drivers/radeon_hd`. The image does not ship that file. Tonga through Vega 20 are not claimed. The IP-discovery row is not compiled in. A DCN chip with no boot framebuffer is not claimed, and `app_server` moves on to VESA or the framebuffer once it asks past the published devices. Before the ME is unhalted the driver reads the ring setup back and logs `GFX9 ring contract verified`, or logs every mismatch and restores the ring. The apply scripts refuse a firmware blob or a clear-state header whose sha256 is not the one in `THIRD_PARTY_NOTICES.md`.
+
+What's new and `distro/BUILD` are unchanged. Nothing here is on by default, and the panel is still the firmware picture.
+
+The 08:11 stick, sha256 `73a9a97a5cc06a789baec24befa83cf8523be2a43c8d3209914a426fe22cc1c2`, reached the desktop on the Ryzen 5 5625U twice. Tracker started. There is no panic. Scratch was `0xdeadbeef` and the read pointer was `0x392` both times.
+
+`jam -q @r5-anyboot` for AMD64 finished at 08:54 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8389 targets). The apply printed the eleven firmware sha256 lines and the two clear-state header lines, and each matched `THIRD_PARTY_NOTICES.md`. A copy of `renoir_pfp.bin` with the first byte flipped, kept under `/tmp`, made `apply-amdgpu-fw.py` exit before copying. The linked accelerant contains `GFX9 ring off`, `fence landed`, `GFX9 ring contract verified` and `GFX9 ring contract:`. It does not contain `GFX9 phase` or `try writedata`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `1a1e8379d10461d0d2fb98aa1eef47f3f2033d1f704382ff284060287ea0776d`. It has not been booted on the 5625U. Other AMD GPUs were not tested. Polaris and Vega are now not claimed. A hybrid laptop was not tested. VirtualBox was not tested. ARM64 and RISC-V were not tested. QEMU does not have this GPU.
+
 ### The MEC is started before the GFX ring
 
 Linux v6.12 `gfx_v9_0_cp_compute_enable(true)` writes `CP_MEC_CNTL` to 0 and waits 50 µs. `mmCP_MEC_CNTL` is `0x008d`, base index 0. `MEC_ME1_HALT` is bit 30 and `MEC_ME2_HALT` is bit 28. The accelerant does that write after the `rlc` snapshot and before the ring registers, and only when both MEC PSP items (type 4 and type 5) returned status 0. There is no KIQ queue and no MQD. A failure path writes that saved value back before `radeon_gfx9_restore_saved`. Two such calls sit after the new code. The log line is `GFX9 CP_MEC_CNTL`.
