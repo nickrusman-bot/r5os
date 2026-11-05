@@ -1,5 +1,36 @@
 # R5OS changelog (lokaal)
 
+### M4 stick boot on the 5625U
+
+The stick sha256 `58bb5273e8271eb144b191879ea69e92f20af751b7f53d4bb02aa8fcf640cbbc` reached the desktop. The photo of `vulkaninfo` shows RADV failing and the loader continuing. The lines are:
+
+```
+/home/nickr/r5os/r5-sysroot/share/libdrm/amdgpu.ids: No such file or directory
+amdgpu: ac_drm_query_gpu_info failed.
+WARNING: [../src/amd/vulkan/radv_physical_device.c:2269] Code 0 : failed to initialize winsys (VK_ERROR_INITIALIZATION_FAILED)
+ERROR: [Loader Message] Code 0 : setup_loader_term_phys_devs: Failed to initialize winsys (VK_ERROR_INITIALIZATION_FAILED)
+vulkan_radeon.so failed with error code -3
+Vulkan Instance Version: 1.4.367
+```
+
+`/boot/home/config/cache/r5-gpu-selftest.txt` is not on the stick. The cache directory has `Notifications` and `mesa_shader_cache` only. `r5-session.log` launches Tracker, Deskbar, the tray, AirPlay, the clipboard helper and two shells, then `sign-in done: No error`. It does not launch `r5-gpu-selftest`. The syslog has no panic and no shutdown line. It ends while the desktop is up.
+
+The kernel side of this boot:
+
+```
+KERN: radeon_hd: radeon_hd_init: card(0): Radeon Renoir 1002:15E7
+KERN: radeon_hd: radeon_gfx9_cp_start: R5 radeon_hd: GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed
+KERN: radeon_hd: k0 ok fence
+KERN: radeon_hd: k1 ok msi irq 61 eop 1 client 20 src 181 ring 0
+KERN: radeon_hd: k1_wait_us 1159
+KERN: radeon_hd: k2 ok gart 000000f3f0000000-000000f400000000 pte0 060000001ad44077
+KERN: radeon_hd: k2 dma pattern 262144 cafe 0 other 0
+KERN: radeon_hd: k2_ib wb deadbeef seq 3 seen 3
+KERN: radeon_hd: gfx9 cu cc ff080000 user 00000000 active 7 bitmap 000000f7
+```
+
+The PSP load in the same boot reports CE `0x50`, PFP `0xc5`, ME `0xa7` and MEC `0x1e3`, each with status `0x0`. The settings file on the stick is still the six `true` lines, with no `gfx9_workload` and no `gfx9_compute`.
+
 ### VulkanTeapot frame, and the M4 stick
 
 The mesh is still the wrong shape: separate quarters, squashed. The first six patches are turned a quarter turn around Y, and the later patches are mirrored on Z. freeglut 3.8.0 `fg_teapot.c` mirrors those quarters in X and Y, then rotates 270 degrees around X, scales by 0.5 and translates Z by -1.5, so the height axis stands up. That is [#4104](https://github.com/nickrusman-bot/r5os/issues/4104). It is not fixed in this image. The same shape on the Ryzen 5 5625U is expected.
