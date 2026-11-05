@@ -44,7 +44,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
 
-The full list, build by build, is in About R5OS → What's new ([`distro/WHATSNEW`](distro/WHATSNEW)). The technical details and the known limits are in [`CHANGELOG.md`](CHANGELOG.md).
+The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`](distro/WHATSNEW)). The technical details and the known limits are in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Not there yet
 
