@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### VulkanTeapot keeps drawing
+
+A double-click showed an empty window. `show_window()` drew the bitmap once, straight after `Show()`, and the first update cleared it. The program also rendered a single frame, and the title repeated the device name.
+
+`TeapotView::Draw()` paints the latest bitmap. A thread renders the next frame with a turning angle, copies the pixels and calls `Invalidate()`. The title is the device name, the driverID and the fps. Closing the window stops that thread and destroys the Vulkan objects. A missing device or a failed `vkCreate` opens a `BAlert`. `--selftest` still uses the original matrix and prints the same lines.
+
+The self-test also prints `firmware me`, `pfp` and `mec` from `GET_INFO` (indexes `0x04`, `0x05` and `0x08`). It still does not submit `0xDEADBEEF`.
+
+`jam -q @r5-anyboot` on 5 Nov 2026 at 21:55 Europe/Amsterdam exited 0 and updated 1200 targets. The anyboot is 2156724224 bytes. VirtualBox of that whole image, VDI written at 22:00 Europe/Amsterdam: the desktop came up. VulkanTeapot showed a turning teapot. The title was `llvmpipe (LLVM 21.1.0, 256 bits) 13 416 fps`, and two seconds later `204 fps` with the teapot in another pose. A first VDI that held only the inner partition stopped in `bios_ia32 stage1`. The stick has not been written. Build stays 10048.
+
 ### M4 review 6: a binary syncobj follows the latest submit
 
 A binary syncobj stayed signalled after the first retire, because the wait treated any `point > 0` as done. RADV's queue syncobj is signalled again by the next job. `vkQueueWaitIdle` then transferred that syncobj and woke the waiter while the new job was still running. Signalled now means `submitted > 0` and `point >= submitted`. A job stores its own sequence. `submitted` rises at submit and `point` rises at retire. `CREATE_SIGNALED` sets both to 1. Reset sets both to 0. A host signal sets both to the greater of the current values and the highest sequence, or 1 when nothing has been submitted. Transfer uses that rule. A binary destination on a live job is attached with `job->sequence`.
@@ -8,7 +18,7 @@ The host replay printed `ok libdrm ioctl` with Linux errno and again with negati
 
 VulkanTeapot asked for Vulkan 1.0, so `VkPhysicalDeviceDriverProperties` stayed zero and `--selftest` printed `driverID 0`. It now asks for 1.2 when `vkEnumerateInstanceVersion` reports that, and prints `driverID` only when the device is 1.2 or offers `VK_KHR_driver_properties`. Otherwise it prints `driverID unknown`.
 
-VirtualBox, image of 20:50 (VDI of 20:58), software path: GLTeapot works. `vulkaninfo` shows one device, llvmpipe, CPU, Mesa llvmpipe. RADV finds no node. `VulkanTeapot --selftest` prints `device llvmpipe`, `deviceType 4`, `driverID 0`, and six pixels (background `262e38ff`, teapot `251006ff`). That `driverID` is the 1.0 query above. `jam -q @r5-raw` on 5 Nov 2026 at 21:29 Europe/Amsterdam exited 0 and updated 1169 targets. `install-mesa-packages.sh` printed `mesa_packages_ok` and `ok egl vendor`. The image package `vulkanteapot-1.0.0-1` is the rebuilt binary. This image has not been booted. `vulkaninfo`, VulkanTeapot and GLTeapot were not started on it. Build stays 10048.
+VirtualBox, image of 20:50 (VDI of 20:58), software path: GLTeapot works. `vulkaninfo` shows one device, llvmpipe, CPU, Mesa llvmpipe. RADV finds no node. `VulkanTeapot --selftest` prints `device llvmpipe`, `deviceType 4`, `driverID 0`, and six pixels (background `262e38ff`, teapot `251006ff`). That `driverID` is the 1.0 query above. `jam -q @r5-raw` on 5 Nov 2026 at 21:29 Europe/Amsterdam exited 0 and updated 1169 targets. `install-mesa-packages.sh` printed `mesa_packages_ok` and `ok egl vendor`. The image package `vulkanteapot-1.0.0-1` is the rebuilt binary. VirtualBox of that image (VDI written at 21:34 Europe/Amsterdam): GLTeapot works. `vulkaninfo` is correct for a machine without a render node: llvmpipe only. `VulkanTeapot` prints `driverID 13`, which is Mesa llvmpipe. Build stays 10048.
 
 ### M4 review 5: syncobj transfer, and one Mesa sign test
 

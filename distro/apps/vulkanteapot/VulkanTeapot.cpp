@@ -13,8 +13,10 @@ typedef float GLfloat;
 
 #include <vulkan/vulkan.h>
 
+#include <Alert.h>
 #include <Application.h>
 #include <Bitmap.h>
+#include <OS.h>
 #include <View.h>
 #include <Window.h>
 
@@ -46,7 +48,22 @@ static void
 die(const char* text, VkResult result)
 {
 	fprintf(stderr, "%s (%d)\n", text, (int)result);
+	char message[256];
+	snprintf(message, sizeof(message), "%s (%d)", text, (int)result);
+	if (be_app == NULL)
+		new BApplication("application/x-vnd.R5OS-VulkanTeapot");
+	BAlert* alert = new BAlert("VulkanTeapot", message, "OK",
+		NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
+	alert->Go();
 	exit(1);
+}
+
+
+static void
+check(const char* text, VkResult result)
+{
+	if (result != VK_SUCCESS)
+		die(text, result);
 }
 
 
@@ -238,6 +255,29 @@ mvp(float out[16])
 }
 
 
+static void
+mvp_turned(float out[16], float angle)
+{
+	float base[16];
+	mvp(base);
+	float c = cosf(angle);
+	float s = sinf(angle);
+	float rot[16] = {
+		c, 0, -s, 0,
+		0, 1, 0, 0,
+		s, 0, c, 0,
+		0, 0, 0, 1
+	};
+	memset(out, 0, 16 * sizeof(float));
+	for (int col = 0; col < 4; col++) {
+		for (int row = 0; row < 4; row++) {
+			for (int k = 0; k < 4; k++)
+				out[col * 4 + row] += base[k * 4 + row] * rot[col * 4 + k];
+		}
+	}
+}
+
+
 static uint32_t
 memory_type(VkPhysicalDevice gpu, uint32_t bits, VkMemoryPropertyFlags flags)
 {
@@ -253,28 +293,188 @@ memory_type(VkPhysicalDevice gpu, uint32_t bits, VkMemoryPropertyFlags flags)
 }
 
 
+struct DrawState {
+	VkDevice		device;
+	VkQueue			queue;
+	VkCommandBuffer	cmd;
+	VkRenderPass	pass;
+	VkFramebuffer	framebuffer;
+	VkPipeline		pipeline;
+	VkPipelineLayout layout;
+	VkBuffer		vertexBuffer;
+	VkBuffer		indexBuffer;
+	VkImage			color;
+	VkBuffer		readback;
+	uint32_t		indexCount;
+	uint8_t*		pixels;
+};
+
+
 static void
-show_window(const char* title, const uint8_t* pixels)
+draw_frame(DrawState* draw, const float matrix[16])
 {
-	BApplication app("application/x-vnd.R5OS-VulkanTeapot");
-	BBitmap bitmap(BRect(0, 0, kSize - 1, kSize - 1), B_RGBA32);
-	uint8_t* bits = (uint8_t*)bitmap.Bits();
-	for (int i = 0; i < kSize * kSize; i++) {
-		bits[i * 4 + 0] = pixels[i * 4 + 2];
-		bits[i * 4 + 1] = pixels[i * 4 + 1];
-		bits[i * 4 + 2] = pixels[i * 4 + 0];
-		bits[i * 4 + 3] = pixels[i * 4 + 3];
-	}
-	BWindow* window = new BWindow(BRect(80, 80, 80 + kSize * 3, 80 + kSize * 3),
-		title, B_TITLED_WINDOW, B_QUIT_ON_WINDOW_CLOSE);
-	BView* view = new BView(window->Bounds(), "teapot", B_FOLLOW_ALL, B_WILL_DRAW);
-	window->AddChild(view);
-	window->Show();
-	view->LockLooper();
-	view->DrawBitmap(&bitmap, view->Bounds());
-	view->UnlockLooper();
-	app.Run();
+	check("vkResetCommandBuffer", vkResetCommandBuffer(draw->cmd, 0));
+	VkCommandBufferBeginInfo begin = {};
+	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	check("vkBeginCommandBuffer", vkBeginCommandBuffer(draw->cmd, &begin));
+	VkClearValue clears[2] = {};
+	clears[0].color.float32[0] = 0.15f;
+	clears[0].color.float32[1] = 0.18f;
+	clears[0].color.float32[2] = 0.22f;
+	clears[0].color.float32[3] = 1;
+	clears[1].depthStencil.depth = 1;
+	VkRenderPassBeginInfo beginPass = {};
+	beginPass.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	beginPass.renderPass = draw->pass;
+	beginPass.framebuffer = draw->framebuffer;
+	beginPass.renderArea.extent.width = kSize;
+	beginPass.renderArea.extent.height = kSize;
+	beginPass.clearValueCount = 2;
+	beginPass.pClearValues = clears;
+	vkCmdBeginRenderPass(draw->cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(draw->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw->pipeline);
+	vkCmdPushConstants(draw->cmd, draw->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+		sizeof(float) * 16, matrix);
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(draw->cmd, 0, 1, &draw->vertexBuffer, &offset);
+	vkCmdBindIndexBuffer(draw->cmd, draw->indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(draw->cmd, draw->indexCount, 1, 0, 0, 0);
+	vkCmdEndRenderPass(draw->cmd);
+	VkBufferImageCopy copy = {};
+	copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copy.imageSubresource.layerCount = 1;
+	copy.imageExtent.width = kSize;
+	copy.imageExtent.height = kSize;
+	copy.imageExtent.depth = 1;
+	vkCmdCopyImageToBuffer(draw->cmd, draw->color,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, draw->readback, 1, &copy);
+	check("vkEndCommandBuffer", vkEndCommandBuffer(draw->cmd));
+	VkSubmitInfo submit = {};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &draw->cmd;
+	check("vkQueueSubmit", vkQueueSubmit(draw->queue, 1, &submit, VK_NULL_HANDLE));
+	check("vkQueueWaitIdle", vkQueueWaitIdle(draw->queue));
 }
+
+
+class TeapotView : public BView {
+public:
+	TeapotView(BRect frame)
+		:
+		BView(frame, "teapot", B_FOLLOW_ALL, B_WILL_DRAW),
+		fBitmap(new BBitmap(BRect(0, 0, kSize - 1, kSize - 1), B_RGBA32))
+	{
+	}
+
+	~TeapotView()
+	{
+		delete fBitmap;
+	}
+
+	void Draw(BRect updateRect)
+	{
+		(void)updateRect;
+		DrawBitmap(fBitmap, Bounds());
+	}
+
+	void SetPixels(const uint8_t* pixels)
+	{
+		uint8_t* bits = (uint8_t*)fBitmap->Bits();
+		for (int i = 0; i < kSize * kSize; i++) {
+			bits[i * 4 + 0] = pixels[i * 4 + 2];
+			bits[i * 4 + 1] = pixels[i * 4 + 1];
+			bits[i * 4 + 2] = pixels[i * 4 + 0];
+			bits[i * 4 + 3] = pixels[i * 4 + 3];
+		}
+	}
+
+private:
+	BBitmap* fBitmap;
+};
+
+
+class TeapotWindow : public BWindow {
+public:
+	TeapotWindow(DrawState* draw, const char* name, const char* driver)
+		:
+		BWindow(BRect(80, 80, 80 + kSize * 3, 80 + kSize * 3),
+			"VulkanTeapot", B_TITLED_WINDOW, B_QUIT_ON_WINDOW_CLOSE),
+		fView(new TeapotView(Bounds())),
+		fDraw(draw),
+		fStop(false),
+		fThread(-1),
+		fFrames(0),
+		fMark(0)
+	{
+		snprintf(fName, sizeof(fName), "%s", name);
+		snprintf(fDriver, sizeof(fDriver), "%s", driver);
+		AddChild(fView);
+	}
+
+	void Start()
+	{
+		fThread = spawn_thread(render_entry, "teapot", B_NORMAL_PRIORITY, this);
+		if (fThread >= 0)
+			resume_thread(fThread);
+	}
+
+	bool QuitRequested()
+	{
+		if (fThread >= 0) {
+			fStop = true;
+			thread_id thread = fThread;
+			fThread = -1;
+			Unlock();
+			status_t status;
+			wait_for_thread(thread, &status);
+			Lock();
+		}
+		return BWindow::QuitRequested();
+	}
+
+private:
+	static int32 render_entry(void* data)
+	{
+		((TeapotWindow*)data)->Render();
+		return 0;
+	}
+
+	void Render()
+	{
+		fMark = system_time();
+		while (!fStop) {
+			float turns = (float)(system_time() % 4000000) / 4000000.0f;
+			float matrix[16];
+			mvp_turned(matrix, turns * 6.2831853f);
+			draw_frame(fDraw, matrix);
+			if (fStop || !Lock())
+				return;
+			fView->SetPixels(fDraw->pixels);
+			fView->Invalidate();
+			fFrames++;
+			bigtime_t now = system_time();
+			if (now - fMark >= 1000000) {
+				char title[160];
+				snprintf(title, sizeof(title), "%s  %s  %d fps",
+					fName, fDriver, fFrames);
+				SetTitle(title);
+				fFrames = 0;
+				fMark = now;
+			}
+			Unlock();
+		}
+	}
+
+	TeapotView*		fView;
+	DrawState*		fDraw;
+	volatile bool	fStop;
+	thread_id		fThread;
+	int				fFrames;
+	bigtime_t		fMark;
+	char			fName[256];
+	char			fDriver[32];
+};
 
 
 int
@@ -391,7 +591,7 @@ main(int argc, char** argv)
 	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	VkImage color = VK_NULL_HANDLE;
-	vkCreateImage(device, &imageInfo, NULL, &color);
+	check("vkCreateImage", vkCreateImage(device, &imageInfo, NULL, &color));
 	VkMemoryRequirements requirements;
 	vkGetImageMemoryRequirements(device, color, &requirements);
 	VkMemoryAllocateInfo alloc = {};
@@ -400,19 +600,19 @@ main(int argc, char** argv)
 	alloc.memoryTypeIndex = memory_type(gpu, requirements.memoryTypeBits,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkDeviceMemory colorMemory = VK_NULL_HANDLE;
-	vkAllocateMemory(device, &alloc, NULL, &colorMemory);
+	check("vkAllocateMemory", vkAllocateMemory(device, &alloc, NULL, &colorMemory));
 	vkBindImageMemory(device, color, colorMemory, 0);
 
 	imageInfo.format = VK_FORMAT_D32_SFLOAT;
 	imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	VkImage depth = VK_NULL_HANDLE;
-	vkCreateImage(device, &imageInfo, NULL, &depth);
+	check("vkCreateImage", vkCreateImage(device, &imageInfo, NULL, &depth));
 	vkGetImageMemoryRequirements(device, depth, &requirements);
 	alloc.allocationSize = requirements.size;
 	alloc.memoryTypeIndex = memory_type(gpu, requirements.memoryTypeBits,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VkDeviceMemory depthMemory = VK_NULL_HANDLE;
-	vkAllocateMemory(device, &alloc, NULL, &depthMemory);
+	check("vkAllocateMemory", vkAllocateMemory(device, &alloc, NULL, &depthMemory));
 	vkBindImageMemory(device, depth, depthMemory, 0);
 
 	VkImageViewCreateInfo viewInfo = {};
@@ -424,12 +624,12 @@ main(int argc, char** argv)
 	viewInfo.subresourceRange.levelCount = 1;
 	viewInfo.subresourceRange.layerCount = 1;
 	VkImageView colorView = VK_NULL_HANDLE;
-	vkCreateImageView(device, &viewInfo, NULL, &colorView);
+	check("vkCreateImageView", vkCreateImageView(device, &viewInfo, NULL, &colorView));
 	viewInfo.image = depth;
 	viewInfo.format = VK_FORMAT_D32_SFLOAT;
 	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
 	VkImageView depthView = VK_NULL_HANDLE;
-	vkCreateImageView(device, &viewInfo, NULL, &depthView);
+	check("vkCreateImageView", vkCreateImageView(device, &viewInfo, NULL, &depthView));
 
 	VkAttachmentDescription attachments[2] = {};
 	attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -458,7 +658,7 @@ main(int argc, char** argv)
 	passInfo.subpassCount = 1;
 	passInfo.pSubpasses = &subpass;
 	VkRenderPass pass = VK_NULL_HANDLE;
-	vkCreateRenderPass(device, &passInfo, NULL, &pass);
+	check("vkCreateRenderPass", vkCreateRenderPass(device, &passInfo, NULL, &pass));
 
 	VkImageView views[2] = {colorView, depthView};
 	VkFramebufferCreateInfo fbInfo = {};
@@ -470,18 +670,18 @@ main(int argc, char** argv)
 	fbInfo.height = kSize;
 	fbInfo.layers = 1;
 	VkFramebuffer framebuffer = VK_NULL_HANDLE;
-	vkCreateFramebuffer(device, &fbInfo, NULL, &framebuffer);
+	check("vkCreateFramebuffer", vkCreateFramebuffer(device, &fbInfo, NULL, &framebuffer));
 
 	VkShaderModuleCreateInfo shaderInfo = {};
 	shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	shaderInfo.codeSize = kTeapotVertSpvWords * 4;
 	shaderInfo.pCode = kTeapotVertSpv;
 	VkShaderModule vert = VK_NULL_HANDLE;
-	vkCreateShaderModule(device, &shaderInfo, NULL, &vert);
+	check("vkCreateShaderModule", vkCreateShaderModule(device, &shaderInfo, NULL, &vert));
 	shaderInfo.codeSize = kTeapotFragSpvWords * 4;
 	shaderInfo.pCode = kTeapotFragSpv;
 	VkShaderModule frag = VK_NULL_HANDLE;
-	vkCreateShaderModule(device, &shaderInfo, NULL, &frag);
+	check("vkCreateShaderModule", vkCreateShaderModule(device, &shaderInfo, NULL, &frag));
 
 	VkPushConstantRange range = {};
 	range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
@@ -491,7 +691,8 @@ main(int argc, char** argv)
 	layoutInfo.pushConstantRangeCount = 1;
 	layoutInfo.pPushConstantRanges = &range;
 	VkPipelineLayout layout = VK_NULL_HANDLE;
-	vkCreatePipelineLayout(device, &layoutInfo, NULL, &layout);
+	check("vkCreatePipelineLayout",
+		vkCreatePipelineLayout(device, &layoutInfo, NULL, &layout));
 
 	VkPipelineShaderStageCreateInfo stages[2] = {};
 	stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -569,13 +770,13 @@ main(int argc, char** argv)
 	bufferInfo.size = mesh.vertexCount * sizeof(Vertex);
 	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	VkBuffer vertexBuffer = VK_NULL_HANDLE;
-	vkCreateBuffer(device, &bufferInfo, NULL, &vertexBuffer);
+	check("vkCreateBuffer", vkCreateBuffer(device, &bufferInfo, NULL, &vertexBuffer));
 	vkGetBufferMemoryRequirements(device, vertexBuffer, &requirements);
 	alloc.allocationSize = requirements.size;
 	alloc.memoryTypeIndex = memory_type(gpu, requirements.memoryTypeBits,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	VkDeviceMemory vertexMemory = VK_NULL_HANDLE;
-	vkAllocateMemory(device, &alloc, NULL, &vertexMemory);
+	check("vkAllocateMemory", vkAllocateMemory(device, &alloc, NULL, &vertexMemory));
 	vkBindBufferMemory(device, vertexBuffer, vertexMemory, 0);
 	void* mapped = NULL;
 	vkMapMemory(device, vertexMemory, 0, bufferInfo.size, 0, &mapped);
@@ -585,13 +786,13 @@ main(int argc, char** argv)
 	bufferInfo.size = mesh.indexCount * sizeof(uint32_t);
 	bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 	VkBuffer indexBuffer = VK_NULL_HANDLE;
-	vkCreateBuffer(device, &bufferInfo, NULL, &indexBuffer);
+	check("vkCreateBuffer", vkCreateBuffer(device, &bufferInfo, NULL, &indexBuffer));
 	vkGetBufferMemoryRequirements(device, indexBuffer, &requirements);
 	alloc.allocationSize = requirements.size;
 	alloc.memoryTypeIndex = memory_type(gpu, requirements.memoryTypeBits,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	VkDeviceMemory indexMemory = VK_NULL_HANDLE;
-	vkAllocateMemory(device, &alloc, NULL, &indexMemory);
+	check("vkAllocateMemory", vkAllocateMemory(device, &alloc, NULL, &indexMemory));
 	vkBindBufferMemory(device, indexBuffer, indexMemory, 0);
 	vkMapMemory(device, indexMemory, 0, bufferInfo.size, 0, &mapped);
 	memcpy(mapped, mesh.indices, bufferInfo.size);
@@ -600,100 +801,103 @@ main(int argc, char** argv)
 	VkBuffer readback = VK_NULL_HANDLE;
 	bufferInfo.size = kSize * kSize * 4;
 	bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-	vkCreateBuffer(device, &bufferInfo, NULL, &readback);
+	check("vkCreateBuffer", vkCreateBuffer(device, &bufferInfo, NULL, &readback));
 	vkGetBufferMemoryRequirements(device, readback, &requirements);
 	alloc.allocationSize = requirements.size;
 	alloc.memoryTypeIndex = memory_type(gpu, requirements.memoryTypeBits,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	VkDeviceMemory readMemory = VK_NULL_HANDLE;
-	vkAllocateMemory(device, &alloc, NULL, &readMemory);
+	check("vkAllocateMemory", vkAllocateMemory(device, &alloc, NULL, &readMemory));
 	vkBindBufferMemory(device, readback, readMemory, 0);
 
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	poolInfo.queueFamilyIndex = family;
 	VkCommandPool pool = VK_NULL_HANDLE;
-	vkCreateCommandPool(device, &poolInfo, NULL, &pool);
+	check("vkCreateCommandPool", vkCreateCommandPool(device, &poolInfo, NULL, &pool));
 	VkCommandBufferAllocateInfo cmdInfo = {};
 	cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	cmdInfo.commandPool = pool;
 	cmdInfo.commandBufferCount = 1;
 	VkCommandBuffer cmd = VK_NULL_HANDLE;
-	vkAllocateCommandBuffers(device, &cmdInfo, &cmd);
-	VkCommandBufferBeginInfo begin = {};
-	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	vkBeginCommandBuffer(cmd, &begin);
-	VkClearValue clears[2] = {};
-	clears[0].color.float32[0] = 0.15f;
-	clears[0].color.float32[1] = 0.18f;
-	clears[0].color.float32[2] = 0.22f;
-	clears[0].color.float32[3] = 1;
-	clears[1].depthStencil.depth = 1;
-	VkRenderPassBeginInfo beginPass = {};
-	beginPass.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	beginPass.renderPass = pass;
-	beginPass.framebuffer = framebuffer;
-	beginPass.renderArea.extent.width = kSize;
-	beginPass.renderArea.extent.height = kSize;
-	beginPass.clearValueCount = 2;
-	beginPass.pClearValues = clears;
-	vkCmdBeginRenderPass(cmd, &beginPass, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-	vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(matrix), matrix);
-	VkDeviceSize offset = 0;
-	vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &offset);
-	vkCmdBindIndexBuffer(cmd, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);
-	vkCmdEndRenderPass(cmd);
-	VkBufferImageCopy copy = {};
-	copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	copy.imageSubresource.layerCount = 1;
-	copy.imageExtent.width = kSize;
-	copy.imageExtent.height = kSize;
-	copy.imageExtent.depth = 1;
-	vkCmdCopyImageToBuffer(cmd, color, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback, 1, &copy);
-	vkEndCommandBuffer(cmd);
-	VkSubmitInfo submit = {};
-	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submit.commandBufferCount = 1;
-	submit.pCommandBuffers = &cmd;
-	vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
-	vkQueueWaitIdle(queue);
+	check("vkAllocateCommandBuffers",
+		vkAllocateCommandBuffers(device, &cmdInfo, &cmd));
 
-	uint8_t* pixels = NULL;
-	vkMapMemory(device, readMemory, 0, kSize * kSize * 4, 0, (void**)&pixels);
-	const int sampleAt[][2] = {{64, 40}, {64, 64}, {64, 90}, {40, 70}, {90, 70}, {64, 20}};
-	printf("device %s\n", properties.deviceName);
-	printf("deviceType %u\n", (unsigned)properties.deviceType);
-	if (driverKnown)
-		printf("driverID %u\n", driverID);
-	else
-		printf("driverID unknown\n");
-	printf("frames 1\n");
-	printf("fps 0\n");
-	int mismatch = 0;
-	for (int i = 0; i < 6; i++) {
-		int x = sampleAt[i][0];
-		int y = sampleAt[i][1];
-		const uint8_t* p = pixels + (y * kSize + x) * 4;
-		printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
-		(void)mismatch;
-	}
-	if (selftest)
+	DrawState draw = {};
+	draw.device = device;
+	draw.queue = queue;
+	draw.cmd = cmd;
+	draw.pass = pass;
+	draw.framebuffer = framebuffer;
+	draw.pipeline = pipeline;
+	draw.layout = layout;
+	draw.vertexBuffer = vertexBuffer;
+	draw.indexBuffer = indexBuffer;
+	draw.color = color;
+	draw.readback = readback;
+	draw.indexCount = mesh.indexCount;
+	check("vkMapMemory", vkMapMemory(device, readMemory, 0, kSize * kSize * 4, 0,
+		(void**)&draw.pixels));
+
+	if (selftest) {
+		draw_frame(&draw, matrix);
+		const int sampleAt[][2] = {{64, 40}, {64, 64}, {64, 90}, {40, 70}, {90, 70}, {64, 20}};
+		printf("device %s\n", properties.deviceName);
+		printf("deviceType %u\n", (unsigned)properties.deviceType);
+		if (driverKnown)
+			printf("driverID %u\n", driverID);
+		else
+			printf("driverID unknown\n");
+		printf("frames 1\n");
+		printf("fps 0\n");
+		int mismatch = 0;
+		for (int i = 0; i < 6; i++) {
+			int x = sampleAt[i][0];
+			int y = sampleAt[i][1];
+			const uint8_t* p = draw.pixels + (y * kSize + x) * 4;
+			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
+			(void)mismatch;
+		}
 		printf("pixels recorded\n");
-	else {
-		char title[160];
-		snprintf(title, sizeof(title), "%s  %s  1 frame",
-			properties.deviceName, properties.deviceName);
-		uint8_t* copyPixels = (uint8_t*)malloc(kSize * kSize * 4);
-		memcpy(copyPixels, pixels, kSize * kSize * 4);
-		vkUnmapMemory(device, readMemory);
-		pixels = NULL;
-		show_window(title, copyPixels);
-		free(copyPixels);
+	} else {
+		if (be_app == NULL)
+			new BApplication("application/x-vnd.R5OS-VulkanTeapot");
+		char driverText[32];
+		if (driverKnown)
+			snprintf(driverText, sizeof(driverText), "%u", driverID);
+		else
+			snprintf(driverText, sizeof(driverText), "unknown");
+		TeapotWindow* window = new TeapotWindow(&draw,
+			properties.deviceName, driverText);
+		window->Start();
+		window->Show();
+		be_app->Run();
 	}
-	if (pixels != NULL)
-		vkUnmapMemory(device, readMemory);
+
+	vkDeviceWaitIdle(device);
+	vkUnmapMemory(device, readMemory);
+	vkDestroyCommandPool(device, pool, NULL);
+	vkDestroyBuffer(device, readback, NULL);
+	vkFreeMemory(device, readMemory, NULL);
+	vkDestroyBuffer(device, indexBuffer, NULL);
+	vkFreeMemory(device, indexMemory, NULL);
+	vkDestroyBuffer(device, vertexBuffer, NULL);
+	vkFreeMemory(device, vertexMemory, NULL);
+	vkDestroyPipeline(device, pipeline, NULL);
+	vkDestroyShaderModule(device, frag, NULL);
+	vkDestroyShaderModule(device, vert, NULL);
+	vkDestroyPipelineLayout(device, layout, NULL);
+	vkDestroyFramebuffer(device, framebuffer, NULL);
+	vkDestroyImageView(device, depthView, NULL);
+	vkDestroyImageView(device, colorView, NULL);
+	vkDestroyRenderPass(device, pass, NULL);
+	vkDestroyImage(device, depth, NULL);
+	vkFreeMemory(device, depthMemory, NULL);
+	vkDestroyImage(device, color, NULL);
+	vkFreeMemory(device, colorMemory, NULL);
+	vkDestroyDevice(device, NULL);
+	vkDestroyInstance(instance, NULL);
 	free(mesh.vertices);
 	free(mesh.indices);
 	free(gpus);
