@@ -252,7 +252,10 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 		uchar index = (words[0] >> 8) & 0xff;
 		if (status == 0x8 || status == 0x9) {
 			// MIDI 1.0 hooks keep the top 7 bits. Data() still has the packet.
-			uchar velocity = (uchar)(midi2_note_velocity(words, wordCount) >> 9);
+			uint16 full = midi2_note_velocity(words, wordCount);
+			uchar velocity = status == 0x9
+				? midi2_note_on_midi1_velocity(full)
+				: (uchar)(full >> 9);
 			if (status == 0x9)
 				consumer->NoteOn(channel, index, velocity, time);
 			else

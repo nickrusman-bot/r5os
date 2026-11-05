@@ -76,6 +76,10 @@ test_helpers()
 
 	expect(midi2_note_velocity(note, 2) == 0x8000,
 		"helper keeps the 16-bit velocity");
+	expect(midi2_note_on_midi1_velocity(1) == 1, "velocity 1 stays a note-on");
+	expect(midi2_note_on_midi1_velocity(511) == 1, "velocity 511 stays a note-on");
+	expect(midi2_note_on_midi1_velocity(512) == 1, "velocity 512 is MIDI 1.0 velocity 1");
+	expect(midi2_note_on_midi1_velocity(0) == 0, "velocity 0 stays 0");
 	expect(midi2_control_value(control, 2) == 0x80000000,
 		"helper keeps the 32-bit controller");
 	expect(midi2_note_velocity(control, 2) == 0,

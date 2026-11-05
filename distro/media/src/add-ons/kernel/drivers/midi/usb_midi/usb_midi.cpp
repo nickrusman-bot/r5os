@@ -362,6 +362,17 @@ sysex7_bytes(const uint32* words, uint8* status, uint8 data[6])
 }
 
 
+/* Same rule as midi2_note_on_midi1_velocity. A note-on below 512 must not
+ * become MIDI 1.0 velocity 0.
+ */
+static uint8
+note_on_midi1_velocity(uint16 velocity)
+{
+	uint8 scaled = (uint8)(velocity >> 9);
+	return (scaled == 0 && velocity != 0) ? 1 : scaled;
+}
+
+
 static int
 expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
 {
@@ -392,7 +403,9 @@ expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
 		uint8 channel = (words[0] >> 16) & 0x0f;
 		out[0] = (status << 4) | channel;
 		out[1] = (words[0] >> 8) & 0xff;
-		if (status == 0x8 || status == 0x9)
+		if (status == 0x9)
+			out[2] = note_on_midi1_velocity((uint16)(words[1] >> 16));
+		else if (status == 0x8)
 			out[2] = (uint8)((words[1] >> 16) >> 9);
 		else if (status == 0xb)
 			out[2] = (uint8)(words[1] >> 25);
@@ -1127,7 +1140,9 @@ send_ump_as_midi1(usbmidi_port_info* port, const uint32* words, uint32 wordCount
 		uint8 channel = (words[0] >> 16) & 0x0f;
 		midi[0] = (status << 4) | channel;
 		midi[1] = (words[0] >> 8) & 0xff;
-		if (status == 0x8 || status == 0x9)
+		if (status == 0x9)
+			midi[2] = note_on_midi1_velocity((uint16)(words[1] >> 16));
+		else if (status == 0x8)
 			midi[2] = (uint8)((words[1] >> 16) >> 9);
 		else if (status == 0xb)
 			midi[2] = (uint8)(words[1] >> 25);

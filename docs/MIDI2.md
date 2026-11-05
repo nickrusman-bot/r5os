@@ -65,7 +65,7 @@ The group nibble (bits 27..24) is left 0 by the helpers. `usb_midi` replaces it 
 
 `BMidiLocalConsumer::Data` sees the bytes after the roster header. When the magic matches, it does not treat those bytes as a MIDI 1.0 status byte. The full packet stays in that buffer. `midi2_note_velocity` reads the 16-bit velocity. `midi2_control_value` reads the 32-bit controller. `midi2_sysex_payload` reads one SysEx7 packet.
 
-The base `Data` still calls the MIDI 1.0 hooks. A type 0x4 note calls `NoteOn` or `NoteOff` with the top 7 bits of the 16-bit velocity (`value >> 9`). A type 0x4 control change calls `ControlChange` with the top 7 bits of the 32-bit value (`value >> 25`). Velocity 0 on a MIDI 2.0 note-on stays `NoteOn`. An application that only implements `NoteOn` still hears the note, at MIDI 1.0 resolution.
+The base `Data` still calls the MIDI 1.0 hooks. A type 0x4 note-off calls `NoteOff` with the top 7 bits of the 16-bit velocity (`value >> 9`). A type 0x4 note-on calls `NoteOn` with those bits, and with at least 1 when the 16-bit velocity is not 0, so a quiet note-on does not become a MIDI 1.0 note-off. A type 0x4 control change calls `ControlChange` with the top 7 bits of the 32-bit value (`value >> 25`). Velocity 0 on a MIDI 2.0 note-on stays `NoteOn` with MIDI 1.0 velocity 0. An application that only implements `NoteOn` still hears the note, at MIDI 1.0 resolution.
 
 A type 0x2 packet is turned back into MIDI 1.0 bytes and passed through `Data` again, so the existing `NoteOn` / `ControlChange` / `ProgramChange` hooks run.
 
@@ -190,7 +190,7 @@ These are UMP Stream messages, message type `0xF`, four words. The format is 0 (
 
 `usb_midi` looks at the class-specific MIDI header on the streaming interface. A version below 2.0 keeps USB MIDI 1.0 CIN packets. On that endpoint a type 0x4 note or control change becomes one CIN packet with the same top 7 bits. Other UMP types return `B_UNSUPPORTED` there.
 
-Version 2.0 or newer writes the UMP words, little-endian, to the bulk OUT endpoint. The group nibble is the cable of that port. A MIDI 1.0 `write()` on that endpoint becomes one type 0x1 or type 0x2 word. A SysEx `write()` (`F0` … `F7`) becomes one or more type 0x3 packets, six payload bytes each. `B_MIDI_READ_UMP` returns the packet that arrived, including type 0x3 and type 0x4. `read()` expands that same queue to MIDI 1.0 bytes: a type 0x4 note keeps the top 7 bits, and type 0x3 becomes `F0`, the payload, and `F7`.
+Version 2.0 or newer writes the UMP words, little-endian, to the bulk OUT endpoint. The group nibble is the cable of that port. A MIDI 1.0 `write()` on that endpoint becomes one type 0x1 or type 0x2 word. A SysEx `write()` (`F0` … `F7`) becomes one or more type 0x3 packets, six payload bytes each. `B_MIDI_READ_UMP` returns the packet that arrived, including type 0x3 and type 0x4. `read()` expands that same queue to MIDI 1.0 bytes: a type 0x4 note-off keeps the top 7 bits, a type 0x4 note-on keeps those bits and at least 1 when the source velocity is not 0, and type 0x3 becomes `F0`, the payload, and `F7`.
 
 On a version 1.0 endpoint, a type 0x3 packet is sent as USB MIDI CIN SysEx. A type 0x4 note or control change is still one CIN packet with the top 7 bits.
 

@@ -175,6 +175,17 @@ midi2_note_velocity(const uint32* words, size_t wordCount)
 }
 
 
+/* A MIDI 2.0 note-on below 512 becomes MIDI 1.0 velocity 0, and velocity 0
+ * is a note-off. The translation keeps at least 1 when the source is not 0.
+ */
+inline constexpr uint8
+midi2_note_on_midi1_velocity(uint16 velocity)
+{
+	uint8 scaled = (uint8)(velocity >> 9);
+	return (scaled == 0 && velocity != 0) ? 1 : scaled;
+}
+
+
 inline bool
 midi2_is_control(const uint32* words, size_t wordCount)
 {
