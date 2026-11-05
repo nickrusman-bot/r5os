@@ -1,5 +1,29 @@
 # R5OS changelog (lokaal)
 
+### The GFX9 command processor fills memory
+
+The indirect-buffer check stays, and it still runs first. After that fence, the command processor fills memory with `DMA_DATA`. The CPU writes zeros into an 8 MiB buffer. The first submission fills 1 MiB with `0xA5A5A5A5` and takes a GPU counter before and after. The second submission fills all 8 MiB the same way, as eight 1 MiB packets. Linux v6.12 `soc15d.h` says `DATA_SEL(3)` sends the 64-bit GPU counter. `PACKET3_DMA_DATA` is `0x50`. `SRC_SEL(2)` is the constant. `DST_SEL(0)` is the destination address. The byte count is bits 20:0, and `0x100000` fits. The header calls the high destination address bits 7:0. On this machine that half is `0xf4`, so the stored dword is inside those bits. The packet does not set `CMD_DAS`.
+
+What's new and `distro/BUILD` are unchanged.
+
+`jam -q @r5-anyboot` for AMD64 finished at 10:54 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8390 targets). The linked accelerant contains `GFX9 workload dma`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `31cd94cbd1719a28e3fff8e3631704d60fb4c3cd0607e84cbb0287abedcb790d`. A copy gained `home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true` and `gfx9_workload true`. That stick image is 2156724224 bytes, sha256 `221a4837006941b4f23981db9ef35bb831bb05404a1b70ebb247fba1f252e9a4`. It was written to the General UDisk at 10:59 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0 was not opened.
+
+That stick reached the desktop on the Ryzen 5 5625U. One `Welcome to the Haiku boot loader!`. `GFX9 ring contract verified`. `CP_MEC_CNTL` went from `0x50000000` to `0x0`. The lines are `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `GFX9 workload ib wb 0xdeadbeef seq 1 seen 1 rptr 0x39e wptr 0x39e` and `GFX9 workload dma 1m bad 0 ticks 8470 8m bad 0 ticks 67209 ratio 7.9`. `radeon-gfx.txt` says `ib_wb deadbeef`, `ib_seq 1 seen 1`, `ib_rptr 0000039e wptr 0000039e`, `dma_1m_bad 0 ticks_1m 8470`, `dma_8m_bad 0 ticks_8m 67209` and `dma_ratio 7.9`. Both fills are clean. The 8 MiB fill took 7.9 times the 1 MiB fill, so the time grew with the work. Tracker started. There is no panic. The scanout stayed the firmware picture. That sequence is now `GFX9 workload on GC 9.3 (fixed)` in `docs/GRAPHICS.md`. A boot with the ring on and `gfx9_workload` absent was not repeated after this fill. `gfx9_paint` is not implemented. Other AMD GPUs were not tested. VirtualBox was not tested. ARM64 and RISC-V were not tested. QEMU does not have this GPU.
+
+### A GPU write after the GFX9 fence
+
+The fence that landed is a scratch word the command processor stores. This step asks the GPU to write ordinary memory. It runs only after that fence is `0xdeadbeef`, and only when the same `radeon_hd` settings file also says `gfx9_workload true`. The image does not ship the file. With the ring on and this key absent, the log line is `GFX9 workload off` and the first ring is unchanged.
+
+The submission is 12 dwords at the write pointer 914: `INDIRECT_BUFFER` of a 5-dword `WRITE_DATA`, then `RELEASE_MEM`. The indirect buffer writes `0xdeadbeef` at fence+1024. The release writes the sequence at fence+1088. The CPU stores `0xcafedead` and 0 in those slots first. The sequence starts at 1. The new write pointer is 926 (`0x39e`). A miss writes `CP_ME_CNTL` with the halt mask and does not restore the stage-1 registers. The scanout stays the firmware picture.
+
+The packet names match Linux v6.12 `soc15d.h` and `vega10_enum.h`. `CACHE_FLUSH_AND_INV_TS_EVENT` is `0x14`. `PACKET3_WRITE_DATA` is `0x37`, `PACKET3_INDIRECT_BUFFER` is `0x3f`, and `PACKET3_RELEASE_MEM` is `0x49`. Linux `gfx_v9_0_ring_emit_ib_gfx` does not set `INDIRECT_BUFFER_VALID`. This packet does, because that is the bit the test sequence asks for. The high half of the indirect-buffer address is kept in 16 bits, the same mask as the existing writeback. On this machine that half is `0xf4`, so the stored value is the full address.
+
+What's new and `distro/BUILD` are unchanged.
+
+`jam -q @r5-anyboot` for AMD64 finished at 09:57 Europe/Amsterdam on 5 Nov 2026 with exit 0 (8390 targets). The linked accelerant contains `GFX9 workload off`, `GFX9 workload failed:` and `GFX9 workload ib`. The image is `r5-os-anyboot.iso`, 2156724224 bytes, sha256 `a15c2db4d8df82e6e837b138a504d72ae81248302b13779f305f3df7468d407a`. A copy gained `home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true` and `gfx9_workload true`. That stick image is 2156724224 bytes, sha256 `2a5cb8dbc5cfcd52af5d74a6e1149b0f563ba313876ce3ff6a2909786ff6295a`. It was written to the General UDisk at 10:05 Europe/Amsterdam on 5 Nov 2026. Read-back matched at the start, at 6291456, and at 2153775104. Disk 0 was not opened. The settings file read back as those two lines.
+
+That stick reached the desktop on the Ryzen 5 5625U. One `Welcome to the Haiku boot loader!`. `GFX9 ring contract verified`. `CP_MEC_CNTL` went from `0x50000000` to `0x0`. The lines are `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed` and `GFX9 workload ib wb 0xdeadbeef seq 1 seen 1 rptr 0x39e wptr 0x39e`. `radeon-gfx.txt` says `ib_wb deadbeef`, `ib_seq 1 seen 1` and `ib_rptr 0000039e wptr 0000039e`. Tracker started. There is no panic. The scanout stayed the firmware picture. Other AMD GPUs were not tested. VirtualBox was not tested. ARM64 and RISC-V were not tested. QEMU does not have this GPU.
+
 ### The first GFX9 packet lands on the 5625U
 
 The GFX ring fetched 152 dwords and stopped, scratch stayed `0xcafedead`, and `CP_MEC_CNTL` was `0x50000000`. Linux starts the MEC in `gfx_v9_0_kiq_resume` before the GFX ring. Writing `CP_MEC_CNTL` to 0 and waiting 50 µs, only after both MEC PSP items return status 0, makes the PFP idle before the doorbell. The 914-dword clear-state stream then runs, and scratch becomes `0xdeadbeef`.

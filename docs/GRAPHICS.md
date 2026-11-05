@@ -94,6 +94,42 @@ The ring is off unless `/boot/home/config/settings/kernel/drivers/radeon_hd` con
 
 Tested: the 08:11 stick, the repeat boot, boot 1 on 5 Nov 2026 with `gfx9_ring true` (`GFX9 ring contract verified`, `fence landed`), and boot 2 the same morning without that file (`GFX9 ring off`, no mode 2, no PSP load). Changing this sequence requires a new boot on the 5625U that lands the fence, recorded in CHANGELOG.md.
 
+## GFX9 workload on GC 9.3 (fixed)
+
+This runs only after the fence above is `0xDEADBEEF`. The first ring, its registers, the PSP load and the firmware blobs stay as they are. The next packets are written at the current write pointer, over the type-2 padding, and a submission that would pass the end of the 4 KiB ring is refused.
+
+The same settings file has to contain `gfx9_workload true`. The image does not ship that file. With the ring on and this key absent, the log is `GFX9 workload off` and the first ring is unchanged. `gfx9_paint` is not a setting. Nothing is drawn into the firmware picture.
+
+Fence page, 4 KiB. The first ring already uses `+0` for the scratch word, `+256` for the read-pointer writeback, and `+512` for the write-pointer poll. The workload adds four slots, 64 bytes apart, each below 4096:
+
+- `+1024`, the indirect-buffer writeback, 32 bit
+- `+1088`, the fence sequence, 64 bit
+- `+1152`, the start timestamp, 64 bit
+- `+1216`, the end timestamp, 64 bit
+
+One submission is 12 dwords:
+
+1. `PACKET3(INDIRECT_BUFFER, 2)`
+2. indirect-buffer address, low, aligned down to 4
+3. high half, masked to 16 bits
+4. `INDIRECT_BUFFER_VALID` plus the indirect-buffer length, vmid 0
+5. `PACKET3(RELEASE_MEM, 6)`
+6. the four EOP actions, event `0x14`, event index 5
+7. `DATA_SEL(1)`, no interrupt
+8. sequence address, low
+9. sequence address, high
+10. sequence, low
+11. sequence, high
+12. 0
+
+The sequence starts at 1 and increases by one. The CPU writes 0 into `+1088` before each submission. A miss writes `CP_ME_CNTL` with the halt mask and does not restore the stage-1 registers. The scanout stays the firmware picture.
+
+The first indirect buffer is 5 dwords: `WRITE_DATA` to `+1024` with destination select 5, write confirm, and data `0xDEADBEEF`. The CPU writes `0xCAFEDEAD` there first. Success is writeback `deadbeef`, the seen sequence equal to the submitted sequence, and the read pointer equal to the new write pointer `0x39e` (926).
+
+The fill comes after that check. The CPU zeros 8 MiB. The first fill submission writes the GPU counter to `+1152`, one `DMA_DATA` of 1 MiB, then the counter to `+1216`. The second does the same around eight 1 MiB packets, so the whole 8 MiB. `DATA_SEL(3)` is the 64-bit GPU counter from Linux v6.12 `soc15d.h`. One fill packet is 7 dwords: `PACKET3(DMA_DATA, 5)`, `CP_SYNC` with destination select 0, source select 2 and engine 0, the constant `0xA5A5A5A5`, a zero source high half, the destination address, and `CMD_RAW_WAIT` with byte count `0x100000`. The byte count is bits 20:0. `CMD_DAS` is not set. Linux `gfx_v9_0_ring_emit_ib_gfx` does not set `INDIRECT_BUFFER_VALID`. These submissions do.
+
+Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `2a5cb8dbc5cfcd52af5d74a6e1149b0f563ba313876ce3ff6a2909786ff6295a`, written at 10:05 Europe/Amsterdam, reached the desktop with `ib_wb deadbeef`, `ib_seq 1 seen 1` and `ib_rptr 0000039e wptr 0000039e`. The stick sha256 `221a4837006941b4f23981db9ef35bb831bb05404a1b70ebb247fba1f252e9a4`, written at 10:59 Europe/Amsterdam, repeated that and then recorded `dma_1m_bad 0 ticks_1m 8470`, `dma_8m_bad 0 ticks_8m 67209` and `dma_ratio 7.9`. A boot with the ring on and `gfx9_workload` absent was not repeated after this fill.
+
 ## Known GFX9 differences
 
 `MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.
