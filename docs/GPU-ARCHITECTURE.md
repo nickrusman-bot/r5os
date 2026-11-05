@@ -12,6 +12,9 @@ These are settled. Change them only when the user asks.
 4. **The kernel side is a small R5 interface** in the `radeon_hd` driver, written by R5 itself. Linux `amdgpu` is not ported. That code is GPL-2.0-only, and `AGENTS.md` does not allow combining it with GPL-3.0.
 5. **Vulkan is RADV** from Mesa. RADV talks to the R5 interface through a thin library that provides the part of `libdrm_amdgpu` RADV uses.
 6. **Mesa updates have to be easy to take.** That is why there is a version contract between the kernel interface, that library and Mesa. See [Release mechanism](#release-mechanism).
+7. **The R5 GPU interface header and the R5 DRM library are MIT** (decided by the user on 5 Nov 2026). See [Licensing](#licensing).
+8. **Mesa with RADV is built from a recipe of R5's own,** in this repository (decided by the user on 5 Nov 2026).
+9. **VulkanTeapot is the proof of concept for M4.** It is a fork of GLTeapot that draws through Vulkan: RADV when the GPU is available, Lavapipe otherwise.
 
 ## Layers
 
@@ -142,7 +145,7 @@ A **compatibility table** in this document (or a separate `distro/gpu/COMPAT` fi
 - The target is **Mesa without R5 patches**. The R5 support sits in the library, not in Mesa.
 - Patches that turn out to be needed anyway go in a directory of their own. Each has a reason, the upstream status, and the Mesa version it applies to. Each patch is removed as soon as upstream no longer needs it.
 - The Haiku WSI (presenting to a window) is checked first against what the HaikuPorts Mesa recipe carries for Lavapipe on Haiku. Reuse it before writing something new.
-- Building Mesa with RADV (`-Dvulkan-drivers=amd,swrast` and Zink) needs a recipe of its own next to the current HaikuPorts packages. Where that recipe lives is an open decision (see below).
+- Building Mesa with RADV (`-Dvulkan-drivers=amd,swrast` and Zink) uses **a recipe of R5's own, in this repository** (decided by the user, 5 Nov 2026), next to the current HaikuPorts packages. The recipe pins the Mesa version and sha256, lists the meson options, and builds the hpkg that `distro/packages` ships.
 
 ### Updating Mesa, step by step
 
@@ -176,9 +179,9 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 | M1 | IB and DMA fill | Pattern correct, time grows with the work | done (#4092) |
 | M2 | Compute shader | Waves compute and write; time scales | done on the 5625U: every checked dword correct, 16 MiB took 3.9× as long as 4 MiB (#4094) |
 | M3 | Kernel driver owns the GPU, plus interrupts and GART | The fixed sequences run from the kernel; a fence arrives by interrupt; the GPU writes into system memory | |
-| M4 | R5 GPU interface v1 and the R5 DRM library | `vulkaninfo` names the 5625U GPU as RADV, next to Lavapipe | |
+| M4 | R5 GPU interface v1, the R5 DRM library, the Mesa build with RADV, and VulkanTeapot | `vulkaninfo` names the 5625U GPU as RADV, next to Lavapipe. **VulkanTeapot** (a fork of GLTeapot) draws the teapot through RADV, offscreen with a copy into a `BBitmap`, and shows the device name; on a machine without a supported GPU it draws through Lavapipe | |
 | M5 | Address space per context | Two programs submit at the same time, separated from each other | |
-| M6 | RADV workload | `vkcube` offscreen with a correct image, GPU time measured | |
+| M6 | RADV workload | VulkanTeapot and `vkcube` offscreen with a correct image (checked pixels against Lavapipe), GPU time measured | |
 | M7 | Presentation | `vkcube` in a window; falls back to software if that fails | |
 | M8 | app_server uses the GPU for the last copy | Measured gain; Painter fallback works | |
 | M9 | Zink for OpenGL | GLTeapot on the GPU; llvmpipe as fallback | |
@@ -186,14 +189,14 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 
 ## Licensing
 
-- The R5 GPU interface (the kernel header) and the R5 DRM library are R5's own code. **Proposal: MIT.** Mesa, RADV and every Vulkan or OpenGL application load that library. With GPL-3.0, those applications would become part of a GPL-3.0 combination. Haiku's own driver interfaces are MIT for the same reason. This is an exception to the GPL-3.0 default in `AGENTS.md`, so the user decides it.
+- The R5 GPU interface (the kernel header) and the R5 DRM library are R5's own code, and they are **MIT** (decided by the user, 5 Nov 2026). Mesa, RADV and every Vulkan or OpenGL application load that library. With GPL-3.0, those applications would become part of a GPL-3.0 combination. Haiku's own driver interfaces are MIT for the same reason. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`.
+- The GFX9 start code in the kernel add-on (`gfx9_start.cpp`) is GPL-3.0-or-later (decided by the user, 5 Nov 2026). Applications do not link it.
 - The kernel driver `radeon_hd` stays as it is: the Haiku parts MIT, the R5 snippets GPL-3.0-or-later.
 - Mesa and libdrm headers are MIT. Linux `amdgpu` is not copied. Register offsets, values and their order are taken from it as facts.
+- VulkanTeapot is forked from GLTeapot. The files it takes over keep their notices: the Be Sample Code License (Be Incorporated, 1991–1999) and MIT (Haiku, 2008). The new Vulkan code is GPL-3.0-or-later. The teapot geometry comes from a source with a known license, recorded in `THIRD_PARTY_NOTICES.md`; GLTeapot itself does not carry it (it calls `auxSolidTeapot`).
 - New components get a row in `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md`.
 
 ## Open decisions
 
-1. The license of the R5 GPU interface and the R5 DRM library (MIT is the proposal).
-2. Where the Mesa build with RADV lives: a recipe of R5's own, or a modified HaikuPorts recipe.
-3. The name of the device node (`/dev/gpu/radeon_hd/<n>` is the proposal).
-4. Whether radeonsi also comes along later, next to Zink.
+1. The name of the device node (`/dev/gpu/radeon_hd/<n>` is the proposal).
+2. Whether radeonsi also comes along later, next to Zink.
