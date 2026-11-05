@@ -793,6 +793,8 @@ r5_gfx9_vmid1_flush()
 bool
 r5_gfx9_vmid1_setup()
 {
+	/* One shared VMID 1 for every client. A later context reuses the
+	 * tables. Closing the last client does not rebuild them. */
 	if (sVmid1)
 		return true;
 	if (sVm.used != 0 || !r5_gfx9_ring_ready() || sInfo == NULL)

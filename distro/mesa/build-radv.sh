@@ -18,7 +18,5 @@ python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup build-radv \
 	-Dgallium-rusticl=false -Dgallium-drivers=llvmpipe,zink \
 	-Dvulkan-drivers=amd,swrast -Dllvm=enabled \
 	-Dprefix=/home/nickr/r5os/mesa-build/sysroot -Dlibdir=lib \
-	-Dbuildtype=debugoptimized \
-	-Dc_args='-I/mnt/c/Users/nickr/Projects/R5OS/distro/mesa/haiku-extra' \
-	-Dcpp_args='-I/mnt/c/Users/nickr/Projects/R5OS/distro/mesa/haiku-extra'
+	-Dbuildtype=debugoptimized
 ninja -C build-radv

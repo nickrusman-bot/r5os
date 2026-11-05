@@ -466,24 +466,30 @@ gpu_fence_wait(radeon_info* info, void* buffer, size_t length)
 	r5_gpu_fence in;
 	if (!gpu_copy_in(buffer, length, &in, sizeof(in)))
 		return B_BAD_VALUE;
-	if (r5_gfx9_user_seen() >= in.sequence)
-		return B_OK;
 	if (in.timeout_us == 0)
-		return B_TIMED_OUT;
+		return r5_gfx9_user_seen() >= in.sequence ? B_OK : B_TIMED_OUT;
 	sem_id sem = r5_gfx9_eop_sem();
 	if (sem < 0)
 		return B_NO_INIT;
-	gpu_unlock();
-	status_t status = acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT,
-		(bigtime_t)in.timeout_us);
-	gpu_lock();
-	if (r5_gfx9_user_seen() >= in.sequence)
-		return B_OK;
-	if (status == B_TIMED_OUT) {
-		gpu_lost(info, "fence");
-		return B_TIMED_OUT;
+	bigtime_t deadline = system_time() + (bigtime_t)in.timeout_us;
+	while (r5_gfx9_user_seen() < in.sequence) {
+		bigtime_t now = system_time();
+		if (now >= deadline) {
+			gpu_lost(info, "fence");
+			return B_TIMED_OUT;
+		}
+		gpu_unlock();
+		status_t status = acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT,
+			deadline - now);
+		gpu_lock();
+		if (r5_gfx9_user_seen() >= in.sequence)
+			return B_OK;
+		if (status == B_TIMED_OUT) {
+			gpu_lost(info, "fence");
+			return B_TIMED_OUT;
+		}
 	}
-	return status;
+	return B_OK;
 }
 
 
@@ -686,6 +692,9 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		else if (!r5_gfx9_vmid1_setup())
 			status = B_NO_INIT;
 		else {
+			if (sContexts > 0)
+				dprintf("radeon_hd: vmid1 reused, clients %ld\n",
+					(long)sContexts);
 			sContexts++;
 			client->contexts++;
 			in.context = 1;
