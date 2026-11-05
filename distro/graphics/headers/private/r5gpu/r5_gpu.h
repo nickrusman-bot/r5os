@@ -280,7 +280,8 @@ typedef struct {
  * AVAILABLE waits for the submitted point, not the finished point.
  * BINARY waits until the point is greater than 0. FOR_SUBMIT blocks
  * until the point has been submitted. Without it an unsubmitted point
- * times out at once. */
+ * returns B_BAD_VALUE, which is EINVAL, as Linux drm_syncobj_array_wait
+ * does. A timeout is only for a point that was submitted. */
 #define R5_GPU_WAIT_ALL 1u
 #define R5_GPU_WAIT_AVAILABLE 2u
 #define R5_GPU_WAIT_BINARY 4u

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Syncobj wait, VRAM sizes, and the package root
+
+A wait without `FOR_SUBMIT` on an unsubmitted syncobj returns `B_BAD_VALUE`. On Haiku that is `EINVAL`, which is what Linux `drm_syncobj_array_wait` returns. A timeout stays for a point that was submitted and has not retired. The host replay `ok libdrm ioctl` covers a fresh syncobj, a reset syncobj, and a list that mixes a fresh syncobj with a signalled one. `FOR_SUBMIT` still waits, and that wait times out.
+
+`GET_INFO` sets `vram_bytes` from `shared_info->frame_buffer_size` (KiB) times 1024, and copies that into `gtt_bytes`. On the 5625U, `CONFIG_MEMSIZE` reads as `0x3fffff` and is ignored, so the size is the PCI framebuffer BAR. The UMA carveout is 512 MiB. Windows shows 495 MB. The driver does not read the carveout. This is written in `distro/gpu/COMPAT`.
+
+`/boot/home/config` is the packagefs root. The second stick's session log has `settings chown /boot/home/config: Read-only file system` once per program. `r5-desktop` no longer calls `chown` or `chmod` on `config`. The first caller in a boot writes one line, `config … is the package root and is left alone`. `config/settings`, `settings/system`, `settings/kernel`, `settings/kernel/drivers` and `config/cache` are still given to the session user. The image install of those directories is unchanged.
+
 ### Second M4 stick: context create stops on the VMID 1 ack
 
 The stick written at 00:21 Europe/Amsterdam on 6 Nov 2026 was booted on the Ryzen 5 5625U. The self-test file records the render node (`api 1.0 device 15e7 cu 7`, firmware me 167, pfp 197, mec 483) and then:

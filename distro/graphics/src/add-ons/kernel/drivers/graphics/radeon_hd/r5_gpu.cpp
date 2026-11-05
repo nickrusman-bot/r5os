@@ -1108,6 +1108,8 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 			if ((in.flags & R5_GPU_WAIT_ALL) == 0)
 				break;
 		}
+		if (missing && (in.flags & R5_GPU_WAIT_FOR_SUBMIT) == 0)
+			return B_BAD_VALUE;
 		if ((in.flags & R5_GPU_WAIT_ALL) != 0 && met == in.count) {
 			in.first_signaled = 0;
 			return gpu_copy_out(buffer, length, &in, sizeof(in));
@@ -1117,8 +1119,7 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 			return gpu_copy_out(buffer, length, &in, sizeof(in));
 		}
 		bigtime_t now = system_time();
-		if (in.timeout_us == 0 || now >= deadline
-			|| (missing && (in.flags & R5_GPU_WAIT_FOR_SUBMIT) == 0))
+		if (in.timeout_us == 0 || now >= deadline)
 			return B_TIMED_OUT;
 		ConditionVariableEntry entry;
 		sEop.Add(&entry);

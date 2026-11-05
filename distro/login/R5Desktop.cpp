@@ -12,6 +12,7 @@
 #include "SessionLog.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <grp.h>
 #include <image.h>
 #include <pwd.h>
@@ -111,12 +112,23 @@ ensure_user_settings(const struct passwd* pwd)
 	if (pwd->pw_dir == NULL || pwd->pw_dir[0] == '\0')
 		return;
 
-	// The image creates config/settings as root, mode 0755, and it also
-	// ships config/settings/kernel/drivers. The session user then cannot
-	// create a file there. Notifications needs settings/system. Media
-	// writes the latency choice in kernel/drivers.
+	// config is the packagefs root. packagefs has no write_stat, so chown
+	// and chmod on config itself fail. The image still creates
+	// config/settings and config/cache as root, mode 0755. Those, and the
+	// directories under settings, are the ones the session user must own.
+	char configPath[B_PATH_NAME_LENGTH];
+	int configWritten = snprintf(configPath, sizeof(configPath),
+		"%s/config", pwd->pw_dir);
+	if (configWritten > 0 && (size_t)configWritten < sizeof(configPath)) {
+		int stamp = open("/tmp/r5-config-note", O_CREAT | O_EXCL | O_WRONLY,
+			0644);
+		if (stamp >= 0) {
+			close(stamp);
+			r5_session_log("config %s is the package root and is left alone",
+				configPath);
+		}
+	}
 	const char* suffixes[] = {
-		"/config",
 		"/config/settings",
 		"/config/settings/system",
 		"/config/settings/kernel",

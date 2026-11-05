@@ -48,6 +48,14 @@ The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 10`) used one
 buffer and ten syncobjs. The kernel tables are 256 buffers, 256 buffers per
 client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 
+## VRAM and GTT
+
+`GET_INFO` sets `vram_bytes` from `shared_info->frame_buffer_size` times 1024. That field is KiB. `gtt_bytes` is the same number. It is not a quarter of system memory.
+
+On Tahiti and later, including the 5625U, `CONFIG_MEMSIZE` is read as megabytes. A value of 0 or above 65536 MB is ignored. Raven leaves the register at `0x3fffff`, so it is ignored. `graphics_memory_size` stays 0 and `frame_buffer_size` becomes the PCI framebuffer BAR, in KiB. The driver does not read the UMA carveout.
+
+The carveout on the 5625U is 512 MiB. Windows shows 495 MB for that reservation. The number `GET_INFO` returns is the PCI BAR, which can be larger than the carveout.
+
 | Call | Result |
 |---|---|
 | `drmGetDevices2` / `drmGetDevice2` | translated, PCI from `GET_INFO` |
@@ -61,7 +69,7 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | `AMDGPU_INFO_READ_MMR_REG` `0x263e` | translated as `0x063e` |
 | `DRM_CAP_SYNCOBJ` and `DRM_CAP_SYNCOBJ_TIMELINE` | translated, value 1 |
 | syncobj create, reset, signal, query | translated |
-| syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point |
+| syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point. Without `WAIT_FOR_SUBMIT` an unsubmitted syncobj returns `EINVAL` instead of a timeout |
 | `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` | ENOSYS on purpose |
 | `SYNCOBJ_TRANSFER` | translated. `src_point` 0 is the binary fence and is reached only when that syncobj is signalled. A reached source signals the destination the way a host signal does. Otherwise the live job that brings the source to its latest value gets the destination: `job->sequence` when `dst_point` is 0, otherwise `dst_point`, and `submitted` rises at once. No such job is `EINVAL` (`drm_syncobj_find_fence` in Linux 6.12 returns `-EINVAL` when the syncobj has no fence). A missing handle is `ENOENT`. A full job list is `ENOMEM`. `flags` and `pad` must be 0. Sync-file export and import stay ENOSYS |
 | `PRIME` | ENOSYS on purpose |

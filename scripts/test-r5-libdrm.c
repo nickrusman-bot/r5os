@@ -446,6 +446,13 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			value = (wait->flags & R5_GPU_WAIT_AVAILABLE) != 0
 				? gSyncSubmitted[handles[i] - 1] : gSyncPoint[handles[i] - 1];
 			target = points == NULL ? 0 : points[i];
+			if ((wait->flags & R5_GPU_WAIT_FOR_SUBMIT) == 0) {
+				int submitted = (wait->flags & R5_GPU_WAIT_BINARY) != 0
+					? gSyncSubmitted[handles[i] - 1] > 0
+					: gSyncSubmitted[handles[i] - 1] >= target;
+				if (!submitted)
+					return host_err(EINVAL);
+			}
 			ready = host_signalled(value, gSyncSubmitted[handles[i] - 1], target,
 				(wait->flags & R5_GPU_WAIT_BINARY) != 0);
 			if (!ready)
@@ -867,6 +874,19 @@ submit_zero(int node)
 	CHECK(errno == ETIME);
 	r5_host_retire();
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) == 0);
+
+	memset(&created, 0, sizeof(created));
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	fresh = created.handle;
+	memset(&waited, 0, sizeof(waited));
+	waited.handles = (uintptr_t)&fresh;
+	waited.count_handles = 1;
+	waited.timeout_nsec = 1000000000LL;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+	CHECK(errno == EINVAL);
+	waited.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+	CHECK(errno == ETIME);
 }
 
 
@@ -966,7 +986,7 @@ binary_replay(int node)
 	waited.handles = (uintptr_t)&reused;
 	waited.count_handles = 1;
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
-	CHECK(errno == ETIME);
+	CHECK(errno == EINVAL);
 }
 
 
@@ -1138,7 +1158,7 @@ radv_replay(int fd)
 		binaryWait.count_handles = 1;
 		binaryWait.timeout_nsec = 0;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &binaryWait) != 0);
-		CHECK(errno == ETIME);
+		CHECK(errno == EINVAL);
 	}
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_SIGNAL, &list) == 0);
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_QUERY, &timeline) == 0);
@@ -1156,9 +1176,13 @@ radv_replay(int fd)
 		anyWait.handles = (uint64_t)(uintptr_t)both;
 		anyWait.count_handles = 2;
 		anyWait.timeout_nsec = 0;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
+		CHECK(errno == EINVAL);
+		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) == 0);
 		CHECK(anyWait.first_signaled == 1);
-		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL;
+		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT
+			| DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
 		CHECK(errno == ETIME);
 	}
