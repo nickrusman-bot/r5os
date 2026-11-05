@@ -15,6 +15,8 @@ These are settled. Change them only when the user asks.
 7. **The R5 GPU interface header and the R5 DRM library are MIT** (decided by the user on 5 Nov 2026). See [Licensing](#licensing).
 8. **Mesa with RADV is built from a recipe of R5's own,** in this repository (decided by the user on 5 Nov 2026).
 9. **VulkanTeapot is the proof of concept for M4.** It is a fork of GLTeapot that draws through Vulkan: RADV when the GPU is available, Lavapipe otherwise.
+10. **The render node is `/dev/gpu/radeon_hd/<n>`** (decided by the user on 5 Nov 2026). Other GPU drivers later get their own directory under `/dev/gpu/`.
+11. **OpenGL is Zink on RADV.** radeonsi is not built (decided by the user on 5 Nov 2026). This is revisited only when measurements with Zink fall short, and then only on the user's request.
 
 ## Layers
 
@@ -37,7 +39,7 @@ Applications (unchanged)
                          GPU (GC 9.3 first)
 ```
 
-- **OpenGL goes through Zink** (OpenGL on Vulkan) on top of RADV, so there is only one GPU driver to maintain. radeonsi, Mesa's native OpenGL driver, can come later if measurements call for it.
+- **OpenGL goes through Zink** (OpenGL on Vulkan) on top of RADV, so there is only one GPU driver to maintain. radeonsi, Mesa's native OpenGL driver, is not built. It is only reconsidered if Zink falls short in measurements, and only when the user asks.
 - **Display stays a separate track.** That is modes, more than one screen, vsync, and putting a frame on the panel. DCN is not programmed yet; the firmware scanout stays. See `GRAPHICS.md`, "Two problems".
 
 ## Default and fallback
@@ -79,7 +81,7 @@ Today the GFX9 ring is **opt-in**. The GPU becomes the default per GPU family, a
 
 ### Device node
 
-`/dev/gpu/radeon_hd/<n>`, deliberately **not** under `/dev/graphics/`. app_server opens every device in `/dev/graphics/` as a screen. The render node is for applications and libraries; the existing `/dev/graphics/radeon_hd_*` stays for app_server and the accelerant.
+`/dev/gpu/radeon_hd/<n>` (decided), deliberately **not** under `/dev/graphics/`. app_server opens every device in `/dev/graphics/` as a screen. The render node is for applications and libraries; the existing `/dev/graphics/radeon_hd_*` stays for app_server and the accelerant.
 
 ### Versioning
 
@@ -198,5 +200,4 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 
 ## Open decisions
 
-1. The name of the device node (`/dev/gpu/radeon_hd/<n>` is the proposal).
-2. Whether radeonsi also comes along later, next to Zink.
+None at the moment. New ones are added here.
