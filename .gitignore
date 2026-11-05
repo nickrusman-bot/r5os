@@ -11,6 +11,8 @@
 !distro/packages/
 !distro/packages/**
 !distro/packages/**/*.hpkg
+distro/packages/x86_64/mesa_zink-25.3.6-1-x86_64.hpkg
+__pycache__/
 .DS_Store
 Thumbs.db
 /query.csv

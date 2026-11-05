@@ -8,6 +8,9 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_vm.h"
+#include "r5_gpu.h"
+#include "r5_span.h"
 #include "radeon_hd_private.h"
 
 #include <PCI.h>
@@ -26,6 +29,8 @@ extern "C" status_t vm_set_area_memory_type(area_id id,
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+
+extern "C" void r5_gpu_retire_wake();
 
 
 static radeon_info* sInfo = NULL;
@@ -250,8 +255,10 @@ ih_handler(void* data)
 		sLastSource = entry.source;
 		sLastRing = entry.ring;
 		if (entry.client == kClientCp && entry.source == kSourceEop
-			&& entry.ring == 0 && sEopSem >= 0) {
-			release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
+			&& entry.ring == 0) {
+			if (sEopSem >= 0)
+				release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
+			r5_gpu_retire_wake();
 			sEopCount++;
 			woke = true;
 		}
@@ -730,6 +737,172 @@ run_k2()
 }
 
 
+static r5_vm sVm;
+static r5_vm_page sVmPages[1024];
+static bool sVmid1 = false;
+
+
+static int
+vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
+{
+	(void)cookie;
+	uint64 offset = 0;
+	uint8* address = NULL;
+	if (sHost.vram_alloc == NULL || sInfo == NULL)
+		return 0;
+	if (sHost.vram_alloc(sInfo, 4096, 4096, &offset, &address) != B_OK
+		|| address == NULL)
+		return 0;
+	uint32 fb = kread(sInfo, gc_byte(0x096b));
+	*physical = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
+	*cpu = (uint64_t*)address;
+	return 1;
+}
+
+
+int32
+r5_gfx9_eop_sem()
+{
+	return sEopSem;
+}
+
+
+status_t
+r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset, uint8** address)
+{
+	if (sHost.vram_alloc == NULL || sInfo == NULL)
+		return B_NO_INIT;
+	return sHost.vram_alloc(sInfo, bytes, align, offset, address);
+}
+
+
+static r5_span sUserSpans[64];
+
+
+status_t
+r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset)
+{
+	if (offset == NULL || bytes == 0)
+		return B_BAD_VALUE;
+	bytes = (bytes + 4095ull) & ~4095ull;
+	if (r5_span_take(sUserSpans, 64, bytes, offset))
+		return B_OK;
+	uint8* address = NULL;
+	uint64 bumped = 0;
+	status_t status = r5_gfx9_alloc_vram(bytes, 4096, &bumped, &address);
+	if (status != B_OK)
+		return status;
+	if (!r5_span_add(sUserSpans, 64, bumped, bytes))
+		return B_NO_MEMORY;
+	*offset = bumped;
+	return B_OK;
+}
+
+
+void
+r5_gfx9_free_user_vram(uint64 offset)
+{
+	r5_span_free(sUserSpans, 64, offset);
+}
+
+
+bool
+r5_gfx9_vmid1_flush()
+{
+	if (sInfo == NULL)
+		return false;
+	const uint32 eng = 0;
+	uint32 inv = r5_gfx9_tlb_req(1, 0);
+	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
+	(void)kread(sInfo, gc_byte(0x08a3 + eng));
+	for (int i = 0; i < 10000; i++) {
+		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & 1u) != 0)
+			return true;
+		snooze(10);
+	}
+	knote("vmid1 fail tlb");
+	return false;
+}
+
+
+bool
+r5_gfx9_vmid1_setup()
+{
+	/* One shared VMID 1 for every client. A later context reuses the
+	 * tables. Closing the last client does not rebuild them. */
+	if (sVmid1)
+		return true;
+	if (sVm.used != 0 || !r5_gfx9_ring_ready() || sInfo == NULL)
+		return false;
+	memset(&sVm, 0, sizeof(sVm));
+	sVm.pages = sVmPages;
+	sVm.capacity = 1024;
+	sVm.alloc = vm_page_alloc;
+	if (!r5_vm_new_page(&sVm))
+		return false;
+	asm volatile("sfence" ::: "memory");
+	uint64 rootPa = sVm.pages[0].physical;
+	if (!r5_gfx9_pde_aligned(rootPa))
+		return false;
+	uint64 tableBase = rootPa | (uint64)R5_GFX9_PTE_VALID;
+	kwrite(sInfo, gc_byte(0x0851), 0xffffffffu);
+	kwrite(sInfo, gc_byte(0x0852), 0xfu);
+	kwrite(sInfo, gc_byte(0x0853), 0);
+	kwrite(sInfo, gc_byte(0x0854), 0);
+	kwrite(sInfo, gc_byte(0x08ed), (uint32)tableBase);
+	kwrite(sInfo, gc_byte(0x08ee), (uint32)(tableBase >> 32));
+	kwrite(sInfo, gc_byte(0x090d), 0);
+	kwrite(sInfo, gc_byte(0x090e), 0);
+	kwrite(sInfo, gc_byte(0x092d), 0xffffffffu);
+	kwrite(sInfo, gc_byte(0x092e), 0xfu);
+	uint32 cntl = 1u | (3u << 1);
+	cntl |= (1u << 9) | (1u << 10);
+	cntl |= (1u << 11) | (1u << 12);
+	cntl |= (1u << 13) | (1u << 14);
+	cntl |= (1u << 15) | (1u << 16);
+	cntl |= (1u << 17) | (1u << 18);
+	cntl |= (1u << 19) | (1u << 20);
+	cntl |= (1u << 21) | (1u << 22);
+	kwrite(sInfo, gc_byte(0x0881), cntl);
+	if (!r5_gfx9_vmid1_flush())
+		return false;
+	sVmid1 = true;
+	knote("vmid1 ptb %016llx cntl %08lx pages %lu",
+		(unsigned long long)tableBase, (unsigned long)cntl,
+		(unsigned long)sVm.used);
+	knote("vmid1 identity low %08lx %08lx high %08lx %08lx",
+		(unsigned long)kread(sInfo, gc_byte(0x0851)),
+		(unsigned long)kread(sInfo, gc_byte(0x0852)),
+		(unsigned long)kread(sInfo, gc_byte(0x0853)),
+		(unsigned long)kread(sInfo, gc_byte(0x0854)));
+	return true;
+}
+
+
+bool
+r5_gfx9_vmid1_map(uint64 va, uint64 pte)
+{
+	if (!sVmid1)
+		return false;
+	if (!r5_vm_map_page(&sVm, va, pte))
+		return false;
+	asm volatile("sfence" ::: "memory");
+	return true;
+}
+
+
+bool
+r5_gfx9_vmid1_lookup(uint64 va)
+{
+	uint64 pte = 0;
+	if (!sVmid1)
+		return false;
+	if (r5_vm_lookup(&sVm, va & ~0xfffull, &pte) == 0)
+		return false;
+	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
+}
+
+
 void
 r5_gfx9_kernel_start(radeon_info& info)
 {
@@ -790,6 +963,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;
 	r5_gfx9_prepare(&sHost, vramBytes);
 	bool ok = r5_gfx9_start(&sHost, pci, vramBytes, workload, compute, &sResults);
+	r5_gfx9_copy_firmware(info.fw_version, info.fw_feature, 32);
 	knote("k0 %s fence", ok ? "ok" : "fail");
 	if (ok && irq)
 		run_k1();

@@ -1,0 +1,36 @@
+--- a/xf86drm.c
++++ b/xf86drm.c
+@@ -57,6 +57,21 @@
+ #ifdef MAJOR_IN_SYSMACROS
+ #include <sys/sysmacros.h>
+ #endif
++#if defined(__HAIKU__)
++/* Haiku has no makedev. libdrm only uses these to name a device node. */
++static inline unsigned int major(unsigned long dev)
++{
++    return (unsigned int)((dev >> 8) & 0xffu);
++}
++static inline unsigned int minor(unsigned long dev)
++{
++    return (unsigned int)(dev & 0xffu);
++}
++static inline unsigned long makedev(unsigned int maj, unsigned int minor_dev)
++{
++    return ((unsigned long)maj << 8) | minor_dev;
++}
++#endif
+ #if HAVE_SYS_SYSCTL_H
+ #include <sys/sysctl.h>
+ #endif
+@@ -853,6 +868,12 @@
+     if (!dev_name)
+         return -EINVAL;
+ 
++#if defined(__HAIKU__)
++    /* R5 render node. The kernel publishes this name, not /dev/dri. */
++    snprintf(buf, sizeof(buf), "/dev/gpu/radeon_hd/%d", minor);
++    if ((fd = open(buf, O_RDWR | O_CLOEXEC)) >= 0)
++        return fd;
++#endif
+     sprintf(buf, dev_name, DRM_DIR_NAME, minor);
+     drmMsg("drmOpenDevice: node name is %s\n", buf);

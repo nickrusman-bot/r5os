@@ -1,0 +1,95 @@
+# GPU packages on the image
+
+The software path stays installed. A supported GPU uses these packages when the
+render node is present. VirtualBox has no render node, so Lavapipe remains the
+Vulkan device there.
+
+| Package | What it is |
+|---|---|
+| libdrm 2.4.124 | `libdrm.so.2` and `libdrm_amdgpu.so.1`. AMDGPU ioctls become R5 GPU calls |
+| mesa_zink 25.3.6 | EGL vendor. llvmpipe by default. `GALLIUM_DRIVER=zink` selects Zink. Provides `mesa` |
+| mesa_lavapipe 25.3.6 | Vulkan software driver |
+| mesa_radv 25.3.6 | `libvulkan_radeon.so` and `add-ons/vulkan/icd.d/radeon_icd.json` |
+| vulkan_loader 1.4.367 | Khronos loader. Haiku Project package |
+| VulkanTeapot | Offscreen Newell teapot. `--selftest` prints the device and sample pixels |
+
+RADV is not the default for GC 9.3. The ring, the workload, and compute stay
+off until the radeon_hd driver settings say so.
+
+The package is named `mesa`, version `25.3.6-2`. It provides `mesa`,
+`mesa_zink` and `mesa_eglvnd`. `haiku/build/jam/BuildFeatures` fetches
+`file: base mesa`. `mesa-25.3.6-1` is not in the pin and not in the download
+directory: it owns the same EGL file. `mesa_devel` and `mesa_lavapipe` require
+`mesa == 25.3.6`.
+
+DRM version reported to RADV is 3.42.0. That is the oldest version
+`ac_gpu_info.c` accepts. Every `drm_minor >= 45` gate in that file stays off,
+including gang submit, GPUVM faults and conformant trunc.
+
+A binary syncobj follows the latest submit. It is signalled when `submitted`
+is greater than 0 and `point` has caught up with `submitted`. `submitted` 0
+means it was never submitted, or it was reset. A job signals it with that
+job's sequence, never with 1. `submitted` rises when the job is queued.
+`point` rises when the job retires. `CREATE_SIGNALED` sets both to 1. A host
+signal sets both to the greater of the current values and the highest
+sequence, or 1 when no job has run. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
+`PRIME` return ENOSYS. `SYNCOBJ_TRANSFER` is `R5_GPU_SYNCOBJ_TRANSFER`.
+Any other untranslated ioctl returns ENOSYS and is
+named once on stderr. `GEM_MMAP` is one of those: CPU mapping uses `BO_MAP`.
+
+Compute is reported with `available_rings` 0. A command submission whose
+`ip_type` is not GFX, or whose IB flags are not 0, returns EINVAL. VMID 1 is
+one shared address space. `CS` passes `ctx_id`. `GEM_VA` in libdrm 2.4.124
+has no context field, so that call uses context 1. A dependency chunk waits
+on that sequence for five seconds and is not dropped. `WAIT_CS` uses the same
+fence wait. The submit wait is five seconds and returns a timeout.
+
+The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 10`) used one
+buffer and ten syncobjs. The kernel tables are 256 buffers, 256 buffers per
+client, 128 syncobjs and 64 jobs. A full RADV device was not run.
+
+| Call | Result |
+|---|---|
+| `drmGetDevices2` / `drmGetDevice2` | translated, PCI from `GET_INFO` |
+| `drmGetVersion` | translated, 3.42.0 |
+| `AMDGPU_INFO_DEV_INFO` | translated |
+| `AMDGPU_INFO_HW_IP` GFX | translated, rings 1 |
+| `AMDGPU_INFO_HW_IP` compute | translated, rings 0 |
+| `AMDGPU_INFO_FW_VERSION` ME, MEC, PFP | translated, from the ucode header |
+| `AMDGPU_INFO_MEMORY` | translated, max allocation 64 MiB |
+| `AMDGPU_INFO_VRAM_GTT` | translated |
+| `AMDGPU_INFO_READ_MMR_REG` `0x263e` | translated as `0x063e` |
+| `DRM_CAP_SYNCOBJ` and `DRM_CAP_SYNCOBJ_TIMELINE` | translated, value 1 |
+| syncobj create, reset, signal, query | translated |
+| syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point |
+| `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` | ENOSYS on purpose |
+| `SYNCOBJ_TRANSFER` | translated. `src_point` 0 is the binary fence and is reached only when that syncobj is signalled. A reached source signals the destination the way a host signal does. Otherwise the live job that brings the source to its latest value gets the destination: `job->sequence` when `dst_point` is 0, otherwise `dst_point`, and `submitted` rises at once. No such job is `EINVAL` (`drm_syncobj_find_fence` in Linux 6.12 returns `-EINVAL` when the syncobj has no fence). A missing handle is `ENOENT`. A full job list is `ENOMEM`. `flags` and `pad` must be 0. Sync-file export and import stay ENOSYS |
+| `PRIME` | ENOSYS on purpose |
+| `CS` binary `chunk_sem` | translated |
+| `CS` timeline chunk | translated |
+| `CS` dependencies | translated, fence wait before submit |
+| `WAIT_CS` | translated |
+| `GEM_MMAP` | ENOSYS on purpose |
+
+## Error signs on Haiku
+
+POSIX codes are negative. `return -errno` becomes positive. `r == -ETIME`, `-ECANCELED` and `-ENOMEM` still match that positive value, so the `return -errno` sites in `xf86drm.c` and `amdgpu_*.c` stay as they are. `r5_neg()` is only on returns Mesa does not compare with a specific `-E` code.
+
+| Return | Caller | Comparison | `r5_neg` |
+|---|---|---|---|
+| `r5_drm_get_devices2` missing directory returns 0 | `vk_instance.c:418` | `< 1` | no. A negated errno was a device count |
+| `r5_drm_get_device2` | device match | `!= 0` and `< 0` in the host test | yes. No `== -E` in Mesa |
+| `r5_bo_cpu_map` / `unmap` | `amdgpu_bo_cpu_map` returns that value. `radv_amdgpu_bo.c:730` tests it with `if (ac_drm_bo_cpu_map(...))` | any non-zero | yes |
+| `drmSyncobjWait` / `TimelineWait` `xf86drm.c:5042` and `:5109` | `vk_drm_syncobj.c` | `== -ETIME` and `errno == ETIME` | no. libdrm keeps `-errno` |
+| `amdgpu_cs.c` submit `== -ENOMEM`, `-ECANCELED`, `-ETIME` | `radv_amdgpu_cs.c:1966`–`:1984` | exact code | no |
+
+`drm_ioctl` in Mesa `os_drm.h` also returns `-errno`. `ac_drm_query_info` uses it. The syncobj helpers `drmSyncobjCreate`, `Transfer`, `ExportSyncFile`, `ImportSyncFile` and `Query2` return `drmIoctl`, which is `-1`.
+
+| Test | Value | Change |
+|---|---|---|
+| `vk_drm_syncobj.c:59`, `:67`, `:663` | `drmSyncobjCreate` / timeline signal, `drmIoctl` returns `-1` | left |
+| `vk_drm_syncobj.c:498` | `sync_merge`, not a libdrm `-errno` | left |
+| `radv_amdgpu_cs.c:1280`, `:1286`, `:1298`, `:1318`, `:1330`, `:1335`, `:1340`, `:1347` | export, import and transfer return `drmIoctl`'s `-1` | left |
+| `radv_amdgpu_winsys.c:106` | `ac_drm_query_info` returns `-errno` | `!= 0`. Patch `distro/mesa/patches/haiku-errno-nonzero.patch` |
+
+The error mapper stays out. Its hidden `_errnop` writes a positive code into the thread's errno cell, which VulkanTeapot and libbe share.

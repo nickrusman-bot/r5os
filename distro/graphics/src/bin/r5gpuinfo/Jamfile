@@ -1,0 +1,8 @@
+SubDir HAIKU_TOP src bin r5gpuinfo ;
+
+UsePrivateHeaders r5gpu ;
+
+Application r5gpuinfo :
+	r5gpuinfo.cpp
+	: be [ TargetLibsupc++ ]
+	;

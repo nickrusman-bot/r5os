@@ -1,0 +1,55 @@
+--- a/amdgpu/amdgpu_internal.h	2024-12-04 19:30:30.000000000 +0100
++++ b/amdgpu/amdgpu_internal.h	2026-11-05 18:21:39.512339070 +0100
+@@ -107,6 +107,7 @@
+ 	pthread_mutex_t cpu_access_mutex;
+ 	void *cpu_ptr;
+ 	int64_t cpu_map_count;
++	int r5_area;
+ };
+ 
+ struct amdgpu_bo_list {
+--- a/amdgpu/amdgpu_bo.c	2024-12-04 19:30:30.000000000 +0100
++++ b/amdgpu/amdgpu_bo.c	2026-11-05 18:21:39.512339070 +0100
+@@ -38,6 +38,7 @@
+ #include "amdgpu_drm.h"
+ #include "amdgpu_internal.h"
+ #include "util_math.h"
++#include "r5_translate.h"
+ 
+ static int amdgpu_bo_create(amdgpu_device_handle dev,
+ 			    uint64_t size,
+@@ -443,6 +444,14 @@
+ 
+ 	memset(&args, 0, sizeof(args));
+ 
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++	/* The R5 kernel clone_area's the buffer. munmap deletes that clone. */
++	r = r5_bo_cpu_map(bo->dev->fd, bo->handle, &ptr, &bo->r5_area);
++	if (r) {
++		pthread_mutex_unlock(&bo->cpu_access_mutex);
++		return r;
++	}
++#else
+ 	/* Query the buffer address (args.addr_ptr).
+ 	 * The kernel driver ignores the offset and size parameters. */
+ 	args.in.handle = bo->handle;
+@@ -462,6 +471,7 @@
+ 		return -errno;
+ 	}
+ 
++#endif
+ 	bo->cpu_ptr = ptr;
+ 	bo->cpu_map_count = 1;
+ 	pthread_mutex_unlock(&bo->cpu_access_mutex);
+@@ -490,7 +500,11 @@
+ 		return 0;
+ 	}
+ 
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++	r = r5_bo_cpu_unmap(bo->dev->fd, bo->r5_area);
++#else
+ 	r = drm_munmap(bo->cpu_ptr, bo->alloc_size) == 0 ? 0 : -errno;
++#endif
+ 	bo->cpu_ptr = NULL;
+ 	pthread_mutex_unlock(&bo->cpu_access_mutex);
+ 	return r;

@@ -162,6 +162,25 @@ These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not th
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, written at 15:29 Europe/Amsterdam, reached the desktop. The lines are `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, `k1_wait_us 1132`, `k2 map count 8 pages 256`, `k2 ptb 0000000812c18001 got 12c18001 00000008`, `k2 inv 007c0001`, `k2 ok gart`, `k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 10 seen 10`. There is no `k2 fault` line. The user shut that session down and reported no panic. The syslog exported while the desktop was up does not contain the stop lines. A boot with `gfx9_kernel` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
 
+## GFX9 user address space (M4, not fixed)
+
+This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is written down before the page-table code. It is not a fixed sequence: no boot has programmed VMID 1 yet.
+
+`amdgpu_vm_adjust_size(adev, 256 * 1024, 9, 3, 48)` asks for 256 TiB, 9-bit blocks, at most 3 levels above the page table, and 48 VA bits. The minimum and the maximum are the same 262144 GiB, so the VM size does not depend on the RAM size. `max_pfn` is `262144 << 18` (2^36 pages). The byte size minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`: 8 KiB trap, 2 MiB seq64, 2 MiB CSA) is `0xffffffbfe000`.
+
+| Field | Value |
+|---|---|
+| `virtual_address_offset` | `0x10000` (`AMDGPU_VA_RESERVED_BOTTOM`, 64 KiB) |
+| `virtual_address_max` | `0x800000000000` (`AMDGPU_GMC_HOLE_START`) |
+| `high_va_offset` | `0xffff800000000000` (`AMDGPU_GMC_HOLE_END`) |
+| `high_va_max` | `0xffffffffffbfe000` (`AMDGPU_GMC_HOLE_END` or the byte size) |
+
+The high range contains `address32_hi` `0xffff8000`. The walk is four levels: root PDB2, then PDB1, PDB0 and the page table. `PAGE_TABLE_DEPTH` is 3. `PAGE_TABLE_BLOCK_SIZE` is 0 because `translate_further` is off on GC 9.3 and the block field is `block_size - 9`. Each level takes 9 bits. The page is 4 KiB. A PDE is the physical address (`FB_OFFSET << 24` plus the table offset) with `VALID`, and it is rejected when it fails `0xFFFF00000000003F`. A system PTE uses the same flags as the K2 page, including `MTYPE_UC` at bit 57.
+
+`MC_VM_MX_L1_TLB_CNTL` `SYSTEM_ACCESS_MODE` is 3 in `gfxhub_v1_0_init_tlb_regs`, and `SYSTEM_APERTURE_UNMAPPED_ACCESS` is 0. `VM_L2_CNTL` `CONTEXT1_IDENTITY_ACCESS_MODE` is 1, and the identity aperture is then programmed to an empty range (`LOW` `0xffffffff`/`0xf`, `HIGH` 0). A user indirect buffer uses VMID 1 page tables, not the VMID 0 tables. With the identity aperture empty, an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. That is the recorded check. M4 does not change `SYSTEM_ACCESS_MODE`.
+
+The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. No boot has confirmed these writes yet.
+
 ## Known GFX9 differences
 
 `MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.

@@ -10,6 +10,7 @@
 #define GFX9_START_H
 
 #include "gfx9_check.h"
+#include "r5_cs.h"
 
 #include <SupportDefs.h>
 
@@ -53,5 +54,27 @@ bool r5_gfx9_k2_dma(uint64 destMc, uint32* _sequence);
 bool r5_gfx9_k2_gart_ib(uint64 ibMc, uint8* ibCpu, uint32* _sequence);
 uint32 r5_gfx9_last_word();
 uint64 r5_gfx9_last_sequence();
+struct r5_gfx9_user_ib {
+	uint64		va;
+	uint32		dwords;
+};
+
+bool r5_gfx9_ring_ready();
+bool r5_gfx9_user_room(uint32 dwords);
+bool r5_gfx9_fence_offset(uint64* offset);
+uint64 r5_gfx9_user_fence_mc();
+bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
+	uint64* _sequence);
+uint64 r5_gfx9_user_seen();
+bool r5_gfx9_vmid1_setup();
+bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
+bool r5_gfx9_vmid1_flush();
+bool r5_gfx9_vmid1_lookup(uint64 va);
+int32 r5_gfx9_eop_sem();
+status_t r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset,
+	uint8** address);
+status_t r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset);
+void r5_gfx9_free_user_vram(uint64 offset);
+void r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count);
 
 #endif

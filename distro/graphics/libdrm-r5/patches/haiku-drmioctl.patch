@@ -1,0 +1,49 @@
+--- a/xf86drm.c	2026-11-05 17:04:45.861551037 +0100
++++ b/xf86drm.c	2026-11-05 18:21:39.511552216 +0100
+@@ -38,6 +38,7 @@
+ #include <string.h>
+ #include <strings.h>
+ #include <ctype.h>
++#include "r5_translate.h"
+ #include <dirent.h>
+ #include <stddef.h>
+ #include <fcntl.h>
+@@ -703,8 +704,20 @@
+ {
+     int ret;
+ 
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++    {
++        size_t bytes = (request >> 16) & 0x3fffu;
++        int translated = r5_drm_ioctl(fd, request, arg, bytes);
++        if (translated != 1)
++            return translated;
++    }
++#endif
+     do {
++#if defined(__HAIKU__)
++        ret = ioctl(fd, request, arg, (request >> 16) & 0x3fffu);
++#else
+         ret = ioctl(fd, request, arg);
++#endif
+     } while (ret == -1 && (errno == EINTR || errno == EAGAIN));
+     return ret;
+ }
+@@ -4746,6 +4759,9 @@
+ drm_public int drmGetDevice2(int fd, uint32_t flags, drmDevicePtr *device)
+ {
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++    return r5_drm_get_device2(fd, flags, device);
++#endif
+     struct stat sbuf;
+ 
+     if (fd == -1)
+@@ -4792,6 +4808,9 @@
+                               int max_devices)
+ {
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++    return r5_drm_get_devices2(flags, devices, max_devices);
++#endif
+     drmDevicePtr local_devices[MAX_DRM_NODES];
+     drmDevicePtr device;
+     DIR *sysdir;

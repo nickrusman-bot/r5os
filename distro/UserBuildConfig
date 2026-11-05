@@ -27,12 +27,15 @@ switch $(HAIKU_BUILD_PROFILE) {
 			vision
 			wpa_supplicant
 			libglvnd
+			libdrm
 			mesa
 			mesa_devel
 			mesa_lavapipe
+			mesa_radv
 			llvm21_runtime
 			vulkan_loader
 			vulkan_tools
+			vulkanteapot
 			;
 
 		# The downloaded HaikuPorts catalog still lists Mesa 22. The image

@@ -407,6 +407,7 @@ struct radeon_gfx9_ucode {
 	const uint8*	ucode;
 	uint32			ucodeBytes;
 	uint32			version;
+	uint32			feature;
 	uint16			headerMajor;
 	uint16			headerMinor;
 	// gfx_firmware_header_v1_0 jt_offset and jt_size, in bytes from the
@@ -423,6 +424,45 @@ struct radeon_gfx9_ucode {
 	uint32			listSrmBytes;
 	uint32			listSrmOffset;
 };
+
+// Filled once, when the PSP load parses a header. GET_INFO copies these.
+static uint32 sFwVersion[32];
+static uint32 sFwFeature[32];
+
+
+void
+r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count)
+{
+	uint32 n = count < 32 ? count : 32;
+	if (version != NULL)
+		memcpy(version, sFwVersion, n * sizeof(uint32));
+	if (feature != NULL)
+		memcpy(feature, sFwFeature, n * sizeof(uint32));
+}
+
+
+static void
+radeon_gfx9_note_fw(const char* name, const radeon_gfx9_ucode* fw)
+{
+	uint32 index = 32;
+	if (name == NULL || fw == NULL)
+		return;
+	if (strstr(name, "_mec.bin") != NULL)
+		index = 0x08;
+	else if (strstr(name, "_me.bin") != NULL)
+		index = 0x04;
+	else if (strstr(name, "_pfp.bin") != NULL)
+		index = 0x05;
+	else if (strstr(name, "_ce.bin") != NULL)
+		index = 0x06;
+	else if (strstr(name, "_rlc.bin") != NULL)
+		index = 0x07;
+	if (index >= 32)
+		return;
+	sFwVersion[index] = fw->version;
+	sFwFeature[index] = fw->feature;
+}
+
 
 // Set when the three RLC 2.1 lists were accepted. SRM_ENABLE follows that.
 static bool sRlcRestoreLists = false;
@@ -514,6 +554,7 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 				out->ucode = blob + offset;
 				out->ucodeBytes = ucodeBytes;
 				out->version = version;
+				out->feature = radeon_le32(blob + 32);
 				out->headerMajor = headerMajor;
 				out->headerMinor = headerMinor;
 				out->jtOffset = jtOffset;
@@ -793,6 +834,7 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 			continue;
 		if (opened != B_OK)
 			return opened;
+		radeon_gfx9_note_fw(used, &fw);
 
 		if (files[i].jtType == 0) {
 			if (files[i].type == 8 && fw.headerMajor == 2
@@ -1982,6 +2024,7 @@ radeon_gfx9_workload_fail(const char* step, uint32 meCntl, uint32 haltMask,
 
 static uint64 r5_ring_rptr();
 static bool r5_ring_has_room(uint32 count);
+static bool r5_ring_doorbell();
 
 
 static bool
@@ -2034,6 +2077,116 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 		return false;
 	}
 	sRadeonGfx9Ring.submitted = newWptr;
+	return true;
+}
+
+
+static uint64 sUserSequence = 0;
+
+
+bool
+r5_gfx9_ring_ready()
+{
+	return sK0Ok && sRadeonGfx9Ring.ready
+		&& sRadeonGfx9Ring.fenceAddress != NULL
+		&& sRadeonGfx9Ring.ringAddress != NULL;
+}
+
+
+bool
+r5_gfx9_user_room(uint32 dwords)
+{
+	return r5_gfx9_ring_ready() && r5_ring_has_room(dwords);
+}
+
+
+bool
+r5_gfx9_fence_offset(uint64* offset)
+{
+	if (!r5_gfx9_ring_ready() || offset == NULL)
+		return false;
+	*offset = sRadeonGfx9Ring.fenceOffset;
+	return true;
+}
+
+
+uint64
+r5_gfx9_user_seen()
+{
+	if (sRadeonGfx9Ring.fenceAddress == NULL)
+		return 0;
+	return *(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + kR5UserFenceOffset);
+}
+
+
+uint64
+r5_gfx9_user_fence_mc()
+{
+	if (!r5_gfx9_ring_ready())
+		return 0;
+	uint32 location = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0980));
+	return radeon_gfx9_mc_addr(location,
+		sRadeonGfx9Ring.fenceOffset + kR5UserFenceOffset);
+}
+
+
+/* Appends VMID 1 indirect buffers and one 64-bit RELEASE_MEM. The fence
+ * address is the kernel MC address. The ring runs in VMID 0. The write
+ * pointer moves before the fence lands. A full ring returns false. */
+bool
+r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
+{
+	if (ibs == NULL || count == 0 || count > 8)
+		return false;
+	uint32 total = 8;
+	for (uint32 i = 0; i < count; i++) {
+		if ((ibs[i].va & 3ull) != 0 || ibs[i].dwords == 0
+			|| ibs[i].dwords > 0xfffffu)
+			return false;
+		total += 4;
+	}
+	if (!r5_gfx9_user_room(total))
+		return false;
+	uint64 fenceMc = r5_gfx9_user_fence_mc();
+	if (fenceMc == 0 || (fenceMc & 7ull) != 0)
+		return false;
+	uint64 sequence = sUserSequence + 1;
+	uint32 packets[40];
+	uint32 filled = 0;
+	for (uint32 i = 0; i < count; i++) {
+		uint32 one[12];
+		r5_cs_gfx_ib(one, ibs[i].va, ibs[i].dwords, 1, fenceMc, sequence);
+		for (uint32 dword = 0; dword < 4; dword++)
+			packets[filled++] = one[dword];
+	}
+	uint32 one[12];
+	r5_cs_gfx_ib(one, ibs[0].va, ibs[0].dwords, 1, fenceMc, sequence);
+	for (uint32 dword = 4; dword < 12; dword++)
+		packets[filled++] = one[dword];
+	uint64 wptr = sRadeonGfx9Ring.submitted;
+	uint32 dwords = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
+	uint32* ring = (uint32*)sRadeonGfx9Ring.ringAddress;
+	for (uint32 i = 0; i < filled; i++)
+		ring[r5_gfx9_ring_index(wptr, i, dwords)] = packets[i];
+	uint64 newWptr = wptr + filled;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.ringAddress,
+		sRadeonGfx9Ring.ringBytes);
+	radeon_visible_barrier();
+	*(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512) = newWptr;
+	radeon_gfx9_flush_visible(sRadeonGfx9Ring.fenceAddress, 4096);
+	radeon_visible_barrier();
+	if (r5_ring_doorbell()) {
+		*(volatile uint64*)(sHost->doorbell + kGfx9DoorbellByte) = newWptr;
+		radeon_visible_barrier();
+	} else {
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1054), (uint32)newWptr);
+		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1055),
+			(uint32)(newWptr >> 32));
+	}
+	sRadeonGfx9Ring.submitted = newWptr;
+	sUserSequence = sequence;
+	if (_sequence != NULL)
+		*_sequence = sequence;
 	return true;
 }
 

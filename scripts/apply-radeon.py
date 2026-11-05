@@ -31,6 +31,8 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp",
     "src/add-ons/accelerants/radeon_hd/common/gfx9_start.h",
     "src/add-ons/accelerants/radeon_hd/common/gfx9_check.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_vm.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_cs.h",
     "src/add-ons/accelerants/radeon_hd/Jamfile",
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h",
@@ -38,11 +40,19 @@ FILES = (
     "src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+    "src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+    "headers/private/r5gpu/r5_gpu.h",
+    "headers/private/r5gpu/r5_span.h",
+    "headers/private/r5gpu/r5_wait.h",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/Jamfile",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd_private.h",
     "headers/private/graphics/radeon_hd/radeon_hd.h",
     "src/bin/gfxinfo/Jamfile",
     "src/bin/gfxinfo/gfxinfo.cpp",
+    "src/bin/r5gpuinfo/Jamfile",
+    "src/bin/r5gpuinfo/r5gpuinfo.cpp",
+    "src/bin/r5-gpu-selftest/Jamfile",
+    "src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
 )
 
 
@@ -76,6 +86,60 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
         print("patched regular image")
     else:
         print("already regular image")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin r5gpuinfo ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin gfxinfo ;\n"
+        if anchor not in text:
+            raise SystemExit("r5gpuinfo anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile r5gpuinfo")
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += r5gpuinfo ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += gfxinfo ;\n"
+        if anchor not in text:
+            raise SystemExit("r5gpuinfo anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image r5gpuinfo")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin r5-gpu-selftest ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin r5gpuinfo ;\n"
+        if anchor not in text:
+            raise SystemExit("selftest anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile selftest")
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += r5-gpu-selftest ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += r5gpuinfo ;\n"
+        if anchor not in text:
+            raise SystemExit("selftest anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image selftest")
+
+    launch = haiku / "data" / "launch" / "user"
+    text = launch.read_text(encoding="utf-8")
+    job = (
+        "\tjob x-vnd.R5OS-gpu-selftest {\n"
+        "\t\tlaunch /system/bin/r5-gpu-selftest\n"
+        "\t\tif setting ~/config/settings/kernel/drivers/radeon_hd gpu_selftest\n"
+        "\t\trequires x-vnd.Be-TSKB\n"
+        "\t\tno_safemode\n"
+        "\t}\n"
+    )
+    if "x-vnd.R5OS-gpu-selftest" not in text:
+        anchor = "\tjob x-vnd.R5OS-vbox-clip {\n"
+        if anchor not in text:
+            raise SystemExit("selftest anchor missing in launch user")
+        launch.write_text(text.replace(anchor, job + "\n" + anchor, 1),
+            encoding="utf-8")
+        print("patched launch user selftest")
 
 
 def main() -> None:

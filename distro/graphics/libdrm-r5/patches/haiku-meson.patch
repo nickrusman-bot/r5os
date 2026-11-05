@@ -1,0 +1,11 @@
+--- a/meson.build	2024-12-04 19:30:30.000000000 +0100
++++ b/meson.build	2026-11-05 18:21:39.512782101 +0100
+@@ -257,7 +257,7 @@
+ inc_drm = include_directories('include/drm')
+ 
+ libdrm_files = [files(
+-   'xf86drm.c', 'xf86drmHash.c', 'xf86drmRandom.c', 'xf86drmSL.c',
++   'xf86drm.c', 'r5_translate.c', 'xf86drmHash.c', 'xf86drmRandom.c', 'xf86drmSL.c',
+    'xf86drmMode.c'
+   ),
+   config_file, format_mod_static_table
