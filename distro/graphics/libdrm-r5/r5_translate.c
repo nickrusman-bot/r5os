@@ -47,6 +47,14 @@ r5_fail(int err)
 }
 
 
+/* Linux returns -errno. Haiku errno values are already negative. */
+static inline int
+r5_neg(int err)
+{
+	return err < 0 ? err : -err;
+}
+
+
 static int
 r5_call(int fd, unsigned long op, void *buf, size_t bytes)
 {
@@ -58,7 +66,12 @@ r5_call(int fd, unsigned long op, void *buf, size_t bytes)
 	int r5_host_ioctl(int, unsigned long, void *, size_t);
 	int ret = r5_host_ioctl(fd, op, buf, bytes);
 	if (ret < 0) {
+#if defined(R5_HOST_NEGATIVE_ERRNO)
+		/* The fake kernel returns the Haiku errno, which is already negative. */
+		errno = ret;
+#else
 		errno = -ret;
+#endif
 		return -1;
 	}
 	return 0;
@@ -691,8 +704,11 @@ r5_drm_get_devices2(uint32_t flags, drmDevicePtr devices[], int max_devices)
 	int count = 0;
 	(void)flags;
 	dir = opendir(r5_dev_dir());
+	/* Linux libdrm returns 0 devices when /dev/dri is missing. A negative
+	 * Haiku errno, negated again, is a large positive count, and RADV
+	 * then walks devices[] slots that were never filled. */
 	if (dir == NULL)
-		return -errno;
+		return 0;
 	while ((dent = readdir(dir)) != NULL && count < 8) {
 		char path[512];
 		const char *directory = r5_dev_dir();
@@ -745,10 +761,10 @@ r5_drm_get_device2(int fd, uint32_t flags, drmDevicePtr *device)
 	struct stat mine;
 	(void)flags;
 	if (device == NULL || fstat(fd, &mine) != 0)
-		return -EINVAL;
+		return r5_neg(EINVAL);
 	dir = opendir(r5_dev_dir());
 	if (dir == NULL)
-		return -errno;
+		return r5_neg(errno);
 	while ((dent = readdir(dir)) != NULL) {
 		char path[512];
 		const char *directory = r5_dev_dir();
@@ -773,10 +789,10 @@ r5_drm_get_device2(int fd, uint32_t flags, drmDevicePtr *device)
 		*device = r5_device_from_fd(node, path);
 		close(node);
 		closedir(dir);
-		return *device == NULL ? -errno : 0;
+		return *device == NULL ? r5_neg(errno) : 0;
 	}
 	closedir(dir);
-	return -ENODEV;
+	return r5_neg(ENODEV);
 }
 
 
@@ -910,12 +926,12 @@ r5_bo_cpu_map(int fd, unsigned int handle, void **cpu, int *area)
 	bo.version = 1;
 	bo.handle = handle;
 	if (r5_call(fd, R5_GPU_BO_MAP, &bo, sizeof(bo)) != 0)
-		return -errno;
+		return r5_neg(errno);
 	if (bo.area < 0)
-		return -ENODEV;
+		return r5_neg(ENODEV);
 	void *address = r5_area_address(bo.area);
 	if (address == NULL)
-		return -ENOMEM;
+		return r5_neg(ENOMEM);
 	if (area != NULL)
 		*area = bo.area;
 	*cpu = address;
@@ -929,5 +945,5 @@ r5_bo_cpu_unmap(int fd, int area)
 	int ret;
 	(void)fd;
 	ret = r5_area_destroy(area);
-	return ret == 0 ? 0 : -errno;
+	return ret == 0 ? 0 : r5_neg(errno);
 }

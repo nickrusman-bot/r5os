@@ -107,7 +107,7 @@ def zink():
         "{\n"
         '\t"file_format_version" : "1.0.0",\n'
         '\t"ICD" : {\n'
-        '\t\t"library_path" : "libEGL_mesa.so.0"\n'
+        '\t\t"library_path" : "./libEGL_mesa.so.0"\n'
         "\t}\n"
         "}\n"
     )
@@ -130,6 +130,8 @@ requires {
 \tlib:libllvm_21 >= 21
 \tlib:libz >= 1.3.1
 \tlib:libdrm.so.2
+\tlib:libexpat >= 1
+\tlib:libstdc++ >= 6
 \tvulkan_loader >= 1.4.367
 }
 """)

@@ -65,3 +65,25 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | `CS` dependencies | translated, fence wait before submit |
 | `WAIT_CS` | translated |
 | `GEM_MMAP` | ENOSYS on purpose |
+
+## Error signs on Haiku
+
+POSIX codes are negative (`ENOENT` is `B_ENTRY_NOT_FOUND`). `return -errno` and `return -ENOENT` then become positive. A test `r < 0` misses the error. `r == -ETIME` still matches, because both sides flip. A constant `-ENOMEM` overflows in the Haiku compiler to `INT_MIN`, which is still `< 0`, so that form does not cause the device crash.
+
+`drmGetDevices2` is `vk_instance.c:418`. Line 420 continues when the count is `>= 1` and walks `devices[]`. A missing `/dev/gpu/radeon_hd` now returns 0, and no slot past that count is written. `r5_neg()` keeps every R5 `return -errno` negative. The Linux `return -errno` in `haiku-bo-map.patch` is the `#else` of the CPU map and is not built.
+
+These `return -errno` sites are in the RADV path and are not wrapped yet:
+
+- `amdgpu_cs.c:473` and `:540`
+- `ac_linux_drm.c:410`
+- `xf86drm.c` (the device and ioctl helpers that still return `-errno`, including 975, 1006, 1565, 2670, 2774, 4645, 4689, 4770, 4825, 5042 and 5109)
+
+These tests use `< 0` on a libdrm result:
+
+- `vk_drm_syncobj.c:59`, `:67` and `:663` (`sync->create` / `timeline_signal`). Our ioctl returns -1, so this branch still runs.
+- `vk_drm_syncobj.c:498` (`sync_merge`). Sync-file export is ENOSYS.
+- `radv_amdgpu_winsys.c:106` (`ac_drm_query_info` of `GPUVM_FAULT`)
+- `radv_amdgpu_cs.c:1280`, `:1286`, `:1298`, `:1318`, `:1330`, `:1335`, `:1340` and `:1347` (syncobj export, import and transfer)
+- `ac_linux_drm.c` has `return -errno` at 410 and no `< 0` test of its own in that file
+
+`libposix_error_mapper` is a static library. Its `_errnop` is `.hidden`, then `dlsym`s the real `_errnop` and, when that cell is negative, writes the positive code back into it (`misc.cpp` lines 21–28). Errno is one cell per thread. VulkanTeapot and libbe read that same cell. Option (b) would change errno for the whole process, so it is not allowed. Option (a) is the remaining choice. It is not in this image. The host replay was also compiled with negative `ENOENT`, `EINVAL`, `ENODEV`, `ENOMEM` and `ETIME`.

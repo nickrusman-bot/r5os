@@ -21,6 +21,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+static int
+host_err(int err)
+{
+	return err < 0 ? err : -err;
+}
+
+
+static int gMapFault;
 static int gFail;
 static int gCalls;
 static int gShort;
@@ -85,11 +93,11 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 	gCalls++;
 	if (bytes == 0) {
 		gShort++;
-		return -EINVAL;
+		return host_err(EINVAL);
 	}
 	if (op == R5_GPU_GET_INFO) {
 		if (bytes < sizeof(r5_gpu_info) + sizeof(r5_gpu_amd_info))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_info *info = buf;
 		r5_gpu_amd_info *amd = (r5_gpu_amd_info *)((unsigned char *)buf
 			+ sizeof(*info));
@@ -144,25 +152,25 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 	}
 	if (op == R5_GPU_READ_REG) {
 		if (bytes < sizeof(r5_gpu_read_reg))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_read_reg *reg = buf;
 		gReadOffset = reg->offset;
 		if (reg->offset != 0x063eu)
-			return -EPERM;
+			return host_err(EPERM);
 		reg->value = 0x24000042u;
 		return 0;
 	}
 	if (op == R5_GPU_CTX_CREATE) {
 		if (bytes < sizeof(r5_gpu_ctx))
-			return -EINVAL;
+			return host_err(EINVAL);
 		((r5_gpu_ctx *)buf)->context = 1;
 		return 0;
 	}
 	if (op == R5_GPU_CTX_DESTROY)
-		return bytes < sizeof(r5_gpu_ctx) ? -EINVAL : 0;
+		return bytes < sizeof(r5_gpu_ctx) ? host_err(EINVAL) : 0;
 	if (op == R5_GPU_BO_CREATE) {
 		if (bytes < sizeof(r5_gpu_bo))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_bo *bo = buf;
 		for (uint32_t i = 0; i < 64; i++) {
 			if (gMem[i] != NULL)
@@ -173,24 +181,32 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			gBoDomain = bo->domain;
 			if ((uint32_t)i + 1u > gBoPeak)
 				gBoPeak = (uint32_t)i + 1u;
-			return gMem[i] ? 0 : -ENOMEM;
+			return gMem[i] ? 0 : host_err(ENOMEM);
 		}
-		return -ENOMEM;
+		return host_err(ENOMEM);
 	}
 	if (op == R5_GPU_BO_FREE) {
 		r5_gpu_bo *bo = buf;
 		if (bo->handle == 0 || bo->handle > 64)
-			return -EINVAL;
+			return host_err(EINVAL);
 		free(gMem[bo->handle - 1]);
 		gMem[bo->handle - 1] = NULL;
 		return 0;
 	}
 	if (op == R5_GPU_BO_MAP) {
 		if (bytes < sizeof(r5_gpu_bo))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_bo *bo = buf;
+		if (gMapFault == 1) {
+			bo->area = -1;
+			return 0;
+		}
+		if (gMapFault == 2) {
+			bo->area = 7;
+			return 0;
+		}
 		if (bo->handle == 0 || bo->handle > 64 || gMem[bo->handle - 1] == NULL)
-			return -ENOENT;
+			return host_err(ENOENT);
 		for (int i = 1; i < 32; i++) {
 			if (gAreaLive[i])
 				continue;
@@ -200,11 +216,11 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			gClones++;
 			return 0;
 		}
-		return -ENOMEM;
+		return host_err(ENOMEM);
 	}
 	if (op == R5_GPU_VA_MAP || op == R5_GPU_VA_UNMAP) {
 		if (bytes < sizeof(r5_gpu_va))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_va *va = buf;
 		gVa = va->gpu_va;
 		gBoOffset = va->bo_offset;
@@ -213,19 +229,19 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 	}
 	if (op == R5_GPU_CS_SUBMIT) {
 		if (bytes < sizeof(r5_gpu_cs))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_cs *cs = buf;
 		gIbCount = cs->ib_count;
 		gWaitCount = cs->wait_count;
 		gSignalCount = cs->signal_count;
 		gCsContext = cs->context;
 		if (cs->context != 1)
-			return -EINVAL;
+			return host_err(EINVAL);
 		if (cs->ibs != 0 && cs->ib_count > 0) {
 			r5_gpu_ib *ib = (r5_gpu_ib *)(uintptr_t)cs->ibs;
 			for (uint32_t i = 0; i < cs->ib_count; i++) {
 				if (ib[i].flags != 0)
-					return -EINVAL;
+					return host_err(EINVAL);
 			}
 			gIbVa = ib->gpu_va;
 			gIbDwords = ib->dwords;
@@ -242,7 +258,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 					? gSyncPoint[handle - 1] > 0
 					: gSyncPoint[handle - 1] >= wait[i].point;
 				if (!ready)
-					return -ETIMEDOUT;
+					return host_err(ETIMEDOUT);
 			}
 		}
 		gSequence = gSequence == 0 ? 11 : gSequence + 1;
@@ -265,17 +281,17 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 	}
 	if (op == R5_GPU_FENCE_WAIT) {
 		if (bytes < sizeof(r5_gpu_fence))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_fence *fence = buf;
 		if (fence->sequence == 0 || fence->sequence > gSequence)
-			return -ETIMEDOUT;
+			return host_err(ETIMEDOUT);
 		return 0;
 	}
 	if (op == R5_GPU_SYNCOBJ_CREATE || op == R5_GPU_SYNCOBJ_DESTROY
 		|| op == R5_GPU_SYNCOBJ_WAIT || op == R5_GPU_SYNCOBJ_SIGNAL
 		|| op == R5_GPU_SYNCOBJ_RESET || op == R5_GPU_SYNCOBJ_QUERY) {
 		if (bytes < sizeof(r5_gpu_syncobj))
-			return -EINVAL;
+			return host_err(EINVAL);
 		r5_gpu_syncobj *sync = buf;
 		if (op == R5_GPU_SYNCOBJ_CREATE) {
 			int slot = -1;
@@ -287,7 +303,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 					slot = (int)i;
 			}
 			if (slot < 0)
-				return -ENOMEM;
+				return host_err(ENOMEM);
 			gSyncLive[slot] = 1;
 			gSyncPoint[slot] = (sync->flags & R5_GPU_SYNCOBJ_SIGNALED) ? 1 : 0;
 			gSyncSubmitted[slot] = gSyncPoint[slot];
@@ -297,7 +313,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			return 0;
 		}
 		if (sync->handle == 0 || sync->handle > 128 || !gSyncLive[sync->handle - 1])
-			return -EINVAL;
+			return host_err(EINVAL);
 		uint32_t index = sync->handle - 1u;
 		if (op == R5_GPU_SYNCOBJ_DESTROY) {
 			gSyncLive[index] = 0;
@@ -328,7 +344,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			uint64_t target = (sync->flags & R5_GPU_SYNCOBJ_BINARY) != 0
 				? 1 : sync->point;
 			if (gSyncPoint[index] < target)
-				return -ETIMEDOUT;
+				return host_err(ETIMEDOUT);
 			return 0;
 		}
 	}
@@ -340,7 +356,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		int found = -1;
 		uint32_t met = 0;
 		if (bytes < sizeof(*wait) || wait->count == 0 || wait->handles == 0)
-			return -EINVAL;
+			return host_err(EINVAL);
 		handles = (uint32_t *)(uintptr_t)wait->handles;
 		points = (uint64_t *)(uintptr_t)wait->points;
 		for (i = 0; i < wait->count; i++) {
@@ -348,7 +364,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			uint64_t target;
 			int ready;
 			if (handles[i] == 0 || handles[i] > 128 || !gSyncLive[handles[i] - 1])
-				return -EINVAL;
+				return host_err(EINVAL);
 			value = (wait->flags & R5_GPU_WAIT_AVAILABLE) != 0
 				? gSyncSubmitted[handles[i] - 1] : gSyncPoint[handles[i] - 1];
 			target = points == NULL ? 0 : points[i];
@@ -370,10 +386,10 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			wait->first_signaled = (uint32_t)found;
 			return 0;
 		}
-		return -ETIMEDOUT;
+		return host_err(ETIMEDOUT);
 	}
 	gEnosys++;
-	return -ENOSYS;
+	return host_err(ENOSYS);
 }
 
 int
@@ -661,6 +677,46 @@ radv_replay(int fd)
 	uint32_t minor = 0;
 	int ret;
 
+	setenv("R5_GPU_DEV_DIR", "/tmp/r5-gpu-missing", 1);
+	{
+		drmDevicePtr slot = (drmDevicePtr)(uintptr_t)0x5a5a5a5a;
+		int missing = r5_drm_get_devices2(0, &slot, 1);
+		CHECK(missing == 0);
+		CHECK(slot == (drmDevicePtr)(uintptr_t)0x5a5a5a5a);
+	}
+#if defined(R5_HOST_NEGATIVE_ERRNO)
+	{
+		drmDevicePtr none = NULL;
+		int bad = r5_drm_get_device2(-1, 0, &none);
+		CHECK(bad < 0);
+		CHECK(bad == EINVAL);
+		mkdir("/tmp/r5-gpu-empty", 0755);
+		int outside = open("/tmp/r5-gpu-outside", O_RDWR | O_CREAT, 0644);
+		CHECK(outside >= 0);
+		setenv("R5_GPU_DEV_DIR", "/tmp/r5-gpu-empty", 1);
+		bad = r5_drm_get_device2(outside, 0, &none);
+		CHECK(bad < 0);
+		CHECK(bad == ENODEV);
+		close(outside);
+		void *cpu = NULL;
+		int area = -1;
+		int mapped = r5_bo_cpu_map(3, 0, &cpu, &area);
+		CHECK(mapped < 0);
+		CHECK(mapped == ENOENT);
+		mapped = r5_bo_cpu_unmap(3, 0);
+		CHECK(mapped < 0);
+		CHECK(mapped == ENOENT);
+		gMapFault = 1;
+		mapped = r5_bo_cpu_map(3, 1, &cpu, &area);
+		CHECK(mapped < 0);
+		CHECK(mapped == ENODEV);
+		gMapFault = 2;
+		mapped = r5_bo_cpu_map(3, 1, &cpu, &area);
+		CHECK(mapped < 0);
+		CHECK(mapped == ENOMEM);
+		gMapFault = 0;
+	}
+#endif
 	mkdir(dir, 0755);
 	node = open(path, O_RDWR | O_CREAT, 0644);
 	CHECK(node >= 0);

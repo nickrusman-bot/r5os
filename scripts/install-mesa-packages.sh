@@ -39,3 +39,8 @@ do
 	fi
 done
 echo mesa_packages_ok
+CHECK="$(cd "$(dirname "$0")" && pwd)/check-egl-vendor.py"
+if [[ ! -f "$CHECK" ]]; then
+	CHECK="/mnt/c/Users/nickr/Projects/R5OS/scripts/check-egl-vendor.py"
+fi
+python3 "$CHECK"
