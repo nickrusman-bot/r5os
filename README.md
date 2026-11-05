@@ -4,7 +4,7 @@ R5 is a desktop operating system built on [Haiku](https://www.haiku-os.org/). It
 
 The name is a nod to BeOS R5, as history. It is not a product claim.
 
-> R5OS is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
+> R5 Operating System is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
 
 **Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10047**. There is no public release yet.
 
