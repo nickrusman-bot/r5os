@@ -6,6 +6,7 @@
  * Without gpu_render the node only answers GET_INFO. VMID 1 is one
  * shared address space. A job that stays in the ring for 5 seconds
  * marks the device lost. A client wait does not. There is no reset.
+ * The GFX watchdog is 10 seconds, the same as amdgpu.lockup_timeout.
  */
 
 #include "radeon_hd_private.h"
@@ -49,6 +50,12 @@ static const uint32 kStrapShift = 24;
 static const uint32 kShaderArrayConfig = 0x026f;
 static const uint32 kUserShaderArrayConfig = 0x0270;
 static const uint32 kGbAddrConfig = 0x063e;
+static const uint32 kRbBackendDisable = 0x063d;
+static const uint32 kUserRbBackendDisable = 0x06df;
+static const uint32 kRbDisableShift = 16;
+static const uint32 kRbDisableMask = 0x00ff0000u;
+/* gfx_v9_0 for IP 9.3.0: one shader engine, one array, two backends. */
+static const uint32 kMaxBackendsPerSe = 2;
 static const uint32 kInactiveShift = 16;
 static const uint32 kInactiveMask = 0xffff0000u;
 static const uint32 kCuPerSh = 8;
@@ -61,8 +68,8 @@ static const uint32 kMaxList = 8;
 static const uint64 kMaxBoBytes = 64ull * 1024ull * 1024ull;
 static const uint64 kRoomWaitUs = 100000;
 static const uint64 kFreeWaitUs = 5000000;
-/* A job still in the ring after this long is lost. Client waits do not. */
-static const bigtime_t kWatchdogUs = 5000000;
+/* amdgpu.lockup_timeout for GFX is 10000 ms. Client waits do not use this. */
+static const bigtime_t kWatchdogUs = 10000000;
 
 static uint32 sRefuseCount;
 
@@ -122,6 +129,28 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 		(unsigned long)cc, (unsigned long)user, (unsigned long)count,
 		(unsigned long)bitmap);
 	return count;
+}
+
+
+/* gfx_v9_0_get_rb_active_bitmap and gfx_v9_0_setup_rb. One SE and one
+ * SH, so this does not write GRBM_GFX_INDEX. num is the pipe count
+ * Linux puts in num_rb_pipes (max backends times shader engines).
+ * mask is backend_enable_mask. */
+static void
+gpu_rb(radeon_info* info, uint32* num, uint32* mask)
+{
+	uint32 cc = gpu_mmio(info, kGcSegment, kRbBackendDisable);
+	uint32 user = gpu_mmio(info, kGcSegment, kUserRbBackendDisable);
+	uint32 disabled = ((cc | user) & kRbDisableMask) >> kRbDisableShift;
+	uint32 bits = (1u << kMaxBackendsPerSe) - 1u;
+	uint32 active = (~disabled) & bits;
+	if (num != NULL)
+		*num = kMaxBackendsPerSe;
+	if (mask != NULL)
+		*mask = active;
+	dprintf("radeon_hd: rb num %lu mask %lx cc %08lx user %08lx\n",
+		(unsigned long)kMaxBackendsPerSe, (unsigned long)active,
+		(unsigned long)cc, (unsigned long)user);
 }
 
 
@@ -514,6 +543,36 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	amd.device.cu_bitmap[0][0] = bitmap;
 	amd.device.num_cu_per_sh = kCuPerSh;
 	amd.device.ids_flags = R5_AMDGPU_IDS_FLAGS_FUSION;
+	{
+		uint32 rbNum = 0;
+		uint32 rbMask = 0;
+		gpu_rb(info, &rbNum, &rbMask);
+		amd.device.num_rb_pipes = rbNum;
+		amd.device.enabled_rb_pipes_mask = rbMask;
+	}
+	/* gfx_v9_0_gpu_early_init, IP 9.3.0. */
+	amd.device.num_hw_gfx_contexts = 8;
+	/* gfx_v9_0_sw_init. The same value for every GFX9. */
+	amd.device.ce_ram_size = 0x8000;
+	/* Default VM fragment size 9. (1 << 9) * 4096. */
+	amd.device.pte_fragment_size = 2097152;
+	/* Mesa drm-shim for device 15e7. The SMU and the UMC table are
+	 * not read. min equals max, as the non-DPM branch of amdgpu_kms.c
+	 * does. Clocks are kHz. */
+	amd.device.max_engine_clock = 1800000;
+	amd.device.min_engine_clock = 1800000;
+	amd.device.max_memory_clock = 1333000;
+	amd.device.min_memory_clock = 1333000;
+	amd.device.vram_type = 11;
+	amd.device.vram_bit_width = 128;
+	amd.device.gc_double_offchip_lds_buf = 1;
+	/* gfx9 max_gprs, max_texture_channel_caches, and the GS depths
+	 * from the Renoir config Linux copies into this struct. */
+	amd.device.num_shader_visible_vgprs = 256;
+	amd.device.num_tcc_blocks = 4;
+	amd.device.gs_vgt_table_depth = 32;
+	amd.device.gs_prim_buffer_depth = 1792;
+	amd.device.max_gs_waves_per_vgt = 32;
 	/* kHz. Mesa's captured amdgpu query for PCI 15e7 (Renoir) reports
 	 * gpu_counter_freq 100000. Linux copies adev->clock.xclk into that
 	 * field. A zero makes RADV warn that timestamps will be wrong. */

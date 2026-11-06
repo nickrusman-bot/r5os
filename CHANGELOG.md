@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### The device block names the render backends
+
+Stick 17 reached `vulkaninfo` and then source 184 inside the 744-dword buffer. The ME header dump started `c0047600 c0037600 c0017600 c0027600`, and `0000020c` was read as a packet header. That dword is the low address of the next `SET_SH_REG`. Mesa 25.3.6 sets `max_render_backends` from `num_rb_pipes`. R5 left that field 0, so the GFX9 end-of-pipe clear was a `WRITE_DATA` with a count of 2 and no data dword. The command processor then consumed the next packet.
+
+`GET_INFO` now fills the vendor block the way Linux 6.12 `AMDGPU_INFO_DEV_INFO` does for the fields Mesa reads. `num_rb_pipes` is 2. `enabled_rb_pipes_mask` comes from `CC_RB_BACKEND_DISABLE` and `GC_USER_RB_BACKEND_DISABLE`, the same bits as `gfx_v9_0_setup_rb`. One shader engine means `GRBM_GFX_INDEX` is not written. The self-test prints `rb num … mask …`. The table is `generated/gpu-m4/DEV-INFO.md`. Clocks and the memory type are the Mesa record for device `15e7` (`1800000` kHz, `1333000` kHz, LPDDR4, 128 bits). The SMU and the UMC table are not read. `gb_addr_config` stays the `READ_MMR_REG` of `0x063e`.
+
+A user job now starts with two `SWITCH_BUFFER` packets, as `amdgpu_vm_flush` does before `COND_EXEC`. The first submit for context 1 uses `CONTEXT_CONTROL` `0x81018003`. A later submit for the same context uses `0x80000000`. `COND_EXEC` and the pipeline-sync `WAIT_REG_MEM` are not written. One VMID does not need them. That stays on the M5 list.
+
+Linux 6.12 `gfx_v9_0_init_golden_registers` returns before `golden_settings_gc_9_x_common` for IP 9.3.0. The comment is that Renoir does not need it. After the K golden list and the `CP_DEBUG`/`SPI` step, R5 reads `CP_SD_CNTL`, `GRBM_CAM_INDEX` and `GRBM_CAM_DATA` and does not write them. The twelve-slot list is unchanged.
+
+`AMDGPU_CTX_OP_QUERY_STATE2` returns 0 while the device is usable. After the watchdog it returns `RESET` and `GUILTY`, which Mesa turns into `VK_ERROR_DEVICE_LOST` (`-4`). The watchdog is 10 seconds, the GFX value of `amdgpu.lockup_timeout`. The GFX ring stays 1024 dwords. A larger ring is an M6 item.
+
+The eighteenth stick has not been booted.
+
 ### U4 waits behind the teapot
 
 Stick 16 ran `p1` through `p33` and then `u4` still inside stage P. The one-second wait printed timeout while the fence was still sequence 34. The dump immediately afterwards had sequence 35, an idle CP, and `deadbeef` at the high VA. `gpu_lost` had already run, so vulkaninfo and both teapots were skipped.

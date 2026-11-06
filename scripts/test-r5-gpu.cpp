@@ -133,20 +133,34 @@ linux_ring_frame()
 	};
 	const uint32_t ibDw[] = { 0x18u, 0x408u };
 	const uint32_t ibVm[] = { 1u, 1u };
+	if (ring[0x2f] != 0xc0008b00u || ring[0x30] != 0
+		|| ring[0x31] != 0xc0008b00u || ring[0x32] != 0
+		|| ring[0x33] != 0xc0032200u) {
+		free(ring);
+		return fail("vm flush switches");
+	}
+	if (ring[0x46] != 0xc0012800u || ring[0x47] != kR5CsCntxLoad) {
+		free(ring);
+		return fail("load bits");
+	}
 	uint32_t job[512];
 	uint32_t filled = r5_cs_user_body(job, 512, ibs, ibDw, ibVm, 2,
-		0x66d000ull, 3, 0x401040ull);
-	if (filled != body) {
+		0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep);
+	if (filled != body + 4u || job[0] != 0xc0008b00u || job[1] != 0
+		|| job[2] != 0xc0008b00u || job[3] != 0
+		|| job[5] != kR5CsCntxKeep) {
 		free(ring);
 		return fail("two ib body");
 	}
-	uint32_t oursPad = r5_cs_pad_dwords(wptr + filled);
-	if (filled + oursPad > 512) {
+	uint32_t* slice = job + 4;
+	uint32_t oursPad = r5_cs_pad_dwords(wptr + body);
+	uint32_t padWords[256];
+	if (oursPad > 256) {
 		free(ring);
 		return fail("job cap");
 	}
-	r5_cs_pad(job + filled, oursPad);
-	if (pad_form(job + filled, oursPad, "ours pad") != 0) {
+	r5_cs_pad(padWords, oursPad);
+	if (pad_form(padWords, oursPad, "ours pad") != 0) {
 		free(ring);
 		return 1;
 	}
@@ -154,35 +168,35 @@ linux_ring_frame()
 	for (uint32_t i = 0; i < body; i++) {
 		int skip = body_skip((int)i);
 		if (skip == 2) {
-			if (((job[i] ^ ring[start + i]) & ~0xfffffu) != 0) {
+			if (((slice[i] ^ ring[start + i]) & ~0xfffffu) != 0) {
 				fprintf(stderr, "fail ib control +%u linux %08x ours %08x\n",
-					i, ring[start + i], job[i]);
+					i, ring[start + i], slice[i]);
 				free(ring);
 				return 1;
 			}
 			continue;
 		}
 		if (skip != 0) {
-			if (job[i] != ring[start + i]) {
+			if (slice[i] != ring[start + i]) {
 				printf("diff +%03x linux %08x ours %08x %s\n",
-					i, ring[start + i], job[i],
+					i, ring[start + i], slice[i],
 					skip == 3 ? "sequence" : "address");
 				diffs++;
 			}
 			continue;
 		}
-		if (job[i] != ring[start + i]) {
+		if (slice[i] != ring[start + i]) {
 			fprintf(stderr, "fail frame +%u linux %08x ours %08x\n",
-				i, ring[start + i], job[i]);
+				i, ring[start + i], slice[i]);
 			free(ring);
 			return 1;
 		}
 	}
 	if (oursPad == linuxPad) {
 		for (uint32_t i = 0; i < oursPad; i++) {
-			if (job[filled + i] != ring[padAt + i]) {
+			if (padWords[i] != ring[padAt + i]) {
 				fprintf(stderr, "fail nop +%u linux %08x ours %08x\n",
-					i, ring[padAt + i], job[filled + i]);
+					i, ring[padAt + i], padWords[i]);
 				free(ring);
 				return 1;
 			}
@@ -190,34 +204,41 @@ linux_ring_frame()
 	}
 	printf("linux frame file %x..%x wptr %llx body %u pad linux %u ours %u header %08x diffs %d\n",
 		start, padEnd - 1, (unsigned long long)wptr, body, linuxPad, oursPad,
-		job[filled], diffs);
+		padWords[0], diffs);
 
 	const uint64_t otherIb[] = { 0x1000ull, 0x2000ull };
 	const uint32_t otherDw[] = { 4u, 8u };
 	uint32_t other[320];
 	uint32_t otherN = r5_cs_user_body(other, 320, otherIb, otherDw, ibVm, 2,
-		0xabc000ull, 9, 0xabd000ull);
-	uint32_t otherPad = r5_cs_pad_dwords(otherN);
-	r5_cs_pad(other + otherN, otherPad);
+		0xabc000ull, 9, 0xabd000ull, kR5CsCntxKeep);
+	uint32_t load[64];
+	uint32_t loadN = r5_cs_user_body(load, 64, otherIb, otherDw, ibVm, 1,
+		0xabc000ull, 9, 0xabd000ull, kR5CsCntxLoad);
+	if (loadN != r5_cs_user_words(1) || load[5] != kR5CsCntxLoad
+		|| load[6] != 0)
+		return fail("switch load");
+	uint32_t otherPad = r5_cs_pad_dwords(otherN - 4u);
+	uint32_t otherPadWords[256];
+	r5_cs_pad(otherPadWords, otherPad);
 	if (otherPad == linuxPad)
 		return fail("pad count changed");
 	for (uint32_t i = 0; i < body; i++) {
 		int skip = body_skip((int)i);
-		if (skip == 0 && other[i] != ring[start + i]) {
+		if (skip == 0 && other[i + 4] != ring[start + i]) {
 			free(ring);
 			return fail("shifted frame");
 		}
-		if (skip == 2 && ((other[i] ^ ring[start + i]) & ~0xfffffu) != 0) {
+		if (skip == 2 && ((other[i + 4] ^ ring[start + i]) & ~0xfffffu) != 0) {
 			free(ring);
 			return fail("shifted vmid");
 		}
 	}
-	if (pad_form(other + otherN, otherPad, "shifted pad") != 0) {
+	if (pad_form(otherPadWords, otherPad, "shifted pad") != 0) {
 		free(ring);
 		return 1;
 	}
 	printf("shifted wptr 0 pad %u header %08x (count may differ)\n",
-		otherPad, other[otherN]);
+		otherPad, otherPadWords[0]);
 	free(ring);
 	return 0;
 }
@@ -521,35 +542,38 @@ main()
 	const uint64_t fenceMc = 0x812c18000ull + kR5UserFenceOffset;
 	const uint64_t irqMc = 0x812c18000ull + kR5UserIrqOffset;
 	uint32_t body = r5_cs_user_body(packet, 64, ibs, ibDw, ibVm, 1, fenceMc, 7,
-		irqMc);
-	if (body != 29u || body != r5_cs_user_words(1))
+		irqMc, kR5CsCntxKeep);
+	if (body != 33u || body != r5_cs_user_words(1))
 		return fail("frame size");
-	if (packet[0] != r5_cs_packet3(0x28, 1) || packet[1] != 0x80000000u
-		|| packet[2] != 0)
+	if (packet[0] != r5_cs_packet3(0x8b, 0) || packet[1] != 0
+		|| packet[2] != r5_cs_packet3(0x8b, 0) || packet[3] != 0)
+		return fail("open switch");
+	if (packet[4] != r5_cs_packet3(0x28, 1) || packet[5] != kR5CsCntxKeep
+		|| packet[6] != 0)
 		return fail("context");
-	if (packet[3] != r5_cs_packet3(0x90, 0) || packet[4] != 0)
+	if (packet[7] != r5_cs_packet3(0x90, 0) || packet[8] != 0)
 		return fail("frame start");
-	if (packet[5] != r5_cs_packet3(0x3f, 2) || packet[6] != (uint32_t)ib
-		|| packet[7] != 0xffff8000u)
+	if (packet[9] != r5_cs_packet3(0x3f, 2) || packet[10] != (uint32_t)ib
+		|| packet[11] != 0xffff8000u)
 		return fail("ib high");
-	if ((packet[8] & (0xfu << 24)) != (1u << 24))
+	if ((packet[12] & (0xfu << 24)) != (1u << 24))
 		return fail("vmid");
-	if ((packet[8] & (1u << 23)) != 0)
+	if ((packet[12] & (1u << 23)) != 0)
 		return fail("valid bit");
-	if ((packet[8] & 0xfffffu) != 16u)
+	if ((packet[12] & 0xfffffu) != 16u)
 		return fail("ib length");
-	if (packet[9] != r5_cs_packet3(0x90, 0) || packet[10] != 0x10000000u)
+	if (packet[13] != r5_cs_packet3(0x90, 0) || packet[14] != 0x10000000u)
 		return fail("frame end");
-	if (packet[11] != r5_cs_packet3(0x49, 6) || packet[12] != kR5CsEvent
-		|| packet[13] != kR5CsRel64)
+	if (packet[15] != r5_cs_packet3(0x49, 6) || packet[16] != kR5CsEvent
+		|| packet[17] != kR5CsRel64)
 		return fail("user fence");
-	if (packet[14] != (uint32_t)fenceMc || packet[15] != (uint32_t)(fenceMc >> 32)
-		|| packet[16] != 7u)
+	if (packet[18] != (uint32_t)fenceMc || packet[19] != (uint32_t)(fenceMc >> 32)
+		|| packet[20] != 7u)
 		return fail("sequence");
-	if (packet[19] != r5_cs_packet3(0x49, 6) || packet[21] != kR5CsRel32Int
-		|| packet[22] != (uint32_t)irqMc || packet[24] != 7u)
+	if (packet[23] != r5_cs_packet3(0x49, 6) || packet[25] != kR5CsRel32Int
+		|| packet[26] != (uint32_t)irqMc || packet[28] != 7u)
 		return fail("irq fence");
-	if (packet[27] != r5_cs_packet3(0x8b, 0) || packet[28] != 0)
+	if (packet[31] != r5_cs_packet3(0x8b, 0) || packet[32] != 0)
 		return fail("switch");
 	if (r5_cs_user_commit(0, 1) != 256u)
 		return fail("pad align");

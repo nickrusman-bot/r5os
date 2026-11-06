@@ -38,7 +38,8 @@ interval. A second team still gets `B_NOT_ALLOWED` until M5.
 
 A client wait that times out returns `B_TIMED_OUT` and leaves the device
 usable. The retire thread marks the device lost when the oldest job has
-been in the ring for 5 seconds (`kWatchdogUs`). Closing a buffer does not
+been in the ring for 10 seconds (`kWatchdogUs`), the GFX value of
+`amdgpu.lockup_timeout`. Closing a buffer does not
 wait: the buffer stays reserved until that job retires, or until the
 watchdog. There is no reset in M4.
 

@@ -57,10 +57,45 @@ ac_drm_replay(int fd)
 	result = ac_drm_query_info(device, AMDGPU_INFO_DEV_INFO,
 		sizeof(deviceInfo), &deviceInfo);
 	if (result != 0 || deviceInfo.cu_active_number != 7
-		|| deviceInfo.family != AMDGPU_FAMILY_RV) {
-		fprintf(stderr, "dev_info %d cu %u family %u\n", result,
-			deviceInfo.cu_active_number, deviceInfo.family);
+		|| deviceInfo.family != AMDGPU_FAMILY_RV
+		|| deviceInfo.num_rb_pipes == 0
+		|| deviceInfo.enabled_rb_pipes_mask == 0
+		|| deviceInfo.num_tcc_blocks == 0
+		|| deviceInfo.max_engine_clock == 0
+		|| deviceInfo.max_memory_clock == 0
+		|| deviceInfo.num_shader_visible_vgprs == 0
+		|| deviceInfo.ce_ram_size == 0
+		|| deviceInfo.vram_type == 0
+		|| deviceInfo.vram_bit_width == 0
+		|| deviceInfo.wave_front_size == 0
+		|| deviceInfo.num_hw_gfx_contexts == 0
+		|| info.gb_addr_cfg == 0) {
+		fprintf(stderr, "dev_info %d cu %u family %u rb %u tcc %u "
+			"clk %llu gb %x\n", result,
+			deviceInfo.cu_active_number, deviceInfo.family,
+			deviceInfo.num_rb_pipes, deviceInfo.num_tcc_blocks,
+			(unsigned long long)deviceInfo.max_engine_clock,
+			info.gb_addr_cfg);
 		return 1;
+	}
+	if (deviceInfo.pa_sc_tile_steering_override != 0
+		|| deviceInfo.tcc_disabled_mask != 0
+		|| deviceInfo.prim_buf_gpu_addr != 0
+		|| deviceInfo.tcp_cache_size != 0
+		|| deviceInfo.shadow_size != 0
+		|| deviceInfo.vce_harvest_config != 0
+		|| deviceInfo.enabled_rb_pipes_mask_hi != 0) {
+		fprintf(stderr, "dev_info zero field set\n");
+		return 1;
+	}
+	{
+		uint64_t reset = 1;
+		result = ac_drm_cs_query_reset_state2(device, 1, &reset);
+		if (result != 0 || reset != 0) {
+			fprintf(stderr, "query2 %d flags %llx\n", result,
+				(unsigned long long)reset);
+			return 1;
+		}
 	}
 
 	uint32_t version = 0;

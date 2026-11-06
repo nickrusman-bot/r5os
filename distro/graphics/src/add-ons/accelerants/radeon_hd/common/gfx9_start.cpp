@@ -1479,6 +1479,7 @@ radeon_gfx9_saved_restore()
 
 
 static void radeon_gfx9_linux_golden();
+static void radeon_gfx9_common_golden();
 
 
 // gfxhub_v1_0_init_system_aperture_regs for Renoir and Green Sardine. The
@@ -1605,6 +1606,7 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 			sRadeonGfx9Saved.golden[probe], Read32(OUT, probeReg));
 	}
 	radeon_gfx9_linux_golden();
+	radeon_gfx9_common_golden();
 
 	ERROR("%s: R5 radeon_hd: GFX9 aperture low 0x%" B_PRIx32
 		" -> 0x%" B_PRIx32 " high 0x%" B_PRIx32 " -> 0x%" B_PRIx32
@@ -1648,6 +1650,26 @@ radeon_gfx9_linux_golden()
 		B_PRIx32 " SPI_CONFIG_CNTL %08" B_PRIx32
 		" SPI_CONFIG_CNTL_1 %08" B_PRIx32 "\n", __func__,
 		Read32(OUT, cpDebug), Read32(OUT, spi), Read32(OUT, spi1));
+}
+
+
+/* Linux 6.12 gfx_v9_0_init_golden_registers returns before
+ * golden_settings_gc_9_x_common on IP 9.3.0. The comment there is
+ * "for renoir, don't need common goldensetting". This step is after
+ * the K golden list and the CP_DEBUG/SPI step. It reads the three
+ * common registers and does not write them. */
+static void
+radeon_gfx9_common_golden()
+{
+	const uint32 sd = radeon_gfx9_byte(kGfx9Seg0, 0x11b7);
+	const uint32 index = radeon_gfx9_byte(kGfx9Seg1, 0x5a04);
+	const uint32 data = radeon_gfx9_byte(kGfx9Seg1, 0x5a05);
+	if (!radeon_mmio_fits(data))
+		return;
+	ERROR("%s: R5 radeon_hd: gc 9.3 skips golden_settings_gc_9_x_common"
+		" CP_SD_CNTL %08" B_PRIx32 " GRBM_CAM_INDEX %08" B_PRIx32
+		" GRBM_CAM_DATA %08" B_PRIx32 "\n",
+		__func__, Read32(OUT, sd), Read32(OUT, index), Read32(OUT, data));
 }
 
 
@@ -2123,6 +2145,8 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 
 
 static uint64 sUserSequence = 0;
+/* The only user context id. 0 means the next submit is a switch. */
+static uint32 sUserCtx = 0;
 
 
 bool
@@ -2368,11 +2392,12 @@ r5_gfx9_ib_regs(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
 }
 
 
-/* One user job: CONTEXT_CONTROL, FRAME_CONTROL, the indirect buffers,
- * FRAME_CONTROL end, the 64-bit user fence, the 32-bit interrupt fence,
- * SWITCH_BUFFER, then the Linux NOP pad to a multiple of 256 dwords.
- * The K ring is not padded. The fence addresses are kernel MC addresses.
- * A full ring returns false. */
+/* One user job: two SWITCH_BUFFER packets, CONTEXT_CONTROL,
+ * FRAME_CONTROL, the indirect buffers, FRAME_CONTROL end, the 64-bit
+ * user fence, the 32-bit interrupt fence, SWITCH_BUFFER, then the
+ * Linux NOP pad to a multiple of 256 dwords. The first job for
+ * context 1 uses the load bits. The K ring is not padded. The fence
+ * addresses are kernel MC addresses. A full ring returns false. */
 uint32
 r5_gfx9_user_commit_dwords(uint32 count)
 {
@@ -2404,9 +2429,14 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 		return false;
 	uint64 irqMc = fenceMc + (kR5UserIrqOffset - kR5UserFenceOffset);
 	uint64 sequence = sUserSequence + 1;
+	uint32 cntx = kR5CsCntxKeep;
+	if (sUserCtx != 1u) {
+		cntx = kR5CsCntxLoad;
+		sUserCtx = 1u;
+	}
 	uint32 packets[320];
 	uint32 filled = r5_cs_user_body(packets, 320, ibVa, ibDw, ibVm, count,
-		fenceMc, sequence, irqMc);
+		fenceMc, sequence, irqMc, cntx);
 	if (filled == 0)
 		return false;
 	uint32 pad = r5_cs_pad_dwords(wptr + filled);

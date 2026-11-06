@@ -28,6 +28,11 @@ static const uint32_t kR5CsRel64 = 0x40000000u;
 static const uint32_t kR5CsRel32Int = 0x22000000u;
 /* gfx_v9_0 ring nop: PACKET3(PACKET3_NOP, 0x3FFF). */
 static const uint32_t kR5CsNop = 0xffff1000u;
+/* gfx_v9_0_ring_emit_cntxcntl. The load enable bit stays set.
+ * A context switch also sets 0x8001, 0x01000000 and 0x10002.
+ * The 6 Nov 2026 capture stores that as 0x81018003. dw3 stays 0. */
+static const uint32_t kR5CsCntxKeep = 0x80000000u;
+static const uint32_t kR5CsCntxLoad = 0x81018003u;
 
 
 static inline uint32_t
@@ -47,14 +52,16 @@ r5_cs_ib_control(uint32_t dwords, uint32_t vmid)
 }
 
 
-/* One IB plus the fixed frame is 29 dwords. Each further IB adds 4.
- * Eight IBs is the submit limit. */
+/* Two SWITCH_BUFFER packets, CONTEXT_CONTROL, both FRAME_CONTROL
+ * packets, one IB, both RELEASE_MEM packets and the closing
+ * SWITCH_BUFFER: 33 dwords. Each further IB adds 4. Eight IBs is
+ * the submit limit. */
 static inline uint32_t
 r5_cs_user_words(uint32_t count)
 {
 	if (count == 0 || count > 8)
 		return 0;
-	return 29u + (count - 1u) * 4u;
+	return 33u + (count - 1u) * 4u;
 }
 
 
@@ -94,14 +101,24 @@ r5_cs_put(uint32_t* out, uint32_t n, uint32_t cap, uint32_t word)
 static inline uint32_t
 r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	const uint32_t* dwords, const uint32_t* vmid, uint32_t count,
-	uint64_t userFence, uint64_t sequence, uint64_t irqFence)
+	uint64_t userFence, uint64_t sequence, uint64_t irqFence,
+	uint32_t cntx)
 {
 	uint32_t n = 0;
 	uint32_t i;
 	if (r5_cs_user_words(count) == 0 || ib == 0 || dwords == 0 || vmid == 0)
 		return 0;
+	if (cntx != kR5CsCntxKeep && cntx != kR5CsCntxLoad)
+		return 0;
+	/* amdgpu_vm_flush emits this pair before COND_EXEC. That packet
+	 * is not written here: one VMID does not flush. The pair still
+	 * opens the job, as in the capture. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x28, 1));
-	n = r5_cs_put(out, n, cap, 0x80000000u);
+	n = r5_cs_put(out, n, cap, cntx);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x90, 0));
 	n = r5_cs_put(out, n, cap, 0);

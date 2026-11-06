@@ -287,6 +287,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		info->vendor = 0x1002;
 		info->device = 0x15e7;
 		info->capabilities = R5_GPU_CAP_RENDER;
+		if (gLost)
+			info->capabilities |= R5_GPU_CAP_LOST;
 		info->vram_bytes = 256ull << 20;
 		info->gtt_bytes = 256ull << 20;
 		info->va_offset = R5_GPU_VA_OFFSET;
@@ -310,6 +312,29 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		amd->device.family = R5_AMDGPU_FAMILY_RV;
 		amd->device.ids_flags = R5_AMDGPU_IDS_FLAGS_FUSION;
 		amd->device.cu_active_number = 7;
+		amd->device.num_shader_engines = 1;
+		amd->device.num_shader_arrays_per_engine = 1;
+		amd->device.num_cu_per_sh = 8;
+		amd->device.num_rb_pipes = 2;
+		amd->device.enabled_rb_pipes_mask = 3;
+		amd->device.num_hw_gfx_contexts = 8;
+		amd->device.gpu_counter_freq = 100000;
+		amd->device.max_engine_clock = 1800000;
+		amd->device.min_engine_clock = 1800000;
+		amd->device.max_memory_clock = 1333000;
+		amd->device.min_memory_clock = 1333000;
+		amd->device.ce_ram_size = 0x8000;
+		amd->device.pte_fragment_size = 2097152;
+		amd->device.gart_page_size = 4096;
+		amd->device.vram_type = 11;
+		amd->device.vram_bit_width = 128;
+		amd->device.gc_double_offchip_lds_buf = 1;
+		amd->device.wave_front_size = 64;
+		amd->device.num_shader_visible_vgprs = 256;
+		amd->device.num_tcc_blocks = 4;
+		amd->device.gs_vgt_table_depth = 32;
+		amd->device.gs_prim_buffer_depth = 1792;
+		amd->device.max_gs_waves_per_vgt = 32;
 		amd->device.virtual_address_offset = R5_GPU_VA_OFFSET;
 		amd->device.virtual_address_max = R5_GPU_VA_MAX;
 		amd->device.virtual_address_alignment = 4096;
@@ -1829,6 +1854,36 @@ main(void)
 	CHECK(device.high_va_offset == R5_GPU_HIGH_VA_OFFSET);
 	CHECK(device.high_va_max == R5_GPU_HIGH_VA_MAX);
 	CHECK(device.cu_active_number == 7);
+	CHECK(device.num_rb_pipes == 2);
+	CHECK(device.enabled_rb_pipes_mask == 3);
+	CHECK(device.num_tcc_blocks == 4);
+	CHECK(device.max_engine_clock == 1800000);
+	CHECK(device.max_memory_clock == 1333000);
+	CHECK(device.num_shader_visible_vgprs == 256);
+	CHECK(device.wave_front_size == 64);
+	CHECK(device.vram_type == 11);
+	CHECK(device.vram_bit_width == 128);
+	CHECK(device.pa_sc_tile_steering_override == 0);
+	CHECK(device.tcc_disabled_mask == 0);
+	CHECK(device.prim_buf_gpu_addr == 0);
+	CHECK(device.tcp_cache_size == 0);
+	CHECK(device.shadow_size == 0);
+	CHECK(device.vce_harvest_config == 0);
+	{
+		union drm_amdgpu_ctx query;
+		memset(&query, 0, sizeof(query));
+		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
+		query.in.ctx_id = 1;
+		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
+		CHECK(query.out.state.flags == 0);
+		gLost = 1;
+		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
+		query.in.ctx_id = 1;
+		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
+		CHECK(query.out.state.flags == (AMDGPU_CTX_QUERY2_FLAGS_RESET
+			| AMDGPU_CTX_QUERY2_FLAGS_GUILTY));
+		gLost = 0;
+	}
 
 	uint32_t fwVer = 0;
 	uint32_t fwFeature = 0;

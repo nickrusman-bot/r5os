@@ -371,6 +371,27 @@ r5_ctx(int fd, union drm_amdgpu_ctx *ctx)
 			return -1;
 		return 0;
 	}
+	if (ctx->in.op == AMDGPU_CTX_OP_QUERY_STATE2) {
+		r5_gpu_info info;
+		r5_gpu_amd_info amd;
+		if (ctx->in.ctx_id == 0)
+			return r5_fail(EINVAL);
+		if (r5_info(fd, &info, &amd) != 0)
+			return -1;
+		ctx->out.state.flags = 0;
+		ctx->out.state.hangs = 0;
+		ctx->out.state.reset_status = AMDGPU_CTX_NO_RESET;
+		/* Linux reports RESET and GUILTY after a reset. There is
+		 * no reset here. The lost bit is that report, so Mesa
+		 * returns VK_ERROR_DEVICE_LOST. */
+		if ((info.capabilities & R5_GPU_CAP_LOST) != 0) {
+			ctx->out.state.flags = AMDGPU_CTX_QUERY2_FLAGS_RESET
+				| AMDGPU_CTX_QUERY2_FLAGS_GUILTY;
+			ctx->out.state.hangs = 1;
+			ctx->out.state.reset_status = AMDGPU_CTX_GUILTY_RESET;
+		}
+		return 0;
+	}
 	return r5_fail(ENOSYS);
 }
 

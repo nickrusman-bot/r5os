@@ -450,6 +450,9 @@ main()
 			fprintf(out, "firmware me %u feature %u pfp %u mec %u\n",
 				amd->firmware[0x04].ver, amd->firmware[0x04].feature,
 				amd->firmware[0x05].ver, amd->firmware[0x08].ver);
+			fprintf(out, "rb num %u mask %x\n",
+				amd->device.num_rb_pipes,
+				amd->device.enabled_rb_pipes_mask);
 		}
 		close(fd);
 		uint64_t lowVa = R5_GPU_VA_OFFSET;
