@@ -75,6 +75,10 @@ Do not start these during an unrelated bugfix.
     - Without a GPU, the same code runs on Lavapipe.
     - A lost device gives `B_GPU_DEVICE_LOST`, and the kit rebuilds the device.
     - The kit does not lock Vulkan away: the `VkDevice` and `VkImage` underneath stay reachable.
+  - **Every GPU.** The kit works the same on every GPU that has a Vulkan driver: AMD (RADV), Intel (ANV) and NVIDIA (NVK), and on Lavapipe without a GPU.
+    - The kit contains no vendor code and no vendor checks.
+    - A program never needs to know which vendor it runs on. `BGPUDevice` reports the name and the capabilities, and nothing more.
+    - Vendor differences belong in the R5 GPU interface (the vendor block) and in the Mesa drivers, never in the kit.
   - **Where.** A separate library `libr5graphics.so` next to `libbe`, not inside `libbe` (`AGENTS.md`, LibR5). It is MIT, like the GPU header, because every program that uses it links it.
   - **Who it is for.** Three groups, in one kit:
     - games and 3D through `BVulkanView`;
