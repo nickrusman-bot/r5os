@@ -16,6 +16,7 @@
 #include "r5_vm.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
+#include "r5_log.h"
 
 #include <string.h>
 
@@ -828,6 +829,39 @@ main()
 			return fail("p dispatch");
 		if (R5_P_SHADER != 0xbf810000u)
 			return fail("p shader");
+	}
+
+	{
+		int errors = 0;
+		int once = 0;
+		int lines = 0;
+		int i;
+		for (i = 0; i < 3; i++) {
+			if (r5_log_allow(0, 0, R5_LOG_DEBUG, &errors, &once, 0))
+				lines++;
+		}
+		if (lines != 0)
+			return fail("debug off");
+		lines = 0;
+		for (i = 0; i < 3; i++) {
+			if (r5_log_allow(1, 0, R5_LOG_DEBUG, &errors, &once, 0))
+				lines++;
+		}
+		if (lines != 3)
+			return fail("debug on");
+		if (!r5_log_allow(0, 0, R5_LOG_ERROR, &errors, &once, 0))
+			return fail("error");
+		errors = 32;
+		if (r5_log_allow(0, 0, R5_LOG_ERROR, &errors, &once, 0))
+			return fail("error cap");
+		if (!r5_log_allow(0, 0, R5_LOG_ONCE, &errors, &once, 0))
+			return fail("once");
+		if (r5_log_allow(0, 0, R5_LOG_ONCE, &errors, &once, 0))
+			return fail("once again");
+		if (r5_log_allow(0, 0, R5_LOG_TEST, &errors, &once, 0))
+			return fail("test off");
+		if (!r5_log_allow(0, 1, R5_LOG_TEST, &errors, &once, 0))
+			return fail("test on");
 	}
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);

@@ -50,6 +50,39 @@ r5_fail(int err)
 }
 
 
+#if defined(R5_HOST_TEST)
+int r5_host_gpu_debug;
+static int
+r5_debug_on(void)
+{
+	return r5_host_gpu_debug;
+}
+#else
+static int
+r5_debug_on(void)
+{
+	static int cached = -1;
+	FILE *file;
+	char line[128];
+	if (cached >= 0)
+		return cached;
+	cached = 0;
+	file = fopen("/boot/home/config/settings/kernel/drivers/radeon_hd", "r");
+	if (file == NULL)
+		file = fopen("/boot/system/settings/kernel/drivers/radeon_hd", "r");
+	if (file == NULL)
+		return 0;
+	while (fgets(line, (int)sizeof(line), file) != NULL) {
+		if (strncmp(line, "gpu_debug", 9) == 0
+			&& strstr(line, "true") != NULL)
+			cached = 1;
+	}
+	fclose(file);
+	return cached;
+}
+#endif
+
+
 static int
 r5_ioctl_done(int ret)
 {
@@ -58,6 +91,11 @@ r5_ioctl_done(int ret)
 			sIoctlName != NULL ? sIoctlName : "ioctl", sIoctlRequest,
 			(unsigned)R5_IOC_NR(sIoctlRequest),
 			sIoctlDetail[0] != '\0' ? " " : "", sIoctlDetail, errno);
+	} else if (r5_debug_on()) {
+		fprintf(stderr, "r5 libdrm: %s linux %#lx nr %#x%s%s\n",
+			sIoctlName != NULL ? sIoctlName : "ioctl", sIoctlRequest,
+			(unsigned)R5_IOC_NR(sIoctlRequest),
+			sIoctlDetail[0] != '\0' ? " " : "", sIoctlDetail);
 	}
 	return ret;
 }

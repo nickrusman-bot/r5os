@@ -15,6 +15,7 @@
 #include "r5_span.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
+#include "r5_log.h"
 
 #include <KernelExport.h>
 #include <condition_variable.h>
@@ -73,7 +74,36 @@ static const uint64 kFreeWaitUs = 5000000;
 /* amdgpu.lockup_timeout for GFX is 10000 ms. Client waits do not use this. */
 static const bigtime_t kWatchdogUs = 10000000;
 
-static uint32 sRefuseCount;
+static int sErrorLines;
+static int sOnceBits;
+
+
+static bool
+gpu_debug_enabled()
+{
+	bool enabled = false;
+	void* settings = load_driver_settings("radeon_hd");
+	if (settings != NULL) {
+		enabled = get_driver_boolean_parameter(settings, "gpu_debug",
+			false, true);
+		unload_driver_settings(settings);
+	}
+	return enabled;
+}
+
+
+static bool
+gpu_error_line()
+{
+	return r5_log_allow(0, 0, R5_LOG_ERROR, &sErrorLines, &sOnceBits, 0) != 0;
+}
+
+
+bool
+r5_gpu_log_error()
+{
+	return gpu_error_line();
+}
 
 
 /* The first 32 refusals in a boot. Later ones still return the status. */
@@ -82,8 +112,7 @@ gpu_refuse(const char* op, const char* why, status_t status, uint32 handle,
 	uint32 domain, uint64 bytes, uint64 va, uint64 offset, uint64 mapBytes,
 	uint32 flags)
 {
-	if (sRefuseCount < 32) {
-		sRefuseCount++;
+	if (gpu_error_line()) {
 		dprintf("radeon_hd: refuse %s %s status %#x handle %lu domain %lu "
 			"bytes %llu va %#llx offset %llu map %llu flags %#lx\n",
 			op, why, (unsigned)status, (unsigned long)handle,
@@ -127,6 +156,7 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 		count += bit & 1u;
 	if (_bitmap != NULL)
 		*_bitmap = bitmap;
+	if (gpu_debug_enabled())
 	dprintf("radeon_hd: gfx9 cu cc %08lx user %08lx active %lu bitmap %08lx\n",
 		(unsigned long)cc, (unsigned long)user, (unsigned long)count,
 		(unsigned long)bitmap);
@@ -150,6 +180,7 @@ gpu_rb(radeon_info* info, uint32* num, uint32* mask)
 		*num = kMaxBackendsPerSe;
 	if (mask != NULL)
 		*mask = active;
+	if (r5_log_allow(0, 0, R5_LOG_ONCE, &sErrorLines, &sOnceBits, 0))
 	dprintf("radeon_hd: rb num %lu mask %lx cc %08lx user %08lx\n",
 		(unsigned long)kMaxBackendsPerSe, (unsigned long)active,
 		(unsigned long)cc, (unsigned long)user);
@@ -242,7 +273,6 @@ static uint64 sLastIbVa;
 static uint64 sLastIbList[8];
 static uint32 sLastIbDw[8];
 static uint32 sLastIbN;
-static int32 sSubmitLog;
 static radeon_info* sInfo;
 static bool sReplacing;
 static lock sGpuLock;
@@ -714,6 +744,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 				typed = vm_set_area_memory_type(area, entry.address,
 					B_WRITE_COMBINING_MEMORY);
 			}
+			if (gpu_debug_enabled())
 			dprintf("radeon_hd: gtt wc area %ld status %#lx\n",
 				(long)area, (unsigned long)typed);
 			if (typed != B_OK) {
@@ -881,6 +912,7 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 			typed = vm_set_area_memory_type(area, entry.address,
 				B_WRITE_COMBINING_MEMORY);
 		}
+		if (gpu_debug_enabled())
 		dprintf("radeon_hd: gtt wc clone %ld status %#lx\n",
 			(long)area, (unsigned long)typed);
 		if (typed != B_OK) {
@@ -1515,8 +1547,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		}
 	}
 	asm volatile("mfence" ::: "memory");
-	if (sSubmitLog < 16) {
-		sSubmitLog++;
+	if (gpu_debug_enabled()) {
 		for (uint32 i = 0; i < in.ib_count; i++) {
 			dprintf("radeon_hd: submit ib va %016llx dw %lu\n",
 				(unsigned long long)ibs[i].gpu_va,
@@ -1621,7 +1652,8 @@ gpu_sync_create(gpu_client* client, void* buffer, size_t length)
 		}
 	}
 	if (slot < 0) {
-		dprintf("radeon_hd: syncobj limit\n");
+		if (gpu_error_line())
+			dprintf("radeon_hd: syncobj limit\n");
 		return B_NO_MEMORY;
 	}
 	client->syncs[slot].live = true;
@@ -2052,21 +2084,24 @@ gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth)
 			uint64 child = (uint64)words[i + 1]
 				| ((uint64)words[i + 2] << 32);
 			uint32 childDw = words[i + 3] & 0xfffffu;
-			dprintf("radeon_hd: pm4 +%04lx INDIRECT_BUFFER va %016llx dw %lu\n",
-				(unsigned long)i, (unsigned long long)child,
-				(unsigned long)childDw);
+			if (gpu_error_line())
+				dprintf("radeon_hd: pm4 +%04lx INDIRECT_BUFFER va %016llx dw %lu\n",
+					(unsigned long)i, (unsigned long long)child,
+					(unsigned long)childDw);
 			gpu_dump_one(why, "nested", child, childDw, 0, 1);
 		}
-		if (name != NULL && (opcode == 0x68 || opcode == 0x69
-			|| opcode == 0x76 || opcode == 0x79 || opcode == 0x7a)) {
-			dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx idx %lu count %lu\n",
-				(unsigned long)i, name, (unsigned long)reg,
-				(unsigned long)(words[i + 1] >> 28),
-				(unsigned long)values);
-		} else if (name != NULL) {
-			dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx count %lu\n",
-				(unsigned long)i, name, (unsigned long)reg,
-				(unsigned long)values);
+		if (name != NULL && gpu_error_line()) {
+			if (opcode == 0x68 || opcode == 0x69 || opcode == 0x76
+				|| opcode == 0x79 || opcode == 0x7a) {
+				dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx idx %lu count %lu\n",
+					(unsigned long)i, name, (unsigned long)reg,
+					(unsigned long)(words[i + 1] >> 28),
+					(unsigned long)values);
+			} else {
+				dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx count %lu\n",
+					(unsigned long)i, name, (unsigned long)reg,
+					(unsigned long)values);
+			}
 		}
 		i += 1u + body;
 	}
@@ -2085,6 +2120,8 @@ gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
 	uint32 got = 0;
 	if (base != 0)
 		got = r5_gfx9_vmid1_copy(base, words, want);
+	if (!gpu_error_line())
+		return;
 	dprintf("radeon_hd: %s %s va %016llx dw %lu got %lu cp_off %lu\n",
 		why == NULL ? "ib" : why, which == NULL ? "ib" : which,
 		(unsigned long long)base, (unsigned long)want,
@@ -2096,6 +2133,8 @@ gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
 		if (n > 8)
 			n = 8;
 		memcpy(line, words + i, n * 4);
+		if (!gpu_error_line())
+			break;
 		dprintf("radeon_hd: ib +%04lx %08lx %08lx %08lx %08lx "
 			"%08lx %08lx %08lx %08lx\n",
 			(unsigned long)i,
@@ -2130,6 +2169,7 @@ gpu_ib_words(const char* why)
 	gpu_dump_regs(why, &ib1, "ib1");
 	if (ib2.base != ib1.base)
 		gpu_dump_regs(why, &ib2, "ib2");
+	if (gpu_error_line())
 	dprintf("radeon_hd: %s roq ib1 %08lx\n",
 		why == NULL ? "ib" : why, (unsigned long)r5_gfx9_roq_ib1());
 	if (sInfo != NULL) {
@@ -2266,6 +2306,7 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 				typeStatus = vm_set_area_memory_type(page->area,
 					typed.address, B_WRITE_COMBINING_MEMORY);
 			}
+			if (gpu_selftest_enabled())
 			dprintf("radeon_hd: stage wc area %ld status %#lx\n",
 				(long)page->area, (unsigned long)typeStatus);
 			if (typeStatus != B_OK) {
@@ -2888,6 +2929,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			status = B_NO_INIT;
 		else {
 			if (sContexts > 0)
+				if (gpu_debug_enabled())
 				dprintf("radeon_hd: vmid1 reused, clients %ld\n",
 					(long)sContexts);
 			sContexts++;

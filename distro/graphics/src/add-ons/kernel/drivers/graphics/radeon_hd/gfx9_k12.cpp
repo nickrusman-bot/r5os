@@ -45,6 +45,7 @@ static volatile uint32* sIhWriteback = NULL;
 static uint32 sIhRptr = 0;
 static uint32 sIhEntries = 0;
 static uint32 sIhOther = 0;
+extern bool r5_gpu_log_error();
 static uint32 sEopCount = 0;
 static uint32 sLastClient = 0;
 static uint32 sLastSource = 0;
@@ -270,7 +271,7 @@ ih_handler(void* data)
 			if (entry.client == kClientCp && (entry.source == 184
 				|| entry.source == 185 || entry.source == 186))
 				sPrivCount++;
-			if (sIhOther < 32) {
+			if (r5_gpu_log_error()) {
 				const uint32* raw = (const uint32*)(sIhRing + rptr);
 				uint32 vmid = (raw[0] >> 24) & 0xfu;
 				sIhOther++;
@@ -287,6 +288,7 @@ ih_handler(void* data)
 				if (entry.client == kClientCp && sPrivPending == 0) {
 					r5_gfx9_ib_regs(&sPrivIb1, &sPrivIb2);
 					sPrivPending = 1;
+					if (r5_gpu_log_error())
 					dprintf("radeon_hd: ih ib1 %016llx sz %08lx off %08lx "
 						"ib2 %016llx sz %08lx off %08lx\n",
 						(unsigned long long)sPrivIb1.base,
