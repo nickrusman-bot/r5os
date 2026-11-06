@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### VMID 1 turns off when the flush fails
+
+A failed `r5_gfx9_vmid1_flush` had already written `VM_CONTEXT1_CNTL` (`0x0881`) with the enable bit. The next attempt then programmed a new root while that context was still on. The failure path now writes `0x0881` back to 0. The pages are kept and the next attempt rewrites the base from that same root. They are not freed: `vm_page_alloc` has no free, and the page stays valid. A wait without `FOR_SUBMIT` checks every handle once, before the wait. A signalled handle no longer hides a later unsubmitted one. A reset during the wait is a timeout. The host replay covers `[signalled, fresh]` without `WAIT_ALL`. Not booted.
+
 ### M4 drafts after the second stick
 
 `docs/GRAPHICS.md` records the render node, the VMID 1 layout, the submission format and the user fence as drafts. Each section says it is not proven on the stick. The 6 Nov 2026 boot answered `GET_INFO` and stopped in `CTX_CREATE`. `docs/GPU-ARCHITECTURE.md` marks M4 not done, with that result. The design is unchanged. `AGENTS.md` and What's new are unchanged. `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md` name libdrm 2.4.124 and the Mesa RADV, Lavapipe and Zink files that were read. The packages were not audited file by file.

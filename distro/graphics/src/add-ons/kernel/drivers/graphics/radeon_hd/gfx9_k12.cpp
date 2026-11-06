@@ -837,27 +837,30 @@ r5_gfx9_vmid1_setup()
 		return true;
 	if (!r5_gfx9_ring_ready() || sInfo == NULL) {
 		knote("vmid1 fail ring");
-		memset(&sVm, 0, sizeof(sVm));
 		return false;
 	}
-	if (sVm.used != 0)
-		knote("vmid1 fail retry");
-	memset(&sVm, 0, sizeof(sVm));
-	sVm.pages = sVmPages;
-	sVm.capacity = 1024;
-	sVm.alloc = vm_page_alloc;
-	if (!r5_vm_new_page(&sVm)) {
-		knote("vmid1 fail page");
+	/* The root page is kept after a failed flush. The next attempt
+	 * rewrites the base from that same page. There is no free for
+	 * vm_page_alloc, and the page stays valid.
+	 */
+	if (sVm.used == 0) {
 		memset(&sVm, 0, sizeof(sVm));
-		return false;
+		sVm.pages = sVmPages;
+		sVm.capacity = 1024;
+		sVm.alloc = vm_page_alloc;
+		if (!r5_vm_new_page(&sVm)) {
+			knote("vmid1 fail page");
+			memset(&sVm, 0, sizeof(sVm));
+			return false;
+		}
+		asm volatile("sfence" ::: "memory");
+		if (!r5_gfx9_pde_aligned(sVm.pages[0].physical)) {
+			knote("vmid1 fail align");
+			memset(&sVm, 0, sizeof(sVm));
+			return false;
+		}
 	}
-	asm volatile("sfence" ::: "memory");
 	uint64 rootPa = sVm.pages[0].physical;
-	if (!r5_gfx9_pde_aligned(rootPa)) {
-		knote("vmid1 fail align");
-		memset(&sVm, 0, sizeof(sVm));
-		return false;
-	}
 	uint64 tableBase = rootPa | (uint64)R5_GFX9_PTE_VALID;
 	kwrite(sInfo, gc_byte(0x0851), 0xffffffffu);
 	kwrite(sInfo, gc_byte(0x0852), 0xfu);
@@ -879,7 +882,11 @@ r5_gfx9_vmid1_setup()
 	cntl |= (1u << 21) | (1u << 22);
 	kwrite(sInfo, gc_byte(0x0881), cntl);
 	if (!r5_gfx9_vmid1_flush()) {
-		memset(&sVm, 0, sizeof(sVm));
+		/* CNTL is already enabled. Turn the context off so a later
+		 * attempt does not run on the half-written state. The pages
+		 * above stay for that attempt.
+		 */
+		kwrite(sInfo, gc_byte(0x0881), 0);
 		return false;
 	}
 	sVmid1 = true;

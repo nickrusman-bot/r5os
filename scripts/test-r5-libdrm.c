@@ -437,6 +437,20 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			return host_err(EINVAL);
 		handles = (uint32_t *)(uintptr_t)wait->handles;
 		points = (uint64_t *)(uintptr_t)wait->points;
+		if ((wait->flags & R5_GPU_WAIT_FOR_SUBMIT) == 0) {
+			for (i = 0; i < wait->count; i++) {
+				uint64_t target = points == NULL ? 0 : points[i];
+				int submitted;
+				if (handles[i] == 0 || handles[i] > 128
+					|| !gSyncLive[handles[i] - 1])
+					return host_err(EINVAL);
+				submitted = (wait->flags & R5_GPU_WAIT_BINARY) != 0
+					? gSyncSubmitted[handles[i] - 1] > 0
+					: gSyncSubmitted[handles[i] - 1] >= target;
+				if (!submitted)
+					return host_err(EINVAL);
+			}
+		}
 		for (i = 0; i < wait->count; i++) {
 			uint64_t value;
 			uint64_t target;
@@ -446,13 +460,6 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			value = (wait->flags & R5_GPU_WAIT_AVAILABLE) != 0
 				? gSyncSubmitted[handles[i] - 1] : gSyncPoint[handles[i] - 1];
 			target = points == NULL ? 0 : points[i];
-			if ((wait->flags & R5_GPU_WAIT_FOR_SUBMIT) == 0) {
-				int submitted = (wait->flags & R5_GPU_WAIT_BINARY) != 0
-					? gSyncSubmitted[handles[i] - 1] > 0
-					: gSyncSubmitted[handles[i] - 1] >= target;
-				if (!submitted)
-					return host_err(EINVAL);
-			}
 			ready = host_signalled(value, gSyncSubmitted[handles[i] - 1], target,
 				(wait->flags & R5_GPU_WAIT_BINARY) != 0);
 			if (!ready)
@@ -1178,6 +1185,12 @@ radv_replay(int fd)
 		anyWait.timeout_nsec = 0;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
 		CHECK(errno == EINVAL);
+		both[0] = handles[0];
+		both[1] = handles[1];
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
+		CHECK(errno == EINVAL);
+		both[0] = handles[1];
+		both[1] = handles[0];
 		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) == 0);
 		CHECK(anyWait.first_signaled == 1);

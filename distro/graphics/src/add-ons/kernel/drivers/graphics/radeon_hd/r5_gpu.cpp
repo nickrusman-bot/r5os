@@ -1089,17 +1089,23 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 		if (syncs[i] == NULL)
 			return B_BAD_VALUE;
 	}
+	/* Once, over every handle, before any signalled handle can end the
+	 * scan. Linux drm_syncobj_array_wait_timeout does the same. A reset
+	 * during the wait is a timeout, not a second EINVAL.
+	 */
+	if ((in.flags & R5_GPU_WAIT_FOR_SUBMIT) == 0) {
+		for (uint32 i = 0; i < in.count; i++) {
+			if (!gpu_list_submitted(syncs[i], points[i], in.flags))
+				return B_BAD_VALUE;
+		}
+	}
 	bigtime_t deadline = system_time() + (bigtime_t)in.timeout_us;
 	while (true) {
 		int32 first = -1;
 		uint32 met = 0;
-		bool missing = false;
 		for (uint32 i = 0; i < in.count; i++) {
 			if (!syncs[i]->live)
 				return B_BAD_VALUE;
-			if ((in.flags & R5_GPU_WAIT_FOR_SUBMIT) == 0
-				&& !gpu_list_submitted(syncs[i], points[i], in.flags))
-				missing = true;
 			if (!gpu_list_ready(syncs[i], points[i], in.flags))
 				continue;
 			met++;
@@ -1108,8 +1114,6 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 			if ((in.flags & R5_GPU_WAIT_ALL) == 0)
 				break;
 		}
-		if (missing && (in.flags & R5_GPU_WAIT_FOR_SUBMIT) == 0)
-			return B_BAD_VALUE;
 		if ((in.flags & R5_GPU_WAIT_ALL) != 0 && met == in.count) {
 			in.first_signaled = 0;
 			return gpu_copy_out(buffer, length, &in, sizeof(in));
