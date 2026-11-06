@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Third M4 stick
+
+The MIDI work stays in its own work tree. This tree stayed on `cursor/gpu-m4-teapot` at `6e6e0f875e` for the jam and the image steps. `jam -q @r5-raw` finished at 09:06 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. `pin-mesa-packages.sh` could not open the HaikuPorts repository file and stopped before writing `r5-opengl.repo`. Jam continued and warned that `mesa_swpipe` and `mawk` are not available. The image still has the pinned packages.
+
+`jam -q @r5-anyboot` started at 09:13 and finished at 09:15, `jam_exit=0`, 1168 targets. The anyboot is 2156724224 bytes. The BeFS partition at 6291456 is 2147483648 bytes and is not byte-identical to `r5-os.image`. From that partition, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The `radeon_hd` driver contains `vmid1 fail ring` and `vmid1 ptb`. `libvulkan_radeon.so` has no undefined `ioctl`. The Login binary contains `r5-gpu-selftest`.
+
+A copy gained `/boot/home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. It does not set `gfx9_workload` or `gfx9_compute`. That stick image is sha256 `205969430991f2dd842ded1eacee228a20dc25ed261c3cf9aa0e69743b96019b`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 09:19 to 09:23 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 09:23. Disk 0 was not opened. This stick has not been booted.
+
 ### VMID 1 turns off when the flush fails
 
 A failed `r5_gfx9_vmid1_flush` had already written `VM_CONTEXT1_CNTL` (`0x0881`) with the enable bit. The next attempt then programmed a new root while that context was still on. The failure path now writes `0x0881` back to 0. The pages are kept and the next attempt rewrites the base from that same root. They are not freed: `vm_page_alloc` has no free, and the page stays valid. A wait without `FOR_SUBMIT` checks every handle once, before the wait. A signalled handle no longer hides a later unsubmitted one. A reset during the wait is a timeout. The host replay covers `[signalled, fresh]` without `WAIT_ALL`. Not booted.
