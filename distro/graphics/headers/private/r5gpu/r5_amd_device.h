@@ -14,9 +14,11 @@
 #ifndef R5_AMD_DEVICE_H
 #define R5_AMD_DEVICE_H
 
+#include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
+
+extern int snprintf(char* str, size_t size, const char* format, ...);
 
 #define R5_AMD_SRC_TABLE \
 	"device table; Linux v6.12 amdgpu_drv.c CHIP_RENOIR"
