@@ -67,6 +67,38 @@ Do not start these during an unrelated bugfix.
   - Do not destabilize `app_server`.
   - Do not call VESA, `vboxvideo`, Lavapipe, or GPU work without a rendering path "hardware acceleration".
   - The GFX9 sequences on the 5625U are fixed (`AGENTS.md`, "GFX9 ring (Renoir)").
+- **Graphics Kit (after M7).** A C++ kit on top of Vulkan, in the style of the BeOS kits. Decided on 6 Nov 2026, not started:
+  - **Names.** The kit is the **Graphics Kit**, named after the domain, like the Interface Kit and the Media Kit. The classes live in the namespace **`BGraphicsKit`**, the way Haiku does it for `BPackageKit`. Inside that namespace they carry ordinary B names: `BVulkanView` (in the line of `BGLView`), `BGPUDevice`, `BGPUBuffer`, `BGPUTask`. There is one header per class without the B (`<VulkanView.h>`), plus `<GraphicsKit.h>`. Constants are `B_GPU_…`, errors are `status_t`, and hooks follow the usual pattern (`Render()`, `FrameResized()`, `DeviceLost()`). Check every new name against the Haiku tree. The documentation says once that the Interface Kit draws through app_server, and that the Graphics Kit is the layer for drawing and computing on the GPU, with Lavapipe as the fallback.
+  - **The BeOS way.**
+    - A finished task sends a `BMessage` to the `BLooper`, instead of the program waiting on a fence.
+    - A view draws in its own thread.
+    - Without a GPU, the same code runs on Lavapipe.
+    - A lost device gives `B_GPU_DEVICE_LOST`, and the kit rebuilds the device.
+    - The kit does not lock Vulkan away: the `VkDevice` and `VkImage` underneath stay reachable.
+  - **Every GPU.** The kit works the same on every GPU that has a Vulkan driver: AMD (RADV), Intel (ANV) and NVIDIA (NVK), and on Lavapipe without a GPU.
+    - The kit contains no vendor code and no vendor checks.
+    - A program never needs to know which vendor it runs on. `BGPUDevice` reports the name and the capabilities, and nothing more.
+    - Vendor differences belong in the R5 GPU interface (the vendor block) and in the Mesa drivers, never in the kit.
+  - **Where.** A separate library `libr5graphics.so` next to `libbe`, not inside `libbe` (`AGENTS.md`, LibR5). It is MIT, like the GPU header, because every program that uses it links it.
+  - **Who it is for.** Three groups, in one kit:
+    - games and 3D through `BVulkanView`;
+    - simple GPU computing through `BGPUTask` and `BGPUBuffer`;
+    - R5's own components, which use the same parts as they appear.
+  - **How thin.**
+    - `BVulkanView` is a thin shell, as `BGLView` was. The kit handles the instance, the device, the swapchain, resizing, the drawing thread and a lost device. The program writes plain Vulkan in `Render()`.
+    - `BGPUTask` and `BGPUBuffer` are thicker. A program computes without writing Vulkan, and can still reach the `VkDevice` underneath.
+    - No API of its own that hides Vulkan.
+  - **OpenGL.** Not in the kit. `BGLView` already covers it, and moves to the GPU by itself with Zink (M9). A buffer bridge between the two can come later.
+  - **R5 first, portable by design.**
+    - The kit uses only Vulkan, the public Haiku API, and a small internal layer for what is R5-specific: device choice and the M7 presentation.
+    - It depends on no other R5 library unless that is really needed.
+    - It is not tested on stock Haiku for now.
+    - Shipping it as a package for Haiku is a separate decision later. Haiku itself does not accept AI-assisted code (`AGENTS.md`).
+  - **Order.**
+    1. `BGPUTask` and `BGPUBuffer` may come after M6, because they need no window.
+    2. `BVulkanView` comes after M7, with VulkanTeapot rewritten on top of it as the first example.
+    3. Integration with the Media Kit comes after that.
+  - **Before M7:** build nothing for `BVulkanView`, but design the M7 presentation (the R5 WSI layer) so that `BVulkanView` can sit on top of it.
 - **Audio and MIDI.** Improve streaming and device interop, in small steps. The contracts are `docs/USB-AUDIO.md`, `docs/HDMI-AUDIO.md`, `docs/VIRTUAL-SURROUND.md` and `docs/MIDI2.md`.
 - **Mixxx** is a side quest ([#55](https://github.com/nickrusman-bot/r5os/issues/55), `docs/MIXXX.md`). It is not an image application, and not while multi-user is open.
 
