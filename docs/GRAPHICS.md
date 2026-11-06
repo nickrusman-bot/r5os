@@ -164,7 +164,7 @@ Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648
 
 ## GFX9 user address space (draft, not proven on the stick)
 
-This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is not a fixed sequence. The stick of 6 Nov 2026 built VMID 1 far enough to flush, then `vmid1 fail tlb` because the poll waited on ack bit 0. The success line `vmid1 ptb` was not logged. Do not treat the register list below as proven.
+This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is not a fixed sequence. The second stick of 6 Nov 2026 built VMID 1 far enough to flush, then `vmid1 fail tlb` because the poll waited on ack bit 0. The third stick, sha256 `205969430991f2dd842ded1eacee228a20dc25ed261c3cf9aa0e69743b96019b`, logged `vmid1 ptb 0000000811096001 cntl 007ffe07 pages 1` and the empty identity aperture `low ffffffff 0000000f high 00000000 00000000`. `vkCreateDevice` then returned `VK_ERROR_OUT_OF_DEVICE_MEMORY`. A user submission is still not proven. Do not treat the register list below as a finished sequence.
 
 `amdgpu_vm_adjust_size(adev, 256 * 1024, 9, 3, 48)` asks for 256 TiB, 9-bit blocks, at most 3 levels above the page table, and 48 VA bits. The minimum and the maximum are the same 262144 GiB, so the VM size does not depend on the RAM size. `max_pfn` is `262144 << 18` (2^36 pages). The byte size minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`: 8 KiB trap, 2 MiB seq64, 2 MiB CSA) is `0xffffffbfe000`.
 
@@ -179,17 +179,17 @@ The high range contains `address32_hi` `0xffff8000`. The walk is four levels: ro
 
 `MC_VM_MX_L1_TLB_CNTL` `SYSTEM_ACCESS_MODE` is 3 in `gfxhub_v1_0_init_tlb_regs`, and `SYSTEM_APERTURE_UNMAPPED_ACCESS` is 0. `VM_L2_CNTL` `CONTEXT1_IDENTITY_ACCESS_MODE` is 1, and the identity aperture is then programmed to an empty range (`LOW` `0xffffffff`/`0xf`, `HIGH` 0). A user indirect buffer uses VMID 1 page tables, not the VMID 0 tables. With the identity aperture empty, an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. That is the recorded check. M4 does not change `SYSTEM_ACCESS_MODE`.
 
-The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. The 6 Nov 2026 stick did not print `vmid1 ptb`, so these writes are not confirmed. The TLB poll for VMID 1 now waits on ack bit 1. That change has not been booted.
+The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. The third stick printed `vmid1 ptb` and the identity readback in the paragraph above. `cntl 007ffe07` is the value written to `0x0881`. The TLB poll for VMID 1 waits on ack bit 1, and that poll returned. No user indirect buffer has run on this VMID.
 
 ## Render node (draft, not proven on the stick)
 
 The node is `/dev/gpu/radeon_hd/<n>`. The interface is API 1.0 (`R5_GPU_API_MAJOR` 1, `R5_GPU_API_MINOR` 0). The calls, from `R5_GPU_OP_BASE` 30479, are `GET_INFO`, `READ_REG`, `CTX_CREATE`, `CTX_DESTROY`, `BO_CREATE`, `BO_FREE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP`, `CS_SUBMIT`, `FENCE_WAIT`, and the syncobj calls through `SYNCOBJ_TRANSFER`. A shipped call does not change.
 
-The 6 Nov 2026 self-test printed `stage render node: api 1.0 device 15e7 cu 7` and the firmware versions me 167, pfp 197, mec 483. `CTX_CREATE` then returned `B_NO_INIT`. No later call in that list ran.
+The third stick's self-test printed `stage render node: api 1.0 device 15e7 cu 7` and the firmware versions me 167, pfp 197, mec 483. `CTX_CREATE` then logged `vmid1 ptb`. `vkCreateDevice` returned `VK_ERROR_OUT_OF_DEVICE_MEMORY`. No submission, fence wait or syncobj call is in the syslog.
 
 ## Submission (draft, not proven on the stick)
 
-A user submission is `CS_SUBMIT`: a context, one ring, and indirect buffers whose flags are 0. The translator and the kernel reject any other IB flag, including `AMDGPU_IB_FLAG_PREAMBLE`. VMID 1 is bits 24–27 of the indirect-buffer packet. The 6 Nov 2026 stick returned from `CTX_CREATE` before any submission, so preamble flags, `QUERY_STATE2`, `GEM_CREATE` and a high `VA_MAP` were not seen.
+A user submission is `CS_SUBMIT`: a context, one ring, and indirect buffers whose flags are 0. The translator and the kernel reject any other IB flag, including `AMDGPU_IB_FLAG_PREAMBLE`. VMID 1 is bits 24–27 of the indirect-buffer packet. The third stick returned from `CTX_CREATE` and then `vkCreateDevice` failed. Preamble flags, `QUERY_STATE2` and a high `VA_MAP` are still not in the syslog. `GEM_CREATE` is not logged on success, and there is no `bo limit` line.
 
 ## Fence by interrupt (draft, not proven on the stick)
 

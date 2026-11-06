@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Third M4 stick boot: VMID 1 is up, vkCreateDevice is not
+
+The stick sha256 `205969430991f2dd842ded1eacee228a20dc25ed261c3cf9aa0e69743b96019b` reached the desktop on the Ryzen 5 5625U. Sign-in was uid 1001. The syslog has `enable SMEP` and `enable SMAP`. K0, K1 and K2 completed (`scratch deadbeef`, `rptr 0x392`, `k2 inv 007c0001`, `k2 dma pattern 262144 cafe 0 other 0`). There is no panic. The self-test file is `stage render node: api 1.0 device 15e7 cu 7` and firmware me 167, pfp 197, mec 483.
+
+`CTX_CREATE` built VMID 1. The syslog has `vmid1 ptb 0000000811096001 cntl 007ffe07 pages 1` and `vmid1 identity low ffffffff 0000000f high 00000000 00000000`. There is no `vmid1 fail`. The next kernel line is `abort() called` in `vulkaninfo` (`AppGpu` constructor). `vulkaninfo --summary` and VulkanTeapot both stop in `vkCreateDevice` with `VK_ERROR_OUT_OF_DEVICE_MEMORY` (-2). The captured stderr has no `Failed to allocate a buffer` and no `Failed to reserve a PRT VA region`. The syslog has no `bo limit`, no `syncobj limit` and no GPU page fault. RADV returns that Vulkan code without the buffer line when the high-VA reservation fails, or when the map after a successful allocation fails. `~/config/cache/mesa_shader_cache` has cache buckets, so shader compilation started. There is no `driverID 3` and there are no teapot pixels. Lavapipe threads were running in the debugger when `vulkaninfo` aborted; the summary never prints because that abort ends the process. No fourth stick.
+
 ### Third M4 stick
 
 The MIDI work stays in its own work tree. This tree stayed on `cursor/gpu-m4-teapot` at `6e6e0f875e` for the jam and the image steps. `jam -q @r5-raw` finished at 09:06 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. `pin-mesa-packages.sh` could not open the HaikuPorts repository file and stopped before writing `r5-opengl.repo`. Jam continued and warned that `mesa_swpipe` and `mawk` are not available. The image still has the pinned packages.
