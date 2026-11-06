@@ -44,6 +44,7 @@ static uint8* sIhRing = NULL;
 static volatile uint32* sIhWriteback = NULL;
 static uint32 sIhRptr = 0;
 static uint32 sIhEntries = 0;
+static uint32 sIhOther = 0;
 static uint32 sEopCount = 0;
 static uint32 sLastClient = 0;
 static uint32 sLastSource = 0;
@@ -61,6 +62,10 @@ static const uint32 kGcBase = 0x2000;
 static const uint32 kNbioBase = 0x0D20;
 static const uint32 kClientCp = 0x14;
 static const uint32 kSourceEop = 181;
+static r5_gfx9_ib_now sPrivIb1;
+static r5_gfx9_ib_now sPrivIb2;
+static int32 sPrivPending;
+static volatile int32 sPrivCount;
 
 
 static uint32
@@ -261,6 +266,38 @@ ih_handler(void* data)
 			r5_gpu_retire_wake();
 			sEopCount++;
 			woke = true;
+		} else {
+			if (entry.client == kClientCp && (entry.source == 184
+				|| entry.source == 185 || entry.source == 186))
+				sPrivCount++;
+			if (sIhOther < 32) {
+				const uint32* raw = (const uint32*)(sIhRing + rptr);
+				uint32 vmid = (raw[0] >> 24) & 0xfu;
+				sIhOther++;
+				dprintf("radeon_hd: ih client %lu src %lu ring %lu vmid %lu "
+					"%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+					(unsigned long)entry.client, (unsigned long)entry.source,
+					(unsigned long)entry.ring, (unsigned long)vmid,
+					(unsigned long)raw[0], (unsigned long)raw[1],
+					(unsigned long)raw[2], (unsigned long)raw[3],
+					(unsigned long)raw[4], (unsigned long)raw[5],
+					(unsigned long)raw[6], (unsigned long)raw[7]);
+				/* Registers only. The dword dump runs on the retire thread,
+				 * from this snapshot, so the handler does not map a page. */
+				if (entry.client == kClientCp && sPrivPending == 0) {
+					r5_gfx9_ib_regs(&sPrivIb1, &sPrivIb2);
+					sPrivPending = 1;
+					dprintf("radeon_hd: ih ib1 %016llx sz %08lx off %08lx "
+						"ib2 %016llx sz %08lx off %08lx\n",
+						(unsigned long long)sPrivIb1.base,
+						(unsigned long)sPrivIb1.size,
+						(unsigned long)sPrivIb1.offset,
+						(unsigned long long)sPrivIb2.base,
+						(unsigned long)sPrivIb2.size,
+						(unsigned long)sPrivIb2.offset);
+					r5_gpu_retire_wake();
+				}
+			}
 		}
 		rptr = (rptr + 32) & (kIhBytes - 1);
 		walked++;
@@ -429,6 +466,14 @@ ih_on()
 	kwrite(sInfo, oss_byte(0x0080), cntl);
 
 	uint32 cp = kread(sInfo, gc_byte(0x106a));
+	/* gc_9_0_sh_mask.h CP_INT_CNTL_RING0. TIME_STAMP is the EOP
+	 * (shift 0x1a). PRIV_INSTR 0x16, PRIV_REG 0x17 and OPCODE_ERROR
+	 * 0x18 match gfx_v9_0_set_priv_inst_fault_state and
+	 * gfx_v9_0_set_priv_reg_fault_state. Source ids 184 and 185 are
+	 * CP_PRIV_REG_FAULT and CP_PRIV_INSTR_FAULT. */
+	cp |= 1u << 0x16;
+	cp |= 1u << 0x17;
+	cp |= 1u << 0x18;
 	cp |= 1u << 0x1a;
 	kwrite(sInfo, gc_byte(0x106a), cp);
 	return true;
@@ -923,6 +968,9 @@ r5_gfx9_vmid1_setup()
 	uint32 faultNext = (faultCntl | kFaultDefaultMask) & ~kFaultCrashMask;
 	if (faultNext != faultCntl)
 		kwrite(sInfo, gc_byte(0x0847), faultNext);
+	/* RETRY_PERMISSION_OR_INVALID_PAGE_FAULT is bit 7. Linux sets it
+	 * (0x007ffe87). R5 has no retry-fault handler, so the bit stays off
+	 * and the value stays 0x007ffe07. */
 	uint32 cntl = 1u | (3u << 1);
 	cntl |= (1u << 9) | (1u << 10);
 	cntl |= (1u << 11) | (1u << 12);
@@ -1005,6 +1053,96 @@ r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
 	if (pte == NULL || !sVmid1)
 		return false;
 	return r5_vm_lookup(&sVm, va & ~0xfffull, pte) != 0;
+}
+
+
+/* The page comes from the VMID 1 table. A system page is mapped for the
+ * copy and unmapped after it. A VRAM page is the pool window. Neither
+ * is a user address (SMAP). */
+bool
+r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
+{
+	uint64 pte = 0;
+	if (words == NULL || count == 0 || !r5_gfx9_vmid1_pte(va, &pte))
+		return false;
+	if ((pte & (uint64)R5_GFX9_PTE_VALID) == 0)
+		return false;
+	uint64 page = pte & ((1ull << 57) - 1ull) & ~0xfffull;
+	uint32 offset = (uint32)(va & 0xfffull);
+	if (offset >= 4096 || count > 16)
+		return false;
+	if (offset + count * 4 > 4096)
+		count = (4096 - offset) / 4;
+	uint8* cpu = NULL;
+	area_id mapped = -1;
+	if ((pte & (uint64)R5_GFX9_PTE_SYSTEM) != 0) {
+		void* address = NULL;
+		mapped = map_physical_memory("radeon hd ib", (phys_addr_t)page,
+			4096, B_ANY_KERNEL_ADDRESS, B_KERNEL_READ_AREA, &address);
+		if (mapped < B_OK || address == NULL)
+			return false;
+		cpu = (uint8*)address;
+	} else if (sInfo != NULL && sInfo->kernel_window != NULL
+		&& sInfo->shared_info != NULL) {
+		uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
+		uint64 base = (uint64)fb << 24;
+		uint64 pool = sInfo->shared_info->vram_pool_offset;
+		uint64 bytes = sInfo->shared_info->vram_pool_bytes;
+		if (page < base || page - base < pool
+			|| page - base - pool >= bytes)
+			return false;
+		cpu = sInfo->kernel_window + (page - base - pool);
+	} else
+		return false;
+	memcpy(words, cpu + offset, count * 4);
+	if (mapped >= 0)
+		delete_area(mapped);
+	return true;
+}
+
+
+uint32
+r5_gfx9_vmid1_copy(uint64 va, uint32* words, uint32 count)
+{
+	uint32 done = 0;
+	if (words == NULL || count == 0)
+		return 0;
+	if (count > 1024)
+		count = 1024;
+	while (done < count) {
+		uint32 chunk = count - done;
+		uint32 room = (4096u - (uint32)(va & 0xfffu)) / 4u;
+		if (room == 0)
+			break;
+		if (chunk > room)
+			chunk = room;
+		if (chunk > 16)
+			chunk = 16;
+		if (!r5_gfx9_vmid1_read(va, words + done, chunk))
+			break;
+		done += chunk;
+		va += (uint64)chunk * 4u;
+	}
+	return done;
+}
+
+
+int32
+r5_gfx9_priv_count()
+{
+	return sPrivCount;
+}
+
+
+bool
+r5_gfx9_take_priv(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
+{
+	if (ib1 == NULL || ib2 == NULL || sPrivPending == 0)
+		return false;
+	*ib1 = sPrivIb1;
+	*ib2 = sPrivIb2;
+	sPrivPending = 0;
+	return true;
 }
 
 

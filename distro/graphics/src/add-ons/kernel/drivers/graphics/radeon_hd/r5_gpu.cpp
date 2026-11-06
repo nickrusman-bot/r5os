@@ -13,6 +13,7 @@
 #include "r5_gpu.h"
 #include "r5_span.h"
 #include "r5_wait.h"
+#include "r5_stage_p.h"
 
 #include <KernelExport.h>
 #include <condition_variable.h>
@@ -207,6 +208,10 @@ static gpu_job sJobs[kMaxJob];
 static gpu_prt sPrt[kMaxPrt];
 static uint64 sHighestSequence;
 static uint64 sLastIbVa;
+static uint64 sLastIbList[8];
+static uint32 sLastIbDw[8];
+static uint32 sLastIbN;
+static int32 sSubmitLog;
 static radeon_info* sInfo;
 static bool sReplacing;
 static lock sGpuLock;
@@ -216,6 +221,10 @@ static bool sLost = false;
 static int32 sContexts = 0;
 static sem_id sRetireSem = -1;
 static thread_id sRetireThread = -1;
+
+
+static void gpu_ib_words(const char* why);
+static void gpu_dump_priv();
 
 
 static void
@@ -239,10 +248,10 @@ gpu_lost(radeon_info* info, const char* why)
 		return;
 	sLost = true;
 	(void)info;
-	uint64 pte = 0;
-	if (sLastIbVa != 0)
-		r5_gfx9_vmid1_pte(sLastIbVa, &pte);
-	r5_gfx9_cp_dump(why, pte);
+	for (uint32 i = 0; i < kMaxJob; i++)
+		sJobs[i].live = false;
+	sEop.NotifyAll();
+	gpu_ib_words(why);
 }
 
 
@@ -307,9 +316,11 @@ gpu_retire_thread(void* data)
 		if (got != B_OK && got != B_TIMED_OUT)
 			break;
 		gpu_lock();
-		if (got == B_OK)
-			r5_gpu_eop();
+		/* The one-second timeout is the check when no interrupt arrives.
+		 * Retire from the user fence first, then look at what is left. */
+		r5_gpu_eop();
 		gpu_release_parked(r5_gfx9_user_seen());
+		gpu_dump_priv();
 		gpu_watchdog();
 		gpu_unlock();
 	}
@@ -399,6 +410,8 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 	int step = r5_wait_step(gpu_counter(value), target, timeoutUs, 0);
 	if (step == R5_WAIT_DONE)
 		return B_OK;
+	if (sLost)
+		return ECANCELED;
 	if (step == R5_WAIT_POLL)
 		return B_TIMED_OUT;
 	bigtime_t deadline = system_time() + (bigtime_t)timeoutUs;
@@ -410,6 +423,8 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 			now >= deadline);
 		if (step == R5_WAIT_DONE)
 			return B_OK;
+		if (sLost)
+			return ECANCELED;
 		if (step == R5_WAIT_TIMEOUT)
 			return B_TIMED_OUT;
 		bigtime_t left = deadline - now;
@@ -444,8 +459,13 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	out.revision = info->pci->revision;
 	if (gpu_render_enabled())
 		out.capabilities = R5_GPU_CAP_RENDER;
+	if (sLost)
+		out.capabilities |= R5_GPU_CAP_LOST;
 	out.va_offset = R5_GPU_VA_OFFSET;
 	out.va_max = R5_GPU_VA_MAX;
+	/* amdgpu_kms.c for this VM: the hole ends at AMDGPU_GMC_HOLE_END
+	 * and the high manager runs up to the byte size minus the reserved
+	 * top. The page tables are the existing 4-level tables. */
 	out.high_va_offset = R5_GPU_HIGH_VA_OFFSET;
 	out.high_va_max = R5_GPU_HIGH_VA_MAX;
 	out.vendor_block_size = (uint32)sizeof(r5_gpu_amd_info);
@@ -671,16 +691,18 @@ gpu_watchdog()
 		return;
 	bigtime_t now = system_time();
 	uint64 seen = r5_gfx9_user_seen();
+	gpu_job* oldest = NULL;
 	for (uint32 i = 0; i < kMaxJob; i++) {
 		gpu_job* job = &sJobs[i];
 		if (!job->live || job->sequence <= seen || job->submitted == 0)
 			continue;
-		if (now - job->submitted < kWatchdogUs)
-			continue;
-		gpu_lost(sInfo, "gpu lost watchdog");
-		gpu_release_parked(~0ull);
-		return;
+		if (oldest == NULL || job->submitted < oldest->submitted)
+			oldest = job;
 	}
+	if (oldest == NULL || now - oldest->submitted < kWatchdogUs)
+		return;
+	gpu_lost(sInfo, "gpu lost watchdog");
+	gpu_release_parked(~0ull);
 }
 
 
@@ -695,7 +717,7 @@ gpu_bo_detach(gpu_client* client, gpu_bo* bo, uint32 handle)
 		break;
 	}
 	uint64 sequence = client->lastSequence;
-	if (sequence != 0 && r5_gfx9_user_seen() < sequence) {
+	if (!sLost && sequence != 0 && r5_gfx9_user_seen() < sequence) {
 		bo->owner = NULL;
 		bo->parked = true;
 		bo->parkSequence = sequence;
@@ -1231,6 +1253,8 @@ static status_t
 gpu_wait_room(radeon_info* info, uint32 dwords)
 {
 	(void)info;
+	if (sLost)
+		return ECANCELED;
 	if (r5_gfx9_user_room(dwords))
 		return B_OK;
 	bigtime_t deadline = system_time() + (bigtime_t)kRoomWaitUs;
@@ -1240,6 +1264,8 @@ gpu_wait_room(radeon_info* info, uint32 dwords)
 		bigtime_t now = system_time();
 		if (r5_gfx9_user_room(dwords))
 			return B_OK;
+		if (sLost)
+			return ECANCELED;
 		if (now >= deadline)
 			return B_BUSY;
 		gpu_unlock();
@@ -1259,10 +1285,15 @@ gpu_sync_signalled(uint64 value, uint64 submitted, uint64 target, bool binary)
 }
 
 
+static bool gpu_job_blocks(const gpu_sync* sync, uint64 target, bool binary);
+
+
 static bool
 gpu_wait_ready(const gpu_sync* sync, const r5_gpu_cs_sync* wait)
 {
 	bool binary = (wait->flags & R5_GPU_CS_SYNC_BINARY) != 0;
+	if (gpu_job_blocks(sync, wait->point, binary))
+		return false;
 	return gpu_sync_signalled(sync->point, sync->submitted, wait->point, binary);
 }
 
@@ -1271,7 +1302,7 @@ static status_t
 gpu_submit(gpu_client* client, void* buffer, size_t length)
 {
 	if (sLost)
-		return gpu_refuse("CS_SUBMIT", "lost", B_ERROR, 0, 0, 0, 0, 0, 0, 0);
+		return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, 0, 0, 0, 0, 0, 0, 0);
 	r5_gpu_cs in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
@@ -1318,7 +1349,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		bigtime_t deadline = system_time() + (bigtime_t)kFreeWaitUs;
 		while (!gpu_wait_ready(sync, &waits[i])) {
 			if (sLost)
-				return gpu_refuse("CS_SUBMIT", "lost", B_ERROR, in.context, 0,
+				return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, in.context, 0,
 					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			bigtime_t now = system_time();
 			if (now >= deadline)
@@ -1354,13 +1385,12 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		return gpu_refuse("CS_SUBMIT", "job", B_BUSY, in.context, 0, in.ib_count,
 			0, 0, in.ring, 0);
 	r5_gfx9_user_ib ringIbs[kMaxList];
-	uint32 dwords = 8;
 	for (uint32 i = 0; i < in.ib_count; i++) {
 		ringIbs[i].va = ibs[i].gpu_va;
 		ringIbs[i].dwords = ibs[i].dwords;
 		ringIbs[i].vmid = 1;
-		dwords += 4;
 	}
+	uint32 dwords = r5_gfx9_user_commit_dwords(in.ib_count);
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
@@ -1395,6 +1425,14 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		}
 	}
 	asm volatile("mfence" ::: "memory");
+	if (sSubmitLog < 16) {
+		sSubmitLog++;
+		for (uint32 i = 0; i < in.ib_count; i++) {
+			dprintf("radeon_hd: submit ib va %016llx dw %lu\n",
+				(unsigned long long)ibs[i].gpu_va,
+				(unsigned long)ibs[i].dwords);
+		}
+	}
 	gpu_job* job = &sJobs[jobSlot];
 	memset(job, 0, sizeof(*job));
 	uint32 signalFlags[kMaxList];
@@ -1420,10 +1458,20 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	job->submitted = system_time();
 	if (in.ib_count > 0)
 		sLastIbVa = ibs[0].gpu_va;
+	sLastIbN = in.ib_count > 8 ? 8 : in.ib_count;
+	for (uint32 i = 0; i < sLastIbN; i++) {
+		sLastIbList[i] = ibs[i].gpu_va;
+		sLastIbDw[i] = ibs[i].dwords;
+	}
 	if (sequence > sHighestSequence)
 		sHighestSequence = sequence;
 	for (uint32 i = 0; i < in.signal_count; i++) {
-		if ((signalFlags[i] & R5_GPU_CS_SYNC_BINARY) != 0)
+		/* RADV's queue syncobj is signaled with timeline point 0.
+		 * That is this job's sequence, the same as a binary signal.
+		 * submitted moves here. point moves when the user fence
+		 * shows this sequence. */
+		if ((signalFlags[i] & R5_GPU_CS_SYNC_BINARY) != 0
+			|| job->points[i] == 0)
 			job->points[i] = sequence;
 		gpu_sync* sync = job->syncs[i];
 		if (sync != NULL && job->points[i] > sync->submitted)
@@ -1449,7 +1497,10 @@ gpu_fence_wait(radeon_info* info, void* buffer, size_t length)
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
 		return status;
-	return gpu_wait_value(info, NULL, in.sequence, in.timeout_us);
+	status = gpu_wait_value(info, NULL, in.sequence, in.timeout_us);
+	if (status == B_TIMED_OUT && in.timeout_us != 0)
+		gpu_ib_words("fence timeout");
+	return status;
 }
 
 
@@ -1508,7 +1559,7 @@ gpu_sync_destroy(gpu_client* client, void* buffer, size_t length)
 			continue;
 		for (uint32 n = 0; n < sJobs[i].count; n++) {
 			if (sJobs[i].syncs[n] == sync)
-				return B_BUSY;
+				sJobs[i].syncs[n] = NULL;
 		}
 	}
 	sync->live = false;
@@ -1530,10 +1581,35 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0) {
 		if (sync->submitted == 0)
 			return B_TIMED_OUT;
-		return gpu_wait_value(client->info, &sync->point, sync->submitted,
+		status = gpu_wait_value(client->info, &sync->point, sync->submitted,
 			in.timeout_us);
+	} else
+		status = gpu_wait_value(client->info, &sync->point, in.point,
+			in.timeout_us);
+	if (status == B_TIMED_OUT && in.timeout_us != 0)
+		gpu_ib_words("sync wait");
+	return status;
+}
+
+
+static bool
+gpu_job_blocks(const gpu_sync* sync, uint64 target, bool binary)
+{
+	uint64 seen = r5_gfx9_user_seen();
+	for (uint32 i = 0; i < kMaxJob; i++) {
+		gpu_job* job = &sJobs[i];
+		if (!job->live || job->sequence <= seen)
+			continue;
+		for (uint32 n = 0; n < job->count; n++) {
+			if (job->syncs[n] != sync)
+				continue;
+			if (binary)
+				return true;
+			if (job->points[n] >= target && sync->point < target)
+				return true;
+		}
 	}
-	return gpu_wait_value(client->info, &sync->point, in.point, in.timeout_us);
+	return false;
 }
 
 
@@ -1542,6 +1618,8 @@ gpu_list_ready(const gpu_sync* sync, uint64 target, uint32 flags)
 {
 	bool binary = (flags & R5_GPU_WAIT_BINARY) != 0;
 	bool available = (flags & R5_GPU_WAIT_AVAILABLE) != 0;
+	if (!available && gpu_job_blocks(sync, target, binary))
+		return false;
 	uint64 value = available ? sync->submitted : sync->point;
 	return gpu_sync_signalled(value, sync->submitted, target, binary);
 }
@@ -1617,6 +1695,8 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 			return gpu_copy_out(buffer, length, &in, sizeof(in));
 		}
 		bigtime_t now = system_time();
+		if (sLost)
+			return ECANCELED;
 		if (in.timeout_us == 0 || now >= deadline)
 			return B_TIMED_OUT;
 		ConditionVariableEntry entry;
@@ -1669,6 +1749,8 @@ static bool
 gpu_src_reached(const gpu_sync* sync, uint64 srcPoint)
 {
 	bool binary = srcPoint == 0;
+	if (gpu_job_blocks(sync, srcPoint, binary))
+		return false;
 	return gpu_sync_signalled(sync->point, sync->submitted, srcPoint, binary);
 }
 
@@ -1705,6 +1787,8 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 	bool dstBinary = in.dst_point == 0;
 	if (srcBinary && src->submitted == 0)
 		return B_BAD_VALUE;
+	if (!gpu_src_reached(src, in.src_point) && sLost)
+		return ECANCELED;
 	if (gpu_src_reached(src, in.src_point)) {
 		if (dstBinary)
 			gpu_sync_host(dst);
@@ -1764,6 +1848,223 @@ gpu_selftest_enabled()
 		unload_driver_settings(settings);
 	}
 	return enabled;
+}
+
+
+static uint32
+gpu_known_dw(uint64 va)
+{
+	for (uint32 i = 0; i < sLastIbN && i < 8; i++) {
+		if (sLastIbList[i] == va && sLastIbDw[i] != 0)
+			return sLastIbDw[i];
+	}
+	return 0;
+}
+
+
+static void gpu_dump_one(const char* why, const char* which, uint64 base,
+	uint32 hint, uint32 cpOffset, int depth);
+
+
+static void
+gpu_mark(uint64 va)
+{
+	uint32 word = 0;
+	uint32 got = 0;
+	uint64 pte = 0;
+	if (va != 0) {
+		got = r5_gfx9_vmid1_copy(va, &word, 1);
+		r5_gfx9_vmid1_pte(va, &pte);
+	}
+	/* The page number sits above the flag bits. */
+	uint64 pa = pte & ~0xfffull;
+	if (got == 1) {
+		dprintf("radeon_hd: mark 0x%llx = %08lx pte %016llx pa %016llx\n",
+			(unsigned long long)va, (unsigned long)word,
+			(unsigned long long)pte, (unsigned long long)pa);
+	} else {
+		dprintf("radeon_hd: mark 0x%llx unmapped pte %016llx pa %016llx\n",
+			(unsigned long long)va, (unsigned long long)pte,
+			(unsigned long long)pa);
+	}
+}
+
+
+static void
+gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth)
+{
+	uint32 i = 0;
+	while (i < count) {
+		uint32 header = words[i];
+		uint32 type = header >> 30;
+		if (type == 2) {
+			i++;
+			continue;
+		}
+		if (type != 3 || i + 1 >= count) {
+			i++;
+			continue;
+		}
+		uint32 opcode = (header >> 8) & 0xffu;
+		uint32 body = ((header >> 16) & 0x3fffu) + 1u;
+		if (i + 1u + body > count)
+			break;
+		const char* name = NULL;
+		uint32 reg = 0;
+		uint32 values = 0;
+		if (opcode == 0x68 || opcode == 0x69 || opcode == 0x76
+			|| opcode == 0x79 || opcode == 0x7a) {
+			uint32 base = 0x8000;
+			if (opcode == 0x69)
+				base = 0x28000;
+			else if (opcode == 0x76)
+				base = 0xb000;
+			else if (opcode == 0x79 || opcode == 0x7a)
+				base = 0x30000;
+			reg = base + ((words[i + 1] & 0xffffu) << 2);
+			values = body > 0 ? body - 1u : 0;
+			if (opcode == 0x68)
+				name = "SET_CONFIG_REG";
+			else if (opcode == 0x69)
+				name = "SET_CONTEXT_REG";
+			else if (opcode == 0x76)
+				name = "SET_SH_REG";
+			else if (opcode == 0x79)
+				name = "SET_UCONFIG_REG";
+			else
+				name = "SET_UCONFIG_REG_INDEX";
+		} else if (opcode == 0x37 && body >= 1) {
+			uint32 dst = (words[i + 1] >> 8) & 0xfu;
+			if (dst == 5 && body >= 3) {
+				gpu_mark((uint64)words[i + 2]
+					| ((uint64)words[i + 3] << 32));
+			} else if (dst == 0 && body >= 3) {
+				name = "WRITE_DATA";
+				reg = words[i + 2];
+				values = 1;
+			}
+		} else if (opcode == 0x49 && body >= 4) {
+			gpu_mark((uint64)words[i + 3] | ((uint64)words[i + 4] << 32));
+		} else if (opcode == 0x40 && body >= 4) {
+			uint32 dst = (words[i + 1] >> 8) & 0xfu;
+			if (dst == 0 || dst == 4) {
+				name = "COPY_DATA";
+				reg = words[i + 4] << 2;
+				values = 1;
+			}
+		} else if (opcode == 0x3c && body >= 2) {
+			if ((words[i + 1] & (3u << 4)) == 0) {
+				name = "WAIT_REG_MEM";
+				reg = words[i + 2];
+				values = 1;
+			}
+		} else if (opcode == 0x3f && body >= 3 && depth == 0) {
+			uint64 child = (uint64)words[i + 1]
+				| ((uint64)words[i + 2] << 32);
+			uint32 childDw = words[i + 3] & 0xfffffu;
+			dprintf("radeon_hd: pm4 +%04lx INDIRECT_BUFFER va %016llx dw %lu\n",
+				(unsigned long)i, (unsigned long long)child,
+				(unsigned long)childDw);
+			gpu_dump_one(why, "nested", child, childDw, 0, 1);
+		}
+		if (name != NULL && (opcode == 0x68 || opcode == 0x69
+			|| opcode == 0x76 || opcode == 0x79 || opcode == 0x7a)) {
+			dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx idx %lu count %lu\n",
+				(unsigned long)i, name, (unsigned long)reg,
+				(unsigned long)(words[i + 1] >> 28),
+				(unsigned long)values);
+		} else if (name != NULL) {
+			dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx count %lu\n",
+				(unsigned long)i, name, (unsigned long)reg,
+				(unsigned long)values);
+		}
+		i += 1u + body;
+	}
+}
+
+
+static void
+gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
+	uint32 cpOffset, int depth)
+{
+	uint32 words[1024];
+	uint32 want = hint;
+	memset(words, 0, sizeof(words));
+	if (want == 0 || want > 1024)
+		want = 1024;
+	uint32 got = 0;
+	if (base != 0)
+		got = r5_gfx9_vmid1_copy(base, words, want);
+	dprintf("radeon_hd: %s %s va %016llx dw %lu got %lu cp_off %lu\n",
+		why == NULL ? "ib" : why, which == NULL ? "ib" : which,
+		(unsigned long long)base, (unsigned long)want,
+		(unsigned long)got, (unsigned long)cpOffset);
+	for (uint32 i = 0; i < got; i += 8) {
+		uint32 line[8];
+		uint32 n = got - i;
+		memset(line, 0, sizeof(line));
+		if (n > 8)
+			n = 8;
+		memcpy(line, words + i, n * 4);
+		dprintf("radeon_hd: ib +%04lx %08lx %08lx %08lx %08lx "
+			"%08lx %08lx %08lx %08lx\n",
+			(unsigned long)i,
+			(unsigned long)line[0], (unsigned long)line[1],
+			(unsigned long)line[2], (unsigned long)line[3],
+			(unsigned long)line[4], (unsigned long)line[5],
+			(unsigned long)line[6], (unsigned long)line[7]);
+	}
+	gpu_pm4_walk(why, words, got, depth);
+}
+
+
+static void
+gpu_dump_regs(const char* why, const r5_gfx9_ib_now* ib, const char* which)
+{
+	if (ib == NULL || ib->base == 0)
+		return;
+	uint32 known = gpu_known_dw(ib->base);
+	uint32 hint = known != 0 ? known : 1024;
+	gpu_dump_one(why, which, ib->base, hint, ib->offset, 0);
+}
+
+
+static void
+gpu_ib_words(const char* why)
+{
+	r5_gfx9_ib_now ib1;
+	r5_gfx9_ib_now ib2;
+	memset(&ib1, 0, sizeof(ib1));
+	memset(&ib2, 0, sizeof(ib2));
+	r5_gfx9_ib_regs(&ib1, &ib2);
+	gpu_dump_regs(why, &ib1, "ib1");
+	if (ib2.base != ib1.base)
+		gpu_dump_regs(why, &ib2, "ib2");
+	dprintf("radeon_hd: %s roq ib1 %08lx\n",
+		why == NULL ? "ib" : why, (unsigned long)r5_gfx9_roq_ib1());
+	if (sInfo != NULL) {
+		uint64 pte = 0;
+		uint64 va = ib1.base != 0 ? ib1.base : sLastIbVa;
+		if (va != 0)
+			r5_gfx9_vmid1_pte(va, &pte);
+		r5_gfx9_cp_dump(why == NULL ? "ib" : why, pte);
+	}
+}
+
+
+static void
+gpu_dump_priv()
+{
+	r5_gfx9_ib_now ib1;
+	r5_gfx9_ib_now ib2;
+	if (!r5_gfx9_take_priv(&ib1, &ib2))
+		return;
+	gpu_dump_regs("ih", &ib1, "ib1");
+	if (ib2.base != ib1.base)
+		gpu_dump_regs("ih", &ib2, "ib2");
+	dprintf("radeon_hd: ih roq ib1 %08lx\n",
+		(unsigned long)r5_gfx9_roq_ib1());
+	r5_gfx9_pipe_log("ih");
 }
 
 
@@ -1887,9 +2188,98 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt)
 }
 
 
+struct gpu_stage_pace {
+	bool		landed;
+	int32		ms;
+	int			pace;
+};
+
+
+/* The stage submit is a job with no sync object, so the retire thread's
+ * five-second watchdog is what marks the device lost. */
+static int
+gpu_stage_slot(uint64 sequence)
+{
+	for (uint32 i = 0; i < kMaxJob; i++) {
+		if (sJobs[i].live)
+			continue;
+		memset(&sJobs[i], 0, sizeof(sJobs[i]));
+		sJobs[i].live = true;
+		sJobs[i].sequence = sequence;
+		sJobs[i].submitted = system_time();
+		return (int)i;
+	}
+	return -1;
+}
+
+
+static uint32
+gpu_stage_word(uint8* destCpu)
+{
+	if (destCpu == NULL)
+		return 0;
+	uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
+	asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
+	asm volatile("mfence" ::: "memory");
+	return *(volatile uint32*)(destCpu + 64);
+}
+
+
+/* Caller holds the lock and drops it while polling. A landed fence
+ * removes the job. A fence that is still out at 5s stays, and this
+ * waits until the watchdog has marked the device lost. */
+static gpu_stage_pace
+gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu)
+{
+	bigtime_t start = slot >= 0 ? sJobs[slot].submitted : system_time();
+	gpu_stage_pace pace;
+	pace.landed = false;
+	pace.ms = 0;
+	pace.pace = R5_PACE_WAIT;
+	gpu_unlock();
+	while (true) {
+		bool fence = r5_gfx9_user_seen() == sequence;
+		bool word = !expectWord || gpu_stage_word(destCpu) == 0xDEADBEEF;
+		bigtime_t elapsed = system_time() - start;
+		int step = r5_pace((uint64)elapsed, fence && word);
+		if (step != R5_PACE_WAIT) {
+			pace.landed = step != R5_PACE_TIMEOUT;
+			pace.pace = step;
+			break;
+		}
+		snooze(1000);
+	}
+	pace.ms = (int32)((system_time() - start) / 1000);
+	gpu_lock();
+	if (pace.landed) {
+		if (slot >= 0 && slot < (int)kMaxJob)
+			sJobs[slot].live = false;
+	} else if (slot >= 0) {
+		bigtime_t deadline = system_time() + 2000000;
+		while (!sLost && system_time() < deadline) {
+			gpu_unlock();
+			snooze(1000);
+			gpu_lock();
+		}
+	}
+	return pace;
+}
+
+
+static const char*
+gpu_stage_how(const gpu_stage_pace& pace)
+{
+	if (pace.pace == R5_PACE_LATE)
+		return "late";
+	if (pace.pace == R5_PACE_TIMEOUT)
+		return "timeout";
+	return "ok";
+}
+
+
 /* One VMID 1 IB. The WRITE_DATA destination is destVa, which is that
  * page plus 64 when the word is read back through the kernel mapping.
- * The wait does not mark the GPU lost. */
+ * The wait does not mark the GPU lost. The watchdog does, at 5s. */
 static bool
 gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
 	uint64 destVa, bool expectWord)
@@ -1919,28 +2309,16 @@ gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
 		return false;
 	}
-	bool landed = false;
-	uint32 word = 0;
-	for (int i = 0; i < 1000; i++) {
-		word = expectWord && destCpu != NULL
-			? *(volatile uint32*)(destCpu + 64) : 0;
-		if (r5_gfx9_user_seen() == sequence
-			&& (!expectWord || word == 0xDEADBEEF)) {
-			landed = true;
-			break;
-		}
-		snooze(1000);
-	}
-	if (expectWord && destCpu != NULL)
-		word = *(volatile uint32*)(destCpu + 64);
-	dprintf("radeon_hd: %s %s wb %08lx seq %llu seen %llu\n",
-		name, landed ? "ok" : "timeout",
-		(unsigned long)word,
-		(unsigned long long)sequence,
-		(unsigned long long)r5_gfx9_user_seen());
-	if (!landed)
+	int slot = gpu_stage_slot(sequence);
+	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, expectWord,
+		expectWord ? destCpu : NULL);
+	dprintf("radeon_hd: %s %s %ld ms\n", name, gpu_stage_how(pace),
+		(long)pace.ms);
+	if (!pace.landed) {
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
-	return landed;
+		gpu_ib_words(name);
+	}
+	return pace.landed;
 }
 
 
@@ -2004,6 +2382,207 @@ gpu_stage_u2a(radeon_info* info)
 	gpu_stage_release(&dest);
 	gpu_stage_release(&ib);
 	return landed;
+}
+
+
+static const uint64 kStagePIb = R5_GPU_VA_MAX - 0x8000ull;
+static const uint64 kStagePPage = R5_GPU_VA_MAX - 0x7000ull;
+static const uint64 kStagePIb2 = R5_GPU_VA_MAX - 0x6000ull;
+
+
+/* One VMID 1 indirect buffer, one fence. step 0 is the marker
+ * self-test and is not a numbered stage P line. ROOM prints the
+ * pointers and does not write the packet. */
+static uint32
+gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
+	uint64 va, uint32 n, uint64 extraVa, uint32 extraN)
+{
+	r5_gfx9_user_ib submit;
+	memset(&submit, 0, sizeof(submit));
+	submit.va = va;
+	submit.dwords = n;
+	submit.vmid = 1;
+	sLastIbVa = va;
+	sLastIbN = extraN != 0 ? 2 : 1;
+	sLastIbList[0] = va;
+	sLastIbDw[0] = n;
+	if (extraN != 0) {
+		sLastIbList[1] = extraVa;
+		sLastIbDw[1] = extraN;
+	}
+	uint64 sequence = 0;
+	int32 before = r5_gfx9_priv_count();
+	uint32 need = r5_gfx9_user_commit_dwords(extraN != 0 ? 2 : 1);
+	if (need == 0 || !r5_gfx9_user_room(need)) {
+		uint64 wptr = 0;
+		uint64 rptr = 0;
+		r5_gfx9_ring_ptrs(&wptr, &rptr);
+		if (step == 0) {
+			dprintf("radeon_hd: mark selftest room wptr %llx rptr %llx\n",
+				(unsigned long long)wptr, (unsigned long long)rptr);
+		} else {
+			dprintf("radeon_hd: p%lu %s room wptr %llx rptr %llx\n",
+				(unsigned long)step, name,
+				(unsigned long long)wptr, (unsigned long long)rptr);
+		}
+		if (!sLost)
+			gpu_lost(info, "p");
+		return R5_GPU_P_ROOM;
+	}
+	if (!r5_gfx9_user_submit(&submit, 1, &sequence)) {
+		if (step == 0)
+			dprintf("radeon_hd: mark selftest submit\n");
+		else {
+			dprintf("radeon_hd: p%lu %s submit\n",
+				(unsigned long)step, name);
+		}
+		gpu_lost(info, "p");
+		return R5_GPU_P_TIMEOUT;
+	}
+	int slot = gpu_stage_slot(sequence);
+	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, false, NULL);
+	int32 after = r5_gfx9_priv_count();
+	uint32 status = R5_GPU_P_OK;
+	const char* how = gpu_stage_how(pace);
+	if (after != before) {
+		status = R5_GPU_P_PRIV;
+		how = "priv";
+		if (!sLost)
+			gpu_lost(info, "p");
+	} else if (!pace.landed) {
+		status = R5_GPU_P_TIMEOUT;
+		how = "timeout";
+		if (!sLost)
+			gpu_ib_words(step == 0 ? "mark" : name);
+	}
+	if (step == 0) {
+		dprintf("radeon_hd: mark selftest %s %ld ms\n", how,
+			(long)pace.ms);
+	} else {
+		dprintf("radeon_hd: p%lu %s %s %ld ms\n",
+			(unsigned long)step, name, how, (long)pace.ms);
+	}
+	return status;
+}
+
+
+/* Kernel mappings only. The IB and the test page are VRAM windows,
+ * never a user pointer. One packet type per step. A privilege fault
+ * marks the device lost. A fence that is still out at 5s is lost
+ * through the watchdog. U4 and U2 run later, from stage U. */
+static status_t
+gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
+{
+	memset(out, 0, sizeof(*out));
+	out->size = (uint32)sizeof(*out);
+	out->version = 1;
+	out->count = R5_P_COUNT;
+	for (uint32 i = 0; i < R5_P_COUNT && i < R5_GPU_P_STEPS; i++) {
+		const char* name = r5_stage_p_name(i);
+		out->status[i] = R5_GPU_P_SKIP;
+		for (uint32 c = 0; c < 23 && name[c] != '\0'; c++)
+			out->name[i][c] = name[c];
+	}
+	if (sLost) {
+		dprintf("radeon_hd: skipped, gpu lost\n");
+		return ECANCELED;
+	}
+	if (!gpu_render_enabled() || !gpu_selftest_enabled())
+		return B_NOT_ALLOWED;
+	if (!r5_gfx9_vmid1_setup()) {
+		dprintf("radeon_hd: p skip vmid\n");
+		return B_NO_INIT;
+	}
+	gpu_stage_page ib;
+	gpu_stage_page ib2;
+	gpu_stage_page page;
+	memset(&ib, 0, sizeof(ib));
+	memset(&ib2, 0, sizeof(ib2));
+	memset(&page, 0, sizeof(page));
+	if (!gpu_stage_map(info, &ib, kStagePIb, false)
+		|| !gpu_stage_map(info, &ib2, kStagePIb2, false)
+		|| !gpu_stage_map(info, &page, kStagePPage, false)) {
+		dprintf("radeon_hd: p map\n");
+		gpu_stage_release(&ib);
+		gpu_stage_release(&ib2);
+		gpu_stage_release(&page);
+		return B_NO_MEMORY;
+	}
+	memset(page.cpu, 0, 4096);
+	*(volatile uint32*)(page.cpu + R5_P_SHADER_OFF) = R5_P_SHADER;
+	r5_gfx9_stage_bytes(page.cpu, 4096);
+	bool stop = false;
+	uint32 probe[8];
+	memset(probe, 0, sizeof(probe));
+	uint32 probeN = r5_stage_p_build(R5_P_WRITE_DATA, page.va, probe, 8, 0);
+	if (probeN == 6)
+		probe[4] = R5_P_MARK_VALUE;
+	if (probeN != 6) {
+		dprintf("radeon_hd: mark selftest bad\n");
+		stop = true;
+	} else {
+		memcpy(ib.cpu, probe, probeN * 4);
+		r5_gfx9_stage_bytes(ib.cpu, probeN * 4);
+		uint32 probeStatus = gpu_stage_submit(info, 0, "mark", ib.va,
+			probeN, 0, 0);
+		if (probeStatus != R5_GPU_P_OK) {
+			dprintf("radeon_hd: mark selftest bad\n");
+			stop = true;
+		} else {
+			uint32 back = 0;
+			uint32 got = r5_gfx9_vmid1_copy(page.va, &back, 1);
+			dprintf("radeon_hd: mark selftest %s\n",
+				got == 1 && back == R5_P_MARK_VALUE ? "ok" : "bad");
+			gpu_mark(page.va);
+		}
+	}
+	for (uint32 i = 0; i < R5_P_COUNT && i < R5_GPU_P_STEPS; i++) {
+		if (stop)
+			break;
+		uint32 words[256];
+		memset(words, 0, sizeof(words));
+		uint64 extraVa = 0;
+		uint32 extraN = 0;
+		if (i == R5_P_IB2) {
+			uint32 body[8];
+			memset(body, 0, sizeof(body));
+			extraN = r5_stage_p_ib2_body(page.va, body, 8);
+			if (extraN != 0) {
+				memcpy(ib2.cpu, body, extraN * 4);
+				r5_gfx9_stage_bytes(ib2.cpu, extraN * 4);
+				extraVa = ib2.va;
+			}
+		} else if (i == R5_P_IB24) {
+			uint32 preambleN = 0;
+			const uint32* preamble = r5_stage_p_preamble(&preambleN);
+			memcpy(ib2.cpu, preamble, preambleN * 4);
+			r5_gfx9_stage_bytes(ib2.cpu, preambleN * 4);
+			extraVa = ib2.va;
+			extraN = preambleN;
+		}
+		uint32 n = r5_stage_p_build(i, page.va, words, 256, ib2.va);
+		if (n == 0 || (i == R5_P_IB2 && extraN == 0)) {
+			out->status[i] = R5_GPU_P_TIMEOUT;
+			out->first_fail = i + 1;
+			stop = true;
+			continue;
+		}
+		memcpy(ib.cpu, words, n * 4);
+		r5_gfx9_stage_bytes(ib.cpu, n * 4);
+		uint32 status = gpu_stage_submit(info, i + 1, r5_stage_p_name(i),
+			ib.va, n, extraVa, extraN);
+		out->status[i] = status;
+		if (status != R5_GPU_P_OK) {
+			out->first_fail = i + 1;
+			stop = true;
+		}
+	}
+	gpu_stage_release(&page);
+	gpu_stage_release(&ib2);
+	gpu_stage_release(&ib);
+	if (stop)
+		dprintf("radeon_hd: skipped, gpu lost\n");
+	return stop ? ECANCELED : B_OK;
 }
 
 
@@ -2082,7 +2661,7 @@ gpu_free(void* cookie)
 		if (!bo->live || bo->owner != client)
 			continue;
 		uint64 sequence = client->lastSequence;
-		if (sequence != 0 && r5_gfx9_user_seen() < sequence) {
+		if (!sLost && sequence != 0 && r5_gfx9_user_seen() < sequence) {
 			bo->owner = NULL;
 			bo->parked = true;
 			bo->parkSequence = sequence;
@@ -2193,8 +2772,20 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		status = gpu_va_unmap(client, buffer, length);
 	else if (op == R5_GPU_VA_REPLACE)
 		status = gpu_va_replace(client, buffer, length, false);
-	else if (op == R5_GPU_SELFTEST) {
-		if (!gpu_selftest_enabled())
+	else if (op == R5_GPU_STAGE_P) {
+		r5_gpu_stage_p in;
+		status = gpu_copy_in(buffer, length, &in, sizeof(in));
+		if (status == B_OK) {
+			status = gpu_stage_p(client->info, &in);
+			status_t copied = gpu_copy_out(buffer, length, &in, sizeof(in));
+			if (copied != B_OK)
+				status = copied;
+		}
+	} else if (op == R5_GPU_SELFTEST) {
+		if (sLost) {
+			dprintf("radeon_hd: skipped, gpu lost\n");
+			status = ECANCELED;
+		} else if (!gpu_selftest_enabled())
 			status = B_NOT_ALLOWED;
 		else
 			status = gpu_stage_u(client->info);

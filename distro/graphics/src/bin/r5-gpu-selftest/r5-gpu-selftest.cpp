@@ -261,6 +261,7 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 		return;
 	}
 	if (pid == 0) {
+		setpgid(0, 0);
 		dup2(fds[1], 1);
 		dup2(fds[1], 2);
 		close(fds[0]);
@@ -268,6 +269,7 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 		execl("/bin/sh", "sh", "-c", command, (char*)NULL);
 		_exit(127);
 	}
+	setpgid(pid, pid);
 	close(fds[1]);
 	fcntl(fds[0], F_SETFL, O_NONBLOCK);
 	bigtime_t deadline = system_time() + (bigtime_t)seconds * 1000000;
@@ -288,7 +290,10 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 			break;
 		}
 		if (system_time() >= deadline) {
-			kill(pid, SIGKILL);
+			/* kill() with a positive id signals the team. The shell's
+			 * child is another team in this process group. */
+			kill(-pid, SIGKILL);
+			kill_team(pid);
 			waitpid(pid, &status, 0);
 			fprintf(out, "killed, it did not exit\n");
 			fflush(out);
@@ -329,6 +334,70 @@ write_command(FILE* out, const char* title, const char* command)
 	int status = pclose(pipe);
 	if (!any)
 		fprintf(out, "no output, status %d\n", status);
+}
+
+
+static bool
+device_lost()
+{
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	r5_gpu_info info;
+	if (fd < 0)
+		return false;
+	memset(&info, 0, sizeof(info));
+	info.size = (uint32_t)sizeof(info);
+	info.version = 1;
+	if (ioctl(fd, R5_GPU_GET_INFO, &info, sizeof(info)) != 0) {
+		close(fd);
+		return false;
+	}
+	close(fd);
+	return (info.capabilities & R5_GPU_CAP_LOST) != 0;
+}
+
+
+static void
+skip_lost(FILE* out, const char* title)
+{
+	fprintf(out, "stage %s\nskipped, gpu lost\n", title);
+	fflush(out);
+}
+
+
+static void
+stage_p(FILE* out)
+{
+	fprintf(out, "stage P\n");
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	r5_gpu_stage_p result;
+	const char* how[] = {
+		"ok", "timeout", "priv", "skipped, gpu lost", "room"
+	};
+	if (fd < 0) {
+		fprintf(out, "not available, no supported GPU\n");
+		return;
+	}
+	memset(&result, 0, sizeof(result));
+	result.size = (uint32_t)sizeof(result);
+	result.version = 1;
+	int ret = ioctl(fd, R5_GPU_STAGE_P, &result, sizeof(result));
+	close(fd);
+	if (ret != 0 && result.count == 0) {
+		fprintf(out, "R5_GPU_STAGE_P %d errno %d\n", ret, errno);
+		return;
+	}
+	for (uint32_t i = 0; i < result.count && i < R5_GPU_P_STEPS; i++) {
+		uint32_t status = result.status[i];
+		if (status > R5_GPU_P_ROOM)
+			status = R5_GPU_P_SKIP;
+		fprintf(out, "p%u %s %s\n", i + 1, result.name[i], how[status]);
+		if (status == R5_GPU_P_PRIV || status == R5_GPU_P_TIMEOUT
+			|| status == R5_GPU_P_ROOM) {
+			fprintf(out, "skipped, gpu lost\n");
+			break;
+		}
+	}
+	fflush(out);
 }
 
 
@@ -378,9 +447,9 @@ main()
 			fprintf(out, "stage render node: api %u.%u device %04x cu %u\n",
 				info->api_major, info->api_minor, info->device,
 				amd->device.cu_active_number);
-			fprintf(out, "firmware me %u pfp %u mec %u\n",
-				amd->firmware[0x04].ver, amd->firmware[0x05].ver,
-				amd->firmware[0x08].ver);
+			fprintf(out, "firmware me %u feature %u pfp %u mec %u\n",
+				amd->firmware[0x04].ver, amd->firmware[0x04].feature,
+				amd->firmware[0x05].ver, amd->firmware[0x08].ver);
 		}
 		close(fd);
 		uint64_t lowVa = R5_GPU_VA_OFFSET;
@@ -391,12 +460,40 @@ main()
 		if (reported->high_va_offset != 0)
 			highVa = reported->high_va_offset;
 		stage_bo(out, lowVa, highVa, false);
+		stage_p(out);
+		if (device_lost()) {
+			skip_lost(out, "vulkaninfo");
+			skip_lost(out, "VulkanTeapot (sam)");
+			skip_lost(out, "VulkanTeapot");
+			skip_lost(out, "ib");
+			skip_lost(out, "selftest");
+		} else {
 		run_stage(out, "vulkaninfo", "/bin/vulkaninfo --summary 2>&1", 120);
-		run_stage(out, "VulkanTeapot (sam)",
-			"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1", 120);
-		run_stage(out, "VulkanTeapot", "/bin/VulkanTeapot --selftest 2>&1", 120);
-		stage_bo(out, lowVa, highVa, true);
-		stage_selftest(out);
+		if (device_lost()) {
+			skip_lost(out, "VulkanTeapot (sam)");
+			skip_lost(out, "VulkanTeapot");
+			skip_lost(out, "ib");
+			skip_lost(out, "selftest");
+		} else {
+			run_stage(out, "VulkanTeapot (sam)",
+				"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1", 120);
+			if (device_lost()) {
+				skip_lost(out, "VulkanTeapot");
+				skip_lost(out, "ib");
+				skip_lost(out, "selftest");
+			} else {
+				run_stage(out, "VulkanTeapot",
+					"/bin/VulkanTeapot --selftest 2>&1", 120);
+				if (device_lost()) {
+					skip_lost(out, "ib");
+					skip_lost(out, "selftest");
+				} else {
+					stage_bo(out, lowVa, highVa, true);
+					stage_selftest(out);
+				}
+			}
+		}
+		}
 	}
 	fclose(out);
 	return 0;

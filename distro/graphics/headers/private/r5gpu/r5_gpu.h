@@ -43,10 +43,36 @@ enum {
 	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20,
 	R5_GPU_VA_REPLACE = R5_GPU_OP_BASE + 21,
 	R5_GPU_VA_CLEAR = R5_GPU_OP_BASE + 22,
-	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23
+	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23,
+	/* One packet type per step, before any other GPU client. Older
+	 * callers never send this opcode. */
+	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24
 };
 
 #define R5_GPU_CAP_RENDER 1u
+/* Set after the watchdog cancels the device. Older callers ignore it. */
+#define R5_GPU_CAP_LOST 2u
+
+/* Stage P. status is R5_GPU_P_OK, TIMEOUT, PRIV, SKIP or ROOM.
+ * first_fail is the 1-based step, or 0 when every step landed.
+ * name is the step. ROOM means the packet was not written. */
+/* Grown with the extra stage P steps. An older caller fails the
+ * size check. The opcode number is unchanged. */
+#define R5_GPU_P_STEPS 33u
+#define R5_GPU_P_OK 0u
+#define R5_GPU_P_TIMEOUT 1u
+#define R5_GPU_P_PRIV 2u
+#define R5_GPU_P_SKIP 3u
+#define R5_GPU_P_ROOM 4u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	count;
+	uint32_t	first_fail;
+	uint32_t	status[R5_GPU_P_STEPS];
+	char		name[R5_GPU_P_STEPS][24];
+} r5_gpu_stage_p;
 
 #define R5_GPU_DOMAIN_VRAM 1u
 #define R5_GPU_DOMAIN_GTT 2u

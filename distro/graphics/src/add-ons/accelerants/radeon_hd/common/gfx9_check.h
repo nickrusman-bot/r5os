@@ -165,8 +165,20 @@ r5_gfx9_ring_index(uint64_t wptr, uint32_t i, uint32_t dwords)
 }
 
 
+/* The CP reports rptr as an offset in the ring. wptr keeps counting.
+ * ringDwords is a power of two. The result is rptr in that same count.
+ * One slot stays free, so a distance of 0 is empty and never a full lap. */
+static inline uint64_t
+r5_gfx9_rptr_count(uint32_t ringDwords, uint64_t wptr, uint64_t rptrOffset)
+{
+	uint64_t mask = (uint64_t)ringDwords - 1u;
+	return wptr - ((wptr - (rptrOffset & mask)) & mask);
+}
+
+
 /* Free dwords, leaving one slot so the write pointer does not land on
- * the read pointer. rptr and wptr are both the continuing dword count. */
+ * the read pointer. wptr and rptr are both the continuing dword count.
+ * rptr comes from r5_gfx9_rptr_count, not from the CP register. */
 static inline uint64_t
 r5_gfx9_ring_space(uint32_t ringDwords, uint64_t wptr, uint64_t rptr)
 {
