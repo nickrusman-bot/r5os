@@ -9,6 +9,7 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_amd_device.h"
 
 #include "clearstate_defs.h"
 #include "clearstate_gfx9.h"
@@ -706,13 +707,9 @@ radeon_psp_stage(const uint8* bytes, uint32 size, radeon_psp_item* item)
 static const char*
 radeon_gfx9_fw_stem()
 {
-	uint16 pciID = sPciId;
-	// amdgpu_device_init_apu_flags: 1636 and 164c are AMD_APU_IS_RENOIR.
-	// 15e7 Barcelo and 1638 Cezanne are AMD_APU_IS_GREEN_SARDINE.
+	// amdgpu_device_init_apu_flags. The stem is the device-table column.
 	// The PFP, ME, and CE blobs differ. RLC and MEC are the same bytes.
-	if (pciID == 0x1636 || pciID == 0x164c)
-		return "renoir";
-	return "green_sardine";
+	return r5_amd_fw_stem(sPciId);
 }
 
 
@@ -1841,18 +1838,17 @@ radeon_gfx9_stall_note()
 // Linux v6.12 soc15_need_reset_on_init. The only APU in the Raven/Renoir
 // series that returns true is CHIP_RENOIR. Raven and Picasso return false,
 // and soc15_asic_reset returns before sending anything for those chips.
-// amdgpu_drv.c lists 15e7, 1636, 1638 and 164c as CHIP_RENOIR. MP1 12.0.1
-// then selects a mode-2 reset, which is smu_v12_0_mode2_reset: one SMU
-// message, PPSMC_MSG_GfxDeviceDriverReset (0x1E), argument SMU_RESET_MODE_2
-// (2). That is not a mode-1 PCI reset and it is not GRBM_SOFT_RESET.
-// This driver sends it only from the GFX ring start. Lucienne 164c is in
-// the set and is not reset here, because its firmware stays unloaded and
+// The device table lists that chip. MP1 12.0.1 then selects a mode-2
+// reset, which is smu_v12_0_mode2_reset: one SMU message,
+// PPSMC_MSG_GfxDeviceDriverReset (0x1E), argument SMU_RESET_MODE_2 (2).
+// That is not a mode-1 PCI reset and it is not GRBM_SOFT_RESET.
+// This driver sends it only from the GFX ring start. Lucienne is in the
+// set and is not reset here, because its firmware stays unloaded and
 // DCN is not reprogrammed afterwards.
 static bool
 radeon_soc15_need_reset_on_init(uint32 pciID)
 {
-	return pciID == 0x15e7 || pciID == 0x1636 || pciID == 0x1638
-		|| pciID == 0x164c;
+	return r5_amd_need_reset(pciID) != 0;
 }
 
 

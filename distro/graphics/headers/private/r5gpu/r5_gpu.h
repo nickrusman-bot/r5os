@@ -222,17 +222,14 @@ typedef struct {
 	r5_amdgpu_info_hw_ip		hw_ip[R5_AMDGPU_HW_IP_COUNT];
 } r5_gpu_amd_info;
 
+#include "r5_amd_device.h"
+
 /* external_rev uses the NBIO strap rev, the same source as
- * nbio_v7_0_get_rev_id. Renoir adds 0x91. Barcelo, Cezanne and
- * Green Sardine add 0xa1. The PCI revision is not an input. */
+ * nbio_v7_0_get_rev_id. The offset lives in the device table. */
 static inline uint32_t
 r5_amd_external_rev(uint32_t device, uint32_t strapRev)
 {
-	if (device == 0x15e7u || device == 0x1638u)
-		return strapRev + 0xa1u;
-	if (device == 0x1636u || device == 0x164cu)
-		return strapRev + 0x91u;
-	return strapRev;
+	return strapRev + r5_amd_rev_add(device);
 }
 
 typedef struct {

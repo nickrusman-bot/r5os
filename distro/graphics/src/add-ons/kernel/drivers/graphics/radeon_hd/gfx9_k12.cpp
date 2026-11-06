@@ -10,6 +10,7 @@
 #include "gfx9_start.h"
 #include "r5_vm.h"
 #include "r5_gpu.h"
+#include "r5_amd_device.h"
 #include "r5_span.h"
 #include "radeon_hd_private.h"
 
@@ -22,6 +23,7 @@
 // included here.
 extern "C" status_t vm_set_area_memory_type(area_id id,
 	phys_addr_t physicalBase, uint32 type);
+void r5_gpu_fill_passport(radeon_info* info);
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -1185,7 +1187,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	uint32 pci = info.pciID;
 	if (!ring || !kernel)
 		return;
-	if (pci != 0x15e7 && pci != 0x1636 && pci != 0x1638)
+	if (!r5_amd_gfx9_cp(pci))
 		return;
 	sGfx9Started = true;
 	if (!map_pool(info))
@@ -1214,5 +1216,6 @@ r5_gfx9_kernel_start(radeon_info& info)
 		run_k1();
 	if (ok && gart)
 		run_k2();
+	r5_gpu_fill_passport(&info);
 	publish();
 }

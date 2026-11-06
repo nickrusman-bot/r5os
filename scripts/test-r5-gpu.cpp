@@ -406,6 +406,56 @@ main()
 		return fail("barcelo rev");
 	if (r5_amd_external_rev(0x1636u, 1u) != 0x92u)
 		return fail("renoir rev");
+	{
+		r5_amd_device dev;
+		uint32_t fwv[32];
+		uint32_t fwf[32];
+		memset(fwv, 0, sizeof(fwv));
+		memset(fwf, 0, sizeof(fwf));
+		fwv[4] = 0xa7u;
+		fwf[4] = 54u;
+		/* Stick 18 syslog: CC_GC_SHADER_ARRAY_CONFIG ff080000, user 0.
+		 * rb num 2 mask 3, which is no backend disabled. */
+		r5_amd_device_fill(&dev, 0x15e7u, 0, 0, 0, 0, 0xff080000u, 0,
+			fwv, fwf);
+		if (dev.num_shader_engines != 1 || dev.num_cu_per_sh != 8)
+			return fail("passport se");
+		if (dev.cu_active_number != 7 || dev.cu_bitmap != 0xf7u)
+			return fail("passport cu");
+		if (dev.num_rb_pipes != 2 || dev.enabled_rb_pipes_mask != 3)
+			return fail("passport rb");
+		if (dev.max_engine_clock != 1800000u
+			|| dev.max_memory_clock != 1333000u
+			|| dev.vram_type != 11u || dev.vram_bit_width != 128u)
+			return fail("passport clocks");
+		if (dev.gpu_counter_freq != 100000u || dev.family != 142u)
+			return fail("passport freq");
+		if (dev.external_rev != 0xa1u || dev.hw_major != 9 || dev.hw_minor != 3)
+			return fail("passport rev");
+		if (dev.gpu_info_loaded != 0 || dev.atom_read != 0)
+			return fail("passport handover");
+		if (dev.fw_ver[4] != 0xa7u || dev.fw_feature[4] != 54u)
+			return fail("passport fw");
+		if (!r5_amd_gfx9_cp(0x15e7u) || r5_amd_gfx9_cp(0x164cu))
+			return fail("passport cp");
+		if (strcmp(r5_amd_fw_stem(0x1636u), "renoir") != 0
+			|| strcmp(r5_amd_fw_stem(0x15e7u), "green_sardine") != 0)
+			return fail("passport stem");
+		if (r5_amd_need_reset(0x164cu) == 0 || r5_amd_need_reset(0x15ddu) != 0)
+			return fail("passport reset");
+		r5_amd_device other;
+		r5_amd_device_fill(&other, 0x1636u, 1, 0, 0, 0, 0, 0, NULL, NULL);
+		if (other.gpu_counter_freq != 100000u || other.external_rev != 0x92u)
+			return fail("passport 1636");
+		char text[4096];
+		r5_amd_passport_format(&dev, text, (int)sizeof(text));
+		if (strstr(text, "num_shader_engines 1 (ip discovery not parsed") == NULL)
+			return fail("passport line");
+		if (strstr(text, "atom_read 0 (atom not read)") == NULL)
+			return fail("passport atom");
+	}
+	if (system("python3 scripts/check-gpu-hardcode.py") != 0)
+		return fail("hardcode check");
 	static_assert(R5_GPU_VA_OFFSET == 0x10000ull, "va bottom");
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");
 	static_assert(R5_GPU_HIGH_VA_OFFSET == 0xffff800000000000ull, "high");

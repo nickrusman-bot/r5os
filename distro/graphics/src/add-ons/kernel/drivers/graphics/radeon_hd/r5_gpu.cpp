@@ -56,13 +56,8 @@ static const uint32 kUserShaderArrayConfig = 0x0270;
 static const uint32 kGbAddrConfig = 0x063e;
 static const uint32 kRbBackendDisable = 0x063d;
 static const uint32 kUserRbBackendDisable = 0x06df;
-static const uint32 kRbDisableShift = 16;
-static const uint32 kRbDisableMask = 0x00ff0000u;
-/* gfx_v9_0 for IP 9.3.0: one shader engine, one array, two backends. */
-static const uint32 kMaxBackendsPerSe = 2;
-static const uint32 kInactiveShift = 16;
-static const uint32 kInactiveMask = 0xffff0000u;
-static const uint32 kCuPerSh = 8;
+static r5_amd_device sPassport;
+static bool sPassportReady = false;
 static const uint32 kMaxBo = 256;
 static const uint32 kMaxClientBo = 256;
 static const uint32 kMaxSync = 128;
@@ -149,12 +144,11 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 {
 	uint32 cc = gpu_mmio(info, kGcSegment, kShaderArrayConfig);
 	uint32 user = gpu_mmio(info, kGcSegment, kUserShaderArrayConfig);
-	uint32 inactive = ((cc | user) & kInactiveMask) >> kInactiveShift;
-	uint32 mask = (1u << kCuPerSh) - 1u;
-	uint32 bitmap = (~inactive) & mask;
+	const r5_amd_row* row = info->pci == NULL ? NULL
+		: r5_amd_row_find(info->pci->device_id);
+	uint32 width = row == NULL ? 0 : row->num_cu_per_sh;
 	uint32 count = 0;
-	for (uint32 bit = bitmap; bit != 0; bit >>= 1)
-		count += bit & 1u;
+	uint32 bitmap = r5_amd_cu_bitmap(cc, user, width, &count);
 	if (_bitmap != NULL)
 		*_bitmap = bitmap;
 	if (gpu_debug_enabled())
@@ -174,16 +168,19 @@ gpu_rb(radeon_info* info, uint32* num, uint32* mask)
 {
 	uint32 cc = gpu_mmio(info, kGcSegment, kRbBackendDisable);
 	uint32 user = gpu_mmio(info, kGcSegment, kUserRbBackendDisable);
-	uint32 disabled = ((cc | user) & kRbDisableMask) >> kRbDisableShift;
-	uint32 bits = (1u << kMaxBackendsPerSe) - 1u;
-	uint32 active = (~disabled) & bits;
+	const r5_amd_row* row = info->pci == NULL ? NULL
+		: r5_amd_row_find(info->pci->device_id);
+	uint32 backends = row == NULL ? 0 : row->max_backends_per_se;
+	uint32 engines = row == NULL ? 0 : row->num_shader_engines;
+	uint32 active = r5_amd_rb_mask(cc, user, backends);
+	uint32 pipes = backends * engines;
 	if (num != NULL)
-		*num = kMaxBackendsPerSe;
+		*num = pipes;
 	if (mask != NULL)
 		*mask = active;
 	if (r5_log_allow(0, 0, R5_LOG_ONCE, &sErrorLines, &sOnceBits, 0))
 	dprintf("radeon_hd: rb num %lu mask %lx cc %08lx user %08lx\n",
-		(unsigned long)kMaxBackendsPerSe, (unsigned long)active,
+		(unsigned long)pipes, (unsigned long)active,
 		(unsigned long)cc, (unsigned long)user);
 }
 
@@ -497,6 +494,29 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 }
 
 
+void
+r5_gpu_fill_passport(radeon_info* info)
+{
+	if (info == NULL || info->pci == NULL)
+		return;
+	uint32 rbCc = gpu_mmio(info, kGcSegment, kRbBackendDisable);
+	uint32 rbUser = gpu_mmio(info, kGcSegment, kUserRbBackendDisable);
+	uint32 cuCc = gpu_mmio(info, kGcSegment, kShaderArrayConfig);
+	uint32 cuUser = gpu_mmio(info, kGcSegment, kUserShaderArrayConfig);
+	gpu_active_cus(info, NULL);
+	gpu_rb(info, NULL, NULL);
+	r5_amd_device_fill(&sPassport, info->pci->device_id, gpu_strap_rev(info),
+		info->pci->revision, rbCc, rbUser, cuCc, cuUser,
+		info->fw_version, info->fw_feature);
+	sPassportReady = true;
+	if (r5_log_allow(0, 0, R5_LOG_ONCE, &sErrorLines, &sOnceBits, 1)) {
+		char text[4096];
+		r5_amd_passport_format(&sPassport, text, (int)sizeof(text));
+		dprintf("radeon_hd: passport\n%s", text);
+	}
+}
+
+
 static status_t
 gpu_get_info(radeon_info* info, void* buffer, size_t length)
 {
@@ -516,6 +536,7 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	out.version = 1;
 	out.api_major = R5_GPU_API_MAJOR;
 	out.api_minor = R5_GPU_API_MINOR;
+	/* Linux v6.12 PCI vendor ATI. */
 	out.vendor = 0x1002;
 	out.device = info->pci->device_id;
 	out.revision = info->pci->revision;
@@ -559,75 +580,59 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	if (length < sizeof(out) + sizeof(r5_gpu_amd_info))
 		return B_OK;
 
+	if (!sPassportReady)
+		r5_gpu_fill_passport(info);
 	r5_gpu_amd_info amd;
 	memset(&amd, 0, sizeof(amd));
 	amd.size = (uint32)sizeof(amd);
 	amd.version = 1;
-	uint32 strap = gpu_strap_rev(info);
-	uint32 bitmap = 0;
-	amd.device.device_id = info->pci->device_id;
-	amd.device.chip_rev = strap;
-	amd.device.external_rev = r5_amd_external_rev(info->pci->device_id, strap);
-	amd.device.pci_rev = info->pci->revision;
-	amd.device.family = R5_AMDGPU_FAMILY_RV;
-	amd.device.num_shader_engines = 1;
-	amd.device.num_shader_arrays_per_engine = 1;
-	amd.device.cu_active_number = gpu_active_cus(info, &bitmap);
-	amd.device.cu_bitmap[0][0] = bitmap;
-	amd.device.num_cu_per_sh = kCuPerSh;
-	amd.device.ids_flags = R5_AMDGPU_IDS_FLAGS_FUSION;
-	{
-		uint32 rbNum = 0;
-		uint32 rbMask = 0;
-		gpu_rb(info, &rbNum, &rbMask);
-		amd.device.num_rb_pipes = rbNum;
-		amd.device.enabled_rb_pipes_mask = rbMask;
-	}
-	/* gfx_v9_0_gpu_early_init, IP 9.3.0. */
-	amd.device.num_hw_gfx_contexts = 8;
-	/* gfx_v9_0_sw_init. The same value for every GFX9. */
-	amd.device.ce_ram_size = 0x8000;
-	/* Default VM fragment size 9. (1 << 9) * 4096. */
-	amd.device.pte_fragment_size = 2097152;
-	/* Mesa drm-shim for device 15e7. The SMU and the UMC table are
-	 * not read. min equals max, as the non-DPM branch of amdgpu_kms.c
-	 * does. Clocks are kHz. */
-	amd.device.max_engine_clock = 1800000;
-	amd.device.min_engine_clock = 1800000;
-	amd.device.max_memory_clock = 1333000;
-	amd.device.min_memory_clock = 1333000;
-	amd.device.vram_type = 11;
-	amd.device.vram_bit_width = 128;
-	amd.device.gc_double_offchip_lds_buf = 1;
-	/* gfx9 max_gprs, max_texture_channel_caches, and the GS depths
-	 * from the Renoir config Linux copies into this struct. */
-	amd.device.num_shader_visible_vgprs = 256;
-	amd.device.num_tcc_blocks = 4;
-	amd.device.gs_vgt_table_depth = 32;
-	amd.device.gs_prim_buffer_depth = 1792;
-	amd.device.max_gs_waves_per_vgt = 32;
-	/* kHz. Mesa's captured amdgpu query for PCI 15e7 (Renoir) reports
-	 * gpu_counter_freq 100000. Linux copies adev->clock.xclk into that
-	 * field. A zero makes RADV warn that timestamps will be wrong. */
-	if (info->pci->device_id == 0x15e7)
-		amd.device.gpu_counter_freq = 100000;
+	amd.device.device_id = sPassport.device_id;
+	amd.device.chip_rev = sPassport.chip_rev;
+	amd.device.external_rev = sPassport.external_rev;
+	amd.device.pci_rev = sPassport.pci_rev;
+	amd.device.family = sPassport.family;
+	amd.device.num_shader_engines = sPassport.num_shader_engines;
+	amd.device.num_shader_arrays_per_engine = sPassport.num_shader_arrays_per_engine;
+	amd.device.cu_active_number = sPassport.cu_active_number;
+	amd.device.cu_bitmap[0][0] = sPassport.cu_bitmap;
+	amd.device.num_cu_per_sh = sPassport.num_cu_per_sh;
+	amd.device.ids_flags = sPassport.ids_flags;
+	amd.device.num_rb_pipes = sPassport.num_rb_pipes;
+	amd.device.enabled_rb_pipes_mask = sPassport.enabled_rb_pipes_mask;
+	amd.device.num_hw_gfx_contexts = sPassport.num_hw_gfx_contexts;
+	amd.device.ce_ram_size = sPassport.ce_ram_size;
+	amd.device.pte_fragment_size = sPassport.pte_fragment_size;
+	amd.device.max_engine_clock = sPassport.max_engine_clock;
+	amd.device.min_engine_clock = sPassport.min_engine_clock;
+	amd.device.max_memory_clock = sPassport.max_memory_clock;
+	amd.device.min_memory_clock = sPassport.min_memory_clock;
+	amd.device.vram_type = sPassport.vram_type;
+	amd.device.vram_bit_width = sPassport.vram_bit_width;
+	amd.device.gc_double_offchip_lds_buf = sPassport.gc_double_offchip_lds_buf;
+	amd.device.num_shader_visible_vgprs = sPassport.num_shader_visible_vgprs;
+	amd.device.num_tcc_blocks = sPassport.num_tcc_blocks;
+	amd.device.gs_vgt_table_depth = sPassport.gs_vgt_table_depth;
+	amd.device.gs_prim_buffer_depth = sPassport.gs_prim_buffer_depth;
+	amd.device.max_gs_waves_per_vgt = sPassport.max_gs_waves_per_vgt;
+	amd.device.gpu_counter_freq = sPassport.gpu_counter_freq;
 	amd.device.virtual_address_offset = R5_GPU_VA_OFFSET;
 	amd.device.virtual_address_max = R5_GPU_VA_MAX;
-	amd.device.virtual_address_alignment = 4096;
-	amd.device.gart_page_size = 4096;
-	amd.device.wave_front_size = 64;
+	amd.device.virtual_address_alignment = sPassport.page_size;
+	amd.device.gart_page_size = sPassport.page_size;
+	amd.device.wave_front_size = sPassport.wave_front_size;
 	amd.device.high_va_offset = R5_GPU_HIGH_VA_OFFSET;
 	amd.device.high_va_max = R5_GPU_HIGH_VA_MAX;
-	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].hw_ip_version_major = 9;
-	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].hw_ip_version_minor = 3;
-	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].ib_start_alignment = 32;
-	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].ib_size_alignment = 4;
+	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].hw_ip_version_major = sPassport.hw_major;
+	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].hw_ip_version_minor = sPassport.hw_minor;
+	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].ib_start_alignment = sPassport.ib_start_alignment;
+	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].ib_size_alignment = sPassport.ib_size_alignment;
+	/* Linux v6.12 one GFX ring. Compute stays off. */
 	amd.hw_ip[R5_AMDGPU_HW_IP_GFX].available_rings = 1;
 	amd.hw_ip[R5_AMDGPU_HW_IP_COMPUTE] = amd.hw_ip[R5_AMDGPU_HW_IP_GFX];
 	amd.hw_ip[R5_AMDGPU_HW_IP_COMPUTE].available_rings = 0;
 	for (uint32 i = 0; i < R5_AMDGPU_FW_COUNT && i < 32; i++) {
-		amd.firmware[i].ver = info->fw_version[i];
-		amd.firmware[i].feature = info->fw_feature[i];
+		amd.firmware[i].ver = sPassport.fw_ver[i];
+		amd.firmware[i].feature = sPassport.fw_feature[i];
 	}
 	if (user_memcpy((uint8*)buffer + sizeof(out), &amd, sizeof(amd)) != B_OK)
 		return B_BAD_ADDRESS;

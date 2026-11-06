@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Device passport
+
+`GET_INFO` reads the vendor block from one `r5_amd_device`, filled in order: the Renoir device table, the note that Linux 6.12 does not load a `gpu_info` file for this chip, the CU and RB registers, then the firmware headers. The SMU and the UMC table are still not read, so the clocks and the memory type stay the Mesa record, now on that table, for every Renoir id. Shader engines, CUs per shader array and RB pipes are no longer bare assignments in `gpu_get_info`. PCI id tests outside the display table and this passport table are gone. The fixed K sequence asks the table for the firmware stem and the reset set. Its packet bytes are unchanged. The self-test prints each field with its source. The host test printed `ok gpu api 1.0 walk` and `ok gpu hardcode`. Not booted.
+
 ### Image with the next stick's stages
 
 `jam -q @r5-raw` finished at 23:56 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`, and updated 8351 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `3d4960834a9adae35372d798544899b100c8a1a4b7dfe3677bf235212bf4fd18`. The packages in that image match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. None of those four packages contains `/home/nickr`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `u2e`, `u4b`, `u2f` and `u2d`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`, and the image contains that program. Not booted. No stick.

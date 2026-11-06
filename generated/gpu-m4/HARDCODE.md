@@ -2,6 +2,8 @@
 
 Paper inventory from `generated/gpu-m4/HARDCODE-AUDIT.md` step 1. Line numbers are the tree at the high-address commit on `cursor/gpu-m4-teapot`. Nothing in the fixed K0–K2 sequence is changed by this file. A row marked "fixed contract, AGENTS.md" stays until the user asks.
 
+The M5 passport (`r5_amd_device.h`) now holds rows 1–5 and 7–14. Linux 6.12 `amdgpu_device_parse_gpu_info_fw` loads no `gpu_info` file for Renoir: it returns 0 when `discovery_bin` is set, and the chip switch has no Renoir case. SE, SH and CU width stay the discovery record in that table until the discovery binary is parsed. RB mask and the active CU bitmap are the registers. Clocks stay the Mesa record because ATOM is not read.
+
 | # | File:line | What | Value | Linux source | Risk | Plan |
 |---|---|---|---|---|---|---|
 | 1 | `r5_gpu.cpp:542` | `num_shader_engines` | 1 | Linux v6.12 `gfx_v9_0.c:gfx_v9_0_gpu_early_init` for GC 9.3 (one SE). Not read from `gpu_info` yet | high | M5 passport |

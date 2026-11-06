@@ -453,6 +453,47 @@ main()
 			fprintf(out, "rb num %u mask %x\n",
 				amd->device.num_rb_pipes,
 				amd->device.enabled_rb_pipes_mask);
+			r5_amd_device passport;
+			memset(&passport, 0, sizeof(passport));
+			passport.device_id = amd->device.device_id;
+			passport.chip_rev = amd->device.chip_rev;
+			passport.external_rev = amd->device.external_rev;
+			passport.family = amd->device.family;
+			passport.num_shader_engines = amd->device.num_shader_engines;
+			passport.num_shader_arrays_per_engine =
+				amd->device.num_shader_arrays_per_engine;
+			passport.num_cu_per_sh = amd->device.num_cu_per_sh;
+			passport.cu_active_number = amd->device.cu_active_number;
+			passport.cu_bitmap = amd->device.cu_bitmap[0][0];
+			passport.num_rb_pipes = amd->device.num_rb_pipes;
+			passport.enabled_rb_pipes_mask = amd->device.enabled_rb_pipes_mask;
+			passport.num_hw_gfx_contexts = amd->device.num_hw_gfx_contexts;
+			passport.ce_ram_size = amd->device.ce_ram_size;
+			passport.pte_fragment_size = amd->device.pte_fragment_size;
+			passport.max_engine_clock = (uint32_t)amd->device.max_engine_clock;
+			passport.min_engine_clock = (uint32_t)amd->device.min_engine_clock;
+			passport.max_memory_clock = (uint32_t)amd->device.max_memory_clock;
+			passport.min_memory_clock = (uint32_t)amd->device.min_memory_clock;
+			passport.vram_type = amd->device.vram_type;
+			passport.vram_bit_width = amd->device.vram_bit_width;
+			passport.gpu_counter_freq = (uint32_t)amd->device.gpu_counter_freq;
+			passport.gc_double_offchip_lds_buf =
+				amd->device.gc_double_offchip_lds_buf;
+			passport.num_shader_visible_vgprs =
+				amd->device.num_shader_visible_vgprs;
+			passport.num_tcc_blocks = amd->device.num_tcc_blocks;
+			passport.gs_vgt_table_depth = amd->device.gs_vgt_table_depth;
+			passport.gs_prim_buffer_depth = amd->device.gs_prim_buffer_depth;
+			passport.max_gs_waves_per_vgt = amd->device.max_gs_waves_per_vgt;
+			passport.hw_major =
+				amd->hw_ip[R5_AMDGPU_HW_IP_GFX].hw_ip_version_major;
+			passport.hw_minor =
+				amd->hw_ip[R5_AMDGPU_HW_IP_GFX].hw_ip_version_minor;
+			passport.fw_ver[4] = amd->firmware[4].ver;
+			passport.fw_feature[4] = amd->firmware[4].feature;
+			char text[4096];
+			r5_amd_passport_format(&passport, text, (int)sizeof(text));
+			fputs(text, out);
 		}
 		close(fd);
 		uint64_t lowVa = R5_GPU_VA_OFFSET;
