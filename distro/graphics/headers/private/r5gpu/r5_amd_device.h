@@ -18,7 +18,13 @@
 #include <stdint.h>
 #include <string.h>
 
-extern int snprintf(char* str, size_t size, const char* format, ...);
+#ifdef __cplusplus
+extern "C" {
+#endif
+int snprintf(char* str, size_t size, const char* format, ...);
+#ifdef __cplusplus
+}
+#endif
 
 #define R5_AMD_SRC_TABLE \
 	"device table; Linux v6.12 amdgpu_drv.c CHIP_RENOIR"
