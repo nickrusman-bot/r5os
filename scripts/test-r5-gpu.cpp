@@ -15,8 +15,298 @@
 #include "r5_span.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
+#include "r5_stage_p.h"
 
 #include <string.h>
+
+static int fail(const char* what);
+
+static int
+body_skip(int index)
+{
+	/* IB low/high, IB length, both fence addresses, both sequences. */
+	if (index == 6 || index == 7 || index == 10 || index == 11)
+		return 1;
+	if (index == 8 || index == 12)
+		return 2;
+	if (index == 18 || index == 19 || index == 26 || index == 27)
+		return 1;
+	if (index == 20 || index == 21 || index == 28)
+		return 3;
+	return 0;
+}
+
+
+static int
+pad_form(const uint32_t* words, uint32_t count, const char* who)
+{
+	uint32_t i;
+	uint32_t n;
+	if (count == 0)
+		return fail(who);
+	if (count == 1) {
+		if (words[0] != kR5CsNop)
+			return fail(who);
+		return 0;
+	}
+	n = count - 2u;
+	if (n > 0x3ffeu)
+		n = 0x3ffeu;
+	if (words[0] != r5_cs_packet3(0x10, n)) {
+		fprintf(stderr, "fail %s header %08x want %08x count %u\n",
+			who, words[0], r5_cs_packet3(0x10, n), count);
+		return 1;
+	}
+	for (i = 1; i < count; i++) {
+		if (words[i] != kR5CsNop)
+			return fail(who);
+	}
+	return 0;
+}
+
+
+/* The job r5_gfx9_user_submit writes: r5_cs_user_body plus r5_cs_pad.
+ * Compared with ring-after-2 from CONTEXT_CONTROL through the last NOP. */
+static int
+linux_ring_frame()
+{
+	const char* path =
+		"generated/linux-ref/capture-5625u/capture-20261106-194121/"
+		"ring-after-2-amdgpu_ring_gfx.bin";
+	FILE* file = fopen(path, "rb");
+	if (file == NULL)
+		return fail(path);
+	if (fseek(file, 0, SEEK_END) != 0) {
+		fclose(file);
+		return fail(path);
+	}
+	long bytes = ftell(file);
+	if (bytes < 16 || (bytes % 4) != 0) {
+		fclose(file);
+		return fail("ring size");
+	}
+	rewind(file);
+	uint32_t* ring = (uint32_t*)malloc((size_t)bytes);
+	if (ring == NULL) {
+		fclose(file);
+		return fail("ring alloc");
+	}
+	if (fread(ring, 1, (size_t)bytes, file) != (size_t)bytes) {
+		free(ring);
+		fclose(file);
+		return fail("ring read");
+	}
+	fclose(file);
+	uint32_t dwords = (uint32_t)(bytes / 4);
+	if (ring[0] != ring[1] || ring[1] != ring[2]) {
+		free(ring);
+		return fail("ring header");
+	}
+	int start = -1;
+	for (uint32_t i = 3; i + 4 < dwords; i++) {
+		if (ring[i] == 0xc0012800u && ring[i + 1] == 0x80000000u
+			&& ring[i + 2] == 0 && ring[i + 3] == 0xc0009000u)
+			start = (int)i;
+	}
+	if (start < 3) {
+		free(ring);
+		return fail("context");
+	}
+	uint32_t body = 33;
+	if ((uint32_t)start + body >= dwords
+		|| ring[start + 31] != 0xc0008b00u || ring[start + 32] != 0) {
+		free(ring);
+		return fail("switch");
+	}
+	uint32_t padAt = (uint32_t)start + body;
+	uint32_t padEnd = padAt + 1;
+	while (padEnd < dwords && ring[padEnd] == kR5CsNop)
+		padEnd++;
+	uint32_t linuxPad = padEnd - padAt;
+	if (pad_form(ring + padAt, linuxPad, "linux pad") != 0) {
+		free(ring);
+		return 1;
+	}
+	uint64_t wptr = (uint64_t)start - 3ull;
+	const uint64_t ibs[] = {
+		0xffff800100099000ull, 0xffff800100085000ull
+	};
+	const uint32_t ibDw[] = { 0x18u, 0x408u };
+	const uint32_t ibVm[] = { 1u, 1u };
+	uint32_t job[512];
+	uint32_t filled = r5_cs_user_body(job, 512, ibs, ibDw, ibVm, 2,
+		0x66d000ull, 3, 0x401040ull);
+	if (filled != body) {
+		free(ring);
+		return fail("two ib body");
+	}
+	uint32_t oursPad = r5_cs_pad_dwords(wptr + filled);
+	if (filled + oursPad > 512) {
+		free(ring);
+		return fail("job cap");
+	}
+	r5_cs_pad(job + filled, oursPad);
+	if (pad_form(job + filled, oursPad, "ours pad") != 0) {
+		free(ring);
+		return 1;
+	}
+	int diffs = 0;
+	for (uint32_t i = 0; i < body; i++) {
+		int skip = body_skip((int)i);
+		if (skip == 2) {
+			if (((job[i] ^ ring[start + i]) & ~0xfffffu) != 0) {
+				fprintf(stderr, "fail ib control +%u linux %08x ours %08x\n",
+					i, ring[start + i], job[i]);
+				free(ring);
+				return 1;
+			}
+			continue;
+		}
+		if (skip != 0) {
+			if (job[i] != ring[start + i]) {
+				printf("diff +%03x linux %08x ours %08x %s\n",
+					i, ring[start + i], job[i],
+					skip == 3 ? "sequence" : "address");
+				diffs++;
+			}
+			continue;
+		}
+		if (job[i] != ring[start + i]) {
+			fprintf(stderr, "fail frame +%u linux %08x ours %08x\n",
+				i, ring[start + i], job[i]);
+			free(ring);
+			return 1;
+		}
+	}
+	if (oursPad == linuxPad) {
+		for (uint32_t i = 0; i < oursPad; i++) {
+			if (job[filled + i] != ring[padAt + i]) {
+				fprintf(stderr, "fail nop +%u linux %08x ours %08x\n",
+					i, ring[padAt + i], job[filled + i]);
+				free(ring);
+				return 1;
+			}
+		}
+	}
+	printf("linux frame file %x..%x wptr %llx body %u pad linux %u ours %u header %08x diffs %d\n",
+		start, padEnd - 1, (unsigned long long)wptr, body, linuxPad, oursPad,
+		job[filled], diffs);
+
+	const uint64_t otherIb[] = { 0x1000ull, 0x2000ull };
+	const uint32_t otherDw[] = { 4u, 8u };
+	uint32_t other[320];
+	uint32_t otherN = r5_cs_user_body(other, 320, otherIb, otherDw, ibVm, 2,
+		0xabc000ull, 9, 0xabd000ull);
+	uint32_t otherPad = r5_cs_pad_dwords(otherN);
+	r5_cs_pad(other + otherN, otherPad);
+	if (otherPad == linuxPad)
+		return fail("pad count changed");
+	for (uint32_t i = 0; i < body; i++) {
+		int skip = body_skip((int)i);
+		if (skip == 0 && other[i] != ring[start + i]) {
+			free(ring);
+			return fail("shifted frame");
+		}
+		if (skip == 2 && ((other[i] ^ ring[start + i]) & ~0xfffffu) != 0) {
+			free(ring);
+			return fail("shifted vmid");
+		}
+	}
+	if (pad_form(other + otherN, otherPad, "shifted pad") != 0) {
+		free(ring);
+		return 1;
+	}
+	printf("shifted wptr 0 pad %u header %08x (count may differ)\n",
+		otherPad, other[otherN]);
+	free(ring);
+	return 0;
+}
+
+
+static int
+snippet(const char* path, const char* begin, const char* end, char* out,
+	size_t cap)
+{
+	FILE* file = fopen(path, "rb");
+	if (file == NULL)
+		return fail(path);
+	if (fseek(file, 0, SEEK_END) != 0) {
+		fclose(file);
+		return fail(path);
+	}
+	long size = ftell(file);
+	if (size < 0 || size > 2000000) {
+		fclose(file);
+		return fail(path);
+	}
+	rewind(file);
+	char* text = (char*)malloc((size_t)size + 1);
+	if (text == NULL) {
+		fclose(file);
+		return fail(path);
+	}
+	if (fread(text, 1, (size_t)size, file) != (size_t)size) {
+		free(text);
+		fclose(file);
+		return fail(path);
+	}
+	text[size] = 0;
+	fclose(file);
+	const char* from = strstr(text, begin);
+	const char* to = from == NULL ? NULL : strstr(from, end);
+	if (from == NULL || to == NULL || (size_t)(to - from) >= cap) {
+		free(text);
+		return fail(begin);
+	}
+	memcpy(out, from, (size_t)(to - from));
+	out[to - from] = 0;
+	free(text);
+	return 0;
+}
+
+
+/* The wait reads the 64-bit user fence. The EOP interrupt only wakes
+ * retire, and retire reads that same word. The 32-bit INT_SEL 2 fence
+ * is not the value the waiter compares. */
+static int
+waiter_fence()
+{
+	char text[4000];
+	if (snippet(
+			"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp",
+			"r5_gfx9_user_seen()", "r5_gfx9_user_fence_mc()", text,
+			sizeof(text)) != 0)
+		return 1;
+	if (strstr(text, "kR5UserFenceOffset") == NULL
+		|| strstr(text, "volatile uint64") == NULL
+		|| strstr(text, "kR5UserIrqOffset") != NULL)
+		return fail("user seen");
+	if (snippet(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+			"entry.source == kSourceEop", "sEopCount++", text, sizeof(text)) != 0)
+		return 1;
+	if (strstr(text, "r5_gpu_retire_wake()") == NULL)
+		return fail("eop wake");
+	if (snippet(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"r5_gpu_eop()", "gpu_counter(", text, sizeof(text)) != 0)
+		return 1;
+	if (strstr(text, "r5_gfx9_user_seen()") == NULL)
+		return fail("retire fence");
+	if (snippet(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"gpu_counter(", "gpu_wait_value(", text, sizeof(text)) != 0)
+		return 1;
+	if (strstr(text, "return r5_gfx9_user_seen()") == NULL)
+		return fail("wait fence");
+	if ((kR5CsRel64 & 0x03000000u) != 0
+		|| (kR5CsRel32Int & 0x03000000u) != 0x02000000u)
+		return fail("int sel");
+	if (kR5UserIrqOffset != kR5UserFenceOffset + 16u)
+		return fail("fence slots");
+	return 0;
+}
+
 
 static int
 fail(const char* what)
@@ -98,6 +388,18 @@ main()
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");
 	static_assert(R5_GPU_HIGH_VA_OFFSET == 0xffff800000000000ull, "high");
 	static_assert(R5_GPU_HIGH_VA_MAX == 0xffffffffffbfe000ull, "high max");
+	{
+		const char* reported[] = {
+			"out.high_va_offset = R5_GPU_HIGH_VA_OFFSET",
+			"out.high_va_max = R5_GPU_HIGH_VA_MAX",
+			"amd.device.high_va_offset = R5_GPU_HIGH_VA_OFFSET",
+			"amd.device.high_va_max = R5_GPU_HIGH_VA_MAX"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+				reported, 4) != 0)
+			return 1;
+	}
 
 	const uint64_t pages = 262144ull << 18;
 	const uint64_t bytes = pages * 4096ull - 0x402000ull;
@@ -211,23 +513,63 @@ main()
 	if ((root & 1ull) == 0 || (root & ~0xfffull) == 0)
 		return fail("mapped pde");
 
-	uint32_t packet[12];
+	uint32_t packet[64];
 	const uint64_t ib = 0xffff800000001000ull;
+	const uint64_t ibs[] = { ib };
+	const uint32_t ibDw[] = { 16u };
+	const uint32_t ibVm[] = { 1u };
 	const uint64_t fenceMc = 0x812c18000ull + kR5UserFenceOffset;
-	r5_cs_gfx_ib(packet, ib, 16, 1, fenceMc, 7);
-	if (packet[2] != 0x8000u)
+	const uint64_t irqMc = 0x812c18000ull + kR5UserIrqOffset;
+	uint32_t body = r5_cs_user_body(packet, 64, ibs, ibDw, ibVm, 1, fenceMc, 7,
+		irqMc);
+	if (body != 29u || body != r5_cs_user_words(1))
+		return fail("frame size");
+	if (packet[0] != r5_cs_packet3(0x28, 1) || packet[1] != 0x80000000u
+		|| packet[2] != 0)
+		return fail("context");
+	if (packet[3] != r5_cs_packet3(0x90, 0) || packet[4] != 0)
+		return fail("frame start");
+	if (packet[5] != r5_cs_packet3(0x3f, 2) || packet[6] != (uint32_t)ib
+		|| packet[7] != 0xffff8000u)
 		return fail("ib high");
-	if ((packet[3] & (0xfu << 24)) != (1u << 24))
+	if ((packet[8] & (0xfu << 24)) != (1u << 24))
 		return fail("vmid");
-	if ((packet[3] & (1u << 23)) != 0)
+	if ((packet[8] & (1u << 23)) != 0)
 		return fail("valid bit");
-	if ((packet[3] & 0xfffffu) != 16u)
+	if ((packet[8] & 0xfffffu) != 16u)
 		return fail("ib length");
-	if (packet[6] != ((2u << 29) | (2u << 24)))
-		return fail("fence sel");
-	if (packet[7] != (uint32_t)fenceMc || packet[8] != (uint32_t)(fenceMc >> 32)
-		|| packet[9] != 7u)
+	if (packet[9] != r5_cs_packet3(0x90, 0) || packet[10] != 0x10000000u)
+		return fail("frame end");
+	if (packet[11] != r5_cs_packet3(0x49, 6) || packet[12] != kR5CsEvent
+		|| packet[13] != kR5CsRel64)
+		return fail("user fence");
+	if (packet[14] != (uint32_t)fenceMc || packet[15] != (uint32_t)(fenceMc >> 32)
+		|| packet[16] != 7u)
 		return fail("sequence");
+	if (packet[19] != r5_cs_packet3(0x49, 6) || packet[21] != kR5CsRel32Int
+		|| packet[22] != (uint32_t)irqMc || packet[24] != 7u)
+		return fail("irq fence");
+	if (packet[27] != r5_cs_packet3(0x8b, 0) || packet[28] != 0)
+		return fail("switch");
+	if (r5_cs_user_commit(0, 1) != 256u)
+		return fail("pad align");
+	uint32_t pad[8];
+	r5_cs_pad(pad, 1);
+	if (pad[0] != kR5CsNop)
+		return fail("pad one");
+	r5_cs_pad(pad, 3);
+	if (pad[0] != r5_cs_packet3(0x10, 1) || pad[1] != kR5CsNop
+		|| pad[2] != kR5CsNop)
+		return fail("pad form");
+	/* Stick 15 wrote PACKET3(NOP, 44) for a 45-dword pad (c02c1000). */
+	uint32_t pad45[45];
+	r5_cs_pad(pad45, 45);
+	if (pad45[0] != r5_cs_packet3(0x10, 43) || pad45[44] != kR5CsNop)
+		return fail("pad 45");
+	if (linux_ring_frame() != 0)
+		return 1;
+	if (waiter_fence() != 0)
+		return 1;
 	if ((fenceMc & 7ull) != 0)
 		return fail("fence align");
 	if (r5_range_overlap(0, 4096, 4096, 4096))
@@ -249,6 +591,15 @@ main()
 		return fail("wait poll");
 	if (r5_wait_step(1, 5, 10, 1) != R5_WAIT_TIMEOUT)
 		return fail("wait timeout");
+	if (r5_pace(0, 1) != R5_PACE_OK || r5_pace(999999ull, 1) != R5_PACE_OK)
+		return fail("pace ok");
+	if (r5_pace(1000000ull, 1) != R5_PACE_LATE
+		|| r5_pace(4999999ull, 1) != R5_PACE_LATE)
+		return fail("pace late");
+	if (r5_pace(1000000ull, 0) != R5_PACE_WAIT)
+		return fail("pace wait");
+	if (r5_pace(5000000ull, 0) != R5_PACE_TIMEOUT)
+		return fail("pace timeout");
 
 	const char* selftestOrder[] = {
 		"highVa, false",
@@ -259,6 +610,8 @@ main()
 		"stage_selftest(out)"
 	};
 	const char* stageOrder[] = {
+		"gpu_stage_p(",
+		"gpu_stage_u(",
 		"\"u1\"",
 		"gpu_stage_u2a",
 		"\"u4\"",
@@ -272,8 +625,42 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 6) != 0)
+			stageOrder, 8) != 0)
 		return 1;
+
+	if (R5_P_COUNT != R5_GPU_P_STEPS)
+		return fail("stage p count");
+	{
+		uint32_t words[32];
+		uint32_t n = r5_stage_p_build(R5_P_WRITE_DATA, 0x50000ull, words, 32, 0);
+		if (n != 6 || words[0] != 0xc0043700u || words[1] != 0x40100500u
+			|| words[2] != 0x50000u)
+			return fail("p write");
+		n = r5_stage_p_build(R5_P_RELEASE_MEM, 0x50000ull, words, 32, 0);
+		if (n < 8 || words[1] != 0x00220514u || words[2] != 0x23000000u)
+			return fail("p release");
+		n = r5_stage_p_build(R5_P_RSRC3_VS, 0x50000ull, words, 32, 0);
+		if (n != 3 || words[0] != 0xc0017600u || words[1] != 0x30000046u
+			|| words[2] != 0x003ffffeu)
+			return fail("p rsrc3");
+		n = r5_stage_p_build(R5_P_INDEX_PRIM, 0x50000ull, words, 32, 0);
+		if (n != 3 || words[1] != 0x10000242u)
+			return fail("p prim");
+		n = r5_stage_p_build(R5_P_INDEX_TYPE, 0x50000ull, words, 32, 0);
+		if (n != 3 || words[1] != 0x20000243u)
+			return fail("p index");
+		n = r5_stage_p_build(R5_P_DMA_DATA, 0x50000ull, words, 32, 0);
+		if (n != 7 || words[1] != 0x60200000u || words[6] != 0x80000040u)
+			return fail("p dma");
+		n = r5_stage_p_build(R5_P_COHER, 0x50000ull, words, 32, 0);
+		if (n != 3 || words[1] != 0x7bu)
+			return fail("p coher");
+		n = r5_stage_p_build(R5_P_DISPATCH, 0x50000ull, words, 32, 0);
+		if (n != 20 || words[n - 5] != 0xc0031502u || words[n - 4] != 1u)
+			return fail("p dispatch");
+		if (R5_P_SHADER != 0xbf810000u)
+			return fail("p shader");
+	}
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
