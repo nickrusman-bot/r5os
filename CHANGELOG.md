@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Fourth M4 stick
+
+The image jammed at 10:13:47 Europe/Amsterdam on 6 Nov 2026 is `r5-os.image`, 2147483648 bytes. From that image, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The `radeon_hd` driver contains `radeon_hd: refuse`, `BO_CREATE`, `vmid1 fail ring` and `vmid1 ptb`. `r5-gpu-selftest` contains `stage bo`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`. The same jam printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`.
+
+That raw image, with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`, is the BeFS partition of the stick. The settings do not set `gfx9_workload` or `gfx9_compute`. The first 6 MiB is the anyboot boot code already on disk. The stick file is 2156724224 bytes, sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 10:26 to 10:28 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 10:30. Disk 0 was not opened. This stick has not been booted.
+
 ### Device creation is logged, and not reproduced on the host
 
 `BO_CREATE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP` and `CS_SUBMIT` each print one `radeon_hd: refuse` line for a status other than `B_OK`. The line has the reason and the handle, domain, size, VA, offset, map size and flags. The first 32 lines of a boot are kept. A `VA_MAP` that fails after writing page-table entries clears those entries and flushes. Linux `AMDGPU_GMC_HOLE_MASK` is `0x0000ffffffffffff`; the walk uses bits 12–47, so the canonical high address and the masked address select the same slots. The host VM test maps the first and last page of the high range.
