@@ -23,6 +23,20 @@
 #include <string.h>
 
 
+/* vm.h pulls thread types in before the mutex type. These are the calls
+ * radeon_hd already resolves from the kernel, same as vm_set_area_memory_type.
+ */
+extern "C" area_id vm_clone_area(team_id team, const char* name, void** address,
+	uint32 addressSpec, uint32 protection, uint32 mapping, area_id sourceArea,
+	bool kernel);
+extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
+extern "C" team_id team_get_current_team_id(void);
+extern "C" bool team_is_valid(team_id id);
+
+/* headers/private/system/vm_defs.h: REGION_NO_PRIVATE_MAP = 0. */
+static const uint32 kRegionNoPrivateMap = 0;
+
+
 extern radeon_info* gDeviceInfo[];
 
 
@@ -147,6 +161,7 @@ struct gpu_bo {
 	uint64			bytes;
 	uint64			vramOffset;
 	area_id			area;
+	team_id			mapTeam;
 	area_id			kernelArea;
 	void*			kernel;
 	gpu_client*		owner;
@@ -496,13 +511,18 @@ gpu_bo_release(gpu_bo* bo)
 	gpu_bo_unmap(bo);
 	if (bo->domain == R5_GPU_DOMAIN_VRAM)
 		r5_gfx9_free_user_vram(bo->vramOffset);
-	if (bo->area >= 0)
-		delete_area(bo->area);
+	/* The user clone belongs to mapTeam. A team that has already ended
+	 * took its areas with it. team_is_valid is the check; do not delete
+	 * an id in a team that is gone.
+	 */
+	if (bo->area >= 0 && team_is_valid(bo->mapTeam))
+		vm_delete_area(bo->mapTeam, bo->area, true);
 	if (bo->kernelArea >= 0)
 		delete_area(bo->kernelArea);
 	bo->live = false;
 	bo->owner = NULL;
 	bo->area = -1;
+	bo->mapTeam = -1;
 	bo->kernelArea = -1;
 	bo->kernel = NULL;
 }
@@ -538,6 +558,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	gpu_bo* bo = &sBo[slot];
 	memset(bo, 0, sizeof(*bo));
 	bo->area = -1;
+	bo->mapTeam = -1;
 	bo->kernelArea = -1;
 	bo->domain = in.domain;
 	bo->flags = in.flags;
@@ -550,9 +571,13 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		bo->vramOffset = offset;
 	} else {
 		void* kernel = NULL;
+		/* Not B_CLONEABLE_AREA. The user mapping is vm_clone_area below,
+		 * with kernel true, so the source does not have to be cloneable.
+		 * A cloneable id would let any program map this buffer.
+		 */
 		area_id area = create_area("r5 gpu gtt", &kernel,
 			B_ANY_KERNEL_ADDRESS, (size_t)bytes, B_FULL_LOCK,
-			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA);
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 		if (area < 0 || kernel == NULL)
 			return gpu_refuse("BO_CREATE", "gtt", area < 0 ? area : B_NO_MEMORY,
 				0, in.domain, bytes, 0, 0, 0, in.flags);
@@ -632,7 +657,17 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	if (bo == NULL)
 		return gpu_refuse("BO_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0, 0, 0, 0,
 			0);
+	/* Another team does not get a clone until M5. The same team gets
+	 * the clone it already has. clone_area() would put user pages in the
+	 * kernel address space and add the kernel bits (SMAP). vm_clone_area
+	 * with kernel true puts only the user bits in this team. The kernel
+	 * does not read or write through that clone.
+	 */
+	team_id team = team_get_current_team_id();
 	if (bo->area >= 0) {
+		if (bo->mapTeam != team)
+			return gpu_refuse("BO_MAP", "team", B_NOT_ALLOWED, in.handle,
+				bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 		in.area = bo->area;
 		return gpu_copy_out(buffer, length, &in, sizeof(in));
 	}
@@ -642,7 +677,7 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 		void* kernel = NULL;
 		area_id kernelArea = map_physical_memory("r5 gpu vram", phys,
 			(size_t)bo->bytes, B_ANY_KERNEL_ADDRESS,
-			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA,
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA,
 			&kernel);
 		if (kernelArea < 0)
 			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
@@ -651,12 +686,14 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 		bo->kernel = kernel;
 	}
 	void* user = NULL;
-	area_id area = clone_area("r5 gpu bo", &user, B_ANY_ADDRESS,
-		B_READ_AREA | B_WRITE_AREA, bo->kernelArea);
+	area_id area = vm_clone_area(team, "r5 gpu bo", &user, B_ANY_ADDRESS,
+		B_READ_AREA | B_WRITE_AREA, kRegionNoPrivateMap, bo->kernelArea,
+		true);
 	if (area < 0)
 		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
 			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 	bo->area = area;
+	bo->mapTeam = team;
 	in.area = area;
 	status = gpu_copy_out(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
@@ -774,42 +811,67 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			pte += 4096;
 		}
 	} else {
-		physical_entry entries[256];
-		int32 count = get_memory_map(
-			(uint8*)bo->kernel + in.bo_offset, (size_t)in.map_bytes,
-			entries, 256);
-		if (count < 0)
-			return gpu_refuse("VA_MAP", "phys", count, in.handle, bo->domain,
+		/* get_memory_map() returns B_OK and a size-0 end entry, so a
+		 * count taken from that return is always 0. get_memory_map_etc
+		 * writes the count. The address is the kernel area, never the
+		 * user clone, so this does not touch user pages (SMAP). A kernel
+		 * address selects the kernel address space inside that call.
+		 * More than 256 physical pieces continues after B_BUFFER_OVERFLOW.
+		 */
+		if (bo->kernel == NULL)
+			return gpu_refuse("VA_MAP", "gtt", B_NO_INIT, in.handle, bo->domain,
 				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+		uint8* cursor = (uint8*)bo->kernel + in.bo_offset;
 		uint64 filled = 0;
-		for (int32 entry = 0; entry < count && filled < in.map_bytes; entry++) {
-			uint64 address = entries[entry].address;
-			uint64 bytes = entries[entry].size;
-			while (bytes >= 4096 && filled < in.map_bytes) {
-				if (r5_gfx9_vmid1_lookup(in.gpu_va + filled)) {
-					gpu_va_clear(in.gpu_va, filled);
-					return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle,
-						bo->domain, bo->bytes, in.gpu_va + filled, in.bo_offset,
-						in.map_bytes, in.flags);
-				}
-				uint64 pte = r5_gfx9_gart_pte(address,
-					gpu_pte_flags(flags) | (uint64)R5_GFX9_PTE_SYSTEM
-					| (uint64)R5_GFX9_PTE_SNOOPED);
-				if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
-					gpu_va_clear(in.gpu_va, filled);
-					return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
-						bo->domain, bo->bytes, in.gpu_va + filled, in.bo_offset,
-						in.map_bytes, in.flags);
-				}
-				address += 4096;
-				bytes -= 4096;
-				filled += 4096;
+		while (filled < in.map_bytes) {
+			physical_entry entries[256];
+			uint32 count = 256;
+			status_t mapped = get_memory_map_etc(B_CURRENT_TEAM, cursor,
+				(size_t)(in.map_bytes - filled), entries, &count);
+			if (mapped != B_OK && mapped != B_BUFFER_OVERFLOW) {
+				gpu_va_clear(in.gpu_va, filled);
+				return gpu_refuse("VA_MAP", "phys", mapped, in.handle,
+					bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
+					in.flags);
 			}
+			uint64 step = 0;
+			for (uint32 entry = 0; entry < count && filled < in.map_bytes;
+				entry++) {
+				uint64 address = entries[entry].address;
+				uint64 bytes = entries[entry].size;
+				while (bytes >= 4096 && filled < in.map_bytes) {
+					if (r5_gfx9_vmid1_lookup(in.gpu_va + filled)) {
+						gpu_va_clear(in.gpu_va, filled);
+						return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE,
+							in.handle, bo->domain, bo->bytes,
+							in.gpu_va + filled, in.bo_offset, in.map_bytes,
+							in.flags);
+					}
+					uint64 pte = r5_gfx9_gart_pte(address,
+						gpu_pte_flags(flags) | (uint64)R5_GFX9_PTE_SYSTEM
+						| (uint64)R5_GFX9_PTE_SNOOPED);
+					if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
+						gpu_va_clear(in.gpu_va, filled);
+						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
+							in.handle, bo->domain, bo->bytes,
+							in.gpu_va + filled, in.bo_offset, in.map_bytes,
+							in.flags);
+					}
+					address += 4096;
+					bytes -= 4096;
+					filled += 4096;
+					step += 4096;
+				}
+			}
+			if (step == 0 || mapped == B_OK)
+				break;
+			cursor += step;
 		}
 		if (filled != in.map_bytes) {
 			gpu_va_clear(in.gpu_va, filled);
-			return gpu_refuse("VA_MAP", "short", B_BAD_DATA, in.handle, bo->domain,
-				bo->bytes, in.gpu_va, in.bo_offset, filled, in.flags);
+			return gpu_refuse("VA_MAP", "short", B_BAD_DATA, in.handle,
+				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
+				in.flags);
 		}
 	}
 	if (!r5_gfx9_vmid1_flush()) {

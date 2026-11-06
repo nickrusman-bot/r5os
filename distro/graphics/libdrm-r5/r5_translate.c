@@ -110,12 +110,6 @@ r5_area_address(int area)
 		return NULL;
 	return info.address;
 }
-
-static int
-r5_area_destroy(int area)
-{
-	return delete_area(area) == B_OK ? 0 : -1;
-}
 #elif defined(R5_HOST_TEST)
 void *r5_area_address(int area);
 int r5_area_destroy(int area);
@@ -207,11 +201,17 @@ r5_amdgpu_info(int fd, struct drm_amdgpu_info *query)
 {
 	r5_gpu_info info;
 	r5_gpu_amd_info amd;
+	void *out;
 	memset(&info, 0, sizeof(info));
 	memset(&amd, 0, sizeof(amd));
 	if (r5_info(fd, &info, &amd) != 0)
 		return -1;
-	void *out = (void *)(uintptr_t)query->return_pointer;
+	if (query->query == AMDGPU_INFO_SENSOR || query->query == AMDGPU_INFO_VIDEO_CAPS)
+		snprintf(sIoctlDetail, sizeof(sIoctlDetail), "query %#x type %#x",
+			query->query, query->sensor_info.type);
+	else
+		snprintf(sIoctlDetail, sizeof(sIoctlDetail), "query %#x", query->query);
+	out = (void *)(uintptr_t)query->return_pointer;
 	if (query->query == AMDGPU_INFO_ACCEL_WORKING) {
 		uint32_t working = (info.capabilities & R5_GPU_CAP_RENDER) ? 1u : 0u;
 		return r5_copy_out(out, query->return_size, &working, sizeof(working));
@@ -1027,8 +1027,11 @@ r5_bo_cpu_map(int fd, unsigned int handle, void **cpu, int *area)
 drm_public int
 r5_bo_cpu_unmap(int fd, int area)
 {
-	int ret;
 	(void)fd;
-	ret = r5_area_destroy(area);
-	return ret == 0 ? 0 : r5_neg(errno);
+	(void)area;
+	/* The kernel owns the clone and deletes it when the buffer is
+	 * released. Deleting it here would make the next BO_MAP from this
+	 * team return an area id that is already gone.
+	 */
+	return 0;
 }

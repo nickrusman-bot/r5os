@@ -147,8 +147,10 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 			ret = doMap(gtt, &cpu);
 			fprintf(out, "GEM_MMAP %d\n", ret);
 			if (ret == 0 && cpu != NULL) {
-				((uint8_t*)cpu)[0] = 0x5a;
-				fprintf(out, "cpu %02x\n", ((uint8_t*)cpu)[0]);
+				uint32_t written = 0x5a5a5a5au;
+				((uint32_t*)cpu)[0] = written;
+				uint32_t readBack = ((uint32_t*)cpu)[0];
+				fprintf(out, "cpu write %08x read %08x\n", written, readBack);
 				((uint32_t*)cpu)[0] = 0x80000000u;
 				if (doCtx != NULL)
 					ret = doCtx(device, &context);

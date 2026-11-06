@@ -1,10 +1,20 @@
 # R5OS changelog (lokaal)
 
+### GTT map and the user clone
+
+The fourth stick (sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`) reached the desktop on the Ryzen 5 5625U. K0, K1 and K2 completed. `vmid1 ptb` is present and there is no `vmid1 fail`. Stage `bo` created both buffers. `GEM_VA` of the VRAM buffer at the low address returned 0. `GEM_VA` of the GTT buffer at `0xffff800000000000` was `refuse VA_MAP short status 0x80000010` (`B_BAD_DATA`) with `map 0`. RADV's first buffer was the same refusal at `0xffff800100000000`. `vulkaninfo` aborted in `vkCreateDevice` with `VK_ERROR_OUT_OF_DEVICE_MEMORY`. `GEM_MMAP` returned `-2147483648` (`B_NO_MEMORY`) and the syslog has no `BO_MAP` refusal.
+
+`get_memory_map` returns `B_OK` and ends the table with a size-0 entry, so the old count was always 0. GTT `VA_MAP` now calls `get_memory_map_etc` on the kernel area and continues when the table needs more than 256 entries. `clone_area` in the kernel clones into the kernel address space and adds the kernel protection bits. `BO_MAP` now clones into the calling team with `B_READ_AREA | B_WRITE_AREA` only. The kernel does not write through that clone. A second map from that team returns the same area. Another team gets `B_NOT_ALLOWED` until M5. The clone is deleted when the buffer is released, and left alone when the team has already ended. The source area is no longer `B_CLONEABLE_AREA`. libdrm does not delete the clone on unmap.
+
+A failed `AMDGPU_INFO` line now includes `query 0x..`. The queries RADV 25.3.6 treats as optional stay ENOSYS. The host replay's `get_memory_map` stand-in returns 0 and a size-0 end entry, and a clone belongs to a team. A GTT map at the high address and a CPU map both pass on that stand-in. The self-test prints the CPU write and the value read back.
+
+`jam -q @r5-raw` finished at 10:54 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `f41c5822d307e48f755b0e128eb64a46cb1fb40b046f183330618860ffe9d217`. From that image, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The driver contains `vm_clone_area` and `get_memory_map_etc`. `r5-gpu-selftest` contains `cpu write`. `libvulkan_radeon.so` has no undefined `ioctl`. Not booted.
+
 ### Fourth M4 stick
 
 The image jammed at 10:13:47 Europe/Amsterdam on 6 Nov 2026 is `r5-os.image`, 2147483648 bytes. From that image, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The `radeon_hd` driver contains `radeon_hd: refuse`, `BO_CREATE`, `vmid1 fail ring` and `vmid1 ptb`. `r5-gpu-selftest` contains `stage bo`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`. The same jam printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`.
 
-That raw image, with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`, is the BeFS partition of the stick. The settings do not set `gfx9_workload` or `gfx9_compute`. The first 6 MiB is the anyboot boot code already on disk. The stick file is 2156724224 bytes, sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 10:26 to 10:28 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 10:30. Disk 0 was not opened. This stick has not been booted.
+That raw image, with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`, is the BeFS partition of the stick. The settings do not set `gfx9_workload` or `gfx9_compute`. The first 6 MiB is the anyboot boot code already on disk. The stick file is 2156724224 bytes, sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 10:26 to 10:28 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 10:30. Disk 0 was not opened. The boot is in the section above.
 
 ### Device creation is logged, and not reproduced on the host
 
