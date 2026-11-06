@@ -45,10 +45,16 @@ watchdog. There is no reset in M4.
 A binary syncobj follows the latest submit. It is signalled when `submitted`
 is greater than 0 and `point` has caught up with `submitted`. `submitted` 0
 means it was never submitted, or it was reset. A job signals it with that
-job's sequence, never with 1. `submitted` rises when the job is queued.
-`point` rises when the job retires. `CREATE_SIGNALED` sets both to 1. A host
-signal sets both to the greater of the current values and the highest
-sequence, or 1 when no job has run. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
+job's sequence, never with 1. A timeline signal whose point is 0 is that
+same sequence: RADV's queue syncobj is created with `CREATE_SIGNALED` and
+then signaled at point 0. `submitted` rises when the job is queued.
+`point` rises when that job's sequence is on the user fence page. The ring
+read pointer and the act of submitting do not finish the job.
+`CREATE_SIGNALED` sets both to 1. A host signal sets both to the greater of
+the current values and the highest sequence, or 1 when no job has run. A
+transfer or a wait on a sync that a live job still lists waits for that
+job. `SYNCOBJ_DESTROY` detaches the sync from any live job and succeeds.
+The job does not signal a sync that has been destroyed. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
 `PRIME` return ENOSYS. `SYNCOBJ_TRANSFER` is `R5_GPU_SYNCOBJ_TRANSFER`.
 Any other untranslated ioctl returns ENOSYS and is
 named once on stderr. `GEM_MMAP` is one of those: CPU mapping uses `BO_MAP`.
@@ -59,6 +65,14 @@ one shared address space. `CS` passes `ctx_id`. `GEM_VA` in libdrm 2.4.124
 has no context field, so that call uses context 1. A dependency chunk waits
 on that sequence for five seconds and is not dropped. `WAIT_CS` uses the same
 fence wait. The submit wait is five seconds and returns a timeout.
+
+`GET_INFO` reports `high_va_offset` `0xffff800000000000` and `high_va_max`
+`0xffffffffffbfe000`, in the common block and in the AMD vendor block.
+That is the range `amdgpu_kms.c` reports for this VM. libdrm then keeps
+`AMDGPU_VA_RANGE_HIGH`, and RADV places 32-bit buffers at `address32_hi`
+(`0xffff800000000000`). A map in that range uses the existing 4-level
+page tables. U4 (VRAM) and U2 (GTT) run at the end of stage P, and again
+in stage U. The first 16 `CS_SUBMIT` calls log `submit ib va … dw …`.
 
 The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 10`) used one
 buffer and ten syncobjs. The kernel tables are 256 buffers, 256 buffers per
