@@ -12,7 +12,9 @@ Linux 6.12 `gfx_v9_0_init_golden_registers` returns before `golden_settings_gc_9
 
 `AMDGPU_CTX_OP_QUERY_STATE2` returns 0 while the device is usable. After the watchdog it returns `RESET` and `GUILTY`, which Mesa turns into `VK_ERROR_DEVICE_LOST` (`-4`). The watchdog is 10 seconds, the GFX value of `amdgpu.lockup_timeout`. The GFX ring stays 1024 dwords. A larger ring is an M6 item.
 
-The eighteenth stick has not been booted.
+`jam -q @r5-raw` finished at 21:54 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `2f39eb41981bc0d91c34944c202c62dcdfcb880e2889f455bc89481f9aad2e77`. The packages in that image match `distro/packages/x86_64`: `libdrm` `23de8c87948e7335c145e6d6becd477b43c70778c2b99a84501dc4863f777b04`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. The `radeon_hd` driver in the image contains `vmid1 fail ring`, `vmid1 ptb` and `rb num`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+The eighteenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `25403c18576ed17f64e35b65f2913bb99f8e614f620a62a137005896f6ee694b`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 22:01 to 22:04 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 22:05. Disk 0 was not opened. This stick has not been booted.
 
 ### U4 waits behind the teapot
 
