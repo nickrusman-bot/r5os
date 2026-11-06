@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### A MIDI 2.0 note-on of velocity 0 stays a note-on
+
+`midi2_note_on_midi1_velocity(0)` returned 0, and MIDI 1.0 treats a note-on of velocity 0 as a note-off. Appendix D, MIDI 2.0 Note On Velocity (D.2.1), replaces a translated 0 with 1. The helper now returns at least 1 for every note-on, including 0. The same formula is `usb_midi_note_on_midi1_velocity` in the driver, because the driver does not include `Midi2Defs.h`. `midi2test` compares the two.
+
+The other way, Appendix D, Note On/Off (D.3.1): a MIDI 1.0 note-on of velocity 0 written to a UMP endpoint becomes a type 0x4 note-off with velocity `0x8000`. Velocity 1 becomes `0x0200`. Attribute type and attribute value stay 0. Other channel bytes on that write stay type 0x2, so one group can still carry both types. `midi2test` checks both velocities and that the driver copy matches. That program was not run. A host compile of the same checks with `static_assert` passed. No device was attached.
+
 ### The wide spray overloads were not in a release
 
 `SprayNoteOn(uchar, uchar, uint16)` and `SprayControlChange(uchar, uchar, uint32)` were exported from `libmidi2.so` in development builds from `f0c74f2520`. Renaming them to `SprayNoteOn2` and `SprayControlChange2` drops those symbols. No file in `distro/` except `midi2test` called the wide forms, and that program now uses the new names. `PortDrivers.cpp` calls the MIDI 1.0 forms. There is no HaikuPorts recipe in this tree and no package that references the symbols. `distro/VERSION` is `2026.1-dev`. The symbols are removed, not kept as aliases.

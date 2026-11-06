@@ -28,6 +28,7 @@
 
 #include "midi_driver.h"
 #include "usb_midi.h"
+#include "usb_midi_velocity.h"
 
 
 const char* midi_base_name = "midi/usb/";
@@ -362,17 +363,6 @@ sysex7_bytes(const uint32* words, uint8* status, uint8 data[6])
 }
 
 
-/* Same rule as midi2_note_on_midi1_velocity. A note-on below 512 must not
- * become MIDI 1.0 velocity 0.
- */
-static uint8
-note_on_midi1_velocity(uint16 velocity)
-{
-	uint8 scaled = (uint8)(velocity >> 9);
-	return (scaled == 0 && velocity != 0) ? 1 : scaled;
-}
-
-
 static int
 expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
 {
@@ -404,7 +394,7 @@ expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
 		out[0] = (status << 4) | channel;
 		out[1] = (words[0] >> 8) & 0xff;
 		if (status == 0x9)
-			out[2] = note_on_midi1_velocity((uint16)(words[1] >> 16));
+			out[2] = usb_midi_note_on_midi1_velocity((uint16)(words[1] >> 16));
 		else if (status == 0x8)
 			out[2] = (uint8)((words[1] >> 16) >> 9);
 		else if (status == 0xb)
@@ -1141,7 +1131,7 @@ send_ump_as_midi1(usbmidi_port_info* port, const uint32* words, uint32 wordCount
 		midi[0] = (status << 4) | channel;
 		midi[1] = (words[0] >> 8) & 0xff;
 		if (status == 0x9)
-			midi[2] = note_on_midi1_velocity((uint16)(words[1] >> 16));
+			midi[2] = usb_midi_note_on_midi1_velocity((uint16)(words[1] >> 16));
 		else if (status == 0x8)
 			midi[2] = (uint8)((words[1] >> 16) >> 9);
 		else if (status == 0xb)
@@ -1285,6 +1275,14 @@ write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 	memset(midi, 0, sizeof(midi));
 	if (user_memcpy(midi, midiseq, *num_bytes) != B_OK)
 		return B_BAD_ADDRESS;
+
+	/* Appendix D, Note On/Off (D.3.1). Other channel bytes stay type 0x2. */
+	if ((midicode & 0xf0) == 0x90 || (midicode & 0xf0) == 0x80) {
+		uint32 words[2];
+		usb_midi_translate_midi1_note(midi[0] & 0x0f, midi[1] & 0x7f,
+			midi[2] & 0x7f, (midicode & 0xf0) == 0x90, words);
+		return send_ump_words(cookie->port, words, 2);
+	}
 
 	uint32 messageType = (midicode & 0xf0) == 0xf0 ? 0x1u : 0x2u;
 	uint32 words[1];

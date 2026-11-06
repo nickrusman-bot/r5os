@@ -14,6 +14,8 @@
 #include <MidiProducer.h>
 #include <OS.h>
 
+#include "../../add-ons/kernel/drivers/midi/usb_midi/usb_midi_velocity.h"
+
 
 static int sFailures = 0;
 
@@ -76,10 +78,45 @@ test_helpers()
 
 	expect(midi2_note_velocity(note, 2) == 0x8000,
 		"helper keeps the 16-bit velocity");
+	expect(midi2_note_on_midi1_velocity(0) == 1, "velocity 0 is MIDI 1.0 velocity 1");
 	expect(midi2_note_on_midi1_velocity(1) == 1, "velocity 1 stays a note-on");
 	expect(midi2_note_on_midi1_velocity(511) == 1, "velocity 511 stays a note-on");
 	expect(midi2_note_on_midi1_velocity(512) == 1, "velocity 512 is MIDI 1.0 velocity 1");
-	expect(midi2_note_on_midi1_velocity(0) == 0, "velocity 0 stays 0");
+	expect(midi2_note_on_midi1_velocity(0x8000) == 0x40,
+		"velocity 0x8000 is MIDI 1.0 velocity 0x40");
+	uint16 samples[] = { 0, 1, 511, 512, 0x8000, 0xffff };
+	bool velocityCopiesMatch = true;
+	for (size_t i = 0; i < sizeof(samples) / sizeof(samples[0]); i++) {
+		if (midi2_note_on_midi1_velocity(samples[i])
+			!= usb_midi_note_on_midi1_velocity(samples[i]))
+			velocityCopiesMatch = false;
+	}
+	expect(velocityCopiesMatch, "note-on velocity copies match");
+
+	uint32 fromMidi1[2];
+	midi2_translate_midi1_note(0, 60, 0, true, fromMidi1);
+	expect(((fromMidi1[0] >> 20) & 0x0f) == 0x8
+		&& midi2_note_velocity(fromMidi1, 2) == 0x8000
+		&& (fromMidi1[0] & 0xff) == 0 && (fromMidi1[1] & 0xffff) == 0,
+		"MIDI 1.0 note-on velocity 0 is a MIDI 2.0 note-off at 0x8000");
+	midi2_translate_midi1_note(0, 60, 1, true, fromMidi1);
+	expect(((fromMidi1[0] >> 20) & 0x0f) == 0x9
+		&& midi2_note_velocity(fromMidi1, 2) == 0x0200,
+		"MIDI 1.0 note-on velocity 1 is MIDI 2.0 velocity 0x0200");
+	expect(midi2_scale_up_7_to_16(10) == 0x1400
+		&& midi2_scale_up_7_to_16(64) == 0x8000
+		&& midi2_scale_up_7_to_16(87) == 0xaeba
+		&& midi2_scale_up_7_to_16(127) == 0xffff,
+		"7-bit velocities scale to 16 bits");
+	uint32 kernelNote[2];
+	usb_midi_translate_midi1_note(0, 60, 0, 1, kernelNote);
+	midi2_translate_midi1_note(0, 60, 0, true, fromMidi1);
+	expect(kernelNote[0] == fromMidi1[0] && kernelNote[1] == fromMidi1[1],
+		"velocity 0 translation copies match");
+	usb_midi_translate_midi1_note(3, 61, 1, 1, kernelNote);
+	midi2_translate_midi1_note(3, 61, 1, true, fromMidi1);
+	expect(kernelNote[0] == fromMidi1[0] && kernelNote[1] == fromMidi1[1],
+		"velocity 1 translation copies match");
 	expect(midi2_control_value(control, 2) == 0x80000000,
 		"helper keeps the 32-bit controller");
 	expect(midi2_note_velocity(control, 2) == 0,
