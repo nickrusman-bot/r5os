@@ -14,6 +14,7 @@ def install_kernel_sources() -> None:
     files = (
         "src/system/kernel/arch/x86/arch_timer.cpp",
         "src/system/kernel/arch/x86/arch_cpu.cpp",
+        "src/system/kernel/arch/x86/arch_vm.cpp",
     )
     for relative in files:
         install_file(

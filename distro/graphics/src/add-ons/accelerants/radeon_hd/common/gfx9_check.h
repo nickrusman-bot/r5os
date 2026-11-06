@@ -53,19 +53,62 @@ r5_gfx9_gart_pte(uint64_t physical, uint64_t flags)
 }
 
 
-/* Linux gmc_v9_0_get_coherence_flags, GC 9.3 default branch: a system
- * page that is not AMDGPU_GEM_CREATE_UNCACHED and not COHERENT is
- * MTYPE_NC (the two bits stay clear) and SNOOPED. The K2 page and the
- * kernel GART stay on r5_gfx9_gart_pte, which forces MTYPE_UC. */
+/* Linux v6.12 gmc_v9_0.c gmc_v9_0_get_coherence_flags, the branch that
+ * is not GC 9.4. A system page that is not UNCACHED and not COHERENT
+ * is MTYPE_NC. That function also maps user VRAM the same way.
+ * vram_live stays 0, so a user VRAM page still goes through
+ * r5_gfx9_gart_pte (MTYPE_UC) until a boot compares the two.
+ * Coherence sets SNOOPED on every system page, including write
+ * combined. ttm_tt_pte_flags leaves SNOOPED clear for
+ * ttm_write_combined, and that is the snoop bit used here. */
+struct r5_gfx9_mtype_policy {
+	uint32_t	gc_major;
+	uint32_t	gc_minor;
+	uint32_t	system_mtype;
+	uint32_t	vram_mtype;
+	int		vram_live;
+	const char*	source;
+};
+
+static const struct r5_gfx9_mtype_policy kR5Gfx93Mtype = {
+	9, 3, 0, 0, 0,
+	"Linux v6.12 gmc_v9_0.c:gmc_v9_0_get_coherence_flags"
+};
+
+/* KernelExport.h: B_WRITE_COMBINING_MEMORY is (2 << 28). 0 is the
+ * default write-back area type. */
+static inline uint32_t
+r5_gfx9_cpu_memory_type(int writeCombined)
+{
+	return writeCombined ? (2u << 28) : 0u;
+}
+
+static inline uint64_t
+r5_gfx9_user_pte(uint64_t physical, uint64_t flags, int gtt,
+	int writeCombined, const struct r5_gfx9_mtype_policy* policy)
+{
+	const uint64_t mask = kR5Gfx9MtypeUc << kR5Gfx9MtypeShift;
+	uint64_t pte = (physical & ~0xfffull) | (flags & ~mask);
+	uint32_t mtype;
+	if (!gtt) {
+		if (policy == 0 || policy->vram_live == 0)
+			return r5_gfx9_gart_pte(physical, flags);
+		mtype = policy->vram_mtype;
+	} else {
+		mtype = policy == 0 ? 0u : policy->system_mtype;
+		pte |= (uint64_t)R5_GFX9_PTE_SYSTEM;
+		if (!writeCombined)
+			pte |= (uint64_t)R5_GFX9_PTE_SNOOPED;
+	}
+	pte &= ~mask;
+	pte |= ((uint64_t)(mtype & 3u)) << kR5Gfx9MtypeShift;
+	return pte;
+}
+
 static inline uint64_t
 r5_gfx9_cached_gtt_pte(uint64_t physical, uint64_t flags)
 {
-	const uint64_t mask = kR5Gfx9MtypeUc << kR5Gfx9MtypeShift;
-	uint64_t pte = (physical & ~0xfffull)
-		| (flags & ~mask)
-		| (uint64_t)R5_GFX9_PTE_SYSTEM
-		| (uint64_t)R5_GFX9_PTE_SNOOPED;
-	return pte & ~mask;
+	return r5_gfx9_user_pte(physical, flags, 1, 0, &kR5Gfx93Mtype);
 }
 
 
@@ -123,14 +166,14 @@ r5_gfx9_tlb_ack_mask(uint32_t vmid)
 }
 
 
-struct r5_gfx9_fault {
+typedef struct r5_gfx9_fault {
 	uint32_t	more;
 	uint32_t	walker;
 	uint32_t	permission;
 	uint32_t	mapping;
 	uint32_t	cid;
 	uint32_t	rw;
-};
+} r5_gfx9_fault;
 
 /* gc_9_0_sh_mask.h VM_L2_PROTECTION_FAULT_STATUS. */
 static inline r5_gfx9_fault
@@ -228,11 +271,11 @@ r5_gfx9_gart_range(uint64_t fbStart, uint64_t apertureStart,
 	return 1;
 }
 
-struct r5_gfx9_ih_entry {
+typedef struct r5_gfx9_ih_entry {
 	uint32_t	client;
 	uint32_t	source;
 	uint32_t	ring;
-};
+} r5_gfx9_ih_entry;
 
 /* amdgpu_ih_decode_iv_helper: client is bits 7:0, source 15:8, ring 23:16. */
 static inline r5_gfx9_ih_entry

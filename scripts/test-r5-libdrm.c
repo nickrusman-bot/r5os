@@ -6,6 +6,7 @@
  */
 #include "r5_gpu.h"
 #include "r5_translate.h"
+#include "gfx9_check.h"
 
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
@@ -86,6 +87,7 @@ static struct host_job gJob;
 static void *gMem[256];
 static size_t gBytes[256];
 static uint32_t gDomain[256];
+static uint32_t gBoFlags[256];
 static uint64_t gVramUsed;
 
 #define HOST_BO_SLOTS 256u
@@ -393,6 +395,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 				return host_err(ENOMEM);
 			gBytes[i] = (size_t)rounded;
 			gDomain[i] = bo->domain;
+			gBoFlags[i] = bo->flags;
 			if (bo->domain == R5_GPU_DOMAIN_VRAM)
 				gVramUsed += rounded;
 			bo->handle = i + 1;
@@ -414,6 +417,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		gMem[bo->handle - 1] = NULL;
 		gBytes[bo->handle - 1] = 0;
 		gDomain[bo->handle - 1] = 0;
+		gBoFlags[bo->handle - 1] = 0;
 		if (gBoArea[bo->handle - 1] > 0)
 			r5_area_destroy(gBoArea[bo->handle - 1]);
 		gBoArea[bo->handle - 1] = 0;
@@ -518,6 +522,19 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		gPageVa = va->gpu_va;
 		gPageBytes = va->map_bytes;
 		gPagePte = op == R5_GPU_VA_UNMAP ? 0 : 1ull;
+		if (op != R5_GPU_VA_UNMAP && va->handle != 0
+			&& va->handle <= HOST_BO_SLOTS
+			&& gMem[va->handle - 1] != NULL) {
+			int gtt = gDomain[va->handle - 1] == R5_GPU_DOMAIN_GTT;
+			int wc = (gBoFlags[va->handle - 1] & R5_GPU_BO_WC) != 0;
+			uint64_t access = (uint64_t)R5_GFX9_PTE_VALID
+				| (uint64_t)R5_GFX9_PTE_READABLE;
+			if ((va->flags & R5_GPU_VA_WRITE) != 0)
+				access |= (uint64_t)R5_GFX9_PTE_WRITEABLE;
+			if ((va->flags & R5_GPU_VA_EXEC) != 0)
+				access |= (uint64_t)R5_GFX9_PTE_EXECUTABLE;
+			gPagePte = r5_gfx9_user_pte(0, access, gtt, wc, &kR5Gfx93Mtype);
+		}
 		gPageEmpty = 0;
 		return 0;
 	}
@@ -1771,7 +1788,17 @@ radv_replay(int fd)
 		va.flags = AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
 		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
 			sizeof(va)) == 0);
-		CHECK(gPagePte == 1ull);
+		CHECK(gPagePte == 0x67ull);
+		CHECK(gBoFlags[gem.out.handle - 1] == 0);
+		gem.in.domain_flags = AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_CREATE, &gem,
+			sizeof(gem)) == 0);
+		CHECK(gBoFlags[gem.out.handle - 1] == R5_GPU_BO_WC);
+		va.handle = gem.out.handle;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == 0x63ull);
+		CHECK((gPagePte & 4ull) == 0);
 		va.handle = 0;
 		va.operation = AMDGPU_VA_OP_CLEAR;
 		va.flags = 0;

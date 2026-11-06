@@ -455,6 +455,28 @@ main()
 		| R5_GFX9_PTE_WRITEABLE);
 	if (cached != 0x0000000123450077ull)
 		return fail("cached gtt");
+	const uint64_t access = R5_GFX9_PTE_VALID | R5_GFX9_PTE_EXECUTABLE
+		| R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
+	const uint64_t wc = r5_gfx9_user_pte(0x123450000ull, access, 1, 1,
+		&kR5Gfx93Mtype);
+	if (wc != 0x0000000123450073ull)
+		return fail("wc gtt");
+	if ((wc & (uint64_t)R5_GFX9_PTE_SNOOPED) != 0)
+		return fail("wc snoop");
+	if ((cached & (uint64_t)R5_GFX9_PTE_SNOOPED) == 0)
+		return fail("cached snoop");
+	const uint64_t vram = r5_gfx9_user_pte(0x123450000ull,
+		access | (uint64_t)R5_GFX9_PTE_SYSTEM | (uint64_t)R5_GFX9_PTE_SNOOPED,
+		0, 0, &kR5Gfx93Mtype);
+	if (vram != pte)
+		return fail("vram stays uc");
+	if (kR5Gfx93Mtype.gc_major != 9 || kR5Gfx93Mtype.gc_minor != 3
+		|| kR5Gfx93Mtype.system_mtype != 0 || kR5Gfx93Mtype.vram_mtype != 0
+		|| kR5Gfx93Mtype.vram_live != 0 || kR5Gfx93Mtype.source == NULL)
+		return fail("mtype policy");
+	if (r5_gfx9_cpu_memory_type(1) != (2u << 28)
+		|| r5_gfx9_cpu_memory_type(0) != 0)
+		return fail("cpu memory type");
 	const uint64_t highIb = 0xffffffffffbfb000ull;
 	const uint64_t clipped = (highIb & 0xffffffffull)
 		| (((highIb >> 32) & 0xffffull) << 32);
@@ -630,14 +652,17 @@ main()
 		"\"vulkaninfo\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
-		"highVa, true",
-		"stage_selftest(out)"
+		"stage_selftest(out)",
+		"highVa, true"
 	};
 	const char* stageOrder[] = {
 		"gpu_stage_p(",
 		"gpu_stage_u(",
+		"\"u2c\"",
+		"\"u2d\"",
+		"\"u2a\"",
+		"\"u2b\"",
 		"\"u1\"",
-		"gpu_stage_u2a",
 		"\"u4\"",
 		"\"u3\"",
 		"\"u2\"",

@@ -468,31 +468,34 @@ main()
 			skip_lost(out, "vulkaninfo");
 			skip_lost(out, "VulkanTeapot (sam)");
 			skip_lost(out, "VulkanTeapot");
-			skip_lost(out, "ib");
 			skip_lost(out, "selftest");
+			skip_lost(out, "ib");
 		} else {
 		run_stage(out, "vulkaninfo", "/bin/vulkaninfo --summary 2>&1", 120);
 		if (device_lost()) {
 			skip_lost(out, "VulkanTeapot (sam)");
 			skip_lost(out, "VulkanTeapot");
-			skip_lost(out, "ib");
 			skip_lost(out, "selftest");
+			skip_lost(out, "ib");
 		} else {
 			run_stage(out, "VulkanTeapot (sam)",
 				"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1", 120);
 			if (device_lost()) {
 				skip_lost(out, "VulkanTeapot");
-				skip_lost(out, "ib");
 				skip_lost(out, "selftest");
+				skip_lost(out, "ib");
 			} else {
 				run_stage(out, "VulkanTeapot",
 					"/bin/VulkanTeapot --selftest 2>&1", 120);
 				if (device_lost()) {
-					skip_lost(out, "ib");
 					skip_lost(out, "selftest");
+					skip_lost(out, "ib");
 				} else {
-					stage_bo(out, lowVa, highVa, true);
 					stage_selftest(out);
+					if (device_lost())
+						skip_lost(out, "ib");
+					else
+						stage_bo(out, lowVa, highVa, true);
 				}
 			}
 		}

@@ -1,5 +1,21 @@
 # R5OS changelog (lokaal)
 
+### Write-combined GTT for the command buffers
+
+Stick 18 drew the SAM teapot and left the teapot without SAM black. RADV puts those command buffers in GTT with `CPU_GTT_USWC`. Every GTT buffer was mapped cached and snooped, and the `clflush` at submit does not cover a chained buffer.
+
+`GEM_CREATE` now copies `CPU_GTT_USWC` onto `R5_GPU_BO_WC`. A GTT buffer with that flag is `B_WRITE_COMBINING_MEMORY` on the kernel area and on the user clone. With PAT the page type is the PTE: the range overlaps the write-back MTRR and is not programmed as another MTRR. The page-table entry is `MTYPE_NC` without `SNOOPED`. A cached GTT page stays `MTYPE_NC` and `SNOOPED`. Linux v6.12 `gmc_v9_0_get_coherence_flags` (the branch that is not GC 9.4) uses `MTYPE_NC` for both, and also for user VRAM. User VRAM stays `MTYPE_UC` until a boot compares it. The row is `kR5Gfx93Mtype`, `vram_live` 0. The K2 page and the kernel GART are unchanged. The `clflush` at `CS_SUBMIT` stays.
+
+After the teapots, stage U runs U2c, U2d, U2a and U2b, each with a 5 second wait, and stops at the first miss. U2c is a write-combined GTT indirect buffer. U2d is the same at `0xffff800000000000`. U2a writes from a VRAM buffer into cached GTT and the CPU reads without `clflush`. U2b writes a cached GTT buffer without `clflush` and the result is in VRAM. The userspace IB stage runs after that.
+
+The host tests printed `ok gpu api 1.0 walk` and `ok libdrm ioctl`.
+
+`jam -q @r5-raw` finished at 22:58 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `bddc2caced201434e8dfc904c548783d1cea4cf9a3681ddc5b0f37007c5f50a0`. The packages in that image match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `gtt wc` and `u2c`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+The nineteenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `b93b79f1e4a7b7294455be4e2041c764f80048dc7c4ab89531e8e0794bc74737`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 23:01 to 23:04 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 23:05. Disk 0 was not opened. The stick has not been booted.
+
+The first link of `radeon_hd` failed because `vm_set_area_memory_type` was declared with C++ linkage and the kernel exports the C name. The next image was rejected because the new libdrm still contained `/home/nickr` in its debug info. The libraries were stripped, and the soname links `libdrm.so.2` and `libdrm_amdgpu.so.1` were put back, before the image that was written.
+
 ### The device block names the render backends
 
 Stick 17 reached `vulkaninfo` and then source 184 inside the 744-dword buffer. The ME header dump started `c0047600 c0037600 c0017600 c0027600`, and `0000020c` was read as a packet header. That dword is the low address of the next `SET_SH_REG`. Mesa 25.3.6 sets `max_render_backends` from `num_rb_pipes`. R5 left that field 0, so the GFX9 end-of-pipe clear was a `WRITE_DATA` with a count of 2 and no data dword. The command processor then consumed the next packet.

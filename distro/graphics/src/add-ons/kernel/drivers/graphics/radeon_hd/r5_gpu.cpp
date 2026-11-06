@@ -34,6 +34,8 @@ extern "C" area_id vm_clone_area(team_id team, const char* name, void** address,
 extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
 extern "C" team_id team_get_current_team_id(void);
 extern "C" bool team_is_valid(team_id id);
+extern "C" status_t vm_set_area_memory_type(area_id id,
+	phys_addr_t physicalBase, uint32 type);
 
 /* headers/private/system/vm_defs.h: REGION_NO_PRIVATE_MAP = 0. */
 static const uint32 kRegionNoPrivateMap = 0;
@@ -700,6 +702,26 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		if (area < 0 || kernel == NULL)
 			return gpu_refuse("BO_CREATE", "gtt", area < 0 ? area : B_NO_MEMORY,
 				0, in.domain, bytes, 0, 0, 0, in.flags);
+		if ((in.flags & R5_GPU_BO_WC) != 0) {
+			physical_entry entry;
+			memset(&entry, 0, sizeof(entry));
+			uint32 count = 1;
+			status_t typed = get_memory_map_etc(B_CURRENT_TEAM, kernel, 4096,
+				&entry, &count);
+			if (typed == B_OK && count == 0)
+				typed = B_ERROR;
+			if (typed == B_OK) {
+				typed = vm_set_area_memory_type(area, entry.address,
+					B_WRITE_COMBINING_MEMORY);
+			}
+			dprintf("radeon_hd: gtt wc area %ld status %#lx\n",
+				(long)area, (unsigned long)typed);
+			if (typed != B_OK) {
+				delete_area(area);
+				return gpu_refuse("BO_CREATE", "wc", typed, 0, in.domain,
+					bytes, 0, 0, 0, in.flags);
+			}
+		}
 		bo->kernelArea = area;
 		bo->kernel = kernel;
 	}
@@ -847,6 +869,26 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	if (area < 0)
 		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
 			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	if (bo->domain == R5_GPU_DOMAIN_GTT && (bo->flags & R5_GPU_BO_WC) != 0) {
+		physical_entry entry;
+		memset(&entry, 0, sizeof(entry));
+		uint32 count = 1;
+		status_t typed = get_memory_map_etc(B_CURRENT_TEAM, bo->kernel, 4096,
+			&entry, &count);
+		if (typed == B_OK && count == 0)
+			typed = B_ERROR;
+		if (typed == B_OK) {
+			typed = vm_set_area_memory_type(area, entry.address,
+				B_WRITE_COMBINING_MEMORY);
+		}
+		dprintf("radeon_hd: gtt wc clone %ld status %#lx\n",
+			(long)area, (unsigned long)typed);
+		if (typed != B_OK) {
+			vm_delete_area(team, area, true);
+			return gpu_refuse("BO_MAP", "wc", typed, in.handle, bo->domain,
+				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+		}
+	}
 	bo->area = area;
 	bo->mapTeam = team;
 	in.area = area;
@@ -1117,7 +1159,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
 		uint32 fb = gpu_mmio(client->info, kGcSegment, 0x096b) & 0x00ffffffu;
 		uint64 phys = ((uint64)fb << 24) + bo->vramOffset + in.bo_offset;
-		uint64 pte = r5_gfx9_gart_pte(phys, gpu_pte_flags(flags));
+		uint64 pte = r5_gfx9_user_pte(phys, gpu_pte_flags(flags), 0, 0,
+			&kR5Gfx93Mtype);
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
 			if (r5_gfx9_vmid1_lookup(in.gpu_va + page)) {
 				gpu_va_clear(in.gpu_va, page);
@@ -1170,8 +1213,9 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
 					}
-					uint64 pte = r5_gfx9_cached_gtt_pte(address,
-						gpu_pte_flags(flags));
+					uint64 pte = r5_gfx9_user_pte(address,
+						gpu_pte_flags(flags), 1,
+						(bo->flags & R5_GPU_BO_WC) != 0, &kR5Gfx93Mtype);
 					if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
 						gpu_va_clear(in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
@@ -2194,7 +2238,8 @@ gpu_stage_release(gpu_stage_page* page)
 
 
 static bool
-gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt)
+gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
+	bool wc = false)
 {
 	memset(page, 0, sizeof(*page));
 	page->area = -1;
@@ -2222,6 +2267,26 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt)
 			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 		if (page->area < 0 || system == NULL)
 			return false;
+		if (wc) {
+			physical_entry typed;
+			memset(&typed, 0, sizeof(typed));
+			uint32 typedCount = 1;
+			status_t typeStatus = get_memory_map_etc(B_CURRENT_TEAM, system,
+				4096, &typed, &typedCount);
+			if (typeStatus == B_OK && typedCount == 0)
+				typeStatus = B_ERROR;
+			if (typeStatus == B_OK) {
+				typeStatus = vm_set_area_memory_type(page->area,
+					typed.address, B_WRITE_COMBINING_MEMORY);
+			}
+			dprintf("radeon_hd: stage wc area %ld status %#lx\n",
+				(long)page->area, (unsigned long)typeStatus);
+			if (typeStatus != B_OK) {
+				delete_area(page->area);
+				page->area = -1;
+				return false;
+			}
+		}
 		page->cpu = (uint8*)system;
 		page->gtt = true;
 		physical_entry entry;
@@ -2237,8 +2302,8 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt)
 		phys = entry.address;
 	}
 	page->phys = phys;
-	uint64 pte = gtt ? r5_gfx9_cached_gtt_pte(phys, flags)
-		: r5_gfx9_gart_pte(phys, flags);
+	uint64 pte = r5_gfx9_user_pte(phys, flags, gtt ? 1 : 0, wc ? 1 : 0,
+		&kR5Gfx93Mtype);
 	if (!r5_gfx9_vmid1_map(va, pte) || !r5_gfx9_vmid1_flush()) {
 		gpu_stage_release(page);
 		return false;
@@ -2273,13 +2338,15 @@ gpu_stage_slot(uint64 sequence)
 
 
 static uint32
-gpu_stage_word(uint8* destCpu)
+gpu_stage_word(uint8* destCpu, bool flush)
 {
 	if (destCpu == NULL)
 		return 0;
-	uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
-	asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
-	asm volatile("mfence" ::: "memory");
+	if (flush) {
+		uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
+		asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
+		asm volatile("mfence" ::: "memory");
+	}
 	return *(volatile uint32*)(destCpu + 64);
 }
 
@@ -2288,7 +2355,8 @@ gpu_stage_word(uint8* destCpu)
  * removes the job. A fence that is still out at 5s stays, and this
  * waits until the watchdog has marked the device lost. */
 static gpu_stage_pace
-gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu)
+gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu,
+	bool flush)
 {
 	bigtime_t start = slot >= 0 ? sJobs[slot].submitted : system_time();
 	gpu_stage_pace pace;
@@ -2298,7 +2366,7 @@ gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu)
 	gpu_unlock();
 	while (true) {
 		bool fence = r5_gfx9_user_seen() == sequence;
-		bool word = !expectWord || gpu_stage_word(destCpu) == 0xDEADBEEF;
+		bool word = !expectWord || gpu_stage_word(destCpu, flush) == 0xDEADBEEF;
 		bigtime_t elapsed = system_time() - start;
 		int step = r5_pace((uint64)elapsed, fence && word);
 		if (step != R5_PACE_WAIT) {
@@ -2341,17 +2409,24 @@ gpu_stage_how(const gpu_stage_pace& pace)
  * The wait does not mark the GPU lost. The watchdog does, at 5s. */
 static bool
 gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
-	uint64 destVa, bool expectWord)
+	uint64 destVa, bool expectWord, bool flush)
 {
 	if (ibPage == NULL || ibPage->cpu == NULL)
 		return false;
 	if (expectWord && destCpu != NULL) {
 		*(volatile uint32*)(destCpu + 64) = 0;
-		uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
-		asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
-		asm volatile("mfence" ::: "memory");
+		if (flush) {
+			uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
+			asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
+			asm volatile("mfence" ::: "memory");
+		} else
+			asm volatile("sfence" ::: "memory");
 	}
-	if (!r5_gfx9_stage_ib(ibPage->cpu, destVa)) {
+	bool stored = flush ? r5_gfx9_stage_ib(ibPage->cpu, destVa)
+		: r5_gfx9_stage_ib_store(ibPage->cpu, destVa);
+	if (!flush)
+		asm volatile("sfence" ::: "memory");
+	if (!stored) {
 		dprintf("radeon_hd: %s ib\n", name);
 		return false;
 	}
@@ -2370,7 +2445,7 @@ gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
 	}
 	int slot = gpu_stage_slot(sequence);
 	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, expectWord,
-		expectWord ? destCpu : NULL);
+		expectWord ? destCpu : NULL, flush);
 	dprintf("radeon_hd: %s %s %ld ms\n", name, gpu_stage_how(pace),
 		(long)pace.ms);
 	if (!pace.landed) {
@@ -2389,7 +2464,7 @@ gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
 		dprintf("radeon_hd: %s map\n", name);
 		return false;
 	}
-	bool landed = gpu_stage_step(name, &page, page.cpu, va + 64, true);
+	bool landed = gpu_stage_step(name, &page, page.cpu, va + 64, true, true);
 	gpu_stage_release(&page);
 	return landed;
 }
@@ -2403,7 +2478,8 @@ gpu_stage_fault(radeon_info* info)
 		dprintf("radeon_hd: u5 map\n");
 		return false;
 	}
-	bool landed = gpu_stage_step("u5", &page, NULL, kStageFault + 64, false);
+	bool landed = gpu_stage_step("u5", &page, NULL, kStageFault + 64, false,
+		true);
 	uint32 me = gpu_mmio(info, kGcSegment, 0x01b6);
 	uint32 status = gpu_mmio(info, kGcSegment, 0x084b);
 	uint32 addrLo = gpu_mmio(info, kGcSegment, 0x084c);
@@ -2421,23 +2497,26 @@ gpu_stage_fault(radeon_info* info)
 }
 
 
-/* VRAM indirect buffer, WRITE_DATA into a low GTT page, then a CPU read
- * of that word through the kernel mapping. */
+/* One indirect buffer and one WRITE_DATA page. flush is the clflush
+ * used by the older steps. U2 leaves it off: a write-combined store
+ * ends with sfence, and a cached store is left for the GPU to snoop. */
 static bool
-gpu_stage_u2a(radeon_info* info)
+gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
+	bool ibWc, uint64 destVa, bool destGtt, bool destWc, bool flush)
 {
 	gpu_stage_page ib;
 	gpu_stage_page dest;
-	if (!gpu_stage_map(info, &ib, kStageLowVram, false)) {
-		dprintf("radeon_hd: u2a map\n");
+	if (!gpu_stage_map(info, &ib, ibVa, ibGtt, ibWc)) {
+		dprintf("radeon_hd: %s map\n", name);
 		return false;
 	}
-	if (!gpu_stage_map(info, &dest, kStageLowGtt, true)) {
-		dprintf("radeon_hd: u2a map\n");
+	if (!gpu_stage_map(info, &dest, destVa, destGtt, destWc)) {
+		dprintf("radeon_hd: %s map\n", name);
 		gpu_stage_release(&ib);
 		return false;
 	}
-	bool landed = gpu_stage_step("u2a", &ib, dest.cpu, dest.va + 64, true);
+	bool landed = gpu_stage_step(name, &ib, dest.cpu, dest.va + 64, true,
+		flush);
 	gpu_stage_release(&dest);
 	gpu_stage_release(&ib);
 	return landed;
@@ -2499,7 +2578,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 		return R5_GPU_P_TIMEOUT;
 	}
 	int slot = gpu_stage_slot(sequence);
-	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, false, NULL);
+	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, false, NULL, true);
 	int32 after = r5_gfx9_priv_count();
 	uint32 status = R5_GPU_P_OK;
 	const char* how = gpu_stage_how(pace);
@@ -2654,9 +2733,19 @@ gpu_stage_u(radeon_info* info)
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
-	if (!gpu_stage_one(info, "u1", kStageLowVram, false))
+	if (!gpu_stage_pair(info, "u2c", kStageLowGtt, true, true,
+			kStageLowVram, false, false, false))
 		return B_OK;
-	if (!gpu_stage_u2a(info))
+	if (!gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true, true,
+			kStageHighVram, false, false, false))
+		return B_OK;
+	if (!gpu_stage_pair(info, "u2a", kStageLowVram, false, false,
+			kStageLowGtt, true, false, false))
+		return B_OK;
+	if (!gpu_stage_pair(info, "u2b", kStageLowGtt, true, false,
+			kStageLowVram, false, false, false))
+		return B_OK;
+	if (!gpu_stage_one(info, "u1", kStageLowVram, false))
 		return B_OK;
 	if (!gpu_stage_one(info, "u4", kStageHighVram, false))
 		return B_OK;

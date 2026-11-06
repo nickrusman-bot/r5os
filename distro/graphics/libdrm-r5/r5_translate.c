@@ -331,6 +331,8 @@ r5_gem_create(int fd, union drm_amdgpu_gem_create *gem)
 	bo.version = 1;
 	bo.domain = r5_domain(gem->in.domains);
 	bo.bytes = gem->in.bo_size;
+	if ((gem->in.domain_flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC) != 0)
+		bo.flags |= R5_GPU_BO_WC;
 	if (r5_call(fd, R5_GPU_BO_CREATE, &bo, sizeof(bo)) != 0)
 		return -1;
 	gem->out.handle = bo.handle;

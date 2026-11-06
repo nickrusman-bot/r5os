@@ -2211,7 +2211,7 @@ r5_gfx9_k2_word_mc()
  * IB's VMID translates. A VMID 1 test passes its own page plus 64.
  * The upper half is the full 32 bits. The 0xffff mask is only IB_BASE_HI. */
 bool
-r5_gfx9_stage_ib(uint8* cpu, uint64 destVa)
+r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa)
 {
 	if (cpu == NULL || destVa == 0 || (destVa & 3ull) != 0)
 		return false;
@@ -2224,6 +2224,15 @@ r5_gfx9_stage_ib(uint8* cpu, uint64 destVa)
 	ib[5] = 0xFFFF1000;
 	ib[6] = 0xFFFF1000;
 	ib[7] = 0xFFFF1000;
+	return true;
+}
+
+
+bool
+r5_gfx9_stage_ib(uint8* cpu, uint64 destVa)
+{
+	if (!r5_gfx9_stage_ib_store(cpu, destVa))
+		return false;
 	radeon_gfx9_flush_visible(cpu, 64);
 	radeon_visible_barrier();
 	asm volatile("clflush %0" : "+m" (*(volatile char*)cpu) : : "memory");
