@@ -117,6 +117,64 @@ test_helpers()
 	midi2_translate_midi1_note(3, 61, 1, true, fromMidi1);
 	expect(kernelNote[0] == fromMidi1[0] && kernelNote[1] == fromMidi1[1],
 		"velocity 1 translation copies match");
+
+	uint32 voice[2];
+	uint8 midiBytes[12];
+	voice[0] = (0x4u << 28) | (0x9u << 20) | (60u << 8);
+	voice[1] = 0;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 3
+		&& midiBytes[0] == 0x90 && midiBytes[1] == 60 && midiBytes[2] == 1,
+		"translated note-on velocity 0 is 1");
+	voice[0] = (0x4u << 28) | (0xau << 20) | (61u << 8);
+	voice[1] = 0x80000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 3
+		&& midiBytes[0] == 0xa0 && midiBytes[1] == 61 && midiBytes[2] == 0x40,
+		"poly pressure keeps the top 7 bits");
+	voice[0] = (0x4u << 28) | (0xdu << 20);
+	voice[1] = 0xff000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 2
+		&& midiBytes[0] == 0xd0 && midiBytes[1] == 0x7f,
+		"channel pressure keeps the top 7 bits");
+	voice[0] = (0x4u << 28) | (0xeu << 20) | (2u << 16);
+	voice[1] = 0x80000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 3
+		&& midiBytes[0] == 0xe2 && midiBytes[1] == 0x00 && midiBytes[2] == 0x40,
+		"pitch bend center is LSB then MSB");
+	voice[0] = (0x4u << 28) | (0xcu << 20) | 0;
+	voice[1] = (12u << 24);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 2
+		&& midiBytes[0] == 0xc0 && midiBytes[1] == 12,
+		"program change without a bank is one message");
+	voice[0] = (0x4u << 28) | (0xcu << 20) | 1;
+	voice[1] = (12u << 24) | (3u << 8) | 4u;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 8
+		&& midiBytes[0] == 0xb0 && midiBytes[1] == 0 && midiBytes[2] == 3
+		&& midiBytes[3] == 0xb0 && midiBytes[4] == 32 && midiBytes[5] == 4
+		&& midiBytes[6] == 0xc0 && midiBytes[7] == 12,
+		"program change with a bank is MSB, LSB, then program");
+	voice[0] = (0x4u << 28) | (0x2u << 20) | (1u << 8) | 2u;
+	voice[1] = 0x80000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 12
+		&& midiBytes[1] == 101 && midiBytes[2] == 1
+		&& midiBytes[4] == 100 && midiBytes[5] == 2
+		&& midiBytes[7] == 6 && midiBytes[8] == 0x40
+		&& midiBytes[10] == 38 && midiBytes[11] == 0,
+		"registered controller is four control changes");
+	voice[0] = (0x4u << 28) | (0x3u << 20) | (5u << 8) | 6u;
+	voice[1] = 0;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 12
+		&& midiBytes[1] == 99 && midiBytes[2] == 5
+		&& midiBytes[4] == 98 && midiBytes[5] == 6,
+		"assignable controller is four control changes");
+	voice[0] = (0x4u << 28) | (0x4u << 20);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 0,
+		"a relative controller stays UMP");
+	voice[0] = (0x4u << 28) | (0x6u << 20) | (60u << 8);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 0,
+		"per-note pitch bend stays UMP");
+	voice[0] = (0x4u << 28) | (0xfu << 20) | (60u << 8);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 0,
+		"per-note management stays UMP");
 	expect(midi2_control_value(control, 2) == 0x80000000,
 		"helper keeps the 32-bit controller");
 	expect(midi2_note_velocity(control, 2) == 0,

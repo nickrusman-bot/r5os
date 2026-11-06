@@ -250,24 +250,17 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 
 	uint32 messageType = words[0] >> 28;
 	if (messageType == 0x4 && wordCount == 2) {
-		uchar status = (words[0] >> 20) & 0x0f;
-		uchar channel = (words[0] >> 16) & 0x0f;
-		uchar index = (words[0] >> 8) & 0xff;
-		if (status == 0x8 || status == 0x9) {
-			// MIDI 1.0 hooks keep the top 7 bits. Data() still has the packet.
-			uint16 full = midi2_note_velocity(words, wordCount);
-			uchar velocity = status == 0x9
-				? midi2_note_on_midi1_velocity(full)
-				: (uchar)(full >> 9);
-			if (status == 0x9)
-				consumer->NoteOn(channel, index, velocity, time);
-			else
-				consumer->NoteOff(channel, index, velocity, time);
-		} else if (status == 0xb) {
-			uchar value = (uchar)(midi2_control_value(words, wordCount) >> 25);
-			consumer->ControlChange(channel, index, value, time);
+		/* Appendix D, Translation (D.2). D.2.8 stays in Data() only. */
+		uint8 midi[12];
+		int length = midi2_channel_voice_to_midi1(words, wordCount, midi);
+		int offset = 0;
+		while (offset < length) {
+			uchar kind = midi[offset] & 0xf0;
+			size_t messageLength = (kind == B_PROGRAM_CHANGE
+				|| kind == B_CHANNEL_PRESSURE) ? 2 : 3;
+			consumer->Data((uchar*)(midi + offset), messageLength, true, time);
+			offset += (int)messageLength;
 		}
-		// Status 0 and 1 are per-note controllers. They stay in Data().
 		return;
 	}
 

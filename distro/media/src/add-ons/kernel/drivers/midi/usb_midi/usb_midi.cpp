@@ -29,6 +29,7 @@
 #include "midi_driver.h"
 #include "usb_midi.h"
 #include "usb_midi_velocity.h"
+#include "../../../../../../headers/os/midi2/Midi2Translate.h"
 
 
 const char* midi_base_name = "midi/usb/";
@@ -388,21 +389,8 @@ expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
 			return 3;
 		return 0;
 	}
-	if (messageType == 0x4 && packet->word_count == 2) {
-		uint8 status = (words[0] >> 20) & 0x0f;
-		uint8 channel = (words[0] >> 16) & 0x0f;
-		out[0] = (status << 4) | channel;
-		out[1] = (words[0] >> 8) & 0xff;
-		if (status == 0x9)
-			out[2] = usb_midi_note_on_midi1_velocity((uint16)(words[1] >> 16));
-		else if (status == 0x8)
-			out[2] = (uint8)((words[1] >> 16) >> 9);
-		else if (status == 0xb)
-			out[2] = (uint8)(words[1] >> 25);
-		else
-			return 0;
-		return 3;
-	}
+	if (messageType == 0x4 && packet->word_count == 2)
+		return midi2_channel_voice_to_midi1(words, packet->word_count, out);
 	if (messageType == 0x3 && packet->word_count == 2) {
 		uint8 status = 0;
 		uint8 data[6];
@@ -894,7 +882,7 @@ read_ump_as_midi1(driver_cookie* cookie, void* buf, size_t* num_bytes)
 			release_sem(midiDevice->sem_lock);
 			continue;
 		}
-		uint8 expanded[8];
+		uint8 expanded[16];
 		int expandedLength = expand_ump_to_midi1(&packet, expanded);
 		if (expandedLength <= 0) {
 			release_sem(midiDevice->sem_lock);
@@ -1126,19 +1114,23 @@ send_ump_as_midi1(usbmidi_port_info* port, const uint32* words, uint32 wordCount
 		midi[2] = words[0] & 0xff;
 		cin = (midi[0] & 0xf0) == 0xf0 ? CINcode[midi[0] & 0x0f] : (midi[0] >> 4);
 	} else if (messageType == 0x4 && wordCount == 2) {
-		uint8 status = (words[0] >> 20) & 0x0f;
-		uint8 channel = (words[0] >> 16) & 0x0f;
-		midi[0] = (status << 4) | channel;
-		midi[1] = (words[0] >> 8) & 0xff;
-		if (status == 0x9)
-			midi[2] = usb_midi_note_on_midi1_velocity((uint16)(words[1] >> 16));
-		else if (status == 0x8)
-			midi[2] = (uint8)((words[1] >> 16) >> 9);
-		else if (status == 0xb)
-			midi[2] = (uint8)(words[1] >> 25);
-		else
+		uint8 translated[12];
+		int length = midi2_channel_voice_to_midi1(words, wordCount, translated);
+		if (length <= 0)
 			return B_UNSUPPORTED;
-		cin = status;
+		int offset = 0;
+		while (offset < length) {
+			uint8 kind = translated[offset] & 0xf0;
+			int messageLength = (kind == 0xc0 || kind == 0xd0) ? 2 : 3;
+			uint8 event[3];
+			memset(event, 0, sizeof(event));
+			memcpy(event, translated + offset, messageLength);
+			status_t sent = send_cin_packet(port, kind >> 4, event);
+			if (sent != B_OK)
+				return sent;
+			offset += messageLength;
+		}
+		return B_OK;
 	} else if (messageType == 0x1 && wordCount == 1) {
 		midi[0] = (words[0] >> 16) & 0xff;
 		midi[1] = (words[0] >> 8) & 0xff;

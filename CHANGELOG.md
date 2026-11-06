@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### MIDI 2.0 channel voice reaches MIDI 1.0 hooks
+
+Type 0x4 was translated only for note-off, note-on, and control change. Appendix D, Translation (D.2), also covers poly pressure, channel pressure (D.2.2), pitch bend with the least significant byte first (D.2.5), program change with the bank bit (D.2.4), and registered and assignable controllers as four control changes (D.2.3). `BMidiLocalConsumer`, `read()`, and a send to a MIDI 1.0 device use `midi2_channel_voice_to_midi1`. The pending `read()` buffer is 16 bytes, which holds the 12-byte controller sequence. Appendix D, Messages That Cannot Be Translated to MIDI 1.0 (D.2.8), stays UMP: relative controllers, per-note controllers, per-note management, and per-note pitch bend. `midi2test` checks those bytes. That program was not run. A host compile of the helper with `static_assert` passed. No device was attached.
+
 ### A MIDI 2.0 note-on of velocity 0 stays a note-on
 
 `midi2_note_on_midi1_velocity(0)` returned 0, and MIDI 1.0 treats a note-on of velocity 0 as a note-off. Appendix D, MIDI 2.0 Note On Velocity (D.2.1), replaces a translated 0 with 1. The helper now returns at least 1 for every note-on, including 0. The same formula is `usb_midi_note_on_midi1_velocity` in the driver, because the driver does not include `Midi2Defs.h`. `midi2test` compares the two.

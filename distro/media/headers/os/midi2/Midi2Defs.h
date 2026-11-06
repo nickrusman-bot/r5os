@@ -388,6 +388,7 @@ midi2_sysex_payload(const uint32* words, size_t wordCount, uint8* _status,
 }
 
 
+#include "Midi2Translate.h"
 #include <Midi2Property.h>
 #include <Midi2Profile.h>
 #include <Midi2Stream.h>
