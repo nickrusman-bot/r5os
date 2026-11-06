@@ -20,6 +20,7 @@
 
 struct SysexAssembly {
 	BMidiLocalConsumer*	consumer;
+	uint8				group;
 	uint8*				data;
 	size_t				size;
 	size_t				used;
@@ -33,10 +34,10 @@ static SysexAssembly* sSysex = NULL;
 
 
 static SysexAssembly*
-sysex_find(BMidiLocalConsumer* consumer)
+sysex_find(BMidiLocalConsumer* consumer, uint8 group)
 {
 	for (SysexAssembly* node = sSysex; node != NULL; node = node->next) {
-		if (node->consumer == consumer)
+		if (node->consumer == consumer && node->group == group)
 			return node;
 	}
 	return NULL;
@@ -54,7 +55,7 @@ sysex_forget(BMidiLocalConsumer* consumer)
 			*link = node->next;
 			free(node->data);
 			free(node);
-			break;
+			continue;
 		}
 		link = &(*link)->next;
 	}
@@ -98,8 +99,9 @@ dispatch_sysex(BMidiLocalConsumer* consumer, const uint32* words,
 	uint8* owned = NULL;
 	size_t ownedCount = 0;
 
+	uint8 group = (uint8)((words[0] >> 24) & 0x0f);
 	sSysexLock.Lock();
-	SysexAssembly* node = sysex_find(consumer);
+	SysexAssembly* node = sysex_find(consumer, group);
 	if (node == NULL) {
 		node = (SysexAssembly*)calloc(1, sizeof(SysexAssembly));
 		if (node == NULL) {
@@ -107,6 +109,7 @@ dispatch_sysex(BMidiLocalConsumer* consumer, const uint32* words,
 			return;
 		}
 		node->consumer = consumer;
+		node->group = group;
 		node->next = sSysex;
 		sSysex = node;
 	}
@@ -247,21 +250,17 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 
 	uint32 messageType = words[0] >> 28;
 	if (messageType == 0x4 && wordCount == 2) {
-		uchar status = (words[0] >> 20) & 0x0f;
-		uchar channel = (words[0] >> 16) & 0x0f;
-		uchar index = (words[0] >> 8) & 0xff;
-		if (status == 0x8 || status == 0x9) {
-			// MIDI 1.0 hooks keep the top 7 bits. Data() still has the packet.
-			uchar velocity = (uchar)(midi2_note_velocity(words, wordCount) >> 9);
-			if (status == 0x9)
-				consumer->NoteOn(channel, index, velocity, time);
-			else
-				consumer->NoteOff(channel, index, velocity, time);
-		} else if (status == 0xb) {
-			uchar value = (uchar)(midi2_control_value(words, wordCount) >> 25);
-			consumer->ControlChange(channel, index, value, time);
+		/* Appendix D, Translation (D.2). D.2.8 stays in Data() only. */
+		uint8 midi[12];
+		int length = midi2_channel_voice_to_midi1(words, wordCount, midi);
+		int offset = 0;
+		while (offset < length) {
+			uchar kind = midi[offset] & 0xf0;
+			size_t messageLength = (kind == B_PROGRAM_CHANGE
+				|| kind == B_CHANNEL_PRESSURE) ? 2 : 3;
+			consumer->Data((uchar*)(midi + offset), messageLength, true, time);
+			offset += (int)messageLength;
 		}
-		// Status 0 and 1 are per-note controllers. They stay in Data().
 		return;
 	}
 

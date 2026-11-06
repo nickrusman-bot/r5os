@@ -135,7 +135,7 @@ typedef struct usbmidi_port_info
 	int32 ump_head;
 	int32 ump_tail;
 	int32 ump_count;
-	uint8 ump_pending[8];
+	uint8 ump_pending[16];
 	uint8 ump_pending_len;
 	uint8 ump_pending_pos;
 	uint8 sysex_hold[2];

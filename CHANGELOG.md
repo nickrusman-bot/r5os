@@ -1,5 +1,39 @@
 # R5OS changelog (lokaal)
 
+### MIDI parsers live in libmidi2.so
+
+Property Exchange, profiles, stream messages, and the USB descriptor parser were inline in the public headers. Those functions are now defined in `Midi2Library.cpp` and linked into `libmidi2.so`. The headers keep the names and the arguments. `midi2_pe_put14`, `midi2_pe_get14`, `midi2_stream_pack`, `midi2_stream_status`, and `midi2_profile_same` stay inline. `scripts/apply-media.py` copies the library source, `Midi2Translate.h`, and the two driver parser headers. A Haiku cross compile of `Midi2Library.cpp` succeeded. The host fuzzer, linked with that file, ran each target for one second under AddressSanitizer and printed `ok`. `midi2test` was not run. No device was attached. The library was not jammed into an image.
+
+### MIDI parsers have a host fuzz run
+
+`interpret_ump_buffer`, `expand_ump_to_midi1`, and `sysex7_bytes` call `usb_midi_parse.h`. The host harness includes that file, so it runs the driver code. `scripts/fuzz-midi2.sh` builds it with AddressSanitizer and UndefinedBehaviorSanitizer (`g++` 15.2.0 on WSL). The kernel target ran first for 600 seconds, then payload, Property Exchange, profiles, stream messages, and the USB descriptor parser, 600 seconds each. Each log printed `ok`. There was no sanitizer report. `midi2test` was not run. No device was attached.
+
+### MIDI 2.0 channel voice reaches MIDI 1.0 hooks
+
+Type 0x4 was translated only for note-off, note-on, and control change. Appendix D, Translation (D.2), also covers poly pressure, channel pressure (D.2.2), pitch bend with the least significant byte first (D.2.5), program change with the bank bit (D.2.4), and registered and assignable controllers as four control changes (D.2.3). `BMidiLocalConsumer`, `read()`, and a send to a MIDI 1.0 device use `midi2_channel_voice_to_midi1`. The pending `read()` buffer is 16 bytes, which holds the 12-byte controller sequence. Appendix D, Messages That Cannot Be Translated to MIDI 1.0 (D.2.8), stays UMP: relative controllers, per-note controllers, per-note management, and per-note pitch bend. `midi2test` checks those bytes. That program was not run. A host compile of the helper with `static_assert` passed. No device was attached.
+
+### A MIDI 2.0 note-on of velocity 0 stays a note-on
+
+`midi2_note_on_midi1_velocity(0)` returned 0, and MIDI 1.0 treats a note-on of velocity 0 as a note-off. Appendix D, MIDI 2.0 Note On Velocity (D.2.1), replaces a translated 0 with 1. The helper now returns at least 1 for every note-on, including 0. The same formula is `usb_midi_note_on_midi1_velocity` in the driver, because the driver does not include `Midi2Defs.h`. `midi2test` compares the two.
+
+The other way, Appendix D, Note On/Off (D.3.1): a MIDI 1.0 note-on of velocity 0 written to a UMP endpoint becomes a type 0x4 note-off with velocity `0x8000`. Velocity 1 becomes `0x0200`. Attribute type and attribute value stay 0. Other channel bytes on that write stay type 0x2, so one group can still carry both types. `midi2test` checks both velocities and that the driver copy matches. That program was not run. A host compile of the same checks with `static_assert` passed. No device was attached.
+
+### The wide spray overloads were not in a release
+
+`SprayNoteOn(uchar, uchar, uint16)` and `SprayControlChange(uchar, uchar, uint32)` were exported from `libmidi2.so` in development builds from `f0c74f2520`. Renaming them to `SprayNoteOn2` and `SprayControlChange2` drops those symbols. No file in `distro/` except `midi2test` called the wide forms, and that program now uses the new names. `PortDrivers.cpp` calls the MIDI 1.0 forms. There is no HaikuPorts recipe in this tree and no package that references the symbols. `distro/VERSION` is `2026.1-dev`. The symbols are removed, not kept as aliases.
+
+### SysEx7 is assembled per group
+
+`BMidiLocalConsumer` kept one SysEx buffer per consumer. Two groups that start a message at the same time overwrote that buffer. The buffer is now keyed by the consumer and the group in bits 27..24 of the first word. Closing the consumer frees every group. `midi2test` does not send two groups. This is not run on a device.
+
+### A quiet MIDI 2.0 note-on stays a note-on
+
+`value >> 9` turned a MIDI 2.0 velocity below 512 into MIDI 1.0 velocity 0, which is a note-off. `midi2_note_on_midi1_velocity` returns at least 1 when the 16-bit velocity is not 0. Velocity 0 stays 0. Note-off is unchanged. The same rule is in `expand_ump_to_midi1`, `send_ump_as_midi1`, and the `NoteOn` hook. `midi2test` checks 1, 511 and 512. That program was not run. A cross compile of the helper with `static_assert` is the host check.
+
+### MIDI 2.0 spray calls have their own names
+
+`SprayNoteOn(uchar, uchar, uchar)` and `SprayControlChange(uchar, uchar, uchar)` are again the only candidates for a bare integer. `SprayNoteOn(0, 60, 100)` compiles and is a MIDI 1.0 note. The 16-bit velocity call is `SprayNoteOn2`. The 32-bit controller call is `SprayControlChange2`. The methods stay non-virtual. A cross compile of those four calls with the Haiku g++ succeeded (`n1_compile_ok`). `midi2test` was not run: it needs the MIDI server.
+
 ### Teapot patches follow freeglut
 
 The mesh no longer turns the raw data around Y. Each control point is converted first, the way freeglut 3.4 `fghTeaset` does for `glutSolidTeapot`: GL `(x, z - 1.575, -y)` times `size / 2`, with `size` 1. Patches 0–5 are copied four times by a turn around that GL Y axis: `(x, y, z)`, `(z, y, -x)`, `(-x, y, -z)`, `(-z, y, x)`. Patches 6–9 are copied twice. The copy negates GL Z, which is the data Y, and reverses the row order. Normals take the same turn or mirror. The first row of patch 3 is forced to `(0, 1, 0)` and the first row of patch 5 to `(0, -1, 0)`. A solid patch is 8 by 8 points (`GLUT_SOLID_N_SUBDIV`). The camera looks at the origin from `(0, 0.15, 7.2)`.

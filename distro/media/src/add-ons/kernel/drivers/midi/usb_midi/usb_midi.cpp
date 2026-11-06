@@ -28,6 +28,9 @@
 
 #include "midi_driver.h"
 #include "usb_midi.h"
+#include "usb_midi_velocity.h"
+#include "../../../../../../headers/os/midi2/Midi2Translate.h"
+#include "usb_midi_parse.h"
 
 
 const char* midi_base_name = "midi/usb/";
@@ -302,21 +305,7 @@ load_le32(const uint8* in)
 static uint32
 ump_word_count(uint32 first)
 {
-	switch (first >> 28) {
-		case 0x0:
-		case 0x1:
-		case 0x2:
-			return 1;
-		case 0x3:
-		case 0x4:
-			return 2;
-		case 0x5:
-		case 0xd:
-		case 0xf:
-			return 4;
-		default:
-			return 0;
-	}
+	return usb_midi_ump_word_count(first);
 }
 
 
@@ -346,103 +335,33 @@ push_ump_packet(usbmidi_port_info* port, const uint32* words, uint32 count)
 static int
 sysex7_bytes(const uint32* words, uint8* status, uint8 data[6])
 {
-	if ((words[0] >> 28) != 0x3)
-		return -1;
-	*status = (words[0] >> 20) & 0x0f;
-	int count = (int)((words[0] >> 16) & 0x0f);
-	if (*status > 3 || count > 6)
-		return -1;
-	data[0] = (words[0] >> 8) & 0xff;
-	data[1] = words[0] & 0xff;
-	data[2] = (words[1] >> 24) & 0xff;
-	data[3] = (words[1] >> 16) & 0xff;
-	data[4] = (words[1] >> 8) & 0xff;
-	data[5] = words[1] & 0xff;
-	return count;
+	return usb_midi_sysex7_bytes(words, status, data);
 }
 
 
 static int
 expand_ump_to_midi1(const midi_ump_packet* packet, uint8* out)
 {
-	const uint32* words = packet->words;
-	uint32 messageType = words[0] >> 28;
-	if (messageType == 0x1 || messageType == 0x2) {
-		out[0] = (words[0] >> 16) & 0xff;
-		out[1] = (words[0] >> 8) & 0xff;
-		out[2] = words[0] & 0xff;
-		if (messageType == 0x1) {
-			if (out[0] >= 0xf8 || out[0] == 0xf6)
-				return 1;
-			if (out[0] == 0xf1 || out[0] == 0xf3)
-				return 2;
-			if (out[0] == 0xf2)
-				return 3;
-			return 0;
-		}
-		uint8 kind = out[0] & 0xf0;
-		if (kind == 0xc0 || kind == 0xd0)
-			return 2;
-		if (kind >= 0x80 && kind <= 0xe0)
-			return 3;
-		return 0;
-	}
-	if (messageType == 0x4 && packet->word_count == 2) {
-		uint8 status = (words[0] >> 20) & 0x0f;
-		uint8 channel = (words[0] >> 16) & 0x0f;
-		out[0] = (status << 4) | channel;
-		out[1] = (words[0] >> 8) & 0xff;
-		if (status == 0x8 || status == 0x9)
-			out[2] = (uint8)((words[1] >> 16) >> 9);
-		else if (status == 0xb)
-			out[2] = (uint8)(words[1] >> 25);
-		else
-			return 0;
-		return 3;
-	}
-	if (messageType == 0x3 && packet->word_count == 2) {
-		uint8 status = 0;
-		uint8 data[6];
-		int count = sysex7_bytes(words, &status, data);
-		if (count < 0)
-			return 0;
-		int length = 0;
-		if (status == 0 || status == 1)
-			out[length++] = 0xf0;
-		for (int i = 0; i < count; i++)
-			out[length++] = data[i] & 0x7f;
-		if (status == 0 || status == 3)
-			out[length++] = 0xf7;
-		return length;
-	}
-	return 0;
+	return usb_midi_expand_ump(packet->words, packet->word_count, out);
+}
+
+
+static void
+deliver_ump_packet(void* cookie, uint32_t group, const uint32_t* words,
+	uint32_t count)
+{
+	usbmidi_device_info* midiDevice = (usbmidi_device_info*)cookie;
+	usbmidi_port_info* port = group < 16 ? midiDevice->ports[group] : NULL;
+	if (port != NULL)
+		push_ump_packet(port, (const uint32*)words, count);
 }
 
 
 static void
 interpret_ump_buffer(usbmidi_device_info* midiDevice)
 {
-	const uint8* bytes = (const uint8*)midiDevice->buffer;
-	size_t left = midiDevice->actual_length;
-
-	while (left >= 4) {
-		uint32 word = load_le32(bytes);
-		uint32 count = ump_word_count(word);
-		if (count == 0 || left < count * 4)
-			break;
-
-		uint32 words[4];
-		for (uint32 i = 0; i < count; i++)
-			words[i] = load_le32(bytes + i * 4);
-
-		uint32 group = (word >> 24) & 0x0f;
-		usbmidi_port_info* port = group < 16 ? midiDevice->ports[group] : NULL;
-		if (port != NULL)
-			push_ump_packet(port, words, count);
-
-		bytes += count * 4;
-		left -= count * 4;
-	}
+	usb_midi_walk_ump((const uint8*)midiDevice->buffer, midiDevice->actual_length,
+		deliver_ump_packet, midiDevice);
 }
 
 
@@ -891,7 +810,7 @@ read_ump_as_midi1(driver_cookie* cookie, void* buf, size_t* num_bytes)
 			release_sem(midiDevice->sem_lock);
 			continue;
 		}
-		uint8 expanded[8];
+		uint8 expanded[16];
 		int expandedLength = expand_ump_to_midi1(&packet, expanded);
 		if (expandedLength <= 0) {
 			release_sem(midiDevice->sem_lock);
@@ -1123,17 +1042,23 @@ send_ump_as_midi1(usbmidi_port_info* port, const uint32* words, uint32 wordCount
 		midi[2] = words[0] & 0xff;
 		cin = (midi[0] & 0xf0) == 0xf0 ? CINcode[midi[0] & 0x0f] : (midi[0] >> 4);
 	} else if (messageType == 0x4 && wordCount == 2) {
-		uint8 status = (words[0] >> 20) & 0x0f;
-		uint8 channel = (words[0] >> 16) & 0x0f;
-		midi[0] = (status << 4) | channel;
-		midi[1] = (words[0] >> 8) & 0xff;
-		if (status == 0x8 || status == 0x9)
-			midi[2] = (uint8)((words[1] >> 16) >> 9);
-		else if (status == 0xb)
-			midi[2] = (uint8)(words[1] >> 25);
-		else
+		uint8 translated[12];
+		int length = midi2_channel_voice_to_midi1(words, wordCount, translated);
+		if (length <= 0)
 			return B_UNSUPPORTED;
-		cin = status;
+		int offset = 0;
+		while (offset < length) {
+			uint8 kind = translated[offset] & 0xf0;
+			int messageLength = (kind == 0xc0 || kind == 0xd0) ? 2 : 3;
+			uint8 event[3];
+			memset(event, 0, sizeof(event));
+			memcpy(event, translated + offset, messageLength);
+			status_t sent = send_cin_packet(port, kind >> 4, event);
+			if (sent != B_OK)
+				return sent;
+			offset += messageLength;
+		}
+		return B_OK;
 	} else if (messageType == 0x1 && wordCount == 1) {
 		midi[0] = (words[0] >> 16) & 0xff;
 		midi[1] = (words[0] >> 8) & 0xff;
@@ -1270,6 +1195,14 @@ write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 	memset(midi, 0, sizeof(midi));
 	if (user_memcpy(midi, midiseq, *num_bytes) != B_OK)
 		return B_BAD_ADDRESS;
+
+	/* Appendix D, Note On/Off (D.3.1). Other channel bytes stay type 0x2. */
+	if ((midicode & 0xf0) == 0x90 || (midicode & 0xf0) == 0x80) {
+		uint32 words[2];
+		usb_midi_translate_midi1_note(midi[0] & 0x0f, midi[1] & 0x7f,
+			midi[2] & 0x7f, (midicode & 0xf0) == 0x90, words);
+		return send_ump_words(cookie->port, words, 2);
+	}
 
 	uint32 messageType = (midicode & 0xf0) == 0xf0 ? 0x1u : 0x2u;
 	uint32 words[1];
