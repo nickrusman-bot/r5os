@@ -359,7 +359,10 @@ r5_va_flags(uint32_t flags)
 		out |= R5_GPU_VA_WRITE;
 	if ((flags & AMDGPU_VM_PAGE_EXECUTABLE) != 0)
 		out |= R5_GPU_VA_EXEC;
-	if (out == 0)
+	if ((flags & AMDGPU_VM_PAGE_PRT) != 0)
+		out |= R5_GPU_VA_PRT;
+	if ((out & (R5_GPU_VA_READ | R5_GPU_VA_WRITE | R5_GPU_VA_EXEC)) == 0
+		&& (out & R5_GPU_VA_PRT) == 0)
 		out = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
 	return out;
 }
@@ -388,15 +391,15 @@ r5_gem_va(int fd, struct drm_amdgpu_gem_va *va)
 		op = R5_GPU_VA_MAP;
 	else if (va->operation == AMDGPU_VA_OP_UNMAP)
 		op = R5_GPU_VA_UNMAP;
-	else if (va->operation == AMDGPU_VA_OP_CLEAR
-		|| va->operation == AMDGPU_VA_OP_REPLACE) {
-		char name[80];
-		snprintf(name, sizeof(name),
-			"DRM_IOCTL_AMDGPU_GEM_VA operation %u", va->operation);
-		r5_unknown(0xc0u + va->operation, name);
+	else if (va->operation == AMDGPU_VA_OP_REPLACE)
+		op = R5_GPU_VA_REPLACE;
+	else if (va->operation == AMDGPU_VA_OP_CLEAR)
+		op = R5_GPU_VA_CLEAR;
+	else
 		return r5_fail(ENOSYS);
-	} else
-		return r5_fail(ENOSYS);
+	if (va->operation == AMDGPU_VA_OP_MAP && va->handle == 0
+		&& (va->flags & AMDGPU_VM_PAGE_PRT) == 0)
+		return r5_fail(EINVAL);
 	return r5_call(fd, op, &call, sizeof(call));
 }
 

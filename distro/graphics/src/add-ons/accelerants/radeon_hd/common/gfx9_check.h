@@ -19,6 +19,23 @@ enum {
 	R5_GFX9_PTE_WRITEABLE = 1u << 6
 };
 
+/* Linux v6.12 amdgpu_vm.h: AMDGPU_PTE_PRT is bit 51 before GFX12.
+ * GFX12 moves it to bit 56. GC 9.3 uses bit 51. gmc_v9_0_get_vm_pte
+ * sets this bit and clears VALID. No other GMC 9 register is written
+ * for a PRT mapping. */
+static const uint64_t kR5Gfx9PtePrt = 1ull << 51;
+
+/* 2 is a valid mapping, 1 is PRT, 0 is an empty entry. */
+static inline int
+r5_gfx9_pte_kind(uint64_t pte)
+{
+	if ((pte & (uint64_t)R5_GFX9_PTE_VALID) != 0)
+		return 2;
+	if ((pte & kR5Gfx9PtePrt) != 0)
+		return 1;
+	return 0;
+}
+
 /* amdgpu_vm.h AMDGPU_PTE_MTYPE_VG10 shifts by 57 and keeps two bits.
  * vega10_enum.h MTYPE_UC is 3. gmc_v9_0_gart_init stores
  * AMDGPU_PTE_MTYPE_VG10(0, MTYPE_UC) | AMDGPU_PTE_EXECUTABLE. */

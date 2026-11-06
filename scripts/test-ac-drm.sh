@@ -27,11 +27,14 @@ gcc -std=c11 -O2 -DHAVE_ENDIAN_H -D_GNU_SOURCE -DR5_HOST_TEST "${INC[@]}" \
 	-c -o /tmp/ac_linux_drm.o "$MESA/src/amd/common/ac_linux_drm.c"
 gcc -std=c11 -O2 -DHAVE_ENDIAN_H -D_GNU_SOURCE "${INC[@]}" \
 	-c -o /tmp/test-ac-drm.o "$WIN/scripts/test-ac-drm.c"
-gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE "${INC[@]}" \
-	-I"$WIN/distro/graphics/libdrm-r5" \
+gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE \
 	-I"$WIN/distro/graphics/headers/private/r5gpu" \
+	-I"$WIN/distro/graphics/libdrm-r5" \
+	"${INC[@]}" \
 	-c -o /tmp/r5_translate.o "$WIN/distro/graphics/libdrm-r5/r5_translate.c"
-gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE "${INC[@]}" \
+gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE \
+	-I"$WIN/distro/graphics/headers/private/r5gpu" \
+	"${INC[@]}" \
 	-c -o /tmp/test-r5-libdrm.o "$WIN/scripts/test-r5-libdrm.c"
 gcc -o /tmp/test-ac-drm \
 	/tmp/ac_linux_drm.o /tmp/test-ac-drm.o /tmp/test-r5-libdrm.o \

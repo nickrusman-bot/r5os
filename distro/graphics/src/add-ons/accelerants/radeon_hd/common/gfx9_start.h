@@ -70,6 +70,7 @@ bool r5_gfx9_vmid1_setup();
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
 bool r5_gfx9_vmid1_lookup(uint64 va);
+bool r5_gfx9_vmid1_pte(uint64 va, uint64* pte);
 int32 r5_gfx9_eop_sem();
 status_t r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset,
 	uint8** address);

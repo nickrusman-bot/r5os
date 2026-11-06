@@ -57,6 +57,13 @@ static uint32_t gSyncPeak;
 static uint32_t gBoPeak;
 static int gEnosys;
 static int gDeferRetire;
+static int gJobAgeUs;
+static int gWatch;
+static int gLost;
+static uint64_t gPageVa;
+static uint64_t gPageBytes;
+static uint64_t gPagePte;
+static int gPageEmpty;
 
 struct host_job {
 	int		live;
@@ -404,23 +411,48 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		}
 		return host_err(ENOMEM);
 	}
-	if (op == R5_GPU_VA_MAP || op == R5_GPU_VA_UNMAP) {
+	if (op == R5_GPU_VA_MAP || op == R5_GPU_VA_UNMAP
+		|| op == R5_GPU_VA_REPLACE || op == R5_GPU_VA_CLEAR) {
 		if (bytes < sizeof(r5_gpu_va))
 			return host_err(EINVAL);
 		r5_gpu_va *va = buf;
+		int low = va->gpu_va >= R5_GPU_VA_OFFSET
+			&& va->gpu_va + va->map_bytes <= R5_GPU_VA_MAX;
+		int high = va->gpu_va >= R5_GPU_HIGH_VA_OFFSET
+			&& va->gpu_va + va->map_bytes <= R5_GPU_HIGH_VA_MAX;
+		if (va->map_bytes == 0 || (va->map_bytes & 0xfff) != 0 || !low && !high)
+			return host_err(EINVAL);
+		if (op == R5_GPU_VA_CLEAR) {
+			gPageVa = va->gpu_va;
+			gPageBytes = va->map_bytes;
+			gPagePte = 0;
+			gPageEmpty = 1;
+			gVa = va->gpu_va;
+			gMapBytes = va->map_bytes;
+			return 0;
+		}
+		if ((op == R5_GPU_VA_MAP || op == R5_GPU_VA_REPLACE)
+			&& va->handle == 0) {
+			if ((va->flags & R5_GPU_VA_PRT) == 0)
+				return host_err(EINVAL);
+			gPageVa = va->gpu_va;
+			gPageBytes = va->map_bytes;
+			/* gfx9_check.h kR5Gfx9PtePrt, Linux AMDGPU_PTE_PRT bit 51. */
+			gPagePte = 1ull << 51;
+			gPageEmpty = 0;
+			gVa = va->gpu_va;
+			gMapBytes = va->map_bytes;
+			return 0;
+		}
+		if (op == R5_GPU_VA_UNMAP && gPageEmpty && va->gpu_va == gPageVa)
+			return host_err(EINVAL);
 		if (va->handle == 0 || va->handle > HOST_BO_SLOTS
 			|| gMem[va->handle - 1] == NULL)
 			return host_err(EINVAL);
 		if (va->bo_offset > gBytes[va->handle - 1]
 			|| va->map_bytes > gBytes[va->handle - 1] - va->bo_offset)
 			return host_err(EINVAL);
-		int low = va->gpu_va >= R5_GPU_VA_OFFSET
-			&& va->gpu_va + va->map_bytes <= R5_GPU_VA_MAX;
-		int high = va->gpu_va >= R5_GPU_HIGH_VA_OFFSET
-			&& va->gpu_va + va->map_bytes <= R5_GPU_HIGH_VA_MAX;
-		if (va->map_bytes == 0 || !low && !high)
-			return host_err(EINVAL);
-		if (op == R5_GPU_VA_MAP
+		if ((op == R5_GPU_VA_MAP || op == R5_GPU_VA_REPLACE)
 			&& gDomain[va->handle - 1] == R5_GPU_DOMAIN_GTT) {
 			int pages = host_cover(0, (size_t)va->map_bytes, 1);
 			if ((uint64_t)pages * 4096 != va->map_bytes)
@@ -429,9 +461,19 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		gVa = va->gpu_va;
 		gBoOffset = va->bo_offset;
 		gMapBytes = va->map_bytes;
+		gPageVa = va->gpu_va;
+		gPageBytes = va->map_bytes;
+		gPagePte = op == R5_GPU_VA_UNMAP ? 0 : 1ull;
+		gPageEmpty = 0;
 		return 0;
 	}
 	if (op == R5_GPU_CS_SUBMIT) {
+		if (gLost)
+			return host_err(EIO);
+		if (gWatch && gJob.live && gJobAgeUs >= 5000000) {
+			gLost = 1;
+			return host_err(EIO);
+		}
 		if (bytes < sizeof(r5_gpu_cs))
 			return host_err(EINVAL);
 		r5_gpu_cs *cs = buf;
@@ -508,6 +550,9 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		if (bytes < sizeof(r5_gpu_fence))
 			return host_err(EINVAL);
 		r5_gpu_fence *fence = buf;
+		if (gWatch && gJob.live && fence->sequence == gJob.sequence
+			&& gJobAgeUs < 5000000)
+			return host_err(ETIMEDOUT);
 		if (fence->sequence == 0 || fence->sequence > gSequence)
 			return host_err(ETIMEDOUT);
 		return 0;
@@ -1435,6 +1480,83 @@ radv_replay(int fd)
 	}
 	submit_zero(node);
 	binary_replay(node);
+
+	CHECK(((1ull << 51) & 1ull) == 0);
+	{
+		struct drm_amdgpu_gem_va va;
+		union drm_amdgpu_gem_create gem;
+		memset(&va, 0, sizeof(va));
+		va.operation = AMDGPU_VA_OP_MAP;
+		va.va_address = 0xffff800000002000ull;
+		va.map_size = 4096;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) != 0);
+		CHECK(errno == EINVAL);
+		va.flags = AMDGPU_VM_PAGE_PRT;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == (1ull << 51));
+		memset(&gem, 0, sizeof(gem));
+		gem.in.bo_size = 4096;
+		gem.in.alignment = 4096;
+		gem.in.domains = AMDGPU_GEM_DOMAIN_GTT;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_CREATE, &gem,
+			sizeof(gem)) == 0);
+		va.handle = gem.out.handle;
+		va.operation = AMDGPU_VA_OP_REPLACE;
+		va.flags = AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == 1ull);
+		va.handle = 0;
+		va.operation = AMDGPU_VA_OP_CLEAR;
+		va.flags = 0;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == 0);
+		va.handle = gem.out.handle;
+		va.operation = AMDGPU_VA_OP_UNMAP;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) != 0);
+		CHECK(errno == EINVAL);
+		CHECK(gPagePte == 0);
+	}
+	gJob.live = 0;
+	gWatch = 1;
+	gJobAgeUs = 0;
+	gLost = 0;
+	gDeferRetire = 1;
+	ib.flags = 0;
+	ib.ip_type = AMDGPU_HW_IP_GFX;
+	chunks[0].chunk_id = AMDGPU_CHUNK_ID_IB;
+	chunks[0].length_dw = sizeof(ib) / 4;
+	chunks[0].chunk_data = (uint64_t)(uintptr_t)&ib;
+	{
+		uint64_t held = 0;
+		uint32_t expired = 1;
+		struct amdgpu_cs_fence query;
+		uint32_t working = 0;
+		CHECK(amdgpu_cs_submit_raw2(dev, context, 0, 1, chunks, &held) == 0);
+		gDeferRetire = 0;
+		memset(&query, 0, sizeof(query));
+		query.context = context;
+		query.ip_type = AMDGPU_HW_IP_GFX;
+		query.fence = held;
+		CHECK(amdgpu_cs_query_fence_status(&query, 1000, 0, &expired) == 0);
+		CHECK(expired == 0);
+		CHECK(gLost == 0);
+		CHECK(info_query(node, AMDGPU_INFO_ACCEL_WORKING, 0, &working,
+			sizeof(working)) == 0);
+		gJobAgeUs = 6000000;
+		CHECK(amdgpu_cs_submit_raw2(dev, context, 0, 1, chunks, &held) != 0);
+		CHECK(errno == EIO);
+		CHECK(gLost == 1);
+	}
+	gWatch = 0;
+	gLost = 0;
+	gJob.live = 0;
+	gJobAgeUs = 0;
+
 	printf("replay peaks bo %u sync %u\n", gBoPeak, gSyncPeak);
 	close(node);
 	return gFail;

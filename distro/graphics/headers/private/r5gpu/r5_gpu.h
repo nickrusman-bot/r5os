@@ -40,7 +40,9 @@ enum {
 	R5_GPU_BO_EXPORT = R5_GPU_OP_BASE + 17,
 	R5_GPU_BO_IMPORT = R5_GPU_OP_BASE + 18,
 	R5_GPU_SYNCOBJ_WAIT_LIST = R5_GPU_OP_BASE + 19,
-	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20
+	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20,
+	R5_GPU_VA_REPLACE = R5_GPU_OP_BASE + 21,
+	R5_GPU_VA_CLEAR = R5_GPU_OP_BASE + 22
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -51,6 +53,8 @@ enum {
 #define R5_GPU_VA_READ 1u
 #define R5_GPU_VA_WRITE 2u
 #define R5_GPU_VA_EXEC 4u
+/* Linux AMDGPU_VM_PAGE_PRT. Handle 0 is valid only with this flag. */
+#define R5_GPU_VA_PRT 8u
 
 /* Linux v6.12 amdgpu_kms.c for a 48-bit GC 9.3 VM. See GRAPHICS.md. */
 #define R5_GPU_VA_OFFSET 0x10000ull

@@ -926,6 +926,15 @@ r5_gfx9_vmid1_lookup(uint64 va)
 }
 
 
+bool
+r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
+{
+	if (pte == NULL || !sVmid1)
+		return false;
+	return r5_vm_lookup(&sVm, va & ~0xfffull, pte) != 0;
+}
+
+
 void
 r5_gfx9_kernel_start(radeon_info& info)
 {

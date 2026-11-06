@@ -12,14 +12,18 @@
 #include <FindDirectory.h>
 #include <Path.h>
 
+#include <OS.h>
+
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 
 
 struct r5_bo_alloc {
@@ -151,7 +155,27 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 				((uint32_t*)cpu)[0] = written;
 				uint32_t readBack = ((uint32_t*)cpu)[0];
 				fprintf(out, "cpu write %08x read %08x\n", written, readBack);
-				((uint32_t*)cpu)[0] = 0x80000000u;
+				/* Same WRITE_DATA as r5_gfx9_k2_gart_ib, aimed at the
+				 * VMID 1 address highVa + 64. Linux gfx_v9 .nop is
+				 * PACKET3(PACKET3_NOP, 0x3FFF). Mesa pads a GFX IB to
+				 * a multiple of 8 dwords (ib_pad_dw_mask 0x7). The ring
+				 * align_mask 0xff is the ring pointer, not this IB:
+				 * 256 dwords would cover the write at +64.
+				 */
+				uint64_t word = highVa + 64;
+				uint32_t* dst = (uint32_t*)cpu;
+				dst[16] = 0;
+				uint32_t packet[8];
+				packet[0] = (3u << 30) | (3u << 16) | (0x37u << 8);
+				packet[1] = (5u << 8) | (1u << 20);
+				packet[2] = (uint32_t)word;
+				packet[3] = (uint32_t)(word >> 32);
+				packet[4] = 0xDEADBEEFu;
+				uint32_t nop = (3u << 30) | (0x3fffu << 16) | (0x10u << 8);
+				packet[5] = nop;
+				packet[6] = nop;
+				packet[7] = nop;
+				memcpy(dst, packet, sizeof(packet));
 				if (doCtx != NULL)
 					ret = doCtx(device, &context);
 				else
@@ -161,7 +185,7 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 					r5_cs_ib ib;
 					memset(&ib, 0, sizeof(ib));
 					ib.ib_mc_address = highVa;
-					ib.size = 1;
+					ib.size = 8;
 					r5_cs_request requestCs;
 					memset(&requestCs, 0, sizeof(requestCs));
 					requestCs.number_of_ibs = 1;
@@ -174,7 +198,11 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 					fence.fence = requestCs.seq_no;
 					uint32_t expired = 0;
 					int waited = doFence(&fence, 1000000000ull, 0, &expired);
-					fprintf(out, "fence %d expired %u\n", waited, expired);
+					if (waited == 0 && expired != 0)
+						fprintf(out, "fence ok\n");
+					else
+						fprintf(out, "fence timeout\n");
+					fprintf(out, "gpu read %08x\n", dst[16]);
 				} else
 					fprintf(out, "IB not called\n");
 			}
@@ -205,6 +233,74 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 		close(saved);
 	}
 	dlclose(library);
+}
+
+
+static void
+run_stage(FILE* out, const char* title, const char* command, int seconds)
+{
+	fprintf(out, "stage %s\n", title);
+	fflush(out);
+	int fds[2];
+	if (pipe(fds) != 0) {
+		fprintf(out, "not available, %s\n", strerror(errno));
+		return;
+	}
+	pid_t pid = fork();
+	if (pid < 0) {
+		close(fds[0]);
+		close(fds[1]);
+		fprintf(out, "not available, %s\n", strerror(errno));
+		return;
+	}
+	if (pid == 0) {
+		dup2(fds[1], 1);
+		dup2(fds[1], 2);
+		close(fds[0]);
+		close(fds[1]);
+		execl("/bin/sh", "sh", "-c", command, (char*)NULL);
+		_exit(127);
+	}
+	close(fds[1]);
+	fcntl(fds[0], F_SETFL, O_NONBLOCK);
+	bigtime_t deadline = system_time() + (bigtime_t)seconds * 1000000;
+	int status = 0;
+	bool ended = false;
+	bool killed = false;
+	char buf[256];
+	while (!ended) {
+		ssize_t got = read(fds[0], buf, sizeof(buf) - 1);
+		if (got > 0) {
+			buf[got] = 0;
+			fputs(buf, out);
+			fflush(out);
+		}
+		pid_t wait = waitpid(pid, &status, WNOHANG);
+		if (wait == pid) {
+			ended = true;
+			break;
+		}
+		if (system_time() >= deadline) {
+			kill(pid, SIGKILL);
+			waitpid(pid, &status, 0);
+			fprintf(out, "killed, it did not exit\n");
+			fflush(out);
+			killed = true;
+			ended = true;
+			break;
+		}
+		snooze(50000);
+	}
+	char drain[256];
+	ssize_t rest;
+	while ((rest = read(fds[0], drain, sizeof(drain) - 1)) > 0) {
+		drain[rest] = 0;
+		fputs(drain, out);
+	}
+	close(fds[0]);
+	if (!killed && ended)
+		fprintf(out, "exit %d\n", status);
+	fflush(out);
 }
 
 
@@ -245,6 +341,8 @@ main()
 		fprintf(out, "stage render node: not available, no supported GPU\n");
 		fprintf(out, "stage bo: not available, no supported GPU\n");
 		fprintf(out, "stage vulkaninfo: not available, no supported GPU\n");
+		write_command(out, "VulkanTeapot",
+			"/bin/VulkanTeapot --selftest 2>&1");
 	} else {
 		uint8_t bytes[sizeof(r5_gpu_info) + sizeof(r5_gpu_amd_info)];
 		memset(bytes, 0, sizeof(bytes));
@@ -271,11 +369,9 @@ main()
 		if (reported->high_va_offset != 0)
 			highVa = reported->high_va_offset;
 		stage_bo(out, lowVa, highVa);
-		write_command(out, "vulkaninfo",
-			"/bin/vulkaninfo --summary 2>&1");
+		run_stage(out, "vulkaninfo", "/bin/vulkaninfo --summary 2>&1", 120);
+		run_stage(out, "VulkanTeapot", "/bin/VulkanTeapot --selftest 2>&1", 120);
 	}
-	write_command(out, "VulkanTeapot",
-		"/bin/VulkanTeapot --selftest 2>&1");
 	fclose(out);
 	return 0;
 }

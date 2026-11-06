@@ -24,7 +24,23 @@ directory: it owns the same EGL file. `mesa_devel` and `mesa_lavapipe` require
 
 DRM version reported to RADV is 3.42.0. That is the oldest version
 `ac_gpu_info.c` accepts. Every `drm_minor >= 45` gate in that file stays off,
-including gang submit, GPUVM faults and conformant trunc.
+including gang submit, GPUVM faults and conformant trunc. Sparse binding
+stays advertised. It is not turned off by lowering this version.
+
+`GEM_VA` `MAP` with handle 0 is valid only with `AMDGPU_VM_PAGE_PRT`. The
+kernel writes a PRT page-table entry: Linux `AMDGPU_PTE_PRT` is bit 51 on
+GC 9.3 (`kR5Gfx9PtePrt`), and `VALID` stays clear. `gmc_v9_0_get_vm_pte`
+does that and writes no further GMC 9 register for the mapping.
+`REPLACE` clears the entries in the range and then maps the buffer, or
+writes PRT again when the handle is 0 and the PRT flag is set. `CLEAR`
+writes empty entries, the way `amdgpu_vm_bo_clear_mappings` removes the
+interval. A second team still gets `B_NOT_ALLOWED` until M5.
+
+A client wait that times out returns `B_TIMED_OUT` and leaves the device
+usable. The retire thread marks the device lost when the oldest job has
+been in the ring for 5 seconds (`kWatchdogUs`). Closing a buffer does not
+wait: the buffer stays reserved until that job retires, or until the
+watchdog. There is no reset in M4.
 
 A binary syncobj follows the latest submit. It is signalled when `submitted`
 is greater than 0 and `point` has caught up with `submitted`. `submitted` 0
