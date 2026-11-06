@@ -1,8 +1,12 @@
 # R5OS changelog (lokaal)
 
+### Image with the next stick's stages
+
+`jam -q @r5-raw` finished at 23:56 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`, and updated 8351 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `3d4960834a9adae35372d798544899b100c8a1a4b7dfe3677bf235212bf4fd18`. The packages in that image match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. None of those four packages contains `/home/nickr`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `u2e`, `u4b`, `u2f` and `u2d`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`, and the image contains that program. Not booted. No stick.
+
 ### Log lines behind the settings file
 
-Errors stay on, and stop after 32 in a boot: a refusal, the syncobj limit, `gpu lost` with its dump, and a non-EOP interrupt. `gpu_debug true` (default off) prints `submit ib va`, the per-call lines, and a successful translator ioctl. `gpu_selftest true` still prints the stage lines. `rb num` is once per boot. The fixed K sequence is unchanged. The host test printed `ok gpu api 1.0 walk`. The first image build of the high-address check failed: `r5_gpu.cpp` called `r5_vm_va_fits` without including `r5_vm.h`. That include is in. Not a new image yet.
+Errors stay on, and stop after 32 in a boot: a refusal, the syncobj limit, `gpu lost` with its dump, and a non-EOP interrupt. `gpu_debug true` (default off) prints `submit ib va`, the per-call lines, and a successful translator ioctl. `gpu_selftest true` still prints the stage lines. `rb num` is once per boot. The fixed K sequence is unchanged. The host test printed `ok gpu api 1.0 walk`. The first image build of the high-address check failed: `r5_gpu.cpp` called `r5_vm_va_fits` without including `r5_vm.h`. That include is in. The image that contains it is the section above.
 
 ### High virtual address, checked on paper
 
