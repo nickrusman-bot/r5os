@@ -1,5 +1,69 @@
 # R5OS changelog (lokaal)
 
+### Teapot patches follow freeglut
+
+The mesh no longer turns the raw data around Y. Each control point is converted first, the way freeglut 3.4 `fghTeaset` does for `glutSolidTeapot`: GL `(x, z - 1.575, -y)` times `size / 2`, with `size` 1. Patches 0–5 are copied four times by a turn around that GL Y axis: `(x, y, z)`, `(z, y, -x)`, `(-x, y, -z)`, `(-z, y, x)`. Patches 6–9 are copied twice. The copy negates GL Z, which is the data Y, and reverses the row order. Normals take the same turn or mirror. The first row of patch 3 is forced to `(0, 1, 0)` and the first row of patch 5 to `(0, -1, 0)`. A solid patch is 8 by 8 points (`GLUT_SOLID_N_SUBDIV`). The camera looks at the origin from `(0, 0.15, 7.2)`.
+
+A host projection of that mesh, not a guest frame, puts the lid top at pixel `(192, 134)` and the bottom center at `(192, 249)`. The side view at row 192 runs `x` 83–95, then the body 123–260, then 273–291. `--selftest` samples `(24, 24)`, `(192, 80)`, `(192, 192)`, `(192, 134)`, `(90, 192)` and `(280, 192)`. Those are background, background, body, lid edge, and the two side pieces. No Lavapipe colors exist for this mesh yet. [#4104](https://github.com/nickrusman-bot/r5os/issues/4104) stays open until a picture shows the teapot.
+
+### M4 stick boot on the 5625U
+
+The stick sha256 `58bb5273e8271eb144b191879ea69e92f20af751b7f53d4bb02aa8fcf640cbbc` reached the desktop. The photo of `vulkaninfo` shows RADV failing and the loader continuing. The lines are:
+
+```
+/home/nickr/r5os/r5-sysroot/share/libdrm/amdgpu.ids: No such file or directory
+amdgpu: ac_drm_query_gpu_info failed.
+WARNING: [../src/amd/vulkan/radv_physical_device.c:2269] Code 0 : failed to initialize winsys (VK_ERROR_INITIALIZATION_FAILED)
+ERROR: [Loader Message] Code 0 : setup_loader_term_phys_devs: Failed to initialize winsys (VK_ERROR_INITIALIZATION_FAILED)
+vulkan_radeon.so failed with error code -3
+Vulkan Instance Version: 1.4.367
+```
+
+`/boot/home/config/cache/r5-gpu-selftest.txt` is not on the stick. The cache directory has `Notifications` and `mesa_shader_cache` only. `r5-session.log` launches Tracker, Deskbar, the tray, AirPlay, the clipboard helper and two shells, then `sign-in done: No error`. It does not launch `r5-gpu-selftest`. The syslog has no panic and no shutdown line. It ends while the desktop is up.
+
+The kernel side of this boot:
+
+```
+KERN: radeon_hd: radeon_hd_init: card(0): Radeon Renoir 1002:15E7
+KERN: radeon_hd: radeon_gfx9_cp_start: R5 radeon_hd: GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed
+KERN: radeon_hd: k0 ok fence
+KERN: radeon_hd: k1 ok msi irq 61 eop 1 client 20 src 181 ring 0
+KERN: radeon_hd: k1_wait_us 1159
+KERN: radeon_hd: k2 ok gart 000000f3f0000000-000000f400000000 pte0 060000001ad44077
+KERN: radeon_hd: k2 dma pattern 262144 cafe 0 other 0
+KERN: radeon_hd: k2_ib wb deadbeef seq 3 seen 3
+KERN: radeon_hd: gfx9 cu cc ff080000 user 00000000 active 7 bitmap 000000f7
+```
+
+The PSP load in the same boot reports CE `0x50`, PFP `0xc5`, ME `0xa7` and MEC `0x1e3`, each with status `0x0`. The settings file on the stick is still the six `true` lines, with no `gfx9_workload` and no `gfx9_compute`.
+
+### VulkanTeapot frame, and the M4 stick
+
+The mesh is still the wrong shape: separate quarters, squashed. The first six patches are turned a quarter turn around Y, and the later patches are mirrored on Z. freeglut 3.8.0 `fg_teapot.c` mirrors those quarters in X and Y, then rotates 270 degrees around X, scales by 0.5 and translates Z by -1.5, so the height axis stands up. That is [#4104](https://github.com/nickrusman-bot/r5os/issues/4104). It is not fixed in this image. The same shape on the Ryzen 5 5625U is expected.
+
+The window renders at 384 and shows that bitmap 1:1. The grid is 10. Positions are scaled by 0.5. The light uses the absolute value of the dot product, so both sides of a patch are lit. VirtualBox on Lavapipe, 5 Nov 2026: the window turns that shape. The title was `llvmpipe (LLVM 21.1.8, 256 bits) 13` and an fps count. `VulkanTeapot --selftest` printed:
+
+```
+device llvmpipe (LLVM 21.1.8, 256 bits)
+deviceType 4
+driverID 13
+frames 1
+fps 0
+pixel 24 24 262e38ff
+pixel 192 24 262e38ff
+pixel 192 192 431e0bff
+pixel 192 300 262e38ff
+pixel 48 192 262e38ff
+pixel 336 192 262e38ff
+pixels recorded
+```
+
+Those pixels are the Lavapipe reference for this mesh. `r5gpuinfo` still only prints `GET_INFO`. It does not submit `0xDEADBEEF`. `r5-gpu-selftest` prints the render node, then `vulkaninfo --summary`, then `VulkanTeapot --selftest`. It does not run that submit.
+
+`jam -q @r5-anyboot` for AMD64 started at 22:30 and finished at 22:32 Europe/Amsterdam on 5 Nov 2026, exit 0, 1227 targets. The anyboot is 2156724224 bytes, sha256 `48f2e88911dc066dbdba47821610243e9eff1b85ed1d30ccb600e6c53b3630a5`. `install-mesa-packages.sh` printed `mesa_packages_ok` and `ok egl vendor`. The image packages include `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1`, `mesa_lavapipe-25.3.6-1`, `vulkan_loader-1.4.367-1`, `vulkan_tools-1.4.367-1` and `vulkanteapot-1.0.0-1`. That teapot package is the rebuilt binary, 73833 bytes, and its Deskbar link is `data/deskbar/menu/Demos/VulkanTeapot` to `../../../../bin/VulkanTeapot`. The launch job `x-vnd.R5OS-gpu-selftest` is in the user launch file that this jam packaged. Build stays 10048.
+
+A copy of that anyboot gained `/boot/home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. It does not set `gfx9_workload` or `gfx9_compute`. That stick image is 2156724224 bytes, sha256 `58bb5273e8271eb144b191879ea69e92f20af751b7f53d4bb02aa8fcf640cbbc`. It was written to the General UDisk at 22:51 Europe/Amsterdam on 5 Nov 2026. Read-back matched the stick image at 0, at 6291456 and at 2153775104, and the whole device hash matched. Disk 0, the NVMe, was not opened. This image has not been booted.
+
 ### VulkanTeapot keeps drawing
 
 A double-click showed an empty window. `show_window()` drew the bitmap once, straight after `Show()`, and the first update cleared it. The program also rendered a single frame, and the title repeated the device name.
