@@ -28,10 +28,14 @@ gcc -std=c11 -O2 -DHAVE_ENDIAN_H -D_GNU_SOURCE -DR5_HOST_TEST "${INC[@]}" \
 gcc -std=c11 -O2 -DHAVE_ENDIAN_H -D_GNU_SOURCE "${INC[@]}" \
 	-c -o /tmp/test-ac-drm.o "$WIN/scripts/test-ac-drm.c"
 gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE "${INC[@]}" \
+	-I"$WIN/distro/graphics/libdrm-r5" \
+	-I"$WIN/distro/graphics/headers/private/r5gpu" \
+	-c -o /tmp/r5_translate.o "$WIN/distro/graphics/libdrm-r5/r5_translate.c"
+gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE "${INC[@]}" \
 	-c -o /tmp/test-r5-libdrm.o "$WIN/scripts/test-r5-libdrm.c"
 gcc -o /tmp/test-ac-drm \
 	/tmp/ac_linux_drm.o /tmp/test-ac-drm.o /tmp/test-r5-libdrm.o \
-	"$LIBDRM"/build-host/libdrm.so.2.124.0.p/r5_translate.c.o \
+	/tmp/r5_translate.o \
 	"$LIBDRM"/build-host/amdgpu/libdrm_amdgpu.so.1.124.0.p/*.o \
 	-lpthread -lm
 /tmp/test-ac-drm

@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### Device creation is logged, and not reproduced on the host
+
+`BO_CREATE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP` and `CS_SUBMIT` each print one `radeon_hd: refuse` line for a status other than `B_OK`. The line has the reason and the handle, domain, size, VA, offset, map size and flags. The first 32 lines of a boot are kept. A `VA_MAP` that fails after writing page-table entries clears those entries and flushes. Linux `AMDGPU_GMC_HOLE_MASK` is `0x0000ffffffffffff`; the walk uses bits 12–47, so the canonical high address and the masked address select the same slots. The host VM test maps the first and last page of the high range.
+
+The translator prints one stderr line for an ioctl error: the name, the Linux number, and errno. `GEM_CREATE` adds domains, flags, size and alignment. `GEM_VA` adds the operation. `REPLACE` and `CLEAR` also go through `r5_unknown`, with the operation in that text.
+
+The self-test runs stage `bo` before `vulkaninfo`: 4 KiB VRAM and GTT, a low and a high `GEM_VA`, a CPU map, a NOP indirect buffer and a fence, then unmap and map of the same VA. That stage has not run on the 5625U.
+
+A Linux `libvulkan_radeon.so` was not built. This machine has no `llvm-config` and no `pkg-config`, and the existing Mesa build is the Haiku cross build. The host replay of the first RADV buffer path (`amdgpu_va_range_alloc` with `AMDGPU_VA_RANGE_HIGH`, a 4 KiB VRAM `GEM_CREATE`, and `GEM_VA` `MAP`) returned success. A direct `GEM_VA` `REPLACE` returns `ENOSYS`. An allocation above 64 MiB is refused. Neither of those is the call inside `vkCreateDevice` on the stick. `vkCreateDevice` and an empty `vkQueueSubmit` were not run. No fourth stick.
+
 ### Third M4 stick boot: VMID 1 is up, vkCreateDevice is not
 
 The stick sha256 `205969430991f2dd842ded1eacee228a20dc25ed261c3cf9aa0e69743b96019b` reached the desktop on the Ryzen 5 5625U. Sign-in was uid 1001. The syslog has `enable SMEP` and `enable SMAP`. K0, K1 and K2 completed (`scratch deadbeef`, `rptr 0x392`, `k2 inv 007c0001`, `k2 dma pattern 262144 cafe 0 other 0`). There is no panic. The self-test file is `stage render node: api 1.0 device 15e7 cu 7` and firmware me 167, pfp 197, mec 483.

@@ -37,6 +37,9 @@
 #define R5_IOC_NR(request) ((unsigned)(request) & 0xffu)
 
 static unsigned char sUnknownSeen[32];
+static const char *sIoctlName;
+static unsigned long sIoctlRequest;
+static char sIoctlDetail[192];
 
 
 static int
@@ -44,6 +47,19 @@ r5_fail(int err)
 {
 	errno = err;
 	return -1;
+}
+
+
+static int
+r5_ioctl_done(int ret)
+{
+	if (ret < 0) {
+		fprintf(stderr, "r5 libdrm: %s linux %#lx nr %#x%s%s errno %d\n",
+			sIoctlName != NULL ? sIoctlName : "ioctl", sIoctlRequest,
+			(unsigned)R5_IOC_NR(sIoctlRequest),
+			sIoctlDetail[0] != '\0' ? " " : "", sIoctlDetail, errno);
+	}
+	return ret;
 }
 
 
@@ -277,6 +293,12 @@ r5_domain(uint64_t domains)
 static int
 r5_gem_create(int fd, union drm_amdgpu_gem_create *gem)
 {
+	snprintf(sIoctlDetail, sizeof(sIoctlDetail),
+		"domains %#llx flags %#llx size %llu align %llu",
+		(unsigned long long)gem->in.domains,
+		(unsigned long long)gem->in.domain_flags,
+		(unsigned long long)gem->in.bo_size,
+		(unsigned long long)gem->in.alignment);
 	r5_gpu_bo bo;
 	memset(&bo, 0, sizeof(bo));
 	bo.size = (uint32_t)sizeof(bo);
@@ -357,12 +379,23 @@ r5_gem_va(int fd, struct drm_amdgpu_gem_va *va)
 	call.bo_offset = va->offset_in_bo;
 	call.map_bytes = va->map_size;
 	call.flags = r5_va_flags(va->flags);
+	snprintf(sIoctlDetail, sizeof(sIoctlDetail),
+		"operation %u va %#llx size %llu flags %#x", va->operation,
+		(unsigned long long)va->va_address,
+		(unsigned long long)va->map_size, va->flags);
 	unsigned long op = 0;
 	if (va->operation == AMDGPU_VA_OP_MAP)
 		op = R5_GPU_VA_MAP;
 	else if (va->operation == AMDGPU_VA_OP_UNMAP)
 		op = R5_GPU_VA_UNMAP;
-	else
+	else if (va->operation == AMDGPU_VA_OP_CLEAR
+		|| va->operation == AMDGPU_VA_OP_REPLACE) {
+		char name[80];
+		snprintf(name, sizeof(name),
+			"DRM_IOCTL_AMDGPU_GEM_VA operation %u", va->operation);
+		r5_unknown(0xc0u + va->operation, name);
+		return r5_fail(ENOSYS);
+	} else
 		return r5_fail(ENOSYS);
 	return r5_call(fd, op, &call, sizeof(call));
 }
@@ -796,8 +829,46 @@ r5_drm_get_device2(int fd, uint32_t flags, drmDevicePtr *device)
 }
 
 
+static int r5_drm_ioctl_body(int fd, unsigned long request, void *arg, size_t size);
+
+
+static const char *
+r5_ioctl_name(unsigned nr)
+{
+	if (nr == R5_IOC_NR(DRM_IOCTL_VERSION))
+		return "DRM_IOCTL_VERSION";
+	if (nr == R5_IOC_NR(DRM_IOCTL_GET_CAP))
+		return "DRM_IOCTL_GET_CAP";
+	if (nr == R5_IOC_NR(DRM_IOCTL_GEM_CLOSE))
+		return "DRM_IOCTL_GEM_CLOSE";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_INFO))
+		return "DRM_IOCTL_AMDGPU_INFO";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_CREATE))
+		return "DRM_IOCTL_AMDGPU_GEM_CREATE";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_VA))
+		return "DRM_IOCTL_AMDGPU_GEM_VA";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_CTX))
+		return "DRM_IOCTL_AMDGPU_CTX";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_CS))
+		return "DRM_IOCTL_AMDGPU_CS";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_WAIT_CS))
+		return "DRM_IOCTL_AMDGPU_WAIT_CS";
+	return "ioctl";
+}
+
+
 int
 r5_drm_ioctl(int fd, unsigned long request, void *arg, size_t size)
+{
+	sIoctlRequest = request;
+	sIoctlName = r5_ioctl_name(R5_IOC_NR(request));
+	sIoctlDetail[0] = '\0';
+	return r5_ioctl_done(r5_drm_ioctl_body(fd, request, arg, size));
+}
+
+
+static int
+r5_drm_ioctl_body(int fd, unsigned long request, void *arg, size_t size)
 {
 	unsigned nr = R5_IOC_NR(request);
 	(void)size;
@@ -937,8 +1008,10 @@ r5_bo_cpu_map(int fd, unsigned int handle, void **cpu, int *area)
 	bo.size = (uint32_t)sizeof(bo);
 	bo.version = 1;
 	bo.handle = handle;
-	if (r5_call(fd, R5_GPU_BO_MAP, &bo, sizeof(bo)) != 0)
+	if (r5_call(fd, R5_GPU_BO_MAP, &bo, sizeof(bo)) != 0) {
+		fprintf(stderr, "r5 libdrm: BO_MAP handle %u errno %d\n", handle, errno);
 		return r5_neg(errno);
+	}
 	if (bo.area < 0)
 		return r5_neg(ENODEV);
 	void *address = r5_area_address(bo.area);

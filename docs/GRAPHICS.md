@@ -185,7 +185,7 @@ The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when i
 
 The node is `/dev/gpu/radeon_hd/<n>`. The interface is API 1.0 (`R5_GPU_API_MAJOR` 1, `R5_GPU_API_MINOR` 0). The calls, from `R5_GPU_OP_BASE` 30479, are `GET_INFO`, `READ_REG`, `CTX_CREATE`, `CTX_DESTROY`, `BO_CREATE`, `BO_FREE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP`, `CS_SUBMIT`, `FENCE_WAIT`, and the syncobj calls through `SYNCOBJ_TRANSFER`. A shipped call does not change.
 
-The third stick's self-test printed `stage render node: api 1.0 device 15e7 cu 7` and the firmware versions me 167, pfp 197, mec 483. `CTX_CREATE` then logged `vmid1 ptb`. `vkCreateDevice` returned `VK_ERROR_OUT_OF_DEVICE_MEMORY`. No submission, fence wait or syncobj call is in the syslog.
+The third stick's self-test printed `stage render node: api 1.0 device 15e7 cu 7` and the firmware versions me 167, pfp 197, mec 483. `CTX_CREATE` then logged `vmid1 ptb`. `vkCreateDevice` returned `VK_ERROR_OUT_OF_DEVICE_MEMORY`. No submission, fence wait or syncobj call is in the syslog. A later image prints `radeon_hd: refuse` for a failed `BO_CREATE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP` or `CS_SUBMIT`, and the self-test has a `bo` stage before `vulkaninfo`. That image has not been booted.
 
 ## Submission (draft, not proven on the stick)
 

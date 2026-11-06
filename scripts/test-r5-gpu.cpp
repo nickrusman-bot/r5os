@@ -121,6 +121,35 @@ main()
 		return fail("lookup");
 	if (r5_vm_index(va, 3) != 0x100)
 		return fail("mapped pdb2");
+
+	const uint64_t holeMask = 0x0000ffffffffffffull;
+	const uint64_t highFirst = R5_GPU_HIGH_VA_OFFSET;
+	const uint64_t highLast = R5_GPU_HIGH_VA_MAX - 4096ull;
+	if (r5_vm_index(highFirst, 0) != r5_vm_index(highFirst & holeMask, 0)
+		|| r5_vm_index(highFirst, 3) != r5_vm_index(highFirst & holeMask, 3))
+		return fail("high first mask");
+	if (r5_vm_index(highLast, 0) != r5_vm_index(highLast & holeMask, 0)
+		|| r5_vm_index(highLast, 3) != r5_vm_index(highLast & holeMask, 3))
+		return fail("high last mask");
+	static host_page highPages[16];
+	static int highNext = 0;
+	alloc_state highState = { highPages, &highNext };
+	r5_vm_page highSlots[16];
+	r5_vm highVm;
+	memset(&highVm, 0, sizeof(highVm));
+	highVm.pages = highSlots;
+	highVm.capacity = 16;
+	highVm.alloc = alloc;
+	highVm.cookie = &highState;
+	if (!r5_vm_map_page(&highVm, highFirst, leaf))
+		return fail("high first map");
+	if (!r5_vm_map_page(&highVm, highLast, leaf))
+		return fail("high last map");
+	uint64_t highGot = 0;
+	if (!r5_vm_lookup(&highVm, highFirst, &highGot) || highGot != leaf)
+		return fail("high first lookup");
+	if (!r5_vm_lookup(&highVm, highLast, &highGot) || highGot != leaf)
+		return fail("high last lookup");
 	uint64_t root = slots[0].cpu[0x100];
 	if ((root & 1ull) == 0 || (root & ~0xfffull) == 0)
 		return fail("mapped pde");

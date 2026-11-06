@@ -47,6 +47,27 @@ static const uint64 kMaxBoBytes = 64ull * 1024ull * 1024ull;
 static const uint64 kRoomWaitUs = 100000;
 static const uint64 kFreeWaitUs = 5000000;
 
+static uint32 sRefuseCount;
+
+
+/* The first 32 refusals in a boot. Later ones still return the status. */
+static status_t
+gpu_refuse(const char* op, const char* why, status_t status, uint32 handle,
+	uint32 domain, uint64 bytes, uint64 va, uint64 offset, uint64 mapBytes,
+	uint32 flags)
+{
+	if (sRefuseCount < 32) {
+		sRefuseCount++;
+		dprintf("radeon_hd: refuse %s %s status %#x handle %lu domain %lu "
+			"bytes %llu va %#llx offset %llu map %llu flags %#lx\n",
+			op, why, (unsigned)status, (unsigned long)handle,
+			(unsigned long)domain, (unsigned long long)bytes,
+			(unsigned long long)va, (unsigned long long)offset,
+			(unsigned long long)mapBytes, (unsigned long)flags);
+	}
+	return status;
+}
+
 
 static uint32
 gpu_mmio(radeon_info* info, uint32 segment, uint32 index)
@@ -493,15 +514,16 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	r5_gpu_bo in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("BO_CREATE", "copy", status, 0, 0, 0, 0, 0, 0, 0);
 	if (in.bytes == 0 || in.bytes > kMaxBoBytes)
-		return B_BAD_VALUE;
+		return gpu_refuse("BO_CREATE", "size", B_BAD_VALUE, 0, in.domain,
+			in.bytes, 0, 0, 0, in.flags);
 	if (in.domain != R5_GPU_DOMAIN_VRAM && in.domain != R5_GPU_DOMAIN_GTT)
-		return B_BAD_VALUE;
-	if (client->handleCount >= kMaxClientBo) {
-		dprintf("radeon_hd: bo limit\n");
-		return B_NO_MEMORY;
-	}
+		return gpu_refuse("BO_CREATE", "domain", B_BAD_VALUE, 0, in.domain,
+			in.bytes, 0, 0, 0, in.flags);
+	if (client->handleCount >= kMaxClientBo)
+		return gpu_refuse("BO_CREATE", "handles", B_NO_MEMORY, 0, in.domain,
+			in.bytes, 0, 0, 0, in.flags);
 	uint64 bytes = (in.bytes + 4095ull) & ~4095ull;
 	int slot = -1;
 	for (uint32 i = 0; i < kMaxBo; i++) {
@@ -510,10 +532,9 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 			break;
 		}
 	}
-	if (slot < 0) {
-		dprintf("radeon_hd: bo limit\n");
-		return B_NO_MEMORY;
-	}
+	if (slot < 0)
+		return gpu_refuse("BO_CREATE", "slots", B_NO_MEMORY, 0, in.domain,
+			bytes, 0, 0, 0, in.flags);
 	gpu_bo* bo = &sBo[slot];
 	memset(bo, 0, sizeof(*bo));
 	bo->area = -1;
@@ -524,7 +545,8 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	if (in.domain == R5_GPU_DOMAIN_VRAM) {
 		uint64 offset = 0;
 		if (r5_gfx9_alloc_user_vram(bytes, &offset) != B_OK)
-			return B_NO_MEMORY;
+			return gpu_refuse("BO_CREATE", "vram", B_NO_MEMORY, 0, in.domain,
+				bytes, 0, 0, 0, in.flags);
 		bo->vramOffset = offset;
 	} else {
 		void* kernel = NULL;
@@ -532,7 +554,8 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 			B_ANY_KERNEL_ADDRESS, (size_t)bytes, B_FULL_LOCK,
 			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA);
 		if (area < 0 || kernel == NULL)
-			return area < 0 ? area : B_NO_MEMORY;
+			return gpu_refuse("BO_CREATE", "gtt", area < 0 ? area : B_NO_MEMORY,
+				0, in.domain, bytes, 0, 0, 0, in.flags);
 		bo->kernelArea = area;
 		bo->kernel = kernel;
 	}
@@ -542,7 +565,11 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	in.handle = (uint32)slot + 1u;
 	in.area = bo->area;
 	in.bytes = bytes;
-	return gpu_copy_out(buffer, length, &in, sizeof(in));
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_CREATE", "copy", status, in.handle, in.domain,
+			bytes, 0, 0, 0, in.flags);
+	return B_OK;
 }
 
 
@@ -600,10 +627,11 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	r5_gpu_bo in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("BO_MAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
 	gpu_bo* bo = gpu_bo_get(client, in.handle);
 	if (bo == NULL)
-		return B_BAD_VALUE;
+		return gpu_refuse("BO_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0, 0, 0, 0,
+			0);
 	if (bo->area >= 0) {
 		in.area = bo->area;
 		return gpu_copy_out(buffer, length, &in, sizeof(in));
@@ -617,7 +645,8 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA,
 			&kernel);
 		if (kernelArea < 0)
-			return kernelArea;
+			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
+				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 		bo->kernelArea = kernelArea;
 		bo->kernel = kernel;
 	}
@@ -625,10 +654,15 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	area_id area = clone_area("r5 gpu bo", &user, B_ANY_ADDRESS,
 		B_READ_AREA | B_WRITE_AREA, bo->kernelArea);
 	if (area < 0)
-		return area;
+		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
+			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 	bo->area = area;
 	in.area = area;
-	return gpu_copy_out(buffer, length, &in, sizeof(in));
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_MAP", "copy", status, in.handle, bo->domain,
+			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	return B_OK;
 }
 
 
@@ -647,6 +681,12 @@ gpu_pte_flags(uint32 flags)
 static bool
 gpu_va_fits(uint64 va, uint64 bytes)
 {
+	/* Linux amdgpu_gem_va_ioctl rejects an address in the hole, then
+	 * keeps va_address & AMDGPU_GMC_HOLE_MASK. That mask is
+	 * 0x0000ffffffffffff (bits 0-47). The walk uses bits 12-47 only,
+	 * so a canonical high address and that masked address select the
+	 * same page-table slots.
+	 */
 	if (bytes == 0 || (va & 0xfffull) != 0 || (bytes & 0xfffull) != 0)
 		return false;
 	uint64 end = va + bytes;
@@ -658,21 +698,34 @@ gpu_va_fits(uint64 va, uint64 bytes)
 }
 
 
+static void
+gpu_va_clear(uint64 va, uint64 bytes)
+{
+	for (uint64 page = 0; page < bytes; page += 4096)
+		r5_gfx9_vmid1_map(va + page, 0);
+	if (bytes != 0)
+		r5_gfx9_vmid1_flush();
+}
+
+
 static status_t
 gpu_va_map(gpu_client* client, void* buffer, size_t length)
 {
 	r5_gpu_va in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("VA_MAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
 	if (in.context != 1 || !gpu_va_fits(in.gpu_va, in.map_bytes))
-		return B_BAD_VALUE;
+		return gpu_refuse("VA_MAP", "fit", B_BAD_VALUE, in.handle, 0, 0,
+			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	gpu_bo* bo = gpu_bo_get(client, in.handle);
 	if (bo == NULL)
-		return B_BAD_VALUE;
+		return gpu_refuse("VA_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0,
+			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	if ((in.bo_offset & 0xfffull) != 0 || in.bo_offset > bo->bytes
 		|| in.map_bytes > bo->bytes - in.bo_offset)
-		return B_BAD_VALUE;
+		return gpu_refuse("VA_MAP", "offset", B_BAD_VALUE, in.handle, bo->domain,
+			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	for (uint32 i = 0; i < kMaxRange; i++) {
 		gpu_range* range = &bo->ranges[i];
 		if (!range->live)
@@ -681,7 +734,9 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 				range->bytes)
 			|| r5_range_overlap(in.gpu_va, in.map_bytes, range->va,
 				range->bytes))
-			return B_BAD_VALUE;
+			return gpu_refuse("VA_MAP", "overlap", B_BAD_VALUE, in.handle,
+				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
+				in.flags);
 	}
 	int slot = -1;
 	for (uint32 i = 0; i < kMaxRange; i++) {
@@ -691,9 +746,11 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		}
 	}
 	if (slot < 0)
-		return B_NO_MEMORY;
+		return gpu_refuse("VA_MAP", "ranges", B_NO_MEMORY, in.handle, bo->domain,
+			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	if (!r5_gfx9_vmid1_setup())
-		return B_NO_INIT;
+		return gpu_refuse("VA_MAP", "vmid", B_NO_INIT, in.handle, bo->domain,
+			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	uint32 flags = in.flags;
 	if (flags == 0)
 		flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
@@ -702,10 +759,18 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		uint64 phys = ((uint64)fb << 24) + bo->vramOffset + in.bo_offset;
 		uint64 pte = r5_gfx9_gart_pte(phys, gpu_pte_flags(flags));
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
-			if (r5_gfx9_vmid1_lookup(in.gpu_va + page))
-				return B_BAD_VALUE;
-			if (!r5_gfx9_vmid1_map(in.gpu_va + page, pte))
-				return B_NO_MEMORY;
+			if (r5_gfx9_vmid1_lookup(in.gpu_va + page)) {
+				gpu_va_clear(in.gpu_va, page);
+				return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle,
+					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
+					in.map_bytes, in.flags);
+			}
+			if (!r5_gfx9_vmid1_map(in.gpu_va + page, pte)) {
+				gpu_va_clear(in.gpu_va, page);
+				return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
+					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
+					in.map_bytes, in.flags);
+			}
 			pte += 4096;
 		}
 	} else {
@@ -714,29 +779,44 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			(uint8*)bo->kernel + in.bo_offset, (size_t)in.map_bytes,
 			entries, 256);
 		if (count < 0)
-			return count;
+			return gpu_refuse("VA_MAP", "phys", count, in.handle, bo->domain,
+				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		uint64 filled = 0;
 		for (int32 entry = 0; entry < count && filled < in.map_bytes; entry++) {
 			uint64 address = entries[entry].address;
 			uint64 bytes = entries[entry].size;
 			while (bytes >= 4096 && filled < in.map_bytes) {
-				if (r5_gfx9_vmid1_lookup(in.gpu_va + filled))
-					return B_BAD_VALUE;
+				if (r5_gfx9_vmid1_lookup(in.gpu_va + filled)) {
+					gpu_va_clear(in.gpu_va, filled);
+					return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle,
+						bo->domain, bo->bytes, in.gpu_va + filled, in.bo_offset,
+						in.map_bytes, in.flags);
+				}
 				uint64 pte = r5_gfx9_gart_pte(address,
 					gpu_pte_flags(flags) | (uint64)R5_GFX9_PTE_SYSTEM
 					| (uint64)R5_GFX9_PTE_SNOOPED);
-				if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte))
-					return B_NO_MEMORY;
+				if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
+					gpu_va_clear(in.gpu_va, filled);
+					return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
+						bo->domain, bo->bytes, in.gpu_va + filled, in.bo_offset,
+						in.map_bytes, in.flags);
+				}
 				address += 4096;
 				bytes -= 4096;
 				filled += 4096;
 			}
 		}
-		if (filled != in.map_bytes)
-			return B_BAD_DATA;
+		if (filled != in.map_bytes) {
+			gpu_va_clear(in.gpu_va, filled);
+			return gpu_refuse("VA_MAP", "short", B_BAD_DATA, in.handle, bo->domain,
+				bo->bytes, in.gpu_va, in.bo_offset, filled, in.flags);
+		}
 	}
-	if (!r5_gfx9_vmid1_flush())
-		return B_ERROR;
+	if (!r5_gfx9_vmid1_flush()) {
+		gpu_va_clear(in.gpu_va, in.map_bytes);
+		return gpu_refuse("VA_MAP", "flush", B_ERROR, in.handle, bo->domain,
+			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+	}
 	bo->ranges[slot].live = true;
 	bo->ranges[slot].va = in.gpu_va;
 	bo->ranges[slot].offset = in.bo_offset;
@@ -751,10 +831,11 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 	r5_gpu_va in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("VA_UNMAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
 	gpu_bo* bo = gpu_bo_get(client, in.handle);
 	if (bo == NULL || in.context != 1)
-		return B_BAD_VALUE;
+		return gpu_refuse("VA_UNMAP", "bo", B_BAD_VALUE, in.handle, 0, 0,
+			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	for (uint32 i = 0; i < kMaxRange; i++) {
 		gpu_range* range = &bo->ranges[i];
 		if (!range->live || range->va != in.gpu_va
@@ -762,14 +843,19 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 			continue;
 		for (uint64 page = 0; page < range->bytes; page += 4096) {
 			if (!r5_gfx9_vmid1_map(range->va + page, 0))
-				return B_BAD_ADDRESS;
+				return gpu_refuse("VA_UNMAP", "pte", B_BAD_ADDRESS, in.handle,
+					bo->domain, bo->bytes, range->va + page, in.bo_offset,
+					in.map_bytes, in.flags);
 		}
 		if (!r5_gfx9_vmid1_flush())
-			return B_ERROR;
+			return gpu_refuse("VA_UNMAP", "flush", B_ERROR, in.handle, bo->domain,
+				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		range->live = false;
 		return B_OK;
 	}
-	return B_BAD_VALUE;
+	return gpu_refuse("VA_UNMAP", "range", B_BAD_VALUE, in.handle,
+		bo != NULL ? bo->domain : 0, bo != NULL ? bo->bytes : 0, in.gpu_va,
+		in.bo_offset, in.map_bytes, in.flags);
 }
 
 
@@ -833,48 +919,59 @@ static status_t
 gpu_submit(gpu_client* client, void* buffer, size_t length)
 {
 	if (sLost)
-		return B_ERROR;
+		return gpu_refuse("CS_SUBMIT", "lost", B_ERROR, 0, 0, 0, 0, 0, 0, 0);
 	r5_gpu_cs in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("CS_SUBMIT", "copy", status, 0, 0, 0, 0, 0, 0, 0);
 	if (in.context != 1 || in.ring != 0)
-		return B_BAD_VALUE;
+		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,
+			in.ib_count, 0, 0, in.ring, 0);
 	if (in.ib_count == 0 || in.ib_count > kMaxList
 		|| in.wait_count > kMaxList || in.signal_count > kMaxList)
-		return B_BAD_VALUE;
+		return gpu_refuse("CS_SUBMIT", "count", B_BAD_VALUE, in.context, 0,
+			in.ib_count, 0, 0, in.ring, 0);
 	r5_gpu_ib ibs[kMaxList];
 	r5_gpu_cs_sync waits[kMaxList];
 	r5_gpu_cs_sync signals[kMaxList];
 	status = gpu_copy_user(ibs, in.ibs, sizeof(r5_gpu_ib) * in.ib_count);
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("CS_SUBMIT", "ib", status, in.context, 0, in.ib_count,
+			0, 0, in.ring, 0);
 	status = gpu_copy_user(waits, in.waits, sizeof(r5_gpu_cs_sync) * in.wait_count);
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("CS_SUBMIT", "wait", status, in.context, 0, in.ib_count,
+			0, 0, in.ring, 0);
 	status = gpu_copy_user(signals, in.signals,
 		sizeof(r5_gpu_cs_sync) * in.signal_count);
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("CS_SUBMIT", "signal", status, in.context, 0,
+			in.ib_count, 0, 0, in.ring, 0);
 	for (uint32 i = 0; i < in.ib_count; i++) {
 		if (ibs[i].flags != 0)
-			return B_BAD_VALUE;
+			return gpu_refuse("CS_SUBMIT", "flags", B_BAD_VALUE, in.context, 0,
+				in.ib_count, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
 		if (!gpu_ib_mapped(ibs[i].gpu_va, ibs[i].dwords))
-			return B_BAD_ADDRESS;
+			return gpu_refuse("CS_SUBMIT", "mapped", B_BAD_ADDRESS, in.context, 0,
+				ibs[i].dwords, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
 	}
 	for (uint32 i = 0; i < in.wait_count; i++) {
 		if (waits[i].handle == 0 || waits[i].handle > kMaxSync)
-			return B_BAD_VALUE;
+			return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
+				in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 		gpu_sync* sync = &client->syncs[waits[i].handle - 1u];
 		if (!sync->live)
-			return B_BAD_VALUE;
+			return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
+				in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 		bigtime_t deadline = system_time() + (bigtime_t)kFreeWaitUs;
 		while (!gpu_wait_ready(sync, &waits[i])) {
 			if (sLost)
-				return B_ERROR;
+				return gpu_refuse("CS_SUBMIT", "lost", B_ERROR, in.context, 0,
+					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			bigtime_t now = system_time();
 			if (now >= deadline)
-				return B_TIMED_OUT;
+				return gpu_refuse("CS_SUBMIT", "wait", B_TIMED_OUT, in.context, 0,
+					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			ConditionVariableEntry entry;
 			sEop.Add(&entry);
 			if (gpu_wait_ready(sync, &waits[i]))
@@ -884,11 +981,14 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 				B_CAN_INTERRUPT | B_RELATIVE_TIMEOUT, deadline - now);
 			gpu_lock();
 			if (!sync->live)
-				return B_BAD_VALUE;
+				return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
+					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			if (waited == B_INTERRUPTED || waited == B_WOULD_BLOCK)
-				return waited;
+				return gpu_refuse("CS_SUBMIT", "wait", waited, in.context, 0,
+					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			if (waited == B_TIMED_OUT && !gpu_wait_ready(sync, &waits[i]))
-				return B_TIMED_OUT;
+				return gpu_refuse("CS_SUBMIT", "wait", B_TIMED_OUT, in.context, 0,
+					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 		}
 	}
 	int jobSlot = -1;
@@ -899,7 +999,8 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		}
 	}
 	if (jobSlot < 0)
-		return B_BUSY;
+		return gpu_refuse("CS_SUBMIT", "job", B_BUSY, in.context, 0, in.ib_count,
+			0, 0, in.ring, 0);
 	r5_gfx9_user_ib ringIbs[kMaxList];
 	uint32 dwords = 8;
 	for (uint32 i = 0; i < in.ib_count; i++) {
@@ -909,17 +1010,20 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	}
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
-		return status;
+		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
+			ibs[0].gpu_va, 0, in.ring, 0);
 	gpu_job* job = &sJobs[jobSlot];
 	memset(job, 0, sizeof(*job));
 	uint32 signalFlags[kMaxList];
 	memset(signalFlags, 0, sizeof(signalFlags));
 	for (uint32 i = 0; i < in.signal_count; i++) {
 		if (signals[i].handle == 0 || signals[i].handle > kMaxSync)
-			return B_BAD_VALUE;
+			return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
+				in.ib_count, 0, signals[i].handle, in.ring, signals[i].flags);
 		gpu_sync* sync = &client->syncs[signals[i].handle - 1u];
 		if (!sync->live)
-			return B_BAD_VALUE;
+			return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
+				in.ib_count, 0, signals[i].handle, in.ring, signals[i].flags);
 		job->syncs[i] = sync;
 		job->points[i] = signals[i].point;
 		signalFlags[i] = signals[i].flags;
@@ -927,7 +1031,8 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	job->count = in.signal_count;
 	uint64 sequence = 0;
 	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, &sequence))
-		return B_ERROR;
+		return gpu_refuse("CS_SUBMIT", "ring", B_ERROR, in.context, 0,
+			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
 	job->sequence = sequence;
 	if (sequence > sHighestSequence)
 		sHighestSequence = sequence;
@@ -943,7 +1048,11 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (r5_gfx9_user_seen() >= sequence)
 		r5_gpu_eop();
 	in.sequence = sequence;
-	return gpu_copy_out(buffer, length, &in, sizeof(in));
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("CS_SUBMIT", "copy", status, in.context, 0, in.ib_count,
+			ibs[0].gpu_va, 0, in.ring, 0);
+	return B_OK;
 }
 
 

@@ -73,8 +73,14 @@ static struct host_job gJob;
 	} \
 } while (0)
 
-static void *gMem[64];
-static size_t gBytes[64];
+static void *gMem[256];
+static size_t gBytes[256];
+static uint32_t gDomain[256];
+static uint64_t gVramUsed;
+
+#define HOST_BO_SLOTS 256u
+#define HOST_MAX_BO (64ull << 20)
+#define HOST_VRAM_POOL 0xf817000ull
 static void *gArea[32];
 static int gAreaLive[32];
 static uint64_t gSyncPoint[128];
@@ -165,7 +171,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		info->device = 0x15e7;
 		info->capabilities = R5_GPU_CAP_RENDER;
 		info->vram_bytes = 256ull << 20;
-		info->gtt_bytes = 512ull << 20;
+		info->gtt_bytes = 256ull << 20;
 		info->va_offset = R5_GPU_VA_OFFSET;
 		info->va_max = R5_GPU_VA_MAX;
 		info->high_va_offset = R5_GPU_HIGH_VA_OFFSET;
@@ -226,25 +232,43 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		if (bytes < sizeof(r5_gpu_bo))
 			return host_err(EINVAL);
 		r5_gpu_bo *bo = buf;
-		for (uint32_t i = 0; i < 64; i++) {
+		if (bo->bytes == 0 || bo->bytes > HOST_MAX_BO)
+			return host_err(EINVAL);
+		if (bo->domain != R5_GPU_DOMAIN_VRAM && bo->domain != R5_GPU_DOMAIN_GTT)
+			return host_err(EINVAL);
+		uint64_t rounded = (bo->bytes + 4095ull) & ~4095ull;
+		if (bo->domain == R5_GPU_DOMAIN_VRAM
+			&& gVramUsed + rounded > HOST_VRAM_POOL)
+			return host_err(ENOMEM);
+		for (uint32_t i = 0; i < HOST_BO_SLOTS; i++) {
 			if (gMem[i] != NULL)
 				continue;
-			gMem[i] = calloc(1, bo->bytes ? bo->bytes : 1);
-			gBytes[i] = bo->bytes;
+			gMem[i] = calloc(1, (size_t)rounded);
+			if (gMem[i] == NULL)
+				return host_err(ENOMEM);
+			gBytes[i] = (size_t)rounded;
+			gDomain[i] = bo->domain;
+			if (bo->domain == R5_GPU_DOMAIN_VRAM)
+				gVramUsed += rounded;
 			bo->handle = i + 1;
 			gBoDomain = bo->domain;
-			if ((uint32_t)i + 1u > gBoPeak)
-				gBoPeak = (uint32_t)i + 1u;
-			return gMem[i] ? 0 : host_err(ENOMEM);
+			if (i + 1u > gBoPeak)
+				gBoPeak = i + 1u;
+			return 0;
 		}
 		return host_err(ENOMEM);
 	}
 	if (op == R5_GPU_BO_FREE) {
 		r5_gpu_bo *bo = buf;
-		if (bo->handle == 0 || bo->handle > 64)
+		if (bo->handle == 0 || bo->handle > HOST_BO_SLOTS)
 			return host_err(EINVAL);
+		if (gDomain[bo->handle - 1] == R5_GPU_DOMAIN_VRAM
+			&& gVramUsed >= gBytes[bo->handle - 1])
+			gVramUsed -= gBytes[bo->handle - 1];
 		free(gMem[bo->handle - 1]);
 		gMem[bo->handle - 1] = NULL;
+		gBytes[bo->handle - 1] = 0;
+		gDomain[bo->handle - 1] = 0;
 		return 0;
 	}
 	if (op == R5_GPU_BO_MAP) {
@@ -259,7 +283,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			bo->area = 7;
 			return 0;
 		}
-		if (bo->handle == 0 || bo->handle > 64 || gMem[bo->handle - 1] == NULL)
+		if (bo->handle == 0 || bo->handle > HOST_BO_SLOTS
+			|| gMem[bo->handle - 1] == NULL)
 			return host_err(ENOENT);
 		for (int i = 1; i < 32; i++) {
 			if (gAreaLive[i])
@@ -276,6 +301,18 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		if (bytes < sizeof(r5_gpu_va))
 			return host_err(EINVAL);
 		r5_gpu_va *va = buf;
+		if (va->handle == 0 || va->handle > HOST_BO_SLOTS
+			|| gMem[va->handle - 1] == NULL)
+			return host_err(EINVAL);
+		if (va->bo_offset > gBytes[va->handle - 1]
+			|| va->map_bytes > gBytes[va->handle - 1] - va->bo_offset)
+			return host_err(EINVAL);
+		int low = va->gpu_va >= R5_GPU_VA_OFFSET
+			&& va->gpu_va + va->map_bytes <= R5_GPU_VA_MAX;
+		int high = va->gpu_va >= R5_GPU_HIGH_VA_OFFSET
+			&& va->gpu_va + va->map_bytes <= R5_GPU_HIGH_VA_MAX;
+		if (va->map_bytes == 0 || !low && !high)
+			return host_err(EINVAL);
 		gVa = va->gpu_va;
 		gBoOffset = va->bo_offset;
 		gMapBytes = va->map_bytes;
@@ -1122,7 +1159,7 @@ radv_replay(int fd)
 	CHECK(memory.gtt.max_allocation <= (64ull << 20));
 	memset(&heap, 0, sizeof(heap));
 	CHECK(info_query(node, AMDGPU_INFO_VRAM_GTT, 0, &heap, sizeof(heap)) == 0);
-	CHECK(heap.gtt_size == (512ull << 20));
+	CHECK(heap.gtt_size == (256ull << 20));
 	memset(&ip, 0, sizeof(ip));
 	CHECK(info_query(node, AMDGPU_INFO_HW_IP_INFO, AMDGPU_HW_IP_COMPUTE, &ip,
 		sizeof(ip)) == 0);
@@ -1334,9 +1371,58 @@ main(void)
 	CHECK(ip.hw_ip_version_minor == 3);
 	CHECK(ip.available_rings == 1);
 
+	uint64_t radvVa = 0;
+	amdgpu_va_handle radvRange = NULL;
+	ret = amdgpu_va_range_alloc(dev, amdgpu_gpu_va_range_general, 4096, 4096,
+		0, &radvVa, &radvRange, AMDGPU_VA_RANGE_HIGH);
+	if (ret != 0)
+		printf("f2 fail amdgpu_va_range_alloc %d\n", ret);
+	else {
+		struct amdgpu_bo_alloc_request radvRequest;
+		memset(&radvRequest, 0, sizeof(radvRequest));
+		radvRequest.alloc_size = 4096;
+		radvRequest.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+		amdgpu_bo_handle radvBo = NULL;
+		ret = amdgpu_bo_alloc(dev, &radvRequest, &radvBo);
+		if (ret != 0)
+			printf("f2 fail GEM_CREATE %d\n", ret);
+		else {
+			ret = amdgpu_bo_va_op(radvBo, 0, 4096, radvVa, 0, AMDGPU_VA_OP_MAP);
+			if (ret != 0)
+				printf("f2 fail GEM_VA MAP %d\n", ret);
+			else
+				printf("f2 device path: no refusal\n");
+			amdgpu_bo_va_op(radvBo, 0, 4096, radvVa, 0, AMDGPU_VA_OP_UNMAP);
+			amdgpu_bo_free(radvBo);
+		}
+		amdgpu_va_range_free(radvRange);
+	}
+	{
+		struct amdgpu_bo_alloc_request huge;
+		memset(&huge, 0, sizeof(huge));
+		huge.alloc_size = HOST_MAX_BO + 4096;
+		huge.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+		amdgpu_bo_handle hugeBo = NULL;
+		ret = amdgpu_bo_alloc(dev, &huge, &hugeBo);
+		printf("f2 oversize GEM_CREATE %d\n", ret);
+		if (hugeBo != NULL)
+			amdgpu_bo_free(hugeBo);
+	}
+	{
+		struct drm_amdgpu_gem_va replace;
+		memset(&replace, 0, sizeof(replace));
+		replace.operation = AMDGPU_VA_OP_REPLACE;
+		replace.handle = 1;
+		replace.va_address = R5_GPU_HIGH_VA_OFFSET;
+		replace.map_size = 4096;
+		ret = drmIoctl(fd, DRM_IOCTL_AMDGPU_GEM_VA, &replace);
+		printf("f2 direct GEM_VA REPLACE ret %d errno %d\n", ret, errno);
+	}
+	printf("f2 vkCreateDevice: not run\n");
+
 	struct amdgpu_bo_alloc_request request;
 	memset(&request, 0, sizeof(request));
-	request.alloc_size = 4096;
+	request.alloc_size = 8192;
 	request.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
 	amdgpu_bo_handle bo = NULL;
 	ret = amdgpu_bo_alloc(dev, &request, &bo);
