@@ -75,7 +75,7 @@ symbol(void* library, const char* name)
 
 
 static void
-stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
+stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 {
 	fprintf(out, "stage bo\n");
 	void* library = dlopen("libdrm_amdgpu.so.1", RTLD_NOW);
@@ -161,10 +161,16 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 				 * a multiple of 8 dwords (ib_pad_dw_mask 0x7). The ring
 				 * align_mask 0xff is the ring pointer, not this IB:
 				 * 256 dwords would cover the write at +64.
+				 * The first call leaves this out. A hang here would
+				 * mark the GPU lost before the teapot runs.
 				 */
+				if (!submitIb)
+					fprintf(out, "IB skipped\n");
 				uint64_t word = highVa + 64;
 				uint32_t* dst = (uint32_t*)cpu;
 				dst[16] = 0;
+				if (submitIb) {
+				fprintf(out, "stage ib\n");
 				uint32_t packet[8];
 				packet[0] = (3u << 30) | (3u << 16) | (0x37u << 8);
 				packet[1] = (5u << 8) | (1u << 20);
@@ -205,6 +211,7 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa)
 					fprintf(out, "gpu read %08x\n", dst[16]);
 				} else
 					fprintf(out, "IB not called\n");
+				}
 			}
 		} else
 			fprintf(out, "GEM_MMAP not called\n");
@@ -325,6 +332,21 @@ write_command(FILE* out, const char* title, const char* command)
 }
 
 
+static void
+stage_selftest(FILE* out)
+{
+	fprintf(out, "stage selftest\n");
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd < 0) {
+		fprintf(out, "not available, no supported GPU\n");
+		return;
+	}
+	int ret = ioctl(fd, R5_GPU_SELFTEST, NULL, 0);
+	fprintf(out, "R5_GPU_SELFTEST %d errno %d\n", ret, errno);
+	close(fd);
+}
+
+
 int
 main()
 {
@@ -368,9 +390,13 @@ main()
 			lowVa = reported->va_offset;
 		if (reported->high_va_offset != 0)
 			highVa = reported->high_va_offset;
-		stage_bo(out, lowVa, highVa);
+		stage_bo(out, lowVa, highVa, false);
 		run_stage(out, "vulkaninfo", "/bin/vulkaninfo --summary 2>&1", 120);
+		run_stage(out, "VulkanTeapot (sam)",
+			"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1", 120);
 		run_stage(out, "VulkanTeapot", "/bin/VulkanTeapot --selftest 2>&1", 120);
+		stage_bo(out, lowVa, highVa, true);
+		stage_selftest(out);
 	}
 	fclose(out);
 	return 0;

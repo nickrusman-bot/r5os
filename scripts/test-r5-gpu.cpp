@@ -25,12 +25,56 @@ fail(const char* what)
 	return 1;
 }
 
+
+static int
+source_order(const char* path, const char** marks, int count)
+{
+	FILE* file = fopen(path, "rb");
+	if (file == NULL)
+		return fail(path);
+	if (fseek(file, 0, SEEK_END) != 0) {
+		fclose(file);
+		return fail(path);
+	}
+	long size = ftell(file);
+	if (size < 0 || size > 2000000) {
+		fclose(file);
+		return fail(path);
+	}
+	rewind(file);
+	char* text = (char*)malloc((size_t)size + 1);
+	if (text == NULL) {
+		fclose(file);
+		return fail(path);
+	}
+	if (fread(text, 1, (size_t)size, file) != (size_t)size) {
+		free(text);
+		fclose(file);
+		return fail(path);
+	}
+	text[size] = 0;
+	fclose(file);
+	const char* cursor = text;
+	for (int i = 0; i < count; i++) {
+		const char* found = strstr(cursor, marks[i]);
+		if (found == NULL) {
+			fprintf(stderr, "fail order %s in %s\n", marks[i], path);
+			free(text);
+			return 1;
+		}
+		cursor = found + strlen(marks[i]);
+	}
+	free(text);
+	return 0;
+}
+
 int
 main()
 {
 	static_assert(R5_GPU_OP_BASE == 9999u + 0x5000u, "ioctl base");
 	static_assert(R5_GPU_GET_INFO == 30479u, "GET_INFO number");
 	static_assert(R5_GPU_BO_IMPORT == 30479u + 18u, "last v1 call");
+	static_assert(R5_GPU_SELFTEST == 30479u + 23u, "selftest");
 	static_assert(offsetof(r5_gpu_info, size) == 0, "info size");
 	static_assert(offsetof(r5_gpu_info, version) == 4, "info version");
 	static_assert(offsetof(r5_gpu_info, va_offset) == 48, "va offset");
@@ -83,6 +127,19 @@ main()
 		| R5_GFX9_PTE_WRITEABLE);
 	if (pte != 0x0600000123450077ull)
 		return fail("pte");
+	const uint64_t cached = r5_gfx9_cached_gtt_pte(0x123450000ull,
+		R5_GFX9_PTE_VALID | R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE
+		| R5_GFX9_PTE_WRITEABLE);
+	if (cached != 0x0000000123450077ull)
+		return fail("cached gtt");
+	const uint64_t highIb = 0xffffffffffbfb000ull;
+	const uint64_t clipped = (highIb & 0xffffffffull)
+		| (((highIb >> 32) & 0xffffull) << 32);
+	if (r5_vm_index(highIb, 0) != r5_vm_index(clipped, 0)
+		|| r5_vm_index(highIb, 1) != r5_vm_index(clipped, 1)
+		|| r5_vm_index(highIb, 2) != r5_vm_index(clipped, 2)
+		|| r5_vm_index(highIb, 3) != r5_vm_index(clipped, 3))
+		return fail("high va walk");
 
 	struct host_page {
 		uint64_t	cpu[512];
@@ -192,6 +249,31 @@ main()
 		return fail("wait poll");
 	if (r5_wait_step(1, 5, 10, 1) != R5_WAIT_TIMEOUT)
 		return fail("wait timeout");
+
+	const char* selftestOrder[] = {
+		"highVa, false",
+		"\"vulkaninfo\"",
+		"VulkanTeapot (sam)",
+		"\"VulkanTeapot\"",
+		"highVa, true",
+		"stage_selftest(out)"
+	};
+	const char* stageOrder[] = {
+		"\"u1\"",
+		"gpu_stage_u2a",
+		"\"u4\"",
+		"\"u3\"",
+		"\"u2\"",
+		"gpu_stage_fault"
+	};
+	if (source_order(
+			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+			selftestOrder, 6) != 0)
+		return 1;
+	if (source_order(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			stageOrder, 6) != 0)
+		return 1;
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;

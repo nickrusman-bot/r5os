@@ -503,6 +503,18 @@ run_k1()
 }
 
 
+static uint64 sK2GartMc = 0;
+static uint8* sK2GartCpu = NULL;
+static uint64 sK2DummyPa = 0;
+
+/* VM_L2_PROTECTION_FAULT_CNTL. Bits 2–12 are the ENABLE_DEFAULT fields.
+ * Bits 30 and 31 are CRASH_ON_NO_RETRY_FAULT and CRASH_ON_RETRY_FAULT.
+ * gfxhub_v1_0_set_fault_enable_default turns the defaults on and the
+ * crash bits off when amdgpu_vm_fault_stop stays at never. */
+static const uint32 kFaultDefaultMask = 0x1ffcu;
+static const uint32 kFaultCrashMask = 0xc0000000u;
+
+
 static void
 run_k2()
 {
@@ -549,6 +561,7 @@ run_k2()
 	}
 	uint32 fb = kread(sInfo, gc_byte(0x096b));
 	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
+	sK2DummyPa = dummyPa;
 	uint64 flags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM | R5_GFX9_PTE_SNOOPED
 		| R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
 	uint64 dummyPte = r5_gfx9_gart_pte(dummyPa, flags);
@@ -711,6 +724,11 @@ run_k2()
 	}
 	knote("k2_ib wb %08lx seq %lu seen %lu", (unsigned long)seenWord,
 		(unsigned long)ibSequence, (unsigned long)seenSeq);
+	if (dmaOk && ib) {
+		sK2GartMc = gartStart;
+		sK2GartCpu = (uint8*)system;
+		r5_gfx9_cp_dump("k2 baseline", 0);
+	}
 	if (!(dmaOk && ib)) {
 		uint32 faultStatus = kread(sInfo, gc_byte(0x084b));
 		uint32 faultLo = kread(sInfo, gc_byte(0x084c));
@@ -734,6 +752,17 @@ run_k2()
 	}
 	(void)sequence;
 	(void)flushed;
+}
+
+
+bool
+r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu)
+{
+	if (mc == NULL || cpu == NULL || sK2GartMc == 0 || sK2GartCpu == NULL)
+		return false;
+	*mc = sK2GartMc;
+	*cpu = sK2GartCpu;
+	return true;
 }
 
 
@@ -839,6 +868,19 @@ r5_gfx9_vmid1_setup()
 		knote("vmid1 fail ring");
 		return false;
 	}
+	if (sK2DummyPa == 0) {
+		uint64 offset = 0;
+		uint8* dummy = NULL;
+		if (sHost.vram_alloc == NULL
+			|| sHost.vram_alloc(sInfo, 4096, 4096, &offset, &dummy) != B_OK
+			|| dummy == NULL) {
+			knote("vmid1 fail default");
+			return false;
+		}
+		memset(dummy, 0, 4096);
+		uint32 fb = kread(sInfo, gc_byte(0x096b));
+		sK2DummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
+	}
 	/* The root page is kept after a failed flush. The next attempt
 	 * rewrites the base from that same page. There is no free for
 	 * vm_page_alloc, and the page stays valid.
@@ -872,6 +914,15 @@ r5_gfx9_vmid1_setup()
 	kwrite(sInfo, gc_byte(0x090e), 0);
 	kwrite(sInfo, gc_byte(0x092d), 0xffffffffu);
 	kwrite(sInfo, gc_byte(0x092e), 0xfu);
+	/* A faulting VMID 1 access lands on the K2 dummy page, not at
+	 * physical 0. The page number is the MC address >> 12.
+	 */
+	kwrite(sInfo, gc_byte(0x084e), (uint32)(sK2DummyPa >> 12));
+	kwrite(sInfo, gc_byte(0x084f), (uint32)(sK2DummyPa >> 44));
+	uint32 faultCntl = kread(sInfo, gc_byte(0x0847));
+	uint32 faultNext = (faultCntl | kFaultDefaultMask) & ~kFaultCrashMask;
+	if (faultNext != faultCntl)
+		kwrite(sInfo, gc_byte(0x0847), faultNext);
 	uint32 cntl = 1u | (3u << 1);
 	cntl |= (1u << 9) | (1u << 10);
 	cntl |= (1u << 11) | (1u << 12);
@@ -889,10 +940,32 @@ r5_gfx9_vmid1_setup()
 		kwrite(sInfo, gc_byte(0x0881), 0);
 		return false;
 	}
+	/* gfx_v9_0_constants_init for VMID 1..15. ALIGNMENT_MODE unaligned
+	 * and RETRY_DISABLE match VMID 0 (0x1018). PRIVATE_BASE is
+	 * 0x1000000000000000 >> 48 and SHARED_BASE is 0x2000000000000000 >> 48,
+	 * so SH_MEM_BASES is 0x20001000. VMID 0 stays the ring contract
+	 * (bases 0) and is not written here. Callers hold gpu_lock, the same
+	 * lock as the other GRBM_GFX_CNTL users. These are registers only.
+	 */
+	const uint32 shConfig = (3u << 3) | (1u << 12);
+	const uint32 shBases = (0x2000u << 16) | 0x1000u;
+	for (uint32 vmid = 1; vmid <= 15; vmid++) {
+		kwrite(sInfo, gc_byte(0x0022), vmid << 4);
+		kwrite(sInfo, gc_byte(0x030d), shConfig);
+		kwrite(sInfo, gc_byte(0x030a), shBases);
+	}
+	kwrite(sInfo, gc_byte(0x0022), 1u << 4);
+	uint32 shRead = kread(sInfo, gc_byte(0x030d));
+	uint32 baseRead = kread(sInfo, gc_byte(0x030a));
+	kwrite(sInfo, gc_byte(0x0022), 0);
 	sVmid1 = true;
+	knote("vmid1 sh_mem config %08lx bases %08lx",
+		(unsigned long)shRead, (unsigned long)baseRead);
 	knote("vmid1 ptb %016llx cntl %08lx pages %lu",
 		(unsigned long long)tableBase, (unsigned long)cntl,
 		(unsigned long)sVm.used);
+	knote("vmid1 default %016llx fault %08lx",
+		(unsigned long long)sK2DummyPa, (unsigned long)faultNext);
 	knote("vmid1 identity low %08lx %08lx high %08lx %08lx",
 		(unsigned long)kread(sInfo, gc_byte(0x0851)),
 		(unsigned long)kread(sInfo, gc_byte(0x0852)),

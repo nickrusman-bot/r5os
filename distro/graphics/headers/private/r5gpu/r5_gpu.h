@@ -42,7 +42,8 @@ enum {
 	R5_GPU_SYNCOBJ_WAIT_LIST = R5_GPU_OP_BASE + 19,
 	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20,
 	R5_GPU_VA_REPLACE = R5_GPU_OP_BASE + 21,
-	R5_GPU_VA_CLEAR = R5_GPU_OP_BASE + 22
+	R5_GPU_VA_CLEAR = R5_GPU_OP_BASE + 22,
+	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -85,6 +86,10 @@ typedef struct {
 	uint32_t	func;
 	uint32_t	subsystem_vendor;
 	uint32_t	subsystem_device;
+	/* Live buffer bytes. Visible VRAM is the whole BAR on this APU. */
+	uint64_t	vram_usage;
+	uint64_t	visible_vram_usage;
+	uint64_t	gtt_usage;
 } r5_gpu_info;
 
 /* AMDGPU_FAMILY_RV from libdrm amdgpu_drm.h. The vendor block below is that

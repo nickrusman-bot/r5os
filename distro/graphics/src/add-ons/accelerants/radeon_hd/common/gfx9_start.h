@@ -57,6 +57,7 @@ uint64 r5_gfx9_last_sequence();
 struct r5_gfx9_user_ib {
 	uint64		va;
 	uint32		dwords;
+	uint32		vmid;
 };
 
 bool r5_gfx9_ring_ready();
@@ -66,11 +67,15 @@ uint64 r5_gfx9_user_fence_mc();
 bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64* _sequence);
 uint64 r5_gfx9_user_seen();
+uint64 r5_gfx9_k2_word_mc();
+bool r5_gfx9_stage_ib(uint8* cpu, uint64 destVa);
+void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
 bool r5_gfx9_vmid1_lookup(uint64 va);
 bool r5_gfx9_vmid1_pte(uint64 va, uint64* pte);
+bool r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu);
 int32 r5_gfx9_eop_sem();
 status_t r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset,
 	uint8** address);

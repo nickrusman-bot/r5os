@@ -4,8 +4,9 @@
  *
  * GFX IB and RELEASE_MEM for VMID 1. The dword layout follows Linux v6.12
  * gfx_v9_0_ring_emit_ib_gfx and gfx_v9_0_ring_emit_fence. IB_BASE_HI is
- * upper_32_bits masked with 0xffff, as Linux writes it. The RELEASE_MEM
- * address is a VMID 0 MC address. The fence page is not mapped in VMID 1.
+ * the upper 32 bits masked with 0xffff. Current Linux writes
+ * upper_32_bits in full. The RELEASE_MEM address is a VMID 0 MC address.
+ * The fence page is not mapped in VMID 1.
  */
 
 #ifndef R5_CS_H
@@ -39,6 +40,7 @@ r5_cs_gfx_ib(uint32_t packet[12], uint64_t ib, uint32_t dwords,
 {
 	packet[0] = r5_cs_packet3(0x3f, 2);
 	packet[1] = (uint32_t)ib;
+	/* Linux writes the full upper half. This mask is the R5 packet. */
 	packet[2] = (uint32_t)(ib >> 32) & 0xffffu;
 	packet[3] = r5_cs_ib_control(dwords, vmid);
 	packet[4] = r5_cs_packet3(0x49, 6);

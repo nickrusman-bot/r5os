@@ -53,6 +53,22 @@ r5_gfx9_gart_pte(uint64_t physical, uint64_t flags)
 }
 
 
+/* Linux gmc_v9_0_get_coherence_flags, GC 9.3 default branch: a system
+ * page that is not AMDGPU_GEM_CREATE_UNCACHED and not COHERENT is
+ * MTYPE_NC (the two bits stay clear) and SNOOPED. The K2 page and the
+ * kernel GART stay on r5_gfx9_gart_pte, which forces MTYPE_UC. */
+static inline uint64_t
+r5_gfx9_cached_gtt_pte(uint64_t physical, uint64_t flags)
+{
+	const uint64_t mask = kR5Gfx9MtypeUc << kR5Gfx9MtypeShift;
+	uint64_t pte = (physical & ~0xfffull)
+		| (flags & ~mask)
+		| (uint64_t)R5_GFX9_PTE_SYSTEM
+		| (uint64_t)R5_GFX9_PTE_SNOOPED;
+	return pte & ~mask;
+}
+
+
 /* (MC_VM_FB_OFFSET << 24) + table byte offset, then AMDGPU_PTE_VALID.
  * The caller rejects an address that fails kR5Gfx9PdeAlign. */
 static inline uint64_t

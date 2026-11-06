@@ -281,6 +281,9 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		info->func = 0;
 		info->subsystem_vendor = 0x1002;
 		info->subsystem_device = 0x15e7;
+		info->vram_usage = 0x3000;
+		info->visible_vram_usage = 0x3000;
+		info->gtt_usage = 0x4000;
 		amd->size = (uint32_t)sizeof(*amd);
 		amd->version = 1;
 		amd->device.device_id = 0x15e7;
@@ -986,6 +989,8 @@ info_query(int fd, uint32_t query, uint32_t hw, void *out, size_t bytes)
 	info.query = query;
 	if (query == AMDGPU_INFO_HW_IP_INFO || query == AMDGPU_INFO_HW_IP_COUNT)
 		info.query_hw_ip.type = hw;
+	else if (query == AMDGPU_INFO_VIDEO_CAPS)
+		info.video_cap.type = hw;
 	else if (query == AMDGPU_INFO_FW_VERSION)
 		info.query_fw.fw_type = hw;
 	else if (query == AMDGPU_INFO_READ_MMR_REG) {
@@ -1317,6 +1322,37 @@ radv_replay(int fd)
 	CHECK(memory.gtt.max_allocation <= (64ull << 20));
 	memset(&heap, 0, sizeof(heap));
 	CHECK(info_query(node, AMDGPU_INFO_VRAM_GTT, 0, &heap, sizeof(heap)) == 0);
+	{
+		uint64_t usage = 0;
+		uint32_t maxibs[AMDGPU_HW_IP_NUM];
+		memset(maxibs, 0, sizeof(maxibs));
+		CHECK(info_query(node, AMDGPU_INFO_VRAM_USAGE, 0, &usage,
+			sizeof(usage)) == 0);
+		CHECK(usage == 0x3000);
+		CHECK(info_query(node, AMDGPU_INFO_VIS_VRAM_USAGE, 0, &usage,
+			sizeof(usage)) == 0);
+		CHECK(usage == 0x3000);
+		CHECK(info_query(node, AMDGPU_INFO_GTT_USAGE, 0, &usage,
+			sizeof(usage)) == 0);
+		CHECK(usage == 0x4000);
+		CHECK(info_query(node, AMDGPU_INFO_MAX_IBS, 0, maxibs,
+			sizeof(maxibs)) == 0);
+		CHECK(maxibs[AMDGPU_HW_IP_GFX] == 8);
+		CHECK(maxibs[AMDGPU_HW_IP_COMPUTE] == 0);
+		CHECK(maxibs[2] == 0);
+		struct drm_amdgpu_info_video_caps caps;
+		memset(&caps, 0xa5, sizeof(caps));
+		CHECK(info_query(node, AMDGPU_INFO_VIDEO_CAPS,
+			AMDGPU_INFO_VIDEO_CAPS_DECODE, &caps, sizeof(caps)) == 0);
+		CHECK(caps.codec_info[0].valid == 0);
+		CHECK(caps.codec_info[AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_AV1].max_width == 0);
+		memset(&caps, 0xa5, sizeof(caps));
+		CHECK(info_query(node, AMDGPU_INFO_VIDEO_CAPS,
+			AMDGPU_INFO_VIDEO_CAPS_ENCODE, &caps, sizeof(caps)) == 0);
+		CHECK(caps.codec_info[AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_HEVC].valid == 0);
+		CHECK(info_query(node, AMDGPU_INFO_VIDEO_CAPS, 9, &caps,
+			sizeof(caps)) != 0);
+	}
 	CHECK(heap.gtt_size == (256ull << 20));
 	memset(&ip, 0, sizeof(ip));
 	CHECK(info_query(node, AMDGPU_INFO_HW_IP_INFO, AMDGPU_HW_IP_COMPUTE, &ip,

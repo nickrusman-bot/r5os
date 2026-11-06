@@ -117,6 +117,18 @@ def main():
         print("Mesa drm_ioctl must call drmIoctl on Haiku.")
         print("The only allow-list entry is __ioctl for SYNC_IOC_MERGE.")
         return 1
+    radeon = BINARIES[0]
+    if radeon.exists():
+        names = set(undefined(radeon))
+        for sym in ("r5_bo_cpu_map", "r5_bo_cpu_unmap"):
+            if sym in names and sym not in exports:
+                missing.append(f"{radeon.name} {sym}")
+        # mmap stays for the shader cache (a file, not the render node).
+        # DRM_AMDGPU_GEM_MMAP is 0xc0086441. That request must not remain.
+        text = subprocess.check_output(["objdump", "-d", str(radeon)], text=True, errors="replace")
+        if "0xc0086441" in text:
+            print("gem mmap 0xc0086441 still in libvulkan_radeon.so")
+            return 1
     if missing:
         print("missing")
         print("\n".join(missing))

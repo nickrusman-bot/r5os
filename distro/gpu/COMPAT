@@ -93,11 +93,15 @@ The carveout on the 5625U is 512 MiB. Windows shows 495 MB for that reservation.
 | `CS` timeline chunk | translated |
 | `CS` dependencies | translated, fence wait before submit |
 | `WAIT_CS` | translated |
-| `GEM_MMAP` | ENOSYS on purpose. CPU mapping is `BO_MAP` |
+| `GEM_MMAP` | ENOSYS on purpose. CPU mapping is `BO_MAP`. RADV calls `r5_bo_cpu_map` instead of this ioctl |
 
 `BO_MAP` clones the kernel buffer into the calling team with `vm_clone_area(..., B_READ_AREA | B_WRITE_AREA, REGION_NO_PRIVATE_MAP, ..., kernel = true)`. The kernel does not read or write that clone. `get_memory_map_etc` reads the kernel area only. The user bits stay in the program's team, so SMAP is not asked to accept user pages in the kernel address space. A second `BO_MAP` from that team returns the same area. Another team gets `B_NOT_ALLOWED` until M5. The kernel deletes the clone with `vm_delete_area(team, area, true)` when the buffer is released, and does nothing when that team has already ended. The source area is not `B_CLONEABLE_AREA`. libdrm does not clone it, and it does not delete the user clone on unmap.
 
 `VA_MAP` of a GTT buffer uses `get_memory_map_etc`. Haiku's `get_memory_map` returns `B_OK` and a size-0 end entry, so it covers no pages. More than 256 physical pieces continues; a piece that still does not cover the range is `B_BAD_DATA` (`refuse VA_MAP short`).
+
+A user GTT page-table entry is `MTYPE_NC` and `SNOOPED`. Linux `gmc_v9_0_get_coherence_flags` does that for GC 9.3 system memory that is not `AMDGPU_GEM_CREATE_UNCACHED` and not `COHERENT`. RADV puts command buffers in GTT on an APU, and `RADEON_FLAG_GTT_WC` is USWC, which is still that default branch. The K2 page and the kernel GART stay `MTYPE_UC`. Before a GTT indirect buffer is submitted the kernel `clflush`es that range and then `mfence`. The address is the kernel area. This flush is temporary. `CP_IB1_BASE_HI` is 16 bits in the hardware mask as well, so the packet still masks the high half with `0xffff`. A chained indirect buffer uses the same domain and the same packet.
+
+`R5_GPU_SELFTEST` (`R5_GPU_OP_BASE + 23`) runs the VMID 1 steps when `gpu_selftest` is true. Otherwise it is `B_NOT_ALLOWED`. The first open of the render node does not run them. The order is low VRAM, a low-VRAM indirect buffer that writes a low GTT page, high VRAM, low GTT, high GTT, then the unmapped write. The first miss stops the series. The line before the submit prints the first eight dwords and the physical address of the indirect-buffer page.
 
 These `AMDGPU_INFO` queries stay ENOSYS on purpose. RADV 25.3.6 does not need them to create a device:
 
@@ -105,15 +109,13 @@ These `AMDGPU_INFO` queries stay ENOSYS on purpose. RADV 25.3.6 does not need th
 |---|---|
 | `0x05` `TIMESTAMP` | `query_value` returns 0 |
 | `0x0f` `NUM_BYTES_MOVED` | `query_value` returns 0 |
-| `0x10` `VRAM_USAGE` | `query_value` ignores the failure and returns 0. The size came from `VRAM_GTT` |
-| `0x11` `GTT_USAGE` | same |
-| `0x17` `VIS_VRAM_USAGE` | same |
 | `0x18` `NUM_EVICTIONS` | `query_value` returns 0 |
 | `0x1d` `SENSOR` (clocks and temperature) | `query_value` returns 0 |
 | `0x1e` `NUM_VRAM_CPU_PAGE_FAULTS` | `query_value` returns 0 |
-| `0x21` `VIDEO_CAPS` decode and encode | `ac_gpu_info.c` ignores the return. The caps stay zero |
-| `0x22` `MAX_IBS` | failure stores 50 IBs per IP type |
+| `0x21` `VIDEO_CAPS` decode and encode | a zeroed `drm_amdgpu_info_video_caps`. That is the Linux answer for a chip without the codec. Any other subquery is `EINVAL`. There is no video block |
 | `0x23` `GPUVM_FAULT` | the winsys prints a line and reports no fault |
+
+`0x10` `VRAM_USAGE`, `0x11` `GTT_USAGE` and `0x17` `VIS_VRAM_USAGE` are the live buffer bytes. Visible VRAM equals VRAM: the whole BAR is CPU-visible. `0x22` `MAX_IBS` is 8 for GFX and 0 for every other IP. The kernel accepts 8 indirect buffers on the GFX ring.
 
 A failed `AMDGPU_INFO` line includes `query 0x..`.
 

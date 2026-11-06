@@ -84,6 +84,35 @@ ac_drm_replay(int fd)
 		return 1;
 	}
 
-	printf("ok ac drm family RV cu 7 firmware\n");
+	struct amdgpu_bo_alloc_request request;
+	memset(&request, 0, sizeof(request));
+	request.alloc_size = 4096;
+	request.phys_alignment = 4096;
+	request.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
+	ac_drm_bo bo;
+	memset(&bo, 0, sizeof(bo));
+	result = ac_drm_bo_alloc(device, &request, &bo);
+	if (result != 0) {
+		fprintf(stderr, "bo_alloc %d\n", result);
+		return 1;
+	}
+	void *cpu = NULL;
+	result = ac_drm_bo_cpu_map(device, bo, &cpu);
+	if (result != 0 || cpu == NULL) {
+		fprintf(stderr, "bo_cpu_map %d\n", result);
+		return 1;
+	}
+	*(uint32_t *)cpu = 0x5a5a5a5au;
+	if (*(uint32_t *)cpu != 0x5a5a5a5au) {
+		fprintf(stderr, "bo_cpu_map read\n");
+		return 1;
+	}
+	result = ac_drm_bo_cpu_unmap(device, bo);
+	if (result != 0) {
+		fprintf(stderr, "bo_cpu_unmap %d\n", result);
+		return 1;
+	}
+
+	printf("ok ac drm family RV cu 7 firmware map\n");
 	return 0;
 }

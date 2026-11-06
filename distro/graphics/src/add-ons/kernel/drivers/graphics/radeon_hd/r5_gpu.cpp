@@ -41,8 +41,6 @@ extern radeon_info* gDeviceInfo[];
 
 
 static const uint32 kGcSegment = 0x2000;
-/* gc_9_0_offset.h BASE_IDX 1. CP_IB1_* live here, not in segment 0. */
-static const uint32 kGcIbSegment = 0xA000;
 static const uint32 kNbioSegment = 0x0D20;
 static const uint32 kStrapIndex = 0x000f;
 static const uint32 kStrapMask = 0x0F000000u;
@@ -240,28 +238,11 @@ gpu_lost(radeon_info* info, const char* why)
 	if (sLost)
 		return;
 	sLost = true;
-	/* gc_9_0_offset.h, BASE_IDX 0: GRBM_STATUS 0x0004, CP_STAT 0x01a0,
-	 * VM_L2_PROTECTION_FAULT_STATUS 0x084b, ADDR_LO32 0x084c, ADDR_HI32
-	 * 0x084d. BASE_IDX 1: CP_IB1_BASE_LO 0x20cc, HI 0x20cd, BUFSZ 0x20ce.
-	 */
-	uint32 fault = gpu_mmio(info, kGcSegment, 0x084b);
-	uint32 faultLo = gpu_mmio(info, kGcSegment, 0x084c);
-	uint32 faultHi = gpu_mmio(info, kGcSegment, 0x084d);
-	uint32 ibLo = gpu_mmio(info, kGcIbSegment, 0x20cc);
-	uint32 ibHi = gpu_mmio(info, kGcIbSegment, 0x20cd);
-	uint32 ibSz = gpu_mmio(info, kGcIbSegment, 0x20ce);
+	(void)info;
 	uint64 pte = 0;
 	if (sLastIbVa != 0)
 		r5_gfx9_vmid1_pte(sLastIbVa, &pte);
-	dprintf("radeon_hd: gpu lost %s cp %08lx grbm %08lx seen %lu\n",
-		why, (unsigned long)gpu_mmio(info, kGcSegment, 0x01a0),
-		(unsigned long)gpu_mmio(info, kGcSegment, 0x0004),
-		(unsigned long)r5_gfx9_user_seen());
-	dprintf("radeon_hd: gpu lost fault %08lx addr %08lx%08lx ib %08lx%08lx "
-		"sz %08lx pte %016llx\n",
-		(unsigned long)fault, (unsigned long)faultHi,
-		(unsigned long)faultLo, (unsigned long)ibHi, (unsigned long)ibLo,
-		(unsigned long)ibSz, (unsigned long long)pte);
+	r5_gfx9_cp_dump(why, pte);
 }
 
 
@@ -478,6 +459,16 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 		out.vram_bytes = (uint64)info->shared_info->frame_buffer_size * 1024ull;
 		out.gtt_bytes = out.vram_bytes;
 	}
+	for (uint32 i = 0; i < kMaxBo; i++) {
+		if (!sBo[i].live)
+			continue;
+		if (sBo[i].domain == R5_GPU_DOMAIN_VRAM)
+			out.vram_usage += sBo[i].bytes;
+		else if (sBo[i].domain == R5_GPU_DOMAIN_GTT)
+			out.gtt_usage += sBo[i].bytes;
+	}
+	/* The whole BAR is CPU-visible on this APU. There is no invisible heap. */
+	out.visible_vram_usage = out.vram_usage;
 	size_t copy = sizeof(out);
 	if (length < copy)
 		copy = length;
@@ -686,7 +677,7 @@ gpu_watchdog()
 			continue;
 		if (now - job->submitted < kWatchdogUs)
 			continue;
-		gpu_lost(sInfo, "watchdog");
+		gpu_lost(sInfo, "gpu lost watchdog");
 		gpu_release_parked(~0ull);
 		return;
 	}
@@ -1098,9 +1089,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
 					}
-					uint64 pte = r5_gfx9_gart_pte(address,
-						gpu_pte_flags(flags) | (uint64)R5_GFX9_PTE_SYSTEM
-						| (uint64)R5_GFX9_PTE_SNOOPED);
+					uint64 pte = r5_gfx9_cached_gtt_pte(address,
+						gpu_pte_flags(flags));
 					if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
 						gpu_va_clear(in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
@@ -1368,12 +1358,43 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	for (uint32 i = 0; i < in.ib_count; i++) {
 		ringIbs[i].va = ibs[i].gpu_va;
 		ringIbs[i].dwords = ibs[i].dwords;
+		ringIbs[i].vmid = 1;
 		dwords += 4;
 	}
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
 			ibs[0].gpu_va, 0, in.ring, 0);
+	/* Temporary. A GTT indirect buffer is MTYPE_NC and snooped. clflush
+	 * plus mfence makes the CPU stores visible before the doorbell. The
+	 * pointer is the kernel area, never the user clone (SMAP).
+	 */
+	for (uint32 i = 0; i < in.ib_count; i++) {
+		uint64 bytes = (uint64)ibs[i].dwords * 4;
+		for (uint32 h = 0; h < client->handleCount; h++) {
+			gpu_bo* bo = gpu_bo_get(client, client->handles[h]);
+			if (bo == NULL || bo->domain != R5_GPU_DOMAIN_GTT
+				|| bo->kernel == NULL)
+				continue;
+			for (uint32 r = 0; r < kMaxRange; r++) {
+				gpu_range* range = &bo->ranges[r];
+				if (!range->live)
+					continue;
+				if (ibs[i].gpu_va < range->va
+					|| ibs[i].gpu_va + bytes > range->va + range->bytes)
+					continue;
+				uint8* cpu = (uint8*)bo->kernel + range->offset
+					+ (ibs[i].gpu_va - range->va);
+				uintptr_t start = (uintptr_t)cpu & ~(uintptr_t)63;
+				uintptr_t end = ((uintptr_t)cpu + (uintptr_t)bytes + 63)
+					& ~(uintptr_t)63;
+				for (uintptr_t line = start; line < end; line += 64)
+					asm volatile("clflush (%0)" :: "r"((void*)line)
+						: "memory");
+			}
+		}
+	}
+	asm volatile("mfence" ::: "memory");
 	gpu_job* job = &sJobs[jobSlot];
 	memset(job, 0, sizeof(*job));
 	uint32 signalFlags[kMaxList];
@@ -1732,6 +1753,284 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 }
 
 
+static bool
+gpu_selftest_enabled()
+{
+	bool enabled = false;
+	void* settings = load_driver_settings("radeon_hd");
+	if (settings != NULL) {
+		enabled = get_driver_boolean_parameter(settings, "gpu_selftest",
+			false, true);
+		unload_driver_settings(settings);
+	}
+	return enabled;
+}
+
+
+static void
+gpu_stage_words(const char* name, uint64 ibVa, uint8* cpu, uint64 phys)
+{
+	uint32 words[8];
+	memset(words, 0, sizeof(words));
+	if (cpu != NULL)
+		memcpy(words, cpu, sizeof(words));
+	dprintf("radeon_hd: %s ib %016llx phys %016llx "
+		"%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+		name,
+		(unsigned long long)ibVa,
+		(unsigned long long)phys,
+		(unsigned long)words[0], (unsigned long)words[1],
+		(unsigned long)words[2], (unsigned long)words[3],
+		(unsigned long)words[4], (unsigned long)words[5],
+		(unsigned long)words[6], (unsigned long)words[7]);
+}
+
+
+static void
+gpu_stage_dump(const char* name, uint64 ibVa, uint8* cpu, uint64 phys)
+{
+	uint64 pte = 0;
+	if (ibVa != 0)
+		r5_gfx9_vmid1_pte(ibVa, &pte);
+	r5_gfx9_cp_dump(name, pte);
+	gpu_stage_words(name, ibVa, cpu, phys);
+}
+
+
+/* Just below the advertised limits, so a program that grows upward from
+ * va_offset or high_va_offset does not land on a stage page. */
+static const uint64 kStageLowVram = R5_GPU_VA_MAX - 0x3000ull;
+static const uint64 kStageLowGtt = R5_GPU_VA_MAX - 0x2000ull;
+static const uint64 kStageHighGtt = R5_GPU_HIGH_VA_MAX - 0x3000ull;
+static const uint64 kStageHighVram = R5_GPU_HIGH_VA_MAX - 0x2000ull;
+static const uint64 kStageFault = R5_GPU_VA_MAX - 0x1000ull;
+
+
+struct gpu_stage_page {
+	uint64		va;
+	uint64		phys;
+	uint64		vramOffset;
+	uint8*		cpu;
+	area_id		area;
+	bool		vram;
+	bool		gtt;
+};
+
+
+static void
+gpu_stage_release(gpu_stage_page* page)
+{
+	if (page == NULL || page->va == 0)
+		return;
+	r5_gfx9_vmid1_map(page->va, 0);
+	r5_gfx9_vmid1_flush();
+	if (page->vram)
+		r5_gfx9_free_user_vram(page->vramOffset);
+	if (page->gtt && page->area >= 0)
+		delete_area(page->area);
+	memset(page, 0, sizeof(*page));
+	page->area = -1;
+}
+
+
+static bool
+gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt)
+{
+	memset(page, 0, sizeof(*page));
+	page->area = -1;
+	page->va = va;
+	uint64 phys = 0;
+	uint64 flags = gpu_pte_flags(R5_GPU_VA_READ | R5_GPU_VA_WRITE | R5_GPU_VA_EXEC);
+	if (!gtt) {
+		if (r5_gfx9_alloc_user_vram(4096, &page->vramOffset) != B_OK)
+			return false;
+		radeon_shared_info* shared = info->shared_info;
+		if (info->kernel_window == NULL || shared == NULL
+			|| page->vramOffset < shared->vram_pool_offset) {
+			r5_gfx9_free_user_vram(page->vramOffset);
+			return false;
+		}
+		page->cpu = info->kernel_window
+			+ (page->vramOffset - shared->vram_pool_offset);
+		page->vram = true;
+		uint32 fb = gpu_mmio(info, kGcSegment, 0x096b) & 0x00ffffffu;
+		phys = ((uint64)fb << 24) + page->vramOffset;
+	} else {
+		void* system = NULL;
+		page->area = create_area("r5 gfx9 stage", &system,
+			B_ANY_KERNEL_ADDRESS, 4096, B_FULL_LOCK,
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+		if (page->area < 0 || system == NULL)
+			return false;
+		page->cpu = (uint8*)system;
+		page->gtt = true;
+		physical_entry entry;
+		memset(&entry, 0, sizeof(entry));
+		uint32 count = 1;
+		status_t mapped = get_memory_map_etc(B_CURRENT_TEAM, system, 4096,
+			&entry, &count);
+		if (mapped != B_OK || count == 0 || entry.size < 4096) {
+			delete_area(page->area);
+			page->area = -1;
+			return false;
+		}
+		phys = entry.address;
+	}
+	page->phys = phys;
+	uint64 pte = gtt ? r5_gfx9_cached_gtt_pte(phys, flags)
+		: r5_gfx9_gart_pte(phys, flags);
+	if (!r5_gfx9_vmid1_map(va, pte) || !r5_gfx9_vmid1_flush()) {
+		gpu_stage_release(page);
+		return false;
+	}
+	return true;
+}
+
+
+/* One VMID 1 IB. The WRITE_DATA destination is destVa, which is that
+ * page plus 64 when the word is read back through the kernel mapping.
+ * The wait does not mark the GPU lost. */
+static bool
+gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
+	uint64 destVa, bool expectWord)
+{
+	if (ibPage == NULL || ibPage->cpu == NULL)
+		return false;
+	if (expectWord && destCpu != NULL) {
+		*(volatile uint32*)(destCpu + 64) = 0;
+		uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
+		asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
+		asm volatile("mfence" ::: "memory");
+	}
+	if (!r5_gfx9_stage_ib(ibPage->cpu, destVa)) {
+		dprintf("radeon_hd: %s ib\n", name);
+		return false;
+	}
+	r5_gfx9_user_ib ib;
+	memset(&ib, 0, sizeof(ib));
+	ib.va = ibPage->va;
+	ib.dwords = 8;
+	ib.vmid = 1;
+	sLastIbVa = ibPage->va;
+	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
+	uint64 sequence = 0;
+	if (!r5_gfx9_user_submit(&ib, 1, &sequence)) {
+		dprintf("radeon_hd: %s submit\n", name);
+		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
+		return false;
+	}
+	bool landed = false;
+	uint32 word = 0;
+	for (int i = 0; i < 1000; i++) {
+		word = expectWord && destCpu != NULL
+			? *(volatile uint32*)(destCpu + 64) : 0;
+		if (r5_gfx9_user_seen() == sequence
+			&& (!expectWord || word == 0xDEADBEEF)) {
+			landed = true;
+			break;
+		}
+		snooze(1000);
+	}
+	if (expectWord && destCpu != NULL)
+		word = *(volatile uint32*)(destCpu + 64);
+	dprintf("radeon_hd: %s %s wb %08lx seq %llu seen %llu\n",
+		name, landed ? "ok" : "timeout",
+		(unsigned long)word,
+		(unsigned long long)sequence,
+		(unsigned long long)r5_gfx9_user_seen());
+	if (!landed)
+		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
+	return landed;
+}
+
+
+static bool
+gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
+{
+	gpu_stage_page page;
+	if (!gpu_stage_map(info, &page, va, gtt)) {
+		dprintf("radeon_hd: %s map\n", name);
+		return false;
+	}
+	bool landed = gpu_stage_step(name, &page, page.cpu, va + 64, true);
+	gpu_stage_release(&page);
+	return landed;
+}
+
+
+static bool
+gpu_stage_fault(radeon_info* info)
+{
+	gpu_stage_page page;
+	if (!gpu_stage_map(info, &page, kStageLowVram, false)) {
+		dprintf("radeon_hd: u5 map\n");
+		return false;
+	}
+	bool landed = gpu_stage_step("u5", &page, NULL, kStageFault + 64, false);
+	uint32 me = gpu_mmio(info, kGcSegment, 0x01b6);
+	uint32 status = gpu_mmio(info, kGcSegment, 0x084b);
+	uint32 addrLo = gpu_mmio(info, kGcSegment, 0x084c);
+	uint32 addrHi = gpu_mmio(info, kGcSegment, 0x084d);
+	uint64 addr = r5_gfx9_fault_address(addrLo, addrHi);
+	uint32 vmid = (status >> 20) & 0xfu;
+	bool halted = (me & 0x15000000u) != 0;
+	dprintf("radeon_hd: u5 fault status %08lx vmid %lu addr %016llx me %08lx\n",
+		(unsigned long)status, (unsigned long)vmid,
+		(unsigned long long)addr, (unsigned long)me);
+	if (!landed || halted || status == 0 || vmid != 1)
+		gpu_stage_dump("u5", page.va, page.cpu, page.phys);
+	gpu_stage_release(&page);
+	return landed && !halted && status != 0 && vmid == 1;
+}
+
+
+/* VRAM indirect buffer, WRITE_DATA into a low GTT page, then a CPU read
+ * of that word through the kernel mapping. */
+static bool
+gpu_stage_u2a(radeon_info* info)
+{
+	gpu_stage_page ib;
+	gpu_stage_page dest;
+	if (!gpu_stage_map(info, &ib, kStageLowVram, false)) {
+		dprintf("radeon_hd: u2a map\n");
+		return false;
+	}
+	if (!gpu_stage_map(info, &dest, kStageLowGtt, true)) {
+		dprintf("radeon_hd: u2a map\n");
+		gpu_stage_release(&ib);
+		return false;
+	}
+	bool landed = gpu_stage_step("u2a", &ib, dest.cpu, dest.va + 64, true);
+	gpu_stage_release(&dest);
+	gpu_stage_release(&ib);
+	return landed;
+}
+
+
+static status_t
+gpu_stage_u(radeon_info* info)
+{
+	if (!gpu_render_enabled() || !gpu_selftest_enabled())
+		return B_NOT_ALLOWED;
+	if (!r5_gfx9_vmid1_setup()) {
+		dprintf("radeon_hd: u1 skip vmid\n");
+		return B_NO_INIT;
+	}
+	if (!gpu_stage_one(info, "u1", kStageLowVram, false))
+		return B_OK;
+	if (!gpu_stage_u2a(info))
+		return B_OK;
+	if (!gpu_stage_one(info, "u4", kStageHighVram, false))
+		return B_OK;
+	if (!gpu_stage_one(info, "u3", kStageLowGtt, true))
+		return B_OK;
+	if (!gpu_stage_one(info, "u2", kStageHighGtt, true))
+		return B_OK;
+	gpu_stage_fault(info);
+	return B_OK;
+}
+
+
 static status_t
 gpu_open(const char* name, uint32 flags, void** cookie)
 {
@@ -1894,7 +2193,12 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		status = gpu_va_unmap(client, buffer, length);
 	else if (op == R5_GPU_VA_REPLACE)
 		status = gpu_va_replace(client, buffer, length, false);
-	else if (op == R5_GPU_VA_CLEAR)
+	else if (op == R5_GPU_SELFTEST) {
+		if (!gpu_selftest_enabled())
+			status = B_NOT_ALLOWED;
+		else
+			status = gpu_stage_u(client->info);
+	} else if (op == R5_GPU_VA_CLEAR)
 		status = gpu_va_replace(client, buffer, length, true);
 	else if (op == R5_GPU_CS_SUBMIT)
 		status = gpu_submit(client, buffer, length);

@@ -262,6 +262,32 @@ r5_amdgpu_info(int fd, struct drm_amdgpu_info *query)
 		heap.gtt_size = info.gtt_bytes;
 		return r5_copy_out(out, query->return_size, &heap, sizeof(heap));
 	}
+	if (query->query == AMDGPU_INFO_VRAM_USAGE)
+		return r5_copy_out(out, query->return_size, &info.vram_usage,
+			sizeof(info.vram_usage));
+	if (query->query == AMDGPU_INFO_VIS_VRAM_USAGE)
+		return r5_copy_out(out, query->return_size, &info.visible_vram_usage,
+			sizeof(info.visible_vram_usage));
+	if (query->query == AMDGPU_INFO_GTT_USAGE)
+		return r5_copy_out(out, query->return_size, &info.gtt_usage,
+			sizeof(info.gtt_usage));
+	if (query->query == AMDGPU_INFO_MAX_IBS) {
+		uint32_t maxibs[AMDGPU_HW_IP_NUM];
+		memset(maxibs, 0, sizeof(maxibs));
+		maxibs[AMDGPU_HW_IP_GFX] = 8;
+		return r5_copy_out(out, query->return_size, maxibs, sizeof(maxibs));
+	}
+	if (query->query == AMDGPU_INFO_VIDEO_CAPS) {
+		/* No video block. Linux returns a zeroed codec table for a
+		 * chip without that codec, for both decode and encode. */
+		uint32_t type = query->video_cap.type;
+		struct drm_amdgpu_info_video_caps caps;
+		if (type != AMDGPU_INFO_VIDEO_CAPS_DECODE
+			&& type != AMDGPU_INFO_VIDEO_CAPS_ENCODE)
+			return r5_fail(EINVAL);
+		memset(&caps, 0, sizeof(caps));
+		return r5_copy_out(out, query->return_size, &caps, sizeof(caps));
+	}
 	if (query->query == AMDGPU_INFO_MEMORY) {
 		struct drm_amdgpu_memory_info memory;
 		uint64_t vram = info.vram_bytes;
