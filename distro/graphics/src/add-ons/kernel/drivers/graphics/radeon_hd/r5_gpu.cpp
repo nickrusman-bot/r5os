@@ -16,6 +16,7 @@
 #include "r5_wait.h"
 #include "r5_stage_p.h"
 #include "r5_log.h"
+#include "r5_vm.h"
 
 #include <KernelExport.h>
 #include <condition_variable.h>

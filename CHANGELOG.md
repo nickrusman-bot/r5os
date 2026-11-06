@@ -2,7 +2,7 @@
 
 ### Log lines behind the settings file
 
-Errors stay on, and stop after 32 in a boot: a refusal, the syncobj limit, `gpu lost` with its dump, and a non-EOP interrupt. `gpu_debug true` (default off) prints `submit ib va`, the per-call lines, and a successful translator ioctl. `gpu_selftest true` still prints the stage lines. `rb num` is once per boot. The fixed K sequence is unchanged. The host test printed `ok gpu api 1.0 walk`. Not a new image yet.
+Errors stay on, and stop after 32 in a boot: a refusal, the syncobj limit, `gpu lost` with its dump, and a non-EOP interrupt. `gpu_debug true` (default off) prints `submit ib va`, the per-call lines, and a successful translator ioctl. `gpu_selftest true` still prints the stage lines. `rb num` is once per boot. The fixed K sequence is unchanged. The host test printed `ok gpu api 1.0 walk`. The first image build of the high-address check failed: `r5_gpu.cpp` called `r5_vm_va_fits` without including `r5_vm.h`. That include is in. Not a new image yet.
 
 ### High virtual address, checked on paper
 
