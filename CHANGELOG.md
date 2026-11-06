@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### High virtual address, checked on paper
+
+The nineteenth stick hung on write-combined GTT at `0xffff800000000000` and ran the same kind of buffer at a low address. The page-table walk for that address, for `0xffff800000200000`, for `0xffff800100000000`, and for the last high page is the same for GTT and VRAM apart from the page address and the SYSTEM, SNOOP, and MTYPE bits. A canonical address and the same address masked to 48 bits select the same slots. Adding the filled byte count does not wrap those pages, and an address inside the 48-bit hole is rejected. Linux 6.12 `amdgpu_gmc.h` starts the high range at `AMDGPU_GMC_HOLE_END` (`0xffff800000000000`) and does not reserve that first page. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off, which it is on this GPU. The 6 Nov 2026 Linux `dmesg` on this machine has no AMD-Vi line. The walk is not the bug that stick showed. The next stick runs U2c, U2a, U2b, U4b, U2e, U2f, then U2d, and stops at the first hang. Not booted.
+
 ### Write-combined GTT for the command buffers
 
 Stick 18 drew the SAM teapot and left the teapot without SAM black. RADV puts those command buffers in GTT with `CPU_GTT_USWC`. Every GTT buffer was mapped cached and snooped, and the `clflush` at submit does not cover a chained buffer.

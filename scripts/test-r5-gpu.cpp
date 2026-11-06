@@ -659,9 +659,12 @@ main()
 		"gpu_stage_p(",
 		"gpu_stage_u(",
 		"\"u2c\"",
-		"\"u2d\"",
 		"\"u2a\"",
 		"\"u2b\"",
+		"\"u4b\"",
+		"\"u2e\"",
+		"\"u2f\"",
+		"\"u2d\"",
 		"\"u1\"",
 		"\"u4\"",
 		"\"u3\"",
@@ -674,8 +677,124 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 8) != 0)
+			stageOrder, 14) != 0)
 		return 1;
+
+	{
+		/* REVIEW-25 X1. Four high addresses, GTT and VRAM. */
+		static uint64_t pool_gtt[64][512];
+		static uint64_t pool_vram[64][512];
+		struct walk_cookie {
+			int next;
+			uint64_t (*pool)[512];
+			uint64_t base;
+		};
+		auto alloc = [](void* raw, uint64_t* physical, uint64_t** cpu) -> int {
+			walk_cookie* c = (walk_cookie*)raw;
+			if (c->next >= 64)
+				return 0;
+			*physical = c->base + (uint64_t)c->next * 4096ull;
+			*cpu = c->pool[c->next];
+			c->next++;
+			return 1;
+		};
+		const uint64_t vas[4] = {
+			0xffff800000000000ull,
+			0xffff800000200000ull,
+			0xffff800100000000ull,
+			R5_GPU_HIGH_VA_MAX - 0x1000ull
+		};
+		const uint64_t access = R5_GFX9_PTE_VALID | R5_GFX9_PTE_EXECUTABLE
+			| R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
+		const uint64_t keep = access;
+		for (int i = 0; i < 4; i++) {
+			uint64_t masked = vas[i] & 0x0000ffffffffffffull;
+			for (int level = 0; level < 4; level++) {
+				if (r5_vm_index(vas[i], (uint32_t)level)
+					!= r5_vm_index(masked, (uint32_t)level))
+					return fail("x1 masked index");
+			}
+			if (!r5_vm_va_fits(vas[i], 4096))
+				return fail("x1 fits");
+			uint64_t page = 0;
+			if (!r5_vm_page_va(vas[i], 0, &page) || page != vas[i])
+				return fail("x1 page");
+			if (!r5_vm_page_va(vas[i], 4096, &page)
+				|| page != vas[i] + 4096ull)
+				return fail("x1 filled");
+			r5_vm_page pages_gtt[64];
+			r5_vm_page pages_vram[64];
+			memset(pool_gtt, 0, sizeof(pool_gtt));
+			memset(pool_vram, 0, sizeof(pool_vram));
+			walk_cookie gtt_cookie;
+			gtt_cookie.next = 0;
+			gtt_cookie.pool = pool_gtt;
+			gtt_cookie.base = 0x900000000ull;
+			r5_vm gtt;
+			memset(&gtt, 0, sizeof(gtt));
+			gtt.pages = pages_gtt;
+			gtt.capacity = 64;
+			gtt.alloc = alloc;
+			gtt.cookie = &gtt_cookie;
+			uint64_t gtt_pte = r5_gfx9_user_pte(0x123450000ull, access,
+				1, 1, &kR5Gfx93Mtype);
+			if (!r5_vm_map_page(&gtt, vas[i], gtt_pte))
+				return fail("x1 gtt map");
+			walk_cookie vram_cookie;
+			vram_cookie.next = 0;
+			vram_cookie.pool = pool_vram;
+			vram_cookie.base = 0x900000000ull;
+			r5_vm vram;
+			memset(&vram, 0, sizeof(vram));
+			vram.pages = pages_vram;
+			vram.capacity = 64;
+			vram.alloc = alloc;
+			vram.cookie = &vram_cookie;
+			uint64_t vram_pte = r5_gfx9_user_pte(0x123450000ull, access,
+				0, 0, &kR5Gfx93Mtype);
+			if (!r5_vm_map_page(&vram, vas[i], vram_pte))
+				return fail("x1 vram map");
+			if (gtt.used != vram.used || gtt.used != 4)
+				return fail("x1 depth");
+			printf("x1 va %016llx", (unsigned long long)vas[i]);
+			for (int level = 3; level >= 0; level--) {
+				printf(" L%d=%u", level,
+					r5_vm_index(vas[i], (uint32_t)level));
+			}
+			for (uint32_t p = 0; p + 1 < gtt.used; p++) {
+				uint32_t slot = r5_vm_index(vas[i], 3u - p);
+				if (gtt.pages[p].cpu[slot] != vram.pages[p].cpu[slot])
+					return fail("x1 pde");
+				printf(" pde%u=%016llx", p,
+					(unsigned long long)gtt.pages[p].cpu[slot]);
+			}
+			uint64_t got_gtt = 0;
+			uint64_t got_vram = 0;
+			if (!r5_vm_lookup(&gtt, vas[i], &got_gtt)
+				|| !r5_vm_lookup(&gtt, masked, &got_gtt)
+				|| !r5_vm_lookup(&vram, vas[i], &got_vram))
+				return fail("x1 lookup");
+			if ((got_gtt & keep) != (got_vram & keep))
+				return fail("x1 pte bits");
+			if ((got_gtt & (uint64_t)R5_GFX9_PTE_SYSTEM) == 0
+				|| (got_gtt & (uint64_t)R5_GFX9_PTE_SNOOPED) != 0)
+				return fail("x1 gtt flags");
+			if ((got_vram & (uint64_t)R5_GFX9_PTE_SYSTEM) != 0)
+				return fail("x1 vram system");
+			if ((got_vram & (3ull << 57)) != (3ull << 57))
+				return fail("x1 vram mtype");
+			if ((got_gtt & (3ull << 57)) != 0)
+				return fail("x1 gtt mtype");
+			printf(" gtt=%016llx vram=%016llx\n",
+				(unsigned long long)got_gtt,
+				(unsigned long long)got_vram);
+		}
+		if (r5_vm_va_fits(0x800000000000ull, 4096))
+			return fail("x1 hole");
+		uint64_t wrapped = 0;
+		if (r5_vm_page_va(0xfffffffffffff000ull, 0x2000ull, &wrapped))
+			return fail("x1 overflow");
+	}
 
 	if (R5_P_COUNT != R5_GPU_P_STEPS)
 		return fail("stage p count");

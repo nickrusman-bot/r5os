@@ -915,20 +915,7 @@ gpu_pte_flags(uint32 flags)
 static bool
 gpu_va_fits(uint64 va, uint64 bytes)
 {
-	/* Linux amdgpu_gem_va_ioctl rejects an address in the hole, then
-	 * keeps va_address & AMDGPU_GMC_HOLE_MASK. That mask is
-	 * 0x0000ffffffffffff (bits 0-47). The walk uses bits 12-47 only,
-	 * so a canonical high address and that masked address select the
-	 * same page-table slots.
-	 */
-	if (bytes == 0 || (va & 0xfffull) != 0 || (bytes & 0xfffull) != 0)
-		return false;
-	uint64 end = va + bytes;
-	if (end < va)
-		return false;
-	bool low = va >= R5_GPU_VA_OFFSET && end <= R5_GPU_VA_MAX;
-	bool high = va >= R5_GPU_HIGH_VA_OFFSET && end <= R5_GPU_HIGH_VA_MAX;
-	return low || high;
+	return r5_vm_va_fits(va, bytes) != 0;
 }
 
 
@@ -2736,14 +2723,26 @@ gpu_stage_u(radeon_info* info)
 	if (!gpu_stage_pair(info, "u2c", kStageLowGtt, true, true,
 			kStageLowVram, false, false, false))
 		return B_OK;
-	if (!gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true, true,
-			kStageHighVram, false, false, false))
-		return B_OK;
 	if (!gpu_stage_pair(info, "u2a", kStageLowVram, false, false,
 			kStageLowGtt, true, false, false))
 		return B_OK;
 	if (!gpu_stage_pair(info, "u2b", kStageLowGtt, true, false,
 			kStageLowVram, false, false, false))
+		return B_OK;
+	/* U4b is VRAM on the first high page. Linux v6.12 amdgpu_gmc.h
+	 * AMDGPU_GMC_HOLE_END is that page and the VM does not reserve it.
+	 * U2e is the high region the stick 19 teapot indirect buffers used
+	 * (0xffff800100284000). U2f is 2 MiB into the high range. */
+	if (!gpu_stage_one(info, "u4b", R5_GPU_HIGH_VA_OFFSET, false))
+		return B_OK;
+	if (!gpu_stage_pair(info, "u2e", 0xffff800100000000ull, true, true,
+			kStageLowVram, false, false, false))
+		return B_OK;
+	if (!gpu_stage_pair(info, "u2f", 0xffff800000200000ull, true, true,
+			kStageLowVram, false, false, false))
+		return B_OK;
+	if (!gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true, true,
+			kStageHighVram, false, false, false))
 		return B_OK;
 	if (!gpu_stage_one(info, "u1", kStageLowVram, false))
 		return B_OK;

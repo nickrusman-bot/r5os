@@ -13,12 +13,51 @@
 #include <stdint.h>
 
 #include "gfx9_check.h"
+#include "r5_gpu.h"
 
-/* PDB2 is level 3, the page table is level 0. Nine bits each. */
+/* PDB2 is level 3, the page table is level 0. Nine bits each.
+ * Bits 63:48 are not part of the walk. Linux amdgpu_gmc.h
+ * AMDGPU_GMC_HOLE_MASK is 0x0000ffffffffffff, so a canonical high
+ * address and that masked address select the same slots. */
 static inline uint32_t
 r5_vm_index(uint64_t va, uint32_t level)
 {
 	return (uint32_t)((va >> (12u + 9u * level)) & 0x1ffu);
+}
+
+/* Linux amdgpu_gem_va_ioctl rejects an address in the hole
+ * (amdgpu_gmc.h AMDGPU_GMC_HOLE_START .. AMDGPU_GMC_HOLE_END).
+ * The high range starts at AMDGPU_GMC_HOLE_END. Nothing extra is
+ * reserved on that first page. */
+static inline int
+r5_vm_va_fits(uint64_t va, uint64_t bytes)
+{
+	uint64_t end;
+	int low;
+	int high;
+	if (bytes == 0 || (va & 0xfffull) != 0 || (bytes & 0xfffull) != 0)
+		return 0;
+	end = va + bytes;
+	if (end < va)
+		return 0;
+	low = va >= R5_GPU_VA_OFFSET && end <= R5_GPU_VA_MAX;
+	high = va >= R5_GPU_HIGH_VA_OFFSET && end <= R5_GPU_HIGH_VA_MAX;
+	return low || high;
+}
+
+/* gpu_va_map adds the filled byte count to the GPU address. The sum
+ * stays canonical. It is not masked before the walk. */
+static inline int
+r5_vm_page_va(uint64_t va, uint64_t filled, uint64_t* page)
+{
+	uint64_t sum;
+	if ((va & 0xfffull) != 0 || (filled & 0xfffull) != 0 || page == 0)
+		return 0;
+	sum = va + filled;
+	if (sum < va)
+		return 0;
+	*page = sum;
+	return 1;
 }
 
 /* Physical address of a page-table page, then VALID. Same alignment rule
