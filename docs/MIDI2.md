@@ -8,6 +8,8 @@ The check program is `midi2test` in `/system/bin`. This file is the contract for
 
 Include `<MidiProducer.h>` and `<MidiConsumer.h>`. Link `be` and `libmidi2.so`.
 
+Property Exchange, profiles, stream messages, and the USB descriptor parser are defined in `libmidi2.so`. The headers keep those names and arguments. `midi2_pe_put14`, `midi2_pe_get14`, `midi2_stream_pack`, `midi2_stream_status`, and `midi2_profile_same` stay inline. An application compiled after this change calls the library.
+
 A `uchar` velocity or controller value is still a MIDI 1.0 channel message: two or three bytes, status in the first byte. `SprayNoteOn2` takes a `uint16` velocity and `SprayControlChange2` takes a `uint32` controller value. Each sends one MIDI 2.0 channel-voice packet (message type 0x4, two 32-bit words). `SprayNoteOn(0, 60, 100)` is the MIDI 1.0 call. A bare integer is not ambiguous.
 
 The earlier overloads, `SprayNoteOn(uchar, uchar, uint16)` and `SprayControlChange(uchar, uchar, uint32)`, were exported from `libmidi2.so` in development builds from `f0c74f2520`. They were never in a release: `distro/VERSION` is `2026.1-dev`. Nothing else in this tree calls them. `midi2test` and `PortDrivers.cpp` use the MIDI 1.0 calls, and `midi2test` uses the new names for the wide values. The old symbols are removed. They are not aliases.

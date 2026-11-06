@@ -8,7 +8,8 @@ g++ -std=c++17 -fsanitize=address,undefined -fno-omit-frame-pointer -g -O1 \
 	-I scripts/midi2-host \
 	-I distro/media/headers/os/midi2 \
 	-I distro/media/src/add-ons/kernel/drivers/midi/usb_midi \
-	scripts/midi2-fuzz.cpp -o /tmp/midi2-fuzz
+	scripts/midi2-fuzz.cpp distro/media/src/kits/midi2/Midi2Library.cpp \
+	-o /tmp/midi2-fuzz
 mkdir -p generated/midi2
 # Kernel parsers first, then the header parsers.
 /tmp/midi2-fuzz kernel "$seconds" > "generated/midi2/fuzz-kernel.log" 2>&1
