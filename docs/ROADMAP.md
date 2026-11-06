@@ -67,6 +67,21 @@ Do not start these during an unrelated bugfix.
   - Do not destabilize `app_server`.
   - Do not call VESA, `vboxvideo`, Lavapipe, or GPU work without a rendering path "hardware acceleration".
   - The GFX9 sequences on the 5625U are fixed (`AGENTS.md`, "GFX9 ring (Renoir)").
+- **GPU Kit (after M7).** A C++ kit on top of Vulkan, in the style of the BeOS kits. Decided on 6 Nov 2026, not started:
+  - **Names.** The kit is the **GPU Kit**, named after the domain, like the Midi Kit. The classes live in the namespace **`BGPUKit`**, the way Haiku does it for `BPackageKit`. Inside that namespace they carry ordinary B names: `BVulkanView` (in the line of `BGLView`), `BGPUDevice`, `BGPUBuffer`, `BGPUTask`. There is one header per class without the B (`<VulkanView.h>`), plus `<GPUKit.h>`. Constants are `B_GPU_…`, errors are `status_t`, and hooks follow the usual pattern (`Render()`, `FrameResized()`, `DeviceLost()`). Check every new name against the Haiku tree.
+  - **The BeOS way.**
+    - A finished task sends a `BMessage` to the `BLooper`, instead of the program waiting on a fence.
+    - A view draws in its own thread.
+    - Without a GPU, the same code runs on Lavapipe.
+    - A lost device gives `B_GPU_DEVICE_LOST`, and the kit rebuilds the device.
+    - The kit does not lock Vulkan away: the `VkDevice` and `VkImage` underneath stay reachable.
+  - **Where.** A separate library `libr5gpu.so` next to `libbe`, not inside `libbe` (`AGENTS.md`, LibR5). It is MIT, like the GPU header, because every program that uses it links it.
+  - **Order.**
+    1. `BVulkanView` after M7, with VulkanTeapot rewritten on top of it as the first example.
+    2. `BGPUDevice`, `BGPUBuffer` and `BGPUTask`, with a compute example.
+    3. Integration with the Media Kit.
+  - **Before M7:** build nothing, but design the M7 presentation (the R5 WSI layer) so that `BVulkanView` can sit on top of it.
+  - **Still open:** whether the kit also covers OpenGL (through Zink), and whether it is meant only for R5 or for other Haiku systems too.
 - **Audio and MIDI.** Improve streaming and device interop, in small steps. The contracts are `docs/USB-AUDIO.md`, `docs/HDMI-AUDIO.md`, `docs/VIRTUAL-SURROUND.md` and `docs/MIDI2.md`.
 - **Mixxx** is a side quest ([#55](https://github.com/nickrusman-bot/r5os/issues/55), `docs/MIXXX.md`). It is not an image application, and not while multi-user is open.
 
