@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Fifth M4 stick
+
+The image jammed at 10:54 Europe/Amsterdam on 6 Nov 2026 is the BeFS partition of this stick. The settings are `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. They do not set `gfx9_workload` or `gfx9_compute`. The stick file is 2156724224 bytes, sha256 `b97e9be5d9cca87ed9dfcb5c7ebff8add96852a7c0b759c9ba930b3a15704aeb`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 10:59 to 11:02 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 11:03. Disk 0 was not opened. This stick has not been booted.
+
 ### GTT map and the user clone
 
 The fourth stick (sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`) reached the desktop on the Ryzen 5 5625U. K0, K1 and K2 completed. `vmid1 ptb` is present and there is no `vmid1 fail`. Stage `bo` created both buffers. `GEM_VA` of the VRAM buffer at the low address returned 0. `GEM_VA` of the GTT buffer at `0xffff800000000000` was `refuse VA_MAP short status 0x80000010` (`B_BAD_DATA`) with `map 0`. RADV's first buffer was the same refusal at `0xffff800100000000`. `vulkaninfo` aborted in `vkCreateDevice` with `VK_ERROR_OUT_OF_DEVICE_MEMORY`. `GEM_MMAP` returned `-2147483648` (`B_NO_MEMORY`) and the syslog has no `BO_MAP` refusal.
