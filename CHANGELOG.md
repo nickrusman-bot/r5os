@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### MIDI parsers have a host fuzz run
+
+`interpret_ump_buffer`, `expand_ump_to_midi1`, and `sysex7_bytes` call `usb_midi_parse.h`. The host harness includes that file, so it runs the driver code. `scripts/fuzz-midi2.sh` builds it with AddressSanitizer and UndefinedBehaviorSanitizer (`g++` 15.2.0 on WSL). The kernel target ran first for 600 seconds, then payload, Property Exchange, profiles, stream messages, and the USB descriptor parser, 600 seconds each. Each log printed `ok`. There was no sanitizer report. `midi2test` was not run. No device was attached.
+
 ### MIDI 2.0 channel voice reaches MIDI 1.0 hooks
 
 Type 0x4 was translated only for note-off, note-on, and control change. Appendix D, Translation (D.2), also covers poly pressure, channel pressure (D.2.2), pitch bend with the least significant byte first (D.2.5), program change with the bank bit (D.2.4), and registered and assignable controllers as four control changes (D.2.3). `BMidiLocalConsumer`, `read()`, and a send to a MIDI 1.0 device use `midi2_channel_voice_to_midi1`. The pending `read()` buffer is 16 bytes, which holds the 12-byte controller sequence. Appendix D, Messages That Cannot Be Translated to MIDI 1.0 (D.2.8), stays UMP: relative controllers, per-note controllers, per-note management, and per-note pitch bend. `midi2test` checks those bytes. That program was not run. A host compile of the helper with `static_assert` passed. No device was attached.

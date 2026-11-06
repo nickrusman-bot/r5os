@@ -204,6 +204,8 @@ On the VirtualBox guest, `midi2test` printed `all checks passed` on 3 Nov 2026 (
 
 `midi2test` prints `ok` or `FAIL` for each check and exits 0 only when every check passed. The first checks are the helpers: word counts, `midi2_encode_note_on`, `midi2_encode_control_change`, and `midi2_ump_from_payload`. They do not need `midi_server`.
 
+`scripts/fuzz-midi2.sh` builds `scripts/midi2-fuzz.cpp` with AddressSanitizer and UndefinedBehaviorSanitizer. It runs the kernel walk, expansion, and SysEx7 parser first (`usb_midi_parse.h`, the same file the driver includes), then the payload helper, Property Exchange, profiles, stream messages, and the USB descriptor parser. Each target runs for the number of seconds on the command line. The stub headers in `scripts/midi2-host` exist only for that host build.
+
 The rest registers a local producer and a local consumer, connects them, and sprays:
 
 - a `uchar` note and a `uchar` control change, which stay three MIDI 1.0 bytes
