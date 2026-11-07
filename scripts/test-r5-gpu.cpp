@@ -1042,16 +1042,21 @@ main()
 		if (n != 31 || n != r5_cs_vm_switch_words())
 			return fail("vm switch words");
 		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
-			|| words[4] != 7u)
+			|| words[4] != 7u || words[6] != 4u)
 			return fail("vm switch pipe");
-		if (words[7] != r5_cs_packet3(0x37, 3) || words[11] != 0x12c18001u
+		/* gc_9 dword offsets, gmc_v9_0_emit_flush_gpu_tlb. VMID 1
+		 * is context 1: 0x2000 + 0x08ed and the next register.
+		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5. */
+		if (words[7] != r5_cs_packet3(0x37, 3) || words[9] != 0x28edu
+			|| words[11] != 0x12c18001u || words[14] != 0x28eeu
 			|| words[16] != 0x8u)
 			return fail("vm switch ptb");
 		if (words[17] != r5_cs_packet3(0x37, 3)
-			|| words[19] != r5_cs_gc_byte(0x08a3u) || words[21] != inv)
+			|| words[19] != 0x28a3u || words[21] != inv)
 			return fail("vm switch inv");
 		if (words[22] != r5_cs_packet3(0x3c, 5) || words[23] != 0x103u
-			|| words[26] != ack || words[27] != ack)
+			|| words[24] != 0x28b5u || words[26] != ack || words[27] != ack
+			|| words[28] != 0x20u)
 			return fail("vm switch ack");
 		if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
 			return fail("vm switch pfp");

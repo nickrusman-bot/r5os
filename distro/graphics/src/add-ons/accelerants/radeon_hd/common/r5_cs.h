@@ -183,10 +183,12 @@ r5_cs_pad(uint32_t* out, uint32_t count)
 }
 
 
+/* Dword register offset for a CP packet. gc_byte() in the driver is
+ * this value times four, and that form is only for MMIO. */
 static inline uint32_t
-r5_cs_gc_byte(uint32_t index)
+r5_cs_gc_reg(uint32_t index)
 {
-	return (0x2000u + index) * 4u;
+	return 0x2000u + index;
 }
 
 
@@ -214,16 +216,17 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 		return 0;
 	inv = r5_gfx9_tlb_req(vmid, 0);
 	ack = r5_gfx9_tlb_ack_mask(vmid);
-	lo = r5_cs_gc_byte(0x08ebu + vmid * 2u);
+	lo = r5_cs_gc_reg(0x08ebu + vmid * 2u);
 	/* Pipeline sync on the previous user fence. Memory, equal, PFP.
-	 * Control 0x113 is function 3, memory space, engine 1. */
+	 * Control 0x113 is function 3, memory space, engine 1.
+	 * The poll interval is 4, as in the Linux v6.12 pipeline sync. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
 	n = r5_cs_put(out, n, cap, 0x113u);
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceMc);
 	n = r5_cs_put(out, n, cap, (uint32_t)(fenceMc >> 32));
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
-	n = r5_cs_put(out, n, cap, 0x20u);
+	n = r5_cs_put(out, n, cap, 4u);
 	/* WRITE_DATA to a register: engine ME, destination register, confirm.
 	 * WR_CONFIRM is bit 20. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
@@ -233,18 +236,18 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	n = r5_cs_put(out, n, cap, (uint32_t)pd);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
 	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, lo + 4u);
+	n = r5_cs_put(out, n, cap, lo + 1u);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
 	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_byte(0x08a3u));
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, inv);
 	/* Register wait, function equal, PFP. (reg & mask) == mask. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
 	n = r5_cs_put(out, n, cap, 0x103u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_byte(0x08b5u));
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08b5u));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, ack);

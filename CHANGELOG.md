@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The ring flush writes dword register offsets
+
+Stick 26 boot 1 landed the K fence and set up VMID 1. The first user job, `mark`, then hung for 5000 ms and the GPU was lost. Stage P, the three teapots and stage U did not run. The ME had finished the three `WRITE_DATA` packets. The PFP was in the second `WAIT_REG_MEM`, waiting for the invalidate ack. The indirect buffer was never fetched. Logs are `generated/boot-5625u-26/`.
+
+`r5_cs_vm_switch` built every register address as `(0x2000 + index) * 4`. That is the MMIO byte offset. A CP packet takes the dword offset `0x2000 + index`, which is what `gmc_v9_0_emit_flush_gpu_tlb` writes and what `gfx9_compute_ib.h` already uses. The page-table base and the request therefore landed at `0xa3ac`, `0xa3ad` and `0xa28c`, and the wait watched `0xa2d4`. For VMID 1, engine 0, the dword offsets are PTB low `0x28ed`, high `0x28ee`, request `0x28a3` and ack `0x28b5`. The high register is the next dword, not four bytes later. The host test compares those four numbers. `gc_byte()` for MMIO is unchanged.
+
+The packet stays 31 dwords. Linux v6.12 `gfx_v9_0_check_fw_write_wait` sets `me_fw_write_wait` in the default case, which is GC 9.3, with no ME or PFP version gate. This machine's ME is `0xa7` feature 54 and its PFP is `0xc5` feature 54. That Linux path uses one `WAIT_REG_MEM` with control `0x143` (write-wait-write, `gfx_v9_0_ring_emit_reg_write_reg_wait`) instead of a separate request write and ack wait, which is five dwords shorter. That form is not in this packet. The pipeline sync now polls every 4 dwords, as that Linux wait does. The ack wait stays at interval `0x20`, which is `gfx_v9_0_ring_emit_reg_wait`. Not booted.
+
 ### The VM sequence is in the shared GFX9 start
 
 `r5_gfx9_vmid1_flush_due` was in the kernel driver. The accelerant also links `gfx9_start.cpp` and the image jam stopped on those symbols. The sequence and the recorded page-table base now live in that shared file. The kernel stores the VMID 1 root there when the tables are built. The accelerant never raises the sequence, so its jobs do not prefix a flush.
