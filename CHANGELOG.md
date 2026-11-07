@@ -2,7 +2,7 @@
 
 ### SPDX snippets on the Renoir driver hooks
 
-`r5_gpu_init()` and `r5_gpu_uninit()` in the Radeon driver, and the `"Renoir"` chip name, are marked as R5 portions. The Haiku MIT header stays.
+`r5_gpu_init()` and `r5_gpu_uninit()` in the Radeon driver, and the `"Renoir"` chip name, are marked as R5 portions. The Haiku MIT header stays. The commit that added the markers reused the previous subject line. This sentence is the record of that.
 
 ### Page-table pages count as VRAM
 
