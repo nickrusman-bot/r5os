@@ -346,3 +346,5 @@ Deskbar shows the same Preferences list to everyone (build 10009). Nothing is hi
 VBox 2026-10-29 22:04 Europe/Amsterdam (guest 9:04 PM, UTC): as `nick` (uid 1002), Network stayed locked with the gray buttons at the bottom right. Users unlocked for a few minutes in the same session. The grant is per preference window. Screen and Time at 22:06: Locked, Revert/Apply gray.
 
 CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Leave them.
+
+The render node `/dev/gpu/radeon_hd/0` is not an administrator preference. A standard account may open it when the GPU steps are on. `gpu_render` in the driver settings is not a gate. A fault marks that open file only.

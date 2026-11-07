@@ -18,6 +18,7 @@
 
 #include <PCI.h>
 #include <KernelExport.h>
+#include <OS.h>
 #include <driver_settings.h>
 
 // The kernel exports this with C linkage. The private vm.h declaration
@@ -264,7 +265,26 @@ ih_handler(void* data)
 		sLastClient = entry.client;
 		sLastSource = entry.source;
 		sLastRing = entry.ring;
-		if (entry.client == kClientCp && entry.source == kSourceEop
+		/* Linux v6.12 soc15_ih_clientid.h: VMC is 0x12 (MMHUB) and
+		 * UTCL2 is 0x1a (GFXHUB). gmc_v9_0_process_interrupt handles
+		 * both. Source 0 is VMC_1_0__SRCID__VM_FAULT and
+		 * UTCL2_1_0__SRCID__FAULT. vmid_src is bit 31: 0 is the GC
+		 * hub. The address is src_data[0] and src_data[1], the same
+		 * shift as r5_gfx9_fault_address. */
+		if ((entry.client == 0x12u || entry.client == 0x1au)
+			&& entry.source == 0) {
+			const uint32* raw = (const uint32*)(sIhRing + rptr);
+			uint32 vmid = (raw[0] >> 24) & 0xfu;
+			uint32 hub = raw[0] >> 31;
+			uint64 addr = r5_gfx9_fault_address(raw[4], raw[5]);
+			dprintf("radeon_hd: vm fault %s vmid %lu addr %016llx\n",
+				hub == 0 ? "gfxhub" : "mmhub",
+				(unsigned long)vmid, (unsigned long long)addr);
+			if (entry.client == 0x1au && hub == 0)
+				r5_gfx9_as_fault(vmid, addr);
+			r5_gpu_retire_wake();
+			woke = true;
+		} else if (entry.client == kClientCp && entry.source == kSourceEop
 			&& entry.ring == 0) {
 			if (sEopSem >= 0)
 				release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
@@ -824,12 +844,13 @@ static bool sVmid1 = false;
 struct r5_as {
 	uint32		id;
 	r5_vm		vm;
-	r5_vm_page	pages[256];
+	r5_vm_page	pages[1024];
 	int			loaded;
 	int			parked;
 	uint64		last;
 	uint32		vmid;
 	uint64		tlb_seq;
+	int			lost;
 };
 
 static r5_as* sSpaces[64];
@@ -839,7 +860,6 @@ static uint32 sNextAs = 1;
 static r5_vm_page sFreePages[1024];
 static uint32 sFreeCount = 0;
 
-extern "C" uint64 vm_page_num_pages();
 
 
 static r5_as*
@@ -1340,7 +1360,9 @@ r5_gfx9_as_open(void)
 	if (as->id == 0)
 		as->id = sNextAs++;
 	as->vm.pages = as->pages;
-	as->vm.capacity = 256;
+	/* 1024 table pages cover a contiguous 1 GiB map (512 leaves plus
+	 * the upper levels) and still fit under a quarter of RAM. */
+	as->vm.capacity = 1024;
 	as->vm.alloc = vm_page_alloc;
 	if (!r5_vm_new_page(&as->vm)) {
 		free(as);
@@ -1445,6 +1467,34 @@ r5_gfx9_as_vmid(void* cookie)
 }
 
 
+bool
+r5_gfx9_as_lost(void* cookie)
+{
+	r5_as* as = as_from(cookie);
+	return as != NULL && as->lost != 0;
+}
+
+
+void
+r5_gfx9_as_fault(uint32 vmid, uint64 addr)
+{
+	uint32 n;
+	if (vmid == 0 || vmid > 15)
+		return;
+	for (n = 0; n < 64; n++) {
+		r5_as* as = sSpaces[n];
+		if (as == NULL || as->vmid != vmid)
+			continue;
+		as->lost = 1;
+		knote("vm fault vmid %lu addr %016llx",
+			(unsigned long)vmid, (unsigned long long)addr);
+		return;
+	}
+	knote("vm fault vmid %lu addr %016llx unmatched",
+		(unsigned long)vmid, (unsigned long long)addr);
+}
+
+
 void
 r5_gfx9_as_retired(uint64 seen)
 {
@@ -1471,7 +1521,10 @@ r5_gfx9_mem_limits(uint64* vramCap, uint64* gttCap)
 	if (top < base)
 		return 0;
 	carve = ((uint64)(top - base) + 1ull) << 24;
-	ram = vm_page_num_pages() * 4096ull;
+	system_info sys;
+	if (get_system_info(&sys) != B_OK)
+		return 0;
+	ram = (uint64)sys.max_pages * 4096ull;
 	*vramCap = r5_limit_vram(carve);
 	*gttCap = r5_limit_gtt(ram);
 	return *vramCap != 0 && *gttCap != 0;

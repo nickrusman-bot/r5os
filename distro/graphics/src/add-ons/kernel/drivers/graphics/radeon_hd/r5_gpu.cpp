@@ -1216,6 +1216,15 @@ amd_vmid_lookup(void* as, uint64_t va)
 
 
 static int
+amd_space_lost(void* as)
+{
+	/* ECANCELED means this file's address space took a GC hub fault.
+	 * Another file still returns B_OK. */
+	return r5_gfx9_as_lost(as) ? ECANCELED : B_OK;
+}
+
+
+static int
 amd_wait_room(uint32_t count)
 {
 	uint32 need = r5_gfx9_user_commit_switch(count, 1);
@@ -1401,5 +1410,6 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_bind,
 	amd_limits,
 	amd_note_retired,
-	amd_wait_room
+	amd_wait_room,
+	amd_space_lost
 };

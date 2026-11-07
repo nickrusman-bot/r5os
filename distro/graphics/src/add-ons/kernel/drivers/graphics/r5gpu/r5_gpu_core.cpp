@@ -169,14 +169,9 @@ gpu_refuse(const char* op, const char* why, status_t status, uint32 handle,
 bool
 gpu_render_enabled()
 {
-	bool enabled = false;
-	void* settings = load_driver_settings("radeon_hd");
-	if (settings != NULL) {
-		enabled = get_driver_boolean_parameter(settings, "gpu_render",
-			false, true);
-		unload_driver_settings(settings);
-	}
-	return enabled;
+	/* The node is open to every account once the GPU steps are on.
+	 * gpu_render in the settings file is ignored. */
+	return true;
 }
 
 
@@ -314,6 +309,18 @@ r5_gpu_eop()
 }
 
 
+static bool
+gpu_space_lost(gpu_client* client)
+{
+	if (sLost)
+		return true;
+	if (client == NULL || client->address == NULL
+		|| gR5GpuOps.space_lost == NULL)
+		return false;
+	return gR5GpuOps.space_lost(client->address) != B_OK;
+}
+
+
 static uint64
 gpu_counter(volatile uint64* value)
 {
@@ -324,14 +331,14 @@ gpu_counter(volatile uint64* value)
 
 
 static status_t
-gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
+gpu_wait_value(gpu_client* client, volatile uint64* value, uint64 target,
 	uint64 timeoutUs)
 {
-	(void)info;
+	(void)client;
 	int step = r5_wait_step(gpu_counter(value), target, timeoutUs, 0);
 	if (step == R5_WAIT_DONE)
 		return B_OK;
-	if (sLost)
+	if (gpu_space_lost(client))
 		return ECANCELED;
 	if (step == R5_WAIT_POLL)
 		return B_TIMED_OUT;
@@ -344,7 +351,7 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 			now >= deadline);
 		if (step == R5_WAIT_DONE)
 			return B_OK;
-		if (sLost)
+		if (gpu_space_lost(client))
 			return ECANCELED;
 		if (step == R5_WAIT_TIMEOUT)
 			return B_TIMED_OUT;
@@ -357,7 +364,7 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 
 
 static status_t
-gpu_get_info(radeon_info* info, void* buffer, size_t length)
+gpu_get_info(gpu_client* client, radeon_info* info, void* buffer, size_t length)
 {
 	if (info == NULL || info->pci == NULL || buffer == NULL || length < 8)
 		return B_BAD_VALUE;
@@ -381,7 +388,7 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 	out.revision = info->pci->revision;
 	if (gpu_render_enabled())
 		out.capabilities = R5_GPU_CAP_RENDER;
-	if (sLost)
+	if (gpu_space_lost(client))
 		out.capabilities |= R5_GPU_CAP_LOST;
 	out.va_offset = R5_GPU_VA_OFFSET;
 	out.va_max = R5_GPU_VA_MAX;
@@ -1254,7 +1261,7 @@ gpu_wait_ready(const gpu_sync* sync, const r5_gpu_cs_sync* wait)
 static status_t
 gpu_submit(gpu_client* client, void* buffer, size_t length)
 {
-	if (sLost)
+	if (gpu_space_lost(client))
 		return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, 0, 0, 0, 0, 0, 0, 0);
 	r5_gpu_cs in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
@@ -1301,7 +1308,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 				in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 		bigtime_t deadline = system_time() + (bigtime_t)kFreeWaitUs;
 		while (!gpu_wait_ready(sync, &waits[i])) {
-			if (sLost)
+			if (gpu_space_lost(client))
 				return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, in.context, 0,
 					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			bigtime_t now = system_time();
@@ -1448,13 +1455,13 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 
 
 static status_t
-gpu_fence_wait(radeon_info* info, void* buffer, size_t length)
+gpu_fence_wait(gpu_client* client, void* buffer, size_t length)
 {
 	r5_gpu_fence in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
 		return status;
-	status = gpu_wait_value(info, NULL, in.sequence, in.timeout_us);
+	status = gpu_wait_value(client, NULL, in.sequence, in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		if (gR5GpuOps.dump != NULL)
 		gR5GpuOps.dump("fence timeout");
@@ -1540,10 +1547,10 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0) {
 		if (sync->submitted == 0)
 			return B_TIMED_OUT;
-		status = gpu_wait_value(client->info, &sync->point, sync->submitted,
+		status = gpu_wait_value(client, &sync->point, sync->submitted,
 			in.timeout_us);
 	} else
-		status = gpu_wait_value(client->info, &sync->point, in.point,
+		status = gpu_wait_value(client, &sync->point, in.point,
 			in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		if (gR5GpuOps.dump != NULL)
@@ -1655,7 +1662,7 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 			return gpu_copy_out(buffer, length, &in, sizeof(in));
 		}
 		bigtime_t now = system_time();
-		if (sLost)
+		if (gpu_space_lost(client))
 			return ECANCELED;
 		if (in.timeout_us == 0 || now >= deadline)
 			return B_TIMED_OUT;
@@ -1747,7 +1754,7 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 	bool dstBinary = in.dst_point == 0;
 	if (srcBinary && src->submitted == 0)
 		return B_BAD_VALUE;
-	if (!gpu_src_reached(src, in.src_point) && sLost)
+	if (!gpu_src_reached(src, in.src_point) && gpu_space_lost(client))
 		return ECANCELED;
 	if (gpu_src_reached(src, in.src_point)) {
 		if (dstBinary)
@@ -1927,7 +1934,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	if (client == NULL || client->info == NULL)
 		return B_BAD_VALUE;
 	if (op == R5_GPU_GET_INFO)
-		return gpu_get_info(client->info, buffer, length);
+		return gpu_get_info(client, client->info, buffer, length);
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)
@@ -2015,7 +2022,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	else if (op == R5_GPU_CS_SUBMIT)
 		status = gpu_submit(client, buffer, length);
 	else if (op == R5_GPU_FENCE_WAIT)
-		status = gpu_fence_wait(client->info, buffer, length);
+		status = gpu_fence_wait(client, buffer, length);
 	else if (op == R5_GPU_SYNCOBJ_CREATE)
 		status = gpu_sync_create(client, buffer, length);
 	else if (op == R5_GPU_SYNCOBJ_DESTROY)

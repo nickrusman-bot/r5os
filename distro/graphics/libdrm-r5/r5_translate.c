@@ -113,8 +113,12 @@ static int
 r5_call(int fd, unsigned long op, void *buf, size_t bytes)
 {
 #if defined(__HAIKU__)
-	if (ioctl(fd, op, buf, bytes) < 0)
+	if (ioctl(fd, op, buf, bytes) < 0) {
+		/* SupportDefs.h B_NO_MEMORY. RADV expects ENOMEM. */
+		if (errno == (int)0x80000000)
+			errno = ENOMEM;
 		return -1;
+	}
 	return 0;
 #elif defined(R5_HOST_TEST)
 	int r5_host_ioctl(int, unsigned long, void *, size_t);

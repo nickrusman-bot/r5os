@@ -94,6 +94,8 @@ void r5_gfx9_as_cancel(void);
 void r5_gfx9_as_finish(void* as, uint32 vmid, uint64 sequence);
 int r5_gfx9_as_first(void* as);
 uint32 r5_gfx9_as_vmid(void* as);
+bool r5_gfx9_as_lost(void* as);
+void r5_gfx9_as_fault(uint32 vmid, uint64 addr);
 void r5_gfx9_as_retired(uint64 seen);
 int r5_gfx9_mem_limits(uint64* vramCap, uint64* gttCap);
 bool r5_gfx9_vmid1_map(void* as, uint64 va, uint64 pte);

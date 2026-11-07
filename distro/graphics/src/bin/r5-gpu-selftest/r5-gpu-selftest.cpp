@@ -316,6 +316,105 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 }
 
 
+static pid_t
+spawn_command(const char* command, int* readFd)
+{
+	int fds[2];
+	pid_t pid;
+	if (pipe(fds) != 0)
+		return -1;
+	pid = fork();
+	if (pid < 0) {
+		close(fds[0]);
+		close(fds[1]);
+		return -1;
+	}
+	if (pid == 0) {
+		setpgid(0, 0);
+		dup2(fds[1], 1);
+		dup2(fds[1], 2);
+		close(fds[0]);
+		close(fds[1]);
+		execl("/bin/sh", "sh", "-c", command, (char*)NULL);
+		_exit(127);
+	}
+	setpgid(pid, pid);
+	close(fds[1]);
+	fcntl(fds[0], F_SETFL, O_NONBLOCK);
+	*readFd = fds[0];
+	return pid;
+}
+
+
+static void
+run_pair(FILE* out, const char* title, const char* first, const char* second,
+	int seconds)
+{
+	int fdA = -1;
+	int fdB = -1;
+	pid_t a;
+	pid_t b;
+	int statusA = 0;
+	int statusB = 0;
+	bool doneA = false;
+	bool doneB = false;
+	bigtime_t deadline = system_time() + (bigtime_t)seconds * 1000000;
+	fprintf(out, "stage %s\n", title);
+	fflush(out);
+	a = spawn_command(first, &fdA);
+	b = spawn_command(second, &fdB);
+	if (a < 0 || b < 0) {
+		fprintf(out, "not available, %s\n", strerror(errno));
+		if (a > 0)
+			kill_team(a);
+		if (b > 0)
+			kill_team(b);
+		if (fdA >= 0)
+			close(fdA);
+		if (fdB >= 0)
+			close(fdB);
+		return;
+	}
+	while (!doneA || !doneB) {
+		char buf[256];
+		ssize_t got;
+		if (!doneA && (got = read(fdA, buf, sizeof(buf) - 1)) > 0) {
+			buf[got] = 0;
+			fputs(buf, out);
+		}
+		if (!doneB && (got = read(fdB, buf, sizeof(buf) - 1)) > 0) {
+			buf[got] = 0;
+			fputs(buf, out);
+		}
+		if (!doneA && waitpid(a, &statusA, WNOHANG) == a)
+			doneA = true;
+		if (!doneB && waitpid(b, &statusB, WNOHANG) == b)
+			doneB = true;
+		if (system_time() >= deadline) {
+			if (!doneA) {
+				kill(-a, SIGKILL);
+				kill_team(a);
+				waitpid(a, &statusA, 0);
+				doneA = true;
+			}
+			if (!doneB) {
+				kill(-b, SIGKILL);
+				kill_team(b);
+				waitpid(b, &statusB, 0);
+				doneB = true;
+			}
+			fprintf(out, "killed, it did not exit\n");
+			break;
+		}
+		snooze(50000);
+	}
+	close(fdA);
+	close(fdB);
+	fprintf(out, "exit %d %d\n", statusA, statusB);
+	fflush(out);
+}
+
+
 static void
 write_command(FILE* out, const char* title, const char* command)
 {
@@ -447,6 +546,9 @@ main()
 			fprintf(out, "stage render node: api %u.%u device %04x cu %u\n",
 				info->api_major, info->api_minor, info->device,
 				amd->device.cu_active_number);
+			fprintf(out, "counters vram %llu gtt %llu\n",
+				(unsigned long long)info->vram_usage,
+				(unsigned long long)info->gtt_usage);
 			fprintf(out, "firmware me %u feature %u pfp %u mec %u\n",
 				amd->firmware[0x04].ver, amd->firmware[0x04].feature,
 				amd->firmware[0x05].ver, amd->firmware[0x08].ver);
@@ -528,6 +630,28 @@ main()
 			} else {
 				run_stage(out, "VulkanTeapot",
 					"/bin/VulkanTeapot --selftest 2>&1", 120);
+				run_pair(out, "VulkanTeapot pair",
+					"/bin/VulkanTeapot --selftest 2>&1",
+					"/bin/VulkanTeapot --selftest 2>&1", 120);
+				run_stage(out, "isolation",
+					"/bin/r5-gpu-isolation 2>&1", 60);
+				run_stage(out, "kill",
+					"/bin/r5-gpu-isolation kill 2>&1", 2);
+				{
+					int again = open("/dev/gpu/radeon_hd/0", O_RDWR);
+					r5_gpu_info after;
+					memset(&after, 0, sizeof(after));
+					after.size = (uint32_t)sizeof(after);
+					after.version = 1;
+					if (again >= 0 && ioctl(again, R5_GPU_GET_INFO, &after,
+							sizeof(after)) == 0) {
+						fprintf(out, "counters after kill vram %llu gtt %llu\n",
+							(unsigned long long)after.vram_usage,
+							(unsigned long long)after.gtt_usage);
+					}
+					if (again >= 0)
+						close(again);
+				}
 				if (device_lost()) {
 					skip_lost(out, "selftest");
 					skip_lost(out, "ib");

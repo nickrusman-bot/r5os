@@ -593,6 +593,97 @@ two_spaces()
 }
 
 
+static uint64_t* gGibStore;
+static uint32_t gGibN;
+
+
+static int
+gib_alloc(void*, uint64_t* physical, uint64_t** cpu)
+{
+	if (gGibN >= 600)
+		return 0;
+	*physical = ((uint64_t)gGibN + 1ull) << 21;
+	*cpu = gGibStore + (size_t)gGibN * 512;
+	memset(*cpu, 0, 512 * sizeof(uint64_t));
+	gGibN++;
+	return 1;
+}
+
+
+/* A contiguous 1 GiB map needs more than 256 table pages. */
+static int
+one_gib()
+{
+	r5_vm_page pages[600];
+	r5_vm vm;
+	uint64_t va = 0x100000000ull;
+	uint64_t bytes = 1ull << 30;
+	uint64_t page;
+	uint64_t got = 0;
+	char* text = NULL;
+	const char* fn;
+	const char* brace;
+	const char* end;
+	gGibStore = (uint64_t*)calloc(600ull * 512ull, sizeof(uint64_t));
+	if (gGibStore == NULL)
+		return fail("gib alloc");
+	memset(&vm, 0, sizeof(vm));
+	memset(pages, 0, sizeof(pages));
+	vm.pages = pages;
+	vm.capacity = 600;
+	vm.alloc = gib_alloc;
+	gGibN = 0;
+	for (page = 0; page < bytes; page += 4096) {
+		if (!r5_vm_map_page(&vm, va + page, 0x1000ull + page)) {
+			free(gGibStore);
+			return fail("gib map");
+		}
+	}
+	if (!r5_vm_lookup(&vm, va, &got) || got != 0x1000ull) {
+		free(gGibStore);
+		return fail("gib first");
+	}
+	if (!r5_vm_lookup(&vm, va + bytes - 4096, &got)
+		|| got != 0x1000ull + bytes - 4096) {
+		free(gGibStore);
+		return fail("gib last");
+	}
+	free(gGibStore);
+	if (read_file(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+			&text) != 0)
+		return fail("gib read");
+	if (strstr(text, "vm_page_num_pages") != NULL
+		|| strstr(text, "get_system_info") == NULL
+		|| strstr(text, "0x1au") == NULL) {
+		free(text);
+		return fail("gib kernel");
+	}
+	free(text);
+	if (read_file(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+			&text) != 0)
+		return fail("gib core");
+	fn = strstr(text, "gpu_render_enabled()");
+	brace = fn != NULL ? strchr(fn, '{') : NULL;
+	end = brace != NULL ? strchr(brace, '}') : NULL;
+	if (fn == NULL || end == NULL || strstr(brace, "return true") == NULL
+		|| strstr(brace, "return true") > end) {
+		free(text);
+		return fail("gib render");
+	}
+	free(text);
+	if (read_file("distro/graphics/libdrm-r5/r5_translate.c", &text) != 0)
+		return fail("gib drm");
+	if (strstr(text, "0x80000000") == NULL || strstr(text, "ENOMEM") == NULL) {
+		free(text);
+		return fail("gib enomem");
+	}
+	free(text);
+	return 0;
+}
+
+
 /* B_OK is 0. Every op returns that on success. A fake backend that
  * returns 0 must pass `!= 0`. One that returns 1 must fail it. `!op()`
  * reads 0 as failure, which is the bug this test rejects. */
@@ -651,6 +742,7 @@ static int op_limits(uint64_t* vram, uint64_t* gtt)
 }
 static int op_retired(uint64_t) { return 0; }
 static int op_room(uint32_t) { return 0; }
+static int op_lost(void*) { return 0; }
 
 
 static int
@@ -661,7 +753,7 @@ ops_status()
 		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
 		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
 		op_stage_p, op_stage_u, op_as_open, op_as_close, op_bind,
-		op_limits, op_retired, op_room
+		op_limits, op_retired, op_room, op_lost
 	};
 	uint32_t reg = 0;
 	uint64_t off = 0;
@@ -701,7 +793,8 @@ ops_status()
 			|| ops.note_retired(0) != 0 || ops.address_close(as, 0) != 0)
 			return fail("op address");
 	}
-	if (ops.submit(0, 0, 0, 0, 0) != 0 || ops.wait_room(1) != 0)
+	if (ops.submit(0, 0, 0, 0, 0) != 0 || ops.wait_room(1) != 0
+		|| ops.space_lost(0) != 0)
 		return fail("op submit");
 	if (ops.poll_retired(&seen) != 0 || seen == 0)
 		return fail("op seen");
@@ -1379,6 +1472,8 @@ main()
 	}
 
 	if (two_spaces() != 0)
+		return 1;
+	if (one_gib() != 0)
 		return 1;
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;

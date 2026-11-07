@@ -56,6 +56,9 @@ typedef struct r5_gpu_backend_ops {
 	/* Room for a submit that may start with the VM switch. Does not
 	 * reserve a VMID. The caller flushes, then submit reserves. */
 	int			(*wait_room)(uint32_t count);
+	/* B_OK when this address space is still running. ECANCELED when a
+	 * GC hub fault marked it lost. */
+	int			(*space_lost)(void* as);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;
