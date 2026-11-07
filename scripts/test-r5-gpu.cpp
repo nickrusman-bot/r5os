@@ -801,6 +801,24 @@ ops_status()
 		|| ops.space_lost(0) != 0 || ops.space_hold(0) != 0
 		|| ops.space_drop(0) != 0)
 		return fail("op submit");
+	{
+		char* openText = NULL;
+		const char* openFn;
+		const char* locked;
+		const char* opened;
+		const char* unlocked;
+		if (read_file(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				&openText) != 0)
+			return fail("open read");
+		openFn = strstr(openText, "gpu_open(");
+		locked = openFn != NULL ? strstr(openFn, "gpu_lock()") : NULL;
+		opened = locked != NULL ? strstr(locked, "address_open") : NULL;
+		unlocked = opened != NULL ? strstr(opened, "gpu_unlock()") : NULL;
+		free(openText);
+		if (locked == NULL || opened == NULL || unlocked == NULL)
+			return fail("open lock");
+	}
 	if (r5_space_free_ok(1, 4, 9) || r5_space_free_ok(0, 9, 4))
 		return fail("space held");
 	if (!r5_space_free_ok(0, 4, 4) || !r5_space_free_ok(0, 4, 9))

@@ -1833,12 +1833,15 @@ gpu_open(const char* name, uint32 flags, void** cookie)
 		return B_NO_MEMORY;
 	memset(client, 0, sizeof(*client));
 	client->info = gDeviceInfo[0];
+	gpu_lock();
 	if (gR5GpuOps.address_open == NULL
 		|| gR5GpuOps.address_open(&client->address) != B_OK
 		|| client->address == NULL) {
+		gpu_unlock();
 		free(client);
 		return B_NO_MEMORY;
 	}
+	gpu_unlock();
 	*cookie = client;
 	return B_OK;
 }

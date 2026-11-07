@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Opening a file takes the GPU lock
+
+`address_open` programs the VMID setup and publishes the new address space. That call now runs while `gpu_lock` is held, and the lock is dropped before the file cookie is returned. The host test finds the lock, the open and the unlock in that order.
+
 ### A parked buffer keeps its address space until the unmap
 
 The retire path freed a parked address space and then unmapped buffers through that pointer. Parked buffers are released first. Each parked buffer holds the space. `address_close` leaves the space in place while that count is above zero or while its last submit is still ahead of the fence. The hold drops after the unmap, and that drop frees a space that was already waiting. `gpu_free` reads the fence once and uses that value for the park decision and the close. The host test refuses a free while a hold remains or while the last submit is ahead, and allows it once both have passed.
