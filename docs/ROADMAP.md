@@ -201,8 +201,9 @@ The user went through the features of air/OS and RenkuOS.
   - audio and video: the USB audio and USB MIDI fixes, choosing the audio device from the Deskbar volume control, USB webcams (UVC);
   - laptop and hardware: power management (`power_daemon`, lid, battery and AC, suspend to idle), deep CPU idle states, I2C touchpads and touch screens, the USB improvements;
   - system: the per-team syscall filter, and kernel debugger capture to a file;
-  - boot: starting a 64-bit kernel from 32-bit EFI, Apple EFI firmware, a faster boot, and IO-APICs with more than 64 pins.
-- **Maybe, decided per item later:** the on-screen volume and brightness panel, the new Terminal, the new MediaConverter, and the Installer with EFI.
+  - boot: starting a 64-bit kernel from 32-bit EFI, Apple EFI firmware, a faster boot, and IO-APICs with more than 64 pins;
+  - install: the Installer that erases one whole disk and sets it up for UEFI (EFI and BFS partitions, the loader on the removable-media path), and live media that stay read-only. Tested in QEMU and VirtualBox first; it never offers the disk the system runs from.
+- **Maybe, decided per item later:** the on-screen volume and brightness panel, the new Terminal, and the new MediaConverter.
 - **Not wanted:** Quick Look, the Deskbar menu with folders, ZSnake menus, and the MCP server on the device.
 
 How they fit R5:
