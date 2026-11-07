@@ -969,12 +969,10 @@ gpu_va_write_prt(void* space, uint64 va, uint64 bytes)
 
 
 static status_t
-gpu_va_map(gpu_client* client, void* buffer, size_t length)
+gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 {
-	r5_gpu_va in;
-	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
-	if (status != B_OK)
-		return gpu_refuse("VA_MAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
+	r5_gpu_va in = *copied;
+	status_t status = B_OK;
 	if (in.context != 1 || !gpu_va_fits(in.gpu_va, in.map_bytes))
 		return gpu_refuse("VA_MAP", "fit", B_BAD_VALUE, in.handle, 0, 0,
 			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
@@ -1164,6 +1162,17 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 
 
 static status_t
+gpu_va_map(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_va in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("VA_MAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
+	return gpu_va_map_copied(client, &in);
+}
+
+
+static status_t
 gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 {
 	const char* op = clearOnly ? "VA_CLEAR" : "VA_REPLACE";
@@ -1206,7 +1215,7 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 		return B_OK;
 	}
 	sReplacing = true;
-	status = gpu_va_map(client, buffer, length);
+	status = gpu_va_map_copied(client, &in);
 	sReplacing = false;
 	return status;
 }

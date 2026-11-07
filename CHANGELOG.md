@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A VA replace uses the kernel copy of the request
+
+`gpu_va_replace` copies the user request once. The map that follows reads that copy. It does not read the user buffer again while `sReplacing` skips the PRT overlap check.
+
 ### A submit checks the indirect buffer again after the lock returns
 
 `gpu_submit` checks that each indirect buffer is mapped, then the sync wait and `wait_room` drop the lock. The mapping is checked again before the cache flush and the doorbell. A buffer that was unmapped in that window is rejected.

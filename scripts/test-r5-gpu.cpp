@@ -1853,6 +1853,13 @@ main()
 			return 1;
 		if (strstr(text, "gpu_ib_mapped") == NULL)
 			return fail("ib recheck");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"gpu_va_replace(", "gpu_va_unmap(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "gpu_va_map_copied") == NULL
+			|| strstr(text, "gpu_va_map(client, buffer") != NULL)
+			return fail("va replace copy");
 	}
 	{
 		char text[4000];
