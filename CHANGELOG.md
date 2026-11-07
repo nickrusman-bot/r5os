@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### U2d changes only the indirect-buffer address
+
+U2d kept two differences from U2c: the indirect buffer at `0xffff800000000000`, and a write to the high VRAM page. The destination is now the low VRAM page, the same one U2c writes. U2g is a new last step: that same high buffer, writing the high VRAM page. The run still stops at the first hang. The fixed K sequence is unchanged.
+
+`jam -q @r5-raw` finished at 09:26 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`, and updated 8351 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `695011c00b26791a8ee5e1e7f1056fbf7925079c1aabd0342548c86fdb75b551`. The packages match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. None of those four contains `/home/nickr`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `u2e`, `u4b`, `u2f`, `u2d` and `u2g`. Not booted. No stick.
+
 ### Image with the next stick's stages
 
 `jam -q @r5-raw` finished at 23:56 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`, and updated 8351 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `3d4960834a9adae35372d798544899b100c8a1a4b7dfe3677bf235212bf4fd18`. The packages in that image match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. None of those four packages contains `/home/nickr`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `u2e`, `u4b`, `u2f` and `u2d`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`, and the image contains that program. Not booted. No stick.
