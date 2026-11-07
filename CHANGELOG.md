@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The core does not name the vendor block
+
+`GET_INFO` asks `vendor_size` for the tail and lets `fill_vendor_info` write those bytes. The core no longer declares `r5_gpu_amd_info`. The host test rejects that name in the core.
+
 ### The render node needs every required backend op
 
 `r5_gpu_ops_ready` runs once before `/dev/gpu/radeon_hd/0` is published. A missing required op withholds that node. Optional ops stay NULL and are checked at the call. The contract is the comment on `r5_gpu_backend_ops`. Phase 1 of the GPU Driver Kit is in `docs/GPU-ARCHITECTURE.md`.

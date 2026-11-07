@@ -477,7 +477,7 @@ core_boundary()
 		return 1;
 	const char* banned[] = {
 		"gfx9_", "r5_gfx9", "r5_amd", "amdgpu", "kR5Gfx", "R5_GFX9_",
-		"kGcSegment", "atombios"
+		"kGcSegment", "atombios", "r5_gpu_amd_info"
 	};
 	for (unsigned i = 0; i < sizeof(banned) / sizeof(banned[0]); i++) {
 		if (strstr(text, banned[i]) != NULL) {
@@ -747,6 +747,14 @@ static int op_room(uint32_t) { return 0; }
 static int op_lost(void*) { return 0; }
 static int op_hold(void*) { return 0; }
 static int op_drop(void*) { return 0; }
+static int op_vendor(uint32_t* bytes, uint32_t* version)
+{
+	if (bytes != 0)
+		*bytes = 8;
+	if (version != 0)
+		*version = 1;
+	return 0;
+}
 static int op_counts(void*, uint32_t* pages, uint32_t* vmid, uint32_t* pagesAll,
 	uint32_t* vmidsAll)
 {
@@ -770,7 +778,8 @@ ops_status()
 		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
 		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
 		op_stage_p, op_stage_u, op_as_open, op_as_close, op_bind,
-		op_limits, op_retired, op_room, op_lost, op_hold, op_drop, op_counts
+		op_limits, op_retired, op_room, op_lost, op_hold, op_drop, op_counts,
+		op_vendor
 	};
 	uint32_t reg = 0;
 	uint64_t off = 0;

@@ -415,8 +415,10 @@ gpu_get_info(gpu_client* client, radeon_info* info, void* buffer, size_t length)
 	 * top. The page tables are the existing 4-level tables. */
 	out.high_va_offset = R5_GPU_HIGH_VA_OFFSET;
 	out.high_va_max = R5_GPU_HIGH_VA_MAX;
-	out.vendor_block_size = (uint32)sizeof(r5_gpu_amd_info);
-	out.vendor_block_version = 1;
+	out.vendor_block_size = 0;
+	out.vendor_block_version = 0;
+	if (gR5GpuOps.vendor_size != NULL)
+		gR5GpuOps.vendor_size(&out.vendor_block_size, &out.vendor_block_version);
 	out.bus = info->pci->bus;
 	out.dev = info->pci->device;
 	out.func = info->pci->function;
@@ -441,19 +443,27 @@ gpu_get_info(gpu_client* client, radeon_info* info, void* buffer, size_t length)
 		copy = length;
 	if (user_memcpy(buffer, &out, copy) != B_OK)
 		return B_BAD_ADDRESS;
-	if (length < sizeof(out) + sizeof(r5_gpu_amd_info))
+	if (out.vendor_block_size == 0
+		|| length < sizeof(out) + out.vendor_block_size)
 		return B_OK;
-
-	r5_gpu_amd_info amd;
-	memset(&amd, 0, sizeof(amd));
 	if (gR5GpuOps.fill_vendor_info == NULL)
 		return B_NOT_SUPPORTED;
+	uint8* block = (uint8*)malloc(out.vendor_block_size);
+	if (block == NULL)
+		return B_NO_MEMORY;
+	memset(block, 0, out.vendor_block_size);
 	{
-		int filled = gR5GpuOps.fill_vendor_info(info, &amd, sizeof(amd));
-		if (filled != B_OK)
+		int filled = gR5GpuOps.fill_vendor_info(info, block,
+			out.vendor_block_size);
+		if (filled != B_OK) {
+			free(block);
 			return filled;
+		}
 	}
-	if (user_memcpy((uint8*)buffer + sizeof(out), &amd, sizeof(amd)) != B_OK)
+	status_t copied = user_memcpy((uint8*)buffer + sizeof(out), block,
+		out.vendor_block_size);
+	free(block);
+	if (copied != B_OK)
 		return B_BAD_ADDRESS;
 	return B_OK;
 }

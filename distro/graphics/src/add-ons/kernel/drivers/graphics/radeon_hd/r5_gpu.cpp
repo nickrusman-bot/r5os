@@ -1169,6 +1169,17 @@ gpu_stage_u(radeon_info* info)
 
 
 static int
+amd_vendor_size(uint32_t* bytes, uint32_t* version)
+{
+	if (bytes != NULL)
+		*bytes = (uint32_t)sizeof(r5_gpu_amd_info);
+	if (version != NULL)
+		*version = 1;
+	return B_OK;
+}
+
+
+static int
 amd_fill_vendor_info(void* info, void* block, uint32_t bytes)
 {
 	if (info == NULL || block == NULL || bytes < sizeof(r5_gpu_amd_info))
@@ -1576,5 +1587,6 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_space_lost,
 	amd_space_hold,
 	amd_space_drop,
-	amd_space_counts
+	amd_space_counts,
+	amd_vendor_size
 };

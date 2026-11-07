@@ -24,7 +24,8 @@
  * Required: fill_vendor_info, read_reg, vram_alloc, vram_free,
  * encode_pte, vm_map, vm_unmap, tlb_flush, vmid_prepare, vmid_lookup,
  * sh_mem, submit, poll_retired, address_open, address_close, limits,
- * note_retired, wait_room, space_lost, space_hold, space_drop.
+ * note_retired, wait_room, space_lost, space_hold, space_drop,
+ * vendor_size.
  * Optional: set_cpu_type, vm_prt, ih_decode, fault_decode, dump,
  * stage_p, stage_u, bind, space_counts. */
 typedef struct r5_gpu_backend_ops {
@@ -77,6 +78,9 @@ typedef struct r5_gpu_backend_ops {
 	 * pt_pages includes the kernel page tables. */
 	int			(*space_counts)(void* as, uint32_t* pt_pages,
 				uint32_t* vmid, uint32_t* pt_pages_all, uint32_t* vmids_all);
+	/* Bytes and version of the vendor block that follows r5_gpu_info.
+	 * The core does not name that block. */
+	int			(*vendor_size)(uint32_t* bytes, uint32_t* version);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;
@@ -96,7 +100,7 @@ r5_gpu_ops_ready(const r5_gpu_backend_ops* ops)
 		|| ops->address_close == NULL || ops->limits == NULL
 		|| ops->note_retired == NULL || ops->wait_room == NULL
 		|| ops->space_lost == NULL || ops->space_hold == NULL
-		|| ops->space_drop == NULL)
+		|| ops->space_drop == NULL || ops->vendor_size == NULL)
 		return 0;
 	return 1;
 }
