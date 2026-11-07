@@ -1,5 +1,49 @@
 # R5OS changelog (lokaal)
 
+### The page-table writes use the GFX ring engine
+
+`r5_cs_vm_switch` wrote the page-table base with `WRITE_DATA` control `0x00100000`. That is `WR_CONFIRM` on the ME. Linux `gfx_v9_0_ring_emit_wreg` for the GFX ring uses `WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`, which is `0x40100000`, so the PFP writes the register. `gfx_v9_0_check_fw_write_wait` leaves `me_fw_write_wait` true in the default case, which is GC 9.3. The invalidate stays one `WAIT_REG_MEM` with control `0x143`, `reg0` `0x28a3`, `reg1` `0x28b5`, reference `0x007c0002`, mask `0x2` and interval `0x20`, as `gfx_v9_0_ring_emit_reg_write_reg_wait`. The packet stays 26 dwords. Host test only. Not booted.
+
+### The invalidate request and its ack are one write-wait-write
+
+The ring flush wrote the invalidate request with `WRITE_DATA` and then waited for the ack. Linux `gfx_v9_0_ring_emit_reg_write_reg_wait`, when `me_fw_write_wait` is set, uses one `WAIT_REG_MEM` instead. Control `0x143` is function 3 (equal), operation 1 (write-wait-write) and engine 1 (PFP). `reg0` is `0x28a3`, `reg1` is `0x28b5`, the reference is the invalidate request, the mask is the ack bit, and the poll interval is `0x20`. For VMID 1 the request is `0x007c0002` and the mask is `0x2`. The packet is 26 dwords. The page-table writes stay `WRITE_DATA`. GC 9.3 takes this path with no ME or PFP version gate. This machine's ME is `0xa7` feature 54 and its PFP is `0xc5` feature 54. Host test only. Not booted.
+
+### The ring flush writes dword register offsets
+
+Stick 26 boot 1 landed the K fence and set up VMID 1. The first user job, `mark`, then hung for 5000 ms and the GPU was lost. Stage P, the three teapots and stage U did not run. The ME had finished the three `WRITE_DATA` packets. The PFP was in the second `WAIT_REG_MEM`, waiting for the invalidate ack. The indirect buffer was never fetched. Logs are `generated/boot-5625u-26/`.
+
+`r5_cs_vm_switch` built every register address as `(0x2000 + index) * 4`. That is the MMIO byte offset. A CP packet takes the dword offset `0x2000 + index`, which is what `gmc_v9_0_emit_flush_gpu_tlb` writes and what `gfx9_compute_ib.h` already uses. The page-table base and the request therefore landed at `0xa3ac`, `0xa3ad` and `0xa28c`, and the wait watched `0xa2d4`. For VMID 1, engine 0, the dword offsets are PTB low `0x28ed`, high `0x28ee`, request `0x28a3` and ack `0x28b5`. The high register is the next dword, not four bytes later. The host test compares those four numbers. `gc_byte()` for MMIO is unchanged.
+
+The packet stays 31 dwords. Linux v6.12 `gfx_v9_0_check_fw_write_wait` sets `me_fw_write_wait` in the default case, which is GC 9.3, with no ME or PFP version gate. This machine's ME is `0xa7` feature 54 and its PFP is `0xc5` feature 54. That Linux path uses one `WAIT_REG_MEM` with control `0x143` (write-wait-write, `gfx_v9_0_ring_emit_reg_write_reg_wait`) instead of a separate request write and ack wait, which is five dwords shorter. That form is not in this packet. The pipeline sync now polls every 4 dwords, as that Linux wait does. The ack wait stays at interval `0x20`, which is `gfx_v9_0_ring_emit_reg_wait`. Not booted.
+
+### The VM sequence is in the shared GFX9 start
+
+`r5_gfx9_vmid1_flush_due` was in the kernel driver. The accelerant also links `gfx9_start.cpp` and the image jam stopped on those symbols. The sequence and the recorded page-table base now live in that shared file. The kernel stores the VMID 1 root there when the tables are built. The accelerant never raises the sequence, so its jobs do not prefix a flush.
+
+### Stick 26 runs the ordinary teapot, then SAM, then the ordinary teapot
+
+The selftest ran SAM first. Stick 26 runs the ordinary teapot, then SAM, then the ordinary teapot again, so a stale VMID 1 translation has to survive the ring flush. Stage U stays in the stick 25 order, with the HDP probe first and C1 last. Not booted.
+
+### The ring flushes VMID 1 when the page table changes
+
+Stick 25's HDP probe wrote eight words through the BAR and read them back through the carveout, at once and after `sfence`. The carveout saw every write. B1, B2 and B5 still missed, A2 still hung, and the normal teapot still read zeros from GTT while `pixel-vram` was the right colour. That refutes the HDP explanation. The carveout window stays, because that is how Linux maps an APU.
+
+The misses are a stale VMID 1 translation. One VMID is shared, and stage U runs after both teapots. Every failing address is one RADV had just mapped. The CPU walk shows the new page-table entry. The GPU still uses the old one. A write into a freed page misses. An indirect buffer fetched from a freed page hangs. SAM runs first, with nothing stale, and its pixels match. The normal run remaps the same virtual addresses. GTT gets new physical pages, so the GPU writes into SAM's freed pages and the CPU reads zeros. VRAM comes back from the same allocator, so a stale translation still hits the right page.
+
+A user job now starts with the switch from M5 when `tlb_seq` has moved: pipeline sync, the page-table base, invalidate plus wait, and `PFP_SYNC_ME`. That is 31 dwords and does not write a PASID. Every successful `r5_gfx9_vmid1_map` raises the sequence, and a cleared PTE is an unmap. There is no per-client VMID allocator. The K sequence is unchanged. Host test only. Not booted.
+
+### VMID 1's MMIO flush uses engine 17
+
+`r5_gfx9_vmid1_flush` wrote `VM_INVALIDATE_ENG0_REQ`. Linux `gmc_v9_0_flush_gpu_tlb` uses engine 17 for that MMIO path, and engine 0 belongs to the GFX ring. The K sequence already invalidates on engine 17 and is unchanged: the same stop order, page-table base, PTE flags, invalidate word and ring-index formula. Host test only. Not booted.
+
+### VMID 1 reads and writes VRAM through the carveout
+
+Linux 6.12 `gmc_v9_0_mc_init` sets `aper_base` to the PCI BAR, then on an x86_64 APU replaces it with `get_mc_fb_offset()`. `amdgpu_ttm_init` maps that with `ioremap_wc`. `amdgpu_device_flush_hdp` returns at once on such an APU, which is why Linux never flushes the HDP there. `amdgpu_vm_cpu_commit` still calls it after a page-table update. `nbio_v7_0` remaps `HDP_MEM_COHERENCY_FLUSH_CNTL`; the APU path does not reach that write.
+
+R5's fixed K sequence still uses the PCI BAR window. Every VMID 1 path now uses a second window at `MC_VM_FB_OFFSET << 24`, write combining: page-table pages, user VRAM buffers, stage pages and the VRAM readback. On the 5625U the register is `0x810`, so the base is `0x810000000`. The UEFI map reserves `0x80e300000`–`0x830000000`. That base sits inside the reservation. The window length is the visible BAR (`0x10000000` on stick 24), which is the part the pool allocates from. The real reservation from the base to `0x830000000` is 512 MiB. `CONFIG_MEMSIZE` stays ignored.
+
+Stick 25's stage U starts with an HDP probe: eight words written through the BAR, read back through the carveout at once and again after `sfence`. Then B1, B2, B3, B5, A2, A1, A3, A8, A7, A4, A5, A6, and C1 last. Not booted.
+
 ### Geen WC-MTRR als PAT aan staat
 
 Met PAT zet de kernel geen WC-MTRR meer, alleen de PAT-bits, zoals Linux. Dit geldt voor alle gebruikers, ook met de GPU uit. Getest op sticks 19–24 en in QEMU. De wijziging is `distro/kernel/src/system/kernel/arch/x86/arch_vm.cpp` (`82cd27fbc8`) en blijft.

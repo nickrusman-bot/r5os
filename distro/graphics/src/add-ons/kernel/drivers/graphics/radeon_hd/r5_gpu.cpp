@@ -38,6 +38,7 @@ extern "C" team_id team_get_current_team_id(void);
 extern "C" bool team_is_valid(team_id id);
 extern "C" status_t vm_set_area_memory_type(area_id id,
 	phys_addr_t physicalBase, uint32 type);
+area_id r5_gfx9_map_vram(uint64 offset, uint64 bytes, void** address);
 
 /* headers/private/system/vm_defs.h: REGION_NO_PRIVATE_MAP = 0. */
 static const uint32 kRegionNoPrivateMap = 0;
@@ -906,14 +907,10 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 		return gpu_copy_out(buffer, length, &in, sizeof(in));
 	}
 	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
-		uint32 fb = gpu_mmio(client->info, kGcSegment, 0x096b) & 0x00ffffffu;
-		phys_addr_t phys = (phys_addr_t)(((uint64)fb << 24) + bo->vramOffset);
 		void* kernel = NULL;
-		area_id kernelArea = map_physical_memory("r5 gpu vram", phys,
-			(size_t)bo->bytes, B_ANY_KERNEL_ADDRESS,
-			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA,
+		area_id kernelArea = r5_gfx9_map_vram(bo->vramOffset, bo->bytes,
 			&kernel);
-		if (kernelArea < 0)
+		if (kernelArea < 0 || kernel == NULL)
 			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
 				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 		bo->kernelArea = kernelArea;
@@ -2296,17 +2293,14 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 	if (!gtt) {
 		if (r5_gfx9_alloc_user_vram(4096, &page->vramOffset) != B_OK)
 			return false;
-		radeon_shared_info* shared = info->shared_info;
-		if (info->kernel_window == NULL || shared == NULL
-			|| page->vramOffset < shared->vram_pool_offset) {
+		page->cpu = r5_gfx9_vram_cpu(page->vramOffset);
+		if (page->cpu == NULL) {
 			r5_gfx9_free_user_vram(page->vramOffset);
 			return false;
 		}
-		page->cpu = info->kernel_window
-			+ (page->vramOffset - shared->vram_pool_offset);
 		page->vram = true;
-		uint32 fb = gpu_mmio(info, kGcSegment, 0x096b) & 0x00ffffffu;
-		phys = ((uint64)fb << 24) + page->vramOffset;
+		uint32 fb = gpu_mmio(info, kGcSegment, 0x096b);
+		phys = r5_gpu_carveout_base(fb) + page->vramOffset;
 	} else {
 		void* system = NULL;
 		page->area = create_area("r5 gfx9 stage", &system,
@@ -2930,6 +2924,8 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 }
 
 
+/* Stick 25 does not call this. The CPU self-check stays for a later stick. */
+__attribute__((unused))
 static bool
 gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 {
@@ -2944,37 +2940,62 @@ gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 }
 
 
+/* CPU only. Eight words go out through the PCI BAR. The same offset
+ * is read back through the carveout at once, then again after sfence.
+ * No clflush: that would hide a write the HDP is still holding. */
+static void
+gpu_stage_hdp(radeon_info* info)
+{
+	(void)info;
+	uint64 offset = 0;
+	uint8* bar = NULL;
+	if (r5_gfx9_alloc_vram(4096, 4096, &offset, &bar) != B_OK || bar == NULL) {
+		dprintf("radeon_hd: hdp alloc fail\n");
+		return;
+	}
+	uint8* alias = r5_gfx9_vram_cpu(offset);
+	if (alias == NULL || alias == bar || r5_gfx9_vram_bar(offset) != bar) {
+		dprintf("radeon_hd: hdp alias fail off %016llx\n",
+			(unsigned long long)offset);
+		return;
+	}
+	volatile uint32* src = (volatile uint32*)(bar + 64);
+	volatile uint32* dst = (volatile uint32*)(alias + 64);
+	for (uint32 i = 0; i < 8; i++)
+		src[i] = 0xA1000000u + i;
+	uint32 now[8];
+	uint32 later[8];
+	for (uint32 i = 0; i < 8; i++)
+		now[i] = dst[i];
+	asm volatile("sfence" ::: "memory");
+	for (uint32 i = 0; i < 8; i++)
+		later[i] = dst[i];
+	dprintf("radeon_hd: hdp off %016llx now %08x %08x %08x %08x "
+		"%08x %08x %08x %08x\n",
+		(unsigned long long)offset,
+		now[0], now[1], now[2], now[3], now[4], now[5], now[6], now[7]);
+	dprintf("radeon_hd: hdp sfence %08x %08x %08x %08x %08x %08x %08x %08x\n",
+		later[0], later[1], later[2], later[3],
+		later[4], later[5], later[6], later[7]);
+}
+
+
 static status_t
 gpu_stage_u(radeon_info* info)
 {
 	if (!gpu_render_enabled() || !gpu_selftest_enabled())
 		return B_NOT_ALLOWED;
+	sStageFresh = 0;
+	gpu_stage_mtrr("before");
+	gpu_stage_hdp(info);
 	if (!r5_gfx9_vmid1_setup()) {
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
-	sStageFresh = 0;
-	gpu_stage_mtrr("before");
 	bool stop = false;
-	if (!gpu_stage_self(info, "u-self", true)
-		|| !gpu_stage_self(info, "u-self", false))
-		stop = true;
-	/* U2a-n: VRAM indirect buffer, fresh cached GTT, no clflush on the
-	 * read. U2a-f is the same read with clflush. U2b-n writes a cached
-	 * GTT indirect buffer without clflush. No write-combined step. */
-	if (!stop && !gpu_stage_pair(info, "u2a-n", gpu_stage_fresh(), false,
-			false, gpu_stage_fresh(), true, false, true, false, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2a-f", gpu_stage_fresh(), false,
-			false, gpu_stage_fresh(), true, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2b-n", gpu_stage_fresh(), true,
-			false, gpu_stage_fresh(), false, false, false, false, 0, 8, false))
-		stop = true;
-	/* Group B writes only. The indirect buffer stays at a fresh low
-	 * address. A miss continues. Group A fetches the indirect buffer
-	 * from the address under test, destination on the next page, both
-	 * VRAM. C1 is the address that hung on stick 23, and it is last. */
+	/* The HDP probe ran first and does not use the GPU. Group B then
+	 * writes only, with the indirect buffer at a fresh low address.
+	 * Group A fetches a VRAM indirect buffer. C1 is last. */
 	if (!stop && !gpu_stage_pair(info, "b1", gpu_stage_fresh(), false,
 			false, 0xffff800000041000ull, false, false, true, true, 0, 8, false))
 		stop = true;
@@ -2983,8 +3004,6 @@ gpu_stage_u(radeon_info* info)
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "b3", gpu_stage_fresh(), false,
 			false, 0xffff800000001000ull, false, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_dma(info, "b4", 0xffff800000041000ull, true))
 		stop = true;
 	if (!stop && !gpu_stage_dma(info, "b5", 0xffff800000041000ull, false))
 		stop = true;

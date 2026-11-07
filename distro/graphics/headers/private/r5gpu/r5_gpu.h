@@ -370,4 +370,13 @@ r5_gpu_node_on(int kernel, int irq, int gart)
 	return kernel && irq && gart;
 }
 
+/* MC_VM_FB_OFFSET is in 16 MiB units. On an APU that value, shifted,
+ * is the system physical address of the carveout. Linux gmc_v9_0_mc_init
+ * uses it as aper_base. The low 24 bits of the register are the field. */
+static inline uint64_t
+r5_gpu_carveout_base(uint32_t fbOffset)
+{
+	return (uint64_t)(fbOffset & 0x00ffffffu) << 24;
+}
+
 #endif

@@ -671,6 +671,7 @@ main()
 	const char* selftestOrder[] = {
 		"highVa, false",
 		"\"vulkaninfo\"",
+		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
 		"stage_selftest(out)",
@@ -679,14 +680,10 @@ main()
 	const char* stageOrder[] = {
 		"gpu_stage_p(",
 		"gpu_stage_u(",
-		"\"u-self\"",
-		"\"u2a-n\"",
-		"\"u2a-f\"",
-		"\"u2b-n\"",
+		"gpu_stage_hdp(info)",
 		"\"b1\"",
 		"\"b2\"",
 		"\"b3\"",
-		"\"b4\"",
 		"\"b5\"",
 		"\"a2\"",
 		"\"a1\"",
@@ -705,11 +702,11 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 6) != 0)
+			selftestOrder, 7) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 14) != 0)
+			stageOrder, 16) != 0)
 		return 1;
 	{
 		FILE* driver = fopen(
@@ -990,6 +987,101 @@ main()
 			return fail("node keys");
 	}
 
+	if (r5_gpu_carveout_base(0x810u) != 0x810000000ull)
+		return fail("carveout base");
+	if (r5_gpu_carveout_base(0x01000810u) != 0x810000000ull)
+		return fail("carveout mask");
+	{
+		char text[2500];
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "map_pool(", "return true;",
+			text, sizeof(text)) != 0)
+			return fail("bar pool");
+		if (strstr(text, "vram_window_phys") == NULL)
+			return fail("bar window");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "map_carveout(", "return true;",
+			text, sizeof(text)) != 0)
+			return fail("carveout map");
+		if (strstr(text, "r5_gpu_carveout_base") == NULL
+			|| strstr(text, "B_WRITE_COMBINING_MEMORY") == NULL)
+			return fail("carveout wc");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "vm_page_alloc(", "return 1;",
+			text, sizeof(text)) != 0)
+			return fail("vm page");
+		if (strstr(text, "r5_gfx9_vram_cpu") == NULL
+			|| strstr(text, "kernel_window") != NULL)
+			return fail("vm page window");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "gpu_stage_hdp(", "gpu_stage_u(",
+			text, sizeof(text)) != 0)
+			return fail("hdp probe");
+		if (strstr(text, "r5_gfx9_vram_bar") == NULL
+			|| strstr(text, "r5_gfx9_vram_cpu") == NULL
+			|| strstr(text, "sfence") == NULL)
+			return fail("hdp paths");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "r5_gfx9_vmid1_flush()",
+			"vmid1 fail tlb", text, sizeof(text)) != 0)
+			return fail("vmid1 flush");
+		if (strstr(text, "const uint32 eng = 17;") == NULL
+			|| strstr(text, "eng = 0") != NULL)
+			return fail("vmid1 engine");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "r5_gfx9_map_vram(bo->vramOffset",
+			"bo->kernel = kernel", text, sizeof(text)) != 0)
+			return fail("bo map");
+	}
+	{
+		uint32_t words[40];
+		uint32_t n = r5_cs_vm_switch(words, 40, 1, 0x812c18001ull,
+			0x9000ull, 7);
+		if (n != 26 || n != r5_cs_vm_switch_words())
+			return fail("vm switch words");
+		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
+			|| words[4] != 7u || words[6] != 4u)
+			return fail("vm switch pipe");
+		/* gmc_v9_0_emit_flush_gpu_tlb, written by gfx_v9_0_ring_emit_wreg.
+		 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000.
+		 * VMID 1 is context 1: 0x2000 + 0x08ed and the next register.
+		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5. */
+		if (words[7] != r5_cs_packet3(0x37, 3) || words[8] != 0x40100000u
+			|| words[9] != 0x28edu || words[11] != 0x12c18001u
+			|| words[12] != r5_cs_packet3(0x37, 3) || words[13] != 0x40100000u
+			|| words[14] != 0x28eeu || words[16] != 0x8u)
+			return fail("vm switch ptb");
+		/* gfx_v9_0_ring_emit_reg_write_reg_wait, me_fw_write_wait.
+		 * VMID 1 request is bit 1 plus the five invalidate bits. */
+		if (words[17] != r5_cs_packet3(0x3c, 5) || words[18] != 0x143u
+			|| words[19] != 0x28a3u || words[20] != 0x28b5u
+			|| words[21] != 0x007c0002u || words[22] != 0x2u
+			|| words[23] != 0x20u)
+			return fail("vm switch inv");
+		if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
+			return fail("vm switch pfp");
+		if (r5_cs_vm_switch(0, 0, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
+			return fail("vm switch vmid");
+		if (r5_cs_vm_switch(words, 40, 1, 0, 0x9000ull, 7) != 0)
+			return fail("vm switch pd");
+		const char* tlbOrder[] = {
+			"r5_gfx9_vmid1_map(uint64 va, uint64 pte)",
+			"r5_gfx9_vmid1_touch()"
+		};
+		const char* ringOrder[] = {
+			"r5_gfx9_user_submit(",
+			"r5_cs_vm_switch(",
+			"r5_gfx9_vmid1_flushed()"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", tlbOrder, 2) != 0)
+			return 1;
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", ringOrder, 3) != 0)
+			return 1;
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

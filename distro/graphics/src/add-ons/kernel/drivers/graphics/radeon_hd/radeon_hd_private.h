@@ -50,6 +50,12 @@ struct radeon_info {
 	// deletes it. The cloneable framebuffer keeps the user bit.
 	area_id			kernel_window_area;
 	uint8*			kernel_window;
+	/* Second window: the carveout at MC_VM_FB_OFFSET << 24.
+	 * VMID 1 and later use it. The K sequence keeps kernel_window. */
+	area_id			carveout_area;
+	uint8*			carveout;
+	uint64			carveout_base;
+	uint64			carveout_bytes;
 // SPDX-SnippetEnd
 
 	struct radeon_shared_info* shared_info;

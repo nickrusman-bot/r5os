@@ -359,6 +359,89 @@ map_pool(radeon_info& info)
 }
 
 
+/* Linux 6.12 amdgpu_ttm_init maps aper_base with ioremap_wc. On an APU
+ * aper_base is get_mc_fb_offset(), not the PCI BAR. */
+static bool
+map_carveout(radeon_info& info)
+{
+	uint32 fb = kread(&info, gc_byte(0x096b));
+	uint64 base = r5_gpu_carveout_base(fb);
+	uint64 bytes = info.shared_info->vram_window_bytes;
+	if (base == 0 || bytes == 0 || (bytes & 4095) != 0 || (base & 4095) != 0) {
+		dprintf("radeon_hd: carveout refused\n");
+		return false;
+	}
+	void* address = NULL;
+	area_id area = map_physical_memory("radeon hd carveout",
+		(phys_addr_t)base, (size_t)bytes, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, &address);
+	if (area < B_OK || address == NULL) {
+		dprintf("radeon_hd: carveout map failed\n");
+		return false;
+	}
+	if (vm_set_area_memory_type(area, (phys_addr_t)base,
+		B_WRITE_COMBINING_MEMORY) != B_OK) {
+		delete_area(area);
+		dprintf("radeon_hd: carveout type failed\n");
+		return false;
+	}
+	info.carveout_area = area;
+	info.carveout = (uint8*)address;
+	info.carveout_base = base;
+	info.carveout_bytes = bytes;
+	dprintf("radeon_hd: carveout 0x%" B_PRIx64 "+0x%" B_PRIx64 "\n",
+		base, bytes);
+	return true;
+}
+
+
+uint8*
+r5_gfx9_vram_bar(uint64 offset)
+{
+	if (sInfo == NULL || sInfo->kernel_window == NULL
+		|| sInfo->shared_info == NULL)
+		return NULL;
+	uint64 pool = sInfo->shared_info->vram_pool_offset;
+	uint64 bytes = sInfo->shared_info->vram_pool_bytes;
+	if (offset < pool || offset - pool >= bytes)
+		return NULL;
+	return sInfo->kernel_window + (offset - pool);
+}
+
+
+uint8*
+r5_gfx9_vram_cpu(uint64 offset)
+{
+	if (sInfo == NULL || sInfo->carveout == NULL || offset >= sInfo->carveout_bytes)
+		return NULL;
+	return sInfo->carveout + offset;
+}
+
+
+area_id
+r5_gfx9_map_vram(uint64 offset, uint64 bytes, void** address)
+{
+	if (address == NULL || sInfo == NULL || sInfo->carveout == NULL || bytes == 0)
+		return B_BAD_VALUE;
+	if (offset > sInfo->carveout_bytes
+		|| bytes > sInfo->carveout_bytes - offset)
+		return B_BAD_VALUE;
+	uint64 phys = sInfo->carveout_base + offset;
+	area_id area = map_physical_memory("r5 gpu vram", (phys_addr_t)phys,
+		(size_t)bytes, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, address);
+	if (area < B_OK || *address == NULL)
+		return area < B_OK ? area : B_ERROR;
+	if (vm_set_area_memory_type(area, (phys_addr_t)phys,
+		B_WRITE_COMBINING_MEMORY) != B_OK) {
+		delete_area(area);
+		*address = NULL;
+		return B_ERROR;
+	}
+	return area;
+}
+
+
 void
 r5_gfx9_kernel_stop()
 {
@@ -403,6 +486,13 @@ r5_gfx9_kernel_stop()
 		delete_area(sInfo->kernel_window_area);
 		sInfo->kernel_window_area = -1;
 		sInfo->kernel_window = NULL;
+	}
+	if (sInfo != NULL && sInfo->carveout_area >= 0) {
+		delete_area(sInfo->carveout_area);
+		sInfo->carveout_area = -1;
+		sInfo->carveout = NULL;
+		sInfo->carveout_base = 0;
+		sInfo->carveout_bytes = 0;
 	}
 }
 
@@ -826,12 +916,18 @@ vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
 	uint8* address = NULL;
 	if (sHost.vram_alloc == NULL || sInfo == NULL)
 		return 0;
+	if (sInfo->carveout == NULL)
+		return 0;
 	if (sHost.vram_alloc(sInfo, 4096, 4096, &offset, &address) != B_OK
 		|| address == NULL)
 		return 0;
+	(void)address;
+	uint8* cpuPage = r5_gfx9_vram_cpu(offset);
+	if (cpuPage == NULL)
+		return 0;
 	uint32 fb = kread(sInfo, gc_byte(0x096b));
-	*physical = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
-	*cpu = (uint64_t*)address;
+	*physical = r5_gpu_carveout_base(fb) + offset;
+	*cpu = (uint64_t*)cpuPage;
 	return 1;
 }
 
@@ -889,7 +985,9 @@ r5_gfx9_vmid1_flush()
 		knote("vmid1 fail info");
 		return false;
 	}
-	const uint32 eng = 0;
+	/* Linux gmc_v9_0_flush_gpu_tlb uses engine 17 for an MMIO flush.
+	 * Engine 0 belongs to the GFX ring. The K sequence already uses 17. */
+	const uint32 eng = 17;
 	uint32 inv = r5_gfx9_tlb_req(1, 0);
 	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
 	(void)kread(sInfo, gc_byte(0x08a3 + eng));
@@ -1021,6 +1119,7 @@ r5_gfx9_vmid1_setup()
 		(unsigned long)kread(sInfo, gc_byte(0x0852)),
 		(unsigned long)kread(sInfo, gc_byte(0x0853)),
 		(unsigned long)kread(sInfo, gc_byte(0x0854)));
+	r5_gfx9_vmid1_set_root(tableBase);
 	return true;
 }
 
@@ -1033,6 +1132,8 @@ r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 	if (!r5_vm_map_page(&sVm, va, pte))
 		return false;
 	asm volatile("sfence" ::: "memory");
+	/* A cleared PTE is an unmap. The next user job flushes that. */
+	r5_gfx9_vmid1_touch();
 	return true;
 }
 
@@ -1055,25 +1156,19 @@ r5_gfx9_vmid1_levels(const char* name, uint64 va)
 	if (name == NULL || !sVmid1 || sVm.used == 0 || sInfo == NULL
 		|| sInfo->shared_info == NULL)
 		return;
-	uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
-	uint64 base = (uint64)fb << 24;
+	uint32 fb = kread(sInfo, gc_byte(0x096b));
+	uint64 base = r5_gpu_carveout_base(fb);
 	int index = 0;
 	for (int level = 3; level >= 0; level--) {
 		uint64 phys = sVm.pages[index].physical;
 		uint64 off = phys - base;
-		uint64 cpuPhys = sInfo->shared_info->vram_window_phys + off;
-		void* mapped = NULL;
-		area_id id = map_physical_memory("r5 vm level",
-			(phys_addr_t)cpuPhys, 4096, B_ANY_KERNEL_ADDRESS,
-			B_KERNEL_READ_AREA, &mapped);
+		uint64* table = sVm.pages[index].cpu;
 		uint64 word = 0;
-		bool ok = id >= B_OK && mapped != NULL;
+		bool ok = table != NULL;
 		if (ok) {
 			uint32 slot = r5_vm_index(va, (uint32)level);
-			word = ((volatile uint64*)mapped)[slot];
+			word = table[slot];
 		}
-		if (id >= B_OK)
-			delete_area(id);
 		dprintf("radeon_hd: %s L%d off %016llx word %016llx\n",
 			name, level, (unsigned long long)off,
 			(unsigned long long)word);
@@ -1121,16 +1216,12 @@ r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
 		if (mapped < B_OK || address == NULL)
 			return false;
 		cpu = (uint8*)address;
-	} else if (sInfo != NULL && sInfo->kernel_window != NULL
-		&& sInfo->shared_info != NULL) {
-		uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
-		uint64 base = (uint64)fb << 24;
-		uint64 pool = sInfo->shared_info->vram_pool_offset;
-		uint64 bytes = sInfo->shared_info->vram_pool_bytes;
-		if (page < base || page - base < pool
-			|| page - base - pool >= bytes)
+	} else if (sInfo != NULL && sInfo->carveout != NULL) {
+		uint32 fb = kread(sInfo, gc_byte(0x096b));
+		uint64 base = r5_gpu_carveout_base(fb);
+		if (page < base || r5_gfx9_vram_cpu(page - base) == NULL)
 			return false;
-		cpu = sInfo->kernel_window + (page - base - pool);
+		cpu = r5_gfx9_vram_cpu(page - base);
 	} else
 		return false;
 	memcpy(words, cpu + offset, count * 4);
@@ -1195,6 +1286,10 @@ r5_gfx9_kernel_start(radeon_info& info)
 	}
 	info.kernel_window_area = -1;
 	info.kernel_window = NULL;
+	info.carveout_area = -1;
+	info.carveout = NULL;
+	info.carveout_base = 0;
+	info.carveout_bytes = 0;
 	if (info.shared_info == NULL || info.pci == NULL)
 		return;
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_NONE;
@@ -1251,5 +1346,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 		run_k1();
 	if (ok && gart)
 		run_k2();
+	if (ok)
+		map_carveout(info);
 	publish();
 }
