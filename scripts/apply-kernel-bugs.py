@@ -147,11 +147,32 @@ def install_usb_stability() -> None:
         print(f"copied {relative}")
 
 
+def install_rtsx() -> None:
+    """Copy the rtsx bus driver. It is built, and it is not added to the image."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source = root / "distro/kernel/src/add-ons/kernel/busses/mmc/rtsx"
+    destination = HAIKU / "src/add-ons/kernel/busses/mmc/rtsx"
+    if not source.is_dir():
+        raise SystemExit(f"missing {source}")
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in ("Jamfile", "rtsx.cpp", "rtsxreg.h"):
+        install_file(source / name, destination / name, "rtsx")
+
+    insert_once(
+        HAIKU / "src/add-ons/kernel/busses/mmc/Jamfile",
+        "\tsdhci_pci.cpp\n;\n",
+        "\tsdhci_pci.cpp\n;\n\nSubInclude HAIKU_TOP src add-ons kernel busses mmc rtsx ;\n",
+        "SubInclude HAIKU_TOP src add-ons kernel busses mmc rtsx ;",
+        "rtsx Jamfile",
+    )
+
+
 def main() -> int:
     install_smp_boot()
     install_kernel_sources()
     install_pstate()
     install_usb_stability()
+    install_rtsx()
     return 0
 
 
