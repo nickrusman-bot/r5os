@@ -1976,6 +1976,14 @@ main()
 		if (strstr(text, "\"Renoir\"") == NULL
 			|| strstr(text, "SPDX-SnippetBegin") == NULL)
 			return fail("renoir snippet");
+		if (snippet(
+				"distro/rest/src/system/runtime_loader/elf_tls.cpp",
+				"fGeneration = new Generation", "SetSize(size)", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "SetCounter(TLSBlockTemplates::Get().GetGeneration(-1))")
+			== NULL)
+			return fail("tls generation");
 	}
 	{
 		char text[4000];

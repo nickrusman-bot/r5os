@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A new thread keeps its thread-local data
+
+A new thread's TLS vector started at generation 0. After any library with thread-local storage was unloaded, the next access treated that vector as stale and zeroed the blocks it had just created. The vector now starts at the current generation. This is haiku-pi `5db923abc6` (Witold Bołt, MIT). Not booted.
+
 ### SPDX snippets on the Renoir driver hooks
 
 `r5_gpu_init()` and `r5_gpu_uninit()` in the Radeon driver, and the `"Renoir"` chip name, are marked as R5 portions. The Haiku MIT header stays. The commit that added the markers reused the previous subject line. This sentence is the record of that.
