@@ -277,6 +277,15 @@ typedef struct r5_gfx9_ih_entry {
 	uint32_t	ring;
 } r5_gfx9_ih_entry;
 
+/* Linux v6.12 drivers/gpu/drm/amd/include/soc15_ih_clientid.h.
+ * GRBM_CP is the EOP client. UTCL2 is the GC hub. 0x1a is reserved. */
+enum {
+	R5_IH_CLIENT_VMC = 0x12,
+	R5_IH_CLIENT_GRBM_CP = 0x14,
+	R5_IH_CLIENT_RESERVED = 0x1a,
+	R5_IH_CLIENT_UTCL2 = 0x1b
+};
+
 /* amdgpu_ih_decode_iv_helper: client is bits 7:0, source 15:8, ring 23:16. */
 static inline r5_gfx9_ih_entry
 r5_gfx9_ih_parse(const uint8_t raw[32])
@@ -287,6 +296,32 @@ r5_gfx9_ih_parse(const uint8_t raw[32])
 	entry.source = (dwords[0] >> 8) & 0xffu;
 	entry.ring = (dwords[0] >> 16) & 0xffu;
 	return entry;
+}
+
+
+/* GC hub fault: UTCL2, source 0, vmid_src bit 31 clear.
+ * Linux v6.12 gmc_v9_0.c gmc_v9_0_process_interrupt. */
+static inline int
+r5_gfx9_ih_gc_fault(const uint8_t raw[32])
+{
+	r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(raw);
+	uint32_t hub = ((const uint32_t*)raw)[0] >> 31;
+	return entry.client == R5_IH_CLIENT_UTCL2 && entry.source == 0 && hub == 0;
+}
+
+
+/* The file that owns this VMID, or -1. The first match wins. */
+static inline int
+r5_gfx9_fault_owner(uint32_t vmid, const uint32_t* vmids, int count)
+{
+	int i;
+	if (vmid == 0 || vmid > 15 || vmids == NULL)
+		return -1;
+	for (i = 0; i < count; i++) {
+		if (vmids[i] == vmid)
+			return i;
+	}
+	return -1;
 }
 
 #endif

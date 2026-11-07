@@ -8,6 +8,7 @@
  */
 
 #include "gfx9_start.h"
+#include "gfx9_check.h"
 #include "r5_vm.h"
 #include "r5_vmid.h"
 #include "r5_limit.h"
@@ -66,7 +67,7 @@ static const uint32 kIhBytes = 64 * 1024;
 static const uint32 kOssBase = 0x10A0;
 static const uint32 kGcBase = 0x2000;
 static const uint32 kNbioBase = 0x0D20;
-static const uint32 kClientCp = 0x14;
+static const uint32 kClientCp = R5_IH_CLIENT_GRBM_CP;
 static const uint32 kSourceEop = 181;
 static r5_gfx9_ib_now sPrivIb1;
 static r5_gfx9_ib_now sPrivIb2;
@@ -265,13 +266,13 @@ ih_handler(void* data)
 		sLastClient = entry.client;
 		sLastSource = entry.source;
 		sLastRing = entry.ring;
-		/* Linux v6.12 soc15_ih_clientid.h: VMC is 0x12 (MMHUB) and
-		 * UTCL2 is 0x1a (GFXHUB). gmc_v9_0_process_interrupt handles
-		 * both. Source 0 is VMC_1_0__SRCID__VM_FAULT and
-		 * UTCL2_1_0__SRCID__FAULT. vmid_src is bit 31: 0 is the GC
-		 * hub. The address is src_data[0] and src_data[1], the same
-		 * shift as r5_gfx9_fault_address. */
-		if ((entry.client == 0x12u || entry.client == 0x1au)
+		/* Linux v6.12 drivers/gpu/drm/amd/include/soc15_ih_clientid.h:
+		 * VMC is 0x12 (MMHUB), RESERVED is 0x1a, UTCL2 is 0x1b
+		 * (GFXHUB). gmc_v9_0_process_interrupt handles VMC and UTCL2.
+		 * Source 0 is the fault. vmid_src bit 31 clear is the GC hub.
+		 * The address is src_data[0] and src_data[1]. */
+		if ((entry.client == R5_IH_CLIENT_VMC
+				|| entry.client == R5_IH_CLIENT_UTCL2)
 			&& entry.source == 0) {
 			const uint32* raw = (const uint32*)(sIhRing + rptr);
 			uint32 vmid = (raw[0] >> 24) & 0xfu;
@@ -280,7 +281,7 @@ ih_handler(void* data)
 			dprintf("radeon_hd: vm fault %s vmid %lu addr %016llx\n",
 				hub == 0 ? "gfxhub" : "mmhub",
 				(unsigned long)vmid, (unsigned long long)addr);
-			if (entry.client == 0x1au && hub == 0)
+			if (r5_gfx9_ih_gc_fault(sIhRing + rptr))
 				r5_gfx9_as_fault(vmid, addr);
 			r5_gpu_retire_wake();
 			woke = true;

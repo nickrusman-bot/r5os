@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A GC hub fault is client UTCL2
+
+Linux 6.12 `drivers/gpu/drm/amd/include/soc15_ih_clientid.h` gives `SOC15_IH_CLIENTID_RESERVED` `0x1a` and `SOC15_IH_CLIENTID_UTCL2` `0x1b`. `VMC` is `0x12` and `GRBM_CP` is `0x14`. The handler was matching `0x1a`, so a GC hub fault never marked a file. It now matches `UTCL2` with source 0 and the GC-hub bit clear. The host test feeds that interrupt entry and checks that VMID 1 selects the second file, and that client `0x1a` is not a GC hub fault. Not booted. No stick.
+
 ### Stick 22: the cached read landed, and the high VRAM step hung
 
 Logs are `generated/boot-5625u-22/`. The settings file is the same six lines. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.

@@ -19,6 +19,7 @@
 #include "r5_wait.h"
 #include "r5_stage_p.h"
 #include "r5_log.h"
+#include "gfx9_check.h"
 #include "../distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_backend.h"
 
 #include <string.h>
@@ -655,7 +656,8 @@ one_gib()
 		return fail("gib read");
 	if (strstr(text, "vm_page_num_pages") != NULL
 		|| strstr(text, "get_system_info") == NULL
-		|| strstr(text, "0x1au") == NULL) {
+		|| strstr(text, "R5_IH_CLIENT_UTCL2") == NULL
+		|| strstr(text, "entry.client == 0x1au") != NULL) {
 		free(text);
 		return fail("gib kernel");
 	}
@@ -1516,6 +1518,22 @@ main()
 		return 1;
 	if (one_gib() != 0)
 		return 1;
+	{
+		uint8_t raw[32];
+		uint32_t* dword = (uint32_t*)raw;
+		uint32_t owners[2] = { 2u, 1u };
+		memset(raw, 0, sizeof(raw));
+		dword[0] = R5_IH_CLIENT_UTCL2 | (1u << 24);
+		if (!r5_gfx9_ih_gc_fault(raw)
+			|| r5_gfx9_fault_owner((dword[0] >> 24) & 0xfu, owners, 2) != 1)
+			return fail("ih utcl2");
+		dword[0] = R5_IH_CLIENT_RESERVED | (1u << 24);
+		if (r5_gfx9_ih_gc_fault(raw))
+			return fail("ih reserved");
+		dword[0] = R5_IH_CLIENT_UTCL2 | (2u << 24);
+		if (r5_gfx9_fault_owner((dword[0] >> 24) & 0xfu, owners, 2) != 0)
+			return fail("ih other file");
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }
