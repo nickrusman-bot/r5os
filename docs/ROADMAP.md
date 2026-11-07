@@ -107,10 +107,27 @@ Do not start these during an unrelated bugfix.
 | Target | Status | Next |
 |---|---|---|
 | AMD64 | Boots to the desktop in QEMU, in VirtualBox, and from USB on the Ryzen 5 5625U. Not release-supported | Hardware items above |
-| ARM64 | No work yet | After AMD64 is usable on hardware: QEMU, then boards |
+| ARM64 | No work yet. Basis decided (7 Nov 2026): the haiku-pi port, see below | After AMD64 is usable on hardware: QEMU, then the Raspberry Pi 4 as the first board |
 | RISC-V 64 | No work yet | After AMD64 and ARM64 |
 
 Levels: buildable → bootable → functional → desktop-capable → release-supported. See `AGENTS.md`, "Architectures".
+
+### ARM64 from haiku-pi
+
+[haiku-pi](https://github.com/haiku-pi/haiku-rpi) ports Haiku to the Raspberry Pi 4 (BCM2711, Cortex-A72). Its Haiku sources are the fork [haiku-pi/haiku](https://github.com/haiku-pi/haiku), branch `rpi4`. That port reaches the Haiku desktop on the Pi, with drivers for the board's hardware. R5 takes that port as the basis of its ARM64 target, instead of starting from Haiku's own arm64 tree.
+
+- **What R5 takes:** the arm64 boot path (the EFI loader under U-Boot, the EL2 to EL1 drop, secondary CPU start-up), the non-coherent DMA handling, the interrupt controller (GICv2), device-tree address translation, and the drivers for the Pi 4's on-board hardware.
+- **Reference only:** the V3D GPU driver and how it draws Vulkan into ordinary Haiku windows. R5 keeps its own vendor-neutral GPU interface (`docs/GPU-ARCHITECTURE.md`). The V3D work is input for the M7 presentation and the Graphics Kit.
+- **Not taken:** the packages (Firefox, Wine, games). They belong in a package repository, not in this source tree.
+- **When:** after AMD64 is usable on hardware, the same rule as above. First QEMU, then the Pi 4.
+
+### Import rules for haiku-pi
+
+The same rules apply to both haiku-pi tracks (ARM64 above, the x86-64 fixes under "Upstream"):
+- **Per commit,** never one large merge. haiku-pi is based on a different Haiku revision (hrev60314 on 5 Nov 2026), and R5 checks each change against its own overlays and APIs, as for `upstream`.
+- **Native source in `distro/`,** as `AGENTS.md` describes. The haiku-pi file header stays exactly as it is, and R5 changes on top are marked with SPDX snippets.
+- **Licence.** The new files in `haiku-pi/haiku` carry an MIT header. Third-party code inside them keeps its own licence (OpenBSD's bwfm driver, ISC; Mesa's DRM headers, MIT; Arm Optimized Routines, MIT OR Apache-2.0 WITH LLVM-exception). Each import gets a line in `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md`. The coordination repository `haiku-pi/haiku-rpi` (scripts and documents) has no licence file, so nothing is copied from it unless its owner agrees.
+- **Tested before it lands.** haiku-pi's code is also written by an AI agent. Each import is read against the source, built, and booted (QEMU, plus the 5625U for x86-64 or the Pi 4 for ARM64).
 
 ## Platform (CPU, power and firmware)
 
@@ -131,3 +148,11 @@ The order follows what R5 is today, a laptop and desktop system: first P-states,
 ## Upstream
 
 Fetch `upstream` when a Haiku fix is useful. Inspect the `distro/` changes and R5 behavior before a merge. Record imports, local patches, and intentional differences in `CHANGELOG.md`. Do not send changes back to Haiku (`AGENTS.md`).
+
+### x86-64 fixes from haiku-pi
+
+About 120 haiku-pi commits change code that x86-64 also builds and runs: the kernel, the VM, the runtime loader, libroot, BFS, the block cache, the kits and the servers. Their docs (`docs/HAIKU-RPI4-CHANGES.md`, the rows marked ★) list them as fixes that are not Pi-specific. haiku-pi built and tested that tree for x86_64 under KVM on 4 Nov 2026, and reports that 14 tests that fail on upstream Haiku pass with those fixes. Examples are a kernel panic on `read()` into a guard page, `MAP_SHARED` after `mprotect` plus `fork`, an `rw_lock` race, the kill race, TLS alignment, and BFS metadata writes.
+
+- **Decided on 7 Nov 2026:** R5 takes these fixes. They help AMD64 directly, on the 5625U and in QEMU.
+- **When:** after GPU milestone M5. It is a separate track, not an M milestone.
+- **How:** the import rules above. Start with the ★ fixes that have a test, and use that test as the proof on R5. A fix that conflicts with an R5 change in `distro/` is reviewed by hand, not overwritten.
