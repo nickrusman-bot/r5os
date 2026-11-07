@@ -919,6 +919,49 @@ main()
 			return fail("test off");
 		if (!r5_log_allow(0, 1, R5_LOG_TEST, &errors, &once, 0))
 			return fail("test on");
+		if (!r5_log_allow(0, 0, R5_LOG_ONCE, &errors, &once, R5_ONCE_RB + 1))
+			return fail("once other");
+		errors = 0;
+		if (!r5_log_allow(0, 0, R5_LOG_DUMP, &errors, &once, -1))
+			return fail("dump start");
+		lines = 0;
+		for (i = 0; i < 100; i++) {
+			if (r5_log_allow(0, 0, R5_LOG_DUMP, &errors, &once, 0))
+				lines++;
+		}
+		if (lines != 64)
+			return fail("dump cap");
+		if (errors != 1)
+			return fail("dump event");
+		if (!r5_log_allow(0, 0, R5_LOG_ERROR, &errors, &once, 0))
+			return fail("fault after dump");
+	}
+	{
+		char text[4000];
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "gpu_debug_enabled()",
+			"gpu_error_line()", text, sizeof(text)) != 0)
+			return fail("debug reader");
+		if (strstr(text, "load_driver_settings") != NULL)
+			return fail("debug reads every call");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "r5_gpu_init()", "r5_gpu_uninit()",
+			text, sizeof(text)) != 0)
+			return fail("init");
+		if (strstr(text, "gpu_cache_log_settings()") == NULL)
+			return fail("settings once");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "sSelftestOn < 0",
+			"gpu_known_dw(", text, sizeof(text)) != 0)
+			return fail("selftest reader");
+		if (strstr(text, "load_driver_settings") != NULL)
+			return fail("selftest reads every call");
+		if (snippet("distro/graphics/libdrm-r5/r5_translate.c",
+			"R5_GPU_BO_CREATE", "gem->out.handle", text, sizeof(text)) != 0)
+			return fail("bo domain line");
+		if (strstr(text, "r5_debug_on()") == NULL
+			|| strstr(text, "kernel bo domain") == NULL)
+			return fail("bo domain ungated");
 	}
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);

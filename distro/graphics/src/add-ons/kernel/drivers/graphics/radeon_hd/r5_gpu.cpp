@@ -77,19 +77,48 @@ static const bigtime_t kWatchdogUs = 10000000;
 
 static int sErrorLines;
 static int sOnceBits;
+static int sDebugOn = -1;
+static int sSelftestOn = -1;
+
+
+static void
+gpu_cache_log_settings()
+{
+	bool debugOn = false;
+	bool selftestOn = false;
+	void* settings = load_driver_settings("radeon_hd");
+	if (settings != NULL) {
+		debugOn = get_driver_boolean_parameter(settings, "gpu_debug",
+			false, true);
+		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
+			false, true);
+		unload_driver_settings(settings);
+	}
+	sDebugOn = debugOn ? 1 : 0;
+	sSelftestOn = selftestOn ? 1 : 0;
+}
 
 
 static bool
 gpu_debug_enabled()
 {
-	bool enabled = false;
-	void* settings = load_driver_settings("radeon_hd");
-	if (settings != NULL) {
-		enabled = get_driver_boolean_parameter(settings, "gpu_debug",
-			false, true);
-		unload_driver_settings(settings);
-	}
-	return enabled;
+	if (sDebugOn < 0)
+		gpu_cache_log_settings();
+	return sDebugOn != 0;
+}
+
+
+static bool
+gpu_dump_begin()
+{
+	return r5_log_allow(0, 0, R5_LOG_DUMP, &sErrorLines, &sOnceBits, -1) != 0;
+}
+
+
+static bool
+gpu_dump_line()
+{
+	return r5_log_allow(0, 0, R5_LOG_DUMP, &sErrorLines, &sOnceBits, 0) != 0;
 }
 
 
@@ -181,7 +210,7 @@ gpu_rb(radeon_info* info, uint32* num, uint32* mask)
 		*num = kMaxBackendsPerSe;
 	if (mask != NULL)
 		*mask = active;
-	if (r5_log_allow(0, 0, R5_LOG_ONCE, &sErrorLines, &sOnceBits, 0))
+	if (r5_log_allow(0, 0, R5_LOG_ONCE, &sErrorLines, &sOnceBits, R5_ONCE_RB))
 	dprintf("radeon_hd: rb num %lu mask %lx cc %08lx user %08lx\n",
 		(unsigned long)kMaxBackendsPerSe, (unsigned long)active,
 		(unsigned long)cc, (unsigned long)user);
@@ -403,6 +432,7 @@ r5_gpu_init()
 {
 	if (sReady)
 		return;
+	gpu_cache_log_settings();
 	init_lock(&sGpuLock, "r5 gpu");
 	sEop.Init(&sEop, "r5 gpu eop");
 	sRetireSem = create_sem(0, "r5 gpu retire");
@@ -1941,14 +1971,9 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 static bool
 gpu_selftest_enabled()
 {
-	bool enabled = false;
-	void* settings = load_driver_settings("radeon_hd");
-	if (settings != NULL) {
-		enabled = get_driver_boolean_parameter(settings, "gpu_selftest",
-			false, true);
-		unload_driver_settings(settings);
-	}
-	return enabled;
+	if (sSelftestOn < 0)
+		gpu_cache_log_settings();
+	return sSelftestOn != 0;
 }
 
 
@@ -2063,13 +2088,13 @@ gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth)
 			uint64 child = (uint64)words[i + 1]
 				| ((uint64)words[i + 2] << 32);
 			uint32 childDw = words[i + 3] & 0xfffffu;
-			if (gpu_error_line())
+			if (gpu_dump_line())
 				dprintf("radeon_hd: pm4 +%04lx INDIRECT_BUFFER va %016llx dw %lu\n",
 					(unsigned long)i, (unsigned long long)child,
 					(unsigned long)childDw);
 			gpu_dump_one(why, "nested", child, childDw, 0, 1);
 		}
-		if (name != NULL && gpu_error_line()) {
+		if (name != NULL && gpu_dump_line()) {
 			if (opcode == 0x68 || opcode == 0x69 || opcode == 0x76
 				|| opcode == 0x79 || opcode == 0x7a) {
 				dprintf("radeon_hd: pm4 +%04lx %s reg 0x%lx idx %lu count %lu\n",
@@ -2099,7 +2124,9 @@ gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
 	uint32 got = 0;
 	if (base != 0)
 		got = r5_gfx9_vmid1_copy(base, words, want);
-	if (!gpu_error_line())
+	if (depth == 0 && !gpu_dump_begin())
+		return;
+	if (!gpu_dump_line())
 		return;
 	dprintf("radeon_hd: %s %s va %016llx dw %lu got %lu cp_off %lu\n",
 		why == NULL ? "ib" : why, which == NULL ? "ib" : which,
@@ -2112,7 +2139,7 @@ gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
 		if (n > 8)
 			n = 8;
 		memcpy(line, words + i, n * 4);
-		if (!gpu_error_line())
+		if (!gpu_dump_line())
 			break;
 		dprintf("radeon_hd: ib +%04lx %08lx %08lx %08lx %08lx "
 			"%08lx %08lx %08lx %08lx\n",
@@ -2148,7 +2175,9 @@ gpu_ib_words(const char* why)
 	gpu_dump_regs(why, &ib1, "ib1");
 	if (ib2.base != ib1.base)
 		gpu_dump_regs(why, &ib2, "ib2");
-	if (gpu_error_line())
+	if (ib1.base == 0 && ib2.base == 0 && !gpu_dump_begin())
+		return;
+	if (gpu_dump_line())
 	dprintf("radeon_hd: %s roq ib1 %08lx\n",
 		why == NULL ? "ib" : why, (unsigned long)r5_gfx9_roq_ib1());
 	if (sInfo != NULL) {

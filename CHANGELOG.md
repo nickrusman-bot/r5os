@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### GPU log settings are read once, and a dump does not eat the error budget
+
+`gpu_debug` and `gpu_selftest` were read from the settings file on every call, including every submit. `r5_gpu_init` now reads both once. A later call uses those values.
+
+An error still counts as one of 32 events in a boot. A PM4 dump is one event and then at most 64 lines. The next fault line still prints. The ring-buffer once-line uses `R5_ONCE_RB`. A second once-line takes the next id.
+
+`kernel bo domain` in `libdrm-r5` is printed only when `gpu_debug` is on. The cache flush at submit is unchanged. The K sequence is unchanged. Host test only. Not booted.
+
 ### Stick 23: the paired high page hung, and the empty leaf reads 0x10
 
 Logs are `generated/boot-5625u-23/`. The settings file is the six lines plus `gpu_debug true`. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
