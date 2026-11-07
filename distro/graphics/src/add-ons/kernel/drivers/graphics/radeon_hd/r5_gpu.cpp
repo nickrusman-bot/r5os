@@ -1005,8 +1005,11 @@ gpu_stage_u(radeon_info* info)
 	if (!gpu_stage_pair(info, "u2f", 0xffff800000200000ull, true, true,
 			kStageLowVram, false, false, false))
 		return B_OK;
+	/* U2d writes the low VRAM page, the same one U2c writes, so only
+	 * the indirect-buffer address changes. U2g is last and is the
+	 * same buffer writing the high VRAM page. */
 	if (!gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true, true,
-			kStageHighVram, false, false, false))
+			kStageLowVram, false, false, false))
 		return B_OK;
 	if (!gpu_stage_one(info, "u1", kStageLowVram, false))
 		return B_OK;
@@ -1015,6 +1018,9 @@ gpu_stage_u(radeon_info* info)
 	if (!gpu_stage_one(info, "u3", kStageLowGtt, true))
 		return B_OK;
 	if (!gpu_stage_one(info, "u2", kStageHighGtt, true))
+		return B_OK;
+	if (!gpu_stage_pair(info, "u2g", R5_GPU_HIGH_VA_OFFSET, true, true,
+			kStageHighVram, false, false, false))
 		return B_OK;
 	gpu_stage_fault(info);
 	return B_OK;

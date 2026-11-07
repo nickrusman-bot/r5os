@@ -979,6 +979,7 @@ main()
 		"\"u4\"",
 		"\"u3\"",
 		"\"u2\"",
+		"\"u2g\"",
 		"gpu_stage_fault"
 	};
 	if (source_order(
@@ -987,7 +988,7 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 14) != 0)
+			stageOrder, 15) != 0)
 		return 1;
 
 	{
