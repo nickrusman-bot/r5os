@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### An interrupted rw_lock wait tries again
+
+`rw_lock_wait()` retried an interrupted block with the status the interruption left. The kernel returns at once for that status and ignores a later unblock, so the waiter kept the lock. It now blocks again, with a fresh wait status, until the thread that holds the mutex dequeues it. This is haiku-pi `2bf2f773ba` (Witold Bołt, MIT). The test `rw_lock_interrupt_test` is in the tree. Not booted.
+
 ### A partial wire no longer panics
 
 `lock_memory_etc()` registered a wired range at its full size when a later page could not be wired. The revert looked for the shorter size and panicked (`VMArea::Unwire(): no such range`). The range is now shrunk to the pages that were wired. This is haiku-pi `6f810ed2d7` (Witold Bołt, MIT). Not booted.

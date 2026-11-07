@@ -12,6 +12,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### An interrupted rw_lock wait
+
+Location: `distro/rest/src/system/libroot/os/locks/rw_lock.cpp` and `distro/rest/src/tests/system/libroot/os/rw_lock_interrupt_test.cpp`.
+
+The lock is Haiku's private rw_lock. Copyright 2009 Michael Lotz. License: MIT. The wait retry is the haiku-pi change `2bf2f773ba`. Copyright 2026 Witold Bołt. License: MIT. The test is the same change. Copyright 2026 Haiku, Inc. License: MIT.
+
 ### Wiring a range that stops at an unwired page
 
 Location: `distro/kernel/src/system/kernel/vm/vm.cpp`.

@@ -40,7 +40,27 @@ def main() -> int:
         count += 1
     if count == 0:
         raise SystemExit(f"no files under {SOURCE}")
+    hook_rw_lock_test()
     return 0
+
+
+def hook_rw_lock_test() -> None:
+    jam = HAIKU / "src" / "tests" / "system" / "libroot" / "os" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    if "rw_lock_interrupt_test" in text:
+        print("already Jamfile (rw_lock_interrupt_test)")
+        return
+    anchor = "SimpleTest get_cpu_num_test :\n\tget_cpu_num_test.cpp\n;\n"
+    if anchor not in text:
+        raise SystemExit(f"rw_lock test anchor missing in {jam}")
+    insert = (
+        anchor
+        + "\nUsePrivateHeaders shared ;\n\n"
+        + "SimpleTest rw_lock_interrupt_test :\n"
+        + "\trw_lock_interrupt_test.cpp\n;\n"
+    )
+    jam.write_text(text.replace(anchor, insert, 1), encoding="utf-8")
+    print("patched Jamfile (rw_lock_interrupt_test)")
 
 
 if __name__ == "__main__":

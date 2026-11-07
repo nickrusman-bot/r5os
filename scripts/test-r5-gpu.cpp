@@ -1997,6 +1997,12 @@ main()
 			return 1;
 		if (strstr(text, "range->size = nextAddress - areaStart") == NULL)
 			return fail("partial wire");
+		if (snippet(
+				"distro/rest/src/system/libroot/os/locks/rw_lock.cpp",
+				"rw_lock_wait(", "rw_lock_unblock(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "while (waiter.queued)") == NULL)
+			return fail("rw lock wait");
 	}
 	{
 		char text[4000];
