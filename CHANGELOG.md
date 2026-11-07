@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The VRAM pool does not subtract the firmware reservations
+
+Linux 6.12 `amdgpu_discovery.h` places the discovery TMR `64 << 10` bytes below the end of VRAM and makes it `10 << 10` bytes. `amdgpu_ttm_reserve_tmr` reserves that TMR and the PSP TMR. `fw_vram_usage_start_offset` and `fw_vram_usage_size` are the firmware reservation on `struct amdgpu_mman`. The R5 pool is still the PCI BAR minus the boot picture. It does not subtract those three ranges.
+
 ### The passport reads the IP discovery table
 
 The GC table is the last 64 KiB of VRAM, 10 KiB long, the same place Linux 6.12 reads. The signature is `0x28211407`. The checksum is the byte sum after `binary_checksum`, and the GC table has its own sum. A valid table fills the shader-engine, array, CU, render-backend, GPR, TCC and geometry-shader counts. The device table stays as the cross-check and a difference prints `discovery mismatch`. A bad checksum leaves the table values in place. This has not been booted, so the 5625U binary itself is still unread.
