@@ -490,6 +490,109 @@ core_boundary()
 }
 
 
+static uint64_t gVmWords[64][512];
+static uint32_t gVmPages;
+
+
+static int
+vm_alloc(void*, uint64_t* physical, uint64_t** cpu)
+{
+	if (gVmPages >= 64)
+		return 0;
+	*physical = ((uint64_t)gVmPages + 1ull) << 21;
+	*cpu = gVmWords[gVmPages];
+	memset(*cpu, 0, 512 * sizeof(uint64_t));
+	gVmPages++;
+	return 1;
+}
+
+
+/* Two page tables, one VA. Closing one leaves the other. An unmap on
+ * VMID n invalidates n. The same owner flushes when its tlb sequence
+ * changes. A finished reserve does not block the other program. */
+static int
+two_spaces()
+{
+	char* text = NULL;
+	const char* submit;
+	const char* end;
+	const char* nulls;
+	const char* reserve;
+	r5_vm_page pagesA[16];
+	r5_vm_page pagesB[16];
+	r5_vm a;
+	r5_vm b;
+	uint64_t va = 0xffff800100000000ull;
+	uint64_t got = 0;
+	r5_vmid_mgr mgr;
+	int flush = 0;
+	uint32_t first;
+	uint32_t second;
+	uint32_t again;
+	if (read_file(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			&text) != 0)
+		return fail("two read");
+	if (strstr(text, "sPhase") != NULL || strstr(text, "sBound") != NULL) {
+		free(text);
+		return fail("two bind");
+	}
+	submit = strstr(text, "amd_submit(");
+	end = submit != NULL ? strstr(submit, "amd_poll_retired") : NULL;
+	nulls = submit != NULL ? strstr(submit, "sequence == NULL") : NULL;
+	reserve = submit != NULL ? strstr(submit, "as_reserve") : NULL;
+	if (submit == NULL || end == NULL || nulls == NULL || nulls > end
+		|| reserve == NULL || reserve < nulls || reserve > end
+		|| strstr(submit, "sh_mem") < end) {
+		free(text);
+		return fail("two submit");
+	}
+	free(text);
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	a.pages = pagesA;
+	b.pages = pagesB;
+	a.capacity = 16;
+	b.capacity = 16;
+	a.alloc = vm_alloc;
+	b.alloc = vm_alloc;
+	gVmPages = 0;
+	if (!r5_vm_map_page(&a, va, 0x111ull) || !r5_vm_map_page(&b, va, 0x222ull))
+		return fail("two map");
+	if (!r5_vm_lookup(&a, va, &got) || got != 0x111ull)
+		return fail("two a");
+	if (!r5_vm_lookup(&b, va, &got) || got != 0x222ull)
+		return fail("two b");
+	a.used = 0;
+	if (!r5_vm_lookup(&b, va, &got) || got != 0x222ull)
+		return fail("two close");
+	if (r5_gfx9_tlb_req(7, 0) == r5_gfx9_tlb_req(1, 0))
+		return fail("two inv");
+	r5_vmid_init(&mgr);
+	first = r5_vmid_reserve(&mgr, 2, 0, 1, &flush);
+	if (first == 0)
+		return fail("two own");
+	r5_vmid_arm(&mgr, 5);
+	again = r5_vmid_reserve(&mgr, 2, 0, 1, &flush);
+	if (again != first || flush != 0)
+		return fail("two keep");
+	again = r5_vmid_reserve(&mgr, 2, 0, 2, &flush);
+	if (again != first || flush != 1)
+		return fail("two tlb");
+	r5_vmid_init(&mgr);
+	first = r5_vmid_reserve(&mgr, 1, 0, 0, &flush);
+	r5_vmid_arm(&mgr, 1);
+	second = r5_vmid_reserve(&mgr, 2, 0, 0, &flush);
+	if (second == 0 || second == first)
+		return fail("two other");
+	r5_vmid_arm(&mgr, 2);
+	again = r5_vmid_reserve(&mgr, 1, 0, 0, &flush);
+	if (again != first || flush != 0)
+		return fail("two alt");
+	return 0;
+}
+
+
 /* B_OK is 0. Every op returns that on success. A fake backend that
  * returns 0 must pass `!= 0`. One that returns 1 must fail it. `!op()`
  * reads 0 as failure, which is the bug this test rejects. */
@@ -505,15 +608,15 @@ static int op_pte(uint64_t, uint32_t, int, int, uint64_t* pte)
 	*pte = 1;
 	return 0;
 }
-static int op_map(uint64_t, uint64_t) { return 0; }
-static int op_unmap(uint64_t, uint64_t) { return 0; }
-static int op_prt(uint64_t, uint64_t) { return 0; }
-static int op_flush(void) { return 0; }
+static int op_map(void*, uint64_t, uint64_t) { return 0; }
+static int op_unmap(void*, uint64_t, uint64_t) { return 0; }
+static int op_prt(void*, uint64_t, uint64_t) { return 0; }
+static int op_flush(void*) { return 0; }
 static int op_prepare(void) { return 0; }
-static int op_lookup(uint64_t) { return 0; }
+static int op_lookup(void*, uint64_t) { return 0; }
 static int op_sh(uint32_t) { return 0; }
 static int op_sh_one(uint32_t) { return 1; }
-static int op_submit(const uint64_t*, const uint32_t*, uint32_t, uint64_t*)
+static int op_submit(void*, const uint64_t*, const uint32_t*, uint32_t, uint64_t*)
 {
 	return 0;
 }
@@ -547,6 +650,7 @@ static int op_limits(uint64_t* vram, uint64_t* gtt)
 	return 0;
 }
 static int op_retired(uint64_t) { return 0; }
+static int op_room(uint32_t) { return 0; }
 
 
 static int
@@ -557,7 +661,7 @@ ops_status()
 		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
 		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
 		op_stage_p, op_stage_u, op_as_open, op_as_close, op_bind,
-		op_limits, op_retired
+		op_limits, op_retired, op_room
 	};
 	uint32_t reg = 0;
 	uint64_t off = 0;
@@ -575,10 +679,10 @@ ops_status()
 		return fail("op type");
 	if (ops.encode_pte(0, 0, 0, 0, &pte) != 0 || pte == 0)
 		return fail("op pte");
-	if (ops.vm_map(0, 0) != 0 || ops.vm_unmap(0, 0) != 0
-		|| ops.vm_prt(0, 0) != 0 || ops.tlb_flush() != 0)
+	if (ops.vm_map(0, 0, 0) != 0 || ops.vm_unmap(0, 0, 0) != 0
+		|| ops.vm_prt(0, 0, 0) != 0 || ops.tlb_flush(0) != 0)
 		return fail("op map");
-	if (ops.vmid_prepare() != 0 || ops.vmid_lookup(0) != 0)
+	if (ops.vmid_prepare() != 0 || ops.vmid_lookup(0, 0) != 0)
 		return fail("op vmid");
 	if (ops.sh_mem(1) != 0)
 		return fail("op sh_mem");
@@ -597,7 +701,7 @@ ops_status()
 			|| ops.note_retired(0) != 0 || ops.address_close(as, 0) != 0)
 			return fail("op address");
 	}
-	if (ops.submit(0, 0, 0, 0) != 0)
+	if (ops.submit(0, 0, 0, 0, 0) != 0 || ops.wait_room(1) != 0)
 		return fail("op submit");
 	if (ops.poll_retired(&seen) != 0 || seen == 0)
 		return fail("op seen");
@@ -1185,16 +1289,16 @@ main()
 		memset(got, 0, sizeof(got));
 		r5_vmid_init(&mgr);
 		for (i = 1; i <= 15u; i++) {
-			uint32_t v = r5_vmid_reserve(&mgr, i, 0, &flush);
+			uint32_t v = r5_vmid_reserve(&mgr, i, 0, 0, &flush);
 			if (v == 0 || flush != 1)
 				return fail("vmid first");
 			r5_vmid_arm(&mgr, 1);
 			got[i] = v;
 		}
-		if (r5_vmid_reserve(&mgr, 16, 0, &flush) != 0)
+		if (r5_vmid_reserve(&mgr, 16, 0, 0, &flush) != 0)
 			return fail("vmid 16th");
 		{
-			uint32_t again = r5_vmid_reserve(&mgr, 1, 0, &flush);
+			uint32_t again = r5_vmid_reserve(&mgr, 1, 0, 0, &flush);
 			if (again != got[1] || flush != 0)
 				return fail("vmid keep");
 			r5_vmid_arm(&mgr, 2);
@@ -1204,7 +1308,7 @@ main()
 		if (mgr.slot[got[1]].owner != 1)
 			return fail("vmid held");
 		for (i = 16; i <= 20u; i++) {
-			uint32_t v = r5_vmid_reserve(&mgr, i, 1, &flush);
+			uint32_t v = r5_vmid_reserve(&mgr, i, 1, 0, &flush);
 			if (v == 0 || flush != 1 || v == got[1])
 				return fail("vmid reuse");
 			r5_vmid_arm(&mgr, 1);
@@ -1231,7 +1335,7 @@ main()
 		if (shared || nown < 6)
 			return fail("vmid count");
 		r5_vmid_init(&mgr);
-		if (r5_vmid_reserve(&mgr, 3, 0, &flush) == 0)
+		if (r5_vmid_reserve(&mgr, 3, 0, 0, &flush) == 0)
 			return fail("vmid cancel");
 		r5_vmid_cancel(&mgr);
 		if (mgr.hold != 0 || mgr.slot[1].owner != 0)
@@ -1245,22 +1349,25 @@ main()
 		if (r5_limit_allow(100ull << 20, 100ull << 20, 256ull << 20) != 1)
 			return fail("limit fit");
 		{
-			uint32_t words[32];
-			uint32_t n = r5_cs_vm_switch(words, 32, 2, 0x812c18001ull,
+			uint32_t words[40];
+			uint32_t n = r5_cs_vm_switch(words, 40, 2, 0x812c18001ull,
 				0x9000ull, 7);
 			uint32_t body[40];
 			uint64_t ib = 0x1000ull;
 			uint32_t dw = 8;
 			uint32_t vm = 2;
 			uint32_t bare;
-			if (n != 29 || words[0] != 0xc0033700u || words[2] != r5_cs_gc_byte(0x08efu))
+			if (n != 31 || words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
+				|| words[4] != 7u)
 				return fail("vm switch");
-			if (words[4] != 0x12c18001u || words[14] != r5_gfx9_tlb_req(2, 0))
+			if (words[7] != 0xc0033700u || words[9] != r5_cs_gc_byte(0x08efu)
+				|| words[11] != 0x12c18001u)
 				return fail("vm switch pd");
-			if (words[16] != 0x103u || words[19] != r5_gfx9_tlb_ack_mask(2))
+			if (words[21] != r5_gfx9_tlb_req(2, 0) || words[23] != 0x103u
+				|| words[26] != r5_gfx9_tlb_ack_mask(2))
 				return fail("vm switch ack");
-			if (words[23] != 0x113u || words[26] != 7u)
-				return fail("vm switch sync");
+			if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
+				return fail("vm switch pfp");
 			bare = r5_cs_user_body(body, 40, &ib, &dw, &vm, 1, 0x9000ull, 8,
 				0x9010ull, kR5CsCntxKeep);
 			if (bare != 33)
@@ -1271,6 +1378,8 @@ main()
 		printf("ok vmid 20 15\n");
 	}
 
+	if (two_spaces() != 0)
+		return 1;
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

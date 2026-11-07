@@ -59,6 +59,7 @@ struct gpu_bo {
 	area_id			kernelArea;
 	void*			kernel;
 	gpu_client*		owner;
+	void*			space;
 	bool			parked;
 	uint64			parkSequence;
 	gpu_range		ranges[kMaxRange];

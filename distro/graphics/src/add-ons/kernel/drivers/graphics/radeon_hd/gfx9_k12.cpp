@@ -829,10 +829,10 @@ struct r5_as {
 	int			parked;
 	uint64		last;
 	uint32		vmid;
+	uint64		tlb_seq;
 };
 
 static r5_as* sSpaces[64];
-static r5_as* sBound = NULL;
 static r5_vmid_mgr sVmids;
 static int sVmidReady = 0;
 static uint32 sNextAs = 1;
@@ -842,12 +842,10 @@ static uint32 sFreeCount = 0;
 extern "C" uint64 vm_page_num_pages();
 
 
-static r5_vm*
-current_vm()
+static r5_as*
+as_from(void* cookie)
 {
-	if (sBound != NULL && sBound->vm.used != 0)
-		return &sBound->vm;
-	return &sVm;
+	return (r5_as*)cookie;
 }
 
 
@@ -922,24 +920,36 @@ r5_gfx9_free_user_vram(uint64 offset)
 
 
 bool
+r5_gfx9_tlb_flush_vmid(uint32 vmid)
+{
+	if (sInfo == NULL || vmid == 0 || vmid > 15)
+		return false;
+	const uint32 eng = 0;
+	uint32 inv = r5_gfx9_tlb_req(vmid, 0);
+	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
+	(void)kread(sInfo, gc_byte(0x08a3 + eng));
+	const uint32 ackBit = r5_gfx9_tlb_ack_mask(vmid);
+	for (int i = 0; i < 10000; i++) {
+		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & ackBit) != 0)
+			return true;
+		snooze(10);
+	}
+	return false;
+}
+
+
+bool
 r5_gfx9_vmid1_flush()
 {
 	if (sInfo == NULL) {
 		knote("vmid1 fail info");
 		return false;
 	}
-	const uint32 eng = 0;
-	uint32 inv = r5_gfx9_tlb_req(1, 0);
-	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
-	(void)kread(sInfo, gc_byte(0x08a3 + eng));
-	const uint32 ackBit = r5_gfx9_tlb_ack_mask(1);
-	for (int i = 0; i < 10000; i++) {
-		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & ackBit) != 0)
-			return true;
-		snooze(10);
+	if (!r5_gfx9_tlb_flush_vmid(1)) {
+		knote("vmid1 fail tlb");
+		return false;
 	}
-	knote("vmid1 fail tlb");
-	return false;
+	return true;
 }
 
 
@@ -1085,35 +1095,43 @@ r5_gfx9_vmid1_setup()
 
 
 bool
-r5_gfx9_vmid1_map(uint64 va, uint64 pte)
+r5_gfx9_vmid1_map(void* as, uint64 va, uint64 pte)
 {
-	if (!sVmid1)
+	r5_as* space = as_from(as);
+	if (!sVmid1 || space == NULL || space->vm.used == 0)
 		return false;
-	if (!r5_vm_map_page(current_vm(), va, pte))
+	if (!r5_vm_map_page(&space->vm, va, pte))
 		return false;
+	if (pte == 0) {
+		space->tlb_seq++;
+		if (space->tlb_seq == 0)
+			space->tlb_seq = 1;
+	}
 	asm volatile("sfence" ::: "memory");
 	return true;
 }
 
 
 bool
-r5_gfx9_vmid1_lookup(uint64 va)
+r5_gfx9_vmid1_lookup(void* as, uint64 va)
 {
+	r5_as* space = as_from(as);
 	uint64 pte = 0;
-	if (!sVmid1)
+	if (!sVmid1 || space == NULL)
 		return false;
-	if (r5_vm_lookup(current_vm(), va & ~0xfffull, &pte) == 0)
+	if (r5_vm_lookup(&space->vm, va & ~0xfffull, &pte) == 0)
 		return false;
 	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
 }
 
 
 bool
-r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
+r5_gfx9_vmid1_pte(void* as, uint64 va, uint64* pte)
 {
-	if (pte == NULL || !sVmid1)
+	r5_as* space = as_from(as);
+	if (pte == NULL || !sVmid1 || space == NULL)
 		return false;
-	return r5_vm_lookup(current_vm(), va & ~0xfffull, pte) != 0;
+	return r5_vm_lookup(&space->vm, va & ~0xfffull, pte) != 0;
 }
 
 
@@ -1124,7 +1142,16 @@ bool
 r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
 {
 	uint64 pte = 0;
-	if (words == NULL || count == 0 || !r5_gfx9_vmid1_pte(va, &pte))
+	uint32 space;
+	int found = 0;
+	if (words == NULL || count == 0)
+		return false;
+	for (space = 0; space < 64 && !found; space++) {
+		if (sSpaces[space] != NULL
+			&& r5_gfx9_vmid1_pte(sSpaces[space], va, &pte))
+			found = 1;
+	}
+	if (!found)
 		return false;
 	if ((pte & (uint64)R5_GFX9_PTE_VALID) == 0)
 		return false;
@@ -1342,8 +1369,6 @@ r5_gfx9_as_close(void* cookie, uint64 seen)
 		if (sSpaces[n] == as)
 			sSpaces[n] = NULL;
 	}
-	if (sBound == as)
-		sBound = NULL;
 	free(as);
 }
 
@@ -1351,26 +1376,30 @@ r5_gfx9_as_close(void* cookie, uint64 seen)
 void
 r5_gfx9_as_bind(void* cookie)
 {
-	sBound = (r5_as*)cookie;
+	(void)cookie;
 }
 
 
 int
-r5_gfx9_as_reserve(uint32* vmid, int* flush, uint64* pd)
+r5_gfx9_as_reserve(void* cookie, uint32* vmid, int* flush, uint64* pd)
 {
+	r5_as* as = as_from(cookie);
 	uint64 seen;
-	if (sBound == NULL || sBound->vm.used == 0 || vmid == NULL || flush == NULL)
+	if (as == NULL || as->vm.used == 0 || vmid == NULL || flush == NULL)
 		return 0;
 	if (!sVmidReady) {
 		r5_vmid_init(&sVmids);
 		sVmidReady = 1;
 	}
 	seen = r5_gfx9_user_seen();
-	*vmid = r5_vmid_reserve(&sVmids, sBound->id, seen, flush);
+	/* gmc_v9_0_get_vm_pde adds no BFS flags when translate_further is
+	 * off, which it is on this GPU. The register value is the root
+	 * physical address with VALID, the same as the VMID 1 setup. */
+	*vmid = r5_vmid_reserve(&sVmids, as->id, seen, as->tlb_seq, flush);
 	if (*vmid == 0)
 		return 0;
 	if (pd != NULL)
-		*pd = sBound->vm.pages[0].physical | (uint64)R5_GFX9_PTE_VALID;
+		*pd = as->vm.pages[0].physical | (uint64)R5_GFX9_PTE_VALID;
 	return 1;
 }
 
@@ -1384,23 +1413,35 @@ r5_gfx9_as_cancel(void)
 
 
 void
-r5_gfx9_as_finish(uint32 vmid, uint64 sequence)
+r5_gfx9_as_finish(void* cookie, uint32 vmid, uint64 sequence)
 {
-	if (sBound == NULL)
+	r5_as* as = as_from(cookie);
+	if (as == NULL)
 		return;
-	sBound->vmid = vmid;
-	sBound->last = sequence;
-	sBound->loaded = 1;
+	as->vmid = vmid;
+	as->last = sequence;
+	as->loaded = 1;
 	r5_vmid_arm(&sVmids, sequence);
 }
 
 
 int
-r5_gfx9_as_first(void)
+r5_gfx9_as_first(void* cookie)
 {
-	if (sBound == NULL)
+	r5_as* as = as_from(cookie);
+	if (as == NULL)
 		return -1;
-	return sBound->loaded ? 0 : 1;
+	return as->loaded ? 0 : 1;
+}
+
+
+uint32
+r5_gfx9_as_vmid(void* cookie)
+{
+	r5_as* as = as_from(cookie);
+	if (as == NULL)
+		return 0;
+	return as->vmid;
 }
 
 

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Address space is an argument, and a changed table flushes
+
+A map, unmap, lookup, or flush names the file's page table. Closing one file no longer clears the last file that was bound. The same owner still keeps its VMID while a job is in flight, and it flushes when that table changed. The ring switch is 31 dwords: the previous user fence, the page-table base, the invalidate and its ack, then `PACKET3` opcode `0x42`. Linux `gmc_v9_0_use_invalidate_semaphore` is true for MMHUB only, so this GFXHUB sequence does not write `VM_INVALIDATE_ENG0_SEM`. An unmap invalidates the VMID that file has loaded. `SH_MEM` stays in the VMID 1 setup. The core waits for room, flushes the kernel copy, then one submit reserves and rings the bell. There is no reservation held across that unlock. The no-flush body is still 33 dwords. The K2 invalidate word is unchanged. The host test printed `ok vmid 20 15` and then `ok gpu api 1.0 walk`. Not booted. No stick.
+
 ### Stick 20: U2a is the first miss
 
 The image is the 09:26 raw image, sha256 `695011c00b26791a8ee5e1e7f1056fbf7925079c1aabd0342548c86fdb75b551`, with the same six settings as stick 19. The stick file sha256 is `1056e1a2d8bcd575837af3edcf8cab6e0116209eae8c1bd92dc52e7bab06c450`. Logs are `generated/boot-5625u-20/`.

@@ -28,14 +28,14 @@ typedef struct r5_gpu_backend_ops {
 	int			(*set_cpu_type)(int area, uint64_t physical, uint32_t type);
 	int			(*encode_pte)(uint64_t physical, uint32_t flags, int system,
 				int writeCombine, uint64_t* pte);
-	int			(*vm_map)(uint64_t va, uint64_t pte);
-	int			(*vm_unmap)(uint64_t va, uint64_t bytes);
-	int			(*vm_prt)(uint64_t va, uint64_t bytes);
-	int			(*tlb_flush)(void);
+	int			(*vm_map)(void* as, uint64_t va, uint64_t pte);
+	int			(*vm_unmap)(void* as, uint64_t va, uint64_t bytes);
+	int			(*vm_prt)(void* as, uint64_t va, uint64_t bytes);
+	int			(*tlb_flush)(void* as);
 	int			(*vmid_prepare)(void);
-	int			(*vmid_lookup)(uint64_t va);
+	int			(*vmid_lookup)(void* as, uint64_t va);
 	int			(*sh_mem)(uint32_t vmid);
-	int			(*submit)(const uint64_t* va, const uint32_t* dwords,
+	int			(*submit)(void* as, const uint64_t* va, const uint32_t* dwords,
 				uint32_t count, uint64_t* sequence);
 	int			(*poll_retired)(uint64_t* seen);
 	int			(*ih_decode)(const uint32_t* words, uint32_t count,
@@ -53,6 +53,9 @@ typedef struct r5_gpu_backend_ops {
 	int			(*bind)(void* as);
 	int			(*limits)(uint64_t* vramCap, uint64_t* gttCap);
 	int			(*note_retired)(uint64_t seen);
+	/* Room for a submit that may start with the VM switch. Does not
+	 * reserve a VMID. The caller flushes, then submit reserves. */
+	int			(*wait_room)(uint32_t count);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

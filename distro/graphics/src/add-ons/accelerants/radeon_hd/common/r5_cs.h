@@ -194,15 +194,15 @@ r5_cs_gc_byte(uint32_t index)
 }
 
 
-/* Three WRITE_DATA, the invalidate wait, and the pipeline sync.
- * gfx_v9_0.c gfx_v9_0_ring_emit_wreg, amdgpu_ring.c
- * amdgpu_ring_emit_reg_wait, gfx_v9_0_ring_emit_pipeline_sync.
- * VM_INVALIDATE_ENG0_SEM is not in this tree. The booted MMIO flush
- * does not write it, and neither does this sequence. */
+/* Linux v6.12 amdgpu_vm.c amdgpu_vm_flush emits the pipeline sync
+ * first, then the VM flush. gfx_v9_0_ring_emit_vm_flush then writes
+ * PACKET3(PFP_SYNC_ME, 0), 0. gmc_v9_0_use_invalidate_semaphore is
+ * true only for MMHUB, so this GFXHUB sequence does not write
+ * VM_INVALIDATE_ENG0_SEM. */
 static inline uint32_t
 r5_cs_vm_switch_words(void)
 {
-	return 29u;
+	return 31u;
 }
 
 
@@ -219,6 +219,16 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	inv = r5_gfx9_tlb_req(vmid, 0);
 	ack = r5_gfx9_tlb_ack_mask(vmid);
 	lo = r5_cs_gc_byte(0x08ebu + vmid * 2u);
+	/* Pipeline sync on the previous user fence. Memory, equal, PFP.
+	 * Control 0x113 is function 3, memory space, engine 1.
+	 * Linux amdgpu_vm_flush emits this before the VM flush. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
+	n = r5_cs_put(out, n, cap, 0x113u);
+	n = r5_cs_put(out, n, cap, (uint32_t)fenceMc);
+	n = r5_cs_put(out, n, cap, (uint32_t)(fenceMc >> 32));
+	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
+	n = r5_cs_put(out, n, cap, 0xffffffffu);
+	n = r5_cs_put(out, n, cap, 0x20u);
 	/* WRITE_DATA to a register: engine ME, destination register, confirm.
 	 * Linux gfx_v9_0_ring_emit_wreg. WR_CONFIRM is bit 20. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
@@ -244,15 +254,10 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, 0x20u);
-	/* Pipeline sync on the previous user fence. Memory, equal, PFP.
-	 * Control 0x113 is function 3, memory space, engine 1. */
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
-	n = r5_cs_put(out, n, cap, 0x113u);
-	n = r5_cs_put(out, n, cap, (uint32_t)fenceMc);
-	n = r5_cs_put(out, n, cap, (uint32_t)(fenceMc >> 32));
-	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
-	n = r5_cs_put(out, n, cap, 0xffffffffu);
-	n = r5_cs_put(out, n, cap, 0x20u);
+	/* PACKET3_PFP_SYNC_ME is 0x42. Linux gfx_v9_0_ring_emit_vm_flush
+	 * writes it so the PFP does not prefetch with the old translation. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x42, 0));
+	n = r5_cs_put(out, n, cap, 0);
 	if (n != r5_cs_vm_switch_words() || (out != 0 && n > cap))
 		return 0;
 	return n;

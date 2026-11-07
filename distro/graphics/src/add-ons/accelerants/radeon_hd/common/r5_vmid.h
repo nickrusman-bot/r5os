@@ -17,6 +17,11 @@
 struct r5_vmid_slot {
 	uint32_t	owner;
 	uint64_t	fence;
+	/* tlb_seq of this owner at the last flush of this VMID.
+	 * Linux v6.12 amdgpu_ids.c amdgpu_vmid_grab compares vm->tlb_seq
+	 * with the id's flushed sequence and flushes the same owner when
+	 * they differ. */
+	uint64_t	flushed;
 };
 
 struct r5_vmid_mgr {
@@ -26,6 +31,7 @@ struct r5_vmid_mgr {
 	uint32_t			hold;
 	uint32_t			hold_owner_prev;
 	uint64_t			hold_fence_prev;
+	uint64_t			pending_tlb;
 };
 
 
@@ -59,17 +65,18 @@ r5_vmid_touch(struct r5_vmid_mgr* m, uint32_t vmid)
  * A reserved slot uses fence ~0 until r5_vmid_arm. */
 static inline uint32_t
 r5_vmid_reserve(struct r5_vmid_mgr* m, uint32_t owner, uint64_t retired,
-	int* flush)
+	uint64_t tlb, int* flush)
 {
 	uint32_t i;
 	if (m == 0 || flush == 0 || owner == 0 || m->hold != 0)
 		return 0;
+	m->pending_tlb = tlb;
 	for (i = 1; i <= 15u; i++) {
 		if (m->slot[i].owner != owner)
 			continue;
 		if (m->slot[i].fence == ~0ull || m->slot[i].fence <= retired)
 			continue;
-		*flush = 0;
+		*flush = m->slot[i].flushed != tlb ? 1 : 0;
 		m->chosen = i;
 		r5_vmid_touch(m, i);
 		return i;
@@ -80,7 +87,8 @@ r5_vmid_reserve(struct r5_vmid_mgr* m, uint32_t owner, uint64_t retired,
 			continue;
 		if (m->slot[v].fence > retired)
 			continue;
-		*flush = m->slot[v].owner != owner ? 1 : 0;
+		*flush = (m->slot[v].owner != owner || m->slot[v].flushed != tlb)
+			? 1 : 0;
 		m->hold = v;
 		m->hold_owner_prev = m->slot[v].owner;
 		m->hold_fence_prev = m->slot[v].fence;
@@ -100,6 +108,7 @@ r5_vmid_arm(struct r5_vmid_mgr* m, uint64_t job)
 	if (m == 0 || m->chosen == 0 || m->chosen > 15u)
 		return;
 	m->slot[m->chosen].fence = job;
+	m->slot[m->chosen].flushed = m->pending_tlb;
 	m->hold = 0;
 	m->chosen = 0;
 }

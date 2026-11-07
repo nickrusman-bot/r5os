@@ -89,16 +89,18 @@ bool r5_gfx9_sh_mem(uint32 vmid);
 void* r5_gfx9_as_open(void);
 void r5_gfx9_as_close(void* as, uint64 seen);
 void r5_gfx9_as_bind(void* as);
-int r5_gfx9_as_reserve(uint32* vmid, int* flush, uint64* pd);
+int r5_gfx9_as_reserve(void* as, uint32* vmid, int* flush, uint64* pd);
 void r5_gfx9_as_cancel(void);
-void r5_gfx9_as_finish(uint32 vmid, uint64 sequence);
-int r5_gfx9_as_first(void);
+void r5_gfx9_as_finish(void* as, uint32 vmid, uint64 sequence);
+int r5_gfx9_as_first(void* as);
+uint32 r5_gfx9_as_vmid(void* as);
 void r5_gfx9_as_retired(uint64 seen);
 int r5_gfx9_mem_limits(uint64* vramCap, uint64* gttCap);
-bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
+bool r5_gfx9_vmid1_map(void* as, uint64 va, uint64 pte);
+bool r5_gfx9_tlb_flush_vmid(uint32 vmid);
 bool r5_gfx9_vmid1_flush();
-bool r5_gfx9_vmid1_lookup(uint64 va);
-bool r5_gfx9_vmid1_pte(uint64 va, uint64* pte);
+bool r5_gfx9_vmid1_lookup(void* as, uint64 va);
+bool r5_gfx9_vmid1_pte(void* as, uint64 va, uint64* pte);
 bool r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count);
 /* Copies up to count dwords, stopping at an unmapped page. Kernel
  * mappings only. Returns how many dwords were copied. */

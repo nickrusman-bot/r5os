@@ -443,13 +443,13 @@ gpu_bo_unmap(gpu_bo* bo)
 		if (!range->live)
 			continue;
 		for (uint64 page = 0; page < range->bytes; page += 4096) {
-			if (gR5GpuOps.vm_map(range->va + page, 0) != B_OK)
+			if (gR5GpuOps.vm_map(bo->space, range->va + page, 0) != B_OK)
 				continue;
 		}
 		range->live = false;
 		any = true;
 	}
-	if (any && gR5GpuOps.tlb_flush() != B_OK)
+	if (any && gR5GpuOps.tlb_flush(bo->space) != B_OK)
 		return;
 }
 
@@ -583,6 +583,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	}
 	bo->live = true;
 	bo->owner = client;
+	bo->space = client->address;
 	if (bo->domain == R5_GPU_DOMAIN_VRAM)
 		client->vramUsed += bo->bytes;
 	else
@@ -791,13 +792,13 @@ gpu_va_fits(uint64 va, uint64 bytes)
 
 
 static void
-gpu_va_clear(uint64 va, uint64 bytes)
+gpu_va_clear(void* space, uint64 va, uint64 bytes)
 {
 	for (uint64 page = 0; page < bytes; page += 4096) {
-		if (gR5GpuOps.vm_map(va + page, 0) != B_OK)
+		if (gR5GpuOps.vm_map(space, va + page, 0) != B_OK)
 			continue;
 	}
-	if (bytes != 0 && gR5GpuOps.tlb_flush() != B_OK)
+	if (bytes != 0 && gR5GpuOps.tlb_flush(space) != B_OK)
 		return;
 }
 
@@ -917,7 +918,7 @@ gpu_prt_add(uint64 va, uint64 bytes)
 
 
 static status_t
-gpu_va_write_prt(uint64 va, uint64 bytes)
+gpu_va_write_prt(void* space, uint64 va, uint64 bytes)
 {
 	/* The PTE is a value built here: bit 51, VALID clear, no address.
 	 * The backend writes that page-table entry. This path does
@@ -926,13 +927,13 @@ gpu_va_write_prt(uint64 va, uint64 bytes)
 	/* One page at a time, so a failure clears only the pages just written. */
 	for (uint64 page = 0; page < bytes; page += 4096) {
 		if (gR5GpuOps.vm_prt == NULL
-			|| gR5GpuOps.vm_prt(va + page, 4096) != B_OK) {
-			gpu_va_clear(va, page);
+			|| gR5GpuOps.vm_prt(space, va + page, 4096) != B_OK) {
+			gpu_va_clear(space, va, page);
 			return gR5GpuOps.vm_prt == NULL ? B_NOT_SUPPORTED : B_NO_MEMORY;
 		}
 	}
-	if (gR5GpuOps.tlb_flush == NULL || gR5GpuOps.tlb_flush() != B_OK) {
-		gpu_va_clear(va, bytes);
+	if (gR5GpuOps.tlb_flush == NULL || gR5GpuOps.tlb_flush(space) != B_OK) {
+		gpu_va_clear(space, va, bytes);
 		return gR5GpuOps.tlb_flush == NULL ? B_NOT_SUPPORTED : B_ERROR;
 	}
 	return B_OK;
@@ -961,19 +962,19 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			return gpu_refuse("VA_MAP", "vmid", B_NO_INIT, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
-			if (gR5GpuOps.vmid_lookup(in.gpu_va + page) == B_OK) {
-				gpu_va_clear(in.gpu_va, page);
+			if (gR5GpuOps.vmid_lookup(client->address, in.gpu_va + page) == B_OK) {
+				gpu_va_clear(client->address, in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle, 0,
 					0, in.gpu_va + page, in.bo_offset, in.map_bytes, in.flags);
 			}
 		}
-		status = gpu_va_write_prt(in.gpu_va, in.map_bytes);
+		status = gpu_va_write_prt(client->address, in.gpu_va, in.map_bytes);
 		if (status != B_OK)
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		status = gpu_prt_add(in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
-			gpu_va_clear(in.gpu_va, in.map_bytes);
+			gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		}
@@ -1031,14 +1032,14 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
 				in.flags);
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
-			if (gR5GpuOps.vmid_lookup(in.gpu_va + page) == B_OK) {
-				gpu_va_clear(in.gpu_va, page);
+			if (gR5GpuOps.vmid_lookup(client->address, in.gpu_va + page) == B_OK) {
+				gpu_va_clear(client->address, in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle,
 					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 			}
-			if (gR5GpuOps.vm_map(in.gpu_va + page, pte) != B_OK) {
-				gpu_va_clear(in.gpu_va, page);
+			if (gR5GpuOps.vm_map(client->address, in.gpu_va + page, pte) != B_OK) {
+				gpu_va_clear(client->address, in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
 					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
@@ -1064,7 +1065,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			status_t mapped = get_memory_map_etc(B_CURRENT_TEAM, cursor,
 				(size_t)(in.map_bytes - filled), entries, &count);
 			if (mapped != B_OK && mapped != B_BUFFER_OVERFLOW) {
-				gpu_va_clear(in.gpu_va, filled);
+				gpu_va_clear(client->address, in.gpu_va, filled);
 				return gpu_refuse("VA_MAP", "phys", mapped, in.handle,
 					bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
 					in.flags);
@@ -1075,8 +1076,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 				uint64 address = entries[entry].address;
 				uint64 bytes = entries[entry].size;
 				while (bytes >= 4096 && filled < in.map_bytes) {
-					if (gR5GpuOps.vmid_lookup(in.gpu_va + filled) == B_OK) {
-						gpu_va_clear(in.gpu_va, filled);
+					if (gR5GpuOps.vmid_lookup(client->address, in.gpu_va + filled) == B_OK) {
+						gpu_va_clear(client->address, in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE,
 							in.handle, bo->domain, bo->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
@@ -1086,14 +1087,14 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 					if (gR5GpuOps.encode_pte == NULL
 						|| gR5GpuOps.encode_pte(address, flags, 1,
 							(bo->flags & R5_GPU_BO_WC) != 0, &pte) != B_OK) {
-						gpu_va_clear(in.gpu_va, filled);
+						gpu_va_clear(client->address, in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NOT_SUPPORTED,
 							in.handle, bo->domain, bo->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
 					}
-					if (gR5GpuOps.vm_map(in.gpu_va + filled, pte) != B_OK) {
-						gpu_va_clear(in.gpu_va, filled);
+					if (gR5GpuOps.vm_map(client->address, in.gpu_va + filled, pte) != B_OK) {
+						gpu_va_clear(client->address, in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
 							in.handle, bo->domain, bo->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
@@ -1110,14 +1111,14 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			cursor += step;
 		}
 		if (filled != in.map_bytes) {
-			gpu_va_clear(in.gpu_va, filled);
+			gpu_va_clear(client->address, in.gpu_va, filled);
 			return gpu_refuse("VA_MAP", "short", B_BAD_DATA, in.handle,
 				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
 				in.flags);
 		}
 	}
-	if (gR5GpuOps.tlb_flush() != B_OK) {
-		gpu_va_clear(in.gpu_va, in.map_bytes);
+	if (gR5GpuOps.tlb_flush(client->address) != B_OK) {
+		gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
 		return gpu_refuse("VA_MAP", "flush", B_ERROR, in.handle, bo->domain,
 			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	}
@@ -1152,20 +1153,20 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 	if (gR5GpuOps.vmid_prepare() != B_OK)
 		return gpu_refuse(op, "vmid", B_NO_INIT, in.handle, 0, 0, in.gpu_va,
 			in.bo_offset, in.map_bytes, in.flags);
-	gpu_va_clear(in.gpu_va, in.map_bytes);
+	gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
 	gpu_ranges_drop_contained(in.gpu_va, in.map_bytes);
 	if (clearOnly) {
 		gpu_prt_drop_contained(in.gpu_va, in.map_bytes);
 		return B_OK;
 	}
 	if (in.handle == 0) {
-		status = gpu_va_write_prt(in.gpu_va, in.map_bytes);
+		status = gpu_va_write_prt(client->address, in.gpu_va, in.map_bytes);
 		if (status != B_OK)
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
 				in.bo_offset, in.map_bytes, in.flags);
 		status = gpu_prt_add(in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
-			gpu_va_clear(in.gpu_va, in.map_bytes);
+			gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
 				in.bo_offset, in.map_bytes, in.flags);
 		}
@@ -1195,12 +1196,12 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 			|| range->offset != in.bo_offset || range->bytes != in.map_bytes)
 			continue;
 		for (uint64 page = 0; page < range->bytes; page += 4096) {
-			if (gR5GpuOps.vm_map(range->va + page, 0) != B_OK)
+			if (gR5GpuOps.vm_map(bo->space, range->va + page, 0) != B_OK)
 				return gpu_refuse("VA_UNMAP", "pte", B_BAD_ADDRESS, in.handle,
 					bo->domain, bo->bytes, range->va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 		}
-		if (gR5GpuOps.tlb_flush() != B_OK)
+		if (gR5GpuOps.tlb_flush(bo->space) != B_OK)
 			return gpu_refuse("VA_UNMAP", "flush", B_ERROR, in.handle, bo->domain,
 				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		range->live = false;
@@ -1213,7 +1214,7 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 
 
 static bool
-gpu_ib_mapped(uint64 va, uint32 dwords)
+gpu_ib_mapped(void* space, uint64 va, uint32 dwords)
 {
 	if (dwords == 0 || (va & 3ull) != 0)
 		return false;
@@ -1221,7 +1222,7 @@ gpu_ib_mapped(uint64 va, uint32 dwords)
 	uint64 first = va & ~0xfffull;
 	uint64 last = (va + bytes - 1ull) & ~0xfffull;
 	for (uint64 page = first; page <= last; page += 4096) {
-		if (gR5GpuOps.vmid_lookup(page) != B_OK)
+		if (gR5GpuOps.vmid_lookup(space, page) != B_OK)
 			return false;
 	}
 	return true;
@@ -1286,7 +1287,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		if (ibs[i].flags != 0)
 			return gpu_refuse("CS_SUBMIT", "flags", B_BAD_VALUE, in.context, 0,
 				in.ib_count, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
-		if (!gpu_ib_mapped(ibs[i].gpu_va, ibs[i].dwords))
+		if (!gpu_ib_mapped(client->address, ibs[i].gpu_va, ibs[i].dwords))
 			return gpu_refuse("CS_SUBMIT", "mapped", B_BAD_ADDRESS, in.context, 0,
 				ibs[i].dwords, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
 	}
@@ -1342,13 +1343,12 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		vas[i] = ibs[i].gpu_va;
 		dws[i] = ibs[i].dwords;
 	}
-	/* A null sequence waits for ring room and does not ring the bell.
-	 * The clflush below stays between that wait and the submit. VMID
-	 * stays 1 inside the backend. */
-	if (gR5GpuOps.submit == NULL)
+	/* Worst-case room, then the kernel-copy flush, then one submit that
+	 * reserves the VMID and rings the bell while this lock is held. */
+	if (gR5GpuOps.wait_room == NULL || gR5GpuOps.submit == NULL)
 		return gpu_refuse("CS_SUBMIT", "room", B_NOT_SUPPORTED, in.context, 0,
 			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
-	status = gR5GpuOps.submit(vas, dws, in.ib_count, NULL);
+	status = gR5GpuOps.wait_room(in.ib_count);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
 			ibs[0].gpu_va, 0, in.ring, 0);
@@ -1407,7 +1407,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	}
 	job->count = in.signal_count;
 	uint64 sequence = 0;
-	status = gR5GpuOps.submit(vas, dws, in.ib_count, &sequence);
+	status = gR5GpuOps.submit(client->address, vas, dws, in.ib_count, &sequence);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "ring", status, in.context, 0,
 			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
@@ -1935,8 +1935,6 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 
 	gpu_lock();
 	sInfo = client->info;
-	if (gR5GpuOps.bind != NULL)
-		gR5GpuOps.bind(client->address);
 	status_t status = B_BAD_VALUE;
 	if (op == R5_GPU_READ_REG) {
 		r5_gpu_read_reg in;
