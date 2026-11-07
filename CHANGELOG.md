@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### SPDX snippets on the Renoir driver hooks
+
+`r5_gpu_init()` and `r5_gpu_uninit()` in the Radeon driver, and the `"Renoir"` chip name, are marked as R5 portions. The Haiku MIT header stays.
+
 ### Page-table pages count as VRAM
 
 A buffer and a mapping are refused with `B_NO_MEMORY` when this file's buffers plus its page-table pages do not fit in the VRAM cap. A mapping that cannot allocate a table page logs `page table pool full` and returns the same error.

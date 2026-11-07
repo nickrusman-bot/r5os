@@ -1954,6 +1954,28 @@ main()
 			return 1;
 		if (strstr(text, "page table pool full") == NULL)
 			return fail("pt pool");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
+				"mutex_init(&gLock", "find devices", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "r5_gpu_init()") == NULL
+			|| strstr(text, "SPDX-SnippetBegin") == NULL)
+			return fail("init snippet");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
+				"uninit_driver", "mutex_destroy(&gLock)", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "r5_gpu_uninit()") == NULL
+			|| strstr(text, "SPDX-SnippetBegin") == NULL)
+			return fail("uninit snippet");
+		if (snippet(
+				"distro/graphics/headers/private/graphics/radeon_hd/radeon_hd.h",
+				"\"Raven\"", "\"Navi\"", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "\"Renoir\"") == NULL
+			|| strstr(text, "SPDX-SnippetBegin") == NULL)
+			return fail("renoir snippet");
 	}
 	{
 		char text[4000];

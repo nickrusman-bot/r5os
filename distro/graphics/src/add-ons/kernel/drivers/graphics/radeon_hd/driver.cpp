@@ -886,7 +886,11 @@ init_driver(void)
 	}
 
 	mutex_init(&gLock, "radeon hd ksync");
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	r5_gpu_init();
+// SPDX-SnippetEnd
 
 	// find devices
 
@@ -997,7 +1001,11 @@ uninit_driver(void)
 {
 	TRACE("%s\n", __func__);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	r5_gpu_uninit();
+// SPDX-SnippetEnd
 	mutex_destroy(&gLock);
 
 	// free device related structures

@@ -6,6 +6,14 @@
  *		Axel Dörfler, axeld@pinc-software.de
  *		Alexander von Gluck IV, kallisti5@unixzen.com
  */
+
+/*
+ * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
+ * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
+ * cover the original work. A build that ships both follows GPL-3.0-or-later,
+ * and the MIT notices stay on the Haiku portions.
+ */
+
 #ifndef RADEON_HD_H
 #define RADEON_HD_H
 
@@ -196,7 +204,11 @@ static const char radeon_chip_name[][MAX_NAME_LENGTH] = {
 	"Vega 12",
 	"Vega 20",
 	"Raven",
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	"Renoir",
+// SPDX-SnippetEnd
 	"Navi",
 };
 
