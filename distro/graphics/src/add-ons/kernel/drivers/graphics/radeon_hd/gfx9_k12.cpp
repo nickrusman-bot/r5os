@@ -1047,10 +1047,6 @@ r5_gfx9_vmid1_setup()
 	kwrite(sInfo, gc_byte(0x0854), 0);
 	kwrite(sInfo, gc_byte(0x08ed), (uint32)tableBase);
 	kwrite(sInfo, gc_byte(0x08ee), (uint32)(tableBase >> 32));
-	kwrite(sInfo, gc_byte(0x090d), 0);
-	kwrite(sInfo, gc_byte(0x090e), 0);
-	kwrite(sInfo, gc_byte(0x092d), 0xffffffffu);
-	kwrite(sInfo, gc_byte(0x092e), 0xfu);
 	/* A faulting VMID 1 access lands on the K2 dummy page, not at
 	 * physical 0. The page number is the MC address >> 12.
 	 */
@@ -1062,22 +1058,30 @@ r5_gfx9_vmid1_setup()
 		kwrite(sInfo, gc_byte(0x0847), faultNext);
 	/* RETRY_PERMISSION_OR_INVALID_PAGE_FAULT is bit 7. Linux sets it
 	 * (0x007ffe87). R5 has no retry-fault handler, so the bit stays off
-	 * and the value stays 0x007ffe07. */
-	uint32 cntl = 1u | (3u << 1);
-	cntl |= (1u << 9) | (1u << 10);
-	cntl |= (1u << 11) | (1u << 12);
-	cntl |= (1u << 13) | (1u << 14);
-	cntl |= (1u << 15) | (1u << 16);
-	cntl |= (1u << 17) | (1u << 18);
-	cntl |= (1u << 19) | (1u << 20);
-	cntl |= (1u << 21) | (1u << 22);
-	kwrite(sInfo, gc_byte(0x0881), cntl);
+	 * and the value stays 0x007ffe07. gfxhub_v1_0_setup_vmid_config
+	 * writes that value, and the same start and end, for i = 0..14.
+	 */
+	uint32 cntl = r5_gfx9_vmid_cntl();
+	for (uint32 vmid = 1; vmid <= 15; vmid++) {
+		r5_gfx9_vmid_ctx regs;
+		if (!r5_gfx9_vmid_ctx_regs(vmid, &regs))
+			return false;
+		kwrite(sInfo, gc_byte(regs.start_lo), 0);
+		kwrite(sInfo, gc_byte(regs.start_hi), 0);
+		kwrite(sInfo, gc_byte(regs.end_lo), 0xffffffffu);
+		kwrite(sInfo, gc_byte(regs.end_hi), 0xfu);
+		kwrite(sInfo, gc_byte(regs.cntl), cntl);
+	}
 	if (!r5_gfx9_vmid1_flush()) {
-		/* CNTL is already enabled. Turn the context off so a later
+		/* CNTL is already enabled. Turn every context off so a later
 		 * attempt does not run on the half-written state. The pages
 		 * above stay for that attempt.
 		 */
-		kwrite(sInfo, gc_byte(0x0881), 0);
+		for (uint32 vmid = 1; vmid <= 15; vmid++) {
+			r5_gfx9_vmid_ctx regs;
+			if (r5_gfx9_vmid_ctx_regs(vmid, &regs))
+				kwrite(sInfo, gc_byte(regs.cntl), 0);
+		}
 		return false;
 	}
 	/* gfx_v9_0_constants_init for VMID 1..15. ALIGNMENT_MODE unaligned

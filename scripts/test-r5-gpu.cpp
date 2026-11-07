@@ -1549,6 +1549,26 @@ main()
 		if (r5_gfx9_fault_owner((dword[0] >> 24) & 0xfu, owners, 2) != 0)
 			return fail("ih other file");
 	}
+	if (r5_gfx9_vmid_cntl() != 0x007ffe07u)
+		return fail("vmid cntl");
+	{
+		r5_gfx9_vmid_ctx regs;
+		uint32_t prev = 0;
+		for (uint32_t vmid = 1; vmid <= 15; vmid++) {
+			if (!r5_gfx9_vmid_ctx_regs(vmid, &regs))
+				return fail("vmid ctx");
+			if (regs.cntl != 0x0881u + (vmid - 1)
+				|| regs.start_lo != 0x090du + (vmid - 1) * 2u
+				|| regs.start_hi != regs.start_lo + 1u
+				|| regs.end_lo != 0x092du + (vmid - 1) * 2u
+				|| regs.end_hi != regs.end_lo + 1u
+				|| regs.cntl == prev)
+				return fail("vmid regs");
+			prev = regs.cntl;
+		}
+		if (r5_gfx9_vmid_ctx_regs(0, &regs) || r5_gfx9_vmid_ctx_regs(16, &regs))
+			return fail("vmid range");
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

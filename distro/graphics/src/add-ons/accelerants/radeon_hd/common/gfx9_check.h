@@ -166,6 +166,47 @@ r5_gfx9_tlb_ack_mask(uint32_t vmid)
 }
 
 
+/* gfxhub_v1_0_setup_vmid_config writes VMID 1..15 (i = 0..14).
+ * ctx_distance is mmVM_CONTEXT1_CNTL - mmVM_CONTEXT0_CNTL (1).
+ * ctx_addr_distance is the page-table base stride (2). Retry stays off. */
+struct r5_gfx9_vmid_ctx {
+	uint32_t	cntl;
+	uint32_t	start_lo;
+	uint32_t	start_hi;
+	uint32_t	end_lo;
+	uint32_t	end_hi;
+};
+
+static inline uint32_t
+r5_gfx9_vmid_cntl(void)
+{
+	uint32_t cntl = 1u | (3u << 1);
+	cntl |= (1u << 9) | (1u << 10);
+	cntl |= (1u << 11) | (1u << 12);
+	cntl |= (1u << 13) | (1u << 14);
+	cntl |= (1u << 15) | (1u << 16);
+	cntl |= (1u << 17) | (1u << 18);
+	cntl |= (1u << 19) | (1u << 20);
+	cntl |= (1u << 21) | (1u << 22);
+	return cntl;
+}
+
+static inline int
+r5_gfx9_vmid_ctx_regs(uint32_t vmid, struct r5_gfx9_vmid_ctx* out)
+{
+	uint32_t i;
+	if (out == NULL || vmid < 1 || vmid > 15)
+		return 0;
+	i = vmid - 1;
+	out->cntl = 0x0881u + i;
+	out->start_lo = 0x090du + i * 2u;
+	out->start_hi = out->start_lo + 1u;
+	out->end_lo = 0x092du + i * 2u;
+	out->end_hi = out->end_lo + 1u;
+	return 1;
+}
+
+
 typedef struct r5_gfx9_fault {
 	uint32_t	more;
 	uint32_t	walker;
