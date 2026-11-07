@@ -21,6 +21,11 @@
 #include "driver.h"
 #include "device.h"
 #include "lock.h"
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "r5_gpu_backend.h"
+// SPDX-SnippetEnd
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -960,11 +965,13 @@ init_driver(void)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (found > 0) {
+	if (found > 0 && r5_gpu_ops_ready(&gR5GpuOps)) {
 		sR5GpuName = strdup("gpu/radeon_hd/0");
 		sR5Published[0] = gDeviceNames[0];
 		sR5Published[1] = sR5GpuName;
 		sR5Published[2] = NULL;
+	} else if (found > 0) {
+		dprintf("radeon_hd: render node withheld, a required op is missing\n");
 	}
 // SPDX-SnippetEnd
 

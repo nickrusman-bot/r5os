@@ -16,7 +16,17 @@
  * is a failure, so a caller writes `!= B_OK` and never `!op()`.
  * vmid_lookup returns B_OK when that page is mapped and
  * B_ENTRY_NOT_FOUND when it is not. encode_pte writes *pte.
- * poll_retired writes *seen. */
+ * poll_retired writes *seen.
+ *
+ * Required ops are checked once, before the render node is published.
+ * A missing required op means there is no /dev/gpu node. Optional ops
+ * stay NULL and are checked at the call.
+ * Required: fill_vendor_info, read_reg, vram_alloc, vram_free,
+ * encode_pte, vm_map, vm_unmap, tlb_flush, vmid_prepare, vmid_lookup,
+ * sh_mem, submit, poll_retired, address_open, address_close, limits,
+ * note_retired, wait_room, space_lost, space_hold, space_drop.
+ * Optional: set_cpu_type, vm_prt, ih_decode, fault_decode, dump,
+ * stage_p, stage_u, bind, space_counts. */
 typedef struct r5_gpu_backend_ops {
 	int			(*fill_vendor_info)(void* info, void* block, uint32_t bytes);
 	/* B_OK writes *value. B_NOT_ALLOWED is an offset this backend does
@@ -70,6 +80,26 @@ typedef struct r5_gpu_backend_ops {
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;
+
+static inline int
+r5_gpu_ops_ready(const r5_gpu_backend_ops* ops)
+{
+	if (ops == NULL)
+		return 0;
+	if (ops->fill_vendor_info == NULL || ops->read_reg == NULL
+		|| ops->vram_alloc == NULL || ops->vram_free == NULL
+		|| ops->encode_pte == NULL || ops->vm_map == NULL
+		|| ops->vm_unmap == NULL || ops->tlb_flush == NULL
+		|| ops->vmid_prepare == NULL || ops->vmid_lookup == NULL
+		|| ops->sh_mem == NULL || ops->submit == NULL
+		|| ops->poll_retired == NULL || ops->address_open == NULL
+		|| ops->address_close == NULL || ops->limits == NULL
+		|| ops->note_retired == NULL || ops->wait_room == NULL
+		|| ops->space_lost == NULL || ops->space_hold == NULL
+		|| ops->space_drop == NULL)
+		return 0;
+	return 1;
+}
 
 /* Core query, not a published READ_REG offset. The low 24 bits of the
  * framebuffer location, the same mask the mapper already applied. */

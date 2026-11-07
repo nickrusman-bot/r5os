@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The render node needs every required backend op
+
+`r5_gpu_ops_ready` runs once before `/dev/gpu/radeon_hd/0` is published. A missing required op withholds that node. Optional ops stay NULL and are checked at the call. The contract is the comment on `r5_gpu_backend_ops`. Phase 1 of the GPU Driver Kit is in `docs/GPU-ARCHITECTURE.md`.
+
 ### Clocks and VRAM wait on two ATOM tables
 
 The engine and memory clocks are still the device-table numbers. The next passport milestone reads ATOM `firmwareinfo` for `default_sclk`, `default_mclk` and the SPLL reference, and `integratedsysteminfo` for the VRAM type and width. Linux 6.12 does that in `amdgpu_atomfirmware.c` and `amdgpu_atombios.c`.

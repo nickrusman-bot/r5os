@@ -45,6 +45,10 @@ Applications (unchanged)
 - **OpenGL goes through Zink** (OpenGL on Vulkan) on top of RADV, so there is only one GPU driver to maintain. radeonsi, Mesa's native OpenGL driver, is not built. It is only reconsidered if Zink falls short in measurements, and only when the user asks.
 - **Display stays a separate track.** That is modes, more than one screen, vsync, and putting a frame on the panel. DCN is not programmed yet; the firmware scanout stays. See `GRAPHICS.md`, "Two problems".
 
+## GPU Driver Kit, phase 1
+
+A vendor backend is the struct `r5_gpu_backend_ops`. The core never calls a vendor function by name. Required ops are checked once, in `r5_gpu_ops_ready`, before `/dev/gpu/radeon_hd/0` is published. One missing required op and that node is not published; the display device still is. Optional ops may be NULL. The core checks those at the call and returns `B_NOT_SUPPORTED`. The contract for each op is the comment on the struct in `r5_gpu_backend.h`. Later phases add a second vendor. They do not change a call that already shipped.
+
 ## Default and fallback
 
 ### Which path is used

@@ -814,6 +814,11 @@ ops_status()
 		|| ops.space_lost(0) != 0 || ops.space_hold(0) != 0
 		|| ops.space_drop(0) != 0)
 		return fail("op submit");
+	if (r5_gpu_ops_ready(&ops) != 1)
+		return fail("ops ready");
+	ops.submit = 0;
+	if (r5_gpu_ops_ready(&ops) != 0)
+		return fail("ops ready missing");
 	{
 		char* openText = NULL;
 		const char* openFn;
@@ -985,6 +990,12 @@ main()
 		return 1;
 	if (ops_status() != 0)
 		return 1;
+	{
+		r5_gpu_backend_ops empty;
+		memset(&empty, 0, sizeof(empty));
+		if (r5_gpu_ops_ready(&empty) != 0 || r5_gpu_ops_ready(NULL) != 0)
+			return fail("ops ready empty");
+	}
 	static_assert(R5_GPU_VA_OFFSET == 0x10000ull, "va bottom");
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");
 	static_assert(R5_GPU_HIGH_VA_OFFSET == 0xffff800000000000ull, "high");
