@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### The touchpad has no GPIO interrupt, and a bad I2C child no longer stops the walk
+
+Stick 19 on the 5625U (`generated/boot-5625u-19/syslog`) brings up four DesignWare buses, `0xfedc2000`, `0xfedc3000`, `0xfedc4000` and `0xfedc5000`, version `0x3230312a`. Two more, `0xfedc6000` and `0xfedcb000`, read `0xffffffff` and `enable_device` fails. Those two are not programmed. The touchpad `SYNA32CB` and the touch screen `ELAN2513` are HID over I2C (`PNP0C50`). Which of the four working buses they sit on is not in that syslog. `i2c_hid` matches HID or CID `PNP0C50` and is already in the input Jamfile. The syslog has no `i2c_hid` line, so nothing published a matching child.
+
+There is no AMD GPIO driver for `AMDI0030`. `i2c_hid` does not install a `GpioInt` handler. It reads the input register when the HID stack asks (`MaybeScheduleTransfer`). Linux `i2c-hid` waits for that pin and does not poll. The read-on-demand path stays until a GPIO driver exists. Its cost is an I2C read on every input poll, including when the finger is still, and no wake when nothing is reading. `AMDI0081` is the laptop/tablet indicator, not the pad interrupt.
+
+A child whose `_CRS` has no I2C address used to return `B_BAD_DATA` from the ACPI walk, and any later error returned that error, so the next child on the same bus was never published. The walk now continues. A `STOP_DET` wait already had a 500 ms timeout and then looped again. One timeout now leaves the loop. The SDA hold time is still the register value. The ACPI hold value is not read in this change. The cache flush and the K sequence are untouched. This is not a GPU change.
+
+Haiku's mouse handler accepts a generic-desktop mouse or pointer collection, which is the Precision Touchpad mouse collection Windows calls `COL01`, when the report has X and Y. The tablet handler accepts a digitizer, pen, or touch screen with absolute axes. Multi-finger gestures are not part of this. Neither device has been booted with this change. Host test only. Not jammed.
+
 ### Tracker opens folders in the same window
 
 Haiku Tracker opens each folder in a new window by default. In R5, "Single window navigation" and "Show navigator" are now on by default: a double-clicked folder replaces the view in the same window, and the Back, Forward, Up and location bar are shown. `distro/desktop/src/kits/tracker/TrackerDefaults.h` is a copy of Haiku `src/kits/tracker/TrackerDefaults.h` (MIT header kept). Only `kDefaultSingleWindowBrowse` and `kDefaultShowNavigator` change, marked as an SPDX snippet. This is the factory setting: it applies to every account that has no saved Tracker setting, and to Defaults in Tracker preferences. An account that already saved `TrackerSettings` keeps its own choice. The separate Tracker preferences can still turn both off. Not jammed or booted yet.

@@ -12,6 +12,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### I2C bus scan
+
+Location: `distro/rest/src/add-ons/kernel/busses/i2c/pch/pch_i2c.cpp` and `r5_i2c_scan.h`.
+
+`pch_i2c.cpp` is Haiku's driver. Copyright 2020 Jérôme Duval. License: MIT. That header stays. `r5_i2c_scan.h` is new R5 code, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The combined `pch_i2c` add-on follows GPL-3.0-or-later and the MIT notice stays.
+
 ### Teapot control points
 
 Location: `distro/apps/vulkanteapot/fg_teapot_data.h`.
