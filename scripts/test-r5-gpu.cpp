@@ -1669,13 +1669,15 @@ main()
 				|| words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 				|| words[4] != 7u || words[6] != 4u)
 				return fail("vm switch");
-			/* gc_9 dword offsets. VMID 2 is 0x2000 + 0x08ef and the
-			 * next register. The write-wait-write uses engine 0 at
-			 * 0x28a3 and 0x28b5. VMID 2 request is bit 2 plus the
-			 * five invalidate bits. osssys_4_0: IH_VMID_2_LUT is
-			 * 0x10A0 + 2. */
-			if (words[7] != 0xc0033700u || words[9] != 0x28efu
-				|| words[11] != 0x12c18001u || words[14] != 0x28f0u)
+			/* gfx_v9_0_ring_emit_wreg: WRITE_DATA_ENGINE_SEL(1) |
+			 * WR_CONFIRM is 0x40100000. VMID 2 is 0x2000 + 0x08ef
+			 * and the next register. gfx_v9_0_ring_emit_reg_write_reg_wait
+			 * uses engine 0 at 0x28a3 and 0x28b5. VMID 2 request is
+			 * bit 2 plus the five invalidate bits. osssys_4_0:
+			 * IH_VMID_2_LUT is 0x10A0 + 2. */
+			if (words[7] != 0xc0033700u || words[8] != 0x40100000u
+				|| words[9] != 0x28efu || words[11] != 0x12c18001u
+				|| words[13] != 0x40100000u || words[14] != 0x28f0u)
 				return fail("vm switch pd");
 			if (words[17] != r5_cs_packet3(0x3c, 5) || words[18] != 0x143u
 				|| words[19] != 0x28a3u || words[20] != 0x28b5u
@@ -1684,8 +1686,8 @@ main()
 				return fail("vm switch ack");
 			if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
 				return fail("vm switch pfp");
-			if (words[26] != 0xc0033700u || words[28] != 0x10a2u
-				|| words[30] != 0x42u)
+			if (words[26] != 0xc0033700u || words[27] != 0x40100000u
+				|| words[28] != 0x10a2u || words[30] != 0x42u)
 				return fail("vm switch pasid");
 			bare = r5_cs_user_body(body, 40, &ib, &dw, &vm, 1, 0x9000ull, 8,
 				0x9010ull, kR5CsCntxKeep);

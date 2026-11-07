@@ -214,7 +214,8 @@ static inline uint32_t
 r5_cs_vm_switch_words(void)
 {
 	/* Pipeline sync, two page-table writes, one write-wait-write,
-	 * and PFP_SYNC_ME, then PASID. 26 + 5. */
+	 * and PFP_SYNC_ME, then PASID. 26 + 5. gfx_v9_0_check_fw_write_wait
+	 * leaves me_fw_write_wait true in the default case, which is GC 9.3. */
 	return 31u;
 }
 
@@ -243,15 +244,16 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
 	n = r5_cs_put(out, n, cap, 4u);
-	/* WRITE_DATA to a register: engine ME, destination register, confirm.
-	 * Linux gfx_v9_0_ring_emit_wreg. WR_CONFIRM is bit 20. */
+	/* gfx_v9_0_ring_emit_wreg on the GFX ring.
+	 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000. The PASID
+	 * write below uses the same control. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, 0x40100000u);
 	n = r5_cs_put(out, n, cap, lo);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)pd);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, 0x40100000u);
 	n = r5_cs_put(out, n, cap, lo + 1u);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
@@ -273,7 +275,7 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	 * amdgpu_gmc_emit_pasid_mapping. IH_VMID_n_LUT gets the 16-bit
 	 * PASID after the page-table base, the invalidate, and PFP_SYNC_ME. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, 0x40100000u);
 	n = r5_cs_put(out, n, cap, r5_cs_oss_reg(vmid));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, pasid);

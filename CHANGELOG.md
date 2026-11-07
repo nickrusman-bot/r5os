@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The page-table and PASID writes use the GFX ring engine
+
+`r5_cs_vm_switch` wrote the page-table base and the PASID with `WRITE_DATA` control `0x00100000`. That is `WR_CONFIRM` on the ME. Linux `gfx_v9_0_ring_emit_wreg` for the GFX ring uses `WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`, which is `0x40100000`, so the PFP writes the register. `gfx_v9_0_check_fw_write_wait` leaves `me_fw_write_wait` true in the default case, which is GC 9.3. The invalidate stays one `WAIT_REG_MEM` with control `0x143`, `reg0` `0x28a3`, `reg1` `0x28b5`, reference `0x007c0004` for VMID 2, mask `0x4` and interval `0x20`, as `gfx_v9_0_ring_emit_reg_write_reg_wait`. The packet stays 31 dwords. Host test only. Not booted.
+
 ### The invalidate request and its ack are one write-wait-write
 
 The ring flush wrote the invalidate request with `WRITE_DATA` and then waited for the ack. Linux `gfx_v9_0_ring_emit_reg_write_reg_wait`, when `me_fw_write_wait` is set, uses one `WAIT_REG_MEM` instead. Control `0x143` is function 3 (equal), operation 1 (write-wait-write) and engine 1 (PFP). `reg0` is `0x28a3`, `reg1` is `0x28b5`, the reference is the invalidate request, the mask is the ack bit, and the poll interval is `0x20`. For VMID 2 the request is `0x007c0004` and the mask is `0x4`. The flush is 26 dwords and the PASID write adds five, so the packet is 31 dwords. The page-table writes stay `WRITE_DATA`. Host test only. Not booted.
