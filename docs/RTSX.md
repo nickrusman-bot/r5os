@@ -6,6 +6,10 @@ The register file is OpenBSD `sys/dev/ic/rtsxreg.h` r1.5. The command, clock, an
 
 The module is built with jam. It is not installed in the image.
 
+`module_dependencies` stores the MMC bus module in `sMMCBusModule`. The kernel writes the loaded module through that pointer. NULL panics in `get_module`.
+
+The first call of `supports_device` prints `rtsx: loaded`. That is how a serial boot shows the module ran. `10ec:5228` also prints `rtsx: not claiming 10ec:5228` and returns 0.
+
 ## Chips
 
 | PCI id | Name | Flag | What the driver does |
@@ -19,7 +23,7 @@ The module is built with jam. It is not installed in the image.
 | `10ec:5286` | RTL8402 | none | OpenBSD default init |
 | `10ec:5287` | RTL8411B | none | OpenBSD default init |
 | `10ec:5289` | RTL8411 | none | OpenBSD default init |
-| `10ec:5228` | RTS5228 | `RTSX_F_5228` | Attach only. No chip registers are written |
+| `10ec:5228` | RTS5228 | `RTSX_F_5228` | Not claimed. `supports_device` returns 0 until a chip init exists |
 
 Match requires vendor `10ec` and PCI class `0xff`. A Realtek chip that advertises the SDHCI class stays with `sdhci`. That is the OpenBSD rule.
 
@@ -34,7 +38,7 @@ Match requires vendor `10ec` and PCI class `0xff`. A Realtek chip that advertise
 
 ## RTS5228, open points
 
-The 5625U reader is `10ec:5228` revision `01`, subsystem `103c:8a31`, class `ff:00:00`, BAR0 `0xd0700000` size `0x1000`. OpenBSD does not list this id. The driver claims it and publishes the MMC bus. `set_clock`, `execute_command`, `do_io`, and `set_bus_width` return without touching the chip. `mmc_bus` then waits on the scan semaphore, the same as an empty SDHCI slot.
+The 5625U reader is `10ec:5228` revision `01`, subsystem `103c:8a31`, class `ff:00:00`, BAR0 `0xd0700000` size `0x1000`. OpenBSD does not list this id. `supports_device` returns 0 for that id, so no MMC bus is published and no chip register is written.
 
 Still open, because the only published init for this chip is the Linux `rts5228` code, which this port does not use:
 
@@ -43,7 +47,7 @@ Still open, because the only published init for this chip is the Linux `rts5228`
 - MSI. The other chips use the legacy interrupt line, as `sdhci` does. The 5228 does not install that handler until it has an init sequence
 - A boot on the 5625U with a card
 
-The other ids are ported and have not been booted on hardware. QEMU has no rtsx device, so a boot there only shows that a missing device does not run this module.
+The other ids are ported and have not been booted on hardware. QEMU has no rtsx device. A QEMU boot with `-device sdhci-pci` scans `busses/mmc`, so `supports_device` runs, matches nothing, and returns 0. Class `0xff` is not scanned under `busses/mmc`, so a 5228 on the 5625U is not probed until that path is added with the init.
 
 ## How a command runs
 

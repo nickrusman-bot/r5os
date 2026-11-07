@@ -2,7 +2,9 @@
 
 ### Realtek rtsx bus driver, not in the image
 
-The SD reader on the 5625U is PCI `10ec:5228`, class `ff:00:00`. `sdhci` does not claim that class. The new module is `busses/mmc/rtsx`, a port of OpenBSD `rtsx(4)` (Uwe Stuehler, 2006; Stefan Sperling, 2012), ISC, including the Haiku glue. It publishes the same MMC bus as `sdhci`. `10ec:5228` has its own flag and writes no chip registers: OpenBSD has no init for it, and Linux `rts5228.c` / `rts5228.h` are not a source. The other OpenBSD ids are in the table and have not been booted. The module is built and is not packaged into the image. QEMU has no such device. Developer note: `docs/RTSX.md`.
+The SD reader on the 5625U is PCI `10ec:5228`, class `ff:00:00`. `sdhci` does not claim that class. The new module is `busses/mmc/rtsx`, a port of OpenBSD `rtsx(4)` (Uwe Stuehler, 2006; Stefan Sperling, 2012), ISC, including the Haiku glue. It publishes the same MMC bus as `sdhci` for the OpenBSD ids. `10ec:5228` is in the table and `supports_device` returns 0, so no bus is published until a chip init exists. Linux `rts5228.c` / `rts5228.h` are not a source. The other OpenBSD ids have not been booted. The module is built and is not packaged into the image. Developer note: `docs/RTSX.md`.
+
+The MMC-bus dependency has to store the module pointer. A NULL pointer made `get_module` write address 0 and panic in the kernel as soon as the module was loaded. QEMU, 7 Nov 2026 20:38 Europe/Amsterdam, throwaway image `r5-os-rtsx-test.image` (a copy of `r5-os.image`; that image was not changed) with `-device sdhci-pci` and a serial log: `rtsx: loaded` twice, no `10ec:5228` line (QEMU has no such device), then the sign-in window and, after an empty password, Tracker and Deskbar. Not booted on the 5625U.
 
 ### Geen WC-MTRR als PAT aan staat
 

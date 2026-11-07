@@ -24,9 +24,7 @@
  * rtsx(4) driver (sys/dev/ic/rtsx.c,v 1.22 and sys/dev/pci/rtsx_pci.c,v 1.16).
  * RTS5228 is a separate flag. OpenBSD has no init sequence for that chip.
  * Nothing from Linux drivers/misc/cardreader/rts5228.c or rts5228.h is used.
- * Until a sequence exists that is not taken from those files, the 5228
- * accepts the PCI device and publishes the MMC bus, and every bus operation
- * returns B_NOT_SUPPORTED without writing a register.
+ * Until that init exists, supports_device returns 0 for 10ec:5228.
  */
 
 
@@ -192,6 +190,7 @@ private:
 
 
 device_manager_info* gDeviceManager;
+static module_info* sMMCBusModule;
 
 
 RtsxBus::RtsxBus(volatile uint8* registers, uint8 irq, uint32 flags,
@@ -1133,6 +1132,12 @@ supports_device(device_node* parent)
 		|| strcmp(bus, "pci") != 0)
 		return 0.0f;
 
+	static bool sLoaded = false;
+	if (!sLoaded) {
+		TRACE_ALWAYS("rtsx: loaded\n");
+		sLoaded = true;
+	}
+
 	uint16 vendor = 0;
 	uint16 device = 0;
 	uint16 type = 0;
@@ -1143,6 +1148,16 @@ supports_device(device_node* parent)
 		|| gDeviceManager->get_attr_uint16(parent, B_DEVICE_TYPE, &type, false)
 			!= B_OK)
 		return 0.0f;
+
+	/*
+	 * RTS5228 has no chip init yet. Do not claim it: a published bus with
+	 * no commands is an empty slot. The id stays in the table for the
+	 * later init file.
+	 */
+	if (vendor == 0x10ec && device == 0x5228) {
+		TRACE_ALWAYS("rtsx: not claiming 10ec:5228\n");
+		return 0.0f;
+	}
 
 	/* Same rule as OpenBSD: an SDHCI class stays with sdhci. */
 	if (vendor != 0x10ec || type != 0xff || find_device(device) == NULL)
@@ -1373,7 +1388,7 @@ static mmc_bus_interface sRtsxBusModule = {
 
 
 module_dependency module_dependencies[] = {
-	{ MMC_BUS_MODULE_NAME, NULL },
+	{ MMC_BUS_MODULE_NAME, &sMMCBusModule },
 	{ B_DEVICE_MANAGER_MODULE_NAME, (module_info**)&gDeviceManager },
 	{}
 };
