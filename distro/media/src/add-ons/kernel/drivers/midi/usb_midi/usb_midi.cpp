@@ -295,16 +295,6 @@ usb_module_info* gUSBModule = NULL;
 
 
 static uint32
-load_le32(const uint8* in)
-{
-	return (uint32)in[0]
-		| ((uint32)in[1] << 8)
-		| ((uint32)in[2] << 16)
-		| ((uint32)in[3] << 24);
-}
-
-
-static uint32
 ump_word_count(uint32 first)
 {
 	return usb_midi_ump_word_count(first);
