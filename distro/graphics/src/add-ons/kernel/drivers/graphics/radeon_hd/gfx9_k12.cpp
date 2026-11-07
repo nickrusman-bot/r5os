@@ -969,7 +969,7 @@ r5_gfx9_tlb_flush_vmid(uint32 vmid)
 {
 	if (sInfo == NULL || vmid == 0 || vmid > 15)
 		return false;
-	const uint32 eng = 0;
+	const uint32 eng = 17;
 	uint32 inv = r5_gfx9_tlb_req(vmid, 0);
 	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
 	(void)kread(sInfo, gc_byte(0x08a3 + eng));

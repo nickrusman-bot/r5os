@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The MMIO TLB flush uses engine 17
+
+`r5_gfx9_tlb_flush_vmid` writes `VM_INVALIDATE_ENG17_REQ`. That is the engine Linux uses for an MMIO flush. The GFX ring's VM switch stays on engine 0. The K2 stop and the K2 invalidate already used engine 17, and those lines are unchanged.
+
 ### Designated backend ops, and the dump call is indented
 
 `gR5GpuOps` uses designated initialisers, so a new op cannot shift the ones before it. The `dump` call in `gpu_fence_wait` and `gpu_sync_wait` sits inside its `if`, the same way the other dump calls do.

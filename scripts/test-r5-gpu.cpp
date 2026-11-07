@@ -1835,6 +1835,22 @@ main()
 				(int)sizeof(mismatch)) != 0)
 			return fail("discovery checksum");
 	}
+	{
+		char text[4000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_tlb_flush_vmid", "r5_gfx9_vmid1_flush", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "eng = 17") == NULL)
+			return fail("tlb mmio eng");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_kernel_stop", "sIhInstalled", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "eng = 17") == NULL)
+			return fail("tlb k eng");
+	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
