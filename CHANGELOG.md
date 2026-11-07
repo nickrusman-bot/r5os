@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The GPU core is MIT
+
+`r5_gpu_core.cpp`, `r5_gpu_backend.h`, and `r5_gpu_internal.h` are R5 code, copyright 2026 R5OS Contributors, and are MIT. The `radeon_hd` add-on that links them still follows GPL-3.0-or-later, because other files in that add-on are GPL-3.0-or-later.
+
 ### A blocked fault signal ends the team
 
 A thread that faults returns to the same instruction. When that fault's signal is blocked or ignored, the signal stays pending and the thread faults again. `send_fault_signal()` unblocks it and resets the action to the default before sending it. The page fault and the ARM64 exception handler use that call. This is haiku-pi `6e517bb52c` (Witold Bołt, MIT). Not booted.

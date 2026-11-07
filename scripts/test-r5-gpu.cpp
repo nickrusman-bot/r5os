@@ -2040,6 +2040,24 @@ main()
 		if (strstr(text, "eng = 17") == NULL)
 			return fail("tlb k eng");
 	}
+	{
+		char text[400];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"SPDX-License-Identifier: MIT", "Vendor-neutral", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_backend.h",
+				"SPDX-License-Identifier: MIT", "boundary", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_internal.h",
+				"SPDX-License-Identifier: MIT", "State shared", text,
+				sizeof(text)) != 0)
+			return 1;
+	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)

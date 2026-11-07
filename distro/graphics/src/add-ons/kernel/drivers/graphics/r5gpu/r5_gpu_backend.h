@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * The one boundary between the vendor-neutral GPU core and a vendor
  * backend. The core calls only this struct. A null function returns

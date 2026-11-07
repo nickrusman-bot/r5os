@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Vendor-neutral GPU core. User memory is copied only here. AMD
  * registers, page tables, rings and interrupts stay in r5_gpu.cpp.
