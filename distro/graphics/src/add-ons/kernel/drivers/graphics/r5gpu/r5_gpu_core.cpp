@@ -316,7 +316,9 @@ r5_gpu_eop_at(uint64 seen)
 static void
 r5_gpu_eop()
 {
-	r5_gpu_eop_at(gpu_seen());
+	/* After gpu lost the last fence never arrives. ~0 retires every
+	 * parked buffer and lets note_retired free the parked spaces. */
+	r5_gpu_eop_at(sLost ? ~0ull : gpu_seen());
 }
 
 

@@ -861,6 +861,8 @@ ops_status()
 		return fail("space held");
 	if (!r5_space_free_ok(0, 4, 4) || !r5_space_free_ok(0, 4, 9))
 		return fail("space free");
+	if (!r5_space_free_ok(0, 9, ~0ull))
+		return fail("lost space");
 	if (ops.poll_retired(&seen) != 0 || seen == 0)
 		return fail("op seen");
 	if (ops.ih_decode(0, 0, &source, &address) != 0
@@ -1926,6 +1928,19 @@ main()
 			return 1;
 		if (strstr(text, "st_mode") == NULL)
 			return fail("node ls");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"r5_gpu_eop()", "gpu_space_lost(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "sLost ? ~0ull") == NULL)
+			return fail("lost retire");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_as_close(", "r5_gfx9_as_hold(", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "r5_space_free_ok") == NULL)
+			return fail("lost close");
 	}
 	{
 		char text[4000];

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A lost GPU frees parked spaces
+
+Once the GPU is lost, the retire thread treats every fence as passed. Parked buffers are unmapped and `note_retired(~0)` closes a parked address space, including its page-table pages. `r5_space_free_ok(0, last, ~0)` is that check.
+
 ### The render node is mode 0644
 
 devfs publishes `/dev/gpu/radeon_hd/0` as `S_IFCHR | 0644` and does not check that mode when the node is opened. The driver prints the mode. The self-test writes `ls -l /dev/gpu/radeon_hd/0` into its result file. A standard account may open the node.

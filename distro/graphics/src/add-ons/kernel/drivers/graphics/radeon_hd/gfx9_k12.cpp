@@ -1449,7 +1449,7 @@ r5_gfx9_as_close(void* cookie, uint64 seen)
 	/* A parked buffer still unmaps through this space. holds counts
 	 * those buffers. last is the newest submit, so a job still in
 	 * flight keeps the space too. */
-	if (as->holds > 0 || (as->vmid != 0 && as->last > seen)) {
+	if (!r5_space_free_ok(as->holds, as->vmid != 0 ? as->last : 0, seen)) {
 		as->parked = 1;
 		return;
 	}
