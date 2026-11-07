@@ -2924,6 +2924,8 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 }
 
 
+/* Stick 25 does not call this. The CPU self-check stays for a later stick. */
+__attribute__((unused))
 static bool
 gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 {
