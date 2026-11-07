@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The ring flushes VMID 1 when the page table changes
+
+Stick 25's HDP probe wrote eight words through the BAR and read them back through the carveout, at once and after `sfence`. The carveout saw every write. B1, B2 and B5 still missed, A2 still hung, and the normal teapot still read zeros from GTT while `pixel-vram` was the right colour. That refutes the HDP explanation. The carveout window stays, because that is how Linux maps an APU.
+
+The misses are a stale VMID 1 translation. One VMID is shared, and stage U runs after both teapots. Every failing address is one RADV had just mapped. The CPU walk shows the new page-table entry. The GPU still uses the old one. A write into a freed page misses. An indirect buffer fetched from a freed page hangs. SAM runs first, with nothing stale, and its pixels match. The normal run remaps the same virtual addresses. GTT gets new physical pages, so the GPU writes into SAM's freed pages and the CPU reads zeros. VRAM comes back from the same allocator, so a stale translation still hits the right page.
+
+A user job now starts with the switch from M5 when `tlb_seq` has moved: pipeline sync, the page-table base, invalidate plus wait, and `PFP_SYNC_ME`. That is 31 dwords and does not write a PASID. Every successful `r5_gfx9_vmid1_map` raises the sequence, and a cleared PTE is an unmap. There is no per-client VMID allocator. The K sequence is unchanged. Host test only. Not booted.
+
 ### VMID 1's MMIO flush uses engine 17
 
 `r5_gfx9_vmid1_flush` wrote `VM_INVALIDATE_ENG0_REQ`. Linux `gmc_v9_0_flush_gpu_tlb` uses engine 17 for that MMIO path, and engine 0 belongs to the GFX ring. The K sequence already invalidates on engine 17 and is unchanged: the same stop order, page-table base, PTE flags, invalidate word and ring-index formula. Host test only. Not booted.

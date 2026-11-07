@@ -2428,9 +2428,17 @@ r5_gfx9_ib_regs(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
 uint32
 r5_gfx9_user_commit_dwords(uint32 count)
 {
+	uint64 pd = 0;
+	uint32 body;
+	uint32 extra;
 	if (!r5_gfx9_ring_ready())
 		return 0;
-	return r5_cs_user_commit(sRadeonGfx9Ring.submitted, count);
+	body = r5_cs_user_words(count);
+	if (body == 0)
+		return 0;
+	extra = r5_gfx9_vmid1_flush_due(&pd) ? r5_cs_vm_switch_words() : 0;
+	return extra + body + r5_cs_pad_dwords(
+		sRadeonGfx9Ring.submitted + extra + body);
 }
 
 
@@ -2447,9 +2455,17 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 		ibDw[i] = ibs[i].dwords;
 		ibVm[i] = ibs[i].vmid;
 	}
+	uint64 pd = 0;
+	bool flush = r5_gfx9_vmid1_flush_due(&pd);
+	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
-	uint32 total = r5_cs_user_commit(wptr, count);
-	if (total == 0 || total > 320 || !r5_gfx9_user_room(total))
+	uint32 body = r5_cs_user_words(count);
+	uint32 total = body == 0 ? 0 : prefix + body
+		+ r5_cs_pad_dwords(wptr + prefix + body);
+	uint32 cap = flush ? 512u : 320u;
+	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
+		return false;
+	if (flush && (pd == 0 || ibs[0].vmid == 0))
 		return false;
 	uint64 fenceMc = r5_gfx9_user_fence_mc();
 	if (fenceMc == 0 || (fenceMc & 7ull) != 0)
@@ -2461,11 +2477,19 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 		cntx = kR5CsCntxLoad;
 		sUserCtx = 1u;
 	}
-	uint32 packets[320];
-	uint32 filled = r5_cs_user_body(packets, 320, ibVa, ibDw, ibVm, count,
-		fenceMc, sequence, irqMc, cntx);
+	uint32 packets[512];
+	uint32 switched = 0;
+	if (flush) {
+		switched = r5_cs_vm_switch(packets, cap, ibs[0].vmid, pd, fenceMc,
+			sUserSequence);
+		if (switched != prefix)
+			return false;
+	}
+	uint32 filled = r5_cs_user_body(packets + switched, cap - switched, ibVa,
+		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx);
 	if (filled == 0)
 		return false;
+	filled += switched;
 	uint32 pad = r5_cs_pad_dwords(wptr + filled);
 	if (filled + pad != total)
 		return false;
@@ -2492,6 +2516,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 	}
 	sRadeonGfx9Ring.submitted = newWptr;
 	sUserSequence = sequence;
+	if (flush)
+		r5_gfx9_vmid1_flushed();
 	if (_sequence != NULL)
 		*_sequence = sequence;
 	return true;

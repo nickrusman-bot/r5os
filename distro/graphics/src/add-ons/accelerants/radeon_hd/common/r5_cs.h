@@ -14,6 +14,8 @@
 
 #include <stdint.h>
 
+#include "gfx9_check.h"
+
 /* 64-bit sequence on the kernel fence page, past the K0/K2 words.
  * The 32-bit interrupt fence sits 16 bytes later and does not overlap it. */
 static const uint32_t kR5UserFenceOffset = 2048u;
@@ -110,9 +112,9 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 		return 0;
 	if (cntx != kR5CsCntxKeep && cntx != kR5CsCntxLoad)
 		return 0;
-	/* amdgpu_vm_flush emits this pair before COND_EXEC. That packet
-	 * is not written here: one VMID does not flush. The pair still
-	 * opens the job, as in the capture. */
+	/* Two SWITCH_BUFFER packets open the job, as in the capture.
+	 * When the page table changed, r5_cs_vm_switch is a prefix in
+	 * front of this frame. It is not part of these dwords. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
@@ -178,6 +180,82 @@ r5_cs_pad(uint32_t* out, uint32_t count)
 	out[0] = r5_cs_packet3(0x10, n);
 	for (i = 1; i < count; i++)
 		out[i] = kR5CsNop;
+}
+
+
+static inline uint32_t
+r5_cs_gc_byte(uint32_t index)
+{
+	return (0x2000u + index) * 4u;
+}
+
+
+/* Linux v6.12 amdgpu_vm_flush emits the pipeline sync first, then the
+ * VM flush. gfx_v9_0_ring_emit_vm_flush then writes PACKET3(PFP_SYNC_ME, 0).
+ * gmc_v9_0_use_invalidate_semaphore is true only for MMHUB, so this GFXHUB
+ * sequence does not write VM_INVALIDATE_ENG0_SEM. PASID is not part of
+ * this packet: 31 dwords. */
+static inline uint32_t
+r5_cs_vm_switch_words(void)
+{
+	return 31u;
+}
+
+
+static inline uint32_t
+r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
+	uint64_t fenceMc, uint64_t fenceSeq)
+{
+	uint32_t n = 0;
+	uint32_t inv;
+	uint32_t ack;
+	uint32_t lo;
+	if (vmid == 0 || vmid > 15u || pd == 0)
+		return 0;
+	inv = r5_gfx9_tlb_req(vmid, 0);
+	ack = r5_gfx9_tlb_ack_mask(vmid);
+	lo = r5_cs_gc_byte(0x08ebu + vmid * 2u);
+	/* Pipeline sync on the previous user fence. Memory, equal, PFP.
+	 * Control 0x113 is function 3, memory space, engine 1. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
+	n = r5_cs_put(out, n, cap, 0x113u);
+	n = r5_cs_put(out, n, cap, (uint32_t)fenceMc);
+	n = r5_cs_put(out, n, cap, (uint32_t)(fenceMc >> 32));
+	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
+	n = r5_cs_put(out, n, cap, 0xffffffffu);
+	n = r5_cs_put(out, n, cap, 0x20u);
+	/* WRITE_DATA to a register: engine ME, destination register, confirm.
+	 * WR_CONFIRM is bit 20. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, lo);
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, (uint32_t)pd);
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, lo + 4u);
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, r5_cs_gc_byte(0x08a3u));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, inv);
+	/* Register wait, function equal, PFP. (reg & mask) == mask. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
+	n = r5_cs_put(out, n, cap, 0x103u);
+	n = r5_cs_put(out, n, cap, r5_cs_gc_byte(0x08b5u));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, ack);
+	n = r5_cs_put(out, n, cap, ack);
+	n = r5_cs_put(out, n, cap, 0x20u);
+	/* PACKET3_PFP_SYNC_ME is 0x42. The PFP must not prefetch with the
+	 * old translation. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x42, 0));
+	n = r5_cs_put(out, n, cap, 0);
+	if (n != r5_cs_vm_switch_words() || (out != 0 && n > cap))
+		return 0;
+	return n;
 }
 
 #endif

@@ -1032,6 +1032,50 @@ main()
 			"bo->kernel = kernel", text, sizeof(text)) != 0)
 			return fail("bo map");
 	}
+	{
+		uint32_t words[40];
+		uint32_t n = r5_cs_vm_switch(words, 40, 1, 0x812c18001ull,
+			0x9000ull, 7);
+		uint32_t inv = r5_gfx9_tlb_req(1, 0);
+		uint32_t ack = r5_gfx9_tlb_ack_mask(1);
+		if (n != 31 || n != r5_cs_vm_switch_words())
+			return fail("vm switch words");
+		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
+			|| words[4] != 7u)
+			return fail("vm switch pipe");
+		if (words[7] != r5_cs_packet3(0x37, 3) || words[11] != 0x12c18001u
+			|| words[16] != 0x8u)
+			return fail("vm switch ptb");
+		if (words[17] != r5_cs_packet3(0x37, 3)
+			|| words[19] != r5_cs_gc_byte(0x08a3u) || words[21] != inv)
+			return fail("vm switch inv");
+		if (words[22] != r5_cs_packet3(0x3c, 5) || words[23] != 0x103u
+			|| words[26] != ack || words[27] != ack)
+			return fail("vm switch ack");
+		if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
+			return fail("vm switch pfp");
+		if (r5_cs_vm_switch(0, 0, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
+			return fail("vm switch vmid");
+		if (r5_cs_vm_switch(words, 40, 1, 0, 0x9000ull, 7) != 0)
+			return fail("vm switch pd");
+		const char* tlbOrder[] = {
+			"r5_gfx9_vmid1_map(uint64 va, uint64 pte)",
+			"r5_gfx9_vmid1_touch()"
+		};
+		const char* ringOrder[] = {
+			"r5_gfx9_user_submit(",
+			"r5_cs_vm_switch(",
+			"r5_gfx9_vmid1_flushed()"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", tlbOrder, 2) != 0)
+			return 1;
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", ringOrder, 3) != 0)
+			return 1;
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }
