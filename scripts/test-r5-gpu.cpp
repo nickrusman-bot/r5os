@@ -1941,6 +1941,19 @@ main()
 			return 1;
 		if (strstr(text, "r5_space_free_ok") == NULL)
 			return fail("lost close");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"gpu_vram_room(", "gpu_bo_create(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "pages * 4096ull") == NULL)
+			return fail("pt vram");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_vmid1_map(", "r5_gfx9_vmid1_lookup(", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "page table pool full") == NULL)
+			return fail("pt pool");
 	}
 	{
 		char text[4000];

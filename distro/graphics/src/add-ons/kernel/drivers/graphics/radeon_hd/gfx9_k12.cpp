@@ -1153,8 +1153,10 @@ r5_gfx9_vmid1_map(void* as, uint64 va, uint64 pte)
 	r5_as* space = as_from(as);
 	if (!sVmid1 || space == NULL || space->vm.used == 0)
 		return false;
-	if (!r5_vm_map_page(&space->vm, va, pte))
+	if (!r5_vm_map_page(&space->vm, va, pte)) {
+		knote("page table pool full");
 		return false;
+	}
 	if (pte == 0) {
 		space->tlb_seq++;
 		if (space->tlb_seq == 0)

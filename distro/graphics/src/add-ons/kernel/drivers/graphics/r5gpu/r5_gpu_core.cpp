@@ -536,6 +536,26 @@ gpu_bo_release(gpu_bo* bo)
 bool gpu_selftest_enabled();
 
 
+/* Page-table pages are VRAM. They count with this file's buffers. */
+static status_t
+gpu_vram_room(gpu_client* client, uint64 extra)
+{
+	uint64 vramCap = 0;
+	uint64 gttCap = 0;
+	uint32 pages = 0;
+	uint64 used;
+	if (gR5GpuOps.limits == NULL
+		|| gR5GpuOps.limits(&vramCap, &gttCap) != B_OK)
+		return B_NO_MEMORY;
+	if (gR5GpuOps.space_counts != NULL && client->address != NULL)
+		gR5GpuOps.space_counts(client->address, &pages, NULL, NULL, NULL);
+	used = client->vramUsed + (uint64)pages * 4096ull;
+	if (vramCap == 0 || extra > vramCap || used > vramCap - extra)
+		return B_NO_MEMORY;
+	return B_OK;
+}
+
+
 static status_t
 gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 {
@@ -553,17 +573,20 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		return gpu_refuse("BO_CREATE", "handles", B_NO_MEMORY, 0, in.domain,
 			in.bytes, 0, 0, 0, in.flags);
 	uint64 bytes = (in.bytes + 4095ull) & ~4095ull;
-	uint64 vramCap = 0;
-	uint64 gttCap = 0;
-	if (gR5GpuOps.limits == NULL
-		|| gR5GpuOps.limits(&vramCap, &gttCap) != B_OK)
-		return gpu_refuse("BO_CREATE", "limit", B_NO_MEMORY, 0, in.domain,
-			bytes, 0, 0, 0, in.flags);
-	{
-		uint64 used = in.domain == R5_GPU_DOMAIN_VRAM
-			? client->vramUsed : client->gttUsed;
-		uint64 cap = in.domain == R5_GPU_DOMAIN_VRAM ? vramCap : gttCap;
-		if (cap == 0 || bytes > cap || used > cap - bytes)
+	if (in.domain == R5_GPU_DOMAIN_VRAM) {
+		if (gpu_vram_room(client, bytes) != B_OK)
+			return gpu_refuse("BO_CREATE", "limit", B_NO_MEMORY, 0, in.domain,
+				bytes, 0, 0, 0, in.flags);
+	} else {
+		uint64 vramCap = 0;
+		uint64 gttCap = 0;
+		if (gR5GpuOps.limits == NULL
+			|| gR5GpuOps.limits(&vramCap, &gttCap) != B_OK)
+			return gpu_refuse("BO_CREATE", "limit", B_NO_MEMORY, 0, in.domain,
+				bytes, 0, 0, 0, in.flags);
+		(void)vramCap;
+		uint64 used = client->gttUsed;
+		if (gttCap == 0 || bytes > gttCap || used > gttCap - bytes)
 			return gpu_refuse("BO_CREATE", "limit", B_NO_MEMORY, 0, in.domain,
 				bytes, 0, 0, 0, in.flags);
 	}
@@ -1059,6 +1082,10 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 	if (gR5GpuOps.vmid_prepare() != B_OK)
 		return gpu_refuse("VA_MAP", "vmid", B_NO_INIT, in.handle, bo->domain,
 			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+	/* A new address can allocate four table levels before the leaf. */
+	if (gpu_vram_room(client, 4ull * 4096ull) != B_OK)
+		return gpu_refuse("VA_MAP", "pool", B_NO_MEMORY, in.handle, bo->domain,
+			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	uint32 flags = in.flags;
 	if (flags == 0)
 		flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
@@ -1083,7 +1110,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 			}
 			if (gR5GpuOps.vm_map(client->address, in.gpu_va + page, pte) != B_OK) {
 				gpu_va_clear(client->address, in.gpu_va, page);
-				return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
+				return gpu_refuse("VA_MAP", "pool", B_NO_MEMORY, in.handle,
 					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 			}
@@ -1137,7 +1164,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 					}
 					if (gR5GpuOps.vm_map(client->address, in.gpu_va + filled, pte) != B_OK) {
 						gpu_va_clear(client->address, in.gpu_va, filled);
-						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
+						return gpu_refuse("VA_MAP", "pool", B_NO_MEMORY,
 							in.handle, bo->domain, bo->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
