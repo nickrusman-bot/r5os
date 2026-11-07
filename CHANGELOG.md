@@ -1,5 +1,85 @@
 # R5OS changelog (lokaal)
 
+### Stick 22: the cached read landed, and the high VRAM step hung
+
+Logs are `generated/boot-5625u-22/`. The settings file is the same six lines. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
+
+U-self stored `51550000` through `51550007` and read the same eight words through the page and through a second mapping. The cached GTT page is physical `00000000226eb000`. The VRAM page is physical `0000000811096000`.
+
+| Step | Result |
+|---|---|
+| U-self GTT | equal, both mappings, PAT not printed on this line |
+| U-self VRAM | equal, both mappings |
+| U2a-n | ok, 1 ms, seq 37 seen 37, word `deadbeef`, CP 0, dest `00000000226eb000`, PAT 0 |
+| U2a-f | ok, 1 ms, seq 38 seen 38, word `deadbeef`, CP 0, dest `00000000226eb000`, PAT 0 |
+| U2b-n | ok, 1 ms, seq 39 seen 39, word `deadbeef`, CP 0, dest `0000000811096000`, PAT 4 |
+| U4b | hang, 5000 ms, seq 40 seen 39, word 0, CP `84008600`, dest `0000000811096000`, PAT 4 |
+| U2e, U2f, U2d, U2g | not run |
+| U2l, U2b, U2b-f, U1, U4, U3, U2, U5 | not run |
+
+U2a-n is a VRAM indirect buffer and a fresh cached GTT destination, read without `clflush`. U2a-f is that read with `clflush`. U2b-n wrote a cached GTT indirect buffer without `clflush`, and the GPU wrote `deadbeef` into VRAM. The eight indirect-buffer words of U4b were present on the CPU (`c0033700 … deadbeef`). `CP_IB1` shows `0000800000001000` for the buffer at `ffff800000001000`. Size and offset are 0. The page-table entry of the full address is `0600000811096071`. `fault` is 0. The series stopped. The watchdog then printed `gpu lost`. The userspace indirect-buffer stage still ran and printed `fence timeout` and `gpu read 00000000`. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
+The variable MTRRs are the same before and after stage U. Cap `0000000000000508`, count 8. Register 0 is base `00000000ff000005`, mask `0000ffffff000800`. Register 1 is base `0000000000000006`, mask `0000ffff80000800`. Register 2 is base `0000000080000006`, mask `0000ffffc0000800`. Register 3 is base `00000000c0000006`, mask `0000fffff0000800`. Register 4 is base `00000000cf000000`, mask `0000ffffff000800`. Registers 5, 6 and 7 are zero. None of the types is 1.
+
+Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir. The Vulkan readback line is still type 2, flags `00000006`, heap 0. The buffer is 589824 bytes. The kernel used domain 2 for that size with requested flags `00000004` and used flags `00000000`, snooped 1. libdrm printed `kernel bo domain 2 flags 00000000 bytes 589824`. A VRAM buffer of the same size stayed domain 1, flags 0, snooped 0.
+
+SAM pixels are `pixels ok`: `(24,24)` and `(192,80)` are `262e38ff`, `(192,192)` is `853b16ff`, `(192,134)` is `a64a1cff`, `(90,192)` is `873c17ff`, `(280,192)` is `692e11ff`. The normal run is `pixels MISMATCH`. All six samples are `00000000`.
+
+### Stick 22 drops write-combined RAM
+
+Y1, from the Haiku sources this image builds, not from a new MTRR. `vm_set_area_memory_type()` (`src/system/kernel/vm/vm.cpp`) sets the area type and calls `ProtectArea`, which rewrites every page-table entry, then `arch_vm_set_memory_type()`. On x86 that records a range of the area's physical base and size and rebuilds the variable MTRRs. For `B_WRITE_COMBINING_MEMORY`, `MemoryTypeToPageTableEntryFlags` sets only `X86_64_PTE_PAT` when `x86_use_pat()` is true, which is PAT index 4. The same function returns 0 for write-back. `update_mtrrs()` skips a write-combining range when PAT is on, both while collecting ranges and while emitting registers, so that range is not a variable MTRR. `set_mtrrs()` still runs and calls `disable_caches()` then `enable_caches()` on every CPU: CR0 cache-disable, `wbinvd`, a global TLB flush, the register write, `wbinvd` again, caches back on. `wbinvd` writes dirty lines back. It does not drop them. `delete_area()` calls `arch_vm_unset_memory_type()`, which removes the recorded range and rebuilds the MTRRs the same way.
+
+Stick 21's page `0x2d037000` was a 4096-byte GTT area. With PAT on, the recorded range is base `0x2d037000`, size `0x1000`, and no variable MTRR covers it. The boot write-back MTRR is the one that still covers that RAM. A power-of-two WC MTRR of that page would be base `0x2d037000` size `0x1000` only if PAT were off and `add_mtrrs_for_range` ran. This image does not do that. Linux `set_memory_wc()` / `set_pages_array_wc()` (`arch/x86/mm/pat/set_memory.c`) changes the PAT bits of the pages and flushes those lines. It does not add a variable MTRR for RAM. TTM uses that for `ttm_write_combined`. R5 already has the PAT-only skip for a write-combining RAM range. The stick 21 read was still wrong through the same pointer, before the GPU ran, so the write-combined CPU mapping of RAM stays off until that is understood. The variable-MTRR list is printed before and after stage U so a boot can show whether it moved.
+
+`R5_GPU_BO_WC` is still accepted. No RAM area is given a write-combined memory type. Every GTT page is cached and `SNOOPED`. That is Linux `amdgpu_bo_support_uswc()` false (`amdgpu_object.c`). The `clflush` before a GTT indirect buffer is submitted stays. Stage U on this stick is U-self, U2a-n, U2a-f, U2b-n, then the high addresses with cached GTT, then U2l and the older steps. There is no write-combined step and no `-lx` step. `BO_CREATE` prints the domain, the requested flags and the flags that were used. libdrm prints `kernel bo domain` with those used flags, which is the teapot readback's buffer as well as the others.
+
+`jam -q @r5-raw` finished at 12:38 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick22-m4.image`, 2147483648 bytes, sha256 `3b1b3aa53dc755fcc6d9507f5e47c8a33c7e98367f414b39296c4fa3e007ae4f`. The stick file is the anyboot from 6 Nov 2026, 21:11 Europe/Amsterdam, with that image as the BeFS partition and the same six settings as stick 21. It is 2156724224 bytes, sha256 `b981ebd13e80072b143b62b8e61f2317aa7f8f32f8b26224fac671cef3ec6b19`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 12:40 to 12:43 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 12:44. Disk 0 was not opened. Not booted.
+
+### Stick 21: U2c hung, so the cached-read steps did not run
+
+Logs are `generated/boot-5625u-21/`. The settings file is the same six lines as stick 20. Stage P, all 33 steps, printed `ok 1 ms` before the teapots. Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir. The readback buffer is type 2, flags `00000006`, heap 0, on the SAM run and on the normal run. `00000006` is host-visible and host-coherent. The device-local bit is not set.
+
+SAM pixels are `pixels MISMATCH`. Five of the six samples are the background `262e38ff`. `(192,192)` is `773514ff`. The normal run is also `pixels MISMATCH`. `(192,192)` is `00000000`. The other five are non-zero, with alpha `97` to `9b`.
+
+Stage U then stopped on its first step. `u2c hang 5000 ms seq 37 seen 36 word 00000000 cp 84008600 phys 00000008110a1000 pat 4`. The fence did not land and `CP_STAT` stayed busy. The indirect buffer is `00007ffffffb3000`, physical `000000002d037000`, PTE `000000002d037073`. The eight dwords read back as zero. `CP_IB1` size and offset are 0. `fault` is 0. The watchdog then printed `gpu lost`. `seen` was still 36. No fix in this commit.
+
+| Step | Result |
+|---|---|
+| U2c | hang, 5000 ms, CP `84008600`, seen 36 of sequence 37, word 0, PAT 4 |
+| U4b | not run |
+| U2e | not run |
+| U2f | not run |
+| U2d | not run |
+| U2g | not run |
+| U2a | not run |
+| U2a-f | not run |
+| U2a-n | not run |
+| u2a-sh-lx | not run |
+| u2a-f-sh-lx | not run |
+| u2a-ctx-lx | not run |
+| u2a-f-ctx-lx | not run |
+| U2l | not run |
+| U2b | not run |
+| U2b-f | not run |
+
+Boot still has `SH_MEM_CONFIG` `00001018` and `VM_CONTEXT1_CNTL` `007ffe07`. The `-lx` writes did not happen. After the hang the userspace indirect-buffer stage still ran and printed `fence timeout`. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
+### Stick 21 measures the cached read, on its own page
+
+Stick 20's U2a was a miss, not a hang. The log says `u2a timeout 5000 ms` with `cp 00000000`, the kernel fence equal to the ring pointer, and `seen 38`. The CPU still read 0. The series stopped there, so the high-address steps never ran. The destination was the same virtual address and the same physical page (`0x22ff4000`) as the U2c indirect buffer that had just been deleted. That buffer was write-combined. U2a mapped it cached and snooped.
+
+X1, against Linux 6.12 (`gfxhub_v1_0_init_tlb_regs`, `gc_9_0_sh_mask.h`, `vega10_enum.h`) and the 6 Nov 2026 watch file `watch-2-after-preamble.txt`. From the logged prior value `0x2501`, Linux's read-modify-write of `MC_VM_MX_L1_TLB_CNTL` is `0x3d59`. `ATC_EN` is 1, `MTYPE` is UC (3), and `ECO_BITS` is left at `0xA`. That register matches. `VM_L2_CNTL` `0x80603`, `VM_L2_CNTL2` (the invalidate bits read back 0), `VM_L2_CNTL3` `0x80130009` and `VM_L2_CNTL4` `0x1` match the watch. `VM_L2_CNTL4` is a saved read-modify-write in R5 and a default of `0xc1` with bits 6 and 7 cleared in Linux; the value on this machine is the same. The fence word `0x00238514` matches `gfx_v9_0_ring_emit_fence` without `EOP_TC_NC_ACTION_EN`.
+
+Two registers differ, both already the shipped choice. `SH_MEM_CONFIG` is `0x1018` for VMID 1 (unaligned, retry disabled). Linux `gfx_v9_0_constants_init` writes `0x18` when `gmc.noretry` is 0, which this watch shows for VMID 0. `VM_CONTEXT1_CNTL` is `0x007ffe07`. The watch reads `0x007ffe87`, retry on. Stage U writes the Linux value for those two, flushes, runs U2a and U2a-f, and writes R5's value back. The boot path and the K sequence stay as they are. `VM_CONTEXT0_CNTL` `0x007ffe01` is not the stage VMID.
+
+`vm_set_area_memory_type` sets the area type and `ProtectArea` rewrites every page's PTE from it, so a write-combined GTT object gets the PAT type on each page. The MTRR entry is one span from the first physical page, and the existing path skips that span when it covers the write-back boot range. `delete_area` drops the range when the type is not 0. A new area of that page starts as write-back. Linux `amdgpu_bo_support_uswc()` false is an option that ignores `CPU_GTT_USWC`. It stays an option until a boot shows the snoop.
+
+The stage line prints the sequence, the seen fence, the word, `CP_STAT`, the destination physical page, and the CPU PAT index of that line. Write-back is 0. Haiku's write-combining PTE, with PAT, is index 4. Each step uses a virtual address no earlier step used. U2d keeps `0xffff800000000000`. U4b is the next page. U2g has its own high buffer, one page after U4b, and the high VRAM page. U2a-n is allocated before any write-combining stage page and held until its turn. U2l is the five-dword `WRITE_DATA` of `gfx_v9_0_ring_test_ib`, poisoned with `0xCAFEDEAD`, read without `clflush`. A miss continues. A busy CP at 5 seconds, or the device already lost, stops the series. VulkanTeapot prints the readback type, its flags, and the heap for a self-test run.
+
+`jam -q @r5-raw` finished at 11:50 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`, and updated 1142 targets. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick21-m4.image`, 2147483648 bytes, sha256 `36da2dc8ac95e2efa0590d2a329c02aea83816add927fe856a91068a043f69ff`. `vulkanteapot-1.0.0-1` was rebuilt so the self-test prints that readback line, and the package has no `/home/nickr`. The stick file is the anyboot with that image as the BeFS partition and the same six settings as stick 20. It is 2156724224 bytes, sha256 `ec227c826917b5acfaca7d28d319c89ba522a66ac56062cf9ee655a3a9da267e`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 11:55 to 11:58 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 11:59. Disk 0 was not opened. Not booted.
+
+The 6 Nov 2026 capture grep does not show whether AMD-Vi was present. The host walk shows the software slots. It does not show what the hardware did.
+
 ### A fault marks one file, and the node is not gated
 
 A GC hub interrupt (UTCL2 client `0x1a`, source 0) wakes the retire thread and marks the file that holds that VMID. That file's waits return `ECANCELED`, and `GET_INFO` sets the lost bit so `QUERY_STATE2` reports guilty. Another open file is unchanged. The job watchdog still marks the whole device, and there is still no reset. `gpu_render` is ignored, so a standard account can open the node while the GPU steps are on. A page table holds 1024 pages, enough for a contiguous 1 GiB map. RAM for the GTT cap comes from `get_system_info()`. libdrm turns `B_NO_MEMORY` into `ENOMEM`. `r5-gpu-isolation` sends a foreign GPU address to a second process and has a kill loop. The self-test starts two teapots together and prints the buffer counters. Unproven until the M5 stick. Not booted. No stick.
@@ -52,7 +132,7 @@ Errors stay on, and stop after 32 in a boot: a refusal, the syncobj limit, `gpu 
 
 ### High virtual address, checked on paper
 
-The nineteenth stick hung on write-combined GTT at `0xffff800000000000` and ran the same kind of buffer at a low address. The page-table walk for that address, for `0xffff800000200000`, for `0xffff800100000000`, and for the last high page is the same for GTT and VRAM apart from the page address and the SYSTEM, SNOOP, and MTYPE bits. A canonical address and the same address masked to 48 bits select the same slots. Adding the filled byte count does not wrap those pages, and an address inside the 48-bit hole is rejected. Linux 6.12 `amdgpu_gmc.h` starts the high range at `AMDGPU_GMC_HOLE_END` (`0xffff800000000000`) and does not reserve that first page. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off, which it is on this GPU. The 6 Nov 2026 Linux `dmesg` on this machine has no AMD-Vi line. The walk is not the bug that stick showed. The next stick runs U2c, U2a, U2b, U4b, U2e, U2f, then U2d, and stops at the first hang. Not booted.
+The nineteenth stick hung on write-combined GTT at `0xffff800000000000` and ran the same kind of buffer at a low address. The page-table walk for that address, for `0xffff800000200000`, for `0xffff800100000000`, and for the last high page is the same for GTT and VRAM apart from the page address and the SYSTEM, SNOOP, and MTYPE bits. A canonical address and the same address masked to 48 bits select the same slots. Adding the filled byte count does not wrap those pages, and an address inside the 48-bit hole is rejected. Linux 6.12 `amdgpu_gmc.h` starts the high range at `AMDGPU_GMC_HOLE_END` (`0xffff800000000000`) and does not reserve that first page. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off, which it is on this GPU. The 6 Nov 2026 capture grep does not show whether AMD-Vi was present. The host walk shows the software slots, not what the hardware did. The next stick runs U2c, U2a, U2b, U4b, U2e, U2f, then U2d, and stops at the first hang. Not booted.
 
 ### Write-combined GTT for the command buffers
 

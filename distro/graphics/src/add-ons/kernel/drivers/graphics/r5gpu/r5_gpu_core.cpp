@@ -496,6 +496,9 @@ gpu_bo_release(gpu_bo* bo)
 }
 
 
+bool gpu_selftest_enabled();
+
+
 static status_t
 gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 {
@@ -563,28 +566,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		if (area < 0 || kernel == NULL)
 			return gpu_refuse("BO_CREATE", "gtt", area < 0 ? area : B_NO_MEMORY,
 				0, in.domain, bytes, 0, 0, 0, in.flags);
-		if ((in.flags & R5_GPU_BO_WC) != 0) {
-			physical_entry entry;
-			memset(&entry, 0, sizeof(entry));
-			uint32 count = 1;
-			status_t typed = get_memory_map_etc(B_CURRENT_TEAM, kernel, 4096,
-				&entry, &count);
-			if (typed == B_OK && count == 0)
-				typed = B_ERROR;
-			if (typed == B_OK) {
-				typed = gR5GpuOps.set_cpu_type == NULL ? B_NOT_SUPPORTED
-					: gR5GpuOps.set_cpu_type(area, entry.address,
-						B_WRITE_COMBINING_MEMORY);
-			}
-			if (gpu_debug_enabled())
-			dprintf("radeon_hd: gtt wc area %ld status %#lx\n",
-				(long)area, (unsigned long)typed);
-			if (typed != B_OK) {
-				delete_area(area);
-				return gpu_refuse("BO_CREATE", "wc", typed, 0, in.domain,
-					bytes, 0, 0, 0, in.flags);
-			}
-		}
+		/* R5_GPU_BO_WC is accepted and not applied. GTT stays cached. */
 		bo->kernelArea = area;
 		bo->kernel = kernel;
 	}
@@ -599,6 +581,17 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	in.handle = (uint32)slot + 1u;
 	in.area = bo->area;
 	in.bytes = bytes;
+	{
+		uint32 requested = (uint32)in.flags;
+		uint32 used = requested & ~R5_GPU_BO_WC;
+		if (gpu_selftest_enabled())
+			dprintf("radeon_hd: bo domain %lu requested %08lx used %08lx "
+				"bytes %llu snooped %d\n",
+				(unsigned long)in.domain, (unsigned long)requested,
+				(unsigned long)used, (unsigned long long)bytes,
+				in.domain == R5_GPU_DOMAIN_GTT ? 1 : 0);
+		in.flags = used;
+	}
 	status = gpu_copy_out(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
 		return gpu_refuse("BO_CREATE", "copy", status, in.handle, in.domain,
@@ -747,28 +740,6 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	if (area < 0)
 		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
 			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-	if (bo->domain == R5_GPU_DOMAIN_GTT && (bo->flags & R5_GPU_BO_WC) != 0) {
-		physical_entry entry;
-		memset(&entry, 0, sizeof(entry));
-		uint32 count = 1;
-		status_t typed = get_memory_map_etc(B_CURRENT_TEAM, bo->kernel, 4096,
-			&entry, &count);
-		if (typed == B_OK && count == 0)
-			typed = B_ERROR;
-		if (typed == B_OK) {
-			typed = gR5GpuOps.set_cpu_type == NULL ? B_NOT_SUPPORTED
-				: gR5GpuOps.set_cpu_type(area, entry.address,
-					B_WRITE_COMBINING_MEMORY);
-		}
-		if (gpu_debug_enabled())
-		dprintf("radeon_hd: gtt wc clone %ld status %#lx\n",
-			(long)area, (unsigned long)typed);
-		if (typed != B_OK) {
-			vm_delete_area(team, area, true);
-			return gpu_refuse("BO_MAP", "wc", typed, in.handle, bo->domain,
-				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-		}
-	}
 	bo->area = area;
 	bo->mapTeam = team;
 	in.area = area;
@@ -1092,8 +1063,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 					}
 					uint64 pte = 0;
 					if (gR5GpuOps.encode_pte == NULL
-						|| gR5GpuOps.encode_pte(address, flags, 1,
-							(bo->flags & R5_GPU_BO_WC) != 0, &pte) != B_OK) {
+						|| gR5GpuOps.encode_pte(address, flags, 1, 0, &pte) != B_OK) {
 						gpu_va_clear(client->address, in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NOT_SUPPORTED,
 							in.handle, bo->domain, bo->bytes,

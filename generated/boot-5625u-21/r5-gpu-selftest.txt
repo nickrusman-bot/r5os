@@ -1,0 +1,154 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 feature 54 pfp 197 mec 483
+rb num 2 mask 3
+stage bo
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 0
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+IB skipped
+GEM_VA unmap 0
+GEM_VA remap 0
+close 0
+stage P
+p1 WRITE_DATA ok
+p2 RELEASE_MEM ok
+p3 ACQUIRE_MEM ok
+p4 EVENT_2C ok
+p5 EVENT_2E ok
+p6 EVENT_0E ok
+p7 EVENT_407 ok
+p8 EVENT_410 ok
+p9 EVENT_ZPASS ok
+p10 DMA_DATA ok
+p11 LOAD_CONTEXT ok
+p12 INDEX_PRIM ok
+p13 INDEX_TYPE ok
+p14 IA_MULTI_VGT ok
+p15 MULTI_PRIM_RESET ok
+p16 CP_COHER_DELAY ok
+p17 SH_RSRC3_VS ok
+p18 DISPATCH ok
+p19 IB2 ok
+p20 CONTEXT_CONTROL ok
+p21 CLEAR_STATE ok
+p22 EVENT_19 ok
+p23 EVENT_1A ok
+p24 UC_30A00 ok
+p25 UC_30920 ok
+p26 UC_30968 ok
+p27 UC_30E00 ok
+p28 CONTEXT4 ok
+p29 SH_PREFIX ok
+p30 PREAMBLE_LO ok
+p31 PREAMBLE_HI ok
+p32 PREAMBLE ok
+p33 IB24 ok
+stage vulkaninfo
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.4.367
+
+
+Instance Extensions: count = 10
+-------------------------------
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_headless_surface                : extension revision 1
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_portability_enumeration         : extension revision 1
+VK_LUNARG_direct_driver_loading        : extension revision 1
+
+Instance Layers:
+----------------
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.4.328
+	driverVersion      = 25.3.6
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 21.1.8, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 25.3.6 (LLVM 21.1.8)
+	conformanceVersion = 1.3.1.1
+	deviceUUID         = 6d657361-3235-2e33-2e36-000000000000
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000
+GPU1:
+	apiVersion         = 1.4.328
+	driverVersion      = 25.3.6
+	vendorID           = 0x1002
+	deviceID           = 0x15e7
+	deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+	deviceName         = AMD Radeon Graphics (RADV RENOIR)
+	driverID           = DRIVER_ID_MESA_RADV
+	driverName         = radv
+	driverInfo         = Mesa 25.3.6
+	conformanceVersion = 1.4.0.0
+	deviceUUID         = 00000000-0400-0000-0000-000000000000
+	driverUUID         = 414d442d-4d45-5341-2d44-525600000000
+exit 0
+stage VulkanTeapot (sam)
+vkQueueWaitIdle 0
+device AMD Radeon Graphics (RADV RENOIR)
+deviceType 1
+driverID 3
+frames 1
+fps 0
+readback type 2 flags 00000006 heap 0
+pixel 24 24 262e38ff
+pixel 192 80 262e38ff
+pixel 192 192 773514ff
+pixel 192 134 262e38ff
+pixel 90 192 262e38ff
+pixel 280 192 262e38ff
+pixels MISMATCH
+vkDeviceWaitIdle 0
+exit 2
+stage VulkanTeapot
+vkQueueWaitIdle 0
+device AMD Radeon Graphics (RADV RENOIR)
+deviceType 1
+driverID 3
+frames 1
+fps 0
+readback type 2 flags 00000006 heap 0
+pixel 24 24 10eced99
+pixel 192 80 3004cf97
+pixel 192 192 00000000
+pixel 192 134 c056cb9b
+pixel 90 192 a0663798
+pixel 280 192 c4b27a97
+pixels MISMATCH
+vkDeviceWaitIdle 0
+exit 2
+stage selftest
+R5_GPU_SELFTEST 0 errno -2147483637
+stage bo
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 0
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+stage ib
+context 0
+IB 0
+fence timeout
+gpu read 00000000
+GEM_VA unmap 0
+GEM_VA remap 0
+close 0

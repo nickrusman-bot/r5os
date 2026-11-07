@@ -2224,6 +2224,24 @@ r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa)
 }
 
 
+/* gfx_v9_0_ring_test_ib, Linux 6.12. Five dwords, no padding NOPs.
+ * The caller submits that length and reads the word without clflush. */
+bool
+r5_gfx9_stage_wb(uint8* cpu, uint64 destVa)
+{
+	if (cpu == NULL || destVa == 0 || (destVa & 3ull) != 0)
+		return false;
+	uint32* ib = (uint32*)cpu;
+	memset(ib, 0, 32);
+	ib[0] = radeon_packet3(kWlWriteData, 3);
+	ib[1] = kWlWriteDstMemory | kWlWrConfirm;
+	ib[2] = (uint32)destVa;
+	ib[3] = (uint32)(destVa >> 32);
+	ib[4] = 0xDEADBEEF;
+	return true;
+}
+
+
 bool
 r5_gfx9_stage_ib(uint8* cpu, uint64 destVa)
 {

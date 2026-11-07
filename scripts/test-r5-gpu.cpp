@@ -1165,28 +1165,69 @@ main()
 	const char* stageOrder[] = {
 		"gpu_stage_p(",
 		"gpu_stage_u(",
-		"\"u2c\"",
-		"\"u2a\"",
-		"\"u2b\"",
+		"\"u-self\"",
+		"\"u2a-n\"",
+		"\"u2a-f\"",
+		"\"u2b-n\"",
 		"\"u4b\"",
 		"\"u2e\"",
 		"\"u2f\"",
 		"\"u2d\"",
+		"\"u2g\"",
+		"\"u2l\"",
+		"\"u2b\"",
+		"\"u2b-f\"",
 		"\"u1\"",
 		"\"u4\"",
 		"\"u3\"",
 		"\"u2\"",
-		"\"u2g\"",
 		"gpu_stage_fault"
 	};
+	/* Linux 6.12 gfxhub_v1_0_init_tlb_regs, from the same prior 0x2501.
+	 * Mask 0x3879 is the fields it writes. ECO stays. */
+	static_assert(((0x2501u & ~0x3879u) | 0x3859u) == 0x3d59u, "l1 tlb");
+	static_assert((0x1018u ^ 0x18u) == 0x1000u, "sh mem retry");
+	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
 			selftestOrder, 6) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 15) != 0)
+			stageOrder, 19) != 0)
 		return 1;
+	{
+		FILE* driver = fopen(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"rb");
+		if (driver == NULL)
+			return fail("r5_gpu.cpp");
+		if (fseek(driver, 0, SEEK_END) != 0) {
+			fclose(driver);
+			return fail("r5_gpu.cpp");
+		}
+		long bytes = ftell(driver);
+		if (bytes < 0) {
+			fclose(driver);
+			return fail("r5_gpu.cpp");
+		}
+		rewind(driver);
+		char* text = (char*)malloc((size_t)bytes + 1);
+		if (text == NULL || fread(text, 1, (size_t)bytes, driver) != (size_t)bytes) {
+			free(text);
+			fclose(driver);
+			return fail("r5_gpu.cpp");
+		}
+		text[bytes] = 0;
+		fclose(driver);
+		if (strstr(text, "B_WRITE_COMBINING_MEMORY") != NULL
+			|| strstr(text, "\"u2c\"") != NULL
+			|| strstr(text, "u2a-sh-lx") != NULL) {
+			free(text);
+			return fail("uswc still on");
+		}
+		free(text);
+	}
 
 	{
 		/* REVIEW-25 X1. Four high addresses, GTT and VRAM. */
