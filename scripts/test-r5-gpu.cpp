@@ -1037,9 +1037,7 @@ main()
 		uint32_t words[40];
 		uint32_t n = r5_cs_vm_switch(words, 40, 1, 0x812c18001ull,
 			0x9000ull, 7);
-		uint32_t inv = r5_gfx9_tlb_req(1, 0);
-		uint32_t ack = r5_gfx9_tlb_ack_mask(1);
-		if (n != 31 || n != r5_cs_vm_switch_words())
+		if (n != 26 || n != r5_cs_vm_switch_words())
 			return fail("vm switch words");
 		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 			|| words[4] != 7u || words[6] != 4u)
@@ -1051,14 +1049,14 @@ main()
 			|| words[11] != 0x12c18001u || words[14] != 0x28eeu
 			|| words[16] != 0x8u)
 			return fail("vm switch ptb");
-		if (words[17] != r5_cs_packet3(0x37, 3)
-			|| words[19] != 0x28a3u || words[21] != inv)
+		/* gfx_v9_0_ring_emit_reg_write_reg_wait, me_fw_write_wait.
+		 * VMID 1 request is bit 1 plus the five invalidate bits. */
+		if (words[17] != r5_cs_packet3(0x3c, 5) || words[18] != 0x143u
+			|| words[19] != 0x28a3u || words[20] != 0x28b5u
+			|| words[21] != 0x007c0002u || words[22] != 0x2u
+			|| words[23] != 0x20u)
 			return fail("vm switch inv");
-		if (words[22] != r5_cs_packet3(0x3c, 5) || words[23] != 0x103u
-			|| words[24] != 0x28b5u || words[26] != ack || words[27] != ack
-			|| words[28] != 0x20u)
-			return fail("vm switch ack");
-		if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
+		if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
 			return fail("vm switch pfp");
 		if (r5_cs_vm_switch(0, 0, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
 			return fail("vm switch vmid");

@@ -196,11 +196,13 @@ r5_cs_gc_reg(uint32_t index)
  * VM flush. gfx_v9_0_ring_emit_vm_flush then writes PACKET3(PFP_SYNC_ME, 0).
  * gmc_v9_0_use_invalidate_semaphore is true only for MMHUB, so this GFXHUB
  * sequence does not write VM_INVALIDATE_ENG0_SEM. PASID is not part of
- * this packet: 31 dwords. */
+ * this packet: 26 dwords. The invalidate request and its ack are one
+ * WAIT_REG_MEM, write-wait-write, as gfx_v9_0_ring_emit_reg_write_reg_wait
+ * does when me_fw_write_wait is set. */
 static inline uint32_t
 r5_cs_vm_switch_words(void)
 {
-	return 31u;
+	return 26u;
 }
 
 
@@ -239,17 +241,14 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	n = r5_cs_put(out, n, cap, lo + 1u);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
-	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, inv);
-	/* Register wait, function equal, PFP. (reg & mask) == mask. */
+	/* gfx_v9_0_ring_emit_reg_write_reg_wait with me_fw_write_wait.
+	 * Control 0x143 is function 3 (equal), operation 1 (write-wait-write)
+	 * and engine 1 (PFP). reg0 is the request, reg1 the ack. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
-	n = r5_cs_put(out, n, cap, 0x103u);
+	n = r5_cs_put(out, n, cap, 0x143u);
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
 	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08b5u));
-	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, ack);
+	n = r5_cs_put(out, n, cap, inv);
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, 0x20u);
 	/* PACKET3_PFP_SYNC_ME is 0x42. The PFP must not prefetch with the

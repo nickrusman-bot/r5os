@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The invalidate request and its ack are one write-wait-write
+
+The ring flush wrote the invalidate request with `WRITE_DATA` and then waited for the ack. Linux `gfx_v9_0_ring_emit_reg_write_reg_wait`, when `me_fw_write_wait` is set, uses one `WAIT_REG_MEM` instead. Control `0x143` is function 3 (equal), operation 1 (write-wait-write) and engine 1 (PFP). `reg0` is `0x28a3`, `reg1` is `0x28b5`, the reference is the invalidate request, the mask is the ack bit, and the poll interval is `0x20`. For VMID 1 the request is `0x007c0002` and the mask is `0x2`. The packet is 26 dwords. The page-table writes stay `WRITE_DATA`. GC 9.3 takes this path with no ME or PFP version gate. This machine's ME is `0xa7` feature 54 and its PFP is `0xc5` feature 54. Host test only. Not booted.
+
 ### The ring flush writes dword register offsets
 
 Stick 26 boot 1 landed the K fence and set up VMID 1. The first user job, `mark`, then hung for 5000 ms and the GPU was lost. Stage P, the three teapots and stage U did not run. The ME had finished the three `WRITE_DATA` packets. The PFP was in the second `WAIT_REG_MEM`, waiting for the invalidate ack. The indirect buffer was never fetched. Logs are `generated/boot-5625u-26/`.
