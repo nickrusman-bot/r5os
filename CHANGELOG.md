@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### The MT7921 driver is not in the image yet
+
+The 5625U card is MediaTek MT7921, PCI `14c3:7961`, subsystem `1a3b:4682` (AzureWave). Bluetooth on the same card is USB `13d3:3567`.
+
+RenkuOS `Source` `main` has `src/add-ons/kernel/drivers/network/wlan/mediatekwifi`. `dev/pci/if_mwx.c` is OpenBSD `if_mwx.c` 1.46 (8 Oct 2026). The header is ISC. Copyright holders in that file: Claudio Jeker (2022), MediaTek Inc. (2021), Lorenzo Bianconi (2021), Stefan Sperling (2017), Felix Fietkau (2016), Damien Bergamini (2007–2010). It lists `PCI_PRODUCT_MEDIATEK_MT7921` as `0x7961` and `MT7921K` as `0x0608`. The comment in that file says HT20 for this family, with rate selection in the firmware. That is not Wi-Fi 6. The firmware names are `mwx-mt7961_patch_mcu_1_2_hdr` and `mwx-mt7961_ram_code_1`.
+
+Haiku in the WSL tree already has `src/libs/compat/openbsd_wlan`. RenkuOS also has that tree, including files this Haiku tree does not (`ieee80211_haiku.cpp`, `ieee80211_ra_vht.c`). Copying Renku's stack over the one the other Wi-Fi drivers already link was not done. The driver was not added. The jam recipe `build/jam/packages/MediatekWifiFirmwares` is MIT and downloads OpenBSD `mwx-firmware-20260309p0.tgz`, SHA-256 `777e0e188aeeece6bb294b1c2bcf54926b213276e31a86df1c04cf4248b41345`. The blobs and `firmware/mwx-license` were not downloaded and are not in this tree. No scan, no join, no speed.
+
+`h2generic.cpp` in this Haiku tree mentions MediaTek MT76x0E in a comment and does not list `13d3:3567`. air/OS was not read. Bluetooth firmware for this card is not loaded here.
+
 ### Tracker opens folders in the same window
 
 Haiku Tracker opens each folder in a new window by default. In R5, "Single window navigation" and "Show navigator" are now on by default: a double-clicked folder replaces the view in the same window, and the Back, Forward, Up and location bar are shown. `distro/desktop/src/kits/tracker/TrackerDefaults.h` is a copy of Haiku `src/kits/tracker/TrackerDefaults.h` (MIT header kept). Only `kDefaultSingleWindowBrowse` and `kDefaultShowNavigator` change, marked as an SPDX snippet. This is the factory setting: it applies to every account that has no saved Tracker setting, and to Defaults in Tracker preferences. An account that already saved `TrackerSettings` keeps its own choice. The separate Tracker preferences can still turn both off. Not jammed or booted yet.
