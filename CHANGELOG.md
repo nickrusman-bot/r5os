@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Firmware versions come from the ucode header
+
+`radeon_gfx9_open_ucode` reads `ucode_version` at byte 16 and `ucode_feature_version` at byte 32. Both the PSP load and the direct engine load record those words. The passport copies them. The device table has no firmware version.
+
 ### One chip row for GC 9.3
 
 The four Renoir PCI ids share one generation row, `GC 9.3 Renoir`. Each id row keeps only the PCI id, the revision addend, the firmware stem and the flags. The passport values are unchanged.

@@ -41,7 +41,7 @@ int snprintf(char* str, size_t size, const char* format, ...);
 #define R5_AMD_SRC_XCLK \
 	"Mesa capture gpu_counter_freq 100000; Linux v6.12 amdgpu_kms.c xclk"
 #define R5_AMD_SRC_FW \
-	"firmware header"
+	"common_firmware_header ucode_version byte 16, ucode_feature_version byte 32"
 #define R5_AMD_SRC_GPU_INFO \
 	"no gpu_info.bin; Linux v6.12 amdgpu_device_parse_gpu_info_fw"
 #define R5_AMD_SRC_ATOM \
@@ -313,6 +313,25 @@ r5_le32(const uint8_t* p)
 	uint32_t v;
 	memcpy(&v, p, 4);
 	return v;
+}
+
+
+/* Linux common_firmware_header. The device table does not carry these. */
+static inline int
+r5_amd_ucode_versions(const uint8_t* blob, uint32_t bytes,
+	uint32_t* version, uint32_t* feature)
+{
+	uint32_t ver;
+	uint32_t feat;
+	if (blob == NULL || bytes < 36)
+		return 0;
+	ver = r5_le32(blob + 16);
+	feat = r5_le32(blob + 32);
+	if (version != NULL)
+		*version = ver;
+	if (feature != NULL)
+		*feature = feat;
+	return 1;
 }
 
 

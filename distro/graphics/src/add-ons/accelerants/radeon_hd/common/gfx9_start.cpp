@@ -486,7 +486,10 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 		uint16 headerMinor = radeon_le16(blob + 10);
 		uint16 ipMajor = radeon_le16(blob + 12);
 		uint16 ipMinor = radeon_le16(blob + 14);
-		uint32 version = radeon_le32(blob + 16);
+		uint32 version = 0;
+		uint32 feature = 0;
+		if (!r5_amd_ucode_versions(blob, (uint32)bytes, &version, &feature))
+			version = 0;
 		uint32 ucodeBytes = radeon_le32(blob + 20);
 		uint32 offset = radeon_le32(blob + 24);
 		bool headerOk = (headerMajor == 1 && headerMinor == 0)
@@ -555,7 +558,8 @@ radeon_gfx9_open_ucode(const char* fileName, radeon_gfx9_ucode* out)
 				out->ucode = blob + offset;
 				out->ucodeBytes = ucodeBytes;
 				out->version = version;
-				out->feature = radeon_le32(blob + 32);
+				out->feature = feature;
+				radeon_gfx9_note_fw(fileName, out);
 				out->headerMajor = headerMajor;
 				out->headerMinor = headerMinor;
 				out->jtOffset = jtOffset;

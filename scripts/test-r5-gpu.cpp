@@ -938,6 +938,20 @@ main()
 			return fail("passport handover");
 		if (dev.fw_ver[4] != 0xa7u || dev.fw_feature[4] != 54u)
 			return fail("passport fw");
+		{
+			uint8_t hdr[44];
+			uint32_t ver = 0;
+			uint32_t feat = 0;
+			memset(hdr, 0, sizeof(hdr));
+			hdr[16] = 0x11;
+			hdr[17] = 0x22;
+			hdr[32] = 0x33;
+			hdr[33] = 0x44;
+			if (r5_amd_ucode_versions(hdr, sizeof(hdr), &ver, &feat) != 1
+				|| ver != 0x2211u || feat != 0x4433u
+				|| r5_amd_ucode_versions(hdr, 8, &ver, &feat) != 0)
+				return fail("ucode header");
+		}
 		if (!r5_amd_gfx9_cp(0x15e7u) || r5_amd_gfx9_cp(0x164cu))
 			return fail("passport cp");
 		if (r5_amd_row_find(0x15e7u) == NULL
