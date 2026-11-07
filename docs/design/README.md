@@ -9,7 +9,12 @@ These files are not part of any image.
 The user's target for the look of a window, shared on 7 Nov 2026. It shows a Sign in window. **The logo in it is not the R5 logo.** Look at the window, not the logo. The text "R5OS" in the picture becomes "R5" in user-facing text (`AGENTS.md`, "Name").
 
 What to take from it:
-- **The BeOS yellow tab** with the title and a close box, with rounded corners and a lighter finish.
+- **The BeOS yellow tab,** with rounded corners and a lighter finish. **The tab keeps the BeOS buttons and their places, not the "X" in the picture** (the user, 7 Nov 2026):
+  - the close box on the left;
+  - then the title;
+  - the zoom box on the right.
+
+  Both stay the BeOS square boxes, restyled to the new look. The picture's "X" at the right is not taken.
 - **A window body with large rounded corners.**
 - **A frosted, slightly translucent light surface** with a soft shadow over the desktop.
 - **Controls:**
