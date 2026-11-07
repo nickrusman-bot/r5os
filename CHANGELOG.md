@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### VMID 1's MMIO flush uses engine 17
+
+`r5_gfx9_vmid1_flush` wrote `VM_INVALIDATE_ENG0_REQ`. Linux `gmc_v9_0_flush_gpu_tlb` uses engine 17 for that MMIO path, and engine 0 belongs to the GFX ring. The K sequence already invalidates on engine 17 and is unchanged: the same stop order, page-table base, PTE flags, invalidate word and ring-index formula. Host test only. Not booted.
+
 ### VMID 1 reads and writes VRAM through the carveout
 
 Linux 6.12 `gmc_v9_0_mc_init` sets `aper_base` to the PCI BAR, then on an x86_64 APU replaces it with `get_mc_fb_offset()`. `amdgpu_ttm_init` maps that with `ioremap_wc`. `amdgpu_device_flush_hdp` returns at once on such an APU, which is why Linux never flushes the HDP there. `amdgpu_vm_cpu_commit` still calls it after a page-table update. `nbio_v7_0` remaps `HDP_MEM_COHERENCY_FLUSH_CNTL`; the APU path does not reach that write.

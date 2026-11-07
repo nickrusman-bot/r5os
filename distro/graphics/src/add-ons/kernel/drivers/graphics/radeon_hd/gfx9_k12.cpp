@@ -985,7 +985,9 @@ r5_gfx9_vmid1_flush()
 		knote("vmid1 fail info");
 		return false;
 	}
-	const uint32 eng = 0;
+	/* Linux gmc_v9_0_flush_gpu_tlb uses engine 17 for an MMIO flush.
+	 * Engine 0 belongs to the GFX ring. The K sequence already uses 17. */
+	const uint32 eng = 17;
 	uint32 inv = r5_gfx9_tlb_req(1, 0);
 	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
 	(void)kread(sInfo, gc_byte(0x08a3 + eng));

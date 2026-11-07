@@ -1021,6 +1021,13 @@ main()
 			|| strstr(text, "sfence") == NULL)
 			return fail("hdp paths");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "r5_gfx9_vmid1_flush()",
+			"vmid1 fail tlb", text, sizeof(text)) != 0)
+			return fail("vmid1 flush");
+		if (strstr(text, "const uint32 eng = 17;") == NULL
+			|| strstr(text, "eng = 0") != NULL)
+			return fail("vmid1 engine");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
 			"radeon_hd/r5_gpu.cpp", "r5_gfx9_map_vram(bo->vramOffset",
 			"bo->kernel = kernel", text, sizeof(text)) != 0)
 			return fail("bo map");
