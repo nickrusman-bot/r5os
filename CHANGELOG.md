@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A failed copy gives the buffer back
+
+`BO_CREATE`, `BO_MAP`, and `CTX_CREATE` undo the handle, the mapping, or the context count when the copy back to the caller fails. A user VRAM bump whose span does not fit is rewound on the pool cursor. A page-table close that cannot fit its pages on the free list parks the space instead of dropping those pages.
+
 ### A VA replace uses the kernel copy of the request
 
 `gpu_va_replace` copies the user request once. The map that follows reads that copy. It does not read the user buffer again while `sReplacing` skips the PRT overlap check.

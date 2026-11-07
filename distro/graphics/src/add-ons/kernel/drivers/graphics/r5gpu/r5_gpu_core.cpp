@@ -628,9 +628,12 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		in.flags = used;
 	}
 	status = gpu_copy_out(buffer, length, &in, sizeof(in));
-	if (status != B_OK)
+	if (status != B_OK) {
+		client->handleCount--;
+		gpu_bo_release(bo);
 		return gpu_refuse("BO_CREATE", "copy", status, in.handle, in.domain,
 			bytes, 0, 0, 0, in.flags);
+	}
 	return B_OK;
 }
 
@@ -753,7 +756,8 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 		in.area = bo->area;
 		return gpu_copy_out(buffer, length, &in, sizeof(in));
 	}
-	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+	bool madeKernel = false;
+	if (bo->domain == R5_GPU_DOMAIN_VRAM && bo->kernelArea < 0) {
 		uint32 fb = 0;
 		if (gpu_vram_base(client->info, &fb) != B_OK)
 			return gpu_refuse("BO_MAP", "vram", B_NO_INIT, in.handle, bo->domain,
@@ -769,6 +773,7 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 		bo->kernelArea = kernelArea;
 		bo->kernel = kernel;
+		madeKernel = true;
 	}
 	void* user = NULL;
 	area_id area = vm_clone_area(team, "r5 gpu bo", &user, B_ANY_ADDRESS,
@@ -781,9 +786,19 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	bo->mapTeam = team;
 	in.area = area;
 	status = gpu_copy_out(buffer, length, &in, sizeof(in));
-	if (status != B_OK)
+	if (status != B_OK) {
+		if (bo->area >= 0 && team_is_valid(bo->mapTeam))
+			vm_delete_area(bo->mapTeam, bo->area, true);
+		bo->area = -1;
+		bo->mapTeam = -1;
+		if (madeKernel && bo->kernelArea >= 0) {
+			delete_area(bo->kernelArea);
+			bo->kernelArea = -1;
+			bo->kernel = NULL;
+		}
 		return gpu_refuse("BO_MAP", "copy", status, in.handle, bo->domain,
 			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	}
 	return B_OK;
 }
 
@@ -2044,6 +2059,10 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			client->contexts++;
 			in.context = 1;
 			status = gpu_copy_out(buffer, length, &in, sizeof(in));
+			if (status != B_OK) {
+				sContexts--;
+				client->contexts--;
+			}
 		}
 	} else if (op == R5_GPU_CTX_DESTROY) {
 		r5_gpu_ctx in;

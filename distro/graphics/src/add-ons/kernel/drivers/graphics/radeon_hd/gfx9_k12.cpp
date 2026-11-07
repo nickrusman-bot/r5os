@@ -946,8 +946,12 @@ r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset)
 		return status;
 	if (address != NULL)
 		memset(address, 0, bytes);
-	if (!r5_span_add(sUserSpans, 64, bumped, bytes))
+	if (!r5_span_add(sUserSpans, 64, bumped, bytes)) {
+		radeon_shared_info* shared = sInfo != NULL ? sInfo->shared_info : NULL;
+		if (shared != NULL && shared->vram_pool_cursor == bumped + bytes)
+			shared->vram_pool_cursor = bumped;
 		return B_NO_MEMORY;
+	}
 	for (int i = 0; i < 64; i++) {
 		if (sUserSpans[i].live && sUserSpans[i].offset == bumped)
 			sUserSpans[i].cpu = address;
@@ -1455,6 +1459,20 @@ r5_gfx9_as_close(void* cookie, uint64 seen)
 	if (as->holds > 0 || (as->vmid != 0 && as->last > seen)) {
 		as->parked = 1;
 		return;
+	}
+	{
+		uint32 live = 0;
+		uint32 i;
+		for (i = 0; i < as->vm.used; i++) {
+			if (as->vm.pages[i].physical != 0)
+				live++;
+		}
+		/* The free list cannot take these pages. Parking keeps them
+		 * with the space; as_retired tries this close again. */
+		if (live > 1024u - sFreeCount) {
+			as->parked = 1;
+			return;
+		}
 	}
 	if (as->vmid != 0 && sVmidReady)
 		r5_vmid_release(&sVmids, as->id, seen);

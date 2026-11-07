@@ -1862,6 +1862,43 @@ main()
 			return fail("va replace copy");
 	}
 	{
+		char text[8000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"gpu_bo_create(", "gpu_bo_get(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "gpu_bo_release(bo)") == NULL)
+			return fail("bo create undo");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"gpu_bo_map(", "gpu_va_fits(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "vm_delete_area") == NULL
+			|| strstr(text, "madeKernel") == NULL)
+			return fail("bo map undo");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"R5_GPU_CTX_CREATE", "R5_GPU_CTX_DESTROY", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "sContexts--") == NULL)
+			return fail("ctx undo");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_alloc_user_vram", "r5_gfx9_free_user_vram", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "vram_pool_cursor = bumped") == NULL)
+			return fail("span rewind");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_as_close(", "r5_gfx9_as_drop(", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "1024u - sFreeCount") == NULL)
+			return fail("page keep");
+	}
+	{
 		char text[4000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
