@@ -12,6 +12,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### A fault whose signal is blocked
+
+Location: `distro/kernel/src/system/kernel/signal.cpp`, `distro/kernel/headers/private/kernel/ksignal.h`, `distro/kernel/src/system/kernel/vm/vm.cpp`, and `distro/kernel/src/system/kernel/arch/arm64/arch_int.cpp`.
+
+The files are Haiku's. Licenses: MIT, and for `vm.cpp` also NewOS. `send_fault_signal()` is the haiku-pi change `6e517bb52c`. Copyright 2026 Witold Bołt. License: MIT. A fault signal that the thread blocks or ignores is unblocked and reset to the default before it is sent.
+
 ### An interrupted rw_lock wait
 
 Location: `distro/rest/src/system/libroot/os/locks/rw_lock.cpp` and `distro/rest/src/tests/system/libroot/os/rw_lock_interrupt_test.cpp`.

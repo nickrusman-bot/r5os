@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A blocked fault signal ends the team
+
+A thread that faults returns to the same instruction. When that fault's signal is blocked or ignored, the signal stays pending and the thread faults again. `send_fault_signal()` unblocks it and resets the action to the default before sending it. The page fault and the ARM64 exception handler use that call. This is haiku-pi `6e517bb52c` (Witold Bołt, MIT). Not booted.
+
 ### An interrupted rw_lock wait tries again
 
 `rw_lock_wait()` retried an interrupted block with the status the interruption left. The kernel returns at once for that status and ignores a later unblock, so the waiter kept the lock. It now blocks again, with a fresh wait status, until the thread that holds the mutex dequeues it. This is haiku-pi `2bf2f773ba` (Witold Bołt, MIT). The test `rw_lock_interrupt_test` is in the tree. Not booted.

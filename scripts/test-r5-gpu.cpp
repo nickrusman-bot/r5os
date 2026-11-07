@@ -2003,6 +2003,26 @@ main()
 			return 1;
 		if (strstr(text, "while (waiter.queued)") == NULL)
 			return fail("rw lock wait");
+		if (snippet("distro/kernel/src/system/kernel/signal.cpp",
+				"send_fault_signal(", "Sends the given signal to the thread with",
+				text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "action.sa_handler = SIG_DFL") == NULL
+			|| strstr(text, "sig_block_mask") == NULL)
+			return fail("fault signal");
+		if (snippet("distro/kernel/src/system/kernel/vm/vm.cpp",
+				"signal.SetAddress((void*)address)", "return B_HANDLED_INTERRUPT",
+				text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "send_fault_signal(thread, signal)") == NULL)
+			return fail("fault vm");
+		if (snippet(
+				"distro/kernel/src/system/kernel/arch/arm64/arch_int.cpp",
+				"signal.SetAddress((void*)signalAddress)",
+				"unhandled exception", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "send_fault_signal(thread, signal)") == NULL)
+			return fail("fault arm");
 	}
 	{
 		char text[4000];
