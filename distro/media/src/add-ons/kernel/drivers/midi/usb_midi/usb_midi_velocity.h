@@ -103,7 +103,7 @@ usb_midi_translate_channel(uint8_t protocol, uint8_t statusByte, uint8_t data1,
 {
 	uint8_t channel;
 	uint8_t kind;
-	if (protocol != 0x02 || words == NULL)
+	if (protocol != 0x02 || words == 0)
 		return 0;
 	kind = statusByte & 0xf0;
 	channel = statusByte & 0x0f;
@@ -132,7 +132,7 @@ usb_midi_translate_channel(uint8_t protocol, uint8_t statusByte, uint8_t data1,
 		uint8_t bankValid = 0;
 		uint8_t msb = 0;
 		uint8_t lsb = 0;
-		if (state != NULL && (state->bank_mask[channel] & 0x03) == 0x03) {
+		if (state != 0 && (state->bank_mask[channel] & 0x03) == 0x03) {
 			bankValid = 1;
 			msb = state->bank_msb[channel];
 			lsb = state->bank_lsb[channel];
@@ -144,7 +144,7 @@ usb_midi_translate_channel(uint8_t protocol, uint8_t statusByte, uint8_t data1,
 	}
 	if (kind != 0xb0)
 		return 0;
-	if (state == NULL) {
+	if (state == 0) {
 		words[0] = (0x4u << 28) | (0x0bu << 20) | ((uint32_t)channel << 16)
 			| ((uint32_t)(data1 & 0x7f) << 8);
 		words[1] = usb_midi_scale_up_7_to_32(data2 & 0x7f);
