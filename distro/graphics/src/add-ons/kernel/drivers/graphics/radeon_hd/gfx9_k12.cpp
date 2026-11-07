@@ -15,6 +15,7 @@
 #include "r5_gpu.h"
 #include "r5_amd_device.h"
 #include "r5_span.h"
+#include "r5_vram_reserve.h"
 #include "radeon_hd_private.h"
 
 #include <PCI.h>
@@ -160,16 +161,28 @@ kvram(void* cookie, uint64 bytes, uint64 align, uint64* offset, uint8** address)
 	uint64 cursor = shared->vram_pool_cursor;
 	if (cursor < start)
 		cursor = start;
-	uint64 aligned = (cursor + align - 1) & ~(align - 1);
-	if (aligned < cursor || aligned > end || bytes > end - aligned)
+	r5_vram_range holes[4];
+	int holeCount = (int)shared->vram_hole_count;
+	int index;
+	uint64 placed = 0;
+	if (holeCount > 4)
+		holeCount = 4;
+	if (holeCount < 0)
+		holeCount = 0;
+	for (index = 0; index < holeCount; index++) {
+		holes[index].offset = shared->vram_hole_offset[index];
+		holes[index].bytes = shared->vram_hole_bytes[index];
+	}
+	if (!r5_vram_place(start, end, cursor, bytes, align, holes, holeCount,
+			&placed))
 		return B_NO_MEMORY;
-	if (info->kernel_window == NULL || aligned < shared->vram_pool_offset)
+	if (info->kernel_window == NULL || placed < shared->vram_pool_offset)
 		return B_NO_MEMORY;
-	shared->vram_pool_cursor = aligned + bytes;
-	*offset = aligned;
+	shared->vram_pool_cursor = placed + bytes;
+	*offset = placed;
 	if (address != NULL) {
 		*address = info->kernel_window
-			+ (aligned - shared->vram_pool_offset);
+			+ (placed - shared->vram_pool_offset);
 	}
 	return B_OK;
 }

@@ -19,6 +19,7 @@
 #include "r5_wait.h"
 #include "r5_stage_p.h"
 #include "r5_log.h"
+#include "r5_vram_reserve.h"
 #include "gfx9_check.h"
 #include "../distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_backend.h"
 
@@ -2105,6 +2106,50 @@ main()
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
 		return fail("guilty");
+	{
+		r5_vram_range holes[4];
+		int count;
+		int index;
+		int sawPsp = 0;
+		int sawDiscovery = 0;
+		uint64_t off = 0;
+		uint64_t cursor = 0;
+		count = r5_vram_reserve(512ull << 20, 256ull << 20, 0, 0, holes, 4);
+		if (count != 1 || holes[0].offset != R5_PSP_TMR_OFFSET
+			|| holes[0].bytes != R5_PSP_TMR_BYTES)
+			return fail("reserve psp");
+		count = r5_vram_reserve(32ull << 20, 32ull << 20, 0, 0, holes, 4);
+		for (index = 0; index < count; index++) {
+			if (holes[index].offset == R5_PSP_TMR_OFFSET)
+				sawPsp = 1;
+			if (holes[index].offset == (32ull << 20) - R5_DISCOVERY_TMR_TAIL)
+				sawDiscovery = 1;
+		}
+		if (!sawPsp || !sawDiscovery)
+			return fail("reserve discovery");
+		if (!r5_vram_place(0, 32ull << 20, R5_PSP_TMR_OFFSET, 4096, 4096,
+				holes, count, &off)
+			|| off != R5_PSP_TMR_OFFSET + R5_PSP_TMR_BYTES)
+			return fail("place psp");
+		count = r5_vram_reserve(512ull << 20, 256ull << 20, 0x200000ull,
+			0x1000ull, holes, 4);
+		if (!r5_vram_place(0, 256ull << 20, 0x200000ull, 4096, 4096, holes,
+				count, &off) || off == 0x200000ull)
+			return fail("place fw");
+		for (index = 0; index < 64; index++) {
+			int hole;
+			if (!r5_vram_place(0, 256ull << 20, cursor, 1ull << 20, 4096,
+					holes, count, &off))
+				break;
+			for (hole = 0; hole < count; hole++) {
+				if (r5_vram_overlaps(off, 1ull << 20, holes[hole].offset,
+						holes[hole].bytes))
+					return fail("alloc in hole");
+			}
+			cursor = off + (1ull << 20);
+		}
+	}
+
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

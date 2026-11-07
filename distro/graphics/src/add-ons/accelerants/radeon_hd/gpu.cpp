@@ -17,6 +17,7 @@
 
 
 #include "gpu.h"
+#include "r5_vram_reserve.h"
 
 #include <Debug.h>
 #include <FindDirectory.h>
@@ -634,18 +635,30 @@ radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
 	uint64 cursor = info->vram_pool_cursor;
 	if (cursor < start)
 		cursor = start;
-	uint64 aligned = (cursor + alignment - 1) & ~(alignment - 1);
-	if (aligned < cursor || aligned > end || bytes > end - aligned)
+	r5_vram_range holes[4];
+	int holeCount = (int)info->vram_hole_count;
+	int index;
+	uint64 placed = 0;
+	if (holeCount > 4)
+		holeCount = 4;
+	if (holeCount < 0)
+		holeCount = 0;
+	for (index = 0; index < holeCount; index++) {
+		holes[index].offset = info->vram_hole_offset[index];
+		holes[index].bytes = info->vram_hole_bytes[index];
+	}
+	if (!r5_vram_place(start, end, cursor, bytes, alignment, holes,
+			holeCount, &placed))
 		return B_NO_MEMORY;
 
-	info->vram_pool_cursor = aligned + bytes;
-	*_offset = aligned;
+	info->vram_pool_cursor = placed + bytes;
+	*_offset = placed;
 
 	if (_address != NULL) {
 		uint8* base = (uint8*)info->frame_buffer;
 		if (!radeon_hd_uses_dce(info->chipsetID))
 			base -= info->vram_reserved_offset;
-		*_address = base + aligned;
+		*_address = base + placed;
 	}
 	return B_OK;
 }

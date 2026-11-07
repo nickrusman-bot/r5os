@@ -19,6 +19,7 @@
 
 
 #include "radeon_hd.h"
+#include "r5_vram_reserve.h"
 #include "sensors.h"
 
 #include "atombios/atombios.h"
@@ -787,6 +788,32 @@ radeon_publish_vram_window(radeon_shared_info* info, uint64 barPhys,
 	info->vram_pool_offset = poolOffset;
 	info->vram_pool_bytes = poolBytes;
 	info->vram_pool_cursor = poolOffset;
+
+	{
+		r5_vram_range holes[4];
+		uint64 vramBytes = info->graphics_memory_size * 1024ull;
+		int count = r5_vram_reserve(vramBytes, windowBytes, 0, 0, holes, 4);
+		int index;
+		info->vram_hole_count = (uint32)count;
+		for (index = 0; index < 4; index++) {
+			info->vram_hole_offset[index] = 0;
+			info->vram_hole_bytes[index] = 0;
+		}
+		for (index = 0; index < count; index++) {
+			info->vram_hole_offset[index] = holes[index].offset;
+			info->vram_hole_bytes[index] = holes[index].bytes;
+		}
+		ERROR("%s: R5 radeon_hd: pool holes %d, psp 0x%" B_PRIx64
+			"+0x%" B_PRIx64 " %s, discovery 0x%" B_PRIx64 " %s, "
+			"fw_vram_usage none\n", __func__, count,
+			(uint64)R5_PSP_TMR_OFFSET, (uint64)R5_PSP_TMR_BYTES,
+			R5_PSP_TMR_OFFSET < windowBytes ? "inside" : "outside",
+			vramBytes > R5_DISCOVERY_TMR_TAIL
+				? vramBytes - R5_DISCOVERY_TMR_TAIL : 0,
+			vramBytes > R5_DISCOVERY_TMR_TAIL
+				&& vramBytes - R5_DISCOVERY_TMR_TAIL < windowBytes
+				? "inside" : "outside");
+	}
 
 	ERROR("%s: R5 radeon_hd: visible VRAM bar 0x%" B_PRIx64
 		" size 0x%" B_PRIx64 ", window 0x%" B_PRIx64

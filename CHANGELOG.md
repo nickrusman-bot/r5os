@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The VRAM pool skips the reserved ranges inside the window
+
+The pool was the PCI BAR minus the boot picture. It now also skips the PSP TMR at `0xc00000` for 4 MiB, the discovery TMR when that 10 KiB block (ending 64 KiB below the end of VRAM) lies inside the window, and `fw_vram_usage` when a caller passes a range. On a 512 MiB card the discovery TMR is outside the 256 MiB BAR, so it is not a hole. `fw_vram_usage` is not read from ATOM yet, and the boot line says `fw_vram_usage none`. The boot line names each hole. An allocation never returns an offset inside a hole. Host test only.
+
 ### The PASID follows the VM flush
 
 `r5_cs_vm_switch` wrote the PASID into `IH_VMID_n_LUT` before the page-table base. Linux 6.12 `amdgpu_vm_flush` emits the pipeline sync, then the VM flush (page-table base, invalidate, `PFP_SYNC_ME`), and then `amdgpu_gmc_emit_pasid_mapping`. The switch is still 36 dwords. Host test only. The K sequence is unchanged.

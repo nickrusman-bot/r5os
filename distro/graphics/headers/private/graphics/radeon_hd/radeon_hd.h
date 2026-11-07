@@ -307,6 +307,11 @@ struct radeon_shared_info {
 	uint32			gfx9_owner;
 	char			gfx9_text[8192];
 	uint32			gfx9_text_used;
+	/* PSP TMR, discovery TMR, and fw_vram_usage, when they lie in the
+	 * visible window. vram_pool_cursor skips them. */
+	uint32			vram_hole_count;
+	uint64			vram_hole_offset[4];
+	uint64			vram_hole_bytes[4];
 // SPDX-SnippetEnd
 };
 

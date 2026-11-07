@@ -37,6 +37,7 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/common/r5_limit.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_log.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_vram_reserve.h",
     "src/add-ons/accelerants/radeon_hd/Jamfile",
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h",
