@@ -183,9 +183,28 @@ The first choice of source per area:
 | USB audio and MIDI | RenkuOS | `usb_audio`, `multi_audio`, `usb_midi` fixes | compare with R5's own USB audio and MIDI 2.0 work first |
 | Touchpads and touch screens | RenkuOS | `i2c_hid`, `i2c_elan`, `i2c_goodix`, `pch_i2c` | |
 | USB host controllers, TCP | RenkuOS | EHCI, UHCI, OHCI and xHCI fixes; TCP fixes | |
-| Interface Kit and Tracker | RenkuOS, air/OS | public `BAboutWindow`, live control-look switch (RenkuOS); Quick Look (air/OS) | additive, the BeOS way |
+| Interface Kit and Tracker | RenkuOS | public `BAboutWindow`, live control-look switch, live file-type icons in Tracker | additive, the BeOS way |
 | Security | RenkuOS | `restrict_syscalls()`, a per-team syscall filter | |
 | GPU | reference only | V3D and the Vulkan window path (haiku-pi), the Mali, Adreno and NVIDIA drivers (air/OS) | input for M7, the Graphics Kit and later vendors. R5 keeps its own GPU interface |
 
 - **When:** after GPU milestone M5, as separate tracks, not M milestones. The ARM64 basis follows the rule under "Architectures".
 - **Not imported:** air/OS's GPL-2.0-only AMD driver, the applications without a licence, and the forks' branding.
+
+#### Feature choice (7 Nov 2026)
+
+The user went through the features of air/OS and RenkuOS.
+
+- **Wanted:**
+  - display: per-monitor scaling, several monitors in one desktop, tear-free output, dark mode;
+  - kits and Tracker: public `BAboutWindow`, switching the control look without a restart, live file-type icons in Tracker;
+  - networking: the Wi-Fi panel with auto-join and its Deskbar applet, the extra Wi-Fi drivers, Bluetooth (Low Energy, HID, A2DP), SMB network shares, the TCP fixes;
+  - audio and video: the USB audio and USB MIDI fixes, choosing the audio device from the Deskbar volume control, USB webcams (UVC);
+  - laptop and hardware: power management (`power_daemon`, lid, battery and AC, suspend to idle), deep CPU idle states, I2C touchpads and touch screens, the USB improvements;
+  - system: the per-team syscall filter, and kernel debugger capture to a file.
+- **Maybe, decided per item later:** the on-screen volume and brightness panel, the new Terminal, the new MediaConverter, the boot path changes, and the Installer with EFI.
+- **Not wanted:** Quick Look, the Deskbar menu with folders, ZSnake menus, and the MCP server on the device.
+
+How they fit R5:
+- **Panels become Settings pages.** Wi-Fi, Bluetooth, power and display panels become pages in the R5 Settings window, under the fixed layout in `AGENTS.md`. The separate program stays installed, as for Display and Notifications.
+- **Dark mode** goes into the Appearance page, without changing its tabs or the page order.
+- **Scaling** is designed together with the GPU plan for app_server.
