@@ -235,3 +235,7 @@ No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, op
 ## Reporting
 
 Say software or GPU. Name the PCI ID, the ICD, and the machine. VirtualBox is never the 5625U result.
+
+## VMID 1-15 per open file (not booted)
+
+One open file has its own four-level page table. The boot root written by the VMID 1 setup stays in place for that setup. A user map goes into the file's table. VMIDs 1 through 15 are handed out one owner at a time. The same owner keeps its VMID while a job is still in flight, and that path does not flush. A VMID given to another owner writes that file's page-table base, waits for the invalidate ack, and waits on the previous user fence before the indirect buffer. The invalidate word is `r5_gfx9_tlb_req` for that VMID. It is not the VMID 0 word from the K2 section. `VM_INVALIDATE_ENG0_SEM` is not in this tree, and this sequence does not write it. `SH_MEM` for that VMID is written when the owner changes, before the doorbell. A sixteenth concurrent owner gets nothing. VRAM is at most half the carveout (`MC_VM_FB_LOCATION_BASE` and `TOP`, GC `0x096b` and `0x096c`). GTT is at most a quarter of RAM. Over that is `B_NO_MEMORY`. Closing the file frees the VMID once its last fence has retired; until then the file is parked. This has not been booted. The K2 page-table base, the K2 invalidate word, and the ring-index formula are unchanged.

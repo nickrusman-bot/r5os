@@ -12,6 +12,8 @@
 
 #include "r5_gpu.h"
 #include "r5_cs.h"
+#include "r5_vmid.h"
+#include "r5_limit.h"
 #include "r5_span.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
@@ -527,6 +529,24 @@ static int op_fault(uint32_t, uint32_t, uint64_t*) { return 0; }
 static int op_dump(const char*) { return 0; }
 static int op_stage_p(void*, void*) { return 0; }
 static int op_stage_u(void*) { return 0; }
+static int op_as_open(void** as)
+{
+	if (as == 0)
+		return 1;
+	*as = 0;
+	return 0;
+}
+static int op_as_close(void*, uint64_t) { return 0; }
+static int op_bind(void*) { return 0; }
+static int op_limits(uint64_t* vram, uint64_t* gtt)
+{
+	if (vram == 0 || gtt == 0)
+		return 1;
+	*vram = 1;
+	*gtt = 1;
+	return 0;
+}
+static int op_retired(uint64_t) { return 0; }
 
 
 static int
@@ -536,7 +556,8 @@ ops_status()
 		op_fill, op_reg, op_alloc, op_free, op_type, op_pte,
 		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
 		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
-		op_stage_p, op_stage_u
+		op_stage_p, op_stage_u, op_as_open, op_as_close, op_bind,
+		op_limits, op_retired
 	};
 	uint32_t reg = 0;
 	uint64_t off = 0;
@@ -567,6 +588,15 @@ ops_status()
 	ops.sh_mem = op_sh_one;
 	if (ops.sh_mem(1) == 0)
 		return fail("op sh_mem one");
+	{
+		void* as = 0;
+		uint64_t vram = 0;
+		uint64_t gtt = 0;
+		if (ops.address_open(&as) != 0 || ops.bind(as) != 0
+			|| ops.limits(&vram, &gtt) != 0 || vram == 0 || gtt == 0
+			|| ops.note_retired(0) != 0 || ops.address_close(as, 0) != 0)
+			return fail("op address");
+	}
 	if (ops.submit(0, 0, 0, 0) != 0)
 		return fail("op submit");
 	if (ops.poll_retired(&seen) != 0 || seen == 0)
@@ -1141,6 +1171,103 @@ main()
 			return fail("test off");
 		if (!r5_log_allow(0, 1, R5_LOG_TEST, &errors, &once, 0))
 			return fail("test on");
+	}
+
+	{
+		struct r5_vmid_mgr mgr;
+		uint32_t got[21];
+		uint32_t i;
+		int flush = 0;
+		int shared;
+		uint32_t owners[16];
+		uint32_t nown;
+		memset(got, 0, sizeof(got));
+		r5_vmid_init(&mgr);
+		for (i = 1; i <= 15u; i++) {
+			uint32_t v = r5_vmid_reserve(&mgr, i, 0, &flush);
+			if (v == 0 || flush != 1)
+				return fail("vmid first");
+			r5_vmid_arm(&mgr, 1);
+			got[i] = v;
+		}
+		if (r5_vmid_reserve(&mgr, 16, 0, &flush) != 0)
+			return fail("vmid 16th");
+		{
+			uint32_t again = r5_vmid_reserve(&mgr, 1, 0, &flush);
+			if (again != got[1] || flush != 0)
+				return fail("vmid keep");
+			r5_vmid_arm(&mgr, 2);
+		}
+		for (i = 2; i <= 15u; i++)
+			r5_vmid_release(&mgr, i, 1);
+		if (mgr.slot[got[1]].owner != 1)
+			return fail("vmid held");
+		for (i = 16; i <= 20u; i++) {
+			uint32_t v = r5_vmid_reserve(&mgr, i, 1, &flush);
+			if (v == 0 || flush != 1 || v == got[1])
+				return fail("vmid reuse");
+			r5_vmid_arm(&mgr, 1);
+			got[i] = v;
+		}
+		memset(owners, 0, sizeof(owners));
+		nown = 0;
+		for (i = 1; i <= 15u; i++) {
+			uint32_t owner = mgr.slot[i].owner;
+			uint32_t n;
+			if (owner == 0)
+				continue;
+			for (n = 0; n < nown; n++) {
+				if (owners[n] == owner)
+					return fail("vmid shared");
+			}
+			owners[nown++] = owner;
+		}
+		shared = 0;
+		for (i = 1; i <= 20u; i++) {
+			if (got[i] == 0)
+				shared = 1;
+		}
+		if (shared || nown < 6)
+			return fail("vmid count");
+		r5_vmid_init(&mgr);
+		if (r5_vmid_reserve(&mgr, 3, 0, &flush) == 0)
+			return fail("vmid cancel");
+		r5_vmid_cancel(&mgr);
+		if (mgr.hold != 0 || mgr.slot[1].owner != 0)
+			return fail("vmid restored");
+		if (r5_limit_vram(512ull << 20) != (256ull << 20))
+			return fail("limit vram");
+		if (r5_limit_gtt(8ull << 30) != (2ull << 30))
+			return fail("limit gtt");
+		if (r5_limit_allow(200ull << 20, 100ull << 20, 256ull << 20) != 0)
+			return fail("limit over");
+		if (r5_limit_allow(100ull << 20, 100ull << 20, 256ull << 20) != 1)
+			return fail("limit fit");
+		{
+			uint32_t words[32];
+			uint32_t n = r5_cs_vm_switch(words, 32, 2, 0x812c18001ull,
+				0x9000ull, 7);
+			uint32_t body[40];
+			uint64_t ib = 0x1000ull;
+			uint32_t dw = 8;
+			uint32_t vm = 2;
+			uint32_t bare;
+			if (n != 29 || words[0] != 0xc0033700u || words[2] != r5_cs_gc_byte(0x08efu))
+				return fail("vm switch");
+			if (words[4] != 0x12c18001u || words[14] != r5_gfx9_tlb_req(2, 0))
+				return fail("vm switch pd");
+			if (words[16] != 0x103u || words[19] != r5_gfx9_tlb_ack_mask(2))
+				return fail("vm switch ack");
+			if (words[23] != 0x113u || words[26] != 7u)
+				return fail("vm switch sync");
+			bare = r5_cs_user_body(body, 40, &ib, &dw, &vm, 1, 0x9000ull, 8,
+				0x9010ull, kR5CsCntxKeep);
+			if (bare != 33)
+				return fail("vm switch body");
+			if (r5_cs_vm_switch(0, 0, 0, 0, 0, 0) != 0)
+				return fail("vm switch vmid0");
+		}
+		printf("ok vmid 20 15\n");
 	}
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);

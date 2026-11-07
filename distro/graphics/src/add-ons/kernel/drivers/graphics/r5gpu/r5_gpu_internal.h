@@ -24,7 +24,6 @@ static const uint32 kMaxRange = 8;
 static const uint32 kMaxJob = 64;
 static const uint32 kMaxList = 8;
 static const uint32 kMaxPrt = 32;
-static const uint64 kMaxBoBytes = 64ull * 1024ull * 1024ull;
 static const uint64 kRoomWaitUs = 100000;
 static const uint64 kFreeWaitUs = 5000000;
 /* amdgpu.lockup_timeout for GFX is 10000 ms. Client waits do not use this. */
@@ -90,6 +89,9 @@ struct gpu_client {
 	int32			contexts;
 	uint64			lastSequence;
 	gpu_sync		syncs[kMaxSync];
+	void*			address;
+	uint64			vramUsed;
+	uint64			gttUsed;
 };
 
 

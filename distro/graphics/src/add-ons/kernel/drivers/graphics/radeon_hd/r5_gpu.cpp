@@ -34,6 +34,12 @@ static const uint32 kRbBackendDisable = 0x063d;
 static const uint32 kUserRbBackendDisable = 0x06df;
 static r5_amd_device sPassport;
 static bool sPassportReady = false;
+static int sPhase = 0;
+static uint32 sPhaseVmid = 0;
+static int sPhaseFlush = 0;
+static uint64 sPhasePd = 0;
+
+static bool gpu_ring(r5_gfx9_user_ib* ibs, uint32 count, uint64* sequence);
 
 
 extern "C" status_t vm_set_area_memory_type(area_id id,
@@ -617,9 +623,43 @@ gpu_stage_how(const gpu_stage_pace& pace)
 }
 
 
-/* One VMID 1 IB. The WRITE_DATA destination is destVa, which is that
- * page plus 64 when the word is read back through the kernel mapping.
- * The wait does not mark the GPU lost. The watchdog does, at 5s. */
+/* One indirect buffer on the VMID this file holds. A new owner flushes
+ * that VMID before the doorbell. The wait does not mark the GPU lost.
+ * The watchdog does, at 5s. */
+static bool
+gpu_ring(r5_gfx9_user_ib* ibs, uint32 count, uint64* sequence)
+{
+	uint32 vmid = 0;
+	int flush = 0;
+	uint64 pd = 0;
+	uint32 need;
+	if (ibs == NULL || count == 0 || sPhase)
+		return false;
+	if (!r5_gfx9_as_reserve(&vmid, &flush, &pd))
+		return false;
+	need = r5_gfx9_user_commit_switch(count, flush);
+	if (need == 0 || !r5_gfx9_user_room(need)) {
+		r5_gfx9_as_cancel();
+		return false;
+	}
+	for (uint32 i = 0; i < count; i++)
+		ibs[i].vmid = vmid;
+	if (flush && !r5_gfx9_sh_mem(vmid)) {
+		r5_gfx9_as_cancel();
+		return false;
+	}
+	if (!r5_gfx9_user_submit_switch(ibs, count, sequence, flush, pd,
+			r5_gfx9_as_first())) {
+		r5_gfx9_as_cancel();
+		return false;
+	}
+	r5_gfx9_as_finish(vmid, sequence != NULL ? *sequence : 0);
+	return true;
+}
+
+
+/* The WRITE_DATA destination is destVa, which is that page plus 64
+ * when the word is read back through the kernel mapping. */
 static bool
 gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
 	uint64 destVa, bool expectWord, bool flush)
@@ -647,11 +687,10 @@ gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
 	memset(&ib, 0, sizeof(ib));
 	ib.va = ibPage->va;
 	ib.dwords = 8;
-	ib.vmid = 1;
 	sLastIbVa = ibPage->va;
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
-	if (!r5_gfx9_user_submit(&ib, 1, &sequence)) {
+	if (!gpu_ring(&ib, 1, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
 		return false;
@@ -752,7 +791,6 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 	memset(&submit, 0, sizeof(submit));
 	submit.va = va;
 	submit.dwords = n;
-	submit.vmid = 1;
 	sLastIbVa = va;
 	sLastIbN = extraN != 0 ? 2 : 1;
 	sLastIbList[0] = va;
@@ -780,7 +818,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 			gpu_lost(info, "p");
 		return R5_GPU_P_ROOM;
 	}
-	if (!r5_gfx9_user_submit(&submit, 1, &sequence)) {
+	if (!gpu_ring(&submit, 1, &sequence)) {
 		if (step == 0)
 			dprintf("radeon_hd: mark selftest submit\n");
 		else {
@@ -1167,21 +1205,51 @@ amd_submit(const uint64_t* va, const uint32_t* dwords, uint32_t count,
 {
 	if (count > 8 || va == NULL || dwords == NULL)
 		return B_BAD_VALUE;
-	/* The core calls this twice. A null sequence only waits for room,
-	 * before the core flushes the kernel copy of the indirect buffer.
-	 * The second call rings the bell. VMID stays 1. */
+	/* The core calls this twice. A null sequence reserves the VMID and
+	 * waits for room, before the core flushes the kernel copy of the
+	 * indirect buffer. The reservation stays held across that unlock.
+	 * The second call writes SH_MEM when the owner changed, rings the
+	 * bell, and then arms the fence. */
 	if (sequence == NULL) {
-		uint32 need = r5_gfx9_user_commit_dwords(count);
-		return gpu_wait_room(sInfo, need);
+		if (sPhase) {
+			r5_gfx9_as_cancel();
+			sPhase = 0;
+		}
+		if (!r5_gfx9_as_reserve(&sPhaseVmid, &sPhaseFlush, &sPhasePd))
+			return B_BUSY;
+		sPhase = 1;
+		status_t waited = gpu_wait_room(sInfo,
+			r5_gfx9_user_commit_switch(count, sPhaseFlush));
+		if (waited != B_OK) {
+			r5_gfx9_as_cancel();
+			sPhase = 0;
+		}
+		return waited;
+	}
+	if (!sPhase) {
+		if (!r5_gfx9_as_reserve(&sPhaseVmid, &sPhaseFlush, &sPhasePd))
+			return B_BUSY;
+		sPhase = 1;
 	}
 	r5_gfx9_user_ib ibs[8];
 	for (uint32_t i = 0; i < count; i++) {
 		ibs[i].va = va[i];
 		ibs[i].dwords = dwords[i];
-		ibs[i].vmid = 1;
+		ibs[i].vmid = sPhaseVmid;
 	}
-	if (!r5_gfx9_user_submit(ibs, count, sequence))
+	if (sPhaseFlush && !r5_gfx9_sh_mem(sPhaseVmid)) {
+		r5_gfx9_as_cancel();
+		sPhase = 0;
 		return B_ERROR;
+	}
+	if (!r5_gfx9_user_submit_switch(ibs, count, sequence, sPhaseFlush,
+			sPhasePd, r5_gfx9_as_first())) {
+		r5_gfx9_as_cancel();
+		sPhase = 0;
+		return B_ERROR;
+	}
+	r5_gfx9_as_finish(sPhaseVmid, *sequence);
+	sPhase = 0;
 	return B_OK;
 }
 
@@ -1262,6 +1330,49 @@ amd_stage_u(void* info)
 }
 
 
+static int
+amd_address_open(void** as)
+{
+	if (as == NULL)
+		return B_BAD_VALUE;
+	if (!r5_gfx9_vmid1_setup())
+		return B_ERROR;
+	*as = r5_gfx9_as_open();
+	return *as == NULL ? B_NO_MEMORY : B_OK;
+}
+
+
+static int
+amd_address_close(void* as, uint64_t seen)
+{
+	r5_gfx9_as_close(as, seen);
+	return B_OK;
+}
+
+
+static int
+amd_bind(void* as)
+{
+	r5_gfx9_as_bind(as);
+	return B_OK;
+}
+
+
+static int
+amd_limits(uint64_t* vramCap, uint64_t* gttCap)
+{
+	return r5_gfx9_mem_limits(vramCap, gttCap) ? B_OK : B_ERROR;
+}
+
+
+static int
+amd_note_retired(uint64_t seen)
+{
+	r5_gfx9_as_retired(seen);
+	return B_OK;
+}
+
+
 r5_gpu_backend_ops gR5GpuOps = {
 	amd_fill_vendor_info,
 	amd_read_reg,
@@ -1282,5 +1393,10 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_fault_decode,
 	amd_dump,
 	amd_stage_p,
-	amd_stage_u
+	amd_stage_u,
+	amd_address_open,
+	amd_address_close,
+	amd_bind,
+	amd_limits,
+	amd_note_retired
 };

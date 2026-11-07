@@ -45,6 +45,14 @@ typedef struct r5_gpu_backend_ops {
 	int			(*dump)(const char* why);
 	int			(*stage_p)(void* info, void* out);
 	int			(*stage_u)(void* info);
+	/* One address space per open file. These are internal. They are
+	 * not ioctls. address_open writes *as. limits writes the caps.
+	 * note_retired frees a parked space whose last job has retired. */
+	int			(*address_open)(void** as);
+	int			(*address_close)(void* as, uint64_t seen);
+	int			(*bind)(void* as);
+	int			(*limits)(uint64_t* vramCap, uint64_t* gttCap);
+	int			(*note_retired)(uint64_t seen);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

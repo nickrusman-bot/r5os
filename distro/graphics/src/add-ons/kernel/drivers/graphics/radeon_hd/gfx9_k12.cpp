@@ -9,6 +9,8 @@
 
 #include "gfx9_start.h"
 #include "r5_vm.h"
+#include "r5_vmid.h"
+#include "r5_limit.h"
 #include "r5_gpu.h"
 #include "r5_amd_device.h"
 #include "r5_span.h"
@@ -819,6 +821,35 @@ static r5_vm sVm;
 static r5_vm_page sVmPages[1024];
 static bool sVmid1 = false;
 
+struct r5_as {
+	uint32		id;
+	r5_vm		vm;
+	r5_vm_page	pages[256];
+	int			loaded;
+	int			parked;
+	uint64		last;
+	uint32		vmid;
+};
+
+static r5_as* sSpaces[64];
+static r5_as* sBound = NULL;
+static r5_vmid_mgr sVmids;
+static int sVmidReady = 0;
+static uint32 sNextAs = 1;
+static r5_vm_page sFreePages[1024];
+static uint32 sFreeCount = 0;
+
+extern "C" uint64 vm_page_num_pages();
+
+
+static r5_vm*
+current_vm()
+{
+	if (sBound != NULL && sBound->vm.used != 0)
+		return &sBound->vm;
+	return &sVm;
+}
+
 
 static int
 vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
@@ -826,6 +857,12 @@ vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
 	(void)cookie;
 	uint64 offset = 0;
 	uint8* address = NULL;
+	if (sFreeCount > 0) {
+		sFreeCount--;
+		*physical = sFreePages[sFreeCount].physical;
+		*cpu = sFreePages[sFreeCount].cpu;
+		return 1;
+	}
 	if (sHost.vram_alloc == NULL || sInfo == NULL)
 		return 0;
 	if (sHost.vram_alloc(sInfo, 4096, 4096, &offset, &address) != B_OK
@@ -929,8 +966,8 @@ r5_gfx9_sh_mem(uint32 vmid)
 bool
 r5_gfx9_vmid1_setup()
 {
-	/* One shared VMID 1 for every client. A later context reuses the
-	 * tables. Closing the last client does not rebuild them. */
+	/* The boot root stays this shared table. A bound file maps through
+	 * its own page table. These register writes stay the VMID 1 setup. */
 	if (sVmid1)
 		return true;
 	if (!r5_gfx9_ring_ready() || sInfo == NULL) {
@@ -1052,7 +1089,7 @@ r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 {
 	if (!sVmid1)
 		return false;
-	if (!r5_vm_map_page(&sVm, va, pte))
+	if (!r5_vm_map_page(current_vm(), va, pte))
 		return false;
 	asm volatile("sfence" ::: "memory");
 	return true;
@@ -1065,7 +1102,7 @@ r5_gfx9_vmid1_lookup(uint64 va)
 	uint64 pte = 0;
 	if (!sVmid1)
 		return false;
-	if (r5_vm_lookup(&sVm, va & ~0xfffull, &pte) == 0)
+	if (r5_vm_lookup(current_vm(), va & ~0xfffull, &pte) == 0)
 		return false;
 	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
 }
@@ -1076,7 +1113,7 @@ r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
 {
 	if (pte == NULL || !sVmid1)
 		return false;
-	return r5_vm_lookup(&sVm, va & ~0xfffull, pte) != 0;
+	return r5_vm_lookup(current_vm(), va & ~0xfffull, pte) != 0;
 }
 
 
@@ -1238,4 +1275,163 @@ r5_gfx9_kernel_start(radeon_info& info)
 		run_k2();
 	r5_gpu_fill_passport(&info);
 	publish();
+}
+
+
+static void
+recycle_vm(r5_vm* vm)
+{
+	uint32 i;
+	for (i = 0; i < vm->used && sFreeCount < 1024; i++) {
+		if (vm->pages[i].physical == 0)
+			continue;
+		sFreePages[sFreeCount] = vm->pages[i];
+		sFreeCount++;
+	}
+	vm->used = 0;
+}
+
+
+void*
+r5_gfx9_as_open(void)
+{
+	r5_as* as;
+	uint32 n;
+	if (!sVmid1)
+		return NULL;
+	for (n = 0; n < 64; n++) {
+		if (sSpaces[n] == NULL)
+			break;
+	}
+	if (n == 64)
+		return NULL;
+	as = (r5_as*)malloc(sizeof(*as));
+	if (as == NULL)
+		return NULL;
+	memset(as, 0, sizeof(*as));
+	as->id = sNextAs++;
+	if (as->id == 0)
+		as->id = sNextAs++;
+	as->vm.pages = as->pages;
+	as->vm.capacity = 256;
+	as->vm.alloc = vm_page_alloc;
+	if (!r5_vm_new_page(&as->vm)) {
+		free(as);
+		return NULL;
+	}
+	sSpaces[n] = as;
+	return as;
+}
+
+
+void
+r5_gfx9_as_close(void* cookie, uint64 seen)
+{
+	r5_as* as = (r5_as*)cookie;
+	uint32 n;
+	if (as == NULL)
+		return;
+	if (as->vmid != 0 && as->last > seen) {
+		as->parked = 1;
+		return;
+	}
+	if (as->vmid != 0 && sVmidReady)
+		r5_vmid_release(&sVmids, as->id, seen);
+	recycle_vm(&as->vm);
+	for (n = 0; n < 64; n++) {
+		if (sSpaces[n] == as)
+			sSpaces[n] = NULL;
+	}
+	if (sBound == as)
+		sBound = NULL;
+	free(as);
+}
+
+
+void
+r5_gfx9_as_bind(void* cookie)
+{
+	sBound = (r5_as*)cookie;
+}
+
+
+int
+r5_gfx9_as_reserve(uint32* vmid, int* flush, uint64* pd)
+{
+	uint64 seen;
+	if (sBound == NULL || sBound->vm.used == 0 || vmid == NULL || flush == NULL)
+		return 0;
+	if (!sVmidReady) {
+		r5_vmid_init(&sVmids);
+		sVmidReady = 1;
+	}
+	seen = r5_gfx9_user_seen();
+	*vmid = r5_vmid_reserve(&sVmids, sBound->id, seen, flush);
+	if (*vmid == 0)
+		return 0;
+	if (pd != NULL)
+		*pd = sBound->vm.pages[0].physical | (uint64)R5_GFX9_PTE_VALID;
+	return 1;
+}
+
+
+void
+r5_gfx9_as_cancel(void)
+{
+	if (sVmidReady)
+		r5_vmid_cancel(&sVmids);
+}
+
+
+void
+r5_gfx9_as_finish(uint32 vmid, uint64 sequence)
+{
+	if (sBound == NULL)
+		return;
+	sBound->vmid = vmid;
+	sBound->last = sequence;
+	sBound->loaded = 1;
+	r5_vmid_arm(&sVmids, sequence);
+}
+
+
+int
+r5_gfx9_as_first(void)
+{
+	if (sBound == NULL)
+		return -1;
+	return sBound->loaded ? 0 : 1;
+}
+
+
+void
+r5_gfx9_as_retired(uint64 seen)
+{
+	uint32 n;
+	for (n = 0; n < 64; n++) {
+		if (sSpaces[n] != NULL && sSpaces[n]->parked
+			&& sSpaces[n]->last <= seen)
+			r5_gfx9_as_close(sSpaces[n], seen);
+	}
+}
+
+
+int
+r5_gfx9_mem_limits(uint64* vramCap, uint64* gttCap)
+{
+	uint32 base;
+	uint32 top;
+	uint64 carve;
+	uint64 ram;
+	if (!sVmid1 || sInfo == NULL || vramCap == NULL || gttCap == NULL)
+		return 0;
+	base = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
+	top = kread(sInfo, gc_byte(0x096c)) & 0x00ffffffu;
+	if (top < base)
+		return 0;
+	carve = ((uint64)(top - base) + 1ull) << 24;
+	ram = vm_page_num_pages() * 4096ull;
+	*vramCap = r5_limit_vram(carve);
+	*gttCap = r5_limit_gtt(ram);
+	return *vramCap != 0 && *gttCap != 0;
 }

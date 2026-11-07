@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### One address space per open GPU file
+
+An open of the GPU node builds a four-level page table for that file. User maps go into that table. VMIDs 1-15 are one owner at a time: the same owner keeps its VMID while a job has not retired, and a different owner flushes that VMID (page-table base, invalidate ack, previous user fence) and writes `SH_MEM` before the doorbell. The sixteenth concurrent owner gets `B_BUSY`. The no-flush body is still 33 dwords. The K2 invalidate word and the VMID 0 page-table base are unchanged. VRAM is capped at half the carveout from `MC_VM_FB_LOCATION` (`0x096b`/`0x096c`), GTT at a quarter of RAM, and a larger buffer returns `B_NO_MEMORY`. The 64 MiB ceiling is gone. A close parks the file until its last fence retires, then recycles the page-table pages. The host test printed `ok vmid 20 15` and then `ok gpu api 1.0 walk`. Not booted. No stick.
+
 ### One status from every GPU backend call
 
 Every function in `gR5GpuOps` returns a status. `B_OK` (0) is success. The page-table calls used to return 1 for success, so `if (!sh_mem())` was true when the write had worked. Callers now test `!= B_OK`. `vmid_lookup` returns `B_OK` when the page is mapped and `B_ENTRY_NOT_FOUND` when it is not. `encode_pte` writes the entry through a pointer. `poll_retired` writes the fence the same way. The host test builds a fake backend, checks each success path, and rejects a return of 1. Not booted.

@@ -33,6 +33,8 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/common/gfx9_check.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_vm.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_cs.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_vmid.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_limit.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_log.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h",
     "src/add-ons/accelerants/radeon_hd/Jamfile",

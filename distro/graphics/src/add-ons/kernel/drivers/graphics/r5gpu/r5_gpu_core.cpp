@@ -309,6 +309,8 @@ r5_gpu_eop()
 		job->live = false;
 	}
 	sEop.NotifyAll();
+	if (gR5GpuOps.note_retired != NULL)
+		gR5GpuOps.note_retired(seen);
 }
 
 
@@ -468,6 +470,14 @@ gpu_bo_release(gpu_bo* bo)
 		vm_delete_area(bo->mapTeam, bo->area, true);
 	if (bo->kernelArea >= 0)
 		delete_area(bo->kernelArea);
+	if (bo->owner != NULL) {
+		uint64* used = bo->domain == R5_GPU_DOMAIN_VRAM
+			? &bo->owner->vramUsed : &bo->owner->gttUsed;
+		if (*used >= bo->bytes)
+			*used -= bo->bytes;
+		else
+			*used = 0;
+	}
 	bo->live = false;
 	bo->owner = NULL;
 	bo->parked = false;
@@ -486,7 +496,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
 		return gpu_refuse("BO_CREATE", "copy", status, 0, 0, 0, 0, 0, 0, 0);
-	if (in.bytes == 0 || in.bytes > kMaxBoBytes)
+	if (in.bytes == 0)
 		return gpu_refuse("BO_CREATE", "size", B_BAD_VALUE, 0, in.domain,
 			in.bytes, 0, 0, 0, in.flags);
 	if (in.domain != R5_GPU_DOMAIN_VRAM && in.domain != R5_GPU_DOMAIN_GTT)
@@ -496,6 +506,20 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		return gpu_refuse("BO_CREATE", "handles", B_NO_MEMORY, 0, in.domain,
 			in.bytes, 0, 0, 0, in.flags);
 	uint64 bytes = (in.bytes + 4095ull) & ~4095ull;
+	uint64 vramCap = 0;
+	uint64 gttCap = 0;
+	if (gR5GpuOps.limits == NULL
+		|| gR5GpuOps.limits(&vramCap, &gttCap) != B_OK)
+		return gpu_refuse("BO_CREATE", "limit", B_NO_MEMORY, 0, in.domain,
+			bytes, 0, 0, 0, in.flags);
+	{
+		uint64 used = in.domain == R5_GPU_DOMAIN_VRAM
+			? client->vramUsed : client->gttUsed;
+		uint64 cap = in.domain == R5_GPU_DOMAIN_VRAM ? vramCap : gttCap;
+		if (cap == 0 || bytes > cap || used > cap - bytes)
+			return gpu_refuse("BO_CREATE", "limit", B_NO_MEMORY, 0, in.domain,
+				bytes, 0, 0, 0, in.flags);
+	}
 	int slot = -1;
 	for (uint32 i = 0; i < kMaxBo; i++) {
 		if (!sBo[i].live) {
@@ -559,6 +583,10 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	}
 	bo->live = true;
 	bo->owner = client;
+	if (bo->domain == R5_GPU_DOMAIN_VRAM)
+		client->vramUsed += bo->bytes;
+	else
+		client->gttUsed += bo->bytes;
 	client->handles[client->handleCount++] = (uint32)slot + 1u;
 	in.handle = (uint32)slot + 1u;
 	in.area = bo->area;
@@ -615,6 +643,8 @@ gpu_watchdog()
 	if (oldest == NULL || now - oldest->submitted < kWatchdogUs)
 		return;
 	gpu_lost(sInfo, "gpu lost watchdog");
+	if (gR5GpuOps.note_retired != NULL)
+		gR5GpuOps.note_retired(~0ull);
 	gpu_release_parked(~0ull);
 }
 
@@ -631,6 +661,11 @@ gpu_bo_detach(gpu_client* client, gpu_bo* bo, uint32 handle)
 	}
 	uint64 sequence = client->lastSequence;
 	if (!sLost && sequence != 0 && gpu_seen() < sequence) {
+		if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+			if (client->vramUsed >= bo->bytes)
+				client->vramUsed -= bo->bytes;
+		} else if (client->gttUsed >= bo->bytes)
+			client->gttUsed -= bo->bytes;
 		bo->owner = NULL;
 		bo->parked = true;
 		bo->parkSequence = sequence;
@@ -1788,6 +1823,12 @@ gpu_open(const char* name, uint32 flags, void** cookie)
 		return B_NO_MEMORY;
 	memset(client, 0, sizeof(*client));
 	client->info = gDeviceInfo[0];
+	if (gR5GpuOps.address_open == NULL
+		|| gR5GpuOps.address_open(&client->address) != B_OK
+		|| client->address == NULL) {
+		free(client);
+		return B_NO_MEMORY;
+	}
 	*cookie = client;
 	return B_OK;
 }
@@ -1828,6 +1869,11 @@ gpu_free(void* cookie)
 			continue;
 		uint64 sequence = client->lastSequence;
 		if (!sLost && sequence != 0 && gpu_seen() < sequence) {
+			if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+				if (client->vramUsed >= bo->bytes)
+					client->vramUsed -= bo->bytes;
+			} else if (client->gttUsed >= bo->bytes)
+				client->gttUsed -= bo->bytes;
 			bo->owner = NULL;
 			bo->parked = true;
 			bo->parkSequence = sequence;
@@ -1843,6 +1889,9 @@ gpu_free(void* cookie)
 		if (sContexts < 0)
 			sContexts = 0;
 	}
+	if (gR5GpuOps.address_close != NULL)
+		gR5GpuOps.address_close(client->address, gpu_seen());
+	client->address = NULL;
 	gpu_unlock();
 	free(client);
 	return status;
@@ -1886,6 +1935,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 
 	gpu_lock();
 	sInfo = client->info;
+	if (gR5GpuOps.bind != NULL)
+		gR5GpuOps.bind(client->address);
 	status_t status = B_BAD_VALUE;
 	if (op == R5_GPU_READ_REG) {
 		r5_gpu_read_reg in;

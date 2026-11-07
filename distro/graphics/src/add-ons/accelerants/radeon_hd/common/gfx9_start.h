@@ -64,12 +64,18 @@ bool r5_gfx9_ring_ready();
 bool r5_gfx9_user_room(uint32 dwords);
 /* Dwords this user job will append, including the 256-dword pad. */
 uint32 r5_gfx9_user_commit_dwords(uint32 count);
+uint32 r5_gfx9_user_commit_switch(uint32 count, int vmFlush);
 /* Continuing write count, and the CP read pointer as a ring offset. */
 void r5_gfx9_ring_ptrs(uint64* wptr, uint64* rptrOffset);
 bool r5_gfx9_fence_offset(uint64* offset);
 uint64 r5_gfx9_user_fence_mc();
 bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64* _sequence);
+/* vmFlush writes the page-table base and the pipeline sync in front of
+ * the unchanged body. load 1 uses the context-load bits, 0 keeps them,
+ * and -1 uses the single global first-job flag. */
+bool r5_gfx9_user_submit_switch(const r5_gfx9_user_ib* ibs, uint32 count,
+	uint64* _sequence, int vmFlush, uint64 pd, int load);
 uint64 r5_gfx9_user_seen();
 uint64 r5_gfx9_k2_word_mc();
 bool r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa);
@@ -80,6 +86,15 @@ bool r5_gfx9_vmid1_setup();
  * r5_gfx9_vmid1_setup, then GRBM_GFX_CNTL 0. That loop is unchanged.
  * Nothing on the K path calls this. */
 bool r5_gfx9_sh_mem(uint32 vmid);
+void* r5_gfx9_as_open(void);
+void r5_gfx9_as_close(void* as, uint64 seen);
+void r5_gfx9_as_bind(void* as);
+int r5_gfx9_as_reserve(uint32* vmid, int* flush, uint64* pd);
+void r5_gfx9_as_cancel(void);
+void r5_gfx9_as_finish(uint32 vmid, uint64 sequence);
+int r5_gfx9_as_first(void);
+void r5_gfx9_as_retired(uint64 seen);
+int r5_gfx9_mem_limits(uint64* vramCap, uint64* gttCap);
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
 bool r5_gfx9_vmid1_lookup(uint64 va);
