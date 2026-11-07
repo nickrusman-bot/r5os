@@ -1984,6 +1984,13 @@ main()
 		if (strstr(text, "SetCounter(TLSBlockTemplates::Get().GetGeneration(-1))")
 			== NULL)
 			return fail("tls generation");
+		if (snippet("distro/kernel/src/system/kernel/thread.cpp",
+				"delete the user stack", "user_debug_thread_deleted", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "exit.initialized") == NULL
+			|| strstr(text, "if (!goingDown)") == NULL)
+			return fail("dying stack");
 	}
 	{
 		char text[4000];

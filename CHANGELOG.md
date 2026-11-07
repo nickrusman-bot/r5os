@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A dying team keeps an exited thread's stack
+
+A signal that ends a team is handled by one thread, which exits at once. The main thread kills the others only when it gets there. Deleting the exited thread's stack in that window faulted any thread that still used an object on it. The stack now stays until the team's address space goes. This is haiku-pi `e09cfa1d9e` (Witold Bołt, MIT), on R5's `thread_exit` because this tree has no stack cache. Not booted.
+
 ### A new thread keeps its thread-local data
 
 A new thread's TLS vector started at generation 0. After any library with thread-local storage was unloaded, the next access treated that vector as stale and zeroed the blocks it had just created. The vector now starts at the current generation. This is haiku-pi `5db923abc6` (Witold Bołt, MIT). Not booted.

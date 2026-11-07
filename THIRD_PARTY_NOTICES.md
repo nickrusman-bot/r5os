@@ -12,6 +12,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### Thread stack while a team goes down
+
+Location: `distro/kernel/src/system/kernel/thread.cpp`.
+
+The file is Haiku's thread code. Copyright Jérôme Duval, Ingo Weinhold, Axel Dörfler, and Travis Geiselbrecht. Licenses: MIT and NewOS. One block is the haiku-pi change `e09cfa1d9e`: the stack of a thread that exits while its team is going down stays until the address space goes. Copyright 2026 Witold Bołt. License: MIT. R5's Haiku base has no stack cache, so the same check sits on the existing `vm_delete_area` call.
+
 ### Runtime-loader TLS generation
 
 Location: `distro/rest/src/system/runtime_loader/elf_tls.cpp`.
