@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A submit checks the indirect buffer again after the lock returns
+
+`gpu_submit` checks that each indirect buffer is mapped, then the sync wait and `wait_room` drop the lock. The mapping is checked again before the cache flush and the doorbell. A buffer that was unmapped in that window is rejected.
+
 ### GET_INFO reads its counters under the GPU lock
 
 The lost bit, the guilty address space and the live buffer bytes are read while `gpu_lock` is held. The copy to the caller, and the vendor-block fill, stay outside that lock.

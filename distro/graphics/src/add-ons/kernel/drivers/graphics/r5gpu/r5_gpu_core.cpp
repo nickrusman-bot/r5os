@@ -1386,6 +1386,13 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
 			ibs[0].gpu_va, 0, in.ring, 0);
+	/* wait_room and the sync wait drop the lock. The mapping can go
+	 * away in that window, so check the indirect buffers again. */
+	for (uint32 i = 0; i < in.ib_count; i++) {
+		if (!gpu_ib_mapped(client->address, ibs[i].gpu_va, ibs[i].dwords))
+			return gpu_refuse("CS_SUBMIT", "mapped", B_BAD_ADDRESS, in.context, 0,
+				ibs[i].dwords, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
+	}
 	/* Temporary. A GTT indirect buffer is MTYPE_NC and snooped. clflush
 	 * plus mfence makes the CPU stores visible before the doorbell. The
 	 * pointer is the kernel area, never the user clone (SMAP).

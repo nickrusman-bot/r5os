@@ -1846,6 +1846,13 @@ main()
 		const char* unlocked = bos != NULL ? strstr(bos, "gpu_unlock()") : NULL;
 		if (locked == NULL || bos == NULL || unlocked == NULL)
 			return fail("info lock");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"gR5GpuOps.wait_room(in.ib_count)", "clflush", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "gpu_ib_mapped") == NULL)
+			return fail("ib recheck");
 	}
 	{
 		char text[4000];
