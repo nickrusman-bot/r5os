@@ -232,9 +232,42 @@ The work, after M4 on AMD:
 
 Do not add Intel code before I0, and do not change shipped interface calls for Intel. A new need is a new call or a new field at the end.
 
+## GPU Driver Kit
+
+Decided on 7 Nov 2026: it must be easy for anyone to add a GPU to R5. Someone who knows a chip should only have to write the hardware part, and find the rest ready. That is the BeOS idea of a driver model that draws hardware support to the platform.
+
+A driver author does three things:
+1. describe the chip (a table row);
+2. fill in the backend (the vendor ops);
+3. run the conformance tests until they pass.
+
+R5 provides everything around that.
+
+| # | Part | What it does |
+|---|---|---|
+| 1 | **The backend interface** | The table of vendor ops (`r5_gpu_backend.h`). Each op has a written contract: what it must do, what it may do, its error codes, and whether it is required or optional. Required ops are checked once at attach. The interface is additive, like the R5 GPU interface. |
+| 2 | **The common core** | Everything that is not hardware: clients, buffers, sync objects, jobs, the VMID allocator, limits, user-memory copies under SMAP, faults, the watchdog. A backend never touches user memory itself. |
+| 3 | **The device passport from data** | Values come from the hardware or a handover (IP discovery, firmware headers, ATOM), not from code. A new chip of a known generation is one row in the device table. |
+| 4 | **A template backend** | A backend that emulates a GPU on the CPU and implements every op. It is the starting point for a new driver, and it lets the core and the conformance tests run without hardware, also in QEMU. |
+| 5 | **Conformance tests** | The self-test stages (buffers, the packet stage, the memory stage, isolation, the kill test, two programs at once), made vendor-neutral so that they run on any backend. Later a subset of the Vulkan conformance tests. A backend is "conformant" when these pass. |
+| 6 | **The Linux reference kit** | The Linux capture stick (scripts, register lists, ring and IB capture), made into a tool. An author records what Linux does on their own machine, and compares R5 against it. This was the most useful tool in M4. |
+| 7 | **One diagnostic standard** | The same log keys, error budget, and dumps (ring, IB, fault) for every driver. |
+| 8 | **One front end per vendor in the R5 DRM library** | The translation from a Mesa driver's Linux calls (RADV, ANV, NVK, Turnip, Panfrost and others) to the R5 GPU interface, with a table that documents each mapping. Mesa stays unchanged. |
+| 9 | **The porting guide** | The steps R5 took on the 5625U, as a checklist with the test that proves each step: start the GPU, first fence, interrupt, GART, address space, user submit, the Mesa driver, presentation. |
+| 10 | **Clear licences** | The interface header, the R5 DRM library, the common core and the backend interface are MIT. A backend is MIT or GPL-3.0-or-later, as its author chooses (see "Licensing"). |
+
+**Phases:**
+1. **Within M5 and M6** (partly done): write the op contracts (required and optional), make the self-test stages vendor-neutral, and finish the diagnostic standard.
+2. **Before Intel step I0:** the template backend, the porting guide, and the Linux reference kit as a tool.
+3. **Intel is built with the kit.** Intel is the proof that the kit works. Whatever is hard there is fixed in the kit, not only in the Intel driver.
+
+The same path serves a new AMD generation (for example GC 11 in the Ryzen 7640U, which needs its own backend with MES), and the ARM GPUs that other Haiku forks support (V3D, Mali, Adreno). Their drivers are a reference, not code to copy, as described in `docs/ROADMAP.md`. A new backend starts only when there is hardware to test it on.
+
 ## Licensing
 
 - The R5 GPU interface (the kernel header) and the R5 DRM library are R5's own code, and they are **MIT** (decided by the user, 5 Nov 2026). Mesa, RADV and every Vulkan or OpenGL application load that library. With GPL-3.0, those applications would become part of a GPL-3.0 combination. Haiku's own driver interfaces are MIT for the same reason. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`.
+- The **common GPU core and the backend interface** are **MIT** (decided by the user, 7 Nov 2026). These are the files in `src/add-ons/kernel/drivers/graphics/r5gpu/` (`r5_gpu_core.cpp`, `r5_gpu_backend.h`, `r5_gpu_internal.h`). The reason is the GPU Driver Kit: the contract between hardware and software is MIT throughout, like Haiku's own driver interfaces, so that Haiku and other Haiku forks (several accept only MIT) can take the core and write drivers for it. That code is R5's own, moved out of `r5_gpu.cpp`, so R5 may relicense it. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`, per file, not a bulk header change.
+- **A GPU backend** is MIT or GPL-3.0-or-later, as its author chooses. GPL-2.0-only code is never part of a backend.
 - The GFX9 start code in the kernel add-on (`gfx9_start.cpp`) is GPL-3.0-or-later (decided by the user, 5 Nov 2026). Applications do not link it.
 - The kernel driver `radeon_hd` stays as it is: the Haiku parts MIT, the R5 snippets GPL-3.0-or-later.
 - Mesa and libdrm headers are MIT. Most files of Linux `amdgpu` carry an MIT-style notice from AMD, and most of `i915` is `SPDX-License-Identifier: MIT`. The Linux kernel as a whole is GPL-2.0, and some DRM core files are GPL-2.0-only. So: register offsets, values and their order are taken as facts. A single file or table may be taken over only when that file itself is MIT, with its notice kept, a row in `THIRD_PARTY_NOTICES.md`, and never from a GPL-2.0-only file.

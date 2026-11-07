@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Tracker opens folders in the same window
+
+Haiku Tracker opens each folder in a new window by default. In R5, "Single window navigation" and "Show navigator" are now on by default: a double-clicked folder replaces the view in the same window, and the Back, Forward, Up and location bar are shown. `distro/desktop/src/kits/tracker/TrackerDefaults.h` is a copy of Haiku `src/kits/tracker/TrackerDefaults.h` (MIT header kept). Only `kDefaultSingleWindowBrowse` and `kDefaultShowNavigator` change, marked as an SPDX snippet. This is the factory setting: it applies to every account that has no saved Tracker setting, and to Defaults in Tracker preferences. An account that already saved `TrackerSettings` keeps its own choice. The separate Tracker preferences can still turn both off. Not jammed or booted yet.
+
 ### GPU log settings are read once, and a dump does not eat the error budget
 
 `gpu_debug` and `gpu_selftest` were read from the settings file on every call, including every submit. `r5_gpu_init` now reads both once. A later call uses those values.
