@@ -1,0 +1,18 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 pfp 197 mec 483
+stage bo
+r5 libdrm: DRM_IOCTL_GEM_CLOSE linux 0x80086409 nr 0x9 errno -2147483639
+r5 libdrm: DRM_IOCTL_GEM_CLOSE linux 0x80086409 nr 0x9 errno -2147483639
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 0
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+context 0
+IB 0
+fence 0 expired 0
+GEM_VA unmap 0
+GEM_VA remap 0
+close 0

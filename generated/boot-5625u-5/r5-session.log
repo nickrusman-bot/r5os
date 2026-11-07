@@ -1,0 +1,35 @@
+18601059 uid=0 euid=0 sign-in user
+18601638 uid=0 euid=0 launch /system/Tracker
+18603007 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/Tracker
+18603073 uid=0 euid=0 config /boot/home/config is the package root and is left alone
+18611557 uid=0 euid=0 r5-desktop /system/Tracker ok
+18611592 uid=0 euid=0 launch /system/Deskbar
+18613017 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/Deskbar
+18632561 uid=0 euid=0 r5-desktop /system/Deskbar ok
+18632775 uid=0 euid=0 application/x-vnd.Be-TRAK team 246 uid=1001 gid=100
+18732945 uid=0 euid=0 application/x-vnd.Be-TSKB team 248 uid=1001 gid=100
+18733019 uid=0 euid=0 launch /system/apps/r5-tray
+18734934 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/apps/r5-tray
+18740788 uid=0 euid=0 r5-desktop /system/apps/r5-tray ok
+18740825 uid=0 euid=0 launch /system/bin/desklink
+18742252 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/bin/desklink
+18751474 uid=0 euid=0 r5-desktop /system/bin/desklink ok
+18751521 uid=0 euid=0 launch /system/servers/airplay_deskbar
+18753025 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/servers/airplay_deskbar
+18763846 uid=0 euid=0 r5-desktop /system/servers/airplay_deskbar ok
+18763892 uid=0 euid=0 launch /system/servers/r5_vbox_clip
+18766210 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/servers/r5_vbox_clip
+18772290 uid=0 euid=0 r5-desktop /system/servers/r5_vbox_clip ok
+18772341 uid=0 euid=0 launch /system/bin/dstcheck
+18773809 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/bin/dstcheck
+18779968 uid=0 euid=0 r5-desktop /system/bin/dstcheck ok
+18780020 uid=0 euid=0 launch /system/bin/r5-gpu-selftest
+18781488 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/bin/r5-gpu-selftest
+18786152 uid=0 euid=0 r5-desktop /system/bin/r5-gpu-selftest ok
+18786760 uid=0 euid=0 launch /bin/sh
+18787995 uid=0 euid=0 session user uid=1001 gid=100 cmd=/bin/sh
+18790150 uid=0 euid=0 r5-desktop /bin/sh ok
+18791839 uid=0 euid=0 launch /bin/sh
+18793221 uid=0 euid=0 session user uid=1001 gid=100 cmd=/bin/sh
+18794806 uid=0 euid=0 r5-desktop /bin/sh ok
+18794854 uid=0 euid=0 sign-in done: No error
