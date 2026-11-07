@@ -183,14 +183,14 @@ r5_cs_pad(uint32_t* out, uint32_t count)
 }
 
 
-/* gc_9_0_offset.h. The same (0x2000 + index) * 4 as the kernel gc_byte.
- * VMID 0 page-table base is 0x08eb and stays the K2 write. VMID n is
- * 0x08eb + n * 2. Invalidate request is 0x08a3 and ack is 0x08b5,
- * the registers r5_gfx9_vmid1_flush already uses. */
+/* Dword register offset for a CP packet. gc_byte() in the driver is
+ * this value times four, and that form is only for MMIO.
+ * gc_9_0_offset.h: VMID 0 page-table base is 0x08eb. VMID n is
+ * 0x08eb + n * 2. Invalidate request is 0x08a3 and ack is 0x08b5. */
 static inline uint32_t
-r5_cs_gc_byte(uint32_t index)
+r5_cs_gc_reg(uint32_t index)
 {
-	return (0x2000u + index) * 4u;
+	return 0x2000u + index;
 }
 
 
@@ -201,11 +201,12 @@ r5_cs_gc_byte(uint32_t index)
  * VM_INVALIDATE_ENG0_SEM. */
 /* osssys_4_0_offset.h. mmIH_VMID_0_LUT is index 0. VMID n is the next
  * register. The OSS base in this driver is 0x10A0, the same block as
- * IH_RB_CNTL at index 0x80. */
+ * IH_RB_CNTL at index 0x80. A CP packet takes that dword offset.
+ * The MMIO byte address is this value times four. */
 static inline uint32_t
-r5_cs_oss_byte(uint32_t index)
+r5_cs_oss_reg(uint32_t index)
 {
-	return (0x10A0u + index) * 4u;
+	return 0x10A0u + index;
 }
 
 
@@ -230,17 +231,18 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 		return 0;
 	inv = r5_gfx9_tlb_req(vmid, 0);
 	ack = r5_gfx9_tlb_ack_mask(vmid);
-	lo = r5_cs_gc_byte(0x08ebu + vmid * 2u);
+	lo = r5_cs_gc_reg(0x08ebu + vmid * 2u);
 	/* Pipeline sync on the previous user fence. Memory, equal, PFP.
 	 * Control 0x113 is function 3, memory space, engine 1.
-	 * Linux amdgpu_vm_flush emits this before the VM flush. */
+	 * Linux amdgpu_vm_flush emits this before the VM flush.
+	 * The poll interval is 4. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
 	n = r5_cs_put(out, n, cap, 0x113u);
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceMc);
 	n = r5_cs_put(out, n, cap, (uint32_t)(fenceMc >> 32));
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
-	n = r5_cs_put(out, n, cap, 0x20u);
+	n = r5_cs_put(out, n, cap, 4u);
 	/* WRITE_DATA to a register: engine ME, destination register, confirm.
 	 * Linux gfx_v9_0_ring_emit_wreg. WR_CONFIRM is bit 20. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
@@ -250,18 +252,18 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	n = r5_cs_put(out, n, cap, (uint32_t)pd);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
 	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, lo + 4u);
+	n = r5_cs_put(out, n, cap, lo + 1u);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
 	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_byte(0x08a3u));
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, inv);
 	/* Register wait, function equal, PFP. (reg & mask) == mask. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
 	n = r5_cs_put(out, n, cap, 0x103u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_byte(0x08b5u));
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08b5u));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, ack);
@@ -275,7 +277,7 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	 * PASID after the page-table base, the invalidate, and PFP_SYNC_ME. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
 	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, r5_cs_oss_byte(vmid));
+	n = r5_cs_put(out, n, cap, r5_cs_oss_reg(vmid));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, pasid);
 	if (n != r5_cs_vm_switch_words() || (out != 0 && n > cap))

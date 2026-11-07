@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### The ring flush writes dword register offsets
+
+`r5_cs_vm_switch` built GC and OSS register addresses as a byte offset, `(base + index) * 4`. A CP `WRITE_DATA` or `WAIT_REG_MEM` takes the dword offset. Stick 26 on `cursor/gpu-hdp` hung in the ack wait because the invalidate request never reached engine 0. The same packets are here.
+
+For VMID 2 the page-table registers are `0x28ef` and `0x28f0`. Engine 0 stays `0x28a3` and `0x28b5` (`gc_9` offsets, `gmc_v9_0_emit_flush_gpu_tlb`). The PASID write is `amdgpu_gmc_emit_pasid_mapping`: `IH_VMID_n_LUT` at OSS base `0x10A0` plus the VMID (`osssys_4_0_offset.h`). VMID 2 is `0x10A2`, not `(0x10A0 + 2) * 4`. The high page-table register is the next dword. The host test compares those numbers. `gc_byte()` for MMIO is unchanged.
+
+The packet stays 36 dwords, the 31-dword flush plus the five-dword PASID write. Linux v6.12 sets `me_fw_write_wait` for GC 9.3 with no ME or PFP version gate. This machine's ME is `0xa7` feature 54 and its PFP is `0xc5` feature 54. That path uses one `WAIT_REG_MEM` with control `0x143` instead of a separate request write and ack wait. That form is not in this packet. The pipeline sync now polls every 4 dwords. The ack wait stays at interval `0x20`. Host test only. Not booted.
+
 ### The render node is mode 0666
 
 devfs published every character device as `S_IFCHR | 0644`. A path under `gpu/` is now `0666`, which is the mode Linux uses for a render node. `devfs_open` does not read the mode. `check_open_mode` checks the open flags, not the permission bits. The devfs `access` hook is null, and the VFS `access` path then returns success. A standard account can open the node. `/dev/disk` stays `0644`. That mode does not stop a standard account at devfs either, because the same open and access paths never consult it. Host test only. Not booted.
