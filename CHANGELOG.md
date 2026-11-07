@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### M4, experimenteel en standaard uit
+
+The GPU path stays off unless the radeon_hd settings name it. With no `radeon_hd` settings file, stick 24's second boot on the 5625U reached the desktop: Tracker and Deskbar started, and Sign in finished with no error. The ring line is `GFX9 ring off`. Boot 2's own syslog, after the second `Welcome to the Haiku boot loader!`, has no `refuse`, `gpu lost` or `vm fault`. The same file still holds boot 1's `gpu lost` lines above that banner. `vulkaninfo` lists one device, llvmpipe. RADV does not initialise (`AMDGPU_INFO_ACCEL_WORKING = 0`) and is not in that list. Both teapots then draw through Lavapipe and print `pixels ok`.
+
+What works on the GPU: the SAM path draws pixel-exact on the 5625U, sticks 22, 23 and 24. The known problem is the normal path. On stick 24 boot 1 it drew the teapot into VRAM (`pixel-vram 192 192 853b16ff`) and the GTT readback was all zeros. The suspected cause is that the CPU writes VRAM through the PCI BAR and never flushes the HDP. The fix is a separate change. No What's new, and the build number stays.
+
 ### Stick 24 boot 1 on the 5625U
 
 Logs are `generated/boot-5625u-24/`. The settings file on that boot is the six lines plus `gpu_debug true`. U2b-n was ok. B1 missed, B2 missed, B3 wrote `deadbeef`, B4 copied the GTT page, and B5 missed. A2, a VRAM indirect buffer at `0xffff800100000000`, hung at 5000 ms with CP `84008600` and the fence still on 44. A1 through C1 did not run.
