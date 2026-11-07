@@ -2620,27 +2620,6 @@ gpu_stage_visible(const char* name, gpu_stage_page* page)
 }
 
 
-static bool
-gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
-{
-	gpu_stage_page page;
-	if (!gpu_stage_map(info, &page, va, gtt)) {
-		dprintf("radeon_hd: %s map\n", name);
-		return true;
-	}
-	if (!gpu_stage_visible(name, &page)) {
-		gpu_stage_release(&page);
-		return false;
-	}
-	r5_gfx9_vmid1_levels(name, va);
-	r5_gfx9_vmid1_levels(name, va + 0x1000ull);
-	bool go = gpu_stage_step(info, name, &page, page.cpu, va + 64, page.phys,
-		true, true, true, 0, 8, false);
-	gpu_stage_release(&page);
-	return go;
-}
-
-
 /* One indirect buffer and one WRITE_DATA page. ibFlush makes the
  * packet visible. readFlush is only the CPU read of the word. */
 static bool
@@ -2671,6 +2650,81 @@ gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
 	gpu_stage_release(&dest);
 	gpu_stage_release(&ib);
 	return go;
+}
+
+
+/* DMA_DATA from a page in the high range into a fresh low VRAM page.
+ * The indirect buffer stays at a fresh low VA. A miss continues. A
+ * busy CP at 5s stops the series. */
+static bool
+gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
+{
+	gpu_stage_page ib;
+	gpu_stage_page src;
+	gpu_stage_page dest;
+	if (!gpu_stage_map(info, &ib, gpu_stage_fresh(), false, false)) {
+		dprintf("radeon_hd: %s map\n", name);
+		return true;
+	}
+	if (!gpu_stage_map(info, &src, srcVa, srcGtt, false)) {
+		dprintf("radeon_hd: %s map\n", name);
+		gpu_stage_release(&ib);
+		return true;
+	}
+	if (!gpu_stage_map(info, &dest, gpu_stage_fresh(), false, false)) {
+		dprintf("radeon_hd: %s map\n", name);
+		gpu_stage_release(&src);
+		gpu_stage_release(&ib);
+		return true;
+	}
+	*(volatile uint32*)(src.cpu + 64) = 0xDEADBEEF;
+	asm volatile("sfence" ::: "memory");
+	r5_gfx9_stage_bytes(src.cpu, 128);
+	uint32* words = (uint32*)ib.cpu;
+	words[0] = 0xc0055000u;
+	words[1] = 0x60200000u;
+	words[2] = (uint32)src.va;
+	words[3] = (uint32)(src.va >> 32);
+	words[4] = (uint32)dest.va;
+	words[5] = (uint32)(dest.va >> 32);
+	words[6] = 0x80000080u;
+	r5_gfx9_stage_bytes(ib.cpu, 28);
+	r5_gfx9_vmid1_levels(name, src.va);
+	r5_gfx9_vmid1_levels(name, dest.va);
+	r5_gfx9_user_ib submit;
+	memset(&submit, 0, sizeof(submit));
+	submit.va = ib.va;
+	submit.dwords = 7;
+	submit.vmid = 1;
+	sLastIbVa = ib.va;
+	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
+	uint64 sequence = 0;
+	if (!r5_gfx9_user_submit(&submit, 1, &sequence)) {
+		dprintf("radeon_hd: %s submit\n", name);
+		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
+		gpu_stage_release(&dest);
+		gpu_stage_release(&src);
+		gpu_stage_release(&ib);
+		return !sLost;
+	}
+	int slot = gpu_stage_slot(sequence);
+	gpu_stage_pace pace = gpu_stage_pace_wait(info, slot, sequence, true,
+		dest.cpu, true, false);
+	uint32 pat = gpu_stage_pat(dest.cpu + 64);
+	dprintf("radeon_hd: %s %s %ld ms seq %llu seen %llu word %08lx "
+		"cp %08lx phys %016llx pat %lu\n",
+		name, gpu_stage_how(pace, true), (long)pace.ms,
+		(unsigned long long)sequence, (unsigned long long)pace.seen,
+		(unsigned long)pace.word, (unsigned long)pace.cp,
+		(unsigned long long)dest.phys, (unsigned long)pat);
+	if (pace.hang) {
+		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
+		gpu_ib_words(name);
+	}
+	gpu_stage_release(&dest);
+	gpu_stage_release(&src);
+	gpu_stage_release(&ib);
+	return !pace.hang;
 }
 
 
@@ -2917,27 +2971,51 @@ gpu_stage_u(radeon_info* info)
 	if (!stop && !gpu_stage_pair(info, "u2b-n", gpu_stage_fresh(), true,
 			false, gpu_stage_fresh(), false, false, false, false, 0, 8, false))
 		stop = true;
-	/* u4b-pair maps the next page as well. The single-page steps below
-	 * leave that neighbour as the Linux empty PTE. */
-	if (!stop && !gpu_stage_pair(info, "u4b-pair",
+	/* Group B writes only. The indirect buffer stays at a fresh low
+	 * address. A miss continues. Group A fetches the indirect buffer
+	 * from the address under test, destination on the next page, both
+	 * VRAM. C1 is the address that hung on stick 23, and it is last. */
+	if (!stop && !gpu_stage_pair(info, "b1", gpu_stage_fresh(), false,
+			false, 0xffff800000041000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "b2", gpu_stage_fresh(), false,
+			false, 0xffff800000041000ull, true, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "b3", gpu_stage_fresh(), false,
+			false, 0xffff800000001000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_dma(info, "b4", 0xffff800000041000ull, true))
+		stop = true;
+	if (!stop && !gpu_stage_dma(info, "b5", 0xffff800000041000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a2", 0xffff800100000000ull, false,
+			false, 0xffff800100001000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a1", 0xffffffffffbfc000ull, false,
+			false, 0xffffffffffbfd000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a3", 0xffff808000000000ull, false,
+			false, 0xffff808000001000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a8", 0x01000000ull, false,
+			false, 0x01001000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a7", 0x00100000ull, false,
+			false, 0x00101000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a4", 0xffff8000c0000000ull, false,
+			false, 0xffff8000c0001000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a5", 0xffff800040000000ull, false,
+			false, 0xffff800040001000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "a6", 0xffff800000200000ull, false,
+			false, 0xffff800000201000ull, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "c1",
 			R5_GPU_HIGH_VA_OFFSET + 0x1000ull, false, false,
 			R5_GPU_HIGH_VA_OFFSET + 0x2000ull, false, false,
 			true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u-top", 0xffffffffffbfc000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u-radv", 0xffff800100000000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u-257", 0xffff808000000000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u-pdb1", 0xffff800040000000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u-pdb0", 0xffff800000200000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u-low0", 0x100000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u4b",
-			R5_GPU_HIGH_VA_OFFSET + 0x1000ull, false))
 		stop = true;
 	gpu_stage_mtrr("after");
 	return B_OK;

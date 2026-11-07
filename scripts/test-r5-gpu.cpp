@@ -683,14 +683,20 @@ main()
 		"\"u2a-n\"",
 		"\"u2a-f\"",
 		"\"u2b-n\"",
-		"\"u4b-pair\"",
-		"\"u-top\"",
-		"\"u-radv\"",
-		"\"u-257\"",
-		"\"u-pdb1\"",
-		"\"u-pdb0\"",
-		"\"u-low0\"",
-		"\"u4b\""
+		"\"b1\"",
+		"\"b2\"",
+		"\"b3\"",
+		"\"b4\"",
+		"\"b5\"",
+		"\"a2\"",
+		"\"a1\"",
+		"\"a3\"",
+		"\"a8\"",
+		"\"a7\"",
+		"\"a4\"",
+		"\"a5\"",
+		"\"a6\"",
+		"\"c1\""
 	};
 	/* Linux 6.12 gfxhub_v1_0_init_tlb_regs, from the same prior 0x2501.
 	 * Mask 0x3879 is the fields it writes. ECO stays. */
