@@ -1,5 +1,30 @@
 # R5OS changelog (lokaal)
 
+### Stick 22: the cached read landed, and the high VRAM step hung
+
+Logs are `generated/boot-5625u-22/`. The settings file is the same six lines. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
+
+U-self stored `51550000` through `51550007` and read the same eight words through the page and through a second mapping. The cached GTT page is physical `00000000226eb000`. The VRAM page is physical `0000000811096000`.
+
+| Step | Result |
+|---|---|
+| U-self GTT | equal, both mappings, PAT not printed on this line |
+| U-self VRAM | equal, both mappings |
+| U2a-n | ok, 1 ms, seq 37 seen 37, word `deadbeef`, CP 0, dest `00000000226eb000`, PAT 0 |
+| U2a-f | ok, 1 ms, seq 38 seen 38, word `deadbeef`, CP 0, dest `00000000226eb000`, PAT 0 |
+| U2b-n | ok, 1 ms, seq 39 seen 39, word `deadbeef`, CP 0, dest `0000000811096000`, PAT 4 |
+| U4b | hang, 5000 ms, seq 40 seen 39, word 0, CP `84008600`, dest `0000000811096000`, PAT 4 |
+| U2e, U2f, U2d, U2g | not run |
+| U2l, U2b, U2b-f, U1, U4, U3, U2, U5 | not run |
+
+U2a-n is a VRAM indirect buffer and a fresh cached GTT destination, read without `clflush`. U2a-f is that read with `clflush`. U2b-n wrote a cached GTT indirect buffer without `clflush`, and the GPU wrote `deadbeef` into VRAM. The eight indirect-buffer words of U4b were present on the CPU (`c0033700 … deadbeef`). `CP_IB1` shows `0000800000001000` for the buffer at `ffff800000001000`. Size and offset are 0. The page-table entry of the full address is `0600000811096071`. `fault` is 0. The series stopped. The watchdog then printed `gpu lost`. The userspace indirect-buffer stage still ran and printed `fence timeout` and `gpu read 00000000`. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
+The variable MTRRs are the same before and after stage U. Cap `0000000000000508`, count 8. Register 0 is base `00000000ff000005`, mask `0000ffffff000800`. Register 1 is base `0000000000000006`, mask `0000ffff80000800`. Register 2 is base `0000000080000006`, mask `0000ffffc0000800`. Register 3 is base `00000000c0000006`, mask `0000fffff0000800`. Register 4 is base `00000000cf000000`, mask `0000ffffff000800`. Registers 5, 6 and 7 are zero. None of the types is 1.
+
+Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir. The Vulkan readback line is still type 2, flags `00000006`, heap 0. The buffer is 589824 bytes. The kernel used domain 2 for that size with requested flags `00000004` and used flags `00000000`, snooped 1. libdrm printed `kernel bo domain 2 flags 00000000 bytes 589824`. A VRAM buffer of the same size stayed domain 1, flags 0, snooped 0.
+
+SAM pixels are `pixels ok`: `(24,24)` and `(192,80)` are `262e38ff`, `(192,192)` is `853b16ff`, `(192,134)` is `a64a1cff`, `(90,192)` is `873c17ff`, `(280,192)` is `692e11ff`. The normal run is `pixels MISMATCH`. All six samples are `00000000`.
+
 ### Stick 22 drops write-combined RAM
 
 Y1, from the Haiku sources this image builds, not from a new MTRR. `vm_set_area_memory_type()` (`src/system/kernel/vm/vm.cpp`) sets the area type and calls `ProtectArea`, which rewrites every page-table entry, then `arch_vm_set_memory_type()`. On x86 that records a range of the area's physical base and size and rebuilds the variable MTRRs. For `B_WRITE_COMBINING_MEMORY`, `MemoryTypeToPageTableEntryFlags` sets only `X86_64_PTE_PAT` when `x86_use_pat()` is true, which is PAT index 4. The same function returns 0 for write-back. `update_mtrrs()` skips a write-combining range when PAT is on, both while collecting ranges and while emitting registers, so that range is not a variable MTRR. `set_mtrrs()` still runs and calls `disable_caches()` then `enable_caches()` on every CPU: CR0 cache-disable, `wbinvd`, a global TLB flush, the register write, `wbinvd` again, caches back on. `wbinvd` writes dirty lines back. It does not drop them. `delete_area()` calls `arch_vm_unset_memory_type()`, which removes the recorded range and rebuilds the MTRRs the same way.
