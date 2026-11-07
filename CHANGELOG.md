@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The GFX9 end-of-pipe write is named, not applied
+
+Stick 27 run 2 read 0 from the page its own `RELEASE_MEM` was supposed to write. Linux v6.12 `gfx_v9_0_ring_emit_fence` is that write: the command processor, end of pipe, through the texture cache and GL2, using the GFXHUB TLB of the packet's VMID. `amdgpu_vm_flush` can also emit a PASID mapping, an SPM VMID update, a GDS switch and two `SWITCH_BUFFER` packets that R5 does not. `amdgpu_device_flush_hdp` returns before its packet on an x86-64 APU, which Renoir is, so that flush is not a difference on this machine. The names and the line numbers are in `docs/GRAPHICS.md`. None of it is in the ring. Not booted.
+
 ### A user job can be logged
 
 With `gpu_debug`, each user job logs `system_time()`, whether the VM flush prefix was written, the `cntx` dword, the file and context id, and the first eight dwords on the ring. `CP_IB1_BASE_HI` and `CP_IB2_BASE_HI` are sign-extended from bit 47 before the dump looks up the stored length, so `0x800100001000` is read as `0xffff800100001000`. The self-test stage lines carry `system_time()` too. The existing `gpu_debug` lines do as well. Host test checks the sign extension. Not booted.

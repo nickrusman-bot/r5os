@@ -203,6 +203,28 @@ The user fence is the kernel MC address of the fence page plus 2048, a 64-bit se
 
 `AMDGPU_CTX_OP_QUERY_STATE2` returns 0 while the device is usable. After the watchdog it returns `RESET` and `GUILTY`. The watchdog is 10 seconds. A client timeout does not mark the device lost.
 
+## E2, not applied
+
+Stick 27 run 2 stopped in RADV's `WAIT_REG_MEM` for its own `RELEASE_MEM` (`CACHE_FLUSH_AND_INV_TS_EVENT`). The page at `0xffff800000040000` was still 0. This names the Linux path that write takes, and the VMID-switch work Linux can emit that R5 does not. Nothing in this section is in the ring.
+
+The data dword is written by the command processor. Linux v6.12 `gfx_v9_0_ring_emit_fence` (`gfx_v9_0.c`, from line 5279) builds `PACKET3(PACKET3_RELEASE_MEM, 6)`. The event dword is `CACHE_FLUSH_AND_INV_TS_EVENT` with `EVENT_INDEX(5)` and `EOP_TC_WB_ACTION_EN`. Unless the fence is `AMDGPU_FENCE_FLAG_TC_WB_ONLY`, it also sets `EOP_TCL1_ACTION_EN`, `EOP_TC_ACTION_EN` and `EOP_TC_MD_ACTION_EN`. `DATA_SEL` is 2 for a 64-bit write. That is an end-of-pipe timestamp: the CP writes it through the texture cache and GL2, and the write leaves through the memory client (EA) into the page the packet's VMID translates. The TLB is the GFXHUB TLB of that VMID. These jobs use VMID 1. It is not the VMID 0 TLB and it is not an HDP store. A stale GFXHUB L1 or L2 translation for VMID 1 sends the dword to the previous page.
+
+`amdgpu_ib_schedule` (`amdgpu_ib.c`) calls `amdgpu_vm_flush` before `CONTEXT_CONTROL`. `amdgpu_vm_flush` (`amdgpu_vm.c`, from line 642) returns at once when there is no VM flush, no GDS switch and no pipeline sync. Otherwise, in order:
+
+- `amdgpu_ring_emit_pipeline_sync` when `need_pipe_sync` is true. `amdgpu_vm_need_pipeline_sync` (from line 608) is false for VMID 0. For any other VMID it is true when `job->vm_needs_flush` is set, when the ring has the compute VM bug, when a GDS switch is needed, or when that VMID saw a GPU reset.
+- `amdgpu_ring_emit_vm_flush` when `job->vm_needs_flush`, the ring has `emit_vm_flush`, and the page-table address is valid. R5's 26-dword prefix is this GFX9 packet (pipeline sync, the page-table base, the invalidate, `PFP_SYNC_ME`). It is not the rest of this function.
+- `amdgpu_gmc_emit_pasid_mapping` when the VMID's PASID mapping is missing or not yet signaled. R5 does not emit this.
+- `update_spm_vmid` when `job->spm_update_needed`. R5 does not emit this.
+- `emit_gds_switch` (`gfx_v9_0_ring_emit_gds_switch`, from line 4022) when `job->gds_switch_needed`. That writes `GDS_VMID0_BASE`, `GDS_VMID0_SIZE`, `GDS_GWS_VMID0` and `GDS_OA_VMID0` for the VMID. RADV's GFX context can set `gds_switch_needed`. R5 never writes these.
+- After a VM flush or a PASID update, `amdgpu_fence_emit` on that flush.
+- Two `emit_switch_buffer` packets that `COND_EXEC` must not cover. The body above can sit under `COND_EXEC`. These two cannot. R5's user frame already opens with two `SWITCH_BUFFER` packets. It does not emit this extra pair after the flush.
+
+A cleaner shader can be emitted before that early return, and only when `enable_cleaner_shader`, `emit_cleaner_shader` and `job->enforce_isolation` are all set. R5 does not emit one.
+
+`amdgpu_ib_schedule` also calls `amdgpu_device_flush_hdp` before `emit_cntxcntl`, and `amdgpu_device_invalidate_hdp` after the indirect buffers (`amdgpu_device.c`). On GFX9 the flush function would be `gfx_v9_0_ring_emit_hdp_flush` (from line 5098): a `WAIT_REG_MEM` on the NBIO HDP flush request and done registers, engine 1 (PFP) for the GFX ring, reference `ref_and_mask_cp0`. On x86-64 that function returns before the packet when the device is an APU and not a passthrough. Renoir is that APU, including device `15e7`. `invalidate_hdp` returns on the same condition and does not write a ring packet. So Linux does not put an HDP flush on this machine's GFX ring. The CPU `clflush` of a GTT indirect buffer is a different step. `emit_mem_sync` runs only when the IB has `AMDGPU_IB_FLAG_EMIT_MEM_SYNC`. Stick 27's jobs had flags 0, so that call was not taken.
+
+The GDS switch, the PASID mapping and the SPM VMID update are the VMID-switch packets R5 does not emit. They stay out of the ring until a later stick copies one Linux function.
+
 ## Device info (draft)
 
 `GET_INFO` fills the vendor block. `num_rb_pipes` and `enabled_rb_pipes_mask` come from `CC_RB_BACKEND_DISABLE` and `GC_USER_RB_BACKEND_DISABLE`. Stick 19 logged `rb num 2 mask 3` on every read of that pair. One shader engine means `GRBM_GFX_INDEX` is not written. `num_shader_engines` is 1 and `num_cu_per_sh` is 8 until the device passport (M5) reads them from the source Linux uses. Clocks (`1800000` kHz, `1333000` kHz), memory type LPDDR4 and 128 bits are the Mesa record for device `15e7`. The SMU and the UMC table are not read. `gb_addr_config` is the `READ_MMR_REG` of `0x063e`. `gpu_counter_freq` is `100000` kHz for device `15e7` only.
