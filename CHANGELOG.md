@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### An unknown PCI id has no firmware name
+
+`r5_amd_fw_stem` returns NULL when the id is not in the device table. The PSP load and the direct engine load refuse that NULL instead of asking for `green_sardine` firmware.
+
 ### The VRAM pool does not subtract the firmware reservations
 
 Linux 6.12 `amdgpu_discovery.h` places the discovery TMR `64 << 10` bytes below the end of VRAM and makes it `10 << 10` bytes. `amdgpu_ttm_reserve_tmr` reserves that TMR and the PSP TMR. `fw_vram_usage_start_offset` and `fw_vram_usage_size` are the firmware reservation on `struct amdgpu_mman`. The R5 pool is still the PCI BAR minus the boot picture. It does not subtract those three ranges.

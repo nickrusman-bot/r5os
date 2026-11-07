@@ -186,7 +186,7 @@ r5_amd_fw_stem(uint32_t pci)
 {
 	const r5_amd_row* row = r5_amd_row_find(pci);
 	if (row == NULL)
-		return "green_sardine";
+		return NULL;
 	return row->fw_stem;
 }
 

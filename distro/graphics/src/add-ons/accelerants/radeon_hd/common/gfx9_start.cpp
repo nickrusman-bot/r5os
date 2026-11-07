@@ -782,6 +782,8 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 {
 	const char* stem = radeon_gfx9_fw_stem();
 	char rlc[32];
+	if (stem == NULL)
+		return B_ERROR;
 	char pfp[32];
 	char ce[32];
 	char me[32];
@@ -1198,7 +1200,13 @@ radeon_gfx9_rlc_start(uint32 location, bool loadUcode, uint32* _before,
 	}
 	if (loadUcode) {
 		char rlc[32];
-		snprintf(rlc, sizeof(rlc), "%s_rlc.bin", radeon_gfx9_fw_stem());
+		const char* stem = radeon_gfx9_fw_stem();
+		if (stem == NULL) {
+			Write32(OUT, cntl, saved);
+			Write32(OUT, clock, savedClock);
+			return false;
+		}
+		snprintf(rlc, sizeof(rlc), "%s_rlc.bin", stem);
 		// mmRLC_GPM_UCODE_ADDR / DATA. Start address is 0x2000.
 		status_t loaded = radeon_gfx9_load_engine(rlc, 0x583c, 0x583d,
 			0x2000);
@@ -3329,14 +3337,18 @@ radeon_gfx9_cp_start()
 		char ce[32];
 		char me[32];
 		const char* stem = radeon_gfx9_fw_stem();
-		snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
-		snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
-		snprintf(me, sizeof(me), "%s_me.bin", stem);
-		loaded = radeon_gfx9_load_engine(pfp, 0x5814, 0x5815, 0);
-		if (loaded == B_OK)
-			loaded = radeon_gfx9_load_engine(ce, 0x5818, 0x5819, 0);
-		if (loaded == B_OK)
-			loaded = radeon_gfx9_load_engine(me, 0x5816, 0x5817, 0);
+		if (stem == NULL)
+			loaded = B_ERROR;
+		else {
+			snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
+			snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
+			snprintf(me, sizeof(me), "%s_me.bin", stem);
+			loaded = radeon_gfx9_load_engine(pfp, 0x5814, 0x5815, 0);
+			if (loaded == B_OK)
+				loaded = radeon_gfx9_load_engine(ce, 0x5818, 0x5819, 0);
+			if (loaded == B_OK)
+				loaded = radeon_gfx9_load_engine(me, 0x5816, 0x5817, 0);
+		}
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);

@@ -940,7 +940,8 @@ main()
 			return fail("passport fw");
 		if (!r5_amd_gfx9_cp(0x15e7u) || r5_amd_gfx9_cp(0x164cu))
 			return fail("passport cp");
-		if (strcmp(r5_amd_fw_stem(0x1636u), "renoir") != 0
+		if (r5_amd_fw_stem(0) != NULL || r5_amd_fw_stem(0x1234u) != NULL
+			|| strcmp(r5_amd_fw_stem(0x1636u), "renoir") != 0
 			|| strcmp(r5_amd_fw_stem(0x15e7u), "green_sardine") != 0)
 			return fail("passport stem");
 		if (r5_amd_need_reset(0x164cu) == 0 || r5_amd_need_reset(0x15ddu) != 0)
