@@ -522,6 +522,26 @@ main()
 	uint64_t got = 0;
 	if (!r5_vm_lookup(&vm, va, &got) || got != leaf)
 		return fail("lookup");
+	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
+		return fail("empty pd");
+	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)
+		return fail("empty pte");
+	if (!r5_vm_map_page(&vm, va, 0))
+		return fail("unmap");
+	got = 0;
+	if (r5_vm_lookup(&vm, va, &got) != 0 || got != kR5VmPteEmpty)
+		return fail("unmapped pte");
+	if (!r5_vm_map_page(&vm, va, leaf))
+		return fail("remap");
+	if (!r5_vm_lookup(&vm, va, &got) || got != leaf)
+		return fail("remap lookup");
+	if (!r5_vm_map_page(&vm, va + 4096, kR5Gfx9PtePrt))
+		return fail("prt map");
+	if (!r5_vm_map_page(&vm, va + 4096, 0))
+		return fail("prt clear");
+	got = 0;
+	if (r5_vm_lookup(&vm, va + 4096, &got) != 0 || got != kR5Gfx9PtePrt)
+		return fail("prt stays");
 	if (r5_vm_index(va, 3) != 0x100)
 		return fail("mapped pdb2");
 
@@ -663,19 +683,14 @@ main()
 		"\"u2a-n\"",
 		"\"u2a-f\"",
 		"\"u2b-n\"",
-		"\"u4b\"",
-		"\"u2e\"",
-		"\"u2f\"",
-		"\"u2d\"",
-		"\"u2g\"",
-		"\"u2l\"",
-		"\"u2b\"",
-		"\"u2b-f\"",
-		"\"u1\"",
-		"\"u4\"",
-		"\"u3\"",
-		"\"u2\"",
-		"gpu_stage_fault"
+		"\"u4b-pair\"",
+		"\"u-top\"",
+		"\"u-radv\"",
+		"\"u-257\"",
+		"\"u-pdb1\"",
+		"\"u-pdb0\"",
+		"\"u-low0\"",
+		"\"u4b\""
 	};
 	/* Linux 6.12 gfxhub_v1_0_init_tlb_regs, from the same prior 0x2501.
 	 * Mask 0x3879 is the fields it writes. ECO stays. */
@@ -688,7 +703,7 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 19) != 0)
+			stageOrder, 14) != 0)
 		return 1;
 	{
 		FILE* driver = fopen(

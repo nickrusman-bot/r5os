@@ -1,5 +1,20 @@
 # R5OS changelog (lokaal)
 
+### Stick 23 fills empty page-table entries the way Linux does
+
+Z0. Linux 6.12 `amdgpu_vm_pt_clear` (`amdgpu_vm_pt.c`) fills a new leaf table with `AMDGPU_PTE_EXECUTABLE` (bit 4, `0x10`) and an empty directory entry with `AMDGPU_PDE_PTE` (bit 54). `amdgpu_vm_pte_update_flags` writes that same `0x10` when a PTE is not valid and not PRT. `gmc_v9_0_get_vm_pde` adds nothing else while `translate_further` is off. R5 was storing `0`. A new VMID 1 leaf is now `0x10`, a new directory page is bit 54, and an unmap writes `0x10`. A PRT entry is left as it is. A directory entry counts as a table only when `VALID` is set and bit 54 is clear. A lookup counts as mapped only when the leaf has `VALID`. VMID 0 and the K2 table are unchanged. The host test printed `ok gpu api 1.0 walk`, including a fresh directory entry of bit 54, an unmap that reads back `0x10`, a second map of the same page, and a PRT entry that a clear does not overwrite.
+
+Z1, from the sources, before this image.
+
+1. The stage reads the four entries of each bisect address, and of the next page, through a fresh `map_physical_memory` of that table page. The log line is `L3` through `L0`, the VRAM offset of the table page, and the raw word. The kernel window is write-combined, so that read is not the pointer kept in `sVm`.
+2. `vm_page_alloc` is the same bump as the ring, the IH ring, the K2 table, the dummy page and the CSIB page (`kvram` in `gfx9_k12.cpp`). The cursor only moves forward, so those pages do not overlap each other. The CSIB log address `0xf401000000` is `radeon_gfx9_mc_addr` of that one page, not a second copy. Linux `amdgpu_ttm_reserve_tmr` and `fw_vram_usage` reserve the discovery and PSP ranges at the top of VRAM. This pool does not subtract those ranges (REVIEW-26 P1b). The page tables are the next 4 KiB pages after the earlier bump, at the low end of the pool, not at that top. No K register changes for this.
+3. `gpu_bo_release` unmaps every range of the buffer and flushes VMID 1. A parked buffer keeps its entries until its last sequence has retired. After a teapot that reached `vkQueueWaitIdle`, the first 2 MiB is the cleared value, not the RADV mapping. The stick log shows the four words after those teapots and before the submit.
+4. `amdgpu_vm_pt_create` and `amdgpu_vm_pde_update` do not special-case the first PDB0 or PDB1 of the high range. The clear is the same for every entry. Nothing else in `gmc_v9_0_get_vm_pde` runs for GC 9.3 with `translate_further` off.
+
+Z2. Stage U keeps U-self, U2a-n, U2a-f and U2b-n, then `u4b-pair` (VRAM at `0xffff800000001000` with the next page mapped), then VRAM at `0xffffffffffbfc000`, `0xffff800100000000`, `0xffff808000000000`, `0xffff800040000000`, `0xffff800000200000`, low `0x100000`, and U4b alone. `gpu_debug` prints `va map` with the address, the size and the domain. The `clflush` at submit stays.
+
+`jam -q @r5-raw` finished at 13:28 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick23-m4.image`, 2147483648 bytes, sha256 `b5c7feeea0595f9d233db568448ba2160a6654d55663a61b8f897a74b89b054b`. The stick file is the anyboot from 6 Nov 2026, 21:11 Europe/Amsterdam, with that image as the BeFS partition. The settings are the six lines plus `gpu_debug true`. It is 2156724224 bytes, sha256 `2636976ed935187dd7c9e649a8fdb8d0e033c3f6d1826877309cea265c3aaf8d`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 13:29 to 13:33 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 13:33. Disk 0 was not opened. Not booted.
+
 ### Stick 22: the cached read landed, and the high VRAM step hung
 
 Logs are `generated/boot-5625u-22/`. The settings file is the same six lines. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
