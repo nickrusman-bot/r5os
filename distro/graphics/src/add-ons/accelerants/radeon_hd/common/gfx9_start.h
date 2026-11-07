@@ -109,6 +109,10 @@ status_t r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset,
 	uint8** address);
 status_t r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset);
 void r5_gfx9_free_user_vram(uint64 offset);
+/* VMID 1 and later. The pointer is the carveout window, not the BAR. */
+uint8* r5_gfx9_vram_cpu(uint64 offset);
+/* The BAR window. The K sequence and the HDP probe write use it. */
+uint8* r5_gfx9_vram_bar(uint64 offset);
 void r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count);
 
 #endif

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### VMID 1 reads and writes VRAM through the carveout
+
+Linux 6.12 `gmc_v9_0_mc_init` sets `aper_base` to the PCI BAR, then on an x86_64 APU replaces it with `get_mc_fb_offset()`. `amdgpu_ttm_init` maps that with `ioremap_wc`. `amdgpu_device_flush_hdp` returns at once on such an APU, which is why Linux never flushes the HDP there. `amdgpu_vm_cpu_commit` still calls it after a page-table update. `nbio_v7_0` remaps `HDP_MEM_COHERENCY_FLUSH_CNTL`; the APU path does not reach that write.
+
+R5's fixed K sequence still uses the PCI BAR window. Every VMID 1 path now uses a second window at `MC_VM_FB_OFFSET << 24`, write combining: page-table pages, user VRAM buffers, stage pages and the VRAM readback. On the 5625U the register is `0x810`, so the base is `0x810000000`. The UEFI map reserves `0x80e300000`–`0x830000000`. That base sits inside the reservation. The window length is the visible BAR (`0x10000000` on stick 24), which is the part the pool allocates from. The real reservation from the base to `0x830000000` is 512 MiB. `CONFIG_MEMSIZE` stays ignored.
+
+Stick 25's stage U starts with an HDP probe: eight words written through the BAR, read back through the carveout at once and again after `sfence`. Then B1, B2, B3, B5, A2, A1, A3, A8, A7, A4, A5, A6, and C1 last. Not booted.
+
 ### Geen WC-MTRR als PAT aan staat
 
 Met PAT zet de kernel geen WC-MTRR meer, alleen de PAT-bits, zoals Linux. Dit geldt voor alle gebruikers, ook met de GPU uit. Getest op sticks 19–24 en in QEMU. De wijziging is `distro/kernel/src/system/kernel/arch/x86/arch_vm.cpp` (`82cd27fbc8`) en blijft.

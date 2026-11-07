@@ -679,14 +679,10 @@ main()
 	const char* stageOrder[] = {
 		"gpu_stage_p(",
 		"gpu_stage_u(",
-		"\"u-self\"",
-		"\"u2a-n\"",
-		"\"u2a-f\"",
-		"\"u2b-n\"",
+		"gpu_stage_hdp(info)",
 		"\"b1\"",
 		"\"b2\"",
 		"\"b3\"",
-		"\"b4\"",
 		"\"b5\"",
 		"\"a2\"",
 		"\"a1\"",
@@ -709,7 +705,7 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 14) != 0)
+			stageOrder, 16) != 0)
 		return 1;
 	{
 		FILE* driver = fopen(
@@ -990,6 +986,45 @@ main()
 			return fail("node keys");
 	}
 
+	if (r5_gpu_carveout_base(0x810u) != 0x810000000ull)
+		return fail("carveout base");
+	if (r5_gpu_carveout_base(0x01000810u) != 0x810000000ull)
+		return fail("carveout mask");
+	{
+		char text[2500];
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "map_pool(", "return true;",
+			text, sizeof(text)) != 0)
+			return fail("bar pool");
+		if (strstr(text, "vram_window_phys") == NULL)
+			return fail("bar window");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "map_carveout(", "return true;",
+			text, sizeof(text)) != 0)
+			return fail("carveout map");
+		if (strstr(text, "r5_gpu_carveout_base") == NULL
+			|| strstr(text, "B_WRITE_COMBINING_MEMORY") == NULL)
+			return fail("carveout wc");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "vm_page_alloc(", "return 1;",
+			text, sizeof(text)) != 0)
+			return fail("vm page");
+		if (strstr(text, "r5_gfx9_vram_cpu") == NULL
+			|| strstr(text, "kernel_window") != NULL)
+			return fail("vm page window");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "gpu_stage_hdp(", "gpu_stage_u(",
+			text, sizeof(text)) != 0)
+			return fail("hdp probe");
+		if (strstr(text, "r5_gfx9_vram_bar") == NULL
+			|| strstr(text, "r5_gfx9_vram_cpu") == NULL
+			|| strstr(text, "sfence") == NULL)
+			return fail("hdp paths");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "r5_gfx9_map_vram(bo->vramOffset",
+			"bo->kernel = kernel", text, sizeof(text)) != 0)
+			return fail("bo map");
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

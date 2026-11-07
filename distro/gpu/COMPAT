@@ -87,6 +87,10 @@ On Tahiti and later, including the 5625U, `CONFIG_MEMSIZE` is read as megabytes.
 
 The carveout on the 5625U is 512 MiB. Windows shows 495 MB for that reservation. The number `GET_INFO` returns is the PCI BAR, which can be larger than the carveout.
 
+Linux 6.12 `gmc_v9_0_mc_init` stores the PCI BAR in `aper_base`, then on an x86_64 APU that is not a passthrough sets `aper_base` to `get_mc_fb_offset()` and `aper_size` to `real_vram_size`. `amdgpu_ttm_init` maps it with `ioremap_wc` (`aper_base_kaddr`). `amdgpu_device_flush_hdp` returns immediately on that APU. `amdgpu_vm_cpu_commit` calls the flush after `mb()`. `nbio_v7_0_remap_hdp_registers` points the flush at the HDP remap page; the APU return happens before any write of `HDP_MEM_COHERENCY_FLUSH_CNTL`.
+
+R5 keeps the fixed K sequence on the PCI BAR (`kernel_window`, `vram_window_phys`). VMID 1 and later use `carveout` at `r5_gpu_carveout_base(MC_VM_FB_OFFSET)`, write combining. On the 5625U the register is `0x810`, so the base is `0x810000000`. The UEFI map in the stick 24 syslog reserves `0x80e300000`–`0x830000000` (`EfiReservedMemoryType`). The base is inside that range. The mapped length is `vram_window_bytes`, the visible BAR, because the pool does not allocate past it and `CONFIG_MEMSIZE` (`0x3fffff`) stays ignored. The reservation from the base to `0x830000000` is 512 MiB.
+
 | Call | Result |
 |---|---|
 | `drmGetDevices2` / `drmGetDevice2` | translated, PCI from `GET_INFO` |
