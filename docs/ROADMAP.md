@@ -121,13 +121,18 @@ Levels: buildable → bootable → functional → desktop-capable → release-su
 - **Not taken:** the packages (Firefox, Wine, games). They belong in a package repository, not in this source tree.
 - **When:** after AMD64 is usable on hardware, the same rule as above. First QEMU, then the Pi 4.
 
-### Import rules for haiku-pi
+### Import rules for other Haiku forks
 
-The same rules apply to both haiku-pi tracks (ARM64 above, the x86-64 fixes under "Upstream"):
-- **Per commit,** never one large merge. haiku-pi is based on a different Haiku revision (hrev60314 on 5 Nov 2026), and R5 checks each change against its own overlays and APIs, as for `upstream`.
-- **Native source in `distro/`,** as `AGENTS.md` describes. The haiku-pi file header stays exactly as it is, and R5 changes on top are marked with SPDX snippets.
-- **Licence.** The new files in `haiku-pi/haiku` carry an MIT header. Third-party code inside them keeps its own licence (OpenBSD's bwfm driver, ISC; Mesa's DRM headers, MIT; Arm Optimized Routines, MIT OR Apache-2.0 WITH LLVM-exception). Each import gets a line in `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md`. The coordination repository `haiku-pi/haiku-rpi` (scripts and documents) has no licence file, so nothing is copied from it unless its owner agrees.
-- **Tested before it lands.** haiku-pi's code is also written by an AI agent. Each import is read against the source, built, and booted (QEMU, plus the 5625U for x86-64 or the Pi 4 for ARM64).
+These rules apply to every import from another Haiku fork: haiku-pi, air/OS and RenkuOS (see "Other Haiku forks as sources" under "Upstream"):
+- **Per commit,** never one large merge. Each fork is based on its own Haiku revision (haiku-pi hrev60314, air/OS hrev60207, in November 2026), and R5 checks each change against its own overlays and APIs, as for `upstream`.
+- **Native source in `distro/`,** as `AGENTS.md` describes. The fork's file header stays exactly as it is, and R5 changes on top are marked with SPDX snippets.
+- **Licence.** Only code under a licence R5 can combine with is imported. Each import gets a line in `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md`, with the fork, the commit and the author.
+  - haiku-pi: new files in `haiku-pi/haiku` carry an MIT header. Third-party code inside keeps its own licence (OpenBSD's bwfm driver, ISC; Mesa's DRM headers, MIT; Arm Optimized Routines, MIT OR Apache-2.0 WITH LLVM-exception). The coordination repository `haiku-pi/haiku-rpi` has no licence file: nothing is copied from it unless its owner agrees.
+  - air/OS: new files in `airos-works/haiku` carry an MIT header. Its AMD driver (`airos-works/linux-drm`, Linux 6.18 amdgpu) is GPL-2.0-only and is not imported: R5's GPU interface is its own small driver, and GPL-2.0-only cannot be combined with GPL-3.0 (`AGENTS.md`). R5 may read it as a reference. The applications (the Craft suite, Summit, Mail and others) state no licence and are not imported.
+  - RenkuOS: MIT only (its decision D3). Commits carry a DCO sign-off and the author's name, which R5 keeps.
+- **One source per area.** The forks overlap (Raspberry Pi 4, Wi-Fi, USB) and also take from each other. Per area R5 picks one source, so that no driver is compared three times.
+- **Tested before it lands.** Much of this code is written with AI help. Each import is read against the source, built, and booted (QEMU, plus the 5625U for x86-64 or the Pi 4 for ARM64).
+- **Overlap with R5's own work.** Where R5 already has its own version (`radeon_hd`, USB audio, MIDI, the Settings window), a fork's change is read and judged per fix, never copied over R5's file. The fixed GFX9 sequences in `radeon_hd` are not touched.
 
 ## Platform (CPU, power and firmware)
 
@@ -156,3 +161,31 @@ About 120 haiku-pi commits change code that x86-64 also builds and runs: the ker
 - **Decided on 7 Nov 2026:** R5 takes these fixes. They help AMD64 directly, on the 5625U and in QEMU.
 - **When:** after GPU milestone M5. It is a separate track, not an M milestone.
 - **How:** the import rules above. Start with the ★ fixes that have a test, and use that test as the proof on R5. A fix that conflicts with an R5 change in `distro/` is reviewed by hand, not overwritten.
+
+### Other Haiku forks as sources
+
+Decided on 7 Nov 2026: R5 takes what already works in other Haiku forks, and builds itself only where R5 is deliberately different (the GPU interface, multi-user, the Settings window, the BeOS-style kits). All imports follow the import rules under "Architectures".
+
+- [haiku-pi](https://github.com/haiku-pi/haiku-rpi): the Raspberry Pi 4 port and fixes to shared code (above).
+- [air/OS](https://github.com/airos-works/haiku): ARM64 boards, desktop and laptop work.
+- [RenkuOS](https://github.com/RenkuOS/Source): a community fork with CI and an import ledger, MIT only.
+
+The first choice of source per area:
+
+| Area | Source | What | Note |
+|---|---|---|---|
+| ARM64 basis, Raspberry Pi 4 | haiku-pi | boot path, GICv2, DMA, Pi 4 drivers | air/OS also has a Pi 4 port; compare once, then keep one |
+| Fixes to shared kernel, VM, libroot and BFS code | haiku-pi, then RenkuOS | the ★ fixes, RenkuOS kernel and VM fixes | per fix, with its test |
+| Scaling and several monitors | air/OS | per-monitor HiDPI and fractional scaling in app_server, `DisplayLayout`, tear-free output | what Haiku lacks. Design it together with the GPU plan for app_server |
+| Power on laptops | air/OS, RenkuOS | `power_daemon`, lid, suspend to idle on AMD laptops (air/OS); keeping CPUs out of deep idle when a driver asks (RenkuOS) | input for "Platform", sleep and resume |
+| Wi-Fi | air/OS, RenkuOS | the Wi-Fi preferences panel and Deskbar applet, auto-join (air/OS); MediaTek, QCA6174 and OpenBSD wlan fixes (RenkuOS); AX210 and MT7922 (air/OS) | choose per driver |
+| Bluetooth | air/OS | Low Energy, HID keyboards and mice, A2DP, preferences | |
+| USB audio and MIDI | RenkuOS | `usb_audio`, `multi_audio`, `usb_midi` fixes | compare with R5's own USB audio and MIDI 2.0 work first |
+| Touchpads and touch screens | RenkuOS | `i2c_hid`, `i2c_elan`, `i2c_goodix`, `pch_i2c` | |
+| USB host controllers, TCP | RenkuOS | EHCI, UHCI, OHCI and xHCI fixes; TCP fixes | |
+| Interface Kit and Tracker | RenkuOS, air/OS | public `BAboutWindow`, live control-look switch (RenkuOS); Quick Look (air/OS) | additive, the BeOS way |
+| Security | RenkuOS | `restrict_syscalls()`, a per-team syscall filter | |
+| GPU | reference only | V3D and the Vulkan window path (haiku-pi), the Mali, Adreno and NVIDIA drivers (air/OS) | input for M7, the Graphics Kit and later vendors. R5 keeps its own GPU interface |
+
+- **When:** after GPU milestone M5, as separate tracks, not M milestones. The ARM64 basis follows the rule under "Architectures".
+- **Not imported:** air/OS's GPL-2.0-only AMD driver, the applications without a licence, and the forks' branding.
