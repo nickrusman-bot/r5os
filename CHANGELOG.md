@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### User VRAM is cleared when it is handed out
+
+A span returned to the free list still held the previous owner's bytes. Taking that span now writes zeros through the kernel address stored with it. A fresh bump is cleared the same way before it is published. `R5_GPU_BO_VRAM_CLEARED` is bit 3, the Linux `AMDGPU_GEM_CREATE_VRAM_CLEARED` flag. The host test fills 8 KiB with `0xab`, takes the first 4 KiB, and reads zeros there while the remainder stays `0xab`.
+
 ### An indirect buffer cannot wrap the address space
 
 `gpu_ib_mapped` added the byte count to the GPU address and walked every page up to that sum. A size near the top of the address space wrapped the sum, and the page step could wrap as well. The check now refuses more than `0xfffff` dwords, a sum that does not fit in 64 bits, and a span that `r5_vm_va_fits` rejects. The walk stops on the last page instead of stepping past it. The host test rejects an address near `UINT64_MAX` and a dword count of `0x100000`, and it accepts eight dwords on the last page of `0xffff800000001000`.
