@@ -1,3 +1,9 @@
+# Realtek card reader
+SD card reader driver ported from OpenBSD rtsx. Not the Linux rts5228 driver. Not installed in this image yet.
+
+License: ISC
+Source: https://github.com/openbsd/src/blob/master/sys/dev/ic/rtsx.c
+
 # R5 Operating System
 Original R5 code.
 

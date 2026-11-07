@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Realtek rtsx bus driver, not in the image
+
+The SD reader on the 5625U is PCI `10ec:5228`, class `ff:00:00`. `sdhci` does not claim that class. The new module is `busses/mmc/rtsx`, a port of OpenBSD `rtsx(4)` (Uwe Stuehler, 2006; Stefan Sperling, 2012), ISC, including the Haiku glue. It publishes the same MMC bus as `sdhci`. `10ec:5228` has its own flag and writes no chip registers: OpenBSD has no init for it, and Linux `rts5228.c` / `rts5228.h` are not a source. The other OpenBSD ids are in the table and have not been booted. The module is built and is not packaged into the image. QEMU has no such device. Developer note: `docs/RTSX.md`.
+
 ### Geen WC-MTRR als PAT aan staat
 
 Met PAT zet de kernel geen WC-MTRR meer, alleen de PAT-bits, zoals Linux. Dit geldt voor alle gebruikers, ook met de GPU uit. Getest op sticks 19–24 en in QEMU. De wijziging is `distro/kernel/src/system/kernel/arch/x86/arch_vm.cpp` (`82cd27fbc8`) en blijft.

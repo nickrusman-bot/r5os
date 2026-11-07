@@ -12,6 +12,17 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### Realtek rtsx card reader
+
+Location: `distro/kernel/src/add-ons/kernel/busses/mmc/rtsx/`. Not installed in the image.
+
+| Piece | Project | License |
+|---|---|---|
+| Register definitions and the command, clock, and power sequences | OpenBSD `rtsx(4)`, `sys/dev/ic/rtsxreg.h` r1.5 and `sys/dev/ic/rtsx.c` r1.22, `sys/dev/pci/rtsx_pci.c` r1.16 | ISC |
+| Haiku `device_manager` glue in the same files | R5, 2026 | ISC, same grant, so the module can be taken as a whole |
+
+Copyright 2006 Uwe Stuehler, 2012 Stefan Sperling, 2026 R5OS Contributors. The permission text is in the files. Linux `rts5228.c` and `rts5228.h` were not copied. `rts5228.h` is GPL-2.0-only. RTS5228 attaches and does not run a chip init. Detail: `docs/RTSX.md` and `docs/LICENSING.md`.
+
 ### Teapot control points
 
 Location: `distro/apps/vulkanteapot/fg_teapot_data.h`.

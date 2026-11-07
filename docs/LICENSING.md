@@ -35,6 +35,12 @@ MIT, BSD, and Apache-2.0 code can go into a GPL-3.0 combined work when their not
 
 Flag an uncertain kernel integration for legal review before it is put in an image.
 
+### Exception: Realtek rtsx bus driver
+
+The card-reader module under `distro/kernel/src/add-ons/kernel/busses/mmc/rtsx/` is **ISC**, not GPL-3.0-or-later. That includes the R5 parts of the module, not only the OpenBSD text. The user decided this on 7 Nov 2026, for the same kind of reason as the R5 GPU interface being MIT: the license is what lets the other party use the code. The GPU header and the R5 DRM library are MIT because every Vulkan and OpenGL application loads them. This module is ISC because it is a port of OpenBSD `rtsx(4)` (Uwe Stuehler, 2006; Stefan Sperling, 2012) and Haiku, or anyone else, should be able to take the whole module.
+
+Do not put a GPL-3.0 header on these files. Do not paste them into a GPL-3.0-only file. The kernel they load into may be a GPL-3.0 combination; the ISC notices stay on this module. It is not in the image until that integration is reviewed. Linux `rts5228.c` and `rts5228.h` are not a source for this driver. `rts5228.h` is GPL-2.0-only.
+
 ## How components combine
 
 Judge the real relationship, not the directory name:
@@ -185,6 +191,7 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 | `distro/airplay/third_party/aes.*` | Unlicense | kokke tiny-AES-c |
 | `distro/app_server/`, `distro/boot/`, `distro/debugger/`, `distro/user-paths/` | unchanged | Haiku files. Headers were not rewritten |
 | `distro/kernel/x86/r5_pstate.cpp`, `r5_pstate.h` | MIT | New readout, compiled into the kernel. The kernel is a combined work with Haiku's MIT sources. A GPL-3.0 kernel combination was not reviewed, so this file stays MIT |
+| `distro/kernel/src/add-ons/kernel/busses/mmc/rtsx/` | ISC | Port of OpenBSD `rtsx(4)`. Copyright 2006 Uwe Stuehler, 2012 Stefan Sperling, and 2026 R5OS Contributors for the Haiku bus glue. The whole module stays ISC so Haiku can take it. See the exception above. Not in the image |
 | `distro/cpu/r5_pstate_log.cpp` | GPL-3.0-or-later | Separate log program. It only reads `/dev/misc/r5_pstate` |
 | `distro/graphics/` `radeon_hd` `accelerant.cpp`, `connector.cpp`, `display.cpp`, `gpu.cpp`, `mode.cpp`, `pll.cpp`, `driver.cpp`, `radeon_hd.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of Haiku’s accelerant and kernel driver. Copyright Haiku, Inc., MIT header kept. R5 edits (Barcelo object table, EDID fallback, PLL 2.2, VRAM size, DCN init that leaves the firmware scanout, DPMS skip, PSP load, opt-in GFX9 start, MEC start, scratch test, and the GFX ring submission) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The copied file is one combined work; shipping it follows GPL-3.0-or-later and the MIT notices stay. The kernel add-on `radeon_hd` contains GPL-3.0-or-later R5 code (`gfx9_start.cpp`, by the user's decision on 5 Nov 2026). The combined add-on follows GPL-3.0-or-later. The Haiku parts stay MIT. `1002:15e7` is claimed. DCN does not run the DCE encoder, clock, AUX, modeset, or encoder DPMS. Renoir may program the GFX ring for the clear-state preamble and one scratch packet, and restores those registers if the packet does not land |
 | `distro/graphics/` `radeon_hd` `clearstate_defs.h`, `clearstate_gfx9.h` | MIT | Unmodified from Linux v6.12 `drivers/gpu/drm/amd/amdgpu/`. Copyright 2012 and 2017 Advanced Micro Devices, Inc. The permission text stays in the files. sha256 `70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285` and `e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5`. `gfx9_start.cpp` includes them. The combined accelerant follows GPL-3.0-or-later and these MIT notices stay. AMD does not endorse R5 |
