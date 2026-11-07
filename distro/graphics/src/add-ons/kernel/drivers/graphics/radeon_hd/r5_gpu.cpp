@@ -655,7 +655,7 @@ gpu_ring(void* as, r5_gfx9_user_ib* ibs, uint32 count, uint64* sequence)
 	for (uint32 i = 0; i < count; i++)
 		ibs[i].vmid = vmid;
 	if (!r5_gfx9_user_submit_switch(ibs, count, sequence, flush, pd,
-			r5_gfx9_as_first(as))) {
+			r5_gfx9_as_pasid(as), r5_gfx9_as_first(as))) {
 		r5_gfx9_as_cancel();
 		return false;
 	}
@@ -1375,7 +1375,7 @@ amd_submit(void* as, const uint64_t* va, const uint32_t* dwords, uint32_t count,
 		ibs[i].vmid = vmid;
 	}
 	if (!r5_gfx9_user_submit_switch(ibs, count, sequence, flush, pd,
-			r5_gfx9_as_first(as))) {
+			r5_gfx9_as_pasid(as), r5_gfx9_as_first(as))) {
 		r5_gfx9_as_cancel();
 		return B_ERROR;
 	}

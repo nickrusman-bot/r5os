@@ -75,7 +75,7 @@ bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
  * the unchanged body. load 1 uses the context-load bits, 0 keeps them,
  * and -1 uses the single global first-job flag. */
 bool r5_gfx9_user_submit_switch(const r5_gfx9_user_ib* ibs, uint32 count,
-	uint64* _sequence, int vmFlush, uint64 pd, int load);
+	uint64* _sequence, int vmFlush, uint64 pd, uint32 pasid, int load);
 uint64 r5_gfx9_user_seen();
 uint64 r5_gfx9_k2_word_mc();
 bool r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa);
@@ -97,6 +97,7 @@ void r5_gfx9_as_cancel(void);
 void r5_gfx9_as_finish(void* as, uint32 vmid, uint64 sequence);
 int r5_gfx9_as_first(void* as);
 uint32 r5_gfx9_as_vmid(void* as);
+uint32 r5_gfx9_as_pasid(void* as);
 bool r5_gfx9_as_lost(void* as);
 void r5_gfx9_as_fault(uint32 vmid, uint64 addr);
 void r5_gfx9_as_retired(uint64 seen);

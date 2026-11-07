@@ -2449,13 +2449,13 @@ r5_gfx9_user_commit_switch(uint32 count, int vmFlush)
 bool
 r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 {
-	return r5_gfx9_user_submit_switch(ibs, count, _sequence, 0, 0, -1);
+	return r5_gfx9_user_submit_switch(ibs, count, _sequence, 0, 0, 0, -1);
 }
 
 
 bool
 r5_gfx9_user_submit_switch(const r5_gfx9_user_ib* ibs, uint32 count,
-	uint64* _sequence, int vmFlush, uint64 pd, int load)
+	uint64* _sequence, int vmFlush, uint64 pd, uint32 pasid, int load)
 {
 	if (ibs == NULL || count == 0 || count > 8)
 		return false;
@@ -2491,8 +2491,8 @@ r5_gfx9_user_submit_switch(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint32 packets[512];
 	uint32 switched = 0;
 	if (vmFlush) {
-		switched = r5_cs_vm_switch(packets, cap, ibs[0].vmid, pd, fenceMc,
-			sUserSequence);
+		switched = r5_cs_vm_switch(packets, cap, ibs[0].vmid, pasid, pd,
+			fenceMc, sUserSequence);
 		if (switched != prefix)
 			return false;
 	}

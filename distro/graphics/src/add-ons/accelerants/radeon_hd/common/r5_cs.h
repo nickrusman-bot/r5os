@@ -199,22 +199,34 @@ r5_cs_gc_byte(uint32_t index)
  * PACKET3(PFP_SYNC_ME, 0), 0. gmc_v9_0_use_invalidate_semaphore is
  * true only for MMHUB, so this GFXHUB sequence does not write
  * VM_INVALIDATE_ENG0_SEM. */
+/* osssys_4_0_offset.h. mmIH_VMID_0_LUT is index 0. VMID n is the next
+ * register. The OSS base in this driver is 0x10A0, the same block as
+ * IH_RB_CNTL at index 0x80. */
 static inline uint32_t
-r5_cs_vm_switch_words(void)
+r5_cs_oss_byte(uint32_t index)
 {
-	return 31u;
+	return (0x10A0u + index) * 4u;
 }
 
 
 static inline uint32_t
-r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
-	uint64_t fenceMc, uint64_t fenceSeq)
+r5_cs_vm_switch_words(void)
+{
+	/* Pipeline sync, PASID WRITE_DATA, two page-table writes, the
+	 * invalidate, the ack wait, and PFP_SYNC_ME. 31 + 5. */
+	return 36u;
+}
+
+
+static inline uint32_t
+r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
+	uint64_t pd, uint64_t fenceMc, uint64_t fenceSeq)
 {
 	uint32_t n = 0;
 	uint32_t inv;
 	uint32_t ack;
 	uint32_t lo;
-	if (vmid == 0 || vmid > 15u)
+	if (vmid == 0 || vmid > 15u || pasid == 0 || pasid > 0xffffu)
 		return 0;
 	inv = r5_gfx9_tlb_req(vmid, 0);
 	ack = r5_gfx9_tlb_ack_mask(vmid);
@@ -229,6 +241,13 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
 	n = r5_cs_put(out, n, cap, 0x20u);
+	/* gmc_v9_0_emit_pasid_mapping writes IH_VMID_n_LUT before the
+	 * page-table base. The value is the 16-bit PASID. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, r5_cs_oss_byte(vmid));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, pasid);
 	/* WRITE_DATA to a register: engine ME, destination register, confirm.
 	 * Linux gfx_v9_0_ring_emit_wreg. WR_CONFIRM is bit 20. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));

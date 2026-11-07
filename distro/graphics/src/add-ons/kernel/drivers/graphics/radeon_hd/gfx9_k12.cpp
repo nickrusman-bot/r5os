@@ -260,12 +260,6 @@ ih_handler(void* data)
 	uint32 walked = 0;
 	while (rptr != wptr && walked < (kIhBytes / 32)) {
 		r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(sIhRing + rptr);
-		if (sIhEntries < 4)
-			memcpy(sFirstRaw[sIhEntries], sIhRing + rptr, 32);
-		sIhEntries++;
-		sLastClient = entry.client;
-		sLastSource = entry.source;
-		sLastRing = entry.ring;
 		/* Linux v6.12 drivers/gpu/drm/amd/include/soc15_ih_clientid.h:
 		 * VMC is 0x12 (MMHUB), RESERVED is 0x1a, UTCL2 is 0x1b
 		 * (GFXHUB). gmc_v9_0_process_interrupt handles VMC and UTCL2.
@@ -274,25 +268,38 @@ ih_handler(void* data)
 		if ((entry.client == R5_IH_CLIENT_VMC
 				|| entry.client == R5_IH_CLIENT_UTCL2)
 			&& entry.source == 0) {
+			/* Queue only. The retire thread owns sSpaces and the log. */
 			const uint32* raw = (const uint32*)(sIhRing + rptr);
-			uint32 vmid = (raw[0] >> 24) & 0xfu;
-			uint32 hub = raw[0] >> 31;
-			uint64 addr = r5_gfx9_fault_address(raw[4], raw[5]);
-			dprintf("radeon_hd: vm fault %s vmid %lu addr %016llx\n",
-				hub == 0 ? "gfxhub" : "mmhub",
-				(unsigned long)vmid, (unsigned long long)addr);
-			if (r5_gfx9_ih_gc_fault(sIhRing + rptr))
-				r5_gfx9_as_fault(vmid, addr);
+			uint32 next = (sFaultW + 1u) & 31u;
+			if (next != sFaultR) {
+				sFaultQ[sFaultW].pasid = raw[3] & 0xffffu;
+				sFaultQ[sFaultW].vmid = (raw[0] >> 24) & 0xfu;
+				sFaultQ[sFaultW].addr = r5_gfx9_fault_address(raw[4], raw[5]);
+				asm volatile("sfence" ::: "memory");
+				sFaultW = next;
+			}
 			r5_gpu_retire_wake();
 			woke = true;
 		} else if (entry.client == kClientCp && entry.source == kSourceEop
 			&& entry.ring == 0) {
+			if (sIhEntries < 4)
+				memcpy(sFirstRaw[sIhEntries], sIhRing + rptr, 32);
+			sIhEntries++;
+			sLastClient = entry.client;
+			sLastSource = entry.source;
+			sLastRing = entry.ring;
 			if (sEopSem >= 0)
 				release_sem_etc(sEopSem, 1, B_DO_NOT_RESCHEDULE);
 			r5_gpu_retire_wake();
 			sEopCount++;
 			woke = true;
 		} else {
+			if (sIhEntries < 4)
+				memcpy(sFirstRaw[sIhEntries], sIhRing + rptr, 32);
+			sIhEntries++;
+			sLastClient = entry.client;
+			sLastSource = entry.source;
+			sLastRing = entry.ring;
 			if (entry.client == kClientCp && (entry.source == 184
 				|| entry.source == 185 || entry.source == 186))
 				sPrivCount++;
@@ -853,8 +860,18 @@ struct r5_as {
 	uint64		tlb_seq;
 	int			lost;
 	int			holds;
+	uint32		pasid;
 };
 
+struct r5_fault_note {
+	uint32		pasid;
+	uint32		vmid;
+	uint64		addr;
+};
+
+static r5_fault_note sFaultQ[32];
+static volatile uint32 sFaultW;
+static uint32 sFaultR;
 static r5_as* sSpaces[64];
 static r5_vmid_mgr sVmids;
 static int sVmidReady = 0;
@@ -1408,6 +1425,9 @@ r5_gfx9_as_open(void)
 	as->id = sNextAs++;
 	if (as->id == 0)
 		as->id = sNextAs++;
+	as->pasid = as->id & 0xffffu;
+	if (as->pasid == 0)
+		as->pasid = 1;
 	as->vm.pages = as->pages;
 	/* 1024 table pages cover a contiguous 1 GiB map (512 leaves plus
 	 * the upper levels) and still fit under a quarter of RAM. */
@@ -1548,23 +1568,50 @@ r5_gfx9_as_lost(void* cookie)
 }
 
 
+uint32
+r5_gfx9_as_pasid(void* cookie)
+{
+	r5_as* as = as_from(cookie);
+	if (as == NULL)
+		return 0;
+	return as->pasid;
+}
+
+
+static void
+r5_gfx9_fault_drain()
+{
+	while (sFaultR != sFaultW) {
+		r5_fault_note note = sFaultQ[sFaultR];
+		asm volatile("lfence" ::: "memory");
+		sFaultR = (sFaultR + 1u) & 31u;
+		int found = 0;
+		for (uint32 n = 0; n < 64; n++) {
+			r5_as* as = sSpaces[n];
+			if (as == NULL || as->pasid == 0 || as->pasid != note.pasid)
+				continue;
+			as->lost = 1;
+			knote("vm fault pasid %lu vmid %lu addr %016llx",
+				(unsigned long)note.pasid, (unsigned long)note.vmid,
+				(unsigned long long)note.addr);
+			found = 1;
+			break;
+		}
+		if (!found) {
+			knote("vm fault pasid %lu unknown addr %016llx",
+				(unsigned long)note.pasid,
+				(unsigned long long)note.addr);
+		}
+	}
+}
+
+
 void
 r5_gfx9_as_fault(uint32 vmid, uint64 addr)
 {
-	uint32 n;
-	if (vmid == 0 || vmid > 15)
-		return;
-	for (n = 0; n < 64; n++) {
-		r5_as* as = sSpaces[n];
-		if (as == NULL || as->vmid != vmid)
-			continue;
-		as->lost = 1;
-		knote("vm fault vmid %lu addr %016llx",
-			(unsigned long)vmid, (unsigned long long)addr);
-		return;
-	}
-	knote("vm fault vmid %lu addr %016llx unmatched",
-		(unsigned long)vmid, (unsigned long long)addr);
+	(void)vmid;
+	(void)addr;
+	r5_gfx9_fault_drain();
 }
 
 
@@ -1572,6 +1619,7 @@ void
 r5_gfx9_as_retired(uint64 seen)
 {
 	uint32 n;
+	r5_gfx9_fault_drain();
 	for (n = 0; n < 64; n++) {
 		if (sSpaces[n] != NULL && sSpaces[n]->parked
 			&& sSpaces[n]->last <= seen)

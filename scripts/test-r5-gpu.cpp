@@ -1554,30 +1554,36 @@ main()
 			return fail("limit fit");
 		{
 			uint32_t words[40];
-			uint32_t n = r5_cs_vm_switch(words, 40, 2, 0x812c18001ull,
+			uint32_t n = r5_cs_vm_switch(words, 40, 2, 0x42u, 0x812c18001ull,
 				0x9000ull, 7);
 			uint32_t body[40];
 			uint64_t ib = 0x1000ull;
 			uint32_t dw = 8;
 			uint32_t vm = 2;
 			uint32_t bare;
-			if (n != 31 || words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
+			if (n != 36 || n != r5_cs_vm_switch_words()
+				|| words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 				|| words[4] != 7u)
 				return fail("vm switch");
-			if (words[7] != 0xc0033700u || words[9] != r5_cs_gc_byte(0x08efu)
-				|| words[11] != 0x12c18001u)
+			if (words[7] != 0xc0033700u || words[9] != r5_cs_oss_byte(2)
+				|| words[11] != 0x42u)
+				return fail("vm switch pasid");
+			if (words[12] != 0xc0033700u || words[14] != r5_cs_gc_byte(0x08efu)
+				|| words[16] != 0x12c18001u)
 				return fail("vm switch pd");
-			if (words[21] != r5_gfx9_tlb_req(2, 0) || words[23] != 0x103u
-				|| words[26] != r5_gfx9_tlb_ack_mask(2))
+			if (words[26] != r5_gfx9_tlb_req(2, 0) || words[28] != 0x103u
+				|| words[31] != r5_gfx9_tlb_ack_mask(2))
 				return fail("vm switch ack");
-			if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
+			if (words[34] != r5_cs_packet3(0x42, 0) || words[35] != 0)
 				return fail("vm switch pfp");
 			bare = r5_cs_user_body(body, 40, &ib, &dw, &vm, 1, 0x9000ull, 8,
 				0x9010ull, kR5CsCntxKeep);
 			if (bare != 33)
 				return fail("vm switch body");
-			if (r5_cs_vm_switch(0, 0, 0, 0, 0, 0) != 0)
+			if (r5_cs_vm_switch(0, 0, 0, 0, 0, 0, 0) != 0)
 				return fail("vm switch vmid0");
+			if (r5_cs_vm_switch(words, 40, 2, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
+				return fail("vm switch pasid0");
 		}
 		printf("ok vmid 20 15\n");
 	}

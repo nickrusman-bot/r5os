@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A page fault names the file by PASID
+
+Each address space gets a 16-bit PASID. The VM switch writes it into `IH_VMID_n_LUT` after the pipeline sync and before the page-table base. That switch is 36 dwords. The interrupt handler only queues the PASID, the VMID and the address. The retire thread, which already holds the GPU lock, marks the matching file and logs `vm fault pasid … addr`. An unknown PASID is logged and marks no file. The host test checks the 36 dwords, the LUT address for VMID 2, and a PASID of 0 being refused.
+
 ### User VRAM is cleared when it is handed out
 
 A span returned to the free list still held the previous owner's bytes. Taking that span now writes zeros through the kernel address stored with it. A fresh bump is cleared the same way before it is published. `R5_GPU_BO_VRAM_CLEARED` is bit 3, the Linux `AMDGPU_GEM_CREATE_VRAM_CLEARED` flag. The host test fills 8 KiB with `0xab`, takes the first 4 KiB, and reads zeros there while the remainder stays `0xab`.
