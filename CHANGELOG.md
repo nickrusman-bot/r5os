@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A later context loads its state
+
+Stick 27 boot 1 drew the ordinary teapot, then the SAM teapot hung in its own end-of-pipe wait. One `sUserCtx` gave `CONTEXT_CONTROL` `0x81018003` only to the first user job after boot. Linux v6.12 `amdgpu_ib_schedule` sets `AMDGPU_HAVE_CTX_SWITCH` whenever `ring->current_ctx` differs from the job, and `gfx_v9_ring_emit_cntxcntl` then sets the load bits. R5 now keeps the last open file and `AMDGPU_CTX` id. A different pair gets `0x81018003`. The same pair again stays at `0x80000000`. Kernel jobs are file 0 and id 0. A preamble sets `load_ce_ram` (`0x10000000`) on a switch, or on the first presentation without one. The ioctl still rejects every IB flag, so that bit is not set for RADV. The host test submits two contexts and one repeat. Not booted.
+
 ### Stick 27 boot 1 draws the ordinary teapot, then loses the GPU on SAM
 
 Stick 27 is `7b2ac8e283` with the six GPU settings and `gpu_debug`. The K fence landed and VMID 1 was set up. `mark` and stage P each finished in 1 ms. `vulkaninfo` exited 0 and named RADV Renoir. The ordinary teapot reached `vkQueueWaitIdle 0`, `pixels ok`, and `pixel-vram` `853b16ff`. The SAM teapot then waited until the watchdog. The ioctl returned `ECANCELED` (`0x8000702f`) and `vkQueueWaitIdle` was `-13`. There is no page fault. The seen sequence is 35, the ring read pointer is `0x2c0`, the write pointer is `0x2700`, and the ME and PFP headers start with `WAIT_REG_MEM`. The later teapot, stage selftest, and stage ib were skipped. There is no kernel panic. The volume was not unmounted cleanly. Boot 2 was not run. Logs are `generated/boot-5625u-27/`. The syslog has no per-line clock. `usb_disk` opcode `0x35` failed five times, the same count as stick 26, each with sense `0x05/0x24`.

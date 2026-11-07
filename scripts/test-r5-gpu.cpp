@@ -1082,6 +1082,35 @@ main()
 				"gfx9_start.cpp", ringOrder, 3) != 0)
 			return 1;
 	}
+	r5_cs_ring_ctx ringCtx;
+	memset(&ringCtx, 0, sizeof(ringCtx));
+	if (r5_cs_ctx_switch(&ringCtx, 1, 1) == 0
+		|| r5_cs_cntx(1, 0) != kR5CsCntxLoad)
+		return fail("first context load");
+	r5_cs_ctx_note(&ringCtx, 1, 1);
+	if (r5_cs_ctx_switch(&ringCtx, 1, 1) != 0
+		|| r5_cs_cntx(0, 0) != kR5CsCntxKeep)
+		return fail("same context keep");
+	if (r5_cs_ctx_switch(&ringCtx, 2, 1) == 0
+		|| r5_cs_cntx(1, 0) != kR5CsCntxLoad)
+		return fail("other file load");
+	r5_cs_ctx_note(&ringCtx, 2, 1);
+	if (r5_cs_ctx_switch(&ringCtx, 2, 2) == 0)
+		return fail("other ctx id");
+	if (r5_cs_cntx(1, kR5PreamblePresent) != 0x91018003u)
+		return fail("preamble load ce");
+	if (r5_cs_cntx(0, kR5PreambleFirst) != 0x90000000u)
+		return fail("preamble first");
+	if (r5_cs_cntx(1, kR5PreamblePresent | kR5PreambleFirst) != 0x91018003u)
+		return fail("preamble switch wins");
+	if (r5_cs_skip_preamble_ib(kR5IbPreamble, 0, 0) == 0)
+		return fail("skip repeated preamble");
+	if (r5_cs_skip_preamble_ib(kR5IbPreamble, 1, 0) != 0)
+		return fail("keep preamble on switch");
+	if (r5_cs_skip_preamble_ib(kR5IbPreamble, 0, kR5PreambleFirst) != 0)
+		return fail("keep first preamble");
+	if (r5_cs_skip_preamble_ib(0, 0, 0) != 0)
+		return fail("keep plain ib");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

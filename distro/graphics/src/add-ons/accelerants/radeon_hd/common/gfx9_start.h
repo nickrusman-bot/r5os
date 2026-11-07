@@ -58,6 +58,8 @@ struct r5_gfx9_user_ib {
 	uint64		va;
 	uint32		dwords;
 	uint32		vmid;
+	/* AMDGPU_IB_FLAG_*. The ioctl rejects anything but 0. */
+	uint32		flags;
 };
 
 bool r5_gfx9_ring_ready();
@@ -68,8 +70,11 @@ uint32 r5_gfx9_user_commit_dwords(uint32 count);
 void r5_gfx9_ring_ptrs(uint64* wptr, uint64* rptrOffset);
 bool r5_gfx9_fence_offset(uint64* offset);
 uint64 r5_gfx9_user_fence_mc();
+/* file and ctxId are the open file and the AMDGPU_CTX id. preambleSeen
+ * is that context's preamble_presented flag. The kernel jobs use file 0
+ * and id 0. */
 bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
-	uint64* _sequence);
+	uint64 file, uint32 ctxId, int32* preambleSeen, uint64* _sequence);
 uint64 r5_gfx9_user_seen();
 uint64 r5_gfx9_k2_word_mc();
 bool r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa);

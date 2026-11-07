@@ -2145,8 +2145,8 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 
 
 static uint64 sUserSequence = 0;
-/* The only user context id. 0 means the next submit is a switch. */
-static uint32 sUserCtx = 0;
+/* Linux ring->current_ctx. 0 valid means the next job is a switch. */
+static r5_cs_ring_ctx sRingCtx;
 
 
 bool
@@ -2422,9 +2422,11 @@ r5_gfx9_ib_regs(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
 /* One user job: two SWITCH_BUFFER packets, CONTEXT_CONTROL,
  * FRAME_CONTROL, the indirect buffers, FRAME_CONTROL end, the 64-bit
  * user fence, the 32-bit interrupt fence, SWITCH_BUFFER, then the
- * Linux NOP pad to a multiple of 256 dwords. The first job for
- * context 1 uses the load bits. The K ring is not padded. The fence
- * addresses are kernel MC addresses. A full ring returns false. */
+ * Linux NOP pad to a multiple of 256 dwords. CONTEXT_CONTROL follows
+ * gfx_v9_ring_emit_cntxcntl: the load bits are set when this file and
+ * AMDGPU_CTX differ from the previous job on the ring. The K ring is
+ * not padded. The fence addresses are kernel MC addresses. A full
+ * ring returns false. */
 static uint64 sTlbSeq = 0;
 static uint64 sTlbFlushed = 0;
 static uint64 sTlbPd = 0;
@@ -2482,18 +2484,35 @@ r5_gfx9_user_commit_dwords(uint32 count)
 
 
 bool
-r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
+r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
+	uint32 ctxId, int32* preambleSeen, uint64* _sequence)
 {
 	if (ibs == NULL || count == 0 || count > 8)
 		return false;
+	int haveSwitch = r5_cs_ctx_switch(&sRingCtx, file, ctxId);
+	uint32 preamble = 0;
+	for (uint32 i = 0; i < count; i++) {
+		if ((ibs[i].flags & kR5IbPreamble) != 0)
+			preamble |= kR5PreamblePresent;
+	}
+	if ((preamble & kR5PreamblePresent) != 0
+		&& (preambleSeen == NULL || *preambleSeen == 0))
+		preamble |= kR5PreambleFirst;
 	uint64 ibVa[8];
 	uint32 ibDw[8];
 	uint32 ibVm[8];
+	uint32 emit = 0;
 	for (uint32 i = 0; i < count; i++) {
-		ibVa[i] = ibs[i].va;
-		ibDw[i] = ibs[i].dwords;
-		ibVm[i] = ibs[i].vmid;
+		if (r5_cs_skip_preamble_ib(ibs[i].flags, haveSwitch, preamble))
+			continue;
+		ibVa[emit] = ibs[i].va;
+		ibDw[emit] = ibs[i].dwords;
+		ibVm[emit] = ibs[i].vmid;
+		emit++;
 	}
+	count = emit;
+	if (count == 0)
+		return false;
 	uint64 pd = 0;
 	bool flush = r5_gfx9_vmid1_flush_due(&pd);
 	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
@@ -2504,22 +2523,18 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 	uint32 cap = flush ? 512u : 320u;
 	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
 		return false;
-	if (flush && (pd == 0 || ibs[0].vmid == 0))
+	if (flush && (pd == 0 || ibVm[0] == 0))
 		return false;
 	uint64 fenceMc = r5_gfx9_user_fence_mc();
 	if (fenceMc == 0 || (fenceMc & 7ull) != 0)
 		return false;
 	uint64 irqMc = fenceMc + (kR5UserIrqOffset - kR5UserFenceOffset);
 	uint64 sequence = sUserSequence + 1;
-	uint32 cntx = kR5CsCntxKeep;
-	if (sUserCtx != 1u) {
-		cntx = kR5CsCntxLoad;
-		sUserCtx = 1u;
-	}
+	uint32 cntx = r5_cs_cntx(haveSwitch, preamble);
 	uint32 packets[512];
 	uint32 switched = 0;
 	if (flush) {
-		switched = r5_cs_vm_switch(packets, cap, ibs[0].vmid, pd, fenceMc,
+		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
 			sUserSequence);
 		if (switched != prefix)
 			return false;
@@ -2555,6 +2570,9 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 	}
 	sRadeonGfx9Ring.submitted = newWptr;
 	sUserSequence = sequence;
+	r5_cs_ctx_note(&sRingCtx, file, ctxId);
+	if ((preamble & kR5PreamblePresent) != 0 && preambleSeen != NULL)
+		*preambleSeen = 1;
 	if (flush)
 		r5_gfx9_vmid1_flushed();
 	if (_sequence != NULL)

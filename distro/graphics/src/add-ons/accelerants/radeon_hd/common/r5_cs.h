@@ -30,11 +30,90 @@ static const uint32_t kR5CsRel64 = 0x40000000u;
 static const uint32_t kR5CsRel32Int = 0x22000000u;
 /* gfx_v9_0 ring nop: PACKET3(PACKET3_NOP, 0x3FFF). */
 static const uint32_t kR5CsNop = 0xffff1000u;
-/* gfx_v9_0_ring_emit_cntxcntl. The load enable bit stays set.
- * A context switch also sets 0x8001, 0x01000000 and 0x10002.
- * The 6 Nov 2026 capture stores that as 0x81018003. dw3 stays 0. */
+/* gfx_v9_ring_emit_cntxcntl, Linux v6.12 gfx_v9_0.c. load_enable is
+ * always set. A context switch also sets load_global_config,
+ * load_global_uconfig (0x8001), load_cs_sh_regs (0x01000000) and
+ * load_per_context_state plus load_gfx_sh_regs (0x10002). That is
+ * 0x81018003. dw3 stays 0. */
 static const uint32_t kR5CsCntxKeep = 0x80000000u;
 static const uint32_t kR5CsCntxLoad = 0x81018003u;
+/* amdgpu_job.h. These are the status bits amdgpu_ib_schedule passes
+ * to emit_cntxcntl, not the IB flags. */
+static const uint32_t kR5PreamblePresent = 1u << 0;
+static const uint32_t kR5PreambleFirst = 1u << 1;
+/* include/uapi/drm/amdgpu_drm.h AMDGPU_IB_FLAG_PREAMBLE. */
+static const uint32_t kR5IbPreamble = 1u << 1;
+
+
+/* The last context on the ring. Linux stores this as ring->current_ctx,
+ * the scheduler fence context of the job. That context is one per
+ * open file and AMDGPU_CTX. file 0 with id 0 is the kernel's own jobs. */
+struct r5_cs_ring_ctx {
+	uint64_t	file;
+	uint32_t	id;
+	int		valid;
+};
+
+
+/* amdgpu_ib_schedule: need_ctx_switch = ring->current_ctx != fence_ctx. */
+static inline int
+r5_cs_ctx_switch(const r5_cs_ring_ctx* last, uint64_t file, uint32_t id)
+{
+	if (last == 0 || last->valid == 0)
+		return 1;
+	return last->file != file || last->id != id;
+}
+
+
+static inline void
+r5_cs_ctx_note(r5_cs_ring_ctx* last, uint64_t file, uint32_t id)
+{
+	if (last == 0)
+		return;
+	last->file = file;
+	last->id = id;
+	last->valid = 1;
+}
+
+
+/* gfx_v9_ring_emit_cntxcntl. preamble is AMDGPU_PREAMBLE_IB_PRESENT
+ * and AMDGPU_PREAMBLE_IB_PRESENT_FIRST. A switch with the present bit
+ * sets load_ce_ram (0x10000000). Without a switch, only the first
+ * presentation of a preamble sets that bit. */
+static inline uint32_t
+r5_cs_cntx(int haveSwitch, uint32_t preamble)
+{
+	uint32_t dw2 = 0x80000000u;
+	if (haveSwitch) {
+		dw2 |= 0x8001u;
+		dw2 |= 0x01000000u;
+		dw2 |= 0x10002u;
+		if ((preamble & kR5PreamblePresent) != 0)
+			dw2 |= 0x10000000u;
+	} else if ((preamble & kR5PreambleFirst) != 0) {
+		dw2 |= 0x10000000u;
+	}
+	return dw2;
+}
+
+
+/* v6.12 amdgpu_ib_schedule still emits an IB that has
+ * AMDGPU_IB_FLAG_PREAMBLE. The load_ce_ram bit above is the preamble
+ * rule in gfx_v9_ring_emit_cntxcntl. A repeated preamble, with no
+ * context switch and not the first presentation, is not written.
+ * The ioctl still rejects every flag, so this does not change a
+ * RADV submit until that rejection is lifted. */
+static inline int
+r5_cs_skip_preamble_ib(uint32_t ibFlags, int haveSwitch, uint32_t preamble)
+{
+	if ((ibFlags & kR5IbPreamble) == 0)
+		return 0;
+	if (haveSwitch)
+		return 0;
+	if ((preamble & kR5PreambleFirst) != 0)
+		return 0;
+	return 1;
+}
 
 
 static inline uint32_t
@@ -110,7 +189,10 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	uint32_t i;
 	if (r5_cs_user_words(count) == 0 || ib == 0 || dwords == 0 || vmid == 0)
 		return 0;
-	if (cntx != kR5CsCntxKeep && cntx != kR5CsCntxLoad)
+	if (cntx != r5_cs_cntx(0, 0) && cntx != r5_cs_cntx(1, 0)
+		&& cntx != r5_cs_cntx(1, kR5PreamblePresent)
+		&& cntx != r5_cs_cntx(0, kR5PreambleFirst)
+		&& cntx != r5_cs_cntx(1, kR5PreamblePresent | kR5PreambleFirst))
 		return 0;
 	/* Two SWITCH_BUFFER packets open the job, as in the capture.
 	 * When the page table changed, r5_cs_vm_switch is a prefix in
