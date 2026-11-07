@@ -907,6 +907,26 @@ r5_gfx9_vmid1_flush()
 
 
 bool
+r5_gfx9_sh_mem(uint32 vmid)
+{
+	/* gfx_v9_0_constants_init. ALIGNMENT_MODE unaligned and
+	 * RETRY_DISABLE are the VMID 0 value 0x1018. PRIVATE_BASE and
+	 * SHARED_BASE make SH_MEM_BASES 0x20001000. GRBM_GFX_CNTL is
+	 * vmid << 4, then 0 so the next user is VMID 0 again. VMID 0
+	 * itself stays the ring contract and is not written here. */
+	if (sInfo == NULL || vmid == 0 || vmid > 15)
+		return false;
+	const uint32 shConfig = (3u << 3) | (1u << 12);
+	const uint32 shBases = (0x2000u << 16) | 0x1000u;
+	kwrite(sInfo, gc_byte(0x0022), vmid << 4);
+	kwrite(sInfo, gc_byte(0x030d), shConfig);
+	kwrite(sInfo, gc_byte(0x030a), shBases);
+	kwrite(sInfo, gc_byte(0x0022), 0);
+	return true;
+}
+
+
+bool
 r5_gfx9_vmid1_setup()
 {
 	/* One shared VMID 1 for every client. A later context reuses the

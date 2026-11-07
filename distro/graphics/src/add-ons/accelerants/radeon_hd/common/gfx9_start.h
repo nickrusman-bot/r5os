@@ -76,6 +76,10 @@ bool r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa);
 bool r5_gfx9_stage_ib(uint8* cpu, uint64 destVa);
 void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
+/* One VMID's SH_MEM, the same three writes as the VMID 1..15 loop in
+ * r5_gfx9_vmid1_setup, then GRBM_GFX_CNTL 0. That loop is unchanged.
+ * Nothing on the K path calls this. */
+bool r5_gfx9_sh_mem(uint32 vmid);
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
 bool r5_gfx9_vmid1_lookup(uint64 va);

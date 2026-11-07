@@ -293,7 +293,7 @@ snippet(const char* path, const char* begin, const char* end, char* out,
 static int
 waiter_fence()
 {
-	char text[4000];
+	char text[20000];
 	if (snippet(
 			"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp",
 			"r5_gfx9_user_seen()", "r5_gfx9_user_fence_mc()", text,
@@ -310,17 +310,23 @@ waiter_fence()
 	if (strstr(text, "r5_gpu_retire_wake()") == NULL)
 		return fail("eop wake");
 	if (snippet(
-			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
 			"r5_gpu_eop()", "gpu_counter(", text, sizeof(text)) != 0)
 		return 1;
-	if (strstr(text, "r5_gfx9_user_seen()") == NULL)
+	if (strstr(text, "gR5GpuOps.poll_retired()") == NULL)
 		return fail("retire fence");
 	if (snippet(
-			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
 			"gpu_counter(", "gpu_wait_value(", text, sizeof(text)) != 0)
 		return 1;
-	if (strstr(text, "return r5_gfx9_user_seen()") == NULL)
+	if (strstr(text, "return gR5GpuOps.poll_retired()") == NULL)
 		return fail("wait fence");
+	if (snippet(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"amd_poll_retired", "amd_fault_decode", text, sizeof(text)) != 0)
+		return 1;
+	if (strstr(text, "return r5_gfx9_user_seen()") == NULL)
+		return fail("retire fence");
 	if ((kR5CsRel64 & 0x03000000u) != 0
 		|| (kR5CsRel32Int & 0x03000000u) != 0x02000000u)
 		return fail("int sel");
@@ -375,6 +381,106 @@ source_order(const char* path, const char** marks, int count)
 			return 1;
 		}
 		cursor = found + strlen(marks[i]);
+	}
+	free(text);
+	return 0;
+}
+
+
+static int
+read_file(const char* path, char** out)
+{
+	FILE* file = fopen(path, "rb");
+	if (file == NULL)
+		return fail(path);
+	if (fseek(file, 0, SEEK_END) != 0) {
+		fclose(file);
+		return fail(path);
+	}
+	long size = ftell(file);
+	if (size < 0 || size > 2000000) {
+		fclose(file);
+		return fail(path);
+	}
+	rewind(file);
+	char* text = (char*)malloc((size_t)size + 1);
+	if (text == NULL) {
+		fclose(file);
+		return fail(path);
+	}
+	if (fread(text, 1, (size_t)size, file) != (size_t)size) {
+		free(text);
+		fclose(file);
+		return fail(path);
+	}
+	text[size] = 0;
+	fclose(file);
+	*out = text;
+	return 0;
+}
+
+
+static int
+source_order_two(const char* first, const char* second, const char** marks,
+	int count)
+{
+	char* a = NULL;
+	char* b = NULL;
+	if (read_file(first, &a) != 0)
+		return 1;
+	if (read_file(second, &b) != 0) {
+		free(a);
+		return 1;
+	}
+	size_t na = strlen(a);
+	size_t nb = strlen(b);
+	char* text = (char*)malloc(na + nb + 2);
+	if (text == NULL) {
+		free(a);
+		free(b);
+		return fail("order");
+	}
+	memcpy(text, a, na);
+	text[na] = '\n';
+	memcpy(text + na + 1, b, nb);
+	text[na + nb + 1] = 0;
+	free(a);
+	free(b);
+	const char* cursor = text;
+	for (int i = 0; i < count; i++) {
+		const char* found = strstr(cursor, marks[i]);
+		if (found == NULL) {
+			fprintf(stderr, "fail order %s\n", marks[i]);
+			free(text);
+			return 1;
+		}
+		cursor = found + strlen(marks[i]);
+	}
+	free(text);
+	return 0;
+}
+
+
+/* The core calls the backend through gR5GpuOps. It does not include an
+ * AMD header or call an AMD function by name. */
+static int
+core_boundary()
+{
+	char* text = NULL;
+	if (read_file(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+			&text) != 0)
+		return 1;
+	const char* banned[] = {
+		"gfx9_", "r5_gfx9", "r5_amd", "amdgpu", "kR5Gfx", "R5_GFX9_",
+		"kGcSegment", "atombios"
+	};
+	for (unsigned i = 0; i < sizeof(banned) / sizeof(banned[0]); i++) {
+		if (strstr(text, banned[i]) != NULL) {
+			fprintf(stderr, "fail core boundary %s\n", banned[i]);
+			free(text);
+			return 1;
+		}
 	}
 	free(text);
 	return 0;
@@ -456,6 +562,8 @@ main()
 	}
 	if (system("python3 scripts/check-gpu-hardcode.py") != 0)
 		return fail("hardcode check");
+	if (core_boundary() != 0)
+		return 1;
 	static_assert(R5_GPU_VA_OFFSET == 0x10000ull, "va bottom");
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");
 	static_assert(R5_GPU_HIGH_VA_OFFSET == 0xffff800000000000ull, "high");
@@ -467,7 +575,8 @@ main()
 			"amd.device.high_va_offset = R5_GPU_HIGH_VA_OFFSET",
 			"amd.device.high_va_max = R5_GPU_HIGH_VA_MAX"
 		};
-		if (source_order(
+		if (source_order_two(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
 				reported, 4) != 0)
 			return 1;

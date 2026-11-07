@@ -158,3 +158,5 @@ POSIX codes are negative. `return -errno` becomes positive. `r == -ETIME`, `-ECA
 | `radv_amdgpu_winsys.c:106` | `ac_drm_query_info` returns `-errno` | `!= 0`. Patch `distro/mesa/patches/haiku-errno-nonzero.patch` |
 
 The error mapper stays out. Its hidden `_errnop` writes a positive code into the thread's errno cell, which VulkanTeapot and libbe share.
+
+The GPU core lives in `src/add-ons/kernel/drivers/graphics/r5gpu/` and is compiled into `radeon_hd`. It is not a separate kernel module. There is no extra boot load and no new ioctl. The core calls the AMD backend through `gR5GpuOps`. A null function returns `B_NOT_SUPPORTED`.
