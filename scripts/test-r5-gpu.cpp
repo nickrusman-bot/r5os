@@ -1665,24 +1665,27 @@ main()
 			uint32_t dw = 8;
 			uint32_t vm = 2;
 			uint32_t bare;
-			if (n != 36 || n != r5_cs_vm_switch_words()
+			if (n != 31 || n != r5_cs_vm_switch_words()
 				|| words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 				|| words[4] != 7u || words[6] != 4u)
 				return fail("vm switch");
 			/* gc_9 dword offsets. VMID 2 is 0x2000 + 0x08ef and the
-			 * next register. Engine 0 is 0x28a3 and 0x28b5.
-			 * osssys_4_0: IH_VMID_2_LUT is 0x10A0 + 2. */
+			 * next register. The write-wait-write uses engine 0 at
+			 * 0x28a3 and 0x28b5. VMID 2 request is bit 2 plus the
+			 * five invalidate bits. osssys_4_0: IH_VMID_2_LUT is
+			 * 0x10A0 + 2. */
 			if (words[7] != 0xc0033700u || words[9] != 0x28efu
 				|| words[11] != 0x12c18001u || words[14] != 0x28f0u)
 				return fail("vm switch pd");
-			if (words[19] != 0x28a3u || words[21] != r5_gfx9_tlb_req(2, 0)
-				|| words[23] != 0x103u || words[24] != 0x28b5u
-				|| words[26] != r5_gfx9_tlb_ack_mask(2) || words[28] != 0x20u)
+			if (words[17] != r5_cs_packet3(0x3c, 5) || words[18] != 0x143u
+				|| words[19] != 0x28a3u || words[20] != 0x28b5u
+				|| words[21] != 0x007c0004u || words[22] != 0x4u
+				|| words[23] != 0x20u)
 				return fail("vm switch ack");
-			if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
+			if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
 				return fail("vm switch pfp");
-			if (words[31] != 0xc0033700u || words[33] != 0x10a2u
-				|| words[35] != 0x42u)
+			if (words[26] != 0xc0033700u || words[28] != 0x10a2u
+				|| words[30] != 0x42u)
 				return fail("vm switch pasid");
 			bare = r5_cs_user_body(body, 40, &ib, &dw, &vm, 1, 0x9000ull, 8,
 				0x9010ull, kR5CsCntxKeep);

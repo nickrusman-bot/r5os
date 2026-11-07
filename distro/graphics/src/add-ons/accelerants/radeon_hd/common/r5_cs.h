@@ -213,9 +213,9 @@ r5_cs_oss_reg(uint32_t index)
 static inline uint32_t
 r5_cs_vm_switch_words(void)
 {
-	/* Pipeline sync, the VM flush (two page-table writes, the
-	 * invalidate, the ack wait, and PFP_SYNC_ME), then PASID. 31 + 5. */
-	return 36u;
+	/* Pipeline sync, two page-table writes, one write-wait-write,
+	 * and PFP_SYNC_ME, then PASID. 26 + 5. */
+	return 31u;
 }
 
 
@@ -255,17 +255,14 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	n = r5_cs_put(out, n, cap, lo + 1u);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
-	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, inv);
-	/* Register wait, function equal, PFP. (reg & mask) == mask. */
+	/* gfx_v9_0_ring_emit_reg_write_reg_wait with me_fw_write_wait.
+	 * Control 0x143 is function 3 (equal), operation 1 (write-wait-write)
+	 * and engine 1 (PFP). reg0 is the request, reg1 the ack. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
-	n = r5_cs_put(out, n, cap, 0x103u);
+	n = r5_cs_put(out, n, cap, 0x143u);
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
 	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08b5u));
-	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, ack);
+	n = r5_cs_put(out, n, cap, inv);
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, 0x20u);
 	/* PACKET3_PFP_SYNC_ME is 0x42. Linux gfx_v9_0_ring_emit_vm_flush

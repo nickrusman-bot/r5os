@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The invalidate request and its ack are one write-wait-write
+
+The ring flush wrote the invalidate request with `WRITE_DATA` and then waited for the ack. Linux `gfx_v9_0_ring_emit_reg_write_reg_wait`, when `me_fw_write_wait` is set, uses one `WAIT_REG_MEM` instead. Control `0x143` is function 3 (equal), operation 1 (write-wait-write) and engine 1 (PFP). `reg0` is `0x28a3`, `reg1` is `0x28b5`, the reference is the invalidate request, the mask is the ack bit, and the poll interval is `0x20`. For VMID 2 the request is `0x007c0004` and the mask is `0x4`. The flush is 26 dwords and the PASID write adds five, so the packet is 31 dwords. The page-table writes stay `WRITE_DATA`. Host test only. Not booted.
+
 ### The ring flush writes dword register offsets
 
 `r5_cs_vm_switch` built GC and OSS register addresses as a byte offset, `(base + index) * 4`. A CP `WRITE_DATA` or `WAIT_REG_MEM` takes the dword offset. Stick 26 on `cursor/gpu-hdp` hung in the ack wait because the invalidate request never reached engine 0. The same packets are here.
