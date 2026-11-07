@@ -205,7 +205,7 @@ gpu_lost(radeon_info* info, const char* why)
 		sJobs[i].live = false;
 	sEop.NotifyAll();
 	if (gR5GpuOps.dump != NULL)
-		gR5GpuOps.dump(why);
+		gR5GpuOps.dump(why, NULL);
 }
 
 
@@ -237,7 +237,7 @@ gpu_retire_thread(void* data)
 		r5_gpu_eop();
 		gpu_release_parked(gpu_seen());
 		if (gR5GpuOps.dump != NULL)
-			gR5GpuOps.dump(NULL);
+			gR5GpuOps.dump(NULL, NULL);
 		gpu_watchdog();
 		gpu_unlock();
 	}
@@ -1523,7 +1523,7 @@ gpu_fence_wait(gpu_client* client, void* buffer, size_t length)
 	status = gpu_wait_value(client, NULL, in.sequence, in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		if (gR5GpuOps.dump != NULL)
-			gR5GpuOps.dump("fence timeout");
+			gR5GpuOps.dump("fence timeout", client->address);
 	return status;
 }
 
@@ -1613,7 +1613,7 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 			in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		if (gR5GpuOps.dump != NULL)
-			gR5GpuOps.dump("sync wait");
+			gR5GpuOps.dump("sync wait", client->address);
 	return status;
 }
 

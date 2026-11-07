@@ -198,7 +198,7 @@ gpu_known_dw(uint64 va)
 
 
 static void gpu_dump_one(const char* why, const char* which, uint64 base,
-	uint32 hint, uint32 cpOffset, int depth);
+	uint32 hint, uint32 cpOffset, int depth, void* as);
 
 
 static void
@@ -208,7 +208,7 @@ gpu_mark(uint64 va)
 	uint32 got = 0;
 	uint64 pte = 0;
 	if (va != 0) {
-		got = r5_gfx9_vmid1_copy(va, &word, 1);
+		got = r5_gfx9_vmid1_copy(stage_as(), va, &word, 1);
 		r5_gfx9_vmid1_pte(stage_as(), va, &pte);
 	}
 	/* The page number sits above the flag bits. */
@@ -226,7 +226,8 @@ gpu_mark(uint64 va)
 
 
 static void
-gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth)
+gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth,
+	void* as)
 {
 	uint32 i = 0;
 	while (i < count) {
@@ -301,7 +302,7 @@ gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth)
 				dprintf("radeon_hd: pm4 +%04lx INDIRECT_BUFFER va %016llx dw %lu\n",
 					(unsigned long)i, (unsigned long long)child,
 					(unsigned long)childDw);
-			gpu_dump_one(why, "nested", child, childDw, 0, 1);
+			gpu_dump_one(why, "nested", child, childDw, 0, 1, as);
 		}
 		if (name != NULL && gpu_error_line()) {
 			if (opcode == 0x68 || opcode == 0x69 || opcode == 0x76
@@ -323,7 +324,7 @@ gpu_pm4_walk(const char* why, const uint32* words, uint32 count, int depth)
 
 static void
 gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
-	uint32 cpOffset, int depth)
+	uint32 cpOffset, int depth, void* as)
 {
 	uint32 words[1024];
 	uint32 want = hint;
@@ -332,7 +333,7 @@ gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
 		want = 1024;
 	uint32 got = 0;
 	if (base != 0)
-		got = r5_gfx9_vmid1_copy(base, words, want);
+		got = r5_gfx9_vmid1_copy(as, base, words, want);
 	if (!gpu_error_line())
 		return;
 	dprintf("radeon_hd: %s %s va %016llx dw %lu got %lu cp_off %lu\n",
@@ -356,32 +357,33 @@ gpu_dump_one(const char* why, const char* which, uint64 base, uint32 hint,
 			(unsigned long)line[4], (unsigned long)line[5],
 			(unsigned long)line[6], (unsigned long)line[7]);
 	}
-	gpu_pm4_walk(why, words, got, depth);
+	gpu_pm4_walk(why, words, got, depth, as);
 }
 
 
 static void
-gpu_dump_regs(const char* why, const r5_gfx9_ib_now* ib, const char* which)
+gpu_dump_regs(const char* why, const r5_gfx9_ib_now* ib, const char* which,
+	void* as)
 {
 	if (ib == NULL || ib->base == 0)
 		return;
 	uint32 known = gpu_known_dw(ib->base);
 	uint32 hint = known != 0 ? known : 1024;
-	gpu_dump_one(why, which, ib->base, hint, ib->offset, 0);
+	gpu_dump_one(why, which, ib->base, hint, ib->offset, 0, as);
 }
 
 
 static void
-gpu_ib_words(const char* why)
+gpu_ib_words(const char* why, void* as)
 {
 	r5_gfx9_ib_now ib1;
 	r5_gfx9_ib_now ib2;
 	memset(&ib1, 0, sizeof(ib1));
 	memset(&ib2, 0, sizeof(ib2));
 	r5_gfx9_ib_regs(&ib1, &ib2);
-	gpu_dump_regs(why, &ib1, "ib1");
+	gpu_dump_regs(why, &ib1, "ib1", as);
 	if (ib2.base != ib1.base)
-		gpu_dump_regs(why, &ib2, "ib2");
+		gpu_dump_regs(why, &ib2, "ib2", as);
 	if (gpu_error_line())
 	dprintf("radeon_hd: %s roq ib1 %08lx\n",
 		why == NULL ? "ib" : why, (unsigned long)r5_gfx9_roq_ib1());
@@ -389,7 +391,7 @@ gpu_ib_words(const char* why)
 		uint64 pte = 0;
 		uint64 va = ib1.base != 0 ? ib1.base : sLastIbVa;
 		if (va != 0)
-			r5_gfx9_vmid1_pte(stage_as(), va, &pte);
+			r5_gfx9_vmid1_pte(as, va, &pte);
 		r5_gfx9_cp_dump(why == NULL ? "ib" : why, pte);
 	}
 }
@@ -402,9 +404,9 @@ gpu_dump_priv()
 	r5_gfx9_ib_now ib2;
 	if (!r5_gfx9_take_priv(&ib1, &ib2))
 		return;
-	gpu_dump_regs("ih", &ib1, "ib1");
+	gpu_dump_regs("ih", &ib1, "ib1", NULL);
 	if (ib2.base != ib1.base)
-		gpu_dump_regs("ih", &ib2, "ib2");
+		gpu_dump_regs("ih", &ib2, "ib2", NULL);
 	dprintf("radeon_hd: ih roq ib1 %08lx\n",
 		(unsigned long)r5_gfx9_roq_ib1());
 	r5_gfx9_pipe_log("ih");
@@ -766,7 +768,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 		(unsigned long long)destPhys, (unsigned long)pat);
 	if (pace.hang) {
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
-		gpu_ib_words(name);
+		gpu_ib_words(name, stage_as());
 	}
 	return !pace.hang;
 }
@@ -970,7 +972,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 		status = R5_GPU_P_TIMEOUT;
 		how = "timeout";
 		if (!sLost)
-			gpu_ib_words(step == 0 ? "mark" : name);
+			gpu_ib_words(step == 0 ? "mark" : name, stage_as());
 	}
 	if (step == 0) {
 		dprintf("radeon_hd: mark selftest %s %ld ms\n", how,
@@ -1047,7 +1049,7 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 			stop = true;
 		} else {
 			uint32 back = 0;
-			uint32 got = r5_gfx9_vmid1_copy(page.va, &back, 1);
+			uint32 got = r5_gfx9_vmid1_copy(stage_as(), page.va, &back, 1);
 			dprintf("radeon_hd: mark selftest %s\n",
 				got == 1 && back == R5_P_MARK_VALUE ? "ok" : "bad");
 			gpu_mark(page.va);
@@ -1463,14 +1465,15 @@ amd_fault_decode(uint32_t addrLo, uint32_t addrHi, uint64_t* address)
 
 
 static int
-amd_dump(const char* why)
+amd_dump(const char* why, void* as)
 {
 	/* A null reason is the retire thread's privilege snapshot.
-	 * A reason is the indirect-buffer dump the refusal path already prints. */
+	 * A reason is the indirect-buffer dump the refusal path already prints.
+	 * as is that client's address space. */
 	if (why == NULL)
 		gpu_dump_priv();
 	else
-		gpu_ib_words(why);
+		gpu_ib_words(why, as);
 	return B_OK;
 }
 

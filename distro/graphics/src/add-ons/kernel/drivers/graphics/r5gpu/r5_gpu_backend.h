@@ -53,7 +53,7 @@ typedef struct r5_gpu_backend_ops {
 				uint32_t* source, uint64_t* address);
 	int			(*fault_decode)(uint32_t addrLo, uint32_t addrHi,
 				uint64_t* address);
-	int			(*dump)(const char* why);
+	int			(*dump)(const char* why, void* as);
 	int			(*stage_p)(void* info, void* out);
 	int			(*stage_u)(void* info);
 	/* One address space per open file. These are internal. They are

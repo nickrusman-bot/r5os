@@ -1229,19 +1229,12 @@ r5_gfx9_vmid1_pte(void* as, uint64 va, uint64* pte)
  * copy and unmapped after it. A VRAM page is the pool window. Neither
  * is a user address (SMAP). */
 bool
-r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
+r5_gfx9_vmid1_read(void* as, uint64 va, uint32* words, uint32 count)
 {
 	uint64 pte = 0;
-	uint32 space;
-	int found = 0;
 	if (words == NULL || count == 0)
 		return false;
-	for (space = 0; space < 64 && !found; space++) {
-		if (sSpaces[space] != NULL
-			&& r5_gfx9_vmid1_pte(sSpaces[space], va, &pte))
-			found = 1;
-	}
-	if (!found)
+	if (!r5_gfx9_vmid1_pte(as, va, &pte))
 		return false;
 	if ((pte & (uint64)R5_GFX9_PTE_VALID) == 0)
 		return false;
@@ -1280,7 +1273,7 @@ r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
 
 
 uint32
-r5_gfx9_vmid1_copy(uint64 va, uint32* words, uint32 count)
+r5_gfx9_vmid1_copy(void* as, uint64 va, uint32* words, uint32 count)
 {
 	uint32 done = 0;
 	if (words == NULL || count == 0)
@@ -1296,7 +1289,7 @@ r5_gfx9_vmid1_copy(uint64 va, uint32* words, uint32 count)
 			chunk = room;
 		if (chunk > 16)
 			chunk = 16;
-		if (!r5_gfx9_vmid1_read(va, words + done, chunk))
+		if (!r5_gfx9_vmid1_read(as, va, words + done, chunk))
 			break;
 		done += chunk;
 		va += (uint64)chunk * 4u;

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### An indirect-buffer dump reads the caller's space
+
+`r5_gfx9_vmid1_read` looks up the page in the address space it is given. `gpu_ib_words` uses that same space. A fence or sync timeout passes the waiting file's space. A dump with no file does not walk the other spaces.
+
 ### A failed copy gives the buffer back
 
 `BO_CREATE`, `BO_MAP`, and `CTX_CREATE` undo the handle, the mapping, or the context count when the copy back to the caller fails. A user VRAM bump whose span does not fit is rewound on the pool cursor. A page-table close that cannot fit its pages on the free list parks the space instead of dropping those pages.

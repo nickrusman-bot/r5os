@@ -722,7 +722,7 @@ static int op_seen(uint64_t* seen)
 }
 static int op_ih(const uint32_t*, uint32_t, uint32_t*, uint64_t*) { return 0; }
 static int op_fault(uint32_t, uint32_t, uint64_t*) { return 0; }
-static int op_dump(const char*) { return 0; }
+static int op_dump(const char*, void*) { return 0; }
 static int op_stage_p(void*, void*) { return 0; }
 static int op_stage_u(void*) { return 0; }
 static int op_as_open(void** as)
@@ -864,7 +864,7 @@ ops_status()
 	if (ops.poll_retired(&seen) != 0 || seen == 0)
 		return fail("op seen");
 	if (ops.ih_decode(0, 0, &source, &address) != 0
-		|| ops.fault_decode(0, 0, &address) != 0 || ops.dump(0) != 0)
+		|| ops.fault_decode(0, 0, &address) != 0 || ops.dump(0, 0) != 0)
 		return fail("op decode");
 	if (ops.stage_p(0, 0) != 0 || ops.stage_u(0) != 0)
 		return fail("op stage");
@@ -1897,6 +1897,21 @@ main()
 			return 1;
 		if (strstr(text, "1024u - sFreeCount") == NULL)
 			return fail("page keep");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_vmid1_read(", "r5_gfx9_vmid1_copy(", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "sSpaces") != NULL
+			|| strstr(text, "r5_gfx9_vmid1_pte(as,") == NULL)
+			return fail("read space");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+				"gpu_ib_words(", "gpu_dump_priv(", text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "stage_as()") != NULL
+			|| strstr(text, "r5_gfx9_vmid1_pte(as,") == NULL)
+			return fail("ib words space");
 	}
 	{
 		char text[4000];

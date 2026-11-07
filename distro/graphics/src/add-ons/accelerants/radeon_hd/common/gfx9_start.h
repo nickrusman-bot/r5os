@@ -111,10 +111,11 @@ bool r5_gfx9_vmid1_lookup(void* as, uint64 va);
 /* Four entries of va, read through a fresh mapping of each table page. */
 void r5_gfx9_vmid1_levels(const char* name, uint64 va);
 bool r5_gfx9_vmid1_pte(void* as, uint64 va, uint64* pte);
-bool r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count);
+bool r5_gfx9_vmid1_read(void* as, uint64 va, uint32* words, uint32 count);
 /* Copies up to count dwords, stopping at an unmapped page. Kernel
- * mappings only. Returns how many dwords were copied. */
-uint32 r5_gfx9_vmid1_copy(uint64 va, uint32* words, uint32 count);
+ * mappings only. The address space is the caller's. Returns how many
+ * dwords were copied. */
+uint32 r5_gfx9_vmid1_copy(void* as, uint64 va, uint32* words, uint32 count);
 struct r5_gfx9_ib_now {
 	uint64		base;
 	uint32		size;
