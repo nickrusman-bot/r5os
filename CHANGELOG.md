@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### One chip row for GC 9.3
+
+The four Renoir PCI ids share one generation row, `GC 9.3 Renoir`. Each id row keeps only the PCI id, the revision addend, the firmware stem and the flags. The passport values are unchanged.
+
 ### An unknown PCI id has no firmware name
 
 `r5_amd_fw_stem` returns NULL when the id is not in the device table. The PSP load and the direct engine load refuse that NULL instead of asking for `green_sardine` firmware.

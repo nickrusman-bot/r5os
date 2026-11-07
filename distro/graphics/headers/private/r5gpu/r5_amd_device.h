@@ -57,12 +57,7 @@ int snprintf(char* str, size_t size, const char* format, ...);
 #define R5_AMD_CU_INACTIVE_MASK 0xffff0000u
 
 typedef struct {
-	uint32_t	pci_id;
-	uint32_t	rev_add;
-	uint32_t	gfx9_cp;
-	uint32_t	need_reset;
-	uint32_t	lucienne;
-	const char*	fw_stem;
+	const char*	name;
 	uint32_t	family;
 	uint32_t	num_shader_engines;
 	uint32_t	num_shader_arrays_per_engine;
@@ -89,27 +84,33 @@ typedef struct {
 	uint32_t	ib_size_alignment;
 	uint32_t	wave_front_size;
 	uint32_t	page_size;
+} r5_amd_gen;
+
+typedef struct {
+	uint32_t	pci_id;
+	uint32_t	rev_add;
+	uint32_t	gfx9_cp;
+	uint32_t	need_reset;
+	uint32_t	lucienne;
+	const char*	fw_stem;
+	const r5_amd_gen* gen;
 } r5_amd_row;
+
+/* One generation row. The four Renoir PCI ids share it. */
+static const r5_amd_gen kR5AmdGc93 = {
+	"GC 9.3 Renoir", 142u,
+	1u, 1u, 8u, 2u, 8u, 0x8000u, 2097152u,
+	1800000u, 1333000u, 11u, 128u, 100000u, 1u,
+	256u, 4u, 32u, 1792u, 32u, 9u, 3u, 1u, 32u, 4u, 64u, 4096u
+};
 
 /* rev_add: nbio strap plus the external-rev offset. Green Sardine and
  * Cezanne add 0xa1. Renoir and Lucienne add 0x91. */
 static const r5_amd_row kR5AmdRows[] = {
-	{0x15e7u, 0xa1u, 1u, 1u, 0u, "green_sardine", 142u,
-		1u, 1u, 8u, 2u, 8u, 0x8000u, 2097152u,
-		1800000u, 1333000u, 11u, 128u, 100000u, 1u,
-		256u, 4u, 32u, 1792u, 32u, 9u, 3u, 1u, 32u, 4u, 64u, 4096u},
-	{0x1638u, 0xa1u, 1u, 1u, 0u, "green_sardine", 142u,
-		1u, 1u, 8u, 2u, 8u, 0x8000u, 2097152u,
-		1800000u, 1333000u, 11u, 128u, 100000u, 1u,
-		256u, 4u, 32u, 1792u, 32u, 9u, 3u, 1u, 32u, 4u, 64u, 4096u},
-	{0x1636u, 0x91u, 1u, 1u, 0u, "renoir", 142u,
-		1u, 1u, 8u, 2u, 8u, 0x8000u, 2097152u,
-		1800000u, 1333000u, 11u, 128u, 100000u, 1u,
-		256u, 4u, 32u, 1792u, 32u, 9u, 3u, 1u, 32u, 4u, 64u, 4096u},
-	{0x164cu, 0x91u, 0u, 1u, 1u, "renoir", 142u,
-		1u, 1u, 8u, 2u, 8u, 0x8000u, 2097152u,
-		1800000u, 1333000u, 11u, 128u, 100000u, 1u,
-		256u, 4u, 32u, 1792u, 32u, 9u, 3u, 1u, 32u, 4u, 64u, 4096u},
+	{0x15e7u, 0xa1u, 1u, 1u, 0u, "green_sardine", &kR5AmdGc93},
+	{0x1638u, 0xa1u, 1u, 1u, 0u, "green_sardine", &kR5AmdGc93},
+	{0x1636u, 0x91u, 1u, 1u, 0u, "renoir", &kR5AmdGc93},
+	{0x164cu, 0x91u, 0u, 1u, 1u, "renoir", &kR5AmdGc93},
 };
 
 typedef struct {
@@ -257,38 +258,38 @@ r5_amd_device_fill(r5_amd_device* dev, uint32_t pci, uint32_t strap,
 	if (row == NULL)
 		return;
 	dev->known = 1;
-	dev->family = row->family;
-	dev->num_shader_engines = row->num_shader_engines;
-	dev->num_shader_arrays_per_engine = row->num_shader_arrays_per_engine;
-	dev->num_cu_per_sh = row->num_cu_per_sh;
-	dev->num_rb_pipes = row->max_backends_per_se * row->num_shader_engines;
-	dev->num_hw_gfx_contexts = row->num_hw_gfx_contexts;
-	dev->ce_ram_size = row->ce_ram_size;
-	dev->pte_fragment_size = row->pte_fragment_size;
-	dev->max_engine_clock = row->max_engine_clock;
-	dev->min_engine_clock = row->max_engine_clock;
-	dev->max_memory_clock = row->max_memory_clock;
-	dev->min_memory_clock = row->max_memory_clock;
-	dev->vram_type = row->vram_type;
-	dev->vram_bit_width = row->vram_bit_width;
-	dev->gpu_counter_freq = row->gpu_counter_freq;
-	dev->gc_double_offchip_lds_buf = row->gc_double_offchip_lds_buf;
-	dev->num_shader_visible_vgprs = row->num_shader_visible_vgprs;
-	dev->num_tcc_blocks = row->num_tcc_blocks;
-	dev->gs_vgt_table_depth = row->gs_vgt_table_depth;
-	dev->gs_prim_buffer_depth = row->gs_prim_buffer_depth;
-	dev->max_gs_waves_per_vgt = row->max_gs_waves_per_vgt;
-	dev->ids_flags = row->ids_flags;
-	dev->hw_major = row->hw_major;
-	dev->hw_minor = row->hw_minor;
-	dev->ib_start_alignment = row->ib_start_alignment;
-	dev->ib_size_alignment = row->ib_size_alignment;
-	dev->wave_front_size = row->wave_front_size;
-	dev->page_size = row->page_size;
-	dev->cu_bitmap = r5_amd_cu_bitmap(cuCc, cuUser, row->num_cu_per_sh, &count);
+	dev->family = row->gen->family;
+	dev->num_shader_engines = row->gen->num_shader_engines;
+	dev->num_shader_arrays_per_engine = row->gen->num_shader_arrays_per_engine;
+	dev->num_cu_per_sh = row->gen->num_cu_per_sh;
+	dev->num_rb_pipes = row->gen->max_backends_per_se * row->gen->num_shader_engines;
+	dev->num_hw_gfx_contexts = row->gen->num_hw_gfx_contexts;
+	dev->ce_ram_size = row->gen->ce_ram_size;
+	dev->pte_fragment_size = row->gen->pte_fragment_size;
+	dev->max_engine_clock = row->gen->max_engine_clock;
+	dev->min_engine_clock = row->gen->max_engine_clock;
+	dev->max_memory_clock = row->gen->max_memory_clock;
+	dev->min_memory_clock = row->gen->max_memory_clock;
+	dev->vram_type = row->gen->vram_type;
+	dev->vram_bit_width = row->gen->vram_bit_width;
+	dev->gpu_counter_freq = row->gen->gpu_counter_freq;
+	dev->gc_double_offchip_lds_buf = row->gen->gc_double_offchip_lds_buf;
+	dev->num_shader_visible_vgprs = row->gen->num_shader_visible_vgprs;
+	dev->num_tcc_blocks = row->gen->num_tcc_blocks;
+	dev->gs_vgt_table_depth = row->gen->gs_vgt_table_depth;
+	dev->gs_prim_buffer_depth = row->gen->gs_prim_buffer_depth;
+	dev->max_gs_waves_per_vgt = row->gen->max_gs_waves_per_vgt;
+	dev->ids_flags = row->gen->ids_flags;
+	dev->hw_major = row->gen->hw_major;
+	dev->hw_minor = row->gen->hw_minor;
+	dev->ib_start_alignment = row->gen->ib_start_alignment;
+	dev->ib_size_alignment = row->gen->ib_size_alignment;
+	dev->wave_front_size = row->gen->wave_front_size;
+	dev->page_size = row->gen->page_size;
+	dev->cu_bitmap = r5_amd_cu_bitmap(cuCc, cuUser, row->gen->num_cu_per_sh, &count);
 	dev->cu_active_number = count;
 	dev->enabled_rb_pipes_mask = r5_amd_rb_mask(rbCc, rbUser,
-		row->max_backends_per_se);
+		row->gen->max_backends_per_se);
 	if (fwVer != NULL && fwFeature != NULL) {
 		for (uint32_t i = 0; i < 32; i++) {
 			dev->fw_ver[i] = fwVer[i];
@@ -401,16 +402,17 @@ r5_amd_discovery_apply(r5_amd_device* dev, const void* binary, uint32_t bytes,
 		return 1;
 	row = r5_amd_row_find(dev->device_id);
 	if (row != NULL && mismatch != NULL && mismatchCap > 1
-		&& (se != row->num_shader_engines || sh != row->num_shader_arrays_per_engine
-			|| cu != row->num_cu_per_sh || rb != row->max_backends_per_se
-			|| gprs != row->num_shader_visible_vgprs
-			|| gsTable != row->gs_vgt_table_depth
-			|| gsPrim != row->gs_prim_buffer_depth
-			|| offchip != row->gc_double_offchip_lds_buf
-			|| tcc != row->num_tcc_blocks)) {
+		&& (se != row->gen->num_shader_engines
+			|| sh != row->gen->num_shader_arrays_per_engine
+			|| cu != row->gen->num_cu_per_sh || rb != row->gen->max_backends_per_se
+			|| gprs != row->gen->num_shader_visible_vgprs
+			|| gsTable != row->gen->gs_vgt_table_depth
+			|| gsPrim != row->gen->gs_prim_buffer_depth
+			|| offchip != row->gen->gc_double_offchip_lds_buf
+			|| tcc != row->gen->num_tcc_blocks)) {
 		snprintf(mismatch, (size_t)mismatchCap,
 			"discovery mismatch se %u/%u cu %u/%u",
-			se, row->num_shader_engines, cu, row->num_cu_per_sh);
+			se, row->gen->num_shader_engines, cu, row->gen->num_cu_per_sh);
 	}
 	dev->num_shader_engines = se;
 	dev->num_shader_arrays_per_engine = sh;

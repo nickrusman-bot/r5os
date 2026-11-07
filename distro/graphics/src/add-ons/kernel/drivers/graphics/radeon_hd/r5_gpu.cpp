@@ -79,7 +79,8 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 	uint32 user = gpu_mmio(info, kGcSegment, kUserShaderArrayConfig);
 	const r5_amd_row* row = info->pci == NULL ? NULL
 		: r5_amd_row_find(info->pci->device_id);
-	uint32 width = row == NULL ? 0 : row->num_cu_per_sh;
+	uint32 width = row == NULL || row->gen == NULL ? 0
+		: row->gen->num_cu_per_sh;
 	uint32 count = 0;
 	uint32 bitmap = r5_amd_cu_bitmap(cc, user, width, &count);
 	if (_bitmap != NULL)
@@ -103,8 +104,10 @@ gpu_rb(radeon_info* info, uint32* num, uint32* mask)
 	uint32 user = gpu_mmio(info, kGcSegment, kUserRbBackendDisable);
 	const r5_amd_row* row = info->pci == NULL ? NULL
 		: r5_amd_row_find(info->pci->device_id);
-	uint32 backends = row == NULL ? 0 : row->max_backends_per_se;
-	uint32 engines = row == NULL ? 0 : row->num_shader_engines;
+	uint32 backends = row == NULL || row->gen == NULL ? 0
+		: row->gen->max_backends_per_se;
+	uint32 engines = row == NULL || row->gen == NULL ? 0
+		: row->gen->num_shader_engines;
 	uint32 active = r5_amd_rb_mask(cc, user, backends);
 	uint32 pipes = backends * engines;
 	if (num != NULL)

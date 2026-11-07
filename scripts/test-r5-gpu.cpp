@@ -940,6 +940,11 @@ main()
 			return fail("passport fw");
 		if (!r5_amd_gfx9_cp(0x15e7u) || r5_amd_gfx9_cp(0x164cu))
 			return fail("passport cp");
+		if (r5_amd_row_find(0x15e7u) == NULL
+			|| r5_amd_row_find(0x15e7u)->gen != r5_amd_row_find(0x1636u)->gen
+			|| r5_amd_row_find(0x1638u)->gen != r5_amd_row_find(0x164cu)->gen
+			|| strcmp(r5_amd_row_find(0x1636u)->gen->name, "GC 9.3 Renoir") != 0)
+			return fail("chip gen");
 		if (r5_amd_fw_stem(0) != NULL || r5_amd_fw_stem(0x1234u) != NULL
 			|| strcmp(r5_amd_fw_stem(0x1636u), "renoir") != 0
 			|| strcmp(r5_amd_fw_stem(0x15e7u), "green_sardine") != 0)
