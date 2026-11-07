@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The isolation test reads and writes a foreign address
+
+The second process submits a `COPY_DATA` of the owner's GPU address and then a `WRITE_DATA` to that address. Both use the second process's page tables. The owner's page is filled with `0x5a` and must still be that after the fault. The program prints `owner unchanged` and a `vm fault … addr` line, including any matching line from `/var/log/syslog`.
+
 ### Buffer, page-table and VMID counts
 
 `R5_GPU_GET_COUNTERS` reports live buffers, page-table pages and held VMIDs for the open file and for the whole device. The kernel page tables are part of the device page count. The self-test reads the counts before and after the kill stage. Equal counts print `counters back`. A change prints the difference.

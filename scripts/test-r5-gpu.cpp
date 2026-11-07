@@ -1725,6 +1725,20 @@ main()
 			|| r5_gpu_counters_match(0, &same) != 0)
 			return fail("counters");
 	}
+	{
+		char* iso = NULL;
+		if (read_file(
+			"distro/graphics/src/bin/r5-gpu-isolation/r5-gpu-isolation.cpp",
+			&iso) != 0)
+			return fail("isolation file");
+		if (strstr(iso, "COPY_DATA") == NULL || strstr(iso, "WRITE_DATA") == NULL
+			|| strstr(iso, "owner unchanged") == NULL
+			|| strstr(iso, "vm fault") == NULL || strstr(iso, "0x5a") == NULL) {
+			free(iso);
+			return fail("isolation");
+		}
+		free(iso);
+	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)

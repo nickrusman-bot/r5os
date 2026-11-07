@@ -72,14 +72,14 @@ va_map(int fd, uint32_t handle, uint64_t va)
 
 
 static int
-submit_write(int fd, uint64_t ibVa, uint64_t dest)
+submit_write(int fd, uint64_t ibVa, uint32_t dwords)
 {
 	r5_gpu_ib ib;
 	r5_gpu_cs cs;
 	r5_gpu_fence fence;
 	memset(&ib, 0, sizeof(ib));
 	ib.gpu_va = ibVa;
-	ib.dwords = 8;
+	ib.dwords = dwords;
 	memset(&cs, 0, sizeof(cs));
 	cs.size = (uint32_t)sizeof(cs);
 	cs.version = 1;
@@ -93,24 +93,49 @@ submit_write(int fd, uint64_t ibVa, uint64_t dest)
 	fence.version = 1;
 	fence.sequence = cs.sequence;
 	fence.timeout_us = 5000000;
-	(void)dest;
 	return ioctl(fd, R5_GPU_FENCE_WAIT, &fence, sizeof(fence));
 }
 
 
 static void
-fill_ib(uint32_t* words, uint64_t dest)
+fill_ib(uint32_t* words, uint64_t dest, uint64_t readBack)
 {
-	/* PACKET3 WRITE_DATA, count 3. Engine and destination match the
-	 * stage indirect buffer: memory, WR_CONFIRM. */
-	words[0] = 0xc0033700u;
-	words[1] = (5u << 8) | (1u << 20);
+	/* COPY_DATA reads dest. WRITE_DATA then writes dest. Both use the
+	 * caller's page tables, so a foreign dest faults that file. */
+	words[0] = 0xc0044000u;
+	words[1] = (1u << 16) | (1u << 20);
 	words[2] = (uint32_t)dest;
 	words[3] = (uint32_t)(dest >> 32);
-	words[4] = 0xdeadbeefu;
-	words[5] = 0xffff1000u;
-	words[6] = 0xffff1000u;
-	words[7] = 0xffff1000u;
+	words[4] = (uint32_t)readBack;
+	words[5] = (uint32_t)(readBack >> 32);
+	words[6] = 0xc0033700u;
+	words[7] = (5u << 8) | (1u << 20);
+	words[8] = (uint32_t)dest;
+	words[9] = (uint32_t)(dest >> 32);
+	words[10] = 0xdeadbeefu;
+	words[11] = 0xffff1000u;
+	words[12] = 0xffff1000u;
+	words[13] = 0xffff1000u;
+}
+
+
+static void
+print_fault(uint64_t addr)
+{
+	char needle[32];
+	char line[512];
+	FILE* log;
+	snprintf(needle, sizeof(needle), "%016llx", (unsigned long long)addr);
+	log = fopen("/var/log/syslog", "r");
+	if (log != NULL) {
+		while (fgets(line, (int)sizeof(line), log) != NULL) {
+			if (strstr(line, "vm fault") != NULL && strstr(line, needle) != NULL)
+				fputs(line, stdout);
+		}
+		fclose(log);
+	}
+	fprintf(stdout, "vm fault addr %s\n", needle);
+	fflush(stdout);
 }
 
 
@@ -160,6 +185,7 @@ foreign(void)
 		fprintf(stderr, "owner map errno %d\n", errno);
 		return 1;
 	}
+	memset(cpu, 0x5a, 4096);
 	child = fork();
 	if (child < 0)
 		return 1;
@@ -179,8 +205,8 @@ foreign(void)
 		if (bo_create(mine, &ibHandle, &ibArea, &ibCpu) != 0
 			|| va_map(mine, ibHandle, ibVa) != 0)
 			_exit(4);
-		fill_ib((uint32_t*)ibCpu, foreignVa);
-		if (submit_write(mine, ibVa, foreignVa) == 0)
+		fill_ib((uint32_t*)ibCpu, foreignVa, ibVa + 256ull);
+		if (submit_write(mine, ibVa, 14) == 0)
 			_exit(5);
 		fprintf(stderr, "client errno %d\n", errno);
 		_exit(errno == ECANCELED ? 0 : 6);
@@ -197,14 +223,25 @@ foreign(void)
 		if (bo_create(fd, &ownHandle, &ownArea, &ownCpu) != 0
 			|| va_map(fd, ownHandle, ownIb) != 0)
 			return 1;
-		fill_ib((uint32_t*)ownCpu, va);
-		if (submit_write(fd, ownIb, va) != 0) {
+		fill_ib((uint32_t*)ownCpu, ownIb + 256ull, ownIb + 512ull);
+		if (submit_write(fd, ownIb, 14) != 0) {
 			fprintf(stderr, "owner submit errno %d\n", errno);
 			return 1;
 		}
 	}
 	if (waitpid(child, &status, 0) != child)
 		return 1;
+	{
+		const unsigned char* bytes = (const unsigned char*)cpu;
+		for (uint32_t i = 0; i < 4096; i++) {
+			if (bytes[i] != 0x5a) {
+				fprintf(stderr, "owner changed at %u\n", i);
+				return 1;
+			}
+		}
+		fprintf(stdout, "owner unchanged\n");
+	}
+	print_fault(va);
 	fprintf(stdout, "owner ok client %d\n",
 		WIFEXITED(status) ? WEXITSTATUS(status) : status);
 	fflush(stdout);
