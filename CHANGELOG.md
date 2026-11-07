@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Stick 28 is built, and the write did not finish
+
+`jam -q @r5-raw` started at 23:16 and finished at 23:22 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`, and updated 8341 targets. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick28-vm.image`, 2147483648 bytes, sha256 `1beb52106ddd2a3da3a543cb5eec9ff3e3f13904d72c1b3975a4d30a9b8776df`. The kernel driver contains `user job file`. The self-test contains `stage %s t`. The stick file keeps the anyboot boot code from stick 27 and uses that image as the BeFS partition. The settings are `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true`, `gpu_selftest true` and `gpu_debug true`. It is 2156724224 bytes, sha256 `e8687c5b92ec506b65436bbd6da8feb23ff6a1f5f0aba1b1b5fee903af82777c`. The write to the General UDisk (disk 1, USB) did not finish. The first open of `\\.\PhysicalDrive1` was permission denied. A second write returned error 5 while D: and E: were still mounted. The administrator prompt that would dismount those two letters was cancelled. There is no read-back and no device hash. Disk 0 was not opened. Not booted.
+
 ### The GFX9 end-of-pipe write is named, not applied
 
 Stick 27 run 2 read 0 from the page its own `RELEASE_MEM` was supposed to write. Linux v6.12 `gfx_v9_0_ring_emit_fence` is that write: the command processor, end of pipe, through the texture cache and GL2, using the GFXHUB TLB of the packet's VMID. `amdgpu_vm_flush` can also emit a PASID mapping, an SPM VMID update, a GDS switch and two `SWITCH_BUFFER` packets that R5 does not. `amdgpu_device_flush_hdp` returns before its packet on an x86-64 APU, which Renoir is, so that flush is not a difference on this machine. The names and the line numbers are in `docs/GRAPHICS.md`. None of it is in the ring. Not booted.
