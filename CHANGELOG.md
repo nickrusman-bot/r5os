@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Stick 20: U2a is the first miss
+
+The image is the 09:26 raw image, sha256 `695011c00b26791a8ee5e1e7f1056fbf7925079c1aabd0342548c86fdb75b551`, with the same six settings as stick 19. The stick file sha256 is `1056e1a2d8bcd575837af3edcf8cab6e0116209eae8c1bd92dc52e7bab06c450`. Logs are `generated/boot-5625u-20/`.
+
+U2c wrote `u2c ok 1 ms`. U2a wrote `u2a timeout 5000 ms`, with no fault, dest PTE `0000000022ff4077` (system, snooped, MTYPE_NC) and the CPU still reading 0. U2b, U4b, U2e, U2f, U2d, U1, U4, U3, U2 and U2g did not run. That is the cached low GTT write, not the high range. The PTE matches `gmc_v9_0_get_coherence_flags` as already coded. The log does not print U2a's sequence next to `seen 38`, so it does not say whether the fence retired. No image was built for stick 21. The next boot has to print that sequence, then `clflush` the destination and read it again.
+
+SAM: `pixels MISMATCH`. `(192,192)` `853b16ff` and `(192,134)` `a64a1cff` match stick 19. `(90,192)` is `6b2f12ff` and `(280,192)` is `262e38ff`. The normal run is also `pixels MISMATCH`, and every sampled pixel is non-zero (`(192,80)` `e0769bc5`). The later userspace IB at `0x800000000000` timed out and the watchdog printed `gpu lost`.
+
 ### U2d changes only the indirect-buffer address
 
 U2d kept two differences from U2c: the indirect buffer at `0xffff800000000000`, and a write to the high VRAM page. The destination is now the low VRAM page, the same one U2c writes. U2g is a new last step: that same high buffer, writing the high VRAM page. The run still stops at the first hang. The fixed K sequence is unchanged.
