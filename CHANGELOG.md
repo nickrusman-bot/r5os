@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The passport reads the IP discovery table
+
+The GC table is the last 64 KiB of VRAM, 10 KiB long, the same place Linux 6.12 reads. The signature is `0x28211407`. The checksum is the byte sum after `binary_checksum`, and the GC table has its own sum. A valid table fills the shader-engine, array, CU, render-backend, GPR, TCC and geometry-shader counts. The device table stays as the cross-check and a difference prints `discovery mismatch`. A bad checksum leaves the table values in place. This has not been booted, so the 5625U binary itself is still unread.
+
 ### The isolation test reads and writes a foreign address
 
 The second process submits a `COPY_DATA` of the owner's GPU address and then a `WRITE_DATA` to that address. Both use the second process's page tables. The owner's page is filled with `0x5a` and must still be that after the fault. The program prints `owner unchanged` and a `vm fault … addr` line, including any matching line from `/var/log/syslog`.

@@ -132,6 +132,21 @@ r5_gpu_fill_passport(radeon_info* info)
 	r5_amd_device_fill(&sPassport, info->pci->device_id, gpu_strap_rev(info),
 		info->pci->revision, rbCc, rbUser, cuCc, cuUser,
 		info->fw_version, info->fw_feature);
+	if (info->shared_info != NULL && info->shared_info->frame_buffer != NULL) {
+		uint64 vramBytes = (uint64)info->shared_info->frame_buffer_size * 1024;
+		if (vramBytes > R5_DISCOVERY_TMR_OFFSET
+			&& vramBytes - R5_DISCOVERY_TMR_OFFSET >= R5_DISCOVERY_TMR_SIZE) {
+			static uint8 sDiscovery[R5_DISCOVERY_TMR_SIZE];
+			const uint8* src = (const uint8*)info->shared_info->frame_buffer
+				+ (vramBytes - R5_DISCOVERY_TMR_OFFSET);
+			char mismatch[160];
+			memcpy(sDiscovery, src, R5_DISCOVERY_TMR_SIZE);
+			if (r5_amd_discovery_apply(&sPassport, sDiscovery,
+					R5_DISCOVERY_TMR_SIZE, mismatch, (int)sizeof(mismatch))
+				&& mismatch[0] != 0)
+				dprintf("radeon_hd: %s\n", mismatch);
+		}
+	}
 	sPassportReady = true;
 	if (r5_log_allow(0, 0, R5_LOG_ONCE, &sErrorLines, &sOnceBits, 1)) {
 		char text[4096];

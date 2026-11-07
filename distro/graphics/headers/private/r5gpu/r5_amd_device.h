@@ -153,7 +153,14 @@ typedef struct {
 	uint32_t	fw_ver[32];
 	uint32_t	fw_feature[32];
 	uint32_t	known;
+	uint32_t	discovery_loaded;
 } r5_amd_device;
+
+/* Linux v6.12 amdgpu_discovery.h. The binary sits DISCOVERY_TMR_OFFSET
+ * bytes below the end of VRAM and is DISCOVERY_TMR_SIZE bytes. */
+#define R5_DISCOVERY_SIGNATURE 0x28211407u
+#define R5_DISCOVERY_TMR_SIZE (10u << 10)
+#define R5_DISCOVERY_TMR_OFFSET (64u << 10)
 
 static inline const r5_amd_row*
 r5_amd_row_find(uint32_t pci)
@@ -290,14 +297,148 @@ r5_amd_device_fill(r5_amd_device* dev, uint32_t pci, uint32_t strap,
 	}
 }
 
+static inline uint16_t
+r5_le16(const uint8_t* p)
+{
+	uint16_t v;
+	memcpy(&v, p, 2);
+	return v;
+}
+
+
+static inline uint32_t
+r5_le32(const uint8_t* p)
+{
+	uint32_t v;
+	memcpy(&v, p, 4);
+	return v;
+}
+
+
+static inline uint16_t
+r5_discovery_sum(const uint8_t* p, uint32_t n)
+{
+	uint32_t sum = 0;
+	for (uint32_t i = 0; i < n; i++)
+		sum += p[i];
+	return (uint16_t)sum;
+}
+
+
+/* amdgpu_discovery_init checks the signature and the checksum of the
+ * bytes after binary_checksum. amdgpu_discovery_get_gfx_info then reads
+ * GC table index 1. A valid table replaces the device-table counts.
+ * The device table is the mismatch cross-check. Returns 1 when the
+ * GC table was applied. */
+static inline int
+r5_amd_discovery_apply(r5_amd_device* dev, const void* binary, uint32_t bytes,
+	char* mismatch, int mismatchCap)
+{
+	const uint8_t* bin = (const uint8_t*)binary;
+	uint32_t se;
+	uint32_t cu;
+	uint32_t sh;
+	uint32_t rb;
+	uint32_t tcc;
+	uint32_t gprs;
+	uint32_t gsTable;
+	uint32_t gsPrim;
+	uint32_t offchip;
+	uint16_t gcOff;
+	uint16_t gcSize;
+	uint16_t gcSum;
+	uint16_t major;
+	const uint8_t* gc;
+	const r5_amd_row* row;
+	if (mismatch != NULL && mismatchCap > 0)
+		mismatch[0] = 0;
+	if (bin == NULL || bytes < 60)
+		return 0;
+	if (r5_le32(bin) != R5_DISCOVERY_SIGNATURE)
+		return 0;
+	{
+		uint16_t stored = r5_le16(bin + 8);
+		uint16_t size = r5_le16(bin + 10);
+		if (size < 12 || size > bytes)
+			return 0;
+		if (r5_discovery_sum(bin + 10, (uint32_t)size - 10u) != stored)
+			return 0;
+	}
+	gcOff = r5_le16(bin + 12 + 8);
+	gcSum = r5_le16(bin + 12 + 8 + 2);
+	gcSize = r5_le16(bin + 12 + 8 + 4);
+	if (gcOff == 0 || gcSize < 12 + 11u * 4u || (uint32_t)gcOff + gcSize > bytes)
+		return 0;
+	if (r5_discovery_sum(bin + gcOff, gcSize) != gcSum)
+		return 0;
+	gc = bin + gcOff;
+	major = r5_le16(gc + 4);
+	if (major == 1) {
+		uint32_t wgp0 = r5_le32(gc + 12 + 4);
+		uint32_t wgp1 = r5_le32(gc + 12 + 8);
+		se = r5_le32(gc + 12);
+		cu = 2u * (wgp0 + wgp1);
+		sh = r5_le32(gc + 12 + 16u * 4u);
+		rb = r5_le32(gc + 12 + 12);
+		tcc = r5_le32(gc + 12 + 16);
+		gprs = r5_le32(gc + 12 + 20);
+		gsTable = r5_le32(gc + 12 + 28);
+		gsPrim = r5_le32(gc + 12 + 32);
+		offchip = r5_le32(gc + 12 + 40);
+	} else if (major == 2) {
+		se = r5_le32(gc + 12);
+		cu = r5_le32(gc + 12 + 4);
+		sh = r5_le32(gc + 12 + 8);
+		rb = r5_le32(gc + 12 + 12);
+		tcc = r5_le32(gc + 12 + 16);
+		gprs = r5_le32(gc + 12 + 20);
+		gsTable = r5_le32(gc + 12 + 28);
+		gsPrim = r5_le32(gc + 12 + 32);
+		offchip = r5_le32(gc + 12 + 40);
+	} else
+		return 0;
+	if (dev == NULL)
+		return 1;
+	row = r5_amd_row_find(dev->device_id);
+	if (row != NULL && mismatch != NULL && mismatchCap > 1
+		&& (se != row->num_shader_engines || sh != row->num_shader_arrays_per_engine
+			|| cu != row->num_cu_per_sh || rb != row->max_backends_per_se
+			|| gprs != row->num_shader_visible_vgprs
+			|| gsTable != row->gs_vgt_table_depth
+			|| gsPrim != row->gs_prim_buffer_depth
+			|| offchip != row->gc_double_offchip_lds_buf
+			|| tcc != row->num_tcc_blocks)) {
+		snprintf(mismatch, (size_t)mismatchCap,
+			"discovery mismatch se %u/%u cu %u/%u",
+			se, row->num_shader_engines, cu, row->num_cu_per_sh);
+	}
+	dev->num_shader_engines = se;
+	dev->num_shader_arrays_per_engine = sh;
+	dev->num_cu_per_sh = cu;
+	dev->num_rb_pipes = rb * se;
+	dev->num_tcc_blocks = tcc;
+	dev->num_shader_visible_vgprs = gprs;
+	dev->gs_vgt_table_depth = gsTable;
+	dev->gs_prim_buffer_depth = gsPrim;
+	dev->gc_double_offchip_lds_buf = offchip;
+	dev->discovery_loaded = 1;
+	dev->gpu_info_loaded = 1;
+	return 1;
+}
+
+
 static inline int
 r5_amd_passport_format(const r5_amd_device* dev, char* buf, int cap)
 {
 	int n = 0;
 	int wrote;
+	const char* disc;
 	if (buf == NULL || cap < 1)
 		return 0;
 	buf[0] = 0;
+	disc = dev->discovery_loaded
+		? "ip discovery GC table; Linux v6.12 amdgpu_discovery_get_gfx_info"
+		: R5_AMD_SRC_DISCOVERY;
 #define R5_LINE(fmt, ...) \
 	do { \
 		if (n >= cap - 1) \
@@ -311,14 +452,13 @@ r5_amd_passport_format(const r5_amd_device* dev, char* buf, int cap)
 	R5_LINE("chip_rev %u (%s)\n", dev->chip_rev, R5_AMD_SRC_REGISTER);
 	R5_LINE("external_rev %x (%s)\n", dev->external_rev, R5_AMD_SRC_TABLE);
 	R5_LINE("family %u (%s)\n", dev->family, R5_AMD_SRC_TABLE);
-	R5_LINE("num_shader_engines %u (%s)\n", dev->num_shader_engines,
-		R5_AMD_SRC_DISCOVERY);
+	R5_LINE("num_shader_engines %u (%s)\n", dev->num_shader_engines, disc);
 	R5_LINE("num_shader_arrays_per_engine %u (%s)\n",
-		dev->num_shader_arrays_per_engine, R5_AMD_SRC_DISCOVERY);
-	R5_LINE("num_cu_per_sh %u (%s)\n", dev->num_cu_per_sh, R5_AMD_SRC_DISCOVERY);
+		dev->num_shader_arrays_per_engine, disc);
+	R5_LINE("num_cu_per_sh %u (%s)\n", dev->num_cu_per_sh, disc);
 	R5_LINE("cu_active_number %u (%s)\n", dev->cu_active_number, R5_AMD_SRC_CU);
 	R5_LINE("cu_bitmap %x (%s)\n", dev->cu_bitmap, R5_AMD_SRC_CU);
-	R5_LINE("num_rb_pipes %u (%s)\n", dev->num_rb_pipes, R5_AMD_SRC_DISCOVERY);
+	R5_LINE("num_rb_pipes %u (%s)\n", dev->num_rb_pipes, disc);
 	R5_LINE("enabled_rb_pipes_mask %x (%s)\n", dev->enabled_rb_pipes_mask,
 		R5_AMD_SRC_REGISTER);
 	R5_LINE("num_hw_gfx_contexts %u (%s)\n", dev->num_hw_gfx_contexts,
@@ -334,14 +474,17 @@ r5_amd_passport_format(const r5_amd_device* dev, char* buf, int cap)
 	R5_LINE("vram_bit_width %u (%s)\n", dev->vram_bit_width, R5_AMD_SRC_MESA);
 	R5_LINE("gpu_counter_freq %u (%s)\n", dev->gpu_counter_freq, R5_AMD_SRC_XCLK);
 	R5_LINE("gc_double_offchip_lds_buf %u (%s)\n",
-		dev->gc_double_offchip_lds_buf, R5_AMD_SRC_EARLY);
+		dev->gc_double_offchip_lds_buf,
+		dev->discovery_loaded ? disc : R5_AMD_SRC_EARLY);
 	R5_LINE("num_shader_visible_vgprs %u (%s)\n",
-		dev->num_shader_visible_vgprs, R5_AMD_SRC_EARLY);
-	R5_LINE("num_tcc_blocks %u (%s)\n", dev->num_tcc_blocks, R5_AMD_SRC_EARLY);
+		dev->num_shader_visible_vgprs,
+		dev->discovery_loaded ? disc : R5_AMD_SRC_EARLY);
+	R5_LINE("num_tcc_blocks %u (%s)\n", dev->num_tcc_blocks,
+		dev->discovery_loaded ? disc : R5_AMD_SRC_EARLY);
 	R5_LINE("gs_vgt_table_depth %u (%s)\n", dev->gs_vgt_table_depth,
-		R5_AMD_SRC_EARLY);
+		dev->discovery_loaded ? disc : R5_AMD_SRC_EARLY);
 	R5_LINE("gs_prim_buffer_depth %u (%s)\n", dev->gs_prim_buffer_depth,
-		R5_AMD_SRC_EARLY);
+		dev->discovery_loaded ? disc : R5_AMD_SRC_EARLY);
 	R5_LINE("max_gs_waves_per_vgt %u (%s)\n", dev->max_gs_waves_per_vgt,
 		R5_AMD_SRC_EARLY);
 	R5_LINE("hw_ip %u.%u (%s)\n", dev->hw_major, dev->hw_minor, R5_AMD_SRC_EARLY);

@@ -1739,6 +1739,57 @@ main()
 		}
 		free(iso);
 	}
+	{
+		uint8_t bin[256];
+		uint8_t* gc;
+		r5_amd_device dev;
+		char mismatch[160];
+		uint16_t sum;
+		uint32_t i;
+		memset(bin, 0, sizeof(bin));
+		bin[0] = 0x07;
+		bin[1] = 0x14;
+		bin[2] = 0x21;
+		bin[3] = 0x28;
+		bin[10] = 0;
+		bin[11] = 1;
+		gc = bin + 128;
+		bin[20] = 128;
+		gc[4] = 2;
+		gc[12] = 1;
+		gc[16] = 8;
+		gc[20] = 1;
+		gc[24] = 2;
+		gc[28] = 4;
+		gc[33] = 1;
+		gc[40] = 32;
+		gc[44] = 99;
+		gc[52] = 1;
+		bin[24] = 80;
+		sum = 0;
+		for (i = 0; i < 80; i++)
+			sum = (uint16_t)(sum + gc[i]);
+		bin[22] = (uint8_t)sum;
+		bin[23] = (uint8_t)(sum >> 8);
+		sum = 0;
+		for (i = 10; i < sizeof(bin); i++)
+			sum = (uint16_t)(sum + bin[i]);
+		bin[8] = (uint8_t)sum;
+		bin[9] = (uint8_t)(sum >> 8);
+		memset(&dev, 0, sizeof(dev));
+		dev.device_id = 0x1636;
+		dev.known = 1;
+		if (r5_amd_discovery_apply(&dev, bin, sizeof(bin), mismatch,
+				(int)sizeof(mismatch)) != 1
+			|| dev.num_shader_engines != 1 || dev.num_cu_per_sh != 8
+			|| dev.gs_prim_buffer_depth != 99
+			|| strstr(mismatch, "discovery mismatch") == NULL)
+			return fail("discovery");
+		bin[12] ^= 0xff;
+		if (r5_amd_discovery_apply(&dev, bin, sizeof(bin), mismatch,
+				(int)sizeof(mismatch)) != 0)
+			return fail("discovery checksum");
+	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
