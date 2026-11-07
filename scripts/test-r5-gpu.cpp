@@ -1991,6 +1991,12 @@ main()
 		if (strstr(text, "exit.initialized") == NULL
 			|| strstr(text, "if (!goingDown)") == NULL)
 			return fail("dying stack");
+		if (snippet("distro/kernel/src/system/kernel/vm/vm.cpp",
+				"is the first in this area", "unwire all that", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "range->size = nextAddress - areaStart") == NULL)
+			return fail("partial wire");
 	}
 	{
 		char text[4000];

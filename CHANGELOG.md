@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A partial wire no longer panics
+
+`lock_memory_etc()` registered a wired range at its full size when a later page could not be wired. The revert looked for the shorter size and panicked (`VMArea::Unwire(): no such range`). The range is now shrunk to the pages that were wired. This is haiku-pi `6f810ed2d7` (Witold Bołt, MIT). Not booted.
+
 ### A dying team keeps an exited thread's stack
 
 A signal that ends a team is handled by one thread, which exits at once. The main thread kills the others only when it gets there. Deleting the exited thread's stack in that window faulted any thread that still used an object on it. The stack now stays until the team's address space goes. This is haiku-pi `e09cfa1d9e` (Witold Bołt, MIT), on R5's `thread_exit` because this tree has no stack cache. Not booted.

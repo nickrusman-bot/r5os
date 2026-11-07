@@ -16,6 +16,7 @@ def install_kernel_sources() -> None:
         "src/system/kernel/arch/x86/arch_cpu.cpp",
         "src/system/kernel/arch/x86/arch_vm.cpp",
         "src/system/kernel/thread.cpp",
+        "src/system/kernel/vm/vm.cpp",
     )
     for relative in files:
         install_file(

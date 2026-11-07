@@ -12,6 +12,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### Wiring a range that stops at an unwired page
+
+Location: `distro/kernel/src/system/kernel/vm/vm.cpp`.
+
+The file is Haiku's VM. Copyright Ingo Weinhold, Axel Dörfler, and Travis Geiselbrecht. Licenses: MIT and NewOS. One block is the haiku-pi change `6f810ed2d7`: when a page in the middle of a range cannot be wired, the registered range shrinks to the pages that were wired, so the revert finds it. Copyright 2026 Witold Bołt. License: MIT.
+
 ### Thread stack while a team goes down
 
 Location: `distro/kernel/src/system/kernel/thread.cpp`.
