@@ -169,7 +169,7 @@ Fetch `upstream` when a Haiku fix is useful. Inspect the `distro/` changes and R
 About 120 haiku-pi commits change code that x86-64 also builds and runs: the kernel, the VM, the runtime loader, libroot, BFS, the block cache, the kits and the servers. Their docs (`docs/HAIKU-RPI4-CHANGES.md`, the rows marked ★) list them as fixes that are not Pi-specific. haiku-pi built and tested that tree for x86_64 under KVM on 4 Nov 2026, and reports that 14 tests that fail on upstream Haiku pass with those fixes. Examples are a kernel panic on `read()` into a guard page, `MAP_SHARED` after `mprotect` plus `fork`, an `rw_lock` race, the kill race, TLS alignment, and BFS metadata writes.
 
 - **Decided on 7 Nov 2026:** R5 takes these fixes. They help AMD64 directly, on the 5625U and in QEMU.
-- **When:** after GPU milestone M5. It is a separate track, not an M milestone.
+- **When:** now (changed on 7 Nov 2026, it was "after M5"). It is a separate track, not an M milestone, on its own branch from `main` with small PRs per group. The fixes do not wait for the GPU PRs. A fix that was first made on a GPU branch is cherry-picked onto that branch.
 - **How:** the import rules above. Start with the ★ fixes that have a test, and use that test as the proof on R5. A fix that conflicts with an R5 change in `distro/` is reviewed by hand, not overwritten.
 
 ### Other Haiku forks as sources
