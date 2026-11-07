@@ -45,6 +45,30 @@ r5_vm_va_fits(uint64_t va, uint64_t bytes)
 	return low || high;
 }
 
+
+/* An indirect buffer is dword aligned and at most 0xfffff dwords.
+ * The covered pages have to sit in the VA layout. va + bytes must not wrap. */
+static inline int
+r5_ib_span(uint64_t va, uint32_t dwords, uint64_t* first, uint64_t* last)
+{
+	uint64_t bytes;
+	uint64_t end;
+	uint64_t span;
+	if (first == NULL || last == NULL || dwords == 0 || dwords > 0xfffffu
+		|| (va & 3ull) != 0)
+		return 0;
+	if (va > ~0ull - (uint64_t)dwords * 4ull)
+		return 0;
+	bytes = (uint64_t)dwords * 4ull;
+	end = va + bytes;
+	*first = va & ~0xfffull;
+	*last = (end - 1ull) & ~0xfffull;
+	if (*last < *first)
+		return 0;
+	span = *last - *first + 4096ull;
+	return r5_vm_va_fits(*first, span);
+}
+
 /* gpu_va_map adds the filled byte count to the GPU address. The sum
  * stays canonical. It is not masked before the walk. */
 static inline int

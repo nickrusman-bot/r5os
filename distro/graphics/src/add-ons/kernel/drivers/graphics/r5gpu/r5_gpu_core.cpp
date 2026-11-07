@@ -7,6 +7,7 @@
  */
 
 #include "r5_gpu_internal.h"
+#include "r5_vm.h"
 #include "radeon_hd_private.h"
 #include "r5_gpu.h"
 #include "r5_span.h"
@@ -1226,14 +1227,15 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 static bool
 gpu_ib_mapped(void* space, uint64 va, uint32 dwords)
 {
-	if (dwords == 0 || (va & 3ull) != 0)
+	uint64 first = 0;
+	uint64 last = 0;
+	if (!r5_ib_span(va, dwords, &first, &last))
 		return false;
-	uint64 bytes = (uint64)dwords * 4ull;
-	uint64 first = va & ~0xfffull;
-	uint64 last = (va + bytes - 1ull) & ~0xfffull;
-	for (uint64 page = first; page <= last; page += 4096) {
+	for (uint64 page = first; ; page += 4096) {
 		if (gR5GpuOps.vmid_lookup(space, page) != B_OK)
 			return false;
+		if (page == last)
+			break;
 	}
 	return true;
 }

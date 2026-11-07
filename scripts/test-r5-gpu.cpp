@@ -819,6 +819,17 @@ ops_status()
 		if (locked == NULL || opened == NULL || unlocked == NULL)
 			return fail("open lock");
 	}
+	{
+		uint64_t first = 0;
+		uint64_t last = 1;
+		if (r5_ib_span(~0ull - 7ull, 4, &first, &last))
+			return fail("ib wrap");
+		if (r5_ib_span(0xffff800000001004ull, 0x100000u, &first, &last))
+			return fail("ib cap");
+		if (!r5_ib_span(0xffff800000001004ull, 8, &first, &last)
+			|| first != 0xffff800000001000ull || last != first)
+			return fail("ib last");
+	}
 	if (r5_space_free_ok(1, 4, 9) || r5_space_free_ok(0, 9, 4))
 		return fail("space held");
 	if (!r5_space_free_ok(0, 4, 4) || !r5_space_free_ok(0, 4, 9))

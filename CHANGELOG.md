@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### An indirect buffer cannot wrap the address space
+
+`gpu_ib_mapped` added the byte count to the GPU address and walked every page up to that sum. A size near the top of the address space wrapped the sum, and the page step could wrap as well. The check now refuses more than `0xfffff` dwords, a sum that does not fit in 64 bits, and a span that `r5_vm_va_fits` rejects. The walk stops on the last page instead of stepping past it. The host test rejects an address near `UINT64_MAX` and a dword count of `0x100000`, and it accepts eight dwords on the last page of `0xffff800000001000`.
+
 ### Opening a file takes the GPU lock
 
 `address_open` programs the VMID setup and publishes the new address space. That call now runs while `gpu_lock` is held, and the lock is dropped before the file cookie is returned. The host test finds the lock, the open and the unlock in that order.
