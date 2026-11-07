@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### A SuperSpeed endpoint with a zero packet size is refused
+
+Stick 19 (`generated/boot-5625u-19/syslog`) prints `ConfigureEndpoint() failed invalid max_burst_payload` twice, then `unable to configure endpoint: Invalid Argument`. The controller had already started. The lines do not name the device.
+
+In `xhci.cpp`, `ConfigureEndpoint` sets `max_burst_payload` to `(maxBurst + 1) * maxPacketSize` and returns `B_BAD_VALUE` when that product is 0. `maxBurst` is a `uint8`, so `maxBurst + 1` is at least 1. The product is 0 only when `maxPacketSize` is 0. Those two values come from `pipe->MaxPacketSize()` and `pipe->MaxBurst()`.
+
+`Pipe::InitCommon` copies the endpoint `wMaxPacketSize` through, except a high-speed interrupt or isochronous pipe, which splits the low 11 bits and the burst in bits 11–12. SuperSpeed bulk does not take that split. `InitSuperSpeed` then stores `bMaxBurst` and `wBytesPerInterval` from the SuperSpeed endpoint companion. If the companion is missing, `fMaxBurst` stays 0 and the packet size stays whatever the endpoint descriptor said. A packet size of 0 is a descriptor that never got a size, not a burst of 0.
+
+xHCI 1.2 § 4.11.7.1 is the burst payload (bytes moved by a maximum burst). § 6.2.3 puts Max Packet Size and Max Burst Size in the endpoint context. A bulk SuperSpeed endpoint's packet size is 1024. Linux `xhci-mem.c` refuses a zero max packet as well. Clearing the check would program a context with packet size 0.
+
+haiku-pi `c65ac5a2e6` (completed TRBs cleared from the ring), the air/OS SuperSpeed burst changes, and the RenkuOS xHCI fixes are not in this tree. No code change in this commit. Not jammed. QEMU was not run.
+
 ### Tracker opens folders in the same window
 
 Haiku Tracker opens each folder in a new window by default. In R5, "Single window navigation" and "Show navigator" are now on by default: a double-clicked folder replaces the view in the same window, and the Back, Forward, Up and location bar are shown. `distro/desktop/src/kits/tracker/TrackerDefaults.h` is a copy of Haiku `src/kits/tracker/TrackerDefaults.h` (MIT header kept). Only `kDefaultSingleWindowBrowse` and `kDefaultShowNavigator` change, marked as an SPDX snippet. This is the factory setting: it applies to every account that has no saved Tracker setting, and to Defaults in Tracker preferences. An account that already saved `TrackerSettings` keeps its own choice. The separate Tracker preferences can still turn both off. Not jammed or booted yet.
