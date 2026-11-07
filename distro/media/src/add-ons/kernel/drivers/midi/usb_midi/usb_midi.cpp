@@ -172,6 +172,8 @@ create_device(const usb_device* usbDevice, const usb_device_descriptor* deviceDe
 		return NULL;
 
 	memset(midiDevice, 0, sizeof(usbmidi_device_info));
+	/* No Stream Configuration yet: MIDI 1.0 protocol. */
+	midiDevice->ump_protocol = 1;
 
 	midiDevice->sem_lock = sem = create_sem(1, DRIVER_NAME "_lock");
 	if (sem < 0) {
@@ -352,6 +354,12 @@ deliver_ump_packet(void* cookie, uint32_t group, const uint32_t* words,
 {
 	usbmidi_device_info* midiDevice = (usbmidi_device_info*)cookie;
 	usbmidi_port_info* port = group < 16 ? midiDevice->ports[group] : NULL;
+	if ((words[0] >> 28) == 0xfu && ((words[0] >> 16) & 0x3ffu) == 0x005u
+		&& count >= 1) {
+		uint8 protocol = (uint8)((words[0] >> 8) & 0xffu);
+		if (protocol == 1 || protocol == 2)
+			midiDevice->ump_protocol = protocol;
+	}
 	if (port != NULL)
 		push_ump_packet(port, (const uint32*)words, count);
 }
@@ -1174,6 +1182,9 @@ write_sysex_as_ump(driver_cookie* cookie, const uint8* midiseq, size_t* num_byte
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 static status_t
 write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 	size_t* num_bytes, uint8 midicode, uint8 cin)
@@ -1196,12 +1207,17 @@ write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 	if (user_memcpy(midi, midiseq, *num_bytes) != B_OK)
 		return B_BAD_ADDRESS;
 
-	/* Appendix D, Note On/Off (D.3.1). Other channel bytes stay type 0x2. */
-	if ((midicode & 0xf0) == 0x90 || (midicode & 0xf0) == 0x80) {
+	/* MIDI 2.0 protocol translates every channel voice (M2-104-UM D.3).
+	 * MIDI 1.0 protocol, and a protocol that has not been set, stays
+	 * type 0x2, including a note-on with velocity 0. */
+	if ((midicode & 0xf0) >= 0x80 && (midicode & 0xf0) <= 0xe0) {
 		uint32 words[2];
-		usb_midi_translate_midi1_note(midi[0] & 0x0f, midi[1] & 0x7f,
-			midi[2] & 0x7f, (midicode & 0xf0) == 0x90, words);
-		return send_ump_words(cookie->port, words, 2);
+		int count = usb_midi_translate_channel(cookie->device->ump_protocol,
+			midi[0], midi[1], midi[2], &cookie->device->translate, words);
+		if (count < 0)
+			return B_OK;
+		if (count == 2)
+			return send_ump_words(cookie->port, words, 2);
 	}
 
 	uint32 messageType = (midicode & 0xf0) == 0xf0 ? 0x1u : 0x2u;
@@ -1212,6 +1228,7 @@ write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 		| (uint32)midi[2];
 	return send_ump_words(cookie->port, words, 1);
 }
+// SPDX-SnippetEnd
 
 
 static status_t

@@ -96,6 +96,11 @@ void
 midi2_endpoint_init(midi2_endpoint* endpoint);
 
 
+/* Stream Configuration Request, status 0x005. Protocol 1 or 2. */
+status_t
+midi2_stream_configure(midi2_endpoint* endpoint, const uint32* request);
+
+
 
 status_t
 midi2_stream_endpoint_discovery(uint8 filter, uint32 words[4]);

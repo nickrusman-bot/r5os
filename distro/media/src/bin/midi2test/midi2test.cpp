@@ -117,6 +117,35 @@ test_helpers()
 	midi2_translate_midi1_note(3, 61, 1, true, fromMidi1);
 	expect(kernelNote[0] == fromMidi1[0] && kernelNote[1] == fromMidi1[1],
 		"velocity 1 translation copies match");
+	{
+		usb_midi_translate_state state;
+		uint32 words[2];
+		memset(&state, 0, sizeof(state));
+		expect(usb_midi_translate_channel(1, 0x90, 60, 0, &state, words) == 0,
+			"MIDI 1.0 protocol keeps a velocity 0 note-on as type 0x2");
+		expect(usb_midi_translate_channel(2, 0x90, 60, 0, &state, words) == 2
+			&& ((words[0] >> 28) == 0x4) && ((words[0] >> 20) & 0x0f) == 0x8,
+			"MIDI 2.0 protocol turns velocity 0 into a type 0x4 note-off");
+		expect(usb_midi_translate_channel(2, 0xb0, 7, 127, &state, words) == 2
+			&& ((words[0] >> 20) & 0x0f) == 0x0b && words[1] == 0xffffffffu,
+			"MIDI 2.0 protocol scales a control change to 32 bits");
+		expect(usb_midi_translate_channel(2, 0xb0, 0, 3, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 32, 4, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xc0, 12, 0, &state, words) == 2
+			&& (words[0] & 0xff) == 1 && ((words[1] >> 24) & 0x7f) == 12
+			&& ((words[1] >> 8) & 0x7f) == 3 && (words[1] & 0x7f) == 4,
+			"bank select is held until the program change");
+		memset(&state, 0, sizeof(state));
+		expect(usb_midi_translate_channel(2, 0xb0, 101, 1, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 100, 2, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 6, 0x40, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 38, 0, &state, words) == 2
+			&& ((words[0] >> 20) & 0x0f) == 0x2
+			&& ((words[0] >> 8) & 0x7f) == 1 && (words[0] & 0x7f) == 2,
+			"an RPN is one type 0x4 message after the data LSB");
+		expect(usb_midi_translate_channel(1, 0xb0, 7, 10, &state, words) == 0,
+			"MIDI 1.0 protocol does not mix in a type 0x4 control");
+	}
 
 	uint32 voice[2];
 	uint8 midiBytes[12];
@@ -981,8 +1010,19 @@ test_more()
 			== B_OK && replyCount == 2
 		&& midi2_stream_status(replies[0]) == B_MIDI2_STREAM_ENDPOINT_INFO
 		&& midi2_stream_status(replies[4]) == B_MIDI2_STREAM_CONFIG_NOTIFY
-		&& ((replies[4] >> 8) & 0xff) == B_MIDI2_STREAM_PROTOCOL_MIDI2,
-		"endpoint discovery replies with info and the protocol");
+		&& ((replies[4] >> 8) & 0xff) == B_MIDI2_STREAM_PROTOCOL_MIDI1,
+		"endpoint discovery replies with info and MIDI 1.0 protocol");
+	uint32 configRequest[4];
+	memset(configRequest, 0, sizeof(configRequest));
+	configRequest[0] = midi2_stream_pack(0xf0, 0x05,
+		B_MIDI2_STREAM_PROTOCOL_MIDI2, 0);
+	expect(midi2_stream_configure(&endpoint, configRequest) == B_OK
+		&& endpoint.protocol == B_MIDI2_STREAM_PROTOCOL_MIDI2,
+		"stream configuration selects MIDI 2.0 protocol");
+	configRequest[0] = midi2_stream_pack(0xf0, 0x05, 0x7f, 0);
+	expect(midi2_stream_configure(&endpoint, configRequest) == B_BAD_VALUE
+		&& endpoint.protocol == B_MIDI2_STREAM_PROTOCOL_MIDI2,
+		"an unknown protocol is rejected");
 
 	uint32 blockRequest[4];
 	expect(midi2_stream_block_discovery(0,

@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+### One protocol per UMP endpoint
+
+`libmidi2.so` and the public MIDI headers are MIT. That is the same kind of exception as the GPU header and the R5 DRM library: every MIDI program loads them. The USB MIDI driver and the R5 parts of the MIDI server stay GPL-3.0-or-later. `Midi2Library.cpp` carries the MIT header. The R5 functions in `MidiLocalConsumer.cpp` and `MidiLocalProducer.cpp` are marked with MIT snippet tags. The R5 parts of `usb_midi.cpp` and `PortDrivers.cpp` are marked GPL-3.0-or-later. The Haiku functions around them keep the MIT header.
+
+Until a Stream Configuration message arrives, an endpoint uses MIDI 1.0 protocol. `midi2_endpoint_init` stores protocol 1. `midi2_stream_configure` stores 1 or 2 and rejects any other protocol byte. A USB device starts at protocol 1 and updates that byte when a stream configuration of status `0x005` arrives.
+
+With protocol 1, a MIDI 1.0 channel write stays type 0x2, including a note-on of velocity 0. System bytes stay type 0x1. With protocol 2, every channel voice message becomes type 0x4 (M2-104-UM D.3). A note-on of velocity 0 becomes a note-off at `0x8000`. Poly pressure and channel pressure use the 7-to-32 scale. Pitch bend uses the 14-to-32 scale, so center `8192` is `0x80000000`. Control changes 0 and 32 are held as the bank. A program change then sends the bank-valid bit with those bytes. Controllers 101 and 100, or 99 and 98, select an RPN or NRPN. The first data byte is held. Controller 38, or a later controller 6, sends status `0x2` or `0x3`. Address `0x7F`/`0x7F` is not sent. One group does not mix type 0x2 and type 0x4 channel voice.
+
+`midi2test` checks both protocols, the scaled controller, the bank, and the RPN. That program was not run. A host compile of the translator printed `ok midi protocol`. The host fuzzer, linked with `Midi2Library.cpp`, ran kernel, payload, Property Exchange, profiles, stream, and USB for 60 seconds each under AddressSanitizer and printed `ok`. No USB MIDI device was attached. `midi2test` was not run in VirtualBox.
+
 ### MIDI parsers live in libmidi2.so
 
 Property Exchange, profiles, stream messages, and the USB descriptor parser were inline in the public headers. Those functions are now defined in `Midi2Library.cpp` and linked into `libmidi2.so`. The headers keep the names and the arguments. `midi2_pe_put14`, `midi2_pe_get14`, `midi2_stream_pack`, `midi2_stream_status`, and `midi2_profile_same` stay inline. `scripts/apply-media.py` copies the library source, `Midi2Translate.h`, and the two driver parser headers. A Haiku cross compile of `Midi2Library.cpp` succeeded. The host fuzzer, linked with that file, ran each target for one second under AddressSanitizer and printed `ok`. `midi2test` was not run. No device was attached. The library was not jammed into an image.

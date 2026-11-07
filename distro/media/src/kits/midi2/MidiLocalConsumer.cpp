@@ -18,6 +18,9 @@
 #include "protocol.h"
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
 struct SysexAssembly {
 	BMidiLocalConsumer*	consumer;
 	uint8				group;
@@ -150,6 +153,9 @@ dispatch_sysex(BMidiLocalConsumer* consumer, const uint32* words,
 }
 
 
+// SPDX-SnippetEnd
+
+
 int32 
 _midi_event_thread(void* data)
 {
@@ -239,6 +245,9 @@ BMidiLocalConsumer::Timeout(void* data)
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
 static void
 dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 	bigtime_t time)
@@ -280,11 +289,15 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 		consumer->Data(midi, midiLength, true, time);
 	}
 }
+// SPDX-SnippetEnd
 
 
 void 
 BMidiLocalConsumer::Data(uchar* data, size_t length, bool atomic, bigtime_t time)
 {
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: MIT
 	if (data != NULL && length >= 8) {
 		uint32 magic = 0;
 		memcpy(&magic, data, sizeof(magic));
@@ -293,6 +306,7 @@ BMidiLocalConsumer::Data(uchar* data, size_t length, bool atomic, bigtime_t time
 			return;
 		}
 	}
+	// SPDX-SnippetEnd
 	if (atomic) {
 		switch (data[0] & 0xF0) {
 			case B_NOTE_OFF:

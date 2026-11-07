@@ -1,9 +1,11 @@
 /*
  * Copyright 2026, R5OS.
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * Distributed under the terms of the MIT License.
+ * SPDX-License-Identifier: MIT
  *
  * Parsers and catalogs for the MIDI 2.0 kit. The headers keep the names.
  * A program that includes them calls these functions in libmidi2.so.
+ * The public kit, headers and this library, is MIT.
  */
 
 
@@ -896,6 +898,25 @@ midi2_profile_respond(midi2_profile_catalog* catalog,
 	return B_OK;
 }
 
+status_t
+midi2_stream_configure(midi2_endpoint* endpoint, const uint32* request)
+{
+	uint8 protocol;
+	if (endpoint == NULL || request == NULL)
+		return B_BAD_VALUE;
+	if ((request[0] >> 28) != 0xf)
+		return B_BAD_VALUE;
+	if (midi2_stream_status(request[0]) != B_MIDI2_STREAM_CONFIG_REQUEST)
+		return B_BAD_VALUE;
+	protocol = (uint8)((request[0] >> 8) & 0xff);
+	if (protocol != B_MIDI2_STREAM_PROTOCOL_MIDI1
+		&& protocol != B_MIDI2_STREAM_PROTOCOL_MIDI2)
+		return B_BAD_VALUE;
+	endpoint->protocol = protocol;
+	return B_OK;
+}
+
+
 void
 midi2_endpoint_init(midi2_endpoint* endpoint)
 {
@@ -907,7 +928,8 @@ midi2_endpoint_init(midi2_endpoint* endpoint)
 	endpoint->staticBlocks = true;
 	endpoint->midi1 = true;
 	endpoint->midi2 = true;
-	endpoint->protocol = B_MIDI2_STREAM_PROTOCOL_MIDI2;
+	/* No Stream Configuration has been seen. MIDI 1.0 protocol. */
+	endpoint->protocol = B_MIDI2_STREAM_PROTOCOL_MIDI1;
 	endpoint->manufacturer[0] = 125;
 	endpoint->blockCount = 1;
 	endpoint->blocks[0].number = 0;
