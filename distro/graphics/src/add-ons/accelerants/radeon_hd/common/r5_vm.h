@@ -69,6 +69,27 @@ r5_vm_pde(uint64_t physical)
 }
 
 
+/* Linux v6.12 amdgpu_vm.h. AMDGPU_PTE_EXECUTABLE is bit 4.
+ * AMDGPU_PDE_PTE is bit 54. amdgpu_vm_pt.c amdgpu_vm_pt_clear fills a
+ * new leaf table with EXECUTABLE and an empty directory entry with
+ * PDE_PTE. amdgpu_vm_pte_update_flags writes EXECUTABLE on an unmap
+ * that is not VALID and not PRT. gmc_v9_0_get_vm_pde adds nothing else
+ * while translate_further is off. */
+static const uint64_t kR5VmPteEmpty = 0x10ull;
+static const uint64_t kR5VmPdeEmpty = 1ull << 54;
+
+
+static inline int
+r5_vm_is_table(uint64_t entry)
+{
+	if ((entry & (uint64_t)R5_GFX9_PTE_VALID) == 0)
+		return 0;
+	if ((entry & kR5VmPdeEmpty) != 0)
+		return 0;
+	return 1;
+}
+
+
 struct r5_vm_page {
 	uint64_t	physical;
 	uint64_t*	cpu;
@@ -95,8 +116,9 @@ r5_vm_find(const r5_vm* vm, uint64_t entry)
 }
 
 
+/* leaf is a page table. A directory page is every other level. */
 static inline int
-r5_vm_new_page(r5_vm* vm)
+r5_vm_new_page(r5_vm* vm, int leaf)
 {
 	if (vm->used >= vm->capacity || vm->alloc == NULL)
 		return 0;
@@ -106,8 +128,9 @@ r5_vm_new_page(r5_vm* vm)
 		return 0;
 	if (!r5_gfx9_pde_aligned(physical))
 		return 0;
+	uint64_t fill = leaf ? kR5VmPteEmpty : kR5VmPdeEmpty;
 	for (int i = 0; i < 512; i++)
-		cpu[i] = 0;
+		cpu[i] = fill;
 	vm->pages[vm->used].physical = physical;
 	vm->pages[vm->used].cpu = cpu;
 	vm->used++;
@@ -122,14 +145,14 @@ r5_vm_map_page(r5_vm* vm, uint64_t va, uint64_t pte)
 {
 	if (vm == NULL || (va & 0xfffull) != 0)
 		return 0;
-	if (vm->used == 0 && !r5_vm_new_page(vm))
+	if (vm->used == 0 && !r5_vm_new_page(vm, 0))
 		return 0;
 	int index = 0;
 	for (int level = 3; level >= 1; level--) {
 		uint32_t slot = r5_vm_index(va, (uint32_t)level);
 		uint64_t entry = vm->pages[index].cpu[slot];
-		if (entry == 0) {
-			if (!r5_vm_new_page(vm))
+		if (!r5_vm_is_table(entry)) {
+			if (!r5_vm_new_page(vm, level == 1))
 				return 0;
 			vm->pages[index].cpu[slot] = r5_vm_pde(
 				vm->pages[vm->used - 1].physical);
@@ -140,7 +163,13 @@ r5_vm_map_page(r5_vm* vm, uint64_t va, uint64_t pte)
 				return 0;
 		}
 	}
-	vm->pages[index].cpu[r5_vm_index(va, 0)] = pte;
+	uint32_t leaf = r5_vm_index(va, 0);
+	if (pte == 0) {
+		uint64_t current = vm->pages[index].cpu[leaf];
+		if ((current & kR5Gfx9PtePrt) == 0)
+			vm->pages[index].cpu[leaf] = kR5VmPteEmpty;
+	} else
+		vm->pages[index].cpu[leaf] = pte;
 	return 1;
 }
 
@@ -153,7 +182,7 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 	int index = 0;
 	for (int level = 3; level >= 1; level--) {
 		uint64_t entry = vm->pages[index].cpu[r5_vm_index(va, (uint32_t)level)];
-		if (entry == 0)
+		if (!r5_vm_is_table(entry))
 			return 0;
 		index = r5_vm_find(vm, entry);
 		if (index < 0)
@@ -162,7 +191,7 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 	uint64_t leaf = vm->pages[index].cpu[r5_vm_index(va, 0)];
 	if (pte != NULL)
 		*pte = leaf;
-	return leaf != 0;
+	return (leaf & (uint64_t)R5_GFX9_PTE_VALID) != 0;
 }
 
 #endif

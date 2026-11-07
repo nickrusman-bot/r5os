@@ -103,6 +103,8 @@ bool r5_gfx9_vmid1_map(void* as, uint64 va, uint64 pte);
 bool r5_gfx9_tlb_flush_vmid(uint32 vmid);
 bool r5_gfx9_vmid1_flush();
 bool r5_gfx9_vmid1_lookup(void* as, uint64 va);
+/* Four entries of va, read through a fresh mapping of each table page. */
+void r5_gfx9_vmid1_levels(const char* name, uint64 va);
 bool r5_gfx9_vmid1_pte(void* as, uint64 va, uint64* pte);
 bool r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count);
 /* Copies up to count dwords, stopping at an unmapped page. Kernel

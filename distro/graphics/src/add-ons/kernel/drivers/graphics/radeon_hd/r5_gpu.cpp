@@ -425,11 +425,7 @@ gpu_stage_dump(const char* name, uint64 ibVa, uint8* cpu, uint64 phys)
 
 /* Just below the advertised limits, so a program that grows upward from
  * va_offset or high_va_offset does not land on a stage page. */
-static const uint64 kStageLowVram = R5_GPU_VA_MAX - 0x3000ull;
 static const uint64 kStageLowGtt = R5_GPU_VA_MAX - 0x2000ull;
-static const uint64 kStageHighGtt = R5_GPU_HIGH_VA_MAX - 0x3000ull;
-static const uint64 kStageHighVram = R5_GPU_HIGH_VA_MAX - 0x2000ull;
-static const uint64 kStageFault = R5_GPU_VA_MAX - 0x1000ull;
 static uint64 sStageFresh = 0;
 
 
@@ -848,41 +844,12 @@ gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
 		gpu_stage_release(&page);
 		return false;
 	}
+	r5_gfx9_vmid1_levels(name, va);
+	r5_gfx9_vmid1_levels(name, va + 0x1000ull);
 	bool go = gpu_stage_step(info, name, &page, page.cpu, va + 64, page.phys,
 		true, true, true, 0, 8, false);
 	gpu_stage_release(&page);
 	return go;
-}
-
-
-static bool
-gpu_stage_fault(radeon_info* info)
-{
-	gpu_stage_page page;
-	if (!gpu_stage_map(info, &page, kStageLowVram, false)) {
-		dprintf("radeon_hd: u5 map\n");
-		return false;
-	}
-	if (!gpu_stage_visible("u5", &page)) {
-		gpu_stage_release(&page);
-		return false;
-	}
-	bool landed = gpu_stage_step(info, "u5", &page, NULL, kStageFault + 64, 0,
-		false, true, false, 0, 8, false);
-	uint32 me = gpu_mmio(info, kGcSegment, 0x01b6);
-	uint32 status = gpu_mmio(info, kGcSegment, 0x084b);
-	uint32 addrLo = gpu_mmio(info, kGcSegment, 0x084c);
-	uint32 addrHi = gpu_mmio(info, kGcSegment, 0x084d);
-	uint64 addr = r5_gfx9_fault_address(addrLo, addrHi);
-	uint32 vmid = (status >> 20) & 0xfu;
-	bool halted = (me & 0x15000000u) != 0;
-	dprintf("radeon_hd: u5 fault status %08lx vmid %lu addr %016llx me %08lx\n",
-		(unsigned long)status, (unsigned long)vmid,
-		(unsigned long long)addr, (unsigned long)me);
-	if (!landed || halted || status == 0 || vmid != 1)
-		gpu_stage_dump("u5", page.va, page.cpu, page.phys);
-	gpu_stage_release(&page);
-	return landed && !halted && status != 0 && vmid == 1;
 }
 
 
@@ -907,6 +874,8 @@ gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
 		gpu_stage_release(&ib);
 		return false;
 	}
+	r5_gfx9_vmid1_levels(name, ib.va);
+	r5_gfx9_vmid1_levels(name, dest.va);
 	bool go = gpu_stage_step(info, name, &ib, dest.cpu, dest.va + 64,
 		dest.phys, true, ibFlush, readFlush, fill, dwords, linuxWords);
 	gpu_stage_release(&dest);
@@ -1154,42 +1123,28 @@ gpu_stage_u(radeon_info* info)
 	if (!stop && !gpu_stage_pair(info, "u2b-n", gpu_stage_fresh(), true,
 			false, gpu_stage_fresh(), false, false, false, false, 0, 8, false))
 		stop = true;
+	/* u4b-pair maps the next page as well. The single-page steps below
+	 * leave that neighbour as the Linux empty PTE. */
+	if (!stop && !gpu_stage_pair(info, "u4b-pair",
+			R5_GPU_HIGH_VA_OFFSET + 0x1000ull, false, false,
+			R5_GPU_HIGH_VA_OFFSET + 0x2000ull, false, false,
+			true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u-top", 0xffffffffffbfc000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u-radv", 0xffff800100000000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u-257", 0xffff808000000000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u-pdb1", 0xffff800040000000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u-pdb0", 0xffff800000200000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u-low0", 0x100000ull, false))
+		stop = true;
 	if (!stop && !gpu_stage_one(info, "u4b",
 			R5_GPU_HIGH_VA_OFFSET + 0x1000ull, false))
 		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2e", 0xffff800100000000ull, true,
-			false, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2f", 0xffff800000200000ull, true,
-			false, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true,
-			false, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2g",
-			R5_GPU_HIGH_VA_OFFSET + 0x2000ull, true, false,
-			kStageHighVram, false, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2l", gpu_stage_fresh(), true, false,
-			gpu_stage_fresh(), true, false, false, false, 0xCAFEDEAD, 5, true))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2b", gpu_stage_fresh(), true, false,
-			gpu_stage_fresh(), false, false, false, false, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2b-f", gpu_stage_fresh(), true, false,
-			gpu_stage_fresh(), false, false, true, false, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u1", gpu_stage_fresh(), false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u4",
-			R5_GPU_HIGH_VA_OFFSET + 0x3000ull, false))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u3", gpu_stage_fresh(), true))
-		stop = true;
-	if (!stop && !gpu_stage_one(info, "u2", kStageHighGtt, true))
-		stop = true;
-	if (!stop)
-		gpu_stage_fault(info);
 	gpu_stage_mtrr("after");
 	return B_OK;
 }

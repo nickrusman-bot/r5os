@@ -558,14 +558,14 @@ two_spaces()
 	a.alloc = vm_alloc;
 	b.alloc = vm_alloc;
 	gVmPages = 0;
-	if (!r5_vm_map_page(&a, va, 0x111ull) || !r5_vm_map_page(&b, va, 0x222ull))
+	if (!r5_vm_map_page(&a, va, 0x111ull) || !r5_vm_map_page(&b, va, 0x223ull))
 		return fail("two map");
 	if (!r5_vm_lookup(&a, va, &got) || got != 0x111ull)
 		return fail("two a");
-	if (!r5_vm_lookup(&b, va, &got) || got != 0x222ull)
+	if (!r5_vm_lookup(&b, va, &got) || got != 0x223ull)
 		return fail("two b");
 	a.used = 0;
-	if (!r5_vm_lookup(&b, va, &got) || got != 0x222ull)
+	if (!r5_vm_lookup(&b, va, &got) || got != 0x223ull)
 		return fail("two close");
 	if (r5_gfx9_tlb_req(7, 0) == r5_gfx9_tlb_req(1, 0))
 		return fail("two inv");
@@ -635,17 +635,17 @@ one_gib()
 	vm.alloc = gib_alloc;
 	gGibN = 0;
 	for (page = 0; page < bytes; page += 4096) {
-		if (!r5_vm_map_page(&vm, va + page, 0x1000ull + page)) {
+		if (!r5_vm_map_page(&vm, va + page, 0x1001ull + page)) {
 			free(gGibStore);
 			return fail("gib map");
 		}
 	}
-	if (!r5_vm_lookup(&vm, va, &got) || got != 0x1000ull) {
+	if (!r5_vm_lookup(&vm, va, &got) || got != 0x1001ull) {
 		free(gGibStore);
 		return fail("gib first");
 	}
 	if (!r5_vm_lookup(&vm, va + bytes - 4096, &got)
-		|| got != 0x1000ull + bytes - 4096) {
+		|| got != 0x1001ull + bytes - 4096) {
 		free(gGibStore);
 		return fail("gib last");
 	}
@@ -1030,6 +1030,26 @@ main()
 	uint64_t got = 0;
 	if (!r5_vm_lookup(&vm, va, &got) || got != leaf)
 		return fail("lookup");
+	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
+		return fail("empty pd");
+	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)
+		return fail("empty pte");
+	if (!r5_vm_map_page(&vm, va, 0))
+		return fail("unmap");
+	got = 0;
+	if (r5_vm_lookup(&vm, va, &got) != 0 || got != kR5VmPteEmpty)
+		return fail("unmapped pte");
+	if (!r5_vm_map_page(&vm, va, leaf))
+		return fail("remap");
+	if (!r5_vm_lookup(&vm, va, &got) || got != leaf)
+		return fail("remap lookup");
+	if (!r5_vm_map_page(&vm, va + 4096, kR5Gfx9PtePrt))
+		return fail("prt map");
+	if (!r5_vm_map_page(&vm, va + 4096, 0))
+		return fail("prt clear");
+	got = 0;
+	if (r5_vm_lookup(&vm, va + 4096, &got) != 0 || got != kR5Gfx9PtePrt)
+		return fail("prt stays");
 	if (r5_vm_index(va, 3) != 0x100)
 		return fail("mapped pdb2");
 
@@ -1171,19 +1191,14 @@ main()
 		"\"u2a-n\"",
 		"\"u2a-f\"",
 		"\"u2b-n\"",
-		"\"u4b\"",
-		"\"u2e\"",
-		"\"u2f\"",
-		"\"u2d\"",
-		"\"u2g\"",
-		"\"u2l\"",
-		"\"u2b\"",
-		"\"u2b-f\"",
-		"\"u1\"",
-		"\"u4\"",
-		"\"u3\"",
-		"\"u2\"",
-		"gpu_stage_fault"
+		"\"u4b-pair\"",
+		"\"u-top\"",
+		"\"u-radv\"",
+		"\"u-257\"",
+		"\"u-pdb1\"",
+		"\"u-pdb0\"",
+		"\"u-low0\"",
+		"\"u4b\""
 	};
 	/* Linux 6.12 gfxhub_v1_0_init_tlb_regs, from the same prior 0x2501.
 	 * Mask 0x3879 is the fields it writes. ECO stays. */
@@ -1196,7 +1211,7 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 19) != 0)
+			stageOrder, 14) != 0)
 		return 1;
 	{
 		FILE* driver = fopen(

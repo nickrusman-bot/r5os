@@ -1103,6 +1103,12 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 	bo->ranges[slot].va = in.gpu_va;
 	bo->ranges[slot].offset = in.bo_offset;
 	bo->ranges[slot].bytes = in.map_bytes;
+	if (gpu_debug_enabled()) {
+		dprintf("radeon_hd: va map %016llx bytes %llu domain %lu\n",
+			(unsigned long long)in.gpu_va,
+			(unsigned long long)in.map_bytes,
+			(unsigned long)bo->domain);
+	}
 	return B_OK;
 }
 

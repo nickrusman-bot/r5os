@@ -1027,7 +1027,7 @@ r5_gfx9_vmid1_setup()
 		sVm.pages = sVmPages;
 		sVm.capacity = 1024;
 		sVm.alloc = vm_page_alloc;
-		if (!r5_vm_new_page(&sVm)) {
+		if (!r5_vm_new_page(&sVm, 0)) {
 			knote("vmid1 fail page");
 			memset(&sVm, 0, sizeof(sVm));
 			return false;
@@ -1143,6 +1143,43 @@ r5_gfx9_vmid1_lookup(void* as, uint64 va)
 	if (r5_vm_lookup(&space->vm, va & ~0xfffull, &pte) == 0)
 		return false;
 	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
+}
+
+
+void
+r5_gfx9_vmid1_levels(const char* name, uint64 va)
+{
+	if (name == NULL || !sVmid1 || sVm.used == 0 || sInfo == NULL
+		|| sInfo->shared_info == NULL)
+		return;
+	uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
+	uint64 base = (uint64)fb << 24;
+	int index = 0;
+	for (int level = 3; level >= 0; level--) {
+		uint64 phys = sVm.pages[index].physical;
+		uint64 off = phys - base;
+		uint64 cpuPhys = sInfo->shared_info->vram_window_phys + off;
+		void* mapped = NULL;
+		area_id id = map_physical_memory("r5 vm level",
+			(phys_addr_t)cpuPhys, 4096, B_ANY_KERNEL_ADDRESS,
+			B_KERNEL_READ_AREA, &mapped);
+		uint64 word = 0;
+		bool ok = id >= B_OK && mapped != NULL;
+		if (ok) {
+			uint32 slot = r5_vm_index(va, (uint32)level);
+			word = ((volatile uint64*)mapped)[slot];
+		}
+		if (id >= B_OK)
+			delete_area(id);
+		dprintf("radeon_hd: %s L%d off %016llx word %016llx\n",
+			name, level, (unsigned long long)off,
+			(unsigned long long)word);
+		if (level == 0 || !ok || !r5_vm_is_table(word))
+			break;
+		index = r5_vm_find(&sVm, word);
+		if (index < 0)
+			break;
+	}
 }
 
 
@@ -1365,7 +1402,7 @@ r5_gfx9_as_open(void)
 	 * the upper levels) and still fit under a quarter of RAM. */
 	as->vm.capacity = 1024;
 	as->vm.alloc = vm_page_alloc;
-	if (!r5_vm_new_page(&as->vm)) {
+	if (!r5_vm_new_page(&as->vm, 0)) {
 		free(as);
 		return NULL;
 	}
