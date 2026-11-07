@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### GPU log settings are read once, and a dump does not eat the error budget
+
+`gpu_debug` and `gpu_selftest` were read from the settings file on every call, including every submit. `r5_gpu_init` now reads both once. A later call uses those values.
+
+An error still counts as one of 32 events in a boot. A PM4 dump is one event and then at most 64 lines. The next fault line still prints. The ring-buffer once-line uses `R5_ONCE_RB`. The passport once-line uses `R5_ONCE_PASSPORT`.
+
+`kernel bo domain` in `libdrm-r5` is printed only when `gpu_debug` is on. The cache flush at submit is unchanged. The K sequence is unchanged. Host test only. Not booted.
+
 ### The GPU core is MIT
 
 `r5_gpu_core.cpp`, `r5_gpu_backend.h`, and `r5_gpu_internal.h` are R5 code, copyright 2026 R5OS Contributors, and are MIT. The `radeon_hd` add-on that links them still follows GPL-3.0-or-later, because other files in that add-on are GPL-3.0-or-later.

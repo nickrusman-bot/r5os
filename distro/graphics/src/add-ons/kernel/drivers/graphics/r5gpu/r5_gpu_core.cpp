@@ -122,17 +122,34 @@ gpu_copy_user(void* local, uint64 address, size_t bytes)
 }
 
 
-bool
-gpu_debug_enabled()
+static int sDebugOn = -1;
+static int sSelftestOn = -1;
+
+
+static void
+gpu_cache_log_settings()
 {
-	bool enabled = false;
+	bool debugOn = false;
+	bool selftestOn = false;
 	void* settings = load_driver_settings("radeon_hd");
 	if (settings != NULL) {
-		enabled = get_driver_boolean_parameter(settings, "gpu_debug",
+		debugOn = get_driver_boolean_parameter(settings, "gpu_debug",
+			false, true);
+		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
 			false, true);
 		unload_driver_settings(settings);
 	}
-	return enabled;
+	sDebugOn = debugOn ? 1 : 0;
+	sSelftestOn = selftestOn ? 1 : 0;
+}
+
+
+bool
+gpu_debug_enabled()
+{
+	if (sDebugOn < 0)
+		gpu_cache_log_settings();
+	return sDebugOn != 0;
 }
 
 
@@ -258,6 +275,7 @@ r5_gpu_init()
 {
 	if (sReady)
 		return;
+	gpu_cache_log_settings();
 	init_lock(&sGpuLock, "r5 gpu");
 	sEop.Init(&sEop, "r5 gpu eop");
 	sRetireSem = create_sem(0, "r5 gpu retire");
@@ -1895,14 +1913,9 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 bool
 gpu_selftest_enabled()
 {
-	bool enabled = false;
-	void* settings = load_driver_settings("radeon_hd");
-	if (settings != NULL) {
-		enabled = get_driver_boolean_parameter(settings, "gpu_selftest",
-			false, true);
-		unload_driver_settings(settings);
-	}
-	return enabled;
+	if (sSelftestOn < 0)
+		gpu_cache_log_settings();
+	return sSelftestOn != 0;
 }
 
 
