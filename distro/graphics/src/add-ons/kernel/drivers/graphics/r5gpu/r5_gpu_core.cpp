@@ -792,10 +792,10 @@ gpu_span_inside(uint64 innerVa, uint64 innerBytes, uint64 va, uint64 bytes)
 
 
 static bool
-gpu_bo_partial(uint64 va, uint64 bytes)
+gpu_bo_partial(void* space, uint64 va, uint64 bytes)
 {
 	for (uint32 b = 0; b < kMaxBo; b++) {
-		if (!sBo[b].live)
+		if (!sBo[b].live || sBo[b].space != space)
 			continue;
 		for (uint32 i = 0; i < kMaxRange; i++) {
 			gpu_range* range = &sBo[b].ranges[i];
@@ -812,10 +812,10 @@ gpu_bo_partial(uint64 va, uint64 bytes)
 
 
 static bool
-gpu_va_bo_overlap(uint64 va, uint64 bytes)
+gpu_va_bo_overlap(void* space, uint64 va, uint64 bytes)
 {
 	for (uint32 b = 0; b < kMaxBo; b++) {
-		if (!sBo[b].live)
+		if (!sBo[b].live || sBo[b].space != space)
 			continue;
 		for (uint32 i = 0; i < kMaxRange; i++) {
 			gpu_range* range = &sBo[b].ranges[i];
@@ -829,11 +829,11 @@ gpu_va_bo_overlap(uint64 va, uint64 bytes)
 
 
 static bool
-gpu_prt_overlaps(uint64 va, uint64 bytes)
+gpu_prt_overlaps(void* space, uint64 va, uint64 bytes)
 {
 	for (uint32 i = 0; i < kMaxPrt; i++) {
-		if (sPrt[i].live && r5_range_overlap(va, bytes, sPrt[i].va,
-				sPrt[i].bytes))
+		if (sPrt[i].live && sPrt[i].space == space
+			&& r5_range_overlap(va, bytes, sPrt[i].va, sPrt[i].bytes))
 			return true;
 	}
 	return false;
@@ -841,10 +841,10 @@ gpu_prt_overlaps(uint64 va, uint64 bytes)
 
 
 static bool
-gpu_prt_covers(uint64 va, uint64 bytes)
+gpu_prt_covers(void* space, uint64 va, uint64 bytes)
 {
 	for (uint32 i = 0; i < kMaxPrt; i++) {
-		if (!sPrt[i].live)
+		if (!sPrt[i].live || sPrt[i].space != space)
 			continue;
 		if (gpu_span_inside(va, bytes, sPrt[i].va, sPrt[i].bytes))
 			return true;
@@ -854,9 +854,11 @@ gpu_prt_covers(uint64 va, uint64 bytes)
 
 
 static void
-gpu_ranges_drop_contained(uint64 va, uint64 bytes)
+gpu_ranges_drop_contained(void* space, uint64 va, uint64 bytes)
 {
 	for (uint32 b = 0; b < kMaxBo; b++) {
+		if (sBo[b].space != space)
+			continue;
 		for (uint32 i = 0; i < kMaxRange; i++) {
 			gpu_range* range = &sBo[b].ranges[i];
 			if (range->live && gpu_span_inside(range->va, range->bytes, va,
@@ -868,25 +870,36 @@ gpu_ranges_drop_contained(uint64 va, uint64 bytes)
 
 
 static void
-gpu_prt_drop_contained(uint64 va, uint64 bytes)
+gpu_prt_drop_contained(void* space, uint64 va, uint64 bytes)
 {
 	for (uint32 i = 0; i < kMaxPrt; i++) {
-		if (sPrt[i].live && gpu_span_inside(sPrt[i].va, sPrt[i].bytes, va,
-				bytes))
+		if (sPrt[i].live && sPrt[i].space == space
+			&& gpu_span_inside(sPrt[i].va, sPrt[i].bytes, va, bytes))
+			sPrt[i].live = false;
+	}
+}
+
+
+static void
+gpu_prt_release_space(void* space)
+{
+	for (uint32 i = 0; i < kMaxPrt; i++) {
+		if (sPrt[i].live && sPrt[i].space == space)
 			sPrt[i].live = false;
 	}
 }
 
 
 static status_t
-gpu_prt_add(uint64 va, uint64 bytes)
+gpu_prt_add(void* space, uint64 va, uint64 bytes)
 {
-	if (gpu_prt_covers(va, bytes))
+	if (gpu_prt_covers(space, va, bytes))
 		return B_OK;
 	for (uint32 i = 0; i < kMaxPrt; i++) {
 		if (sPrt[i].live)
 			continue;
 		sPrt[i].live = true;
+		sPrt[i].space = space;
 		sPrt[i].va = va;
 		sPrt[i].bytes = bytes;
 		return B_OK;
@@ -932,8 +945,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		if ((in.flags & R5_GPU_VA_PRT) == 0 || in.bo_offset != 0)
 			return gpu_refuse("VA_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
-		if (gpu_prt_overlaps(in.gpu_va, in.map_bytes)
-			|| gpu_va_bo_overlap(in.gpu_va, in.map_bytes))
+		if (gpu_prt_overlaps(client->address, in.gpu_va, in.map_bytes)
+			|| gpu_va_bo_overlap(client->address, in.gpu_va, in.map_bytes))
 			return gpu_refuse("VA_MAP", "overlap", B_BAD_VALUE, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		if (gR5GpuOps.vmid_prepare() != B_OK)
@@ -950,7 +963,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		if (status != B_OK)
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
-		status = gpu_prt_add(in.gpu_va, in.map_bytes);
+		status = gpu_prt_add(client->address, in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
 			gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
@@ -958,7 +971,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		}
 		return B_OK;
 	}
-	if (!sReplacing && gpu_prt_overlaps(in.gpu_va, in.map_bytes))
+	if (!sReplacing && gpu_prt_overlaps(client->address, in.gpu_va, in.map_bytes))
 		return gpu_refuse("VA_MAP", "overlap", B_BAD_VALUE, in.handle, 0, 0,
 			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	gpu_bo* bo = gpu_bo_get(client, in.handle);
@@ -1130,16 +1143,16 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 	if (!clearOnly && in.handle != 0 && gpu_bo_get(client, in.handle) == NULL)
 		return gpu_refuse(op, "bo", B_BAD_VALUE, in.handle, 0, 0, in.gpu_va,
 			in.bo_offset, in.map_bytes, in.flags);
-	if (gpu_bo_partial(in.gpu_va, in.map_bytes))
+	if (gpu_bo_partial(client->address, in.gpu_va, in.map_bytes))
 		return gpu_refuse(op, "overlap", B_BAD_VALUE, in.handle, 0, 0,
 			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	if (gR5GpuOps.vmid_prepare() != B_OK)
 		return gpu_refuse(op, "vmid", B_NO_INIT, in.handle, 0, 0, in.gpu_va,
 			in.bo_offset, in.map_bytes, in.flags);
 	gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
-	gpu_ranges_drop_contained(in.gpu_va, in.map_bytes);
+	gpu_ranges_drop_contained(client->address, in.gpu_va, in.map_bytes);
 	if (clearOnly) {
-		gpu_prt_drop_contained(in.gpu_va, in.map_bytes);
+		gpu_prt_drop_contained(client->address, in.gpu_va, in.map_bytes);
 		return B_OK;
 	}
 	if (in.handle == 0) {
@@ -1147,7 +1160,7 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 		if (status != B_OK)
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
 				in.bo_offset, in.map_bytes, in.flags);
-		status = gpu_prt_add(in.gpu_va, in.map_bytes);
+		status = gpu_prt_add(client->address, in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
 			gpu_va_clear(client->address, in.gpu_va, in.map_bytes);
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
@@ -1872,6 +1885,7 @@ gpu_free(void* cookie)
 		if (sContexts < 0)
 			sContexts = 0;
 	}
+	gpu_prt_release_space(client->address);
 	if (gR5GpuOps.address_close != NULL)
 		gR5GpuOps.address_close(client->address, gpu_seen());
 	client->address = NULL;

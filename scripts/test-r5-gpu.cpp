@@ -1549,6 +1549,77 @@ main()
 		if (r5_gfx9_fault_owner((dword[0] >> 24) & 0xfu, owners, 2) != 0)
 			return fail("ih other file");
 	}
+	{
+		r5_vm_page slotsA[8];
+		r5_vm_page slotsB[8];
+		static host_page pagesA[8];
+		static host_page pagesB[8];
+		static int nextA = 0;
+		static int nextB = 0;
+		nextA = 0;
+		nextB = 0;
+		auto allocA = [](void* cookie, uint64_t* physical, uint64_t** cpu) -> int {
+			int* next = (int*)cookie;
+			if (*next >= 8)
+				return 0;
+			host_page* page = &pagesA[*next];
+			page->physical = 0x910000000ull + (uint64_t)(*next) * 4096ull;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			*next += 1;
+			return 1;
+		};
+		auto allocB = [](void* cookie, uint64_t* physical, uint64_t** cpu) -> int {
+			int* next = (int*)cookie;
+			if (*next >= 8)
+				return 0;
+			host_page* page = &pagesB[*next];
+			page->physical = 0x920000000ull + (uint64_t)(*next) * 4096ull;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			*next += 1;
+			return 1;
+		};
+		r5_vm spaceA;
+		r5_vm spaceB;
+		memset(&spaceA, 0, sizeof(spaceA));
+		memset(&spaceB, 0, sizeof(spaceB));
+		memset(pagesA, 0, sizeof(pagesA));
+		memset(pagesB, 0, sizeof(pagesB));
+		spaceA.pages = slotsA;
+		spaceB.pages = slotsB;
+		spaceA.capacity = 8;
+		spaceB.capacity = 8;
+		spaceA.alloc = allocA;
+		spaceB.alloc = allocB;
+		spaceA.cookie = &nextA;
+		spaceB.cookie = &nextB;
+		const uint64_t sharedVa = 0xffff800000001000ull;
+		const uint64_t leaf = 0x0600000123450071ull;
+		uint64_t got = 0;
+		if (!r5_vm_map_page(&spaceA, sharedVa, leaf)
+			|| !r5_vm_map_page(&spaceB, sharedVa, leaf))
+			return fail("space map");
+		if (!r5_vm_map_page(&spaceA, sharedVa, 0))
+			return fail("space clear");
+		if (r5_vm_lookup(&spaceA, sharedVa, &got) != 0 || got != kR5VmPteEmpty)
+			return fail("space cleared");
+		if (!r5_vm_lookup(&spaceB, sharedVa, &got) || got != leaf)
+			return fail("space other");
+		char* core = NULL;
+		if (read_file(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				&core) != 0)
+			return fail("space read");
+		if (strstr(core, "sBo[b].space != space") == NULL
+			|| strstr(core, "sPrt[i].space != space") == NULL
+			|| strstr(core, "sPrt[i].space == space") == NULL
+			|| strstr(core, "gpu_prt_release_space") == NULL) {
+			free(core);
+			return fail("space book");
+		}
+		free(core);
+	}
 	if (r5_gfx9_vmid_cntl() != 0x007ffe07u)
 		return fail("vmid cntl");
 	{

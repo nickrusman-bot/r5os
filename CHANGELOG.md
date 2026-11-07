@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A virtual-address check stays inside one address space
+
+Overlap, partial-cover and drop used every buffer and every PRT entry, whichever file owned it. Each of those checks now keeps a buffer only when `bo->space` is the caller's address space. A PRT entry stores that space, and closing the file releases the entries for that space. Two page tables can hold the same address. Clearing one leaves the other entry in place. The host test maps `0xffff800000001000` in both, clears the first, and still reads the second.
+
 ### VMID 1 through 15 get the same context bounds
 
 `r5_gfx9_vmid1_setup` wrote `VM_CONTEXT1_CNTL`, the page-table start and the page-table end for VMID 1 only. Linux `gfxhub_v1_0_setup_vmid_config` writes those for `i = 0..14`. The distance between context control registers is 1 (`0x0881` through `0x088f`). The start and end registers step by 2. Each of the fifteen contexts now gets `0x007ffe07`, start 0 and end `0xffffffff`/`0xf`. A failed flush clears all fifteen control registers. The page-table base of VMID 1 stays the boot root. The host test checks the fifteen register numbers and refuses VMID 0 and 16.

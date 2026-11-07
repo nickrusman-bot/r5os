@@ -78,6 +78,7 @@ struct gpu_job {
 
 struct gpu_prt {
 	bool			live;
+	void*			space;
 	uint64			va;
 	uint64			bytes;
 };
