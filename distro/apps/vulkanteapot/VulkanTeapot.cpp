@@ -923,6 +923,15 @@ main(int argc, char** argv)
 			printf("driverID unknown\n");
 		printf("frames 1\n");
 		printf("fps 0\n");
+		VkPhysicalDeviceMemoryProperties memoryProperties;
+		vkGetPhysicalDeviceMemoryProperties(gpu, &memoryProperties);
+		if (alloc.memoryTypeIndex < memoryProperties.memoryTypeCount) {
+			printf("readback type %u flags %08x heap %u\n",
+				alloc.memoryTypeIndex,
+				(unsigned)memoryProperties.memoryTypes[
+					alloc.memoryTypeIndex].propertyFlags,
+				memoryProperties.memoryTypes[alloc.memoryTypeIndex].heapIndex);
+		}
 		/* Lavapipe on the image of 5 Nov 2026, 23:46 Europe/Amsterdam.
 		 * The second sample is the same background as the first. */
 		static const uint8_t reference[6][4] = {

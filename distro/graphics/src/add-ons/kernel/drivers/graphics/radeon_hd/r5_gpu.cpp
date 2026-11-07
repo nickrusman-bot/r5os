@@ -2236,6 +2236,19 @@ static const uint64 kStageLowGtt = R5_GPU_VA_MAX - 0x2000ull;
 static const uint64 kStageHighGtt = R5_GPU_HIGH_VA_MAX - 0x3000ull;
 static const uint64 kStageHighVram = R5_GPU_HIGH_VA_MAX - 0x2000ull;
 static const uint64 kStageFault = R5_GPU_VA_MAX - 0x1000ull;
+static uint64 sStageFresh = 0;
+
+
+/* One page per step, above the pages stage P already released. */
+static uint64
+gpu_stage_fresh()
+{
+	if (sStageFresh == 0 || sStageFresh >= R5_GPU_VA_MAX - 0x10000ull)
+		sStageFresh = R5_GPU_VA_MAX - 0x50000ull;
+	uint64 va = sStageFresh;
+	sStageFresh += 0x1000ull;
+	return va;
+}
 
 
 struct gpu_stage_page {
@@ -2342,9 +2355,11 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 
 
 struct gpu_stage_pace {
-	bool		landed;
+	bool		hang;
 	int32		ms;
-	int			pace;
+	uint64		seen;
+	uint32		word;
+	uint32		cp;
 };
 
 
@@ -2380,34 +2395,91 @@ gpu_stage_word(uint8* destCpu, bool flush)
 }
 
 
-/* Caller holds the lock and drops it while polling. A landed fence
- * removes the job. A fence that is still out at 5s stays, and this
- * waits until the watchdog has marked the device lost. */
+/* Architectural PAT index: PAT is bit 7, PCD bit 4, PWT bit 3.
+ * Write-back is 0. Haiku's write-combining PTE sets only the PAT bit
+ * when PAT is on, which is index 4. */
+static uint32
+gpu_stage_pat(void* cpu)
+{
+	if (cpu == NULL)
+		return 0xffffffffu;
+	uint64 va = (uint64)(uintptr_t)cpu;
+	uint64 table = 0;
+	asm volatile("mov %%cr3, %0" : "=r"(table));
+	table &= ~0xfffull;
+	static const int shifts[4] = { 39, 30, 21, 12 };
+	for (int level = 0; level < 4; level++) {
+		void* mapped = NULL;
+		area_id id = map_physical_memory("r5 pat", (phys_addr_t)table,
+			4096, B_ANY_KERNEL_ADDRESS, B_KERNEL_READ_AREA, &mapped);
+		if (id < B_OK || mapped == NULL)
+			return 0xffffffffu;
+		uint32 slot = (uint32)((va >> shifts[level]) & 0x1ffu);
+		uint64 entry = ((volatile uint64*)mapped)[slot];
+		delete_area(id);
+		if ((entry & 1ull) == 0)
+			return 0xffffffffu;
+		bool leaf = level == 3 || (entry & (1ull << 7)) != 0;
+		if (leaf) {
+			uint32 pat = (uint32)((entry >> 7) & 1ull);
+			uint32 pcd = (uint32)((entry >> 4) & 1ull);
+			uint32 pwt = (uint32)((entry >> 3) & 1ull);
+			return (pat << 2) | (pcd << 1) | pwt;
+		}
+		table = entry & 0x000ffffffffff000ull;
+	}
+	return 0xffffffffu;
+}
+
+
+static void
+gpu_stage_reg(radeon_info* info, uint32 index, uint32 value)
+{
+	uint32 byte = (kGcSegment + index) * 4u;
+	if (info == NULL || info->registers == 0)
+		return;
+	*(volatile uint32*)(info->registers + byte) = value;
+}
+
+
+/* Caller holds the lock and drops it while polling. A miss is a landed
+ * fence, or an idle CP, with the word absent: the series continues.
+ * A hang is a busy CP at 5s, or the device already lost. */
 static gpu_stage_pace
-gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu,
-	bool flush)
+gpu_stage_pace_wait(radeon_info* info, int slot, uint64 sequence,
+	bool expectWord, uint8* destCpu, bool flush, bool requireFence)
 {
 	bigtime_t start = slot >= 0 ? sJobs[slot].submitted : system_time();
 	gpu_stage_pace pace;
-	pace.landed = false;
-	pace.ms = 0;
-	pace.pace = R5_PACE_WAIT;
+	memset(&pace, 0, sizeof(pace));
 	gpu_unlock();
 	while (true) {
-		bool fence = r5_gfx9_user_seen() == sequence;
-		bool word = !expectWord || gpu_stage_word(destCpu, flush) == 0xDEADBEEF;
+		pace.seen = r5_gfx9_user_seen();
+		bool fence = pace.seen == sequence;
+		pace.word = expectWord ? gpu_stage_word(destCpu, flush) : 0xDEADBEEF;
+		pace.cp = gpu_mmio(info, kGcSegment, 0x01a0);
 		bigtime_t elapsed = system_time() - start;
-		int step = r5_pace((uint64)elapsed, fence && word);
-		if (step != R5_PACE_WAIT) {
-			pace.landed = step != R5_PACE_TIMEOUT;
-			pace.pace = step;
+		bool got = pace.word == 0xDEADBEEF;
+		if (fence && got) {
+			pace.hang = false;
+			break;
+		}
+		if (!requireFence && fence && !got && pace.cp == 0) {
+			pace.hang = false;
+			break;
+		}
+		if (sLost || elapsed >= 5000000) {
+			if (requireFence)
+				pace.hang = sLost || !fence || !got;
+			else
+				pace.hang = sLost || pace.cp != 0;
 			break;
 		}
 		snooze(1000);
 	}
 	pace.ms = (int32)((system_time() - start) / 1000);
 	gpu_lock();
-	if (pace.landed) {
+	if (!pace.hang) {
 		if (slot >= 0 && slot < (int)kMaxJob)
 			sJobs[slot].live = false;
 	} else if (slot >= 0) {
@@ -2423,46 +2495,47 @@ gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu,
 
 
 static const char*
-gpu_stage_how(const gpu_stage_pace& pace)
+gpu_stage_how(const gpu_stage_pace& pace, bool expectWord)
 {
-	if (pace.pace == R5_PACE_LATE)
-		return "late";
-	if (pace.pace == R5_PACE_TIMEOUT)
-		return "timeout";
+	if (pace.hang)
+		return "hang";
+	if (expectWord && pace.word != 0xDEADBEEF)
+		return "miss";
 	return "ok";
 }
 
 
-/* One VMID 1 IB. The WRITE_DATA destination is destVa, which is that
- * page plus 64 when the word is read back through the kernel mapping.
- * The wait does not mark the GPU lost. The watchdog does, at 5s. */
+/* One VMID 1 IB. The WRITE_DATA destination is destVa. A miss keeps
+ * the series going. A hang stops it. linuxWords is the five-dword
+ * wb test; the other steps keep the eight-dword packet. */
 static bool
-gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
-	uint64 destVa, bool expectWord, bool flush)
+gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
+	uint8* destCpu, uint64 destVa, uint64 destPhys, bool expectWord,
+	bool ibFlush, bool readFlush, uint32 fill, uint32 dwords, bool linuxWords)
 {
 	if (ibPage == NULL || ibPage->cpu == NULL)
-		return false;
+		return true;
 	if (expectWord && destCpu != NULL) {
-		*(volatile uint32*)(destCpu + 64) = 0;
-		if (flush) {
-			uintptr_t line = ((uintptr_t)destCpu + 64) & ~(uintptr_t)63;
-			asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
-			asm volatile("mfence" ::: "memory");
-		} else
-			asm volatile("sfence" ::: "memory");
+		*(volatile uint32*)(destCpu + 64) = fill;
+		asm volatile("sfence" ::: "memory");
 	}
-	bool stored = flush ? r5_gfx9_stage_ib(ibPage->cpu, destVa)
-		: r5_gfx9_stage_ib_store(ibPage->cpu, destVa);
-	if (!flush)
+	bool stored = false;
+	if (linuxWords)
+		stored = r5_gfx9_stage_wb(ibPage->cpu, destVa);
+	else if (ibFlush)
+		stored = r5_gfx9_stage_ib(ibPage->cpu, destVa);
+	else
+		stored = r5_gfx9_stage_ib_store(ibPage->cpu, destVa);
+	if (!ibFlush)
 		asm volatile("sfence" ::: "memory");
 	if (!stored) {
 		dprintf("radeon_hd: %s ib\n", name);
-		return false;
+		return true;
 	}
 	r5_gfx9_user_ib ib;
 	memset(&ib, 0, sizeof(ib));
 	ib.va = ibPage->va;
-	ib.dwords = 8;
+	ib.dwords = dwords;
 	ib.vmid = 1;
 	sLastIbVa = ibPage->va;
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
@@ -2470,18 +2543,23 @@ gpu_stage_step(const char* name, gpu_stage_page* ibPage, uint8* destCpu,
 	if (!r5_gfx9_user_submit(&ib, 1, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
-		return false;
+		return !sLost;
 	}
 	int slot = gpu_stage_slot(sequence);
-	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, expectWord,
-		expectWord ? destCpu : NULL, flush);
-	dprintf("radeon_hd: %s %s %ld ms\n", name, gpu_stage_how(pace),
-		(long)pace.ms);
-	if (!pace.landed) {
+	gpu_stage_pace pace = gpu_stage_pace_wait(info, slot, sequence, expectWord,
+		expectWord ? destCpu : NULL, readFlush, false);
+	uint32 pat = destCpu != NULL ? gpu_stage_pat(destCpu + 64) : 0;
+	dprintf("radeon_hd: %s %s %ld ms seq %llu seen %llu word %08lx "
+		"cp %08lx phys %016llx pat %lu\n",
+		name, gpu_stage_how(pace, expectWord), (long)pace.ms,
+		(unsigned long long)sequence, (unsigned long long)pace.seen,
+		(unsigned long)pace.word, (unsigned long)pace.cp,
+		(unsigned long long)destPhys, (unsigned long)pat);
+	if (pace.hang) {
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
 		gpu_ib_words(name);
 	}
-	return pace.landed;
+	return !pace.hang;
 }
 
 
@@ -2491,11 +2569,12 @@ gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
 	gpu_stage_page page;
 	if (!gpu_stage_map(info, &page, va, gtt)) {
 		dprintf("radeon_hd: %s map\n", name);
-		return false;
+		return true;
 	}
-	bool landed = gpu_stage_step(name, &page, page.cpu, va + 64, true, true);
+	bool go = gpu_stage_step(info, name, &page, page.cpu, va + 64, page.phys,
+		true, true, true, 0, 8, false);
 	gpu_stage_release(&page);
-	return landed;
+	return go;
 }
 
 
@@ -2507,8 +2586,8 @@ gpu_stage_fault(radeon_info* info)
 		dprintf("radeon_hd: u5 map\n");
 		return false;
 	}
-	bool landed = gpu_stage_step("u5", &page, NULL, kStageFault + 64, false,
-		true);
+	bool landed = gpu_stage_step(info, "u5", &page, NULL, kStageFault + 64, 0,
+		false, true, false, 0, 8, false);
 	uint32 me = gpu_mmio(info, kGcSegment, 0x01b6);
 	uint32 status = gpu_mmio(info, kGcSegment, 0x084b);
 	uint32 addrLo = gpu_mmio(info, kGcSegment, 0x084c);
@@ -2526,29 +2605,29 @@ gpu_stage_fault(radeon_info* info)
 }
 
 
-/* One indirect buffer and one WRITE_DATA page. flush is the clflush
- * used by the older steps. U2 leaves it off: a write-combined store
- * ends with sfence, and a cached store is left for the GPU to snoop. */
+/* One indirect buffer and one WRITE_DATA page. ibFlush makes the
+ * packet visible. readFlush is only the CPU read of the word. */
 static bool
 gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
-	bool ibWc, uint64 destVa, bool destGtt, bool destWc, bool flush)
+	bool ibWc, uint64 destVa, bool destGtt, bool destWc, bool ibFlush,
+	bool readFlush, uint32 fill, uint32 dwords, bool linuxWords)
 {
 	gpu_stage_page ib;
 	gpu_stage_page dest;
 	if (!gpu_stage_map(info, &ib, ibVa, ibGtt, ibWc)) {
 		dprintf("radeon_hd: %s map\n", name);
-		return false;
+		return true;
 	}
 	if (!gpu_stage_map(info, &dest, destVa, destGtt, destWc)) {
 		dprintf("radeon_hd: %s map\n", name);
 		gpu_stage_release(&ib);
-		return false;
+		return true;
 	}
-	bool landed = gpu_stage_step(name, &ib, dest.cpu, dest.va + 64, true,
-		flush);
+	bool go = gpu_stage_step(info, name, &ib, dest.cpu, dest.va + 64,
+		dest.phys, true, ibFlush, readFlush, fill, dwords, linuxWords);
 	gpu_stage_release(&dest);
 	gpu_stage_release(&ib);
-	return landed;
+	return go;
 }
 
 
@@ -2607,16 +2686,17 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 		return R5_GPU_P_TIMEOUT;
 	}
 	int slot = gpu_stage_slot(sequence);
-	gpu_stage_pace pace = gpu_stage_pace_wait(slot, sequence, false, NULL, true);
+	gpu_stage_pace pace = gpu_stage_pace_wait(info, slot, sequence, false,
+		NULL, false, true);
 	int32 after = r5_gfx9_priv_count();
 	uint32 status = R5_GPU_P_OK;
-	const char* how = gpu_stage_how(pace);
+	const char* how = gpu_stage_how(pace, false);
 	if (after != before) {
 		status = R5_GPU_P_PRIV;
 		how = "priv";
 		if (!sLost)
 			gpu_lost(info, "p");
-	} else if (!pace.landed) {
+	} else if (pace.hang) {
 		status = R5_GPU_P_TIMEOUT;
 		how = "timeout";
 		if (!sLost)
@@ -2753,6 +2833,14 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 }
 
 
+static bool
+gpu_stage_cached(radeon_info* info, const char* name, bool readFlush)
+{
+	return gpu_stage_pair(info, name, gpu_stage_fresh(), false, false,
+		gpu_stage_fresh(), true, false, true, readFlush, 0, 8, false);
+}
+
+
 static status_t
 gpu_stage_u(radeon_info* info)
 {
@@ -2762,47 +2850,103 @@ gpu_stage_u(radeon_info* info)
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
-	if (!gpu_stage_pair(info, "u2c", kStageLowGtt, true, true,
-			kStageLowVram, false, false, false))
-		return B_OK;
-	if (!gpu_stage_pair(info, "u2a", kStageLowVram, false, false,
-			kStageLowGtt, true, false, false))
-		return B_OK;
-	if (!gpu_stage_pair(info, "u2b", kStageLowGtt, true, false,
-			kStageLowVram, false, false, false))
-		return B_OK;
-	/* U4b is VRAM on the first high page. Linux v6.12 amdgpu_gmc.h
-	 * AMDGPU_GMC_HOLE_END is that page and the VM does not reserve it.
-	 * U2e is the high region the stick 19 teapot indirect buffers used
-	 * (0xffff800100284000). U2f is 2 MiB into the high range. */
-	if (!gpu_stage_one(info, "u4b", R5_GPU_HIGH_VA_OFFSET, false))
-		return B_OK;
-	if (!gpu_stage_pair(info, "u2e", 0xffff800100000000ull, true, true,
-			kStageLowVram, false, false, false))
-		return B_OK;
-	if (!gpu_stage_pair(info, "u2f", 0xffff800000200000ull, true, true,
-			kStageLowVram, false, false, false))
-		return B_OK;
-	/* The indirect buffer stays at the first high page. The destination
-	 * is the low VRAM page, the same one U2c writes, so this step
-	 * changes only the buffer address. */
-	if (!gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true, true,
-			kStageLowVram, false, false, false))
-		return B_OK;
-	if (!gpu_stage_one(info, "u1", kStageLowVram, false))
-		return B_OK;
-	if (!gpu_stage_one(info, "u4", kStageHighVram, false))
-		return B_OK;
-	if (!gpu_stage_one(info, "u3", kStageLowGtt, true))
-		return B_OK;
-	if (!gpu_stage_one(info, "u2", kStageHighGtt, true))
-		return B_OK;
-	/* Same indirect buffer as U2d. The destination is the high VRAM
-	 * page, so this step changes only the destination. */
-	if (!gpu_stage_pair(info, "u2g", R5_GPU_HIGH_VA_OFFSET, true, true,
-			kStageHighVram, false, false, false))
-		return B_OK;
-	gpu_stage_fault(info);
+	sStageFresh = 0;
+	/* Held before any write-combining stage page, so u2a-n is not the
+	 * page U2c just released. */
+	gpu_stage_page nIb;
+	gpu_stage_page nDest;
+	memset(&nIb, 0, sizeof(nIb));
+	memset(&nDest, 0, sizeof(nDest));
+	nIb.area = -1;
+	nDest.area = -1;
+	bool nIbOk = gpu_stage_map(info, &nIb, gpu_stage_fresh(), false, false);
+	bool held = nIbOk
+		&& gpu_stage_map(info, &nDest, gpu_stage_fresh(), true, false);
+	if (nIbOk && !held)
+		gpu_stage_release(&nIb);
+	if (!held)
+		dprintf("radeon_hd: u2a-n map\n");
+	bool stop = false;
+	if (!gpu_stage_pair(info, "u2c", gpu_stage_fresh(), true, true,
+			gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+		stop = true;
+	/* U2d keeps the first high page, the stick 19 address. U4b is the
+	 * next page. */
+	if (!stop && !gpu_stage_one(info, "u4b",
+			R5_GPU_HIGH_VA_OFFSET + 0x1000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2e", 0xffff800100000000ull, true,
+			true, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2f", 0xffff800000200000ull, true,
+			true, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true,
+			true, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2g",
+			R5_GPU_HIGH_VA_OFFSET + 0x2000ull, true, true,
+			kStageHighVram, false, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_cached(info, "u2a", false))
+		stop = true;
+	if (!stop && !gpu_stage_cached(info, "u2a-f", true))
+		stop = true;
+	if (!stop && held && !gpu_stage_step(info, "u2a-n", &nIb, nDest.cpu,
+			nDest.va + 64, nDest.phys, true, true, false, 0, 8, false))
+		stop = true;
+	if (!stop) {
+		dprintf("radeon_hd: sh_mem 00000018\n");
+		gpu_stage_reg(info, 0x0022, 1u << 4);
+		gpu_stage_reg(info, 0x030d, 0x18);
+		gpu_stage_reg(info, 0x0022, 0);
+		r5_gfx9_vmid1_flush();
+		if (!gpu_stage_cached(info, "u2a-sh-lx", false))
+			stop = true;
+		if (!stop && !gpu_stage_cached(info, "u2a-f-sh-lx", true))
+			stop = true;
+		dprintf("radeon_hd: sh_mem 00001018\n");
+		gpu_stage_reg(info, 0x0022, 1u << 4);
+		gpu_stage_reg(info, 0x030d, 0x1018);
+		gpu_stage_reg(info, 0x0022, 0);
+		r5_gfx9_vmid1_flush();
+	}
+	if (!stop) {
+		dprintf("radeon_hd: context1 007ffe87\n");
+		gpu_stage_reg(info, 0x0881, 0x007ffe87);
+		r5_gfx9_vmid1_flush();
+		if (!gpu_stage_cached(info, "u2a-ctx-lx", false))
+			stop = true;
+		if (!stop && !gpu_stage_cached(info, "u2a-f-ctx-lx", true))
+			stop = true;
+		dprintf("radeon_hd: context1 007ffe07\n");
+		gpu_stage_reg(info, 0x0881, 0x007ffe07);
+		r5_gfx9_vmid1_flush();
+	}
+	if (!stop && !gpu_stage_pair(info, "u2l", gpu_stage_fresh(), true, true,
+			gpu_stage_fresh(), true, false, false, false, 0xCAFEDEAD, 5, true))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2b", gpu_stage_fresh(), true, false,
+			gpu_stage_fresh(), false, false, false, false, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2b-f", gpu_stage_fresh(), true, false,
+			gpu_stage_fresh(), false, false, true, false, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u1", gpu_stage_fresh(), false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u4",
+			R5_GPU_HIGH_VA_OFFSET + 0x3000ull, false))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u3", gpu_stage_fresh(), true))
+		stop = true;
+	if (!stop && !gpu_stage_one(info, "u2", kStageHighGtt, true))
+		stop = true;
+	if (!stop)
+		gpu_stage_fault(info);
+	if (held) {
+		gpu_stage_release(&nDest);
+		gpu_stage_release(&nIb);
+	}
 	return B_OK;
 }
 

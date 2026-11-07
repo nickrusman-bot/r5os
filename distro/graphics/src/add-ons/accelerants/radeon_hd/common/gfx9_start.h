@@ -74,6 +74,7 @@ uint64 r5_gfx9_user_seen();
 uint64 r5_gfx9_k2_word_mc();
 bool r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa);
 bool r5_gfx9_stage_ib(uint8* cpu, uint64 destVa);
+bool r5_gfx9_stage_wb(uint8* cpu, uint64 destVa);
 void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);

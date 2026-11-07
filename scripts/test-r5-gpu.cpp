@@ -660,26 +660,39 @@ main()
 		"gpu_stage_p(",
 		"gpu_stage_u(",
 		"\"u2c\"",
-		"\"u2a\"",
-		"\"u2b\"",
 		"\"u4b\"",
 		"\"u2e\"",
 		"\"u2f\"",
 		"\"u2d\"",
+		"\"u2g\"",
+		"\"u2a\"",
+		"\"u2a-f\"",
+		"\"u2a-n\"",
+		"\"u2a-sh-lx\"",
+		"\"u2a-f-sh-lx\"",
+		"\"u2a-ctx-lx\"",
+		"\"u2a-f-ctx-lx\"",
+		"\"u2l\"",
+		"\"u2b\"",
+		"\"u2b-f\"",
 		"\"u1\"",
 		"\"u4\"",
 		"\"u3\"",
 		"\"u2\"",
-		"\"u2g\"",
 		"gpu_stage_fault"
 	};
+	/* Linux 6.12 gfxhub_v1_0_init_tlb_regs, from the same prior 0x2501.
+	 * Mask 0x3879 is the fields it writes. ECO stays. */
+	static_assert(((0x2501u & ~0x3879u) | 0x3859u) == 0x3d59u, "l1 tlb");
+	static_assert((0x1018u ^ 0x18u) == 0x1000u, "sh mem retry");
+	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
 			selftestOrder, 6) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 15) != 0)
+			stageOrder, 23) != 0)
 		return 1;
 
 	{
