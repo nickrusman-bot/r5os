@@ -906,8 +906,6 @@ r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu)
 static r5_vm sVm;
 static r5_vm_page sVmPages[1024];
 static bool sVmid1 = false;
-static uint64 sTlbSeq = 0;
-static uint64 sTlbFlushed = 0;
 
 
 static int
@@ -977,33 +975,6 @@ void
 r5_gfx9_free_user_vram(uint64 offset)
 {
 	r5_span_free(sUserSpans, 64, offset);
-}
-
-
-void
-r5_gfx9_vmid1_touch()
-{
-	sTlbSeq++;
-	if (sTlbSeq == 0)
-		sTlbSeq = 1;
-}
-
-
-bool
-r5_gfx9_vmid1_flush_due(uint64* pd)
-{
-	if (!sVmid1 || sTlbSeq == 0 || sTlbSeq == sTlbFlushed || sVm.used == 0)
-		return false;
-	if (pd != NULL)
-		*pd = sVm.pages[0].physical | (uint64)R5_GFX9_PTE_VALID;
-	return true;
-}
-
-
-void
-r5_gfx9_vmid1_flushed()
-{
-	sTlbFlushed = sTlbSeq;
 }
 
 
@@ -1148,6 +1119,7 @@ r5_gfx9_vmid1_setup()
 		(unsigned long)kread(sInfo, gc_byte(0x0852)),
 		(unsigned long)kread(sInfo, gc_byte(0x0853)),
 		(unsigned long)kread(sInfo, gc_byte(0x0854)));
+	r5_gfx9_vmid1_set_root(tableBase);
 	return true;
 }
 

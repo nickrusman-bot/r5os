@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The VM sequence is in the shared GFX9 start
+
+`r5_gfx9_vmid1_flush_due` was in the kernel driver. The accelerant also links `gfx9_start.cpp` and the image jam stopped on those symbols. The sequence and the recorded page-table base now live in that shared file. The kernel stores the VMID 1 root there when the tables are built. The accelerant never raises the sequence, so its jobs do not prefix a flush.
+
 ### Stick 26 runs the ordinary teapot, then SAM, then the ordinary teapot
 
 The selftest ran SAM first. Stick 26 runs the ordinary teapot, then SAM, then the ordinary teapot again, so a stale VMID 1 translation has to survive the ring flush. Stage U stays in the stick 25 order, with the HDP probe first and C1 last. Not booted.

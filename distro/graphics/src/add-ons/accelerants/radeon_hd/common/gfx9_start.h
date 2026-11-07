@@ -79,6 +79,8 @@ void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
+/* Page-table base for the ring flush: physical address with the valid bit. */
+void r5_gfx9_vmid1_set_root(uint64 pd);
 /* Every successful map, including a cleared PTE, raises this. */
 void r5_gfx9_vmid1_touch();
 /* True when a user job must prefix the ring VM flush. pd receives the

@@ -2425,6 +2425,45 @@ r5_gfx9_ib_regs(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
  * Linux NOP pad to a multiple of 256 dwords. The first job for
  * context 1 uses the load bits. The K ring is not padded. The fence
  * addresses are kernel MC addresses. A full ring returns false. */
+static uint64 sTlbSeq = 0;
+static uint64 sTlbFlushed = 0;
+static uint64 sTlbPd = 0;
+
+
+void
+r5_gfx9_vmid1_set_root(uint64 pd)
+{
+	sTlbPd = pd;
+}
+
+
+void
+r5_gfx9_vmid1_touch()
+{
+	sTlbSeq++;
+	if (sTlbSeq == 0)
+		sTlbSeq = 1;
+}
+
+
+bool
+r5_gfx9_vmid1_flush_due(uint64* pd)
+{
+	if (sTlbPd == 0 || sTlbSeq == 0 || sTlbSeq == sTlbFlushed)
+		return false;
+	if (pd != NULL)
+		*pd = sTlbPd;
+	return true;
+}
+
+
+void
+r5_gfx9_vmid1_flushed()
+{
+	sTlbFlushed = sTlbSeq;
+}
+
+
 uint32
 r5_gfx9_user_commit_dwords(uint32 count)
 {
