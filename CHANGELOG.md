@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Buffer, page-table and VMID counts
+
+`R5_GPU_GET_COUNTERS` reports live buffers, page-table pages and held VMIDs for the open file and for the whole device. The kernel page tables are part of the device page count. The self-test reads the counts before and after the kill stage. Equal counts print `counters back`. A change prints the difference.
+
 ### A hang marks one file guilty
 
 The watchdog remembers the address space of the oldest job that did not finish. `GET_INFO` sets `R5_GPU_CAP_LOST` on every file after the device is lost, and `R5_GPU_CAP_GUILTY` only on the file that hung or took the page fault. `QUERY_STATE2` reports a reset to every file. It adds `GUILTY` only when that capability is set. The other files get an innocent reset.

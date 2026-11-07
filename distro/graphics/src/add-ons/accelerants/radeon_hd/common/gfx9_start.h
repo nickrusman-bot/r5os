@@ -98,6 +98,8 @@ void r5_gfx9_as_finish(void* as, uint32 vmid, uint64 sequence);
 int r5_gfx9_as_first(void* as);
 uint32 r5_gfx9_as_vmid(void* as);
 uint32 r5_gfx9_as_pasid(void* as);
+void r5_gfx9_as_counts(void* as, uint32* ptPages, uint32* vmid,
+	uint32* ptPagesAll, uint32* vmidsAll);
 bool r5_gfx9_as_lost(void* as);
 void r5_gfx9_as_fault(uint32 vmid, uint64 addr);
 void r5_gfx9_as_retired(uint64 seen);

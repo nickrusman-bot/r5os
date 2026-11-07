@@ -1578,6 +1578,38 @@ r5_gfx9_as_pasid(void* cookie)
 }
 
 
+void
+r5_gfx9_as_counts(void* cookie, uint32* ptPages, uint32* vmid,
+	uint32* ptPagesAll, uint32* vmidsAll)
+{
+	r5_as* mine = as_from(cookie);
+	uint32 pages = sVm.used;
+	uint32 vmids = 0;
+	uint32 minePages = 0;
+	uint32 mineVmid = 0;
+	for (uint32 n = 0; n < 64; n++) {
+		r5_as* as = sSpaces[n];
+		if (as == NULL)
+			continue;
+		pages += as->vm.used;
+		if (as->vmid != 0)
+			vmids++;
+		if (as == mine) {
+			minePages = as->vm.used;
+			mineVmid = as->vmid != 0 ? 1u : 0u;
+		}
+	}
+	if (ptPages != NULL)
+		*ptPages = minePages;
+	if (vmid != NULL)
+		*vmid = mineVmid;
+	if (ptPagesAll != NULL)
+		*ptPagesAll = pages;
+	if (vmidsAll != NULL)
+		*vmidsAll = vmids;
+}
+
+
 static void
 r5_gfx9_fault_drain()
 {

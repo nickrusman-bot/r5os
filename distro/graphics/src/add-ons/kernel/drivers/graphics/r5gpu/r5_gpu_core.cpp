@@ -1958,6 +1958,26 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		return B_BAD_VALUE;
 	if (op == R5_GPU_GET_INFO)
 		return gpu_get_info(client, client->info, buffer, length);
+	if (op == R5_GPU_GET_COUNTERS) {
+		r5_gpu_counters out;
+		memset(&out, 0, sizeof(out));
+		out.size = (uint32)sizeof(out);
+		out.version = 1;
+		gpu_lock();
+		for (uint32 i = 0; i < kMaxBo; i++) {
+			if (!sBo[i].live)
+				continue;
+			out.bo_count++;
+			if (sBo[i].space == client->address)
+				out.bo_count_space++;
+		}
+		if (gR5GpuOps.space_counts != NULL) {
+			gR5GpuOps.space_counts(client->address, &out.pt_pages_space,
+				&out.vmids_space, &out.pt_pages, &out.vmids);
+		}
+		gpu_unlock();
+		return gpu_copy_out(buffer, length, &out, sizeof(out));
+	}
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)

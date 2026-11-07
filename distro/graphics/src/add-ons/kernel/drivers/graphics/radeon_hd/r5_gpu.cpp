@@ -1519,6 +1519,15 @@ amd_space_drop(void* as)
 }
 
 
+static int
+amd_space_counts(void* as, uint32_t* ptPages, uint32_t* vmid,
+	uint32_t* ptPagesAll, uint32_t* vmidsAll)
+{
+	r5_gfx9_as_counts(as, ptPages, vmid, ptPagesAll, vmidsAll);
+	return B_OK;
+}
+
+
 r5_gpu_backend_ops gR5GpuOps = {
 	amd_fill_vendor_info,
 	amd_read_reg,
@@ -1548,5 +1557,6 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_wait_room,
 	amd_space_lost,
 	amd_space_hold,
-	amd_space_drop
+	amd_space_drop,
+	amd_space_counts
 };

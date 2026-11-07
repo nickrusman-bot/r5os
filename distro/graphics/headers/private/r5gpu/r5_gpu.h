@@ -46,7 +46,9 @@ enum {
 	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23,
 	/* One packet type per step, before any other GPU client. Older
 	 * callers never send this opcode. */
-	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24
+	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24,
+	/* Counts only. Older callers never send this opcode. */
+	R5_GPU_GET_COUNTERS = R5_GPU_OP_BASE + 25
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -369,5 +371,32 @@ typedef struct {
 	uint32_t	flags;
 	uint32_t	_pad;
 } r5_gpu_syncobj_transfer;
+
+/* Live objects. The *_space fields are this open file. The others are
+ * the whole device. Page-table pages include the kernel tables. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	bo_count;
+	uint32_t	bo_count_space;
+	uint32_t	pt_pages;
+	uint32_t	pt_pages_space;
+	uint32_t	vmids;
+	uint32_t	vmids_space;
+} r5_gpu_counters;
+
+static inline int
+r5_gpu_counters_match(const r5_gpu_counters* before,
+	const r5_gpu_counters* after)
+{
+	if (before == 0 || after == 0)
+		return 0;
+	return before->bo_count == after->bo_count
+		&& before->bo_count_space == after->bo_count_space
+		&& before->pt_pages == after->pt_pages
+		&& before->pt_pages_space == after->pt_pages_space
+		&& before->vmids == after->vmids
+		&& before->vmids_space == after->vmids_space;
+}
 
 #endif

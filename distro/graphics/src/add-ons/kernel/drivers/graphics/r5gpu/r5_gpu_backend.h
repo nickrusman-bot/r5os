@@ -63,6 +63,10 @@ typedef struct r5_gpu_backend_ops {
 	 * has unmapped it. note_retired does not free a held space. */
 	int			(*space_hold)(void* as);
 	int			(*space_drop)(void* as);
+	/* Pages and a held VMID for this space, then the device totals.
+	 * pt_pages includes the kernel page tables. */
+	int			(*space_counts)(void* as, uint32_t* pt_pages,
+				uint32_t* vmid, uint32_t* pt_pages_all, uint32_t* vmids_all);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

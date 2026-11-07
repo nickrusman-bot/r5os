@@ -747,6 +747,19 @@ static int op_room(uint32_t) { return 0; }
 static int op_lost(void*) { return 0; }
 static int op_hold(void*) { return 0; }
 static int op_drop(void*) { return 0; }
+static int op_counts(void*, uint32_t* pages, uint32_t* vmid, uint32_t* pagesAll,
+	uint32_t* vmidsAll)
+{
+	if (pages != 0)
+		*pages = 1;
+	if (vmid != 0)
+		*vmid = 0;
+	if (pagesAll != 0)
+		*pagesAll = 2;
+	if (vmidsAll != 0)
+		*vmidsAll = 0;
+	return 0;
+}
 
 
 static int
@@ -757,7 +770,7 @@ ops_status()
 		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
 		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
 		op_stage_p, op_stage_u, op_as_open, op_as_close, op_bind,
-		op_limits, op_retired, op_room, op_lost, op_hold, op_drop
+		op_limits, op_retired, op_room, op_lost, op_hold, op_drop, op_counts
 	};
 	uint32_t reg = 0;
 	uint64_t off = 0;
@@ -1698,6 +1711,19 @@ main()
 		}
 		if (r5_gfx9_vmid_ctx_regs(0, &regs) || r5_gfx9_vmid_ctx_regs(16, &regs))
 			return fail("vmid range");
+	}
+	{
+		r5_gpu_counters same;
+		memset(&same, 0, sizeof(same));
+		same.bo_count = 3;
+		same.pt_pages = 9;
+		same.vmids = 1;
+		r5_gpu_counters other = same;
+		other.bo_count = 4;
+		if (r5_gpu_counters_match(&same, &same) != 1
+			|| r5_gpu_counters_match(&same, &other) != 0
+			|| r5_gpu_counters_match(0, &same) != 0)
+			return fail("counters");
 	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
