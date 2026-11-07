@@ -1042,12 +1042,14 @@ main()
 		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 			|| words[4] != 7u || words[6] != 4u)
 			return fail("vm switch pipe");
-		/* gc_9 dword offsets, gmc_v9_0_emit_flush_gpu_tlb. VMID 1
-		 * is context 1: 0x2000 + 0x08ed and the next register.
+		/* gmc_v9_0_emit_flush_gpu_tlb, written by gfx_v9_0_ring_emit_wreg.
+		 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000.
+		 * VMID 1 is context 1: 0x2000 + 0x08ed and the next register.
 		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5. */
-		if (words[7] != r5_cs_packet3(0x37, 3) || words[9] != 0x28edu
-			|| words[11] != 0x12c18001u || words[14] != 0x28eeu
-			|| words[16] != 0x8u)
+		if (words[7] != r5_cs_packet3(0x37, 3) || words[8] != 0x40100000u
+			|| words[9] != 0x28edu || words[11] != 0x12c18001u
+			|| words[12] != r5_cs_packet3(0x37, 3) || words[13] != 0x40100000u
+			|| words[14] != 0x28eeu || words[16] != 0x8u)
 			return fail("vm switch ptb");
 		/* gfx_v9_0_ring_emit_reg_write_reg_wait, me_fw_write_wait.
 		 * VMID 1 request is bit 1 plus the five invalidate bits. */

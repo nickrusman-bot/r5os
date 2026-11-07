@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The page-table writes use the GFX ring engine
+
+`r5_cs_vm_switch` wrote the page-table base with `WRITE_DATA` control `0x00100000`. That is `WR_CONFIRM` on the ME. Linux `gfx_v9_0_ring_emit_wreg` for the GFX ring uses `WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`, which is `0x40100000`, so the PFP writes the register. `gfx_v9_0_check_fw_write_wait` leaves `me_fw_write_wait` true in the default case, which is GC 9.3. The invalidate stays one `WAIT_REG_MEM` with control `0x143`, `reg0` `0x28a3`, `reg1` `0x28b5`, reference `0x007c0002`, mask `0x2` and interval `0x20`, as `gfx_v9_0_ring_emit_reg_write_reg_wait`. The packet stays 26 dwords. Host test only. Not booted.
+
 ### The invalidate request and its ack are one write-wait-write
 
 The ring flush wrote the invalidate request with `WRITE_DATA` and then waited for the ack. Linux `gfx_v9_0_ring_emit_reg_write_reg_wait`, when `me_fw_write_wait` is set, uses one `WAIT_REG_MEM` instead. Control `0x143` is function 3 (equal), operation 1 (write-wait-write) and engine 1 (PFP). `reg0` is `0x28a3`, `reg1` is `0x28b5`, the reference is the invalidate request, the mask is the ack bit, and the poll interval is `0x20`. For VMID 1 the request is `0x007c0002` and the mask is `0x2`. The packet is 26 dwords. The page-table writes stay `WRITE_DATA`. GC 9.3 takes this path with no ME or PFP version gate. This machine's ME is `0xa7` feature 54 and its PFP is `0xc5` feature 54. Host test only. Not booted.

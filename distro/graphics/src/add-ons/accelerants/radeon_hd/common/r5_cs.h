@@ -196,9 +196,12 @@ r5_cs_gc_reg(uint32_t index)
  * VM flush. gfx_v9_0_ring_emit_vm_flush then writes PACKET3(PFP_SYNC_ME, 0).
  * gmc_v9_0_use_invalidate_semaphore is true only for MMHUB, so this GFXHUB
  * sequence does not write VM_INVALIDATE_ENG0_SEM. PASID is not part of
- * this packet: 26 dwords. The invalidate request and its ack are one
- * WAIT_REG_MEM, write-wait-write, as gfx_v9_0_ring_emit_reg_write_reg_wait
- * does when me_fw_write_wait is set. */
+ * this packet: 26 dwords. gfx_v9_0_check_fw_write_wait leaves
+ * me_fw_write_wait true in the default case, which is GC 9.3.
+ * gfx_v9_0_ring_emit_wreg then writes a register with
+ * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM (0x40100000). The invalidate
+ * request and its ack are one WAIT_REG_MEM, as
+ * gfx_v9_0_ring_emit_reg_write_reg_wait does when that flag is set. */
 static inline uint32_t
 r5_cs_vm_switch_words(void)
 {
@@ -229,15 +232,15 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
 	n = r5_cs_put(out, n, cap, 4u);
-	/* WRITE_DATA to a register: engine ME, destination register, confirm.
-	 * WR_CONFIRM is bit 20. */
+	/* gfx_v9_0_ring_emit_wreg on the GFX ring.
+	 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, 0x40100000u);
 	n = r5_cs_put(out, n, cap, lo);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)pd);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, 0x40100000u);
 	n = r5_cs_put(out, n, cap, lo + 1u);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, (uint32_t)(pd >> 32));
