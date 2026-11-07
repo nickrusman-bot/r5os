@@ -75,9 +75,17 @@ symbol(void* library, const char* name)
 
 
 static void
+stage_at(FILE* out, const char* title)
+{
+	fprintf(out, "stage %s t %lld\n", title, (long long)system_time());
+	fflush(out);
+}
+
+
+static void
 stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 {
-	fprintf(out, "stage bo\n");
+	stage_at(out, "bo");
 	void* library = dlopen("libdrm_amdgpu.so.1", RTLD_NOW);
 	if (library == NULL) {
 		fprintf(out, "not available, %s\n", dlerror());
@@ -170,7 +178,7 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 				uint32_t* dst = (uint32_t*)cpu;
 				dst[16] = 0;
 				if (submitIb) {
-				fprintf(out, "stage ib\n");
+				stage_at(out, "ib");
 				uint32_t packet[8];
 				packet[0] = (3u << 30) | (3u << 16) | (0x37u << 8);
 				packet[1] = (5u << 8) | (1u << 20);
@@ -246,8 +254,7 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 static void
 run_stage(FILE* out, const char* title, const char* command, int seconds)
 {
-	fprintf(out, "stage %s\n", title);
-	fflush(out);
+	stage_at(out, title);
 	int fds[2];
 	if (pipe(fds) != 0) {
 		fprintf(out, "not available, %s\n", strerror(errno));
@@ -319,7 +326,7 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 static void
 write_command(FILE* out, const char* title, const char* command)
 {
-	fprintf(out, "stage %s\n", title);
+	stage_at(out, title);
 	FILE* pipe = popen(command, "r");
 	if (pipe == NULL) {
 		fprintf(out, "not available, %s\n", strerror(errno));
@@ -359,7 +366,8 @@ device_lost()
 static void
 skip_lost(FILE* out, const char* title)
 {
-	fprintf(out, "stage %s\nskipped, gpu lost\n", title);
+	fprintf(out, "stage %s t %lld\nskipped, gpu lost\n", title,
+		(long long)system_time());
 	fflush(out);
 }
 
@@ -367,7 +375,7 @@ skip_lost(FILE* out, const char* title)
 static void
 stage_p(FILE* out)
 {
-	fprintf(out, "stage P\n");
+	stage_at(out, "P");
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	r5_gpu_stage_p result;
 	const char* how[] = {
@@ -404,7 +412,7 @@ stage_p(FILE* out)
 static void
 stage_selftest(FILE* out)
 {
-	fprintf(out, "stage selftest\n");
+	stage_at(out, "selftest");
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
 		fprintf(out, "not available, no supported GPU\n");
@@ -429,9 +437,12 @@ main()
 
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
-		fprintf(out, "stage render node: not available, no supported GPU\n");
-		fprintf(out, "stage bo: not available, no supported GPU\n");
-		fprintf(out, "stage vulkaninfo: not available, no supported GPU\n");
+		fprintf(out, "stage render node t %lld: not available, no supported GPU\n",
+			(long long)system_time());
+		fprintf(out, "stage bo t %lld: not available, no supported GPU\n",
+			(long long)system_time());
+		fprintf(out, "stage vulkaninfo t %lld: not available, no supported GPU\n",
+			(long long)system_time());
 		write_command(out, "VulkanTeapot",
 			"/bin/VulkanTeapot --selftest 2>&1");
 	} else {
@@ -441,10 +452,12 @@ main()
 		info->size = (uint32_t)sizeof(bytes);
 		info->version = 1;
 		if (ioctl(fd, R5_GPU_GET_INFO, bytes, sizeof(bytes)) != 0) {
-			fprintf(out, "stage render node: GET_INFO failed\n");
+			fprintf(out, "stage render node t %lld: GET_INFO failed\n",
+				(long long)system_time());
 		} else {
 			r5_gpu_amd_info* amd = (r5_gpu_amd_info*)(bytes + sizeof(r5_gpu_info));
-			fprintf(out, "stage render node: api %u.%u device %04x cu %u\n",
+			fprintf(out, "stage render node t %lld: api %u.%u device %04x cu %u\n",
+				(long long)system_time(),
 				info->api_major, info->api_minor, info->device,
 				amd->device.cu_active_number);
 			fprintf(out, "firmware me %u feature %u pfp %u mec %u\n",

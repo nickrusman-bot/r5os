@@ -188,7 +188,8 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 	if (_bitmap != NULL)
 		*_bitmap = bitmap;
 	if (gpu_debug_enabled())
-	dprintf("radeon_hd: gfx9 cu cc %08lx user %08lx active %lu bitmap %08lx\n",
+	dprintf("radeon_hd: t %lld gfx9 cu cc %08lx user %08lx active %lu bitmap %08lx\n",
+		(long long)system_time(),
 		(unsigned long)cc, (unsigned long)user, (unsigned long)count,
 		(unsigned long)bitmap);
 	return count;
@@ -1274,7 +1275,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 	bo->ranges[slot].offset = in.bo_offset;
 	bo->ranges[slot].bytes = in.map_bytes;
 	if (gpu_debug_enabled())
-		dprintf("radeon_hd: va map %016llx bytes %llu domain %lu\n",
+		dprintf("radeon_hd: t %lld va map %016llx bytes %llu domain %lu\n",
+			(long long)system_time(),
 			(unsigned long long)in.gpu_va,
 			(unsigned long long)in.map_bytes,
 			(unsigned long)bo->domain);
@@ -1560,9 +1562,11 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	asm volatile("mfence" ::: "memory");
 	if (gpu_debug_enabled()) {
 		for (uint32 i = 0; i < in.ib_count; i++) {
-			dprintf("radeon_hd: submit ib va %016llx dw %lu\n",
+			dprintf("radeon_hd: t %lld submit ib va %016llx dw %lu flags %lu\n",
+				(long long)system_time(),
 				(unsigned long long)ibs[i].gpu_va,
-				(unsigned long)ibs[i].dwords);
+				(unsigned long)ibs[i].dwords,
+				(unsigned long)ibs[i].flags);
 		}
 	}
 	gpu_job* job = &sJobs[jobSlot];
@@ -1583,6 +1587,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	}
 	job->count = in.signal_count;
 	uint64 sequence = 0;
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
 	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, (uint64)(addr_t)client,
 			in.context, &client->preamblePresented, &sequence))
 		return gpu_refuse("CS_SUBMIT", "ring", B_ERROR, in.context, 0,
@@ -2517,6 +2522,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	sLastIbVa = ibPage->va;
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
 	if (!r5_gfx9_user_submit(&ib, 1, 0, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
@@ -2699,6 +2705,7 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	sLastIbVa = ib.va;
 	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
 	uint64 sequence = 0;
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
@@ -2772,6 +2779,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 			gpu_lost(info, "p");
 		return R5_GPU_P_ROOM;
 	}
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, 0, &sKernelPreamble, &sequence)) {
 		if (step == 0)
 			dprintf("radeon_hd: mark selftest submit\n");
@@ -3179,8 +3187,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		else {
 			if (sContexts > 0)
 				if (gpu_debug_enabled())
-				dprintf("radeon_hd: vmid1 reused, clients %ld\n",
-					(long)sContexts);
+				dprintf("radeon_hd: t %lld vmid1 reused, clients %ld\n",
+					(long long)system_time(), (long)sContexts);
 			sContexts++;
 			client->contexts++;
 			in.context = 1;

@@ -16,6 +16,8 @@
 #include "gfx9_compute_shader.h"
 #include "radeon_hd.h"
 
+#include <OS.h>
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -2147,6 +2149,7 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 static uint64 sUserSequence = 0;
 /* Linux ring->current_ctx. 0 valid means the next job is a switch. */
 static r5_cs_ring_ctx sRingCtx;
+static int sGpuDebug = 0;
 
 
 bool
@@ -2408,12 +2411,12 @@ r5_gfx9_ib_regs(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
 		return;
 	uint32 lo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cc));
 	uint32 hi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cd));
-	ib1->base = ((uint64)(hi & 0xffffu) << 32) | lo;
+	ib1->base = r5_cs_ib_va(lo, hi);
 	ib1->size = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20ce));
 	ib1->offset = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x2092));
 	lo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cf));
 	hi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20d0));
-	ib2->base = ((uint64)(hi & 0xffffu) << 32) | lo;
+	ib2->base = r5_cs_ib_va(lo, hi);
 	ib2->size = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20d1));
 	ib2->offset = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x2093));
 }
@@ -2480,6 +2483,13 @@ r5_gfx9_user_commit_dwords(uint32 count)
 	extra = r5_gfx9_vmid1_flush_due(&pd) ? r5_cs_vm_switch_words() : 0;
 	return extra + body + r5_cs_pad_dwords(
 		sRadeonGfx9Ring.submitted + extra + body);
+}
+
+
+void
+r5_gfx9_set_debug(int on)
+{
+	sGpuDebug = on ? 1 : 0;
 }
 
 
@@ -2575,6 +2585,24 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 		*preambleSeen = 1;
 	if (flush)
 		r5_gfx9_vmid1_flushed();
+	if (sGpuDebug && sHost != NULL && sHost->log != NULL) {
+		uint32 show[8];
+		memset(show, 0, sizeof(show));
+		uint32 nShow = filled < 8u ? filled : 8u;
+		for (uint32 i = 0; i < nShow; i++)
+			show[i] = packets[i];
+		sHost->log(sHost->cookie,
+			"radeon_hd: t %lld user job file %llx ctx %lu flush %lu "
+			"cntx %08lx seq %llu %08lx %08lx %08lx %08lx %08lx %08lx "
+			"%08lx %08lx\n",
+			(long long)system_time(), (unsigned long long)file,
+			(unsigned long)ctxId, (unsigned long)(flush ? 1u : 0u),
+			(unsigned long)cntx, (unsigned long long)sequence,
+			(unsigned long)show[0], (unsigned long)show[1],
+			(unsigned long)show[2], (unsigned long)show[3],
+			(unsigned long)show[4], (unsigned long)show[5],
+			(unsigned long)show[6], (unsigned long)show[7]);
+	}
 	if (_sequence != NULL)
 		*_sequence = sequence;
 	return true;

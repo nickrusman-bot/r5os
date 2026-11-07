@@ -1111,6 +1111,10 @@ main()
 		return fail("keep first preamble");
 	if (r5_cs_skip_preamble_ib(0, 0, 0) != 0)
 		return fail("keep plain ib");
+	if (r5_cs_ib_va(0x00001000u, 0x8001u) != 0xffff800100001000ull)
+		return fail("ib va sign");
+	if (r5_cs_ib_va(0x00001000u, 0x0001u) != 0x000100001000ull)
+		return fail("ib va low");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A user job can be logged
+
+With `gpu_debug`, each user job logs `system_time()`, whether the VM flush prefix was written, the `cntx` dword, the file and context id, and the first eight dwords on the ring. `CP_IB1_BASE_HI` and `CP_IB2_BASE_HI` are sign-extended from bit 47 before the dump looks up the stored length, so `0x800100001000` is read as `0xffff800100001000`. The self-test stage lines carry `system_time()` too. The existing `gpu_debug` lines do as well. Host test checks the sign extension. Not booted.
+
 ### A later context loads its state
 
 Stick 27 boot 1 drew the ordinary teapot, then the SAM teapot hung in its own end-of-pipe wait. One `sUserCtx` gave `CONTEXT_CONTROL` `0x81018003` only to the first user job after boot. Linux v6.12 `amdgpu_ib_schedule` sets `AMDGPU_HAVE_CTX_SWITCH` whenever `ring->current_ctx` differs from the job, and `gfx_v9_ring_emit_cntxcntl` then sets the load bits. R5 now keeps the last open file and `AMDGPU_CTX` id. A different pair gets `0x81018003`. The same pair again stays at `0x80000000`. Kernel jobs are file 0 and id 0. A preamble sets `load_ce_ram` (`0x10000000`) on a switch, or on the first presentation without one. The ioctl still rejects every IB flag, so that bit is not set for RADV. The host test submits two contexts and one repeat. Not booted.

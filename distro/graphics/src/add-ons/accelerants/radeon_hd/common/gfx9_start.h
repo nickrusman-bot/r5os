@@ -72,7 +72,8 @@ bool r5_gfx9_fence_offset(uint64* offset);
 uint64 r5_gfx9_user_fence_mc();
 /* file and ctxId are the open file and the AMDGPU_CTX id. preambleSeen
  * is that context's preamble_presented flag. The kernel jobs use file 0
- * and id 0. */
+ * and id 0. gpu_debug is the radeon_hd setting. */
+void r5_gfx9_set_debug(int on);
 bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64 file, uint32 ctxId, int32* preambleSeen, uint64* _sequence);
 uint64 r5_gfx9_user_seen();

@@ -116,6 +116,19 @@ r5_cs_skip_preamble_ib(uint32_t ibFlags, int haveSwitch, uint32_t preamble)
 }
 
 
+/* CP_IB*_BASE_HI keeps bits 15:0. Bit 15 of that field is VA bit 47.
+ * A high VA is sign-extended from that bit, so the dump can match the
+ * address the submit stored. */
+static inline uint64_t
+r5_cs_ib_va(uint32_t lo, uint32_t hi)
+{
+	uint64_t base = ((uint64_t)(hi & 0xffffu) << 32) | (uint64_t)lo;
+	if ((base & (1ull << 47)) != 0)
+		base |= 0xffff000000000000ull;
+	return base;
+}
+
+
 static inline uint32_t
 r5_cs_packet3(uint32_t opcode, uint32_t count)
 {
