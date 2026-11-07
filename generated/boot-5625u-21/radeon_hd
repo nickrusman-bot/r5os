@@ -1,6 +1,0 @@
-gfx9_ring true
-gfx9_kernel true
-gfx9_irq true
-gfx9_gart true
-gpu_render true
-gpu_selftest true
