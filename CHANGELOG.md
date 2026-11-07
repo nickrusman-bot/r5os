@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Stick 27 boot 1 draws the ordinary teapot, then loses the GPU on SAM
+
+Stick 27 is `7b2ac8e283` with the six GPU settings and `gpu_debug`. The K fence landed and VMID 1 was set up. `mark` and stage P each finished in 1 ms. `vulkaninfo` exited 0 and named RADV Renoir. The ordinary teapot reached `vkQueueWaitIdle 0`, `pixels ok`, and `pixel-vram` `853b16ff`. The SAM teapot then waited until the watchdog. The ioctl returned `ECANCELED` (`0x8000702f`) and `vkQueueWaitIdle` was `-13`. There is no page fault. The seen sequence is 35, the ring read pointer is `0x2c0`, the write pointer is `0x2700`, and the ME and PFP headers start with `WAIT_REG_MEM`. The later teapot, stage selftest, and stage ib were skipped. There is no kernel panic. The volume was not unmounted cleanly. Boot 2 was not run. Logs are `generated/boot-5625u-27/`. The syslog has no per-line clock. `usb_disk` opcode `0x35` failed five times, the same count as stick 26, each with sense `0x05/0x24`.
+
 ### The page-table writes use the GFX ring engine
 
 `r5_cs_vm_switch` wrote the page-table base with `WRITE_DATA` control `0x00100000`. That is `WR_CONFIRM` on the ME. Linux `gfx_v9_0_ring_emit_wreg` for the GFX ring uses `WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`, which is `0x40100000`, so the PFP writes the register. `gfx_v9_0_check_fw_write_wait` leaves `me_fw_write_wait` true in the default case, which is GC 9.3. The invalidate stays one `WAIT_REG_MEM` with control `0x143`, `reg0` `0x28a3`, `reg1` `0x28b5`, reference `0x007c0002`, mask `0x2` and interval `0x20`, as `gfx_v9_0_ring_emit_reg_write_reg_wait`. The packet stays 26 dwords. Host test only. Not booted.
