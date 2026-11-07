@@ -1668,17 +1668,17 @@ main()
 				|| words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 				|| words[4] != 7u)
 				return fail("vm switch");
-			if (words[7] != 0xc0033700u || words[9] != r5_cs_oss_byte(2)
-				|| words[11] != 0x42u)
-				return fail("vm switch pasid");
-			if (words[12] != 0xc0033700u || words[14] != r5_cs_gc_byte(0x08efu)
-				|| words[16] != 0x12c18001u)
+			if (words[7] != 0xc0033700u || words[9] != r5_cs_gc_byte(0x08efu)
+				|| words[11] != 0x12c18001u)
 				return fail("vm switch pd");
-			if (words[26] != r5_gfx9_tlb_req(2, 0) || words[28] != 0x103u
-				|| words[31] != r5_gfx9_tlb_ack_mask(2))
+			if (words[21] != r5_gfx9_tlb_req(2, 0) || words[23] != 0x103u
+				|| words[26] != r5_gfx9_tlb_ack_mask(2))
 				return fail("vm switch ack");
-			if (words[34] != r5_cs_packet3(0x42, 0) || words[35] != 0)
+			if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
 				return fail("vm switch pfp");
+			if (words[31] != 0xc0033700u || words[33] != r5_cs_oss_byte(2)
+				|| words[35] != 0x42u)
+				return fail("vm switch pasid");
 			bare = r5_cs_user_body(body, 40, &ib, &dw, &vm, 1, 0x9000ull, 8,
 				0x9010ull, kR5CsCntxKeep);
 			if (bare != 33)

@@ -212,8 +212,8 @@ r5_cs_oss_byte(uint32_t index)
 static inline uint32_t
 r5_cs_vm_switch_words(void)
 {
-	/* Pipeline sync, PASID WRITE_DATA, two page-table writes, the
-	 * invalidate, the ack wait, and PFP_SYNC_ME. 31 + 5. */
+	/* Pipeline sync, the VM flush (two page-table writes, the
+	 * invalidate, the ack wait, and PFP_SYNC_ME), then PASID. 31 + 5. */
 	return 36u;
 }
 
@@ -241,13 +241,6 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
 	n = r5_cs_put(out, n, cap, 0x20u);
-	/* gmc_v9_0_emit_pasid_mapping writes IH_VMID_n_LUT before the
-	 * page-table base. The value is the 16-bit PASID. */
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
-	n = r5_cs_put(out, n, cap, 0x00100000u);
-	n = r5_cs_put(out, n, cap, r5_cs_oss_byte(vmid));
-	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, pasid);
 	/* WRITE_DATA to a register: engine ME, destination register, confirm.
 	 * Linux gfx_v9_0_ring_emit_wreg. WR_CONFIRM is bit 20. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
@@ -277,6 +270,14 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
 	 * writes it so the PFP does not prefetch with the old translation. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x42, 0));
 	n = r5_cs_put(out, n, cap, 0);
+	/* amdgpu_vm_flush emits the VM flush, then
+	 * amdgpu_gmc_emit_pasid_mapping. IH_VMID_n_LUT gets the 16-bit
+	 * PASID after the page-table base, the invalidate, and PFP_SYNC_ME. */
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0x00100000u);
+	n = r5_cs_put(out, n, cap, r5_cs_oss_byte(vmid));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, pasid);
 	if (n != r5_cs_vm_switch_words() || (out != 0 && n > cap))
 		return 0;
 	return n;

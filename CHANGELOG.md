@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The PASID follows the VM flush
+
+`r5_cs_vm_switch` wrote the PASID into `IH_VMID_n_LUT` before the page-table base. Linux 6.12 `amdgpu_vm_flush` emits the pipeline sync, then the VM flush (page-table base, invalidate, `PFP_SYNC_ME`), and then `amdgpu_gmc_emit_pasid_mapping`. The switch is still 36 dwords. Host test only. The K sequence is unchanged.
+
 ### GPU log settings are read once, and a dump does not eat the error budget
 
 `gpu_debug` and `gpu_selftest` were read from the settings file on every call, including every submit. `r5_gpu_init` now reads both once. A later call uses those values.
