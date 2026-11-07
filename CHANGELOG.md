@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The render node stays unpublished until the GPU steps are on
+
+`/dev/gpu/radeon_hd/0` is published only when `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` are all true. Without that file, or with any of the three off, the node does not exist. RADV then finds no device and the Vulkan loader prints no error, as on Linux without amdgpu. Stick 24 boot 2 still had the node, so every Vulkan start printed `failed to initialize device` and a loader `ERROR` before llvmpipe. Host test only. Not booted.
+
 ### M4, experimenteel en standaard uit
 
 The GPU path stays off unless the radeon_hd settings name it. With no `radeon_hd` settings file, stick 24's second boot on the 5625U reached the desktop: Tracker and Deskbar started, and Sign in finished with no error. The ring line is `GFX9 ring off`. Boot 2's own syslog, after the second `Welcome to the Haiku boot loader!`, has no `refuse`, `gpu lost` or `vm fault`. The same file still holds boot 1's `gpu lost` lines above that banner. `vulkaninfo` lists one device, llvmpipe. RADV does not initialise (`AMDGPU_INFO_ACCEL_WORKING = 0`) and is not in that list. Both teapots then draw through Lavapipe and print `pixels ok`.

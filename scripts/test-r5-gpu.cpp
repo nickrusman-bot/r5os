@@ -969,6 +969,26 @@ main()
 			|| strstr(text, "kernel bo domain") == NULL)
 			return fail("bo domain ungated");
 	}
+	if (!r5_gpu_node_on(1, 1, 1))
+		return fail("node on");
+	if (r5_gpu_node_on(0, 0, 0) || r5_gpu_node_on(1, 1, 0)
+		|| r5_gpu_node_on(1, 0, 1) || r5_gpu_node_on(0, 1, 1)
+		|| r5_gpu_node_on(1, 0, 0) || r5_gpu_node_on(0, 1, 0)
+		|| r5_gpu_node_on(0, 0, 1))
+		return fail("node off");
+	{
+		char text[2000];
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/driver.cpp", "load_driver_settings(\"radeon_hd\")",
+			"sR5Published[2] = NULL", text, sizeof(text)) != 0)
+			return fail("node publish");
+		if (strstr(text, "gfx9_kernel") == NULL
+			|| strstr(text, "gfx9_irq") == NULL
+			|| strstr(text, "gfx9_gart") == NULL
+			|| strstr(text, "r5_gpu_node_on") == NULL
+			|| strstr(text, "gpu/radeon_hd/0") == NULL)
+			return fail("node keys");
+	}
 
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;

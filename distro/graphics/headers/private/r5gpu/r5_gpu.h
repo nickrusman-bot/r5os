@@ -362,4 +362,12 @@ typedef struct {
 	uint32_t	_pad;
 } r5_gpu_syncobj_transfer;
 
+/* The render node is published only when these three steps are on.
+ * Without them the node does not exist, so RADV stays quiet. */
+static inline int
+r5_gpu_node_on(int kernel, int irq, int gart)
+{
+	return kernel && irq && gart;
+}
+
 #endif

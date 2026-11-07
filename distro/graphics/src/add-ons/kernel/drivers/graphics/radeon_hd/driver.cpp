@@ -31,6 +31,13 @@
 #include <OS.h>
 #include <PCI.h>
 #include <SupportDefs.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <driver_settings.h>
+
+#include "r5_gpu.h"
+// SPDX-SnippetEnd
 
 extern "C" void r5_gpu_init();
 extern "C" void r5_gpu_uninit();
@@ -961,10 +968,28 @@ init_driver(void)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (found > 0) {
-		sR5GpuName = strdup("gpu/radeon_hd/0");
+		int kernel = 0;
+		int irq = 0;
+		int gart = 0;
+		void* settings = load_driver_settings("radeon_hd");
+		if (settings != NULL) {
+			kernel = get_driver_boolean_parameter(settings,
+				"gfx9_kernel", false, true) ? 1 : 0;
+			irq = get_driver_boolean_parameter(settings,
+				"gfx9_irq", false, true) ? 1 : 0;
+			gart = get_driver_boolean_parameter(settings,
+				"gfx9_gart", false, true) ? 1 : 0;
+			unload_driver_settings(settings);
+		}
 		sR5Published[0] = gDeviceNames[0];
-		sR5Published[1] = sR5GpuName;
-		sR5Published[2] = NULL;
+		sR5Published[1] = NULL;
+		/* No node unless the kernel, the interrupt and the GART are on.
+		 * RADV then finds nothing, as on Linux without amdgpu. */
+		if (r5_gpu_node_on(kernel, irq, gart)) {
+			sR5GpuName = strdup("gpu/radeon_hd/0");
+			sR5Published[1] = sR5GpuName;
+			sR5Published[2] = NULL;
+		}
 	}
 // SPDX-SnippetEnd
 
