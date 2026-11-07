@@ -20,6 +20,7 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/arch/arm64/arch_int.cpp",
         "headers/private/kernel/ksignal.h",
+        "src/system/kernel/device_manager/devfs.cpp",
     )
     for relative in files:
         install_file(

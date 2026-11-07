@@ -1963,8 +1963,15 @@ main()
 				"gpu/radeon_hd/0", "render node withheld", text,
 				sizeof(text)) != 0)
 			return 1;
-		if (strstr(text, "mode 0644") == NULL)
+		if (strstr(text, "mode 0666") == NULL)
 			return fail("node mode");
+		if (snippet(
+				"distro/kernel/src/system/kernel/device_manager/devfs.cpp",
+				"strncmp(path, \"gpu/\"", "node->stream.type", text,
+				sizeof(text)) != 0)
+			return fail("devfs mode");
+		if (strstr(text, "0666") == NULL)
+			return fail("devfs 0666");
 		if (snippet(
 				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
 				"ls -l /dev/gpu/radeon_hd/0", "open(\"/dev/gpu/radeon_hd/0\"",

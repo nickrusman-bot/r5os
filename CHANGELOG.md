@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The render node is mode 0666
+
+devfs published every character device as `S_IFCHR | 0644`. A path under `gpu/` is now `0666`, which is the mode Linux uses for a render node. `devfs_open` does not read the mode. `check_open_mode` checks the open flags, not the permission bits. The devfs `access` hook is null, and the VFS `access` path then returns success. A standard account can open the node. `/dev/disk` stays `0644`. That mode does not stop a standard account at devfs either, because the same open and access paths never consult it. Host test only. Not booted.
+
 ### The VRAM pool skips the reserved ranges inside the window
 
 The pool was the PCI BAR minus the boot picture. It now also skips the PSP TMR at `0xc00000` for 4 MiB, the discovery TMR when that 10 KiB block (ending 64 KiB below the end of VRAM) lies inside the window, and `fw_vram_usage` when a caller passes a range. On a 512 MiB card the discovery TMR is outside the 256 MiB BAR, so it is not a hole. `fw_vram_usage` is not read from ATOM yet, and the boot line says `fw_vram_usage none`. The boot line names each hole. An allocation never returns an offset inside a hole. Host test only.

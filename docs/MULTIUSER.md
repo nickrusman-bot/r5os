@@ -347,4 +347,4 @@ VBox 2026-10-29 22:04 Europe/Amsterdam (guest 9:04 PM, UTC): as `nick` (uid 1002
 
 CodyCam / Icon-O-Matic / TextSearch / MediaConverter only fall back to `/boot/home` after `find_directory`. Leave them.
 
-The render node `/dev/gpu/radeon_hd/0` is not an administrator preference. A standard account may open it when the GPU steps are on. `gpu_render` in the driver settings is not a gate. A fault marks that open file only. devfs publishes the node as mode 0644 and does not check that mode on open.
+The render node `/dev/gpu/radeon_hd/0` is not an administrator preference. A standard account may open it when the GPU steps are on. `gpu_render` in the driver settings is not a gate. A fault marks that open file only. devfs publishes that node as mode 0666, the same mode Linux uses for a render node. Other device nodes stay 0644. devfs_open does not read the mode, and the devfs access hook is null, so access() succeeds without looking at it either. A standard account can open the node. The same is true of /dev/disk: its inode stays 0644, and that mode is not what decides the open.
