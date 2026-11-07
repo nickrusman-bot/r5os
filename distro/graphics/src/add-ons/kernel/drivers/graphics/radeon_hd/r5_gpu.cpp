@@ -512,8 +512,11 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 		phys = entry.address;
 	}
 	page->phys = phys;
-	uint64 pte = gR5GpuOps.encode_pte(phys, flags, gtt ? 1 : 0, wc ? 1 : 0);
-	if (!gR5GpuOps.vm_map(va, pte) || !gR5GpuOps.tlb_flush()) {
+	uint64 pte = 0;
+	if (gR5GpuOps.encode_pte(phys, flags, gtt ? 1 : 0, wc ? 1 : 0, &pte)
+			!= B_OK
+		|| gR5GpuOps.vm_map(va, pte) != B_OK
+		|| gR5GpuOps.tlb_flush() != B_OK) {
 		gpu_stage_release(page);
 		return false;
 	}
@@ -574,7 +577,8 @@ gpu_stage_pace_wait(int slot, uint64 sequence, bool expectWord, uint8* destCpu,
 	pace.pace = R5_PACE_WAIT;
 	gpu_unlock();
 	while (true) {
-		bool fence = gR5GpuOps.poll_retired() == sequence;
+		uint64 seen = 0;
+		bool fence = gR5GpuOps.poll_retired(&seen) == B_OK && seen == sequence;
 		bool word = !expectWord || gpu_stage_word(destCpu, flush) == 0xDEADBEEF;
 		bigtime_t elapsed = system_time() - start;
 		int step = r5_pace((uint64)elapsed, fence && word);
@@ -836,7 +840,7 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 	}
 	if (!gpu_render_enabled() || !gpu_selftest_enabled())
 		return B_NOT_ALLOWED;
-	if (!gR5GpuOps.vmid_prepare()) {
+	if (gR5GpuOps.vmid_prepare() != B_OK) {
 		dprintf("radeon_hd: p skip vmid\n");
 		return B_NO_INIT;
 	}
@@ -938,7 +942,7 @@ gpu_stage_u(radeon_info* info)
 {
 	if (!gpu_render_enabled() || !gpu_selftest_enabled())
 		return B_NOT_ALLOWED;
-	if (!gR5GpuOps.vmid_prepare()) {
+	if (gR5GpuOps.vmid_prepare() != B_OK) {
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
@@ -1067,10 +1071,11 @@ amd_vram_alloc(uint64_t bytes, uint64_t* offset)
 }
 
 
-static void
+static int
 amd_vram_free(uint64_t offset)
 {
 	r5_gfx9_free_user_vram(offset);
+	return B_OK;
 }
 
 
@@ -1093,18 +1098,22 @@ gpu_pte_flags(uint32 flags)
 }
 
 
-static uint64_t
-amd_encode_pte(uint64_t physical, uint32_t flags, int system, int writeCombine)
+static int
+amd_encode_pte(uint64_t physical, uint32_t flags, int system, int writeCombine,
+	uint64_t* pte)
 {
-	return r5_gfx9_user_pte(physical, gpu_pte_flags(flags), system, writeCombine,
+	if (pte == NULL)
+		return B_BAD_VALUE;
+	*pte = r5_gfx9_user_pte(physical, gpu_pte_flags(flags), system, writeCombine,
 		&kR5Gfx93Mtype);
+	return B_OK;
 }
 
 
 static int
 amd_vm_map(uint64_t va, uint64_t pte)
 {
-	return r5_gfx9_vmid1_map(va, pte) ? 1 : 0;
+	return r5_gfx9_vmid1_map(va, pte) ? B_OK : B_ERROR;
 }
 
 
@@ -1113,9 +1122,9 @@ amd_vm_unmap(uint64_t va, uint64_t bytes)
 {
 	for (uint64_t page = 0; page < bytes; page += 4096) {
 		if (!r5_gfx9_vmid1_map(va + page, 0))
-			return 0;
+			return B_ERROR;
 	}
-	return 1;
+	return B_OK;
 }
 
 
@@ -1124,30 +1133,31 @@ amd_vm_prt(uint64_t va, uint64_t bytes)
 {
 	for (uint64_t page = 0; page < bytes; page += 4096) {
 		if (!r5_gfx9_vmid1_map(va + page, kR5Gfx9PtePrt))
-			return 0;
+			return B_ERROR;
 	}
-	return 1;
+	return B_OK;
 }
 
 
 static int
 amd_tlb_flush(void)
 {
-	return r5_gfx9_vmid1_flush() ? 1 : 0;
+	return r5_gfx9_vmid1_flush() ? B_OK : B_ERROR;
 }
 
 
 static int
 amd_vmid_prepare(void)
 {
-	return r5_gfx9_vmid1_setup() ? 1 : 0;
+	return r5_gfx9_vmid1_setup() ? B_OK : B_ERROR;
 }
 
 
 static int
 amd_vmid_lookup(uint64_t va)
 {
-	return r5_gfx9_vmid1_lookup(va) ? 1 : 0;
+	/* B_OK means the page is mapped. B_ENTRY_NOT_FOUND means it is not. */
+	return r5_gfx9_vmid1_lookup(va) ? B_OK : B_ENTRY_NOT_FOUND;
 }
 
 
@@ -1176,10 +1186,13 @@ amd_submit(const uint64_t* va, const uint32_t* dwords, uint32_t count,
 }
 
 
-static uint64_t
-amd_poll_retired(void)
+static int
+amd_poll_retired(uint64_t* seen)
 {
-	return r5_gfx9_user_seen();
+	if (seen == NULL)
+		return B_BAD_VALUE;
+	*seen = r5_gfx9_user_seen();
+	return B_OK;
 }
 
 

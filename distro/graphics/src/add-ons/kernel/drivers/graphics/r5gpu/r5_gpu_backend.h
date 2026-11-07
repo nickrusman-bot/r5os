@@ -12,6 +12,11 @@
 
 #include <stdint.h>
 
+/* Every function returns a status. B_OK (0) is success. A return of 1
+ * is a failure, so a caller writes `!= B_OK` and never `!op()`.
+ * vmid_lookup returns B_OK when that page is mapped and
+ * B_ENTRY_NOT_FOUND when it is not. encode_pte writes *pte.
+ * poll_retired writes *seen. */
 typedef struct r5_gpu_backend_ops {
 	int			(*fill_vendor_info)(void* info, void* block, uint32_t bytes);
 	/* B_OK writes *value. B_NOT_ALLOWED is an offset this backend does
@@ -19,10 +24,10 @@ typedef struct r5_gpu_backend_ops {
 	 * offset: the core rejects that bit before an ioctl reaches here. */
 	int			(*read_reg)(void* info, uint32_t offset, uint32_t* value);
 	int			(*vram_alloc)(uint64_t bytes, uint64_t* offset);
-	void		(*vram_free)(uint64_t offset);
+	int			(*vram_free)(uint64_t offset);
 	int			(*set_cpu_type)(int area, uint64_t physical, uint32_t type);
-	uint64_t	(*encode_pte)(uint64_t physical, uint32_t flags, int system,
-				int writeCombine);
+	int			(*encode_pte)(uint64_t physical, uint32_t flags, int system,
+				int writeCombine, uint64_t* pte);
 	int			(*vm_map)(uint64_t va, uint64_t pte);
 	int			(*vm_unmap)(uint64_t va, uint64_t bytes);
 	int			(*vm_prt)(uint64_t va, uint64_t bytes);
@@ -32,7 +37,7 @@ typedef struct r5_gpu_backend_ops {
 	int			(*sh_mem)(uint32_t vmid);
 	int			(*submit)(const uint64_t* va, const uint32_t* dwords,
 				uint32_t count, uint64_t* sequence);
-	uint64_t	(*poll_retired)(void);
+	int			(*poll_retired)(uint64_t* seen);
 	int			(*ih_decode)(const uint32_t* words, uint32_t count,
 				uint32_t* source, uint64_t* address);
 	int			(*fault_decode)(uint32_t addrLo, uint32_t addrHi,

@@ -17,6 +17,7 @@
 #include "r5_wait.h"
 #include "r5_stage_p.h"
 #include "r5_log.h"
+#include "../distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_backend.h"
 
 #include <string.h>
 
@@ -313,19 +314,19 @@ waiter_fence()
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
 			"r5_gpu_eop()", "gpu_counter(", text, sizeof(text)) != 0)
 		return 1;
-	if (strstr(text, "gR5GpuOps.poll_retired()") == NULL)
+	if (strstr(text, "gpu_seen()") == NULL)
 		return fail("retire fence");
 	if (snippet(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
 			"gpu_counter(", "gpu_wait_value(", text, sizeof(text)) != 0)
 		return 1;
-	if (strstr(text, "return gR5GpuOps.poll_retired()") == NULL)
+	if (strstr(text, "return gpu_seen()") == NULL)
 		return fail("wait fence");
 	if (snippet(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
 			"amd_poll_retired", "amd_fault_decode", text, sizeof(text)) != 0)
 		return 1;
-	if (strstr(text, "return r5_gfx9_user_seen()") == NULL)
+	if (strstr(text, "*seen = r5_gfx9_user_seen()") == NULL)
 		return fail("retire fence");
 	if ((kR5CsRel64 & 0x03000000u) != 0
 		|| (kR5CsRel32Int & 0x03000000u) != 0x02000000u)
@@ -486,6 +487,123 @@ core_boundary()
 	return 0;
 }
 
+
+/* B_OK is 0. Every op returns that on success. A fake backend that
+ * returns 0 must pass `!= 0`. One that returns 1 must fail it. `!op()`
+ * reads 0 as failure, which is the bug this test rejects. */
+static int op_fill(void*, void*, uint32_t) { return 0; }
+static int op_reg(void*, uint32_t, uint32_t*) { return 0; }
+static int op_alloc(uint64_t, uint64_t*) { return 0; }
+static int op_free(uint64_t) { return 0; }
+static int op_type(int, uint64_t, uint32_t) { return 0; }
+static int op_pte(uint64_t, uint32_t, int, int, uint64_t* pte)
+{
+	if (pte == 0)
+		return 1;
+	*pte = 1;
+	return 0;
+}
+static int op_map(uint64_t, uint64_t) { return 0; }
+static int op_unmap(uint64_t, uint64_t) { return 0; }
+static int op_prt(uint64_t, uint64_t) { return 0; }
+static int op_flush(void) { return 0; }
+static int op_prepare(void) { return 0; }
+static int op_lookup(uint64_t) { return 0; }
+static int op_sh(uint32_t) { return 0; }
+static int op_sh_one(uint32_t) { return 1; }
+static int op_submit(const uint64_t*, const uint32_t*, uint32_t, uint64_t*)
+{
+	return 0;
+}
+static int op_seen(uint64_t* seen)
+{
+	if (seen == 0)
+		return 1;
+	*seen = 1;
+	return 0;
+}
+static int op_ih(const uint32_t*, uint32_t, uint32_t*, uint64_t*) { return 0; }
+static int op_fault(uint32_t, uint32_t, uint64_t*) { return 0; }
+static int op_dump(const char*) { return 0; }
+static int op_stage_p(void*, void*) { return 0; }
+static int op_stage_u(void*) { return 0; }
+
+
+static int
+ops_status()
+{
+	r5_gpu_backend_ops ops = {
+		op_fill, op_reg, op_alloc, op_free, op_type, op_pte,
+		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
+		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
+		op_stage_p, op_stage_u
+	};
+	uint32_t reg = 0;
+	uint64_t off = 0;
+	uint64_t pte = 0;
+	uint64_t seen = 0;
+	uint32_t source = 0;
+	uint64_t address = 0;
+	if (ops.fill_vendor_info(0, 0, 0) != 0)
+		return fail("op fill");
+	if (ops.read_reg(0, 0, &reg) != 0)
+		return fail("op reg");
+	if (ops.vram_alloc(0, &off) != 0 || ops.vram_free(0) != 0)
+		return fail("op vram");
+	if (ops.set_cpu_type(0, 0, 0) != 0)
+		return fail("op type");
+	if (ops.encode_pte(0, 0, 0, 0, &pte) != 0 || pte == 0)
+		return fail("op pte");
+	if (ops.vm_map(0, 0) != 0 || ops.vm_unmap(0, 0) != 0
+		|| ops.vm_prt(0, 0) != 0 || ops.tlb_flush() != 0)
+		return fail("op map");
+	if (ops.vmid_prepare() != 0 || ops.vmid_lookup(0) != 0)
+		return fail("op vmid");
+	if (ops.sh_mem(1) != 0)
+		return fail("op sh_mem");
+	/* Success is 0, so `!status` is true. That reading is rejected. */
+	if ((!ops.sh_mem(1)) == 0)
+		return fail("op sh_mem bang");
+	ops.sh_mem = op_sh_one;
+	if (ops.sh_mem(1) == 0)
+		return fail("op sh_mem one");
+	if (ops.submit(0, 0, 0, 0) != 0)
+		return fail("op submit");
+	if (ops.poll_retired(&seen) != 0 || seen == 0)
+		return fail("op seen");
+	if (ops.ih_decode(0, 0, &source, &address) != 0
+		|| ops.fault_decode(0, 0, &address) != 0 || ops.dump(0) != 0)
+		return fail("op decode");
+	if (ops.stage_p(0, 0) != 0 || ops.stage_u(0) != 0)
+		return fail("op stage");
+	char* text = NULL;
+	if (read_file(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+			&text) != 0)
+		return 1;
+	if (strstr(text, "!gR5GpuOps.") != NULL) {
+		free(text);
+		return fail("op bang call");
+	}
+	free(text);
+	if (read_file(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			&text) != 0)
+		return 1;
+	if (strstr(text, "!gR5GpuOps.") != NULL || strstr(text, "? 1 : 0;") != NULL) {
+		free(text);
+		return fail("op backend bang");
+	}
+	if (strstr(text, "? B_OK : B_ERROR") == NULL
+		|| strstr(text, "B_ENTRY_NOT_FOUND") == NULL) {
+		free(text);
+		return fail("op backend status");
+	}
+	free(text);
+	return 0;
+}
+
+
 int
 main()
 {
@@ -563,6 +681,8 @@ main()
 	if (system("python3 scripts/check-gpu-hardcode.py") != 0)
 		return fail("hardcode check");
 	if (core_boundary() != 0)
+		return 1;
+	if (ops_status() != 0)
 		return 1;
 	static_assert(R5_GPU_VA_OFFSET == 0x10000ull, "va bottom");
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");

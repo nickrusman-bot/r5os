@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### One status from every GPU backend call
+
+Every function in `gR5GpuOps` returns a status. `B_OK` (0) is success. The page-table calls used to return 1 for success, so `if (!sh_mem())` was true when the write had worked. Callers now test `!= B_OK`. `vmid_lookup` returns `B_OK` when the page is mapped and `B_ENTRY_NOT_FOUND` when it is not. `encode_pte` writes the entry through a pointer. `poll_retired` writes the fence the same way. The host test builds a fake backend, checks each success path, and rejects a return of 1. Not booted.
+
 ### GPU core beside the AMD backend
 
 The vendor-neutral core (`r5_gpu_core.cpp`) is compiled into `radeon_hd`. It is not a separate kernel module, it is not loaded on its own, and it adds no ioctl. Clients, buffer objects, the job list, sync objects, the retire thread and the copies of user memory stay in the core. Registers, page tables, the ring, the interrupt decode and stages P and U stay in the AMD file and are reached through `gR5GpuOps`. A missing function returns `B_NOT_SUPPORTED`. Submit still waits for ring room, flushes the kernel copy of the indirect buffer, then rings the bell, with VMID 1. The fixed K sequence is unchanged. `SH_MEM` for one VMID and the interrupt-word decode are real functions; the boot path does not call them. The host tests printed the same lines as before the split: `ok gpu api 1.0 walk`, `ok ac drm family RV cu 7 firmware map`, `ok libdrm ioctl`, and `ok stage p syslog (ib24 has no hex in the dump)`.
