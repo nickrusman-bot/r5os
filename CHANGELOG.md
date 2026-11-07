@@ -1,5 +1,55 @@
 # R5OS changelog (lokaal)
 
+### Stick 23: the paired high page hung, and the empty leaf reads 0x10
+
+Logs are `generated/boot-5625u-23/`. The settings file is the six lines plus `gpu_debug true`. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
+
+U-self stored `51550000` through `51550007` and read the same eight words through the page and through a second mapping. The cached GTT page is physical `000000002301e000`. The VRAM page is physical `0000000811096000`.
+
+| Step | Result | Page-table words |
+|---|---|---|
+| U-self GTT | equal, both mappings | not printed |
+| U-self VRAM | equal, both mappings | not printed |
+| U2a-n | ok, 1 ms, seq 37 seen 37, word `deadbeef`, CP 0, dest `000000002301e000`, PAT 0 | L3 `000000081109e001`, L2 `000000081109f001`, L1 `00000008110a0001`, L0 VRAM `0600000811096071`, L0 GTT `000000002301e077` |
+| U2a-f | ok, 1 ms, seq 38 seen 38, word `deadbeef`, CP 0, dest `000000002301e000`, PAT 0 | same four levels and the same two L0 words |
+| U2b-n | ok, 1 ms, seq 39 seen 39, word `deadbeef`, CP 0, dest `0000000811096000`, PAT 4 | same L3–L1, L0 GTT `000000002301e077`, L0 VRAM `0600000811096071` |
+| u4b-pair | hang, 5000 ms, seq 40 seen 39, word 0, CP `84008600`, dest `00000008110a1000`, PAT 4 | L3 `000000081109b001`, L2 `000000081109c001`, L1 `000000081109d001`, L0 IB `0600000811096071`, L0 next page `06000008110a1071` |
+| u-top `0xffffffffffbfc000` | not run | |
+| u-radv `0xffff800100000000` | not run | |
+| u-257 `0xffff808000000000` | not run | |
+| u-pdb1 `0xffff800040000000` | not run | |
+| u-pdb0 `0xffff800000200000` | not run | |
+| u-low0 `0x100000` | not run | |
+| u4b `0xffff800000001000` | not run | |
+
+Both pages of `u4b-pair` are valid VRAM entries. The indirect-buffer words on the CPU are `c0033700 00100500 00002040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000`. `CP_IB1` shows `0000800000001000`. Size and offset are 0. `fault` is 0. The series stopped. The variable MTRRs are the same before and after, and none of the types is 1.
+
+The stage walk never printed an empty directory entry, so bit 54 was not observed. The leaf of an address the command processor did report was `0000000000000010`. After the hang, `fence timeout` and `gpu lost` both show `ib 0000800000001000` and `pte 0000000000000010`. That is the empty-leaf value from Z0. The PTE of the full address `ffff800000001000`, printed on the `u4b-pair` line, stays `0600000811096071`. Mapping the next page did not make this step pass.
+
+Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir before stage U. The readback line is type 2, flags `00000006`, heap 0, 589824 bytes, on both runs. SAM pixels are `pixels ok`: `(24,24)` and `(192,80)` are `262e38ff`, `(192,192)` is `853b16ff`, `(192,134)` is `a64a1cff`, `(90,192)` is `873c17ff`, `(280,192)` is `692e11ff`, exit 0. The normal run is `pixels MISMATCH`. All six samples are `00000000`, exit 2.
+
+`gpu_debug` printed one `va map` line per map. Domain 1 is VRAM and domain 2 is GTT. The two runs use the same addresses. The domains differ on six of them:
+
+| VA | Bytes | SAM domain | Normal domain |
+|---|---|---|---|
+| `ffff800100000000` | 4096 | 2 | 2 |
+| `ffff800100001000` | 81920 | 1, then 1 again | 2, then 2 again |
+| `ffff800100015000` | 4096 | 1 | 2 |
+| `ffff800100020000` | 589824 | 1 | 1 |
+| `ffff8001000b0000` | 1052672 | 1 | 1 |
+| `ffff800000000000` | 262144 | 1 | 1 |
+| `ffff8001001c0000` | 49152 | 2 | 2 |
+| `ffff8001001d0000` | 40960 | 2 | 2 |
+| `ffff8001001e0000` | 589824 | 2 | 2 |
+| `ffff800000040000` | 16384 | 1 | 2 |
+| `ffff800100270000` | 81920 | 1 | 2 |
+| `ffff800100284000` | 81920 | 1 | 2 |
+| `ffff800100298000` | 81920 | 1 | 2 |
+
+The 589824-byte readback is domain 2 at `ffff8001001e0000` on both runs. The first 2 MiB of the high range holds the 262144-byte buffer at `ffff800000000000` as domain 1 on both runs. The normal run also puts a 16384-byte GTT buffer at `ffff800000040000`. The SAM run puts that buffer in domain 1. Each run then submitted `ffff800100284000` (24 dwords) and `ffff800100001000` (752 dwords).
+
+After the hang the userspace indirect-buffer stage still ran. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
 ### Stick 23 fills empty page-table entries the way Linux does
 
 Z0. Linux 6.12 `amdgpu_vm_pt_clear` (`amdgpu_vm_pt.c`) fills a new leaf table with `AMDGPU_PTE_EXECUTABLE` (bit 4, `0x10`) and an empty directory entry with `AMDGPU_PDE_PTE` (bit 54). `amdgpu_vm_pte_update_flags` writes that same `0x10` when a PTE is not valid and not PRT. `gmc_v9_0_get_vm_pde` adds nothing else while `translate_further` is off. R5 was storing `0`. A new VMID 1 leaf is now `0x10`, a new directory page is bit 54, and an unmap writes `0x10`. A PRT entry is left as it is. A directory entry counts as a table only when `VALID` is set and bit 54 is clear. A lookup counts as mapped only when the leaf has `VALID`. VMID 0 and the K2 table are unchanged. The host test printed `ok gpu api 1.0 walk`, including a fresh directory entry of bit 54, an unmap that reads back `0x10`, a second map of the same page, and a PRT entry that a clear does not overwrite.
