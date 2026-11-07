@@ -108,7 +108,7 @@ Do not start these during an unrelated bugfix.
 |---|---|---|
 | AMD64 | Boots to the desktop in QEMU, in VirtualBox, and from USB on the Ryzen 5 5625U. Not release-supported | Hardware items above |
 | ARM64 | No work yet. Basis decided (7 Nov 2026): the haiku-pi port, see below | After AMD64 is usable on hardware: QEMU, then the Raspberry Pi 4 as the first board |
-| RISC-V 64 | No work yet | After AMD64 and ARM64 |
+| RISC-V 64 | No work yet. Reference: X547's port (see below) | After AMD64 and ARM64 |
 
 Levels: buildable → bootable → functional → desktop-capable → release-supported. See `AGENTS.md`, "Architectures".
 
@@ -120,6 +120,14 @@ Levels: buildable → bootable → functional → desktop-capable → release-su
 - **Reference only:** the V3D GPU driver and how it draws Vulkan into ordinary Haiku windows. R5 keeps its own vendor-neutral GPU interface (`docs/GPU-ARCHITECTURE.md`). The V3D work is input for the M7 presentation and the Graphics Kit.
 - **Not taken:** the packages (Firefox, Wine, games). They belong in a package repository, not in this source tree.
 - **When:** after AMD64 is usable on hardware, the same rule as above. First QEMU, then the Pi 4.
+
+### RISC-V reference: X547's port
+
+[X547/Haiku-riscv](https://github.com/X547/Haiku-riscv) is the 2021 Haiku port to RISC-V. It reached the desktop on the SiFive HiFive Unmatched board, with a Radeon card over PCIe. The repository holds a patch set for one exact Haiku revision, and has had no changes since October 2021. Haiku's own riscv64 tree grew out of this work.
+
+- **Reference only.** When R5 starts RISC-V, the basis is Haiku's current riscv64 tree. The patch set shows what the first hardware bring-up needed.
+- **Of interest to the GPU plan:** the port drew its desktop through `radeon_hd` on a RISC-V board. That is a check for later that R5's GPU interface and Radeon backend stay free of x86 assumptions.
+- **Licence:** the repository has no licence file. Nothing is copied from it. Haiku's riscv64 code is used under its own licence instead.
 
 ### Import rules for other Haiku forks
 
