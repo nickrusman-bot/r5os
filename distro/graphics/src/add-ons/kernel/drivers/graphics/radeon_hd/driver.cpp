@@ -966,10 +966,14 @@ init_driver(void)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (found > 0 && r5_gpu_ops_ready(&gR5GpuOps)) {
+		/* devfs publish_device stores S_IFCHR | 0644 and does not
+		 * check that mode on open. A standard account can open the
+		 * node. docs/MULTIUSER.md. */
 		sR5GpuName = strdup("gpu/radeon_hd/0");
 		sR5Published[0] = gDeviceNames[0];
 		sR5Published[1] = sR5GpuName;
 		sR5Published[2] = NULL;
+		dprintf("radeon_hd: /dev/gpu/radeon_hd/0 mode 0644\n");
 	} else if (found > 0) {
 		dprintf("radeon_hd: render node withheld, a required op is missing\n");
 	}

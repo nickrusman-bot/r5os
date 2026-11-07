@@ -23,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 
@@ -525,6 +526,14 @@ main()
 	FILE* out = fopen(cache.Path(), "w");
 	if (out == NULL)
 		return 1;
+
+	struct stat nodeStat;
+	if (stat("/dev/gpu/radeon_hd/0", &nodeStat) == 0) {
+		fprintf(out, "ls -l /dev/gpu/radeon_hd/0 mode %o\n",
+			(unsigned)(nodeStat.st_mode & 0777));
+	} else {
+		fprintf(out, "ls -l /dev/gpu/radeon_hd/0 missing errno %d\n", errno);
+	}
 
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {

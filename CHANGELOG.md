@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The render node is mode 0644
+
+devfs publishes `/dev/gpu/radeon_hd/0` as `S_IFCHR | 0644` and does not check that mode when the node is opened. The driver prints the mode. The self-test writes `ls -l /dev/gpu/radeon_hd/0` into its result file. A standard account may open the node.
+
 ### An indirect-buffer dump reads the caller's space
 
 `r5_gfx9_vmid1_read` looks up the page in the address space it is given. `gpu_ib_words` uses that same space. A fence or sync timeout passes the waiting file's space. A dump with no file does not walk the other spaces.

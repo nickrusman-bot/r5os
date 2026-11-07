@@ -1912,6 +1912,20 @@ main()
 		if (strstr(text, "stage_as()") != NULL
 			|| strstr(text, "r5_gfx9_vmid1_pte(as,") == NULL)
 			return fail("ib words space");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
+				"gpu/radeon_hd/0", "render node withheld", text,
+				sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "mode 0644") == NULL)
+			return fail("node mode");
+		if (snippet(
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				"ls -l /dev/gpu/radeon_hd/0", "open(\"/dev/gpu/radeon_hd/0\"",
+				text, sizeof(text)) != 0)
+			return 1;
+		if (strstr(text, "st_mode") == NULL)
+			return fail("node ls");
 	}
 	{
 		char text[4000];
