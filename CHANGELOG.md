@@ -1,5 +1,34 @@
 # R5OS changelog (lokaal)
 
+### Stick 21: U2c hung, so the cached-read steps did not run
+
+Logs are `generated/boot-5625u-21/`. The settings file is the same six lines as stick 20. Stage P, all 33 steps, printed `ok 1 ms` before the teapots. Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir. The readback buffer is type 2, flags `00000006`, heap 0, on the SAM run and on the normal run. `00000006` is host-visible and host-coherent. The device-local bit is not set.
+
+SAM pixels are `pixels MISMATCH`. Five of the six samples are the background `262e38ff`. `(192,192)` is `773514ff`. The normal run is also `pixels MISMATCH`. `(192,192)` is `00000000`. The other five are non-zero, with alpha `97` to `9b`.
+
+Stage U then stopped on its first step. `u2c hang 5000 ms seq 37 seen 36 word 00000000 cp 84008600 phys 00000008110a1000 pat 4`. The fence did not land and `CP_STAT` stayed busy. The indirect buffer is `00007ffffffb3000`, physical `000000002d037000`, PTE `000000002d037073`. The eight dwords read back as zero. `CP_IB1` size and offset are 0. `fault` is 0. The watchdog then printed `gpu lost`. `seen` was still 36. No fix in this commit.
+
+| Step | Result |
+|---|---|
+| U2c | hang, 5000 ms, CP `84008600`, seen 36 of sequence 37, word 0, PAT 4 |
+| U4b | not run |
+| U2e | not run |
+| U2f | not run |
+| U2d | not run |
+| U2g | not run |
+| U2a | not run |
+| U2a-f | not run |
+| U2a-n | not run |
+| u2a-sh-lx | not run |
+| u2a-f-sh-lx | not run |
+| u2a-ctx-lx | not run |
+| u2a-f-ctx-lx | not run |
+| U2l | not run |
+| U2b | not run |
+| U2b-f | not run |
+
+Boot still has `SH_MEM_CONFIG` `00001018` and `VM_CONTEXT1_CNTL` `007ffe07`. The `-lx` writes did not happen. After the hang the userspace indirect-buffer stage still ran and printed `fence timeout`. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
 ### Stick 21 measures the cached read, on its own page
 
 Stick 20's U2a was a miss, not a hang. The log says `u2a timeout 5000 ms` with `cp 00000000`, the kernel fence equal to the ring pointer, and `seen 38`. The CPU still read 0. The series stopped there, so the high-address steps never ran. The destination was the same virtual address and the same physical page (`0x22ff4000`) as the U2c indirect buffer that had just been deleted. That buffer was write-combined. U2a mapped it cached and snooped.
