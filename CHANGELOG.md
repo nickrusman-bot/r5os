@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Clocks and VRAM wait on two ATOM tables
+
+The engine and memory clocks are still the device-table numbers. The next passport milestone reads ATOM `firmwareinfo` for `default_sclk`, `default_mclk` and the SPLL reference, and `integratedsysteminfo` for the VRAM type and width. Linux 6.12 does that in `amdgpu_atomfirmware.c` and `amdgpu_atombios.c`.
+
 ### Firmware versions come from the ucode header
 
 `radeon_gfx9_open_ucode` reads `ucode_version` at byte 16 and `ucode_feature_version` at byte 32. Both the PSP load and the direct engine load record those words. The passport copies them. The device table has no firmware version.

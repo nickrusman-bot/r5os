@@ -37,15 +37,15 @@ int snprintf(char* str, size_t size, const char* format, ...);
 #define R5_AMD_SRC_SW \
 	"Linux v6.12 gfx_v9_0.c:gfx_v9_0_sw_init"
 #define R5_AMD_SRC_MESA \
-	"Mesa drm-shim device 15e7; atom not read; Linux v6.12 amdgpu_kms.c non-DPM"
+	"device table until ATOM firmwareinfo default_sclk and default_mclk; Linux v6.12 amdgpu_atomfirmware.c"
 #define R5_AMD_SRC_XCLK \
-	"Mesa capture gpu_counter_freq 100000; Linux v6.12 amdgpu_kms.c xclk"
+	"device table until ATOM firmwareinfo SPLL reference (xclk); Linux v6.12 amdgpu_atombios.c"
 #define R5_AMD_SRC_FW \
 	"common_firmware_header ucode_version byte 16, ucode_feature_version byte 32"
 #define R5_AMD_SRC_GPU_INFO \
 	"no gpu_info.bin; Linux v6.12 amdgpu_device_parse_gpu_info_fw"
 #define R5_AMD_SRC_ATOM \
-	"atom not read"
+	"device table until ATOM integratedsysteminfo VRAM type and width; Linux v6.12 amdgpu_atomfirmware.c"
 #define R5_AMD_SRC_CU \
 	"register; Linux v6.12 gfx_v9_0.c CC_GC_SHADER_ARRAY_CONFIG"
 

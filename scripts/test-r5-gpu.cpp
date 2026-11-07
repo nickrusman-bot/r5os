@@ -973,8 +973,11 @@ main()
 		r5_amd_passport_format(&dev, text, (int)sizeof(text));
 		if (strstr(text, "num_shader_engines 1 (ip discovery not parsed") == NULL)
 			return fail("passport line");
-		if (strstr(text, "atom_read 0 (atom not read)") == NULL)
+		if (strstr(text, "atom_read 0 (device table until ATOM integratedsysteminfo") == NULL)
 			return fail("passport atom");
+		if (strstr(text, "firmwareinfo default_sclk") == NULL
+			|| strstr(text, "SPLL reference") == NULL)
+			return fail("passport clocks source");
 	}
 	if (system("python3 scripts/check-gpu-hardcode.py") != 0)
 		return fail("hardcode check");
