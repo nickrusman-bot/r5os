@@ -8,4 +8,5 @@ SubDirHdrs $(HAIKU_TOP) src system kernel device_manager ;
 
 KernelAddon rtsx :
 	rtsx.cpp
+	rtsx_5228.cpp
 ;

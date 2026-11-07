@@ -19,9 +19,10 @@ Location: `distro/kernel/src/add-ons/kernel/busses/mmc/rtsx/`. Not installed in 
 | Piece | Project | License |
 |---|---|---|
 | Register definitions and the command, clock, and power sequences | OpenBSD `rtsx(4)`, `sys/dev/ic/rtsxreg.h` r1.5 and `sys/dev/ic/rtsx.c` r1.22, `sys/dev/pci/rtsx_pci.c` r1.16 | ISC |
-| Haiku `device_manager` glue in the same files | R5, 2026 | ISC, same grant, so the module can be taken as a whole |
+| Haiku `device_manager` glue in `rtsx.cpp` | R5, 2026 | ISC, same grant, so the core can be taken without the GPL file |
+| RTS5228 init in `rtsx_5228.cpp` and `rtsx_5228_regs.h` | Linux v6.12 `rts5228.c`, `rtsx_pcr.c`, and the used part of `include/linux/rtsx_pci.h` | GPL-2.0-or-later. Copyright 2009-2013 and 2018-2019 Realtek Semiconductor Corp. |
 
-Copyright 2006 Uwe Stuehler, 2012 Stefan Sperling, 2026 R5OS Contributors. The permission text is in the files. Linux `rts5228.c` and `rts5228.h` were not copied. `rts5228.h` is GPL-2.0-only. RTS5228 attaches and does not run a chip init. Detail: `docs/RTSX.md` and `docs/LICENSING.md`.
+Copyright 2006 Uwe Stuehler, 2012 Stefan Sperling, 2026 R5OS Contributors, for the ISC files. The permission text is in those files. `rts5228.h` (GPL-2.0-only) was not copied. The linked addon is GPL because of `rtsx_5228.cpp`. `10ec:5228` is not claimed. Detail: `docs/RTSX.md` and `docs/LICENSING.md`.
 
 ### Teapot control points
 

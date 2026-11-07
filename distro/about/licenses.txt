@@ -1,7 +1,7 @@
 # Realtek card reader
-SD card reader driver ported from OpenBSD rtsx. Not the Linux rts5228 driver. Not installed in this image yet.
+SD card reader. The core is an OpenBSD rtsx port (ISC). The RTS5228 file linked into the addon is Linux v6.12 (GPL-2.0-or-later, Realtek). The GPL-2.0-only rts5228.h was not copied. Not installed in this image yet.
 
-License: ISC
+License: ISC for the core, GPL-2.0-or-later for the linked addon
 Source: https://github.com/openbsd/src/blob/master/sys/dev/ic/rtsx.c
 
 # R5 Operating System

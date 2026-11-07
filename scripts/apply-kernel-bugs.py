@@ -15,6 +15,7 @@ def install_kernel_sources() -> None:
         "src/system/kernel/arch/x86/arch_timer.cpp",
         "src/system/kernel/arch/x86/arch_cpu.cpp",
         "src/system/kernel/arch/x86/arch_vm.cpp",
+        "src/system/kernel/device_manager/device_manager.cpp",
     )
     for relative in files:
         install_file(
@@ -155,7 +156,8 @@ def install_rtsx() -> None:
     if not source.is_dir():
         raise SystemExit(f"missing {source}")
     destination.mkdir(parents=True, exist_ok=True)
-    for name in ("Jamfile", "rtsx.cpp", "rtsxreg.h"):
+    for name in ("Jamfile", "rtsx.cpp", "rtsxreg.h", "rtsx_5228.cpp",
+            "rtsx_5228_regs.h"):
         install_file(source / name, destination / name, "rtsx")
 
     insert_once(

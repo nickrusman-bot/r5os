@@ -23,8 +23,10 @@
  * The command engine, the clock, and the power sequence are the OpenBSD
  * rtsx(4) driver (sys/dev/ic/rtsx.c,v 1.22 and sys/dev/pci/rtsx_pci.c,v 1.16).
  * RTS5228 is a separate flag. OpenBSD has no init sequence for that chip.
- * Nothing from Linux drivers/misc/cardreader/rts5228.c or rts5228.h is used.
- * Until that init exists, supports_device returns 0 for 10ec:5228.
+ * Nothing in this file is taken from Linux drivers/misc/cardreader/rts5228.c
+ * or rts5228.h. The GPL init lives in rtsx_5228.cpp. This file calls
+ * rtsx_5228_support() when that file is linked. The call returns 0 while
+ * the GPL-2.0-only register header is not copied, so 10ec:5228 is not claimed.
  */
 
 
@@ -44,6 +46,10 @@
 
 
 static int32 rtsx_interrupt(void* data);
+
+
+extern "C" float rtsx_5228_support(uint16 vendor, uint16 device)
+	__attribute__((weak));
 
 
 //#define TRACE_RTSX
@@ -1155,6 +1161,8 @@ supports_device(device_node* parent)
 	 * later init file.
 	 */
 	if (vendor == 0x10ec && device == 0x5228) {
+		if (rtsx_5228_support != NULL)
+			return rtsx_5228_support(vendor, device);
 		TRACE_ALWAYS("rtsx: not claiming 10ec:5228\n");
 		return 0.0f;
 	}

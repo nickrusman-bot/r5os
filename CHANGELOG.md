@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### RTS5228 init file, still not claimed
+
+`rtsx_5228.cpp` is the Linux v6.12 `rts5228.c` / `rtsx_pcr.c` init, GPL-2.0-or-later, Realtek copyright kept. `rtsx_5228_regs.h` has the registers that file uses from `rtsx_pci.h` (also GPL-2.0-or-later). `rts5228.h` is GPL-2.0-only and is not copied, so the LDO, DV3318, PME and 5228 SSC-depth writes are absent. `rtsx_5228_support()` therefore returns 0 and `10ec:5228` is still not claimed. MSI and the 200 ms card interrupt are in that file and do not run. `rtsx.cpp` stays ISC; the GPL file is a weak symbol, so the core links without it. The linked addon is GPL. It is not in the image.
+
+Class `0xff` now scans `busses/mmc` as well. That `device_manager.cpp` change compiled as `kernel_device_manager.o` and is not in a booted kernel. QEMU, 7 Nov 2026 20:55 Europe/Amsterdam, throwaway image `r5-os-rtsx-test.image` (not `r5-os.image`): `rtsx: loaded` twice, no 5228 line, sign-in, then Tracker and Deskbar. Not booted on the 5625U.
+
 ### Realtek rtsx bus driver, not in the image
 
 The SD reader on the 5625U is PCI `10ec:5228`, class `ff:00:00`. `sdhci` does not claim that class. The new module is `busses/mmc/rtsx`, a port of OpenBSD `rtsx(4)` (Uwe Stuehler, 2006; Stefan Sperling, 2012), ISC, including the Haiku glue. It publishes the same MMC bus as `sdhci` for the OpenBSD ids. `10ec:5228` is in the table and `supports_device` returns 0, so no bus is published until a chip init exists. Linux `rts5228.c` / `rts5228.h` are not a source. The other OpenBSD ids have not been booted. The module is built and is not packaged into the image. Developer note: `docs/RTSX.md`.

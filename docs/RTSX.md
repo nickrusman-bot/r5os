@@ -2,7 +2,7 @@
 
 This is the developer note for `busses/mmc/rtsx`. The module is a Haiku `device_manager` driver. It publishes the same MMC bus as `sdhci`, so `mmc_bus` and `mmc_disk` stay as they are. A card that enumerates shows up as a normal volume.
 
-The register file is OpenBSD `sys/dev/ic/rtsxreg.h` r1.5. The command, clock, and power sequences follow OpenBSD `rtsx.c` r1.22 and `rtsx_pci.c` r1.16. The license of the whole module is ISC. See `docs/LICENSING.md`.
+The register file is OpenBSD `sys/dev/ic/rtsxreg.h` r1.5. The command, clock, and power sequences follow OpenBSD `rtsx.c` r1.22 and `rtsx_pci.c` r1.16. Those files, and `rtsx.cpp`, are ISC. `rtsx_5228.cpp` and `rtsx_5228_regs.h` are GPL-2.0-or-later, from Linux v6.12 `rts5228.c`, `rtsx_pcr.c`, and the registers used from `rtsx_pci.h`. Linking them makes the addon binary GPL. Haiku can leave `rtsx_5228.cpp` out of the Jamfile and keep the ISC core. See `docs/LICENSING.md`.
 
 The module is built with jam. It is not installed in the image.
 
@@ -23,7 +23,7 @@ The first call of `supports_device` prints `rtsx: loaded`. That is how a serial 
 | `10ec:5286` | RTL8402 | none | OpenBSD default init |
 | `10ec:5287` | RTL8411B | none | OpenBSD default init |
 | `10ec:5289` | RTL8411 | none | OpenBSD default init |
-| `10ec:5228` | RTS5228 | `RTSX_F_5228` | Not claimed. `supports_device` returns 0 until a chip init exists |
+| `10ec:5228` | RTS5228 | `RTSX_F_5228` | Not claimed. `rtsx_5228_support()` returns 0 |
 
 Match requires vendor `10ec` and PCI class `0xff`. A Realtek chip that advertises the SDHCI class stays with `sdhci`. That is the OpenBSD rule.
 
@@ -32,22 +32,24 @@ Match requires vendor `10ec` and PCI class `0xff`. A Realtek chip that advertise
 1. Add a row to `kDevices` in `rtsx.cpp`: the PCI device id, the flag, the BAR index, and the name.
 2. If OpenBSD `rtsx_pci.c` already has a flag for that id, use that flag. The init in `InitChip`, `PowerOn`, and `PowerOff` then follows that flag.
 3. If OpenBSD has no sequence for the id, give it a new flag, as with `RTSX_F_5228`. Do not point it at another chip's flag. Leave `ChipReady()` false for that flag so no register write runs.
-4. Do not copy Linux `drivers/misc/cardreader/rts5228.c` or `rts5228.h`. `rts5228.h` is GPL-2.0-only. A sequence that exists only there is not added here. Write the missing step down under Open points instead.
+4. Do not copy Linux `drivers/misc/cardreader/rts5228.h`. It is GPL-2.0-only. A 5228 sequence from `rts5228.c` or `rtsx_pcr.c` belongs in `rtsx_5228.cpp`, and only with registers that are already in `rtsx_pci.h` or written as literals in those `.c` files.
 
 `rts5228.h` is not in this tree.
 
 ## RTS5228, open points
 
-The 5625U reader is `10ec:5228` revision `01`, subsystem `103c:8a31`, class `ff:00:00`, BAR0 `0xd0700000` size `0x1000`. OpenBSD does not list this id. `supports_device` returns 0 for that id, so no MMC bus is published and no chip register is written.
+The 5625U reader is `10ec:5228` revision `01`, subsystem `103c:8a31`, class `ff:00:00`, BAR0 `0xd0700000` size `0x1000`. OpenBSD does not list this id. `rtsx_5228_support()` returns 0, so no MMC bus is published and no chip register is written.
 
-Still open, because the only published init for this chip is the Linux `rts5228` code, which this port does not use:
+`rtsx_5228.cpp` has the Linux v6.12 PHY write `0x07 = 0x8F40`, the 3.3 V drive table, the pull table `0xAA` / `0xE9`, the `rtsx_pci_init_hw` register list that uses `rtsx_pci.h`, MSI when the PCI module can enable it, and the card interrupt. A card interrupt waits 200 ms, as Linux does, and then releases the MMC scan semaphore. Removal does not unpublish the volume: `mmc_bus` still has that as a FIXME. None of this runs, because the device is not claimed.
 
-- PHY, LDO, drive strength, and the 5228 clock switch
-- Card-detect interrupt and hotplug
-- MSI. The other chips use the legacy interrupt line, as `sdhci` does. The 5228 does not install that handler until it has an init sequence
+Still missing, because the values are only in `rts5228.h`:
+
+- LDO power on and power off, DV3318, and the overcurrent clear
+- `RTS5228_SSC_DEPTH_2M` for `SSC_CTL2`. The generic depth in `rtsx_pci.h` is a different number, so it is not written in its place
+- PME force and the 5228 autoload card-detect resume bit
 - A boot on the 5625U with a card
 
-The other ids are ported and have not been booted on hardware. QEMU has no rtsx device. A QEMU boot with `-device sdhci-pci` scans `busses/mmc`, so `supports_device` runs, matches nothing, and returns 0. Class `0xff` is not scanned under `busses/mmc`, so a 5228 on the 5625U is not probed until that path is added with the init.
+Class `0xff` now also scans `busses/mmc` (`device_manager.cpp`, `PCI_undefined`). That change is not in a booted kernel yet. The other ids are ported and have not been booted on hardware. QEMU has no rtsx device. A QEMU boot with `-device sdhci-pci` still only shows the module load.
 
 ## How a command runs
 
