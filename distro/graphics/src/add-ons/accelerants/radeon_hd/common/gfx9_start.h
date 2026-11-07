@@ -89,6 +89,8 @@ bool r5_gfx9_vmid1_setup();
 bool r5_gfx9_sh_mem(uint32 vmid);
 void* r5_gfx9_as_open(void);
 void r5_gfx9_as_close(void* as, uint64 seen);
+void r5_gfx9_as_hold(void* as);
+void r5_gfx9_as_drop(void* as);
 void r5_gfx9_as_bind(void* as);
 int r5_gfx9_as_reserve(void* as, uint32* vmid, int* flush, uint64* pd);
 void r5_gfx9_as_cancel(void);

@@ -1503,6 +1503,22 @@ amd_note_retired(uint64_t seen)
 }
 
 
+static int
+amd_space_hold(void* as)
+{
+	r5_gfx9_as_hold(as);
+	return B_OK;
+}
+
+
+static int
+amd_space_drop(void* as)
+{
+	r5_gfx9_as_drop(as);
+	return B_OK;
+}
+
+
 r5_gpu_backend_ops gR5GpuOps = {
 	amd_fill_vendor_info,
 	amd_read_reg,
@@ -1530,5 +1546,7 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_limits,
 	amd_note_retired,
 	amd_wait_room,
-	amd_space_lost
+	amd_space_lost,
+	amd_space_hold,
+	amd_space_drop
 };

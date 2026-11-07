@@ -852,6 +852,7 @@ struct r5_as {
 	uint32		vmid;
 	uint64		tlb_seq;
 	int			lost;
+	int			holds;
 };
 
 static r5_as* sSpaces[64];
@@ -1422,7 +1423,10 @@ r5_gfx9_as_close(void* cookie, uint64 seen)
 	uint32 n;
 	if (as == NULL)
 		return;
-	if (as->vmid != 0 && as->last > seen) {
+	/* A parked buffer still unmaps through this space. holds counts
+	 * those buffers. last is the newest submit, so a job still in
+	 * flight keeps the space too. */
+	if (as->holds > 0 || (as->vmid != 0 && as->last > seen)) {
 		as->parked = 1;
 		return;
 	}
@@ -1434,6 +1438,27 @@ r5_gfx9_as_close(void* cookie, uint64 seen)
 			sSpaces[n] = NULL;
 	}
 	free(as);
+}
+
+
+void
+r5_gfx9_as_hold(void* cookie)
+{
+	r5_as* as = as_from(cookie);
+	if (as != NULL)
+		as->holds++;
+}
+
+
+void
+r5_gfx9_as_drop(void* cookie)
+{
+	r5_as* as = as_from(cookie);
+	if (as == NULL || as->holds <= 0)
+		return;
+	as->holds--;
+	if (as->holds == 0 && as->parked)
+		r5_gfx9_as_close(as, ~0ull);
 }
 
 

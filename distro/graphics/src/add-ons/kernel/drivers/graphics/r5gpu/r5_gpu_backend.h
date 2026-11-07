@@ -59,6 +59,10 @@ typedef struct r5_gpu_backend_ops {
 	/* B_OK when this address space is still running. ECANCELED when a
 	 * GC hub fault marked it lost. */
 	int			(*space_lost)(void* as);
+	/* A parked buffer holds its address space until gpu_bo_release
+	 * has unmapped it. note_retired does not free a held space. */
+	int			(*space_hold)(void* as);
+	int			(*space_drop)(void* as);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

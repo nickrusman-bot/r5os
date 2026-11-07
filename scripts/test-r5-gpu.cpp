@@ -745,6 +745,8 @@ static int op_limits(uint64_t* vram, uint64_t* gtt)
 static int op_retired(uint64_t) { return 0; }
 static int op_room(uint32_t) { return 0; }
 static int op_lost(void*) { return 0; }
+static int op_hold(void*) { return 0; }
+static int op_drop(void*) { return 0; }
 
 
 static int
@@ -755,7 +757,7 @@ ops_status()
 		op_map, op_unmap, op_prt, op_flush, op_prepare, op_lookup,
 		op_sh, op_submit, op_seen, op_ih, op_fault, op_dump,
 		op_stage_p, op_stage_u, op_as_open, op_as_close, op_bind,
-		op_limits, op_retired, op_room, op_lost
+		op_limits, op_retired, op_room, op_lost, op_hold, op_drop
 	};
 	uint32_t reg = 0;
 	uint64_t off = 0;
@@ -796,8 +798,13 @@ ops_status()
 			return fail("op address");
 	}
 	if (ops.submit(0, 0, 0, 0, 0) != 0 || ops.wait_room(1) != 0
-		|| ops.space_lost(0) != 0)
+		|| ops.space_lost(0) != 0 || ops.space_hold(0) != 0
+		|| ops.space_drop(0) != 0)
 		return fail("op submit");
+	if (r5_space_free_ok(1, 4, 9) || r5_space_free_ok(0, 9, 4))
+		return fail("space held");
+	if (!r5_space_free_ok(0, 4, 4) || !r5_space_free_ok(0, 4, 9))
+		return fail("space free");
 	if (ops.poll_retired(&seen) != 0 || seen == 0)
 		return fail("op seen");
 	if (ops.ih_decode(0, 0, &source, &address) != 0

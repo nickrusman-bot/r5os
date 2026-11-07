@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A parked buffer keeps its address space until the unmap
+
+The retire path freed a parked address space and then unmapped buffers through that pointer. Parked buffers are released first. Each parked buffer holds the space. `address_close` leaves the space in place while that count is above zero or while its last submit is still ahead of the fence. The hold drops after the unmap, and that drop frees a space that was already waiting. `gpu_free` reads the fence once and uses that value for the park decision and the close. The host test refuses a free while a hold remains or while the last submit is ahead, and allows it once both have passed.
+
 ### A virtual-address check stays inside one address space
 
 Overlap, partial-cover and drop used every buffer and every PRT entry, whichever file owned it. Each of those checks now keeps a buffer only when `bo->space` is the caller's address space. A PRT entry stores that space, and closing the file releases the entries for that space. Two page tables can hold the same address. Clearing one leaves the other entry in place. The host test maps `0xffff800000001000` in both, clears the first, and still reads the second.

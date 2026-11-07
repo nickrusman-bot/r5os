@@ -209,6 +209,7 @@ gpu_lost(radeon_info* info, const char* why)
 
 
 
+static void r5_gpu_eop_at(uint64 seen);
 static void r5_gpu_eop();
 static void gpu_sync_host(gpu_sync* sync);
 
@@ -287,11 +288,10 @@ r5_gpu_uninit()
 
 
 static void
-r5_gpu_eop()
+r5_gpu_eop_at(uint64 seen)
 {
 	if (!sReady)
 		return;
-	uint64 seen = gpu_seen();
 	for (uint32 i = 0; i < kMaxJob; i++) {
 		gpu_job* job = &sJobs[i];
 		if (!job->live || job->sequence > seen)
@@ -304,8 +304,17 @@ r5_gpu_eop()
 		job->live = false;
 	}
 	sEop.NotifyAll();
+	/* Unmap parked buffers before a parked space can be freed. */
+	gpu_release_parked(seen);
 	if (gR5GpuOps.note_retired != NULL)
 		gR5GpuOps.note_retired(seen);
+}
+
+
+static void
+r5_gpu_eop()
+{
+	r5_gpu_eop_at(gpu_seen());
 }
 
 
@@ -485,6 +494,8 @@ gpu_bo_release(gpu_bo* bo)
 		else
 			*used = 0;
 	}
+	void* space = bo->space;
+	int held = bo->parked;
 	bo->live = false;
 	bo->owner = NULL;
 	bo->parked = false;
@@ -493,6 +504,9 @@ gpu_bo_release(gpu_bo* bo)
 	bo->mapTeam = -1;
 	bo->kernelArea = -1;
 	bo->kernel = NULL;
+	bo->space = NULL;
+	if (held && space != NULL && gR5GpuOps.space_drop != NULL)
+		gR5GpuOps.space_drop(space);
 }
 
 
@@ -644,9 +658,9 @@ gpu_watchdog()
 	if (oldest == NULL || now - oldest->submitted < kWatchdogUs)
 		return;
 	gpu_lost(sInfo, "gpu lost watchdog");
+	gpu_release_parked(~0ull);
 	if (gR5GpuOps.note_retired != NULL)
 		gR5GpuOps.note_retired(~0ull);
-	gpu_release_parked(~0ull);
 }
 
 
@@ -1846,7 +1860,8 @@ gpu_free(void* cookie)
 		return B_OK;
 	gpu_lock();
 	status_t status = B_OK;
-	r5_gpu_eop();
+	uint64 seen = gpu_seen();
+	r5_gpu_eop_at(seen);
 	for (uint32 i = 0; i < kMaxJob; i++) {
 		if (!sJobs[i].live)
 			continue;
@@ -1864,7 +1879,7 @@ gpu_free(void* cookie)
 		if (!bo->live || bo->owner != client)
 			continue;
 		uint64 sequence = client->lastSequence;
-		if (!sLost && sequence != 0 && gpu_seen() < sequence) {
+		if (!sLost && sequence != 0 && seen < sequence) {
 			if (bo->domain == R5_GPU_DOMAIN_VRAM) {
 				if (client->vramUsed >= bo->bytes)
 					client->vramUsed -= bo->bytes;
@@ -1873,6 +1888,8 @@ gpu_free(void* cookie)
 			bo->owner = NULL;
 			bo->parked = true;
 			bo->parkSequence = sequence;
+			if (gR5GpuOps.space_hold != NULL)
+				gR5GpuOps.space_hold(bo->space);
 		} else
 			gpu_bo_release(bo);
 	}
@@ -1887,7 +1904,7 @@ gpu_free(void* cookie)
 	}
 	gpu_prt_release_space(client->address);
 	if (gR5GpuOps.address_close != NULL)
-		gR5GpuOps.address_close(client->address, gpu_seen());
+		gR5GpuOps.address_close(client->address, seen);
 	client->address = NULL;
 	gpu_unlock();
 	free(client);

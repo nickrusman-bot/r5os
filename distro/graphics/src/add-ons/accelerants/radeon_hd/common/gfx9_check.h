@@ -191,6 +191,18 @@ r5_gfx9_vmid_cntl(void)
 	return cntl;
 }
 
+/* A space with a parked buffer, or a submit still ahead of the fence,
+ * is not freed. holds is that buffer count. */
+static inline int
+r5_space_free_ok(int holds, uint64_t last, uint64_t seen)
+{
+	if (holds > 0)
+		return 0;
+	if (last > seen)
+		return 0;
+	return 1;
+}
+
 static inline int
 r5_gfx9_vmid_ctx_regs(uint32_t vmid, struct r5_gfx9_vmid_ctx* out)
 {
