@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Stick 26 runs the ordinary teapot, then SAM, then the ordinary teapot
+
+The selftest ran SAM first. Stick 26 runs the ordinary teapot, then SAM, then the ordinary teapot again, so a stale VMID 1 translation has to survive the ring flush. Stage U stays in the stick 25 order, with the HDP probe first and C1 last. Not booted.
+
 ### The ring flushes VMID 1 when the page table changes
 
 Stick 25's HDP probe wrote eight words through the BAR and read them back through the carveout, at once and after `sfence`. The carveout saw every write. B1, B2 and B5 still missed, A2 still hung, and the normal teapot still read zeros from GTT while `pixel-vram` was the right colour. That refutes the HDP explanation. The carveout window stays, because that is how Linux maps an APU.

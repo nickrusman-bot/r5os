@@ -671,6 +671,7 @@ main()
 	const char* selftestOrder[] = {
 		"highVa, false",
 		"\"vulkaninfo\"",
+		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
 		"stage_selftest(out)",
@@ -701,7 +702,7 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 6) != 0)
+			selftestOrder, 7) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
