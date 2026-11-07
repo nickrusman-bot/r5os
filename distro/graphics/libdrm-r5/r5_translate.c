@@ -37,6 +37,9 @@
 #define R5_IOC_NR(request) ((unsigned)(request) & 0xffu)
 
 static unsigned char sUnknownSeen[32];
+static const char *sIoctlName;
+static unsigned long sIoctlRequest;
+static char sIoctlDetail[192];
 
 
 static int
@@ -44,6 +47,57 @@ r5_fail(int err)
 {
 	errno = err;
 	return -1;
+}
+
+
+#if defined(R5_HOST_TEST)
+int r5_host_gpu_debug;
+static int
+r5_debug_on(void)
+{
+	return r5_host_gpu_debug;
+}
+#else
+static int
+r5_debug_on(void)
+{
+	static int cached = -1;
+	FILE *file;
+	char line[128];
+	if (cached >= 0)
+		return cached;
+	cached = 0;
+	file = fopen("/boot/home/config/settings/kernel/drivers/radeon_hd", "r");
+	if (file == NULL)
+		file = fopen("/boot/system/settings/kernel/drivers/radeon_hd", "r");
+	if (file == NULL)
+		return 0;
+	while (fgets(line, (int)sizeof(line), file) != NULL) {
+		if (strncmp(line, "gpu_debug", 9) == 0
+			&& strstr(line, "true") != NULL)
+			cached = 1;
+	}
+	fclose(file);
+	return cached;
+}
+#endif
+
+
+static int
+r5_ioctl_done(int ret)
+{
+	if (ret < 0) {
+		fprintf(stderr, "r5 libdrm: %s linux %#lx nr %#x%s%s errno %d\n",
+			sIoctlName != NULL ? sIoctlName : "ioctl", sIoctlRequest,
+			(unsigned)R5_IOC_NR(sIoctlRequest),
+			sIoctlDetail[0] != '\0' ? " " : "", sIoctlDetail, errno);
+	} else if (r5_debug_on()) {
+		fprintf(stderr, "r5 libdrm: %s linux %#lx nr %#x%s%s\n",
+			sIoctlName != NULL ? sIoctlName : "ioctl", sIoctlRequest,
+			(unsigned)R5_IOC_NR(sIoctlRequest),
+			sIoctlDetail[0] != '\0' ? " " : "", sIoctlDetail);
+	}
+	return ret;
 }
 
 
@@ -93,12 +147,6 @@ r5_area_address(int area)
 	if (get_area_info(area, &info) != B_OK)
 		return NULL;
 	return info.address;
-}
-
-static int
-r5_area_destroy(int area)
-{
-	return delete_area(area) == B_OK ? 0 : -1;
 }
 #elif defined(R5_HOST_TEST)
 void *r5_area_address(int area);
@@ -191,11 +239,17 @@ r5_amdgpu_info(int fd, struct drm_amdgpu_info *query)
 {
 	r5_gpu_info info;
 	r5_gpu_amd_info amd;
+	void *out;
 	memset(&info, 0, sizeof(info));
 	memset(&amd, 0, sizeof(amd));
 	if (r5_info(fd, &info, &amd) != 0)
 		return -1;
-	void *out = (void *)(uintptr_t)query->return_pointer;
+	if (query->query == AMDGPU_INFO_SENSOR || query->query == AMDGPU_INFO_VIDEO_CAPS)
+		snprintf(sIoctlDetail, sizeof(sIoctlDetail), "query %#x type %#x",
+			query->query, query->sensor_info.type);
+	else
+		snprintf(sIoctlDetail, sizeof(sIoctlDetail), "query %#x", query->query);
+	out = (void *)(uintptr_t)query->return_pointer;
 	if (query->query == AMDGPU_INFO_ACCEL_WORKING) {
 		uint32_t working = (info.capabilities & R5_GPU_CAP_RENDER) ? 1u : 0u;
 		return r5_copy_out(out, query->return_size, &working, sizeof(working));
@@ -246,6 +300,32 @@ r5_amdgpu_info(int fd, struct drm_amdgpu_info *query)
 		heap.gtt_size = info.gtt_bytes;
 		return r5_copy_out(out, query->return_size, &heap, sizeof(heap));
 	}
+	if (query->query == AMDGPU_INFO_VRAM_USAGE)
+		return r5_copy_out(out, query->return_size, &info.vram_usage,
+			sizeof(info.vram_usage));
+	if (query->query == AMDGPU_INFO_VIS_VRAM_USAGE)
+		return r5_copy_out(out, query->return_size, &info.visible_vram_usage,
+			sizeof(info.visible_vram_usage));
+	if (query->query == AMDGPU_INFO_GTT_USAGE)
+		return r5_copy_out(out, query->return_size, &info.gtt_usage,
+			sizeof(info.gtt_usage));
+	if (query->query == AMDGPU_INFO_MAX_IBS) {
+		uint32_t maxibs[AMDGPU_HW_IP_NUM];
+		memset(maxibs, 0, sizeof(maxibs));
+		maxibs[AMDGPU_HW_IP_GFX] = 8;
+		return r5_copy_out(out, query->return_size, maxibs, sizeof(maxibs));
+	}
+	if (query->query == AMDGPU_INFO_VIDEO_CAPS) {
+		/* No video block. Linux returns a zeroed codec table for a
+		 * chip without that codec, for both decode and encode. */
+		uint32_t type = query->video_cap.type;
+		struct drm_amdgpu_info_video_caps caps;
+		if (type != AMDGPU_INFO_VIDEO_CAPS_DECODE
+			&& type != AMDGPU_INFO_VIDEO_CAPS_ENCODE)
+			return r5_fail(EINVAL);
+		memset(&caps, 0, sizeof(caps));
+		return r5_copy_out(out, query->return_size, &caps, sizeof(caps));
+	}
 	if (query->query == AMDGPU_INFO_MEMORY) {
 		struct drm_amdgpu_memory_info memory;
 		uint64_t vram = info.vram_bytes;
@@ -277,12 +357,20 @@ r5_domain(uint64_t domains)
 static int
 r5_gem_create(int fd, union drm_amdgpu_gem_create *gem)
 {
+	snprintf(sIoctlDetail, sizeof(sIoctlDetail),
+		"domains %#llx flags %#llx size %llu align %llu",
+		(unsigned long long)gem->in.domains,
+		(unsigned long long)gem->in.domain_flags,
+		(unsigned long long)gem->in.bo_size,
+		(unsigned long long)gem->in.alignment);
 	r5_gpu_bo bo;
 	memset(&bo, 0, sizeof(bo));
 	bo.size = (uint32_t)sizeof(bo);
 	bo.version = 1;
 	bo.domain = r5_domain(gem->in.domains);
 	bo.bytes = gem->in.bo_size;
+	if ((gem->in.domain_flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC) != 0)
+		bo.flags |= R5_GPU_BO_WC;
 	if (r5_call(fd, R5_GPU_BO_CREATE, &bo, sizeof(bo)) != 0)
 		return -1;
 	gem->out.handle = bo.handle;
@@ -323,6 +411,27 @@ r5_ctx(int fd, union drm_amdgpu_ctx *ctx)
 			return -1;
 		return 0;
 	}
+	if (ctx->in.op == AMDGPU_CTX_OP_QUERY_STATE2) {
+		r5_gpu_info info;
+		r5_gpu_amd_info amd;
+		if (ctx->in.ctx_id == 0)
+			return r5_fail(EINVAL);
+		if (r5_info(fd, &info, &amd) != 0)
+			return -1;
+		ctx->out.state.flags = 0;
+		ctx->out.state.hangs = 0;
+		ctx->out.state.reset_status = AMDGPU_CTX_NO_RESET;
+		/* Linux reports RESET and GUILTY after a reset. There is
+		 * no reset here. The lost bit is that report, so Mesa
+		 * returns VK_ERROR_DEVICE_LOST. */
+		if ((info.capabilities & R5_GPU_CAP_LOST) != 0) {
+			ctx->out.state.flags = AMDGPU_CTX_QUERY2_FLAGS_RESET
+				| AMDGPU_CTX_QUERY2_FLAGS_GUILTY;
+			ctx->out.state.hangs = 1;
+			ctx->out.state.reset_status = AMDGPU_CTX_GUILTY_RESET;
+		}
+		return 0;
+	}
 	return r5_fail(ENOSYS);
 }
 
@@ -337,7 +446,10 @@ r5_va_flags(uint32_t flags)
 		out |= R5_GPU_VA_WRITE;
 	if ((flags & AMDGPU_VM_PAGE_EXECUTABLE) != 0)
 		out |= R5_GPU_VA_EXEC;
-	if (out == 0)
+	if ((flags & AMDGPU_VM_PAGE_PRT) != 0)
+		out |= R5_GPU_VA_PRT;
+	if ((out & (R5_GPU_VA_READ | R5_GPU_VA_WRITE | R5_GPU_VA_EXEC)) == 0
+		&& (out & R5_GPU_VA_PRT) == 0)
 		out = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
 	return out;
 }
@@ -357,13 +469,24 @@ r5_gem_va(int fd, struct drm_amdgpu_gem_va *va)
 	call.bo_offset = va->offset_in_bo;
 	call.map_bytes = va->map_size;
 	call.flags = r5_va_flags(va->flags);
+	snprintf(sIoctlDetail, sizeof(sIoctlDetail),
+		"operation %u va %#llx size %llu flags %#x", va->operation,
+		(unsigned long long)va->va_address,
+		(unsigned long long)va->map_size, va->flags);
 	unsigned long op = 0;
 	if (va->operation == AMDGPU_VA_OP_MAP)
 		op = R5_GPU_VA_MAP;
 	else if (va->operation == AMDGPU_VA_OP_UNMAP)
 		op = R5_GPU_VA_UNMAP;
+	else if (va->operation == AMDGPU_VA_OP_REPLACE)
+		op = R5_GPU_VA_REPLACE;
+	else if (va->operation == AMDGPU_VA_OP_CLEAR)
+		op = R5_GPU_VA_CLEAR;
 	else
 		return r5_fail(ENOSYS);
+	if (va->operation == AMDGPU_VA_OP_MAP && va->handle == 0
+		&& (va->flags & AMDGPU_VM_PAGE_PRT) == 0)
+		return r5_fail(EINVAL);
 	return r5_call(fd, op, &call, sizeof(call));
 }
 
@@ -796,8 +919,46 @@ r5_drm_get_device2(int fd, uint32_t flags, drmDevicePtr *device)
 }
 
 
+static int r5_drm_ioctl_body(int fd, unsigned long request, void *arg, size_t size);
+
+
+static const char *
+r5_ioctl_name(unsigned nr)
+{
+	if (nr == R5_IOC_NR(DRM_IOCTL_VERSION))
+		return "DRM_IOCTL_VERSION";
+	if (nr == R5_IOC_NR(DRM_IOCTL_GET_CAP))
+		return "DRM_IOCTL_GET_CAP";
+	if (nr == R5_IOC_NR(DRM_IOCTL_GEM_CLOSE))
+		return "DRM_IOCTL_GEM_CLOSE";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_INFO))
+		return "DRM_IOCTL_AMDGPU_INFO";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_CREATE))
+		return "DRM_IOCTL_AMDGPU_GEM_CREATE";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_VA))
+		return "DRM_IOCTL_AMDGPU_GEM_VA";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_CTX))
+		return "DRM_IOCTL_AMDGPU_CTX";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_CS))
+		return "DRM_IOCTL_AMDGPU_CS";
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_WAIT_CS))
+		return "DRM_IOCTL_AMDGPU_WAIT_CS";
+	return "ioctl";
+}
+
+
 int
 r5_drm_ioctl(int fd, unsigned long request, void *arg, size_t size)
+{
+	sIoctlRequest = request;
+	sIoctlName = r5_ioctl_name(R5_IOC_NR(request));
+	sIoctlDetail[0] = '\0';
+	return r5_ioctl_done(r5_drm_ioctl_body(fd, request, arg, size));
+}
+
+
+static int
+r5_drm_ioctl_body(int fd, unsigned long request, void *arg, size_t size)
 {
 	unsigned nr = R5_IOC_NR(request);
 	(void)size;
@@ -937,8 +1098,10 @@ r5_bo_cpu_map(int fd, unsigned int handle, void **cpu, int *area)
 	bo.size = (uint32_t)sizeof(bo);
 	bo.version = 1;
 	bo.handle = handle;
-	if (r5_call(fd, R5_GPU_BO_MAP, &bo, sizeof(bo)) != 0)
+	if (r5_call(fd, R5_GPU_BO_MAP, &bo, sizeof(bo)) != 0) {
+		fprintf(stderr, "r5 libdrm: BO_MAP handle %u errno %d\n", handle, errno);
 		return r5_neg(errno);
+	}
 	if (bo.area < 0)
 		return r5_neg(ENODEV);
 	void *address = r5_area_address(bo.area);
@@ -954,8 +1117,11 @@ r5_bo_cpu_map(int fd, unsigned int handle, void **cpu, int *area)
 drm_public int
 r5_bo_cpu_unmap(int fd, int area)
 {
-	int ret;
 	(void)fd;
-	ret = r5_area_destroy(area);
-	return ret == 0 ? 0 : r5_neg(errno);
+	(void)area;
+	/* The kernel owns the clone and deletes it when the buffer is
+	 * released. Deleting it here would make the next BO_MAP from this
+	 * team return an area id that is already gone.
+	 */
+	return 0;
 }

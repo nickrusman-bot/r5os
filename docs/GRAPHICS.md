@@ -162,24 +162,54 @@ These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not th
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, written at 15:29 Europe/Amsterdam, reached the desktop. The lines are `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, `k1_wait_us 1132`, `k2 map count 8 pages 256`, `k2 ptb 0000000812c18001 got 12c18001 00000008`, `k2 inv 007c0001`, `k2 ok gart`, `k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 10 seen 10`. There is no `k2 fault` line. The user shut that session down and reported no panic. The syslog exported while the desktop was up does not contain the stop lines. A boot with `gfx9_kernel` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
 
-## GFX9 user address space (M4, not fixed)
+## GFX9 user address space (draft)
 
-This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is written down before the page-table code. It is not a fixed sequence: no boot has programmed VMID 1 yet.
+This section is still a draft. Stick 19 did not draw the teapot without SAM (`pixels MISMATCH`). The register list is what the code programs. The stick lines below are what booted. The K sections above are not part of this draft.
 
-`amdgpu_vm_adjust_size(adev, 256 * 1024, 9, 3, 48)` asks for 256 TiB, 9-bit blocks, at most 3 levels above the page table, and 48 VA bits. The minimum and the maximum are the same 262144 GiB, so the VM size does not depend on the RAM size. `max_pfn` is `262144 << 18` (2^36 pages). The byte size minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`: 8 KiB trap, 2 MiB seq64, 2 MiB CSA) is `0xffffffbfe000`.
+## Render node (draft)
 
-| Field | Value |
-|---|---|
-| `virtual_address_offset` | `0x10000` (`AMDGPU_VA_RESERVED_BOTTOM`, 64 KiB) |
-| `virtual_address_max` | `0x800000000000` (`AMDGPU_GMC_HOLE_START`) |
-| `high_va_offset` | `0xffff800000000000` (`AMDGPU_GMC_HOLE_END`) |
-| `high_va_max` | `0xffffffffffbfe000` (`AMDGPU_GMC_HOLE_END` or the byte size) |
+The node is `/dev/gpu/radeon_hd/<n>`. The interface is API 1.0. The calls, from `R5_GPU_OP_BASE` 30479, are `GET_INFO`, `READ_REG`, `CTX_CREATE`, `CTX_DESTROY`, `BO_CREATE`, `BO_FREE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP`, `CS_SUBMIT`, `FENCE_WAIT`, and the syncobj calls through `SYNCOBJ_TRANSFER`, then `VA_REPLACE`, `VA_CLEAR`, and `SELFTEST` (`R5_GPU_OP_BASE + 23`). `SELFTEST` runs when `gpu_selftest` is true and returns `B_NOT_ALLOWED` otherwise. It does not run on open. A shipped call does not change.
 
-The high range contains `address32_hi` `0xffff8000`. The walk is four levels: root PDB2, then PDB1, PDB0 and the page table. `PAGE_TABLE_DEPTH` is 3. `PAGE_TABLE_BLOCK_SIZE` is 0 because `translate_further` is off on GC 9.3 and the block field is `block_size - 9`. Each level takes 9 bits. The page is 4 KiB. A PDE is the physical address (`FB_OFFSET << 24` plus the table offset) with `VALID`, and it is rejected when it fails `0xFFFF00000000003F`. A system PTE uses the same flags as the K2 page, including `MTYPE_UC` at bit 57.
+Stick 18 and stick 19 both reached the desktop with this node. On stick 19, `vulkaninfo --summary` exited 0 and named RADV Renoir next to llvmpipe. The SAM teapot submitted indirect buffers `ffff800100284000` (24 dwords) and `ffff800100001000` (752 dwords), `vkQueueWaitIdle` returned 0, and the six sample pixels matched (`pixels ok`, exit 0). The teapot without SAM used the same two buffers, `vkQueueWaitIdle` returned 0, and the samples were `00000000`, `b87214f0`, `00000000`, `00000000`, `00000000`, `00000000` (`pixels MISMATCH`, exit 2).
 
-`MC_VM_MX_L1_TLB_CNTL` `SYSTEM_ACCESS_MODE` is 3 in `gfxhub_v1_0_init_tlb_regs`, and `SYSTEM_APERTURE_UNMAPPED_ACCESS` is 0. `VM_L2_CNTL` `CONTEXT1_IDENTITY_ACCESS_MODE` is 1, and the identity aperture is then programmed to an empty range (`LOW` `0xffffffff`/`0xf`, `HIGH` 0). A user indirect buffer uses VMID 1 page tables, not the VMID 0 tables. With the identity aperture empty, an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. That is the recorded check. M4 does not change `SYSTEM_ACCESS_MODE`.
+## VMID 1 (draft)
 
-The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. No boot has confirmed these writes yet.
+VMID 1 is one shared address space. The walk is four levels and 48 bits. `PAGE_TABLE_DEPTH` is 3 and `PAGE_TABLE_BLOCK_SIZE` is 0, because `translate_further` is off on GC 9.3. The 6 Nov 2026 Linux capture on this machine logs `vm size is 262144 GB, 4 levels, block size is 9-bit, fragment size is 9-bit`.
+
+| Field | Value | Source |
+|---|---|---|
+| `virtual_address_offset` | `0x10000` | `AMDGPU_VA_RESERVED_BOTTOM` |
+| `virtual_address_max` | `0x800000000000` | `AMDGPU_GMC_HOLE_START` |
+| `high_va_offset` | `0xffff800000000000` | `AMDGPU_GMC_HOLE_END` |
+| `high_va_max` | `0xffffffffffbfe000` | hole end or the byte size, minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`) |
+
+Linux 6.12 `amdgpu_gmc.h` does not reserve the first page of that high range. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off. The 6 Nov 2026 `dmesg` has no AMD-Vi line. A canonical high address and the same address masked with `AMDGPU_GMC_HOLE_MASK` (`0x0000ffffffffffff`) select the same slots. Adding the filled byte count to a GPU address inside the range does not wrap, and an address inside the hole is rejected.
+
+The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). The end page is `2^36 - 1` (`0x092d`/`0x092e`). `VM_CONTEXT1_CNTL` (`0x0881`) is `0x007ffe07` on the third stick of 6 Nov 2026, and bit 7 (retry) stays off. The identity aperture (`0x0851`–`0x0854`) is empty (`LOW` `0xffffffff`/`0xf`, `HIGH` 0), so an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. `SYSTEM_ACCESS_MODE` stays 3. The TLB flush uses engine 0. VMID 1 through 15 get `SH_MEM_CONFIG` `0x1018` and `SH_MEM_BASES` `0x20001000`. VMID 0 stays bases 0. Stick 19 logged `vmid1 ptb` and no `vmid1 fail`.
+
+`CP_IB1_BASE_HI` keeps bits 15:0. A user indirect buffer writes the full upper 32 bits, as Linux does. On stick 19 the hung U2d buffer at `0xffff800000000000` read back as `CP_IB1` base `0000800000000000`, size 0, offset 0.
+
+A user GTT page is `MTYPE_NC`. `CPU_GTT_USWC` leaves `SNOOPED` clear. A cached user GTT page sets `SNOOPED`. User VRAM stays `MTYPE_UC` until its own boot. The K2 page stays `MTYPE_UC`. Stick 19 printed `gtt wc area`, `gtt wc clone` and `stage wc area` with `status 0x0`. U2c, a write-combined GTT indirect buffer at `00007fffffffe000`, printed `ok 1 ms`. U2d, the same packet at `0xffff800000000000`, printed `timeout 5000 ms`. The page-table entry was `000000002442f073` (write-combined, no `SNOOPED`) and `fault` stayed 0. The next image runs U2c, U2a, U2b, U4b (VRAM at the first high page), U2e (write-combined GTT at `0xffff800100000000`, the region of the stick 19 teapot buffers), U2f (write-combined GTT at `0xffff800000200000`), then U2d. U2d keeps the indirect buffer at `0xffff800000000000` and writes the low VRAM page, the same destination as U2c. U2g is last: that same buffer, writing the high VRAM page. The run stops at the first hang. That order has not been booted.
+
+## User job (draft)
+
+A user job is the non-MCBP frame Linux puts around the indirect buffers: two `SWITCH_BUFFER` packets, `CONTEXT_CONTROL`, both `FRAME_CONTROL` packets, the indirect buffers, both `RELEASE_MEM` packets, and a closing `SWITCH_BUFFER`. The first submit of a context uses `CONTEXT_CONTROL` `0x81018003`. A later submit of the same context uses `0x80000000`. `COND_EXEC` and the pipeline-sync `WAIT_REG_MEM` are not written while every client shares VMID 1. The indirect-buffer packet is opcode `0x3f`. The VMID is bits 24–27. The translator and the kernel reject any IB flag other than 0, including `AMDGPU_IB_FLAG_PREAMBLE`.
+
+The user fence is the kernel MC address of the fence page plus 2048, a 64-bit sequence, `INT_SEL` 0. The interrupt fence is 16 bytes later, 32-bit, `INT_SEL` 2. The fence page is not mapped in VMID 1. Stick 19's SAM teapot reached `vkQueueWaitIdle` 0, so that fence retired. The userspace IB stage after U2d printed `fence timeout` and the watchdog printed `gpu lost watchdog` with `seen` still 37.
+
+`AMDGPU_CTX_OP_QUERY_STATE2` returns 0 while the device is usable. After the watchdog it returns `RESET` and `GUILTY`. The watchdog is 10 seconds. A client timeout does not mark the device lost.
+
+## Device info (draft)
+
+`GET_INFO` fills the vendor block. `num_rb_pipes` and `enabled_rb_pipes_mask` come from `CC_RB_BACKEND_DISABLE` and `GC_USER_RB_BACKEND_DISABLE`. Stick 19 logged `rb num 2 mask 3` on every read of that pair. One shader engine means `GRBM_GFX_INDEX` is not written. `num_shader_engines` is 1 and `num_cu_per_sh` is 8 until the device passport (M5) reads them from the source Linux uses. Clocks (`1800000` kHz, `1333000` kHz), memory type LPDDR4 and 128 bits are the Mesa record for device `15e7`. The SMU and the UMC table are not read. `gb_addr_config` is the `READ_MMR_REG` of `0x063e`. `gpu_counter_freq` is `100000` kHz for device `15e7` only.
+
+## Submission (draft)
+
+`CS_SUBMIT` takes one context, one ring, and at most eight indirect buffers. Stick 19's two teapots both submitted the 24-dword and 752-dword buffers named above. The `clflush` of a GTT indirect buffer at submit is still there. It does not cover a chained buffer. It stays until a stick shows the write-combined mapping is enough.
+
+## Fence by interrupt (draft)
+
+`FENCE_WAIT` waits on the sequence `CS_SUBMIT` returned. The K1 interrupt in `GFX9 kernel on GC 9.3 (fixed)` is a different fence and stays as it is. Stick 19 has no source 184. The SAM teapot's wait returned. The wait after the U2d hang did not: `seen` stayed 37 and the watchdog fired.
 
 ## Known GFX9 differences
 
@@ -205,3 +235,7 @@ No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, op
 ## Reporting
 
 Say software or GPU. Name the PCI ID, the ICD, and the machine. VirtualBox is never the 5625U result.
+
+## VMID 1-15 per open file (not booted)
+
+One open file has its own four-level page table. The boot root written by the VMID 1 setup stays in place for that setup. A user map goes into the file's table. VMIDs 1 through 15 are handed out one owner at a time. The same owner keeps its VMID while a job is still in flight, and that path does not flush. A VMID given to another owner writes that file's page-table base, waits for the invalidate ack, and waits on the previous user fence before the indirect buffer. The invalidate word is `r5_gfx9_tlb_req` for that VMID. It is not the VMID 0 word from the K2 section. `VM_INVALIDATE_ENG0_SEM` is not in this tree, and this sequence does not write it. `SH_MEM` for that VMID is written when the owner changes, before the doorbell. A sixteenth concurrent owner gets nothing. VRAM is at most half the carveout (`MC_VM_FB_LOCATION_BASE` and `TOP`, GC `0x096b` and `0x096c`). GTT is at most a quarter of RAM. Over that is `B_NO_MEMORY`. Closing the file frees the VMID once its last fence has retired; until then the file is parked. This has not been booted. The K2 page-table base, the K2 invalidate word, and the ring-index formula are unchanged.

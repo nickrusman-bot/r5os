@@ -27,6 +27,7 @@
 #include <driver_settings.h>
 #include <stdarg.h>
 #include "gfx9_start.h"
+#include "r5_amd_device.h"
 // SPDX-SnippetEnd
 
 #include <fcntl.h>
@@ -999,7 +1000,7 @@ radeon_gpu_ring_boot(uint32 ringType)
 			r5_host_fill(&host);
 			r5_gfx9_prepare(&host, gInfo->fb.vramSize);
 			uint32 pciID = gInfo->shared_info->pciID;
-			if (pciID == 0x15e7 || pciID == 0x1636 || pciID == 0x1638) {
+			if (r5_amd_gfx9_cp(pciID)) {
 				r5_gfx9_results results;
 				memset(&results, 0, sizeof(results));
 				r5_gfx9_start(&host, pciID, gInfo->fb.vramSize,
@@ -1009,7 +1010,7 @@ radeon_gpu_ring_boot(uint32 ringType)
 					results.text);
 				gInfo->shared_info->gfx9_text_used = results.used;
 				radeon_gfx9_write_text();
-			} else if (pciID == 0x164c) {
+			} else if (r5_amd_lucienne(pciID)) {
 				ERROR("%s: R5 radeon_hd: Lucienne firmware stays unloaded, "
 					"mode 2 not sent\n", __func__);
 			} else {

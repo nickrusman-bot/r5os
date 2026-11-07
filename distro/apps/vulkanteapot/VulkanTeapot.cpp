@@ -421,7 +421,9 @@ draw_frame(DrawState* draw, const float matrix[16])
 	submit.commandBufferCount = 1;
 	submit.pCommandBuffers = &draw->cmd;
 	check("vkQueueSubmit", vkQueueSubmit(draw->queue, 1, &submit, VK_NULL_HANDLE));
-	check("vkQueueWaitIdle", vkQueueWaitIdle(draw->queue));
+	VkResult waited = vkQueueWaitIdle(draw->queue);
+	printf("vkQueueWaitIdle %d\n", (int)waited);
+	check("vkQueueWaitIdle", waited);
 }
 
 
@@ -907,6 +909,7 @@ main(int argc, char** argv)
 	check("vkMapMemory", vkMapMemory(device, readMemory, 0, kSize * kSize * 4, 0,
 		(void**)&draw.pixels));
 
+	int pixelStatus = 0;
 	if (selftest) {
 		draw_frame(&draw, matrix);
 		const int sampleAt[][2] = {
@@ -920,15 +923,33 @@ main(int argc, char** argv)
 			printf("driverID unknown\n");
 		printf("frames 1\n");
 		printf("fps 0\n");
+		/* Lavapipe on the image of 5 Nov 2026, 23:46 Europe/Amsterdam.
+		 * The second sample is the same background as the first. */
+		static const uint8_t reference[6][4] = {
+			{0x26, 0x2e, 0x38, 0xff},
+			{0x26, 0x2e, 0x38, 0xff},
+			{0x85, 0x3b, 0x16, 0xff},
+			{0xa6, 0x4a, 0x1c, 0xff},
+			{0x87, 0x3c, 0x17, 0xff},
+			{0x69, 0x2e, 0x11, 0xff}
+		};
 		int mismatch = 0;
 		for (int i = 0; i < 6; i++) {
 			int x = sampleAt[i][0];
 			int y = sampleAt[i][1];
 			const uint8_t* p = draw.pixels + (y * kSize + x) * 4;
 			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
-			(void)mismatch;
+			for (int channel = 0; channel < 4; channel++) {
+				int delta = (int)p[channel] - (int)reference[i][channel];
+				if (delta < 0)
+					delta = -delta;
+				if (delta > 2)
+					mismatch = 1;
+			}
 		}
-		printf("pixels recorded\n");
+		printf("%s\n", mismatch ? "pixels MISMATCH" : "pixels ok");
+		if (mismatch)
+			pixelStatus = 2;
 	} else {
 		if (be_app == NULL)
 			new BApplication("application/x-vnd.R5OS-VulkanTeapot");
@@ -944,7 +965,11 @@ main(int argc, char** argv)
 		be_app->Run();
 	}
 
-	vkDeviceWaitIdle(device);
+	{
+		VkResult waited = vkDeviceWaitIdle(device);
+		printf("vkDeviceWaitIdle %d\n", (int)waited);
+		check("vkDeviceWaitIdle", waited);
+	}
 	vkUnmapMemory(device, readMemory);
 	vkDestroyCommandPool(device, pool, NULL);
 	vkDestroyBuffer(device, readback, NULL);
@@ -971,5 +996,5 @@ main(int argc, char** argv)
 	free(mesh.indices);
 	free(gpus);
 	free(familyInfo);
-	return 0;
+	return pixelStatus;
 }

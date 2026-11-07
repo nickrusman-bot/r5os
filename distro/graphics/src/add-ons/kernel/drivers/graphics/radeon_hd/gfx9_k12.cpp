@@ -9,7 +9,10 @@
 
 #include "gfx9_start.h"
 #include "r5_vm.h"
+#include "r5_vmid.h"
+#include "r5_limit.h"
 #include "r5_gpu.h"
+#include "r5_amd_device.h"
 #include "r5_span.h"
 #include "radeon_hd_private.h"
 
@@ -22,6 +25,7 @@
 // included here.
 extern "C" status_t vm_set_area_memory_type(area_id id,
 	phys_addr_t physicalBase, uint32 type);
+void r5_gpu_fill_passport(radeon_info* info);
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -44,6 +48,8 @@ static uint8* sIhRing = NULL;
 static volatile uint32* sIhWriteback = NULL;
 static uint32 sIhRptr = 0;
 static uint32 sIhEntries = 0;
+static uint32 sIhOther = 0;
+extern bool r5_gpu_log_error();
 static uint32 sEopCount = 0;
 static uint32 sLastClient = 0;
 static uint32 sLastSource = 0;
@@ -61,6 +67,10 @@ static const uint32 kGcBase = 0x2000;
 static const uint32 kNbioBase = 0x0D20;
 static const uint32 kClientCp = 0x14;
 static const uint32 kSourceEop = 181;
+static r5_gfx9_ib_now sPrivIb1;
+static r5_gfx9_ib_now sPrivIb2;
+static int32 sPrivPending;
+static volatile int32 sPrivCount;
 
 
 static uint32
@@ -261,6 +271,39 @@ ih_handler(void* data)
 			r5_gpu_retire_wake();
 			sEopCount++;
 			woke = true;
+		} else {
+			if (entry.client == kClientCp && (entry.source == 184
+				|| entry.source == 185 || entry.source == 186))
+				sPrivCount++;
+			if (r5_gpu_log_error()) {
+				const uint32* raw = (const uint32*)(sIhRing + rptr);
+				uint32 vmid = (raw[0] >> 24) & 0xfu;
+				sIhOther++;
+				dprintf("radeon_hd: ih client %lu src %lu ring %lu vmid %lu "
+					"%08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+					(unsigned long)entry.client, (unsigned long)entry.source,
+					(unsigned long)entry.ring, (unsigned long)vmid,
+					(unsigned long)raw[0], (unsigned long)raw[1],
+					(unsigned long)raw[2], (unsigned long)raw[3],
+					(unsigned long)raw[4], (unsigned long)raw[5],
+					(unsigned long)raw[6], (unsigned long)raw[7]);
+				/* Registers only. The dword dump runs on the retire thread,
+				 * from this snapshot, so the handler does not map a page. */
+				if (entry.client == kClientCp && sPrivPending == 0) {
+					r5_gfx9_ib_regs(&sPrivIb1, &sPrivIb2);
+					sPrivPending = 1;
+					if (r5_gpu_log_error())
+					dprintf("radeon_hd: ih ib1 %016llx sz %08lx off %08lx "
+						"ib2 %016llx sz %08lx off %08lx\n",
+						(unsigned long long)sPrivIb1.base,
+						(unsigned long)sPrivIb1.size,
+						(unsigned long)sPrivIb1.offset,
+						(unsigned long long)sPrivIb2.base,
+						(unsigned long)sPrivIb2.size,
+						(unsigned long)sPrivIb2.offset);
+					r5_gpu_retire_wake();
+				}
+			}
 		}
 		rptr = (rptr + 32) & (kIhBytes - 1);
 		walked++;
@@ -429,6 +472,14 @@ ih_on()
 	kwrite(sInfo, oss_byte(0x0080), cntl);
 
 	uint32 cp = kread(sInfo, gc_byte(0x106a));
+	/* gc_9_0_sh_mask.h CP_INT_CNTL_RING0. TIME_STAMP is the EOP
+	 * (shift 0x1a). PRIV_INSTR 0x16, PRIV_REG 0x17 and OPCODE_ERROR
+	 * 0x18 match gfx_v9_0_set_priv_inst_fault_state and
+	 * gfx_v9_0_set_priv_reg_fault_state. Source ids 184 and 185 are
+	 * CP_PRIV_REG_FAULT and CP_PRIV_INSTR_FAULT. */
+	cp |= 1u << 0x16;
+	cp |= 1u << 0x17;
+	cp |= 1u << 0x18;
 	cp |= 1u << 0x1a;
 	kwrite(sInfo, gc_byte(0x106a), cp);
 	return true;
@@ -503,6 +554,18 @@ run_k1()
 }
 
 
+static uint64 sK2GartMc = 0;
+static uint8* sK2GartCpu = NULL;
+static uint64 sK2DummyPa = 0;
+
+/* VM_L2_PROTECTION_FAULT_CNTL. Bits 2–12 are the ENABLE_DEFAULT fields.
+ * Bits 30 and 31 are CRASH_ON_NO_RETRY_FAULT and CRASH_ON_RETRY_FAULT.
+ * gfxhub_v1_0_set_fault_enable_default turns the defaults on and the
+ * crash bits off when amdgpu_vm_fault_stop stays at never. */
+static const uint32 kFaultDefaultMask = 0x1ffcu;
+static const uint32 kFaultCrashMask = 0xc0000000u;
+
+
 static void
 run_k2()
 {
@@ -549,6 +612,7 @@ run_k2()
 	}
 	uint32 fb = kread(sInfo, gc_byte(0x096b));
 	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
+	sK2DummyPa = dummyPa;
 	uint64 flags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM | R5_GFX9_PTE_SNOOPED
 		| R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
 	uint64 dummyPte = r5_gfx9_gart_pte(dummyPa, flags);
@@ -711,6 +775,11 @@ run_k2()
 	}
 	knote("k2_ib wb %08lx seq %lu seen %lu", (unsigned long)seenWord,
 		(unsigned long)ibSequence, (unsigned long)seenSeq);
+	if (dmaOk && ib) {
+		sK2GartMc = gartStart;
+		sK2GartCpu = (uint8*)system;
+		r5_gfx9_cp_dump("k2 baseline", 0);
+	}
 	if (!(dmaOk && ib)) {
 		uint32 faultStatus = kread(sInfo, gc_byte(0x084b));
 		uint32 faultLo = kread(sInfo, gc_byte(0x084c));
@@ -737,9 +806,49 @@ run_k2()
 }
 
 
+bool
+r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu)
+{
+	if (mc == NULL || cpu == NULL || sK2GartMc == 0 || sK2GartCpu == NULL)
+		return false;
+	*mc = sK2GartMc;
+	*cpu = sK2GartCpu;
+	return true;
+}
+
+
 static r5_vm sVm;
 static r5_vm_page sVmPages[1024];
 static bool sVmid1 = false;
+
+struct r5_as {
+	uint32		id;
+	r5_vm		vm;
+	r5_vm_page	pages[256];
+	int			loaded;
+	int			parked;
+	uint64		last;
+	uint32		vmid;
+};
+
+static r5_as* sSpaces[64];
+static r5_as* sBound = NULL;
+static r5_vmid_mgr sVmids;
+static int sVmidReady = 0;
+static uint32 sNextAs = 1;
+static r5_vm_page sFreePages[1024];
+static uint32 sFreeCount = 0;
+
+extern "C" uint64 vm_page_num_pages();
+
+
+static r5_vm*
+current_vm()
+{
+	if (sBound != NULL && sBound->vm.used != 0)
+		return &sBound->vm;
+	return &sVm;
+}
 
 
 static int
@@ -748,6 +857,12 @@ vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
 	(void)cookie;
 	uint64 offset = 0;
 	uint8* address = NULL;
+	if (sFreeCount > 0) {
+		sFreeCount--;
+		*physical = sFreePages[sFreeCount].physical;
+		*cpu = sFreePages[sFreeCount].cpu;
+		return 1;
+	}
 	if (sHost.vram_alloc == NULL || sInfo == NULL)
 		return 0;
 	if (sHost.vram_alloc(sInfo, 4096, 4096, &offset, &address) != B_OK
@@ -809,14 +924,17 @@ r5_gfx9_free_user_vram(uint64 offset)
 bool
 r5_gfx9_vmid1_flush()
 {
-	if (sInfo == NULL)
+	if (sInfo == NULL) {
+		knote("vmid1 fail info");
 		return false;
+	}
 	const uint32 eng = 0;
 	uint32 inv = r5_gfx9_tlb_req(1, 0);
 	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
 	(void)kread(sInfo, gc_byte(0x08a3 + eng));
+	const uint32 ackBit = r5_gfx9_tlb_ack_mask(1);
 	for (int i = 0; i < 10000; i++) {
-		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & 1u) != 0)
+		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & ackBit) != 0)
 			return true;
 		snooze(10);
 	}
@@ -826,24 +944,71 @@ r5_gfx9_vmid1_flush()
 
 
 bool
+r5_gfx9_sh_mem(uint32 vmid)
+{
+	/* gfx_v9_0_constants_init. ALIGNMENT_MODE unaligned and
+	 * RETRY_DISABLE are the VMID 0 value 0x1018. PRIVATE_BASE and
+	 * SHARED_BASE make SH_MEM_BASES 0x20001000. GRBM_GFX_CNTL is
+	 * vmid << 4, then 0 so the next user is VMID 0 again. VMID 0
+	 * itself stays the ring contract and is not written here. */
+	if (sInfo == NULL || vmid == 0 || vmid > 15)
+		return false;
+	const uint32 shConfig = (3u << 3) | (1u << 12);
+	const uint32 shBases = (0x2000u << 16) | 0x1000u;
+	kwrite(sInfo, gc_byte(0x0022), vmid << 4);
+	kwrite(sInfo, gc_byte(0x030d), shConfig);
+	kwrite(sInfo, gc_byte(0x030a), shBases);
+	kwrite(sInfo, gc_byte(0x0022), 0);
+	return true;
+}
+
+
+bool
 r5_gfx9_vmid1_setup()
 {
-	/* One shared VMID 1 for every client. A later context reuses the
-	 * tables. Closing the last client does not rebuild them. */
+	/* The boot root stays this shared table. A bound file maps through
+	 * its own page table. These register writes stay the VMID 1 setup. */
 	if (sVmid1)
 		return true;
-	if (sVm.used != 0 || !r5_gfx9_ring_ready() || sInfo == NULL)
+	if (!r5_gfx9_ring_ready() || sInfo == NULL) {
+		knote("vmid1 fail ring");
 		return false;
-	memset(&sVm, 0, sizeof(sVm));
-	sVm.pages = sVmPages;
-	sVm.capacity = 1024;
-	sVm.alloc = vm_page_alloc;
-	if (!r5_vm_new_page(&sVm))
-		return false;
-	asm volatile("sfence" ::: "memory");
+	}
+	if (sK2DummyPa == 0) {
+		uint64 offset = 0;
+		uint8* dummy = NULL;
+		if (sHost.vram_alloc == NULL
+			|| sHost.vram_alloc(sInfo, 4096, 4096, &offset, &dummy) != B_OK
+			|| dummy == NULL) {
+			knote("vmid1 fail default");
+			return false;
+		}
+		memset(dummy, 0, 4096);
+		uint32 fb = kread(sInfo, gc_byte(0x096b));
+		sK2DummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
+	}
+	/* The root page is kept after a failed flush. The next attempt
+	 * rewrites the base from that same page. There is no free for
+	 * vm_page_alloc, and the page stays valid.
+	 */
+	if (sVm.used == 0) {
+		memset(&sVm, 0, sizeof(sVm));
+		sVm.pages = sVmPages;
+		sVm.capacity = 1024;
+		sVm.alloc = vm_page_alloc;
+		if (!r5_vm_new_page(&sVm)) {
+			knote("vmid1 fail page");
+			memset(&sVm, 0, sizeof(sVm));
+			return false;
+		}
+		asm volatile("sfence" ::: "memory");
+		if (!r5_gfx9_pde_aligned(sVm.pages[0].physical)) {
+			knote("vmid1 fail align");
+			memset(&sVm, 0, sizeof(sVm));
+			return false;
+		}
+	}
 	uint64 rootPa = sVm.pages[0].physical;
-	if (!r5_gfx9_pde_aligned(rootPa))
-		return false;
 	uint64 tableBase = rootPa | (uint64)R5_GFX9_PTE_VALID;
 	kwrite(sInfo, gc_byte(0x0851), 0xffffffffu);
 	kwrite(sInfo, gc_byte(0x0852), 0xfu);
@@ -855,6 +1020,18 @@ r5_gfx9_vmid1_setup()
 	kwrite(sInfo, gc_byte(0x090e), 0);
 	kwrite(sInfo, gc_byte(0x092d), 0xffffffffu);
 	kwrite(sInfo, gc_byte(0x092e), 0xfu);
+	/* A faulting VMID 1 access lands on the K2 dummy page, not at
+	 * physical 0. The page number is the MC address >> 12.
+	 */
+	kwrite(sInfo, gc_byte(0x084e), (uint32)(sK2DummyPa >> 12));
+	kwrite(sInfo, gc_byte(0x084f), (uint32)(sK2DummyPa >> 44));
+	uint32 faultCntl = kread(sInfo, gc_byte(0x0847));
+	uint32 faultNext = (faultCntl | kFaultDefaultMask) & ~kFaultCrashMask;
+	if (faultNext != faultCntl)
+		kwrite(sInfo, gc_byte(0x0847), faultNext);
+	/* RETRY_PERMISSION_OR_INVALID_PAGE_FAULT is bit 7. Linux sets it
+	 * (0x007ffe87). R5 has no retry-fault handler, so the bit stays off
+	 * and the value stays 0x007ffe07. */
 	uint32 cntl = 1u | (3u << 1);
 	cntl |= (1u << 9) | (1u << 10);
 	cntl |= (1u << 11) | (1u << 12);
@@ -864,12 +1041,40 @@ r5_gfx9_vmid1_setup()
 	cntl |= (1u << 19) | (1u << 20);
 	cntl |= (1u << 21) | (1u << 22);
 	kwrite(sInfo, gc_byte(0x0881), cntl);
-	if (!r5_gfx9_vmid1_flush())
+	if (!r5_gfx9_vmid1_flush()) {
+		/* CNTL is already enabled. Turn the context off so a later
+		 * attempt does not run on the half-written state. The pages
+		 * above stay for that attempt.
+		 */
+		kwrite(sInfo, gc_byte(0x0881), 0);
 		return false;
+	}
+	/* gfx_v9_0_constants_init for VMID 1..15. ALIGNMENT_MODE unaligned
+	 * and RETRY_DISABLE match VMID 0 (0x1018). PRIVATE_BASE is
+	 * 0x1000000000000000 >> 48 and SHARED_BASE is 0x2000000000000000 >> 48,
+	 * so SH_MEM_BASES is 0x20001000. VMID 0 stays the ring contract
+	 * (bases 0) and is not written here. Callers hold gpu_lock, the same
+	 * lock as the other GRBM_GFX_CNTL users. These are registers only.
+	 */
+	const uint32 shConfig = (3u << 3) | (1u << 12);
+	const uint32 shBases = (0x2000u << 16) | 0x1000u;
+	for (uint32 vmid = 1; vmid <= 15; vmid++) {
+		kwrite(sInfo, gc_byte(0x0022), vmid << 4);
+		kwrite(sInfo, gc_byte(0x030d), shConfig);
+		kwrite(sInfo, gc_byte(0x030a), shBases);
+	}
+	kwrite(sInfo, gc_byte(0x0022), 1u << 4);
+	uint32 shRead = kread(sInfo, gc_byte(0x030d));
+	uint32 baseRead = kread(sInfo, gc_byte(0x030a));
+	kwrite(sInfo, gc_byte(0x0022), 0);
 	sVmid1 = true;
+	knote("vmid1 sh_mem config %08lx bases %08lx",
+		(unsigned long)shRead, (unsigned long)baseRead);
 	knote("vmid1 ptb %016llx cntl %08lx pages %lu",
 		(unsigned long long)tableBase, (unsigned long)cntl,
 		(unsigned long)sVm.used);
+	knote("vmid1 default %016llx fault %08lx",
+		(unsigned long long)sK2DummyPa, (unsigned long)faultNext);
 	knote("vmid1 identity low %08lx %08lx high %08lx %08lx",
 		(unsigned long)kread(sInfo, gc_byte(0x0851)),
 		(unsigned long)kread(sInfo, gc_byte(0x0852)),
@@ -884,7 +1089,7 @@ r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 {
 	if (!sVmid1)
 		return false;
-	if (!r5_vm_map_page(&sVm, va, pte))
+	if (!r5_vm_map_page(current_vm(), va, pte))
 		return false;
 	asm volatile("sfence" ::: "memory");
 	return true;
@@ -897,9 +1102,108 @@ r5_gfx9_vmid1_lookup(uint64 va)
 	uint64 pte = 0;
 	if (!sVmid1)
 		return false;
-	if (r5_vm_lookup(&sVm, va & ~0xfffull, &pte) == 0)
+	if (r5_vm_lookup(current_vm(), va & ~0xfffull, &pte) == 0)
 		return false;
 	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
+}
+
+
+bool
+r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
+{
+	if (pte == NULL || !sVmid1)
+		return false;
+	return r5_vm_lookup(current_vm(), va & ~0xfffull, pte) != 0;
+}
+
+
+/* The page comes from the VMID 1 table. A system page is mapped for the
+ * copy and unmapped after it. A VRAM page is the pool window. Neither
+ * is a user address (SMAP). */
+bool
+r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
+{
+	uint64 pte = 0;
+	if (words == NULL || count == 0 || !r5_gfx9_vmid1_pte(va, &pte))
+		return false;
+	if ((pte & (uint64)R5_GFX9_PTE_VALID) == 0)
+		return false;
+	uint64 page = pte & ((1ull << 57) - 1ull) & ~0xfffull;
+	uint32 offset = (uint32)(va & 0xfffull);
+	if (offset >= 4096 || count > 16)
+		return false;
+	if (offset + count * 4 > 4096)
+		count = (4096 - offset) / 4;
+	uint8* cpu = NULL;
+	area_id mapped = -1;
+	if ((pte & (uint64)R5_GFX9_PTE_SYSTEM) != 0) {
+		void* address = NULL;
+		mapped = map_physical_memory("radeon hd ib", (phys_addr_t)page,
+			4096, B_ANY_KERNEL_ADDRESS, B_KERNEL_READ_AREA, &address);
+		if (mapped < B_OK || address == NULL)
+			return false;
+		cpu = (uint8*)address;
+	} else if (sInfo != NULL && sInfo->kernel_window != NULL
+		&& sInfo->shared_info != NULL) {
+		uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
+		uint64 base = (uint64)fb << 24;
+		uint64 pool = sInfo->shared_info->vram_pool_offset;
+		uint64 bytes = sInfo->shared_info->vram_pool_bytes;
+		if (page < base || page - base < pool
+			|| page - base - pool >= bytes)
+			return false;
+		cpu = sInfo->kernel_window + (page - base - pool);
+	} else
+		return false;
+	memcpy(words, cpu + offset, count * 4);
+	if (mapped >= 0)
+		delete_area(mapped);
+	return true;
+}
+
+
+uint32
+r5_gfx9_vmid1_copy(uint64 va, uint32* words, uint32 count)
+{
+	uint32 done = 0;
+	if (words == NULL || count == 0)
+		return 0;
+	if (count > 1024)
+		count = 1024;
+	while (done < count) {
+		uint32 chunk = count - done;
+		uint32 room = (4096u - (uint32)(va & 0xfffu)) / 4u;
+		if (room == 0)
+			break;
+		if (chunk > room)
+			chunk = room;
+		if (chunk > 16)
+			chunk = 16;
+		if (!r5_gfx9_vmid1_read(va, words + done, chunk))
+			break;
+		done += chunk;
+		va += (uint64)chunk * 4u;
+	}
+	return done;
+}
+
+
+int32
+r5_gfx9_priv_count()
+{
+	return sPrivCount;
+}
+
+
+bool
+r5_gfx9_take_priv(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
+{
+	if (ib1 == NULL || ib2 == NULL || sPrivPending == 0)
+		return false;
+	*ib1 = sPrivIb1;
+	*ib2 = sPrivIb2;
+	sPrivPending = 0;
+	return true;
 }
 
 
@@ -940,7 +1244,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	uint32 pci = info.pciID;
 	if (!ring || !kernel)
 		return;
-	if (pci != 0x15e7 && pci != 0x1636 && pci != 0x1638)
+	if (!r5_amd_gfx9_cp(pci))
 		return;
 	sGfx9Started = true;
 	if (!map_pool(info))
@@ -969,5 +1273,165 @@ r5_gfx9_kernel_start(radeon_info& info)
 		run_k1();
 	if (ok && gart)
 		run_k2();
+	r5_gpu_fill_passport(&info);
 	publish();
+}
+
+
+static void
+recycle_vm(r5_vm* vm)
+{
+	uint32 i;
+	for (i = 0; i < vm->used && sFreeCount < 1024; i++) {
+		if (vm->pages[i].physical == 0)
+			continue;
+		sFreePages[sFreeCount] = vm->pages[i];
+		sFreeCount++;
+	}
+	vm->used = 0;
+}
+
+
+void*
+r5_gfx9_as_open(void)
+{
+	r5_as* as;
+	uint32 n;
+	if (!sVmid1)
+		return NULL;
+	for (n = 0; n < 64; n++) {
+		if (sSpaces[n] == NULL)
+			break;
+	}
+	if (n == 64)
+		return NULL;
+	as = (r5_as*)malloc(sizeof(*as));
+	if (as == NULL)
+		return NULL;
+	memset(as, 0, sizeof(*as));
+	as->id = sNextAs++;
+	if (as->id == 0)
+		as->id = sNextAs++;
+	as->vm.pages = as->pages;
+	as->vm.capacity = 256;
+	as->vm.alloc = vm_page_alloc;
+	if (!r5_vm_new_page(&as->vm)) {
+		free(as);
+		return NULL;
+	}
+	sSpaces[n] = as;
+	return as;
+}
+
+
+void
+r5_gfx9_as_close(void* cookie, uint64 seen)
+{
+	r5_as* as = (r5_as*)cookie;
+	uint32 n;
+	if (as == NULL)
+		return;
+	if (as->vmid != 0 && as->last > seen) {
+		as->parked = 1;
+		return;
+	}
+	if (as->vmid != 0 && sVmidReady)
+		r5_vmid_release(&sVmids, as->id, seen);
+	recycle_vm(&as->vm);
+	for (n = 0; n < 64; n++) {
+		if (sSpaces[n] == as)
+			sSpaces[n] = NULL;
+	}
+	if (sBound == as)
+		sBound = NULL;
+	free(as);
+}
+
+
+void
+r5_gfx9_as_bind(void* cookie)
+{
+	sBound = (r5_as*)cookie;
+}
+
+
+int
+r5_gfx9_as_reserve(uint32* vmid, int* flush, uint64* pd)
+{
+	uint64 seen;
+	if (sBound == NULL || sBound->vm.used == 0 || vmid == NULL || flush == NULL)
+		return 0;
+	if (!sVmidReady) {
+		r5_vmid_init(&sVmids);
+		sVmidReady = 1;
+	}
+	seen = r5_gfx9_user_seen();
+	*vmid = r5_vmid_reserve(&sVmids, sBound->id, seen, flush);
+	if (*vmid == 0)
+		return 0;
+	if (pd != NULL)
+		*pd = sBound->vm.pages[0].physical | (uint64)R5_GFX9_PTE_VALID;
+	return 1;
+}
+
+
+void
+r5_gfx9_as_cancel(void)
+{
+	if (sVmidReady)
+		r5_vmid_cancel(&sVmids);
+}
+
+
+void
+r5_gfx9_as_finish(uint32 vmid, uint64 sequence)
+{
+	if (sBound == NULL)
+		return;
+	sBound->vmid = vmid;
+	sBound->last = sequence;
+	sBound->loaded = 1;
+	r5_vmid_arm(&sVmids, sequence);
+}
+
+
+int
+r5_gfx9_as_first(void)
+{
+	if (sBound == NULL)
+		return -1;
+	return sBound->loaded ? 0 : 1;
+}
+
+
+void
+r5_gfx9_as_retired(uint64 seen)
+{
+	uint32 n;
+	for (n = 0; n < 64; n++) {
+		if (sSpaces[n] != NULL && sSpaces[n]->parked
+			&& sSpaces[n]->last <= seen)
+			r5_gfx9_as_close(sSpaces[n], seen);
+	}
+}
+
+
+int
+r5_gfx9_mem_limits(uint64* vramCap, uint64* gttCap)
+{
+	uint32 base;
+	uint32 top;
+	uint64 carve;
+	uint64 ram;
+	if (!sVmid1 || sInfo == NULL || vramCap == NULL || gttCap == NULL)
+		return 0;
+	base = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
+	top = kread(sInfo, gc_byte(0x096c)) & 0x00ffffffu;
+	if (top < base)
+		return 0;
+	carve = ((uint64)(top - base) + 1ull) << 24;
+	ram = vm_page_num_pages() * 4096ull;
+	*vramCap = r5_limit_vram(carve);
+	*gttCap = r5_limit_gtt(ram);
+	return *vramCap != 0 && *gttCap != 0;
 }

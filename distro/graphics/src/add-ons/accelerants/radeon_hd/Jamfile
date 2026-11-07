@@ -9,6 +9,7 @@ UsePrivateHeaders [ FDirName graphics radeon_hd ] ;
 UsePrivateHeaders [ FDirName graphics radeon_hd atombios ] ;
 UsePrivateHeaders [ FDirName graphics common ] ;
 UsePrivateHeaders shared ;
+UsePrivateHeaders r5gpu ;
 
 Addon radeon_hd.accelerant :
 	accelerant.cpp

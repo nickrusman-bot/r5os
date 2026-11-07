@@ -9,6 +9,7 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_amd_device.h"
 
 #include "clearstate_defs.h"
 #include "clearstate_gfx9.h"
@@ -706,13 +707,9 @@ radeon_psp_stage(const uint8* bytes, uint32 size, radeon_psp_item* item)
 static const char*
 radeon_gfx9_fw_stem()
 {
-	uint16 pciID = sPciId;
-	// amdgpu_device_init_apu_flags: 1636 and 164c are AMD_APU_IS_RENOIR.
-	// 15e7 Barcelo and 1638 Cezanne are AMD_APU_IS_GREEN_SARDINE.
+	// amdgpu_device_init_apu_flags. The stem is the device-table column.
 	// The PFP, ME, and CE blobs differ. RLC and MEC are the same bytes.
-	if (pciID == 0x1636 || pciID == 0x164c)
-		return "renoir";
-	return "green_sardine";
+	return r5_amd_fw_stem(sPciId);
 }
 
 
@@ -1478,6 +1475,10 @@ radeon_gfx9_saved_restore()
 }
 
 
+static void radeon_gfx9_linux_golden();
+static void radeon_gfx9_common_golden();
+
+
 // gfxhub_v1_0_init_system_aperture_regs for Renoir and Green Sardine. The
 // system aperture is in 256 KiB pages of the MC window. That window is
 // MC_VM_FB_LOCATION_BASE << 24 through the firmware top. This only widens
@@ -1601,12 +1602,71 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 			" -> 0x%" B_PRIx32 "\n", __func__,
 			sRadeonGfx9Saved.golden[probe], Read32(OUT, probeReg));
 	}
+	radeon_gfx9_linux_golden();
+	radeon_gfx9_common_golden();
 
 	ERROR("%s: R5 radeon_hd: GFX9 aperture low 0x%" B_PRIx32
 		" -> 0x%" B_PRIx32 " high 0x%" B_PRIx32 " -> 0x%" B_PRIx32
 		" default pa 0x%" B_PRIx64 "\n",
 		__func__, aperLow, lowNow, aperHigh, highNow, scratchPa);
 	return true;
+}
+
+
+/* golden_settings_gc_9_1_rn in Linux gfx_v9_0.c. The live values are
+ * the 6 Nov 2026 Renoir capture (watch-2-after-preamble): CP_DEBUG
+ * gc0 0x107f, SPI_CONFIG_CNTL / _1 gc1 0x2440 / 0x2441. Read first.
+ * Write only a register that differs, then read it again. This is not
+ * part of the twelve-slot golden save, and it does not touch VMID 0. */
+static void
+radeon_gfx9_linux_golden()
+{
+	const uint32 cpDebug = radeon_gfx9_byte(kGfx9Seg0, 0x107f);
+	const uint32 spi = radeon_gfx9_byte(kGfx9Seg1, 0x2440);
+	const uint32 spi1 = radeon_gfx9_byte(kGfx9Seg1, 0x2441);
+	const uint32 wantDebug = 0x00400000u;
+	const uint32 wantSpi = 0x0062c688u;
+	const uint32 wantSpi1 = 0x01000104u;
+	if (!radeon_mmio_fits(cpDebug) || !radeon_mmio_fits(spi1))
+		return;
+	uint32 debug = Read32(OUT, cpDebug);
+	uint32 spiNow = Read32(OUT, spi);
+	uint32 spi1Now = Read32(OUT, spi1);
+	ERROR("%s: R5 radeon_hd: CP_DEBUG %08" B_PRIx32
+		" SPI_CONFIG_CNTL %08" B_PRIx32 " SPI_CONFIG_CNTL_1 %08" B_PRIx32
+		"\n", __func__, debug, spiNow, spi1Now);
+	if (debug == wantDebug && spiNow == wantSpi && spi1Now == wantSpi1)
+		return;
+	if (debug != wantDebug)
+		Write32(OUT, cpDebug, wantDebug);
+	if (spiNow != wantSpi)
+		Write32(OUT, spi, wantSpi);
+	if (spi1Now != wantSpi1)
+		Write32(OUT, spi1, wantSpi1);
+	ERROR("%s: R5 radeon_hd: golden_settings_gc_9_1_rn CP_DEBUG %08"
+		B_PRIx32 " SPI_CONFIG_CNTL %08" B_PRIx32
+		" SPI_CONFIG_CNTL_1 %08" B_PRIx32 "\n", __func__,
+		Read32(OUT, cpDebug), Read32(OUT, spi), Read32(OUT, spi1));
+}
+
+
+/* Linux 6.12 gfx_v9_0_init_golden_registers returns before
+ * golden_settings_gc_9_x_common on IP 9.3.0. The comment there is
+ * "for renoir, don't need common goldensetting". This step is after
+ * the K golden list and the CP_DEBUG/SPI step. It reads the three
+ * common registers and does not write them. */
+static void
+radeon_gfx9_common_golden()
+{
+	const uint32 sd = radeon_gfx9_byte(kGfx9Seg0, 0x11b7);
+	const uint32 index = radeon_gfx9_byte(kGfx9Seg1, 0x5a04);
+	const uint32 data = radeon_gfx9_byte(kGfx9Seg1, 0x5a05);
+	if (!radeon_mmio_fits(data))
+		return;
+	ERROR("%s: R5 radeon_hd: gc 9.3 skips golden_settings_gc_9_x_common"
+		" CP_SD_CNTL %08" B_PRIx32 " GRBM_CAM_INDEX %08" B_PRIx32
+		" GRBM_CAM_DATA %08" B_PRIx32 "\n",
+		__func__, Read32(OUT, sd), Read32(OUT, index), Read32(OUT, data));
 }
 
 
@@ -1778,18 +1838,17 @@ radeon_gfx9_stall_note()
 // Linux v6.12 soc15_need_reset_on_init. The only APU in the Raven/Renoir
 // series that returns true is CHIP_RENOIR. Raven and Picasso return false,
 // and soc15_asic_reset returns before sending anything for those chips.
-// amdgpu_drv.c lists 15e7, 1636, 1638 and 164c as CHIP_RENOIR. MP1 12.0.1
-// then selects a mode-2 reset, which is smu_v12_0_mode2_reset: one SMU
-// message, PPSMC_MSG_GfxDeviceDriverReset (0x1E), argument SMU_RESET_MODE_2
-// (2). That is not a mode-1 PCI reset and it is not GRBM_SOFT_RESET.
-// This driver sends it only from the GFX ring start. Lucienne 164c is in
-// the set and is not reset here, because its firmware stays unloaded and
+// The device table lists that chip. MP1 12.0.1 then selects a mode-2
+// reset, which is smu_v12_0_mode2_reset: one SMU message,
+// PPSMC_MSG_GfxDeviceDriverReset (0x1E), argument SMU_RESET_MODE_2 (2).
+// That is not a mode-1 PCI reset and it is not GRBM_SOFT_RESET.
+// This driver sends it only from the GFX ring start. Lucienne is in the
+// set and is not reset here, because its firmware stays unloaded and
 // DCN is not reprogrammed afterwards.
 static bool
 radeon_soc15_need_reset_on_init(uint32 pciID)
 {
-	return pciID == 0x15e7 || pciID == 0x1636 || pciID == 0x1638
-		|| pciID == 0x164c;
+	return r5_amd_need_reset(pciID) != 0;
 }
 
 
@@ -2082,6 +2141,8 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 
 
 static uint64 sUserSequence = 0;
+/* The only user context id. 0 means the next submit is a switch. */
+static uint32 sUserCtx = 0;
 
 
 bool
@@ -2130,40 +2191,303 @@ r5_gfx9_user_fence_mc()
 }
 
 
-/* Appends VMID 1 indirect buffers and one 64-bit RELEASE_MEM. The fence
- * address is the kernel MC address. The ring runs in VMID 0. The write
- * pointer moves before the fence lands. A full ring returns false. */
+uint64
+r5_gfx9_k2_word_mc()
+{
+	if (!r5_gfx9_ring_ready())
+		return 0;
+	uint32 location = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0980));
+	return radeon_gfx9_mc_addr(location,
+		sRadeonGfx9Ring.fenceOffset + kFenceIbWord);
+}
+
+
+/* WRITE_DATA of 0xDEADBEEF to destVa, then three header-only NOPs.
+ * PACKET3(PACKET3_NOP, 0x3FFF) is 0xFFFF1000. destVa is the address the
+ * IB's VMID translates. A VMID 1 test passes its own page plus 64.
+ * The upper half is the full 32 bits. The 0xffff mask is only IB_BASE_HI. */
+bool
+r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa)
+{
+	if (cpu == NULL || destVa == 0 || (destVa & 3ull) != 0)
+		return false;
+	uint32* ib = (uint32*)cpu;
+	ib[0] = radeon_packet3(kWlWriteData, 3);
+	ib[1] = kWlWriteDstMemory | kWlWrConfirm;
+	ib[2] = (uint32)destVa;
+	ib[3] = (uint32)(destVa >> 32);
+	ib[4] = 0xDEADBEEF;
+	ib[5] = 0xFFFF1000;
+	ib[6] = 0xFFFF1000;
+	ib[7] = 0xFFFF1000;
+	return true;
+}
+
+
+bool
+r5_gfx9_stage_ib(uint8* cpu, uint64 destVa)
+{
+	if (!r5_gfx9_stage_ib_store(cpu, destVa))
+		return false;
+	radeon_gfx9_flush_visible(cpu, 64);
+	radeon_visible_barrier();
+	asm volatile("clflush %0" : "+m" (*(volatile char*)cpu) : : "memory");
+	asm volatile("sfence" ::: "memory");
+	return true;
+}
+
+
+void
+r5_gfx9_cp_dump(const char* why, uint64 pte)
+{
+	if (sHost == NULL || sHost->log == NULL || why == NULL)
+		return;
+	uint32 rptr = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01c0));
+	uint32 wptrLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1054));
+	uint32 wptrHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x1055));
+	uint64 fenceWptr = 0;
+	uint64 bell = 0;
+	if (sRadeonGfx9Ring.fenceAddress != NULL)
+		fenceWptr = *(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + 512);
+	if (sHost->doorbell != NULL
+		&& sHost->doorbellBytes >= (uint64)kGfx9DoorbellByte + sizeof(uint64))
+		bell = *(volatile uint64*)(sHost->doorbell + kGfx9DoorbellByte);
+	uint32 cp = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01a0));
+	uint32 grbm = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0004));
+	uint32 grbm2 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0002));
+	uint32 me = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01b6));
+	uint32 stall1 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x019d));
+	uint32 stall2 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x019e));
+	uint32 stall3 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x019c));
+	uint32 fault = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x084b));
+	uint32 faultLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x084c));
+	uint32 faultHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x084d));
+	uint32 ibLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cc));
+	uint32 ibHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cd));
+	uint32 ibSz = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20ce));
+	uint32 ibOff = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x2092));
+	uint32 words[8];
+	memset(words, 0, sizeof(words));
+	if (sRadeonGfx9Ring.ringAddress != NULL && sRadeonGfx9Ring.ringBytes >= 32) {
+		uint32 dwords = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
+		uint32* ring = (uint32*)sRadeonGfx9Ring.ringAddress;
+		uint32 slot = rptr & (dwords - 1u);
+		for (uint32 i = 0; i < 8; i++)
+			words[i] = ring[(slot + i) & (dwords - 1u)];
+	}
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s cp %08lx grbm %08lx grbm2 %08lx me %08lx seen %llu\n",
+		why, (unsigned long)cp, (unsigned long)grbm, (unsigned long)grbm2,
+		(unsigned long)me, (unsigned long long)r5_gfx9_user_seen());
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s rptr %08lx wptr %08lx%08lx kern %llu fence %llu bell %llu\n",
+		why, (unsigned long)rptr, (unsigned long)wptrHi, (unsigned long)wptrLo,
+		(unsigned long long)sRadeonGfx9Ring.submitted,
+		(unsigned long long)fenceWptr, (unsigned long long)bell);
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s stall %08lx %08lx %08lx fault %08lx addr %08lx%08lx "
+		"ib %08lx%08lx sz %08lx off %08lx pte %016llx\n",
+		why, (unsigned long)stall1, (unsigned long)stall2, (unsigned long)stall3,
+		(unsigned long)fault, (unsigned long)faultHi, (unsigned long)faultLo,
+		(unsigned long)ibHi, (unsigned long)ibLo, (unsigned long)ibSz,
+		(unsigned long)ibOff, (unsigned long long)pte);
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s ring %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+		why, (unsigned long)words[0], (unsigned long)words[1],
+		(unsigned long)words[2], (unsigned long)words[3],
+		(unsigned long)words[4], (unsigned long)words[5],
+		(unsigned long)words[6], (unsigned long)words[7]);
+	uint32 defLo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x084e));
+	uint32 defHi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x084f));
+	uint32 faultCntl = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x0847));
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s default %08lx%08lx cntl %08lx\n",
+		why, (unsigned long)defHi, (unsigned long)defLo,
+		(unsigned long)faultCntl);
+	r5_gfx9_pipe_log(why);
+}
+
+
+/* gc_9_0_offset.h, BASE_IDX 0, segment 0. STALLED_STAT3/1/2 are
+ * 0x019c/0x019d/0x019e. ME_HEADER_DUMP is 0x01a1, PFP_HEADER_DUMP
+ * is 0x01a2, PFP_INSTR_PNTR is 0x01a5, ME_INSTR_PNTR is 0x01a6.
+ * Eight header reads. A later note says one PFP header read does
+ * not consume a packet; eight reads still show a FIFO if it is one.
+ * MMIO only. */
+void
+r5_gfx9_pipe_log(const char* why)
+{
+	if (sHost == NULL || sHost->log == NULL || sHost->read32 == NULL
+		|| why == NULL)
+		return;
+	uint32 stall3 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x019c));
+	uint32 stall1 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x019d));
+	uint32 stall2 = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x019e));
+	uint32 pfpIp = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01a5));
+	uint32 meIp = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01a6));
+	uint32 me[8];
+	uint32 pfp[8];
+	uint32 i;
+	for (i = 0; i < 8; i++) {
+		me[i] = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01a1));
+		pfp[i] = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01a2));
+	}
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s stall3 %08lx stall1 %08lx stall2 %08lx "
+		"me_ip %08lx pfp_ip %08lx\n",
+		why, (unsigned long)stall3, (unsigned long)stall1,
+		(unsigned long)stall2, (unsigned long)meIp, (unsigned long)pfpIp);
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s me hdr %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+		why, (unsigned long)me[0], (unsigned long)me[1],
+		(unsigned long)me[2], (unsigned long)me[3],
+		(unsigned long)me[4], (unsigned long)me[5],
+		(unsigned long)me[6], (unsigned long)me[7]);
+	sHost->log(sHost->cookie,
+		"radeon_hd: %s pfp hdr %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+		why, (unsigned long)pfp[0], (unsigned long)pfp[1],
+		(unsigned long)pfp[2], (unsigned long)pfp[3],
+		(unsigned long)pfp[4], (unsigned long)pfp[5],
+		(unsigned long)pfp[6], (unsigned long)pfp[7]);
+}
+
+
+/* gc_9_0_offset.h mmCP_ROQ_IB1_STAT, segment 0 index 0x01e1. MMIO only. */
+uint32
+r5_gfx9_roq_ib1()
+{
+	if (sHost == NULL || sHost->read32 == NULL)
+		return 0;
+	return Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, 0x01e1));
+}
+
+
+void
+r5_gfx9_stage_bytes(uint8* cpu, uint32 bytes)
+{
+	if (cpu == NULL || bytes == 0)
+		return;
+	radeon_gfx9_flush_visible(cpu, bytes);
+	radeon_visible_barrier();
+	for (uint32 i = 0; i < bytes; i += 64) {
+		asm volatile("clflush %0" : "+m" (*(volatile char*)(cpu + i))
+			: : "memory");
+	}
+	asm volatile("sfence" ::: "memory");
+}
+
+
+/* gc_9_0_offset.h, segment 1. BASE_LO/HI/BUFSZ and OFFSET for both IBs.
+ * MMIO only. Safe from the interrupt handler. */
+void
+r5_gfx9_ib_regs(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
+{
+	if (ib1 == NULL || ib2 == NULL)
+		return;
+	uint32 lo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cc));
+	uint32 hi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cd));
+	ib1->base = ((uint64)(hi & 0xffffu) << 32) | lo;
+	ib1->size = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20ce));
+	ib1->offset = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x2092));
+	lo = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20cf));
+	hi = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20d0));
+	ib2->base = ((uint64)(hi & 0xffffu) << 32) | lo;
+	ib2->size = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x20d1));
+	ib2->offset = Read32(OUT, radeon_gfx9_byte(kGfx9Seg1, 0x2093));
+}
+
+
+/* One user job: two SWITCH_BUFFER packets, CONTEXT_CONTROL,
+ * FRAME_CONTROL, the indirect buffers, FRAME_CONTROL end, the 64-bit
+ * user fence, the 32-bit interrupt fence, SWITCH_BUFFER, then the
+ * Linux NOP pad to a multiple of 256 dwords. The first job for
+ * context 1 uses the load bits. The K ring is not padded. The fence
+ * addresses are kernel MC addresses. A full ring returns false. */
+uint32
+r5_gfx9_user_commit_dwords(uint32 count)
+{
+	if (!r5_gfx9_ring_ready())
+		return 0;
+	return r5_cs_user_commit(sRadeonGfx9Ring.submitted, count);
+}
+
+
+uint32
+r5_gfx9_user_commit_switch(uint32 count, int vmFlush)
+{
+	uint32 body;
+	uint32 extra;
+	if (!r5_gfx9_ring_ready())
+		return 0;
+	body = r5_cs_user_words(count);
+	if (body == 0)
+		return 0;
+	extra = vmFlush ? r5_cs_vm_switch_words() : 0;
+	return extra + body + r5_cs_pad_dwords(
+		sRadeonGfx9Ring.submitted + extra + body);
+}
+
+
 bool
 r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64* _sequence)
 {
+	return r5_gfx9_user_submit_switch(ibs, count, _sequence, 0, 0, -1);
+}
+
+
+bool
+r5_gfx9_user_submit_switch(const r5_gfx9_user_ib* ibs, uint32 count,
+	uint64* _sequence, int vmFlush, uint64 pd, int load)
+{
 	if (ibs == NULL || count == 0 || count > 8)
 		return false;
-	uint32 total = 8;
+	uint64 ibVa[8];
+	uint32 ibDw[8];
+	uint32 ibVm[8];
 	for (uint32 i = 0; i < count; i++) {
-		if ((ibs[i].va & 3ull) != 0 || ibs[i].dwords == 0
-			|| ibs[i].dwords > 0xfffffu)
-			return false;
-		total += 4;
+		ibVa[i] = ibs[i].va;
+		ibDw[i] = ibs[i].dwords;
+		ibVm[i] = ibs[i].vmid;
 	}
-	if (!r5_gfx9_user_room(total))
+	uint64 wptr = sRadeonGfx9Ring.submitted;
+	uint32 prefix = vmFlush ? r5_cs_vm_switch_words() : 0;
+	uint32 total = r5_gfx9_user_commit_switch(count, vmFlush);
+	uint32 cap = vmFlush ? 512u : 320u;
+	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
+		return false;
+	if (vmFlush && (pd == 0 || ibs[0].vmid == 0))
 		return false;
 	uint64 fenceMc = r5_gfx9_user_fence_mc();
 	if (fenceMc == 0 || (fenceMc & 7ull) != 0)
 		return false;
+	uint64 irqMc = fenceMc + (kR5UserIrqOffset - kR5UserFenceOffset);
 	uint64 sequence = sUserSequence + 1;
-	uint32 packets[40];
-	uint32 filled = 0;
-	for (uint32 i = 0; i < count; i++) {
-		uint32 one[12];
-		r5_cs_gfx_ib(one, ibs[i].va, ibs[i].dwords, 1, fenceMc, sequence);
-		for (uint32 dword = 0; dword < 4; dword++)
-			packets[filled++] = one[dword];
+	uint32 cntx = kR5CsCntxKeep;
+	if (load < 0) {
+		if (sUserCtx != 1u) {
+			cntx = kR5CsCntxLoad;
+			sUserCtx = 1u;
+		}
+	} else if (load != 0)
+		cntx = kR5CsCntxLoad;
+	uint32 packets[512];
+	uint32 switched = 0;
+	if (vmFlush) {
+		switched = r5_cs_vm_switch(packets, cap, ibs[0].vmid, pd, fenceMc,
+			sUserSequence);
+		if (switched != prefix)
+			return false;
 	}
-	uint32 one[12];
-	r5_cs_gfx_ib(one, ibs[0].va, ibs[0].dwords, 1, fenceMc, sequence);
-	for (uint32 dword = 4; dword < 12; dword++)
-		packets[filled++] = one[dword];
-	uint64 wptr = sRadeonGfx9Ring.submitted;
+	uint32 filled = r5_cs_user_body(packets + switched, cap - switched, ibVa,
+		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx);
+	if (filled == 0)
+		return false;
+	filled += switched;
+	uint32 pad = r5_cs_pad_dwords(wptr + filled);
+	if (filled + pad != total)
+		return false;
+	r5_cs_pad(packets + filled, pad);
+	filled += pad;
 	uint32 dwords = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
 	uint32* ring = (uint32*)sRadeonGfx9Ring.ringAddress;
 	for (uint32 i = 0; i < filled; i++)
@@ -3394,8 +3718,18 @@ r5_ring_has_room(uint32 count)
 		|| (dwords & (dwords - 1u)) != 0)
 		return false;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
-	uint64 rptr = r5_ring_rptr();
+	uint64 rptr = r5_gfx9_rptr_count(dwords, wptr, r5_ring_rptr());
 	return (uint64)count <= r5_gfx9_ring_space(dwords, wptr, rptr);
+}
+
+
+void
+r5_gfx9_ring_ptrs(uint64* wptr, uint64* rptrOffset)
+{
+	if (wptr != NULL)
+		*wptr = sRadeonGfx9Ring.submitted;
+	if (rptrOffset != NULL)
+		*rptrOffset = r5_ring_rptr();
 }
 
 
