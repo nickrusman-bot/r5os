@@ -1,4 +1,3 @@
-90510b4af9
 /*
  * Copyright 2023 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.

@@ -1,8 +1,563 @@
 # R5OS changelog (lokaal)
 
+### Geen WC-MTRR als PAT aan staat
+
+Met PAT zet de kernel geen WC-MTRR meer, alleen de PAT-bits, zoals Linux. Dit geldt voor alle gebruikers, ook met de GPU uit. Getest op sticks 19–24 en in QEMU. De wijziging is `distro/kernel/src/system/kernel/arch/x86/arch_vm.cpp` (`82cd27fbc8`) en blijft.
+
+`update_mtrrs()` slaat een write-combining bereik over, bij het verzamelen en bij het vullen van de registers. `set_mtrrs()` draait daarna nog wel en herschrijft de bestaande MTRRs op elke CPU. Weg is het WC-register, niet die aanroep.
+
+De Y1-tekst bij stick 22 beschreef die skip als Haiku. Het is R5’s eigen patch. Haiku programmeert voor zo’n bereik wel een variabel MTRR.
+
+### The render node stays unpublished until the GPU steps are on
+
+`/dev/gpu/radeon_hd/0` is published only when `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` are all true. Without that file, or with any of the three off, the node does not exist. RADV then finds no device and the Vulkan loader prints no error, as on Linux without amdgpu. Stick 24 boot 2 still had the node, so every Vulkan start printed `failed to initialize device` and a loader `ERROR` before llvmpipe. Host test only. Not booted.
+
+### M4, experimenteel en standaard uit
+
+The GPU path stays off unless the radeon_hd settings name it. With no `radeon_hd` settings file, stick 24's second boot on the 5625U reached the desktop: Tracker and Deskbar started, and Sign in finished with no error. The ring line is `GFX9 ring off`. Boot 2's own syslog, after the second `Welcome to the Haiku boot loader!`, has no `refuse`, `gpu lost` or `vm fault`. The same file still holds boot 1's `gpu lost` lines above that banner. `vulkaninfo` lists one device, llvmpipe. RADV does not initialise (`AMDGPU_INFO_ACCEL_WORKING = 0`) and is not in that list. Both teapots then draw through Lavapipe and print `pixels ok`.
+
+What works on the GPU: the SAM path draws pixel-exact on the 5625U, sticks 22, 23 and 24. The known problem is the normal path. On stick 24 boot 1 it drew the teapot into VRAM (`pixel-vram 192 192 853b16ff`) and the GTT readback was all zeros. The suspected cause is that the CPU writes VRAM through the PCI BAR and never flushes the HDP. The fix is a separate change. No What's new, and the build number stays.
+
+### Stick 24 boot 1 on the 5625U
+
+Logs are `generated/boot-5625u-24/`. The settings file on that boot is the six lines plus `gpu_debug true`. U2b-n was ok. B1 missed, B2 missed, B3 wrote `deadbeef`, B4 copied the GTT page, and B5 missed. A2, a VRAM indirect buffer at `0xffff800100000000`, hung at 5000 ms with CP `84008600` and the fence still on 44. A1 through C1 did not run.
+
+VulkanTeapot (sam) printed `pixels ok`, and `pixel-vram 192 192 853b16ff`. VulkanTeapot printed `pixels MISMATCH`, every GTT sample `00000000`, and `pixel-vram 192 192 853b16ff`. Not a second boot.
+
+### Stick 24: stage U walks the known-good steps first
+
+Stick 23 hung on `u4b-pair` before the later addresses ran. The page-table walk of `0xffff800000001000` was right at every level, so that step is no longer first. Stage U still starts with U-self, U2a-n, U2a-f and U2b-n. Group B then writes or copies with the indirect buffer at a fresh low address: B1 VRAM `0xffff800000041040`, B2 GTT at that address, B3 VRAM `0xffff800000001040`, B4 a `DMA_DATA` read of the GTT page at `0xffff800000041000`, B5 the same read of the VRAM page. Group A fetches a VRAM indirect buffer from A2 `0xffff800100000000`, A1 `0xffffffffffbfc000`, A3 `0xffff808000000000`, A8 `0x01000000`, A7 `0x00100000`, A4 `0xffff8000c0000000`, A5 `0xffff800040000000`, then A6 `0xffff800000200000`. C1, the stick 23 pair at `0xffff800000001000`, is last. A miss continues. A busy command processor at 5 seconds stops the rest.
+
+VulkanTeapot `--selftest` still copies the colour image into the host-visible readback. When the device offers a `DEVICE_LOCAL | HOST_VISIBLE` type it also copies into that memory and prints `pixel-vram 192 192` next to the GTT samples. B2 and B4 do not exercise the shader cache read of the 16 KiB upload buffer. If those two pass and the ordinary teapot stays black, that path is still open.
+
+The PSP trusted-memory region is VRAM offset `0xc00000`, 4 MiB. `SETUP_TMR` uses MC `0xf400c00000`, which is `FB_LOCATION` `0xf400` shifted 24 plus that offset. The pool on this branch is still the BAR minus the boot picture. The boot that printed `pool 0x7e9000+0xf817000` therefore includes `[0xc00000, 0x1000000)`. This branch does not skip that hole. The discovery region is 10 KiB ending 64 KiB below the end of VRAM, so it sits outside a 256 MiB BAR when the card has more VRAM. `fw_vram_usage` is not read from ATOM. Stage U takes fresh pages from that same pool.
+
+RADV's 32-bit range is the first 4 GiB of the high range (`address32_hi` `0xffff8000`). libdrm starts the 64-bit high allocator at `0xffff800100000000`. The command processor is not given a separate limit in this tree: `CP_IB1_BASE_HI` keeps the upper 16 bits of a user indirect buffer, and the page tables cover the full 48-bit range. Whether a fetch from `0xffff8000…` is refused by the hardware, or only avoided by RADV, is what A4 against A2 is for. A4 hangs with A2 ok would match a command-processor rule. A6 hanging with A4 and A5 ok would be the first 2 MiB only. B3 failing as well would be any access to that page, not only the fetch. B2 failing while B1 is ok would be GTT data in that region.
+
+The AGP aperture is unchanged. The boots print `k2 agp bot 00000000 top 00000000`, and that pair is the window `0`–`0x1000000` because `MC_VM_AGP_TOP` is inclusive and the unit is 16 MiB. Linux writes the aperture off when nothing uses it. This register stays in the fixed K sequence. A7 sits inside that window and A8 sits just above it. If A7 hangs and A8 is ok, the aperture is the suspect.
+
+`jam -q @r5-raw` finished at 15:52 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick24-m4.image`, 2147483648 bytes, sha256 `0091fcb7050e6226b166b1c21c744ece693bdd609675dfb998c83e1f47542a5d`. The stick file is the anyboot from 6 Nov 2026, 21:11 Europe/Amsterdam, with that image as the BeFS partition. The settings are the six lines plus `gpu_debug true`. It is 2156724224 bytes, sha256 `48d53127d18b4df2dd37c073b7c7e5a063122f02f91ae8feb5926d89807b3c72`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 15:53 to 15:56 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 15:57. Disk 0 was not opened. Not booted. The K sequence, the empty-leaf fill, and the cache flush at submit are unchanged.
+
 ### Tracker opens folders in the same window
 
-Haiku Tracker opens each folder in a new window by default. In R5, "Single window navigation" and "Show navigator" are now on by default: a double-clicked folder replaces the view in the same window, and the Back, Forward, Up and location bar are shown. `distro/desktop/src/kits/tracker/TrackerDefaults.h` is a copy of Haiku `src/kits/tracker/TrackerDefaults.h` (MIT header kept). Only `kDefaultSingleWindowBrowse` and `kDefaultShowNavigator` change, marked as an SPDX snippet. This is the factory setting: it applies to every account that has no saved Tracker setting, and to Defaults in Tracker preferences. An account that already saved `TrackerSettings` keeps its own choice. The separate Tracker preferences can still turn both off. Not jammed or booted yet.
+Haiku Tracker opens each folder in a new window by default. In R5, "Single window navigation" and "Show navigator" are now on by default: a double-clicked folder replaces the view in the same window, and the Back, Forward, Up and location bar are shown. `distro/desktop/src/kits/tracker/TrackerDefaults.h` is a copy of Haiku `src/kits/tracker/TrackerDefaults.h` (MIT header kept). Only `kDefaultSingleWindowBrowse` and `kDefaultShowNavigator` change, marked as an SPDX snippet. This is the factory setting: it applies to every account that has no saved Tracker setting, and to Defaults in Tracker preferences. An account that already saved `TrackerSettings` keeps its own choice. The separate Tracker preferences can still turn both off. The copy on main started with a stray line `90510b4af9`, which the compiler rejected, so that line is removed. Jammed in the stick 24 image. Not booted.
+
+### GPU log settings are read once, and a dump does not eat the error budget
+
+`gpu_debug` and `gpu_selftest` were read from the settings file on every call, including every submit. `r5_gpu_init` now reads both once. A later call uses those values.
+
+An error still counts as one of 32 events in a boot. A PM4 dump is one event and then at most 64 lines. The next fault line still prints. The ring-buffer once-line uses `R5_ONCE_RB`. A second once-line takes the next id.
+
+`kernel bo domain` in `libdrm-r5` is printed only when `gpu_debug` is on. The cache flush at submit is unchanged. The K sequence is unchanged. Host test only. Not booted.
+
+### Stick 23: the paired high page hung, and the empty leaf reads 0x10
+
+Logs are `generated/boot-5625u-23/`. The settings file is the six lines plus `gpu_debug true`. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
+
+U-self stored `51550000` through `51550007` and read the same eight words through the page and through a second mapping. The cached GTT page is physical `000000002301e000`. The VRAM page is physical `0000000811096000`.
+
+| Step | Result | Page-table words |
+|---|---|---|
+| U-self GTT | equal, both mappings | not printed |
+| U-self VRAM | equal, both mappings | not printed |
+| U2a-n | ok, 1 ms, seq 37 seen 37, word `deadbeef`, CP 0, dest `000000002301e000`, PAT 0 | L3 `000000081109e001`, L2 `000000081109f001`, L1 `00000008110a0001`, L0 VRAM `0600000811096071`, L0 GTT `000000002301e077` |
+| U2a-f | ok, 1 ms, seq 38 seen 38, word `deadbeef`, CP 0, dest `000000002301e000`, PAT 0 | same four levels and the same two L0 words |
+| U2b-n | ok, 1 ms, seq 39 seen 39, word `deadbeef`, CP 0, dest `0000000811096000`, PAT 4 | same L3–L1, L0 GTT `000000002301e077`, L0 VRAM `0600000811096071` |
+| u4b-pair | hang, 5000 ms, seq 40 seen 39, word 0, CP `84008600`, dest `00000008110a1000`, PAT 4 | L3 `000000081109b001`, L2 `000000081109c001`, L1 `000000081109d001`, L0 IB `0600000811096071`, L0 next page `06000008110a1071` |
+| u-top `0xffffffffffbfc000` | not run | |
+| u-radv `0xffff800100000000` | not run | |
+| u-257 `0xffff808000000000` | not run | |
+| u-pdb1 `0xffff800040000000` | not run | |
+| u-pdb0 `0xffff800000200000` | not run | |
+| u-low0 `0x100000` | not run | |
+| u4b `0xffff800000001000` | not run | |
+
+Both pages of `u4b-pair` are valid VRAM entries. The indirect-buffer words on the CPU are `c0033700 00100500 00002040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000`. `CP_IB1` shows `0000800000001000`. Size and offset are 0. `fault` is 0. The series stopped. The variable MTRRs are the same before and after, and none of the types is 1.
+
+The stage walk never printed an empty directory entry, so bit 54 was not observed. The leaf of an address the command processor did report was `0000000000000010`. After the hang, `fence timeout` and `gpu lost` both show `ib 0000800000001000` and `pte 0000000000000010`. That is the empty-leaf value from Z0. The PTE of the full address `ffff800000001000`, printed on the `u4b-pair` line, stays `0600000811096071`. Mapping the next page did not make this step pass.
+
+Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir before stage U. The readback line is type 2, flags `00000006`, heap 0, 589824 bytes, on both runs. SAM pixels are `pixels ok`: `(24,24)` and `(192,80)` are `262e38ff`, `(192,192)` is `853b16ff`, `(192,134)` is `a64a1cff`, `(90,192)` is `873c17ff`, `(280,192)` is `692e11ff`, exit 0. The normal run is `pixels MISMATCH`. All six samples are `00000000`, exit 2.
+
+`gpu_debug` printed one `va map` line per map. Domain 1 is VRAM and domain 2 is GTT. The two runs use the same addresses. The domains differ on six of them:
+
+| VA | Bytes | SAM domain | Normal domain |
+|---|---|---|---|
+| `ffff800100000000` | 4096 | 2 | 2 |
+| `ffff800100001000` | 81920 | 1, then 1 again | 2, then 2 again |
+| `ffff800100015000` | 4096 | 1 | 2 |
+| `ffff800100020000` | 589824 | 1 | 1 |
+| `ffff8001000b0000` | 1052672 | 1 | 1 |
+| `ffff800000000000` | 262144 | 1 | 1 |
+| `ffff8001001c0000` | 49152 | 2 | 2 |
+| `ffff8001001d0000` | 40960 | 2 | 2 |
+| `ffff8001001e0000` | 589824 | 2 | 2 |
+| `ffff800000040000` | 16384 | 1 | 2 |
+| `ffff800100270000` | 81920 | 1 | 2 |
+| `ffff800100284000` | 81920 | 1 | 2 |
+| `ffff800100298000` | 81920 | 1 | 2 |
+
+The 589824-byte readback is domain 2 at `ffff8001001e0000` on both runs. The first 2 MiB of the high range holds the 262144-byte buffer at `ffff800000000000` as domain 1 on both runs. The normal run also puts a 16384-byte GTT buffer at `ffff800000040000`. The SAM run puts that buffer in domain 1. Each run then submitted `ffff800100284000` (24 dwords) and `ffff800100001000` (752 dwords).
+
+After the hang the userspace indirect-buffer stage still ran. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
+### Stick 23 fills empty page-table entries the way Linux does
+
+Z0. Linux 6.12 `amdgpu_vm_pt_clear` (`amdgpu_vm_pt.c`) fills a new leaf table with `AMDGPU_PTE_EXECUTABLE` (bit 4, `0x10`) and an empty directory entry with `AMDGPU_PDE_PTE` (bit 54). `amdgpu_vm_pte_update_flags` writes that same `0x10` when a PTE is not valid and not PRT. `gmc_v9_0_get_vm_pde` adds nothing else while `translate_further` is off. R5 was storing `0`. A new VMID 1 leaf is now `0x10`, a new directory page is bit 54, and an unmap writes `0x10`. A PRT entry is left as it is. A directory entry counts as a table only when `VALID` is set and bit 54 is clear. A lookup counts as mapped only when the leaf has `VALID`. VMID 0 and the K2 table are unchanged. The host test printed `ok gpu api 1.0 walk`, including a fresh directory entry of bit 54, an unmap that reads back `0x10`, a second map of the same page, and a PRT entry that a clear does not overwrite.
+
+Z1, from the sources, before this image.
+
+1. The stage reads the four entries of each bisect address, and of the next page, through a fresh `map_physical_memory` of that table page. The log line is `L3` through `L0`, the VRAM offset of the table page, and the raw word. The kernel window is write-combined, so that read is not the pointer kept in `sVm`.
+2. `vm_page_alloc` is the same bump as the ring, the IH ring, the K2 table, the dummy page and the CSIB page (`kvram` in `gfx9_k12.cpp`). The cursor only moves forward, so those pages do not overlap each other. The CSIB log address `0xf401000000` is `radeon_gfx9_mc_addr` of that one page, not a second copy. Linux `amdgpu_ttm_reserve_tmr` and `fw_vram_usage` reserve the discovery and PSP ranges at the top of VRAM. This pool does not subtract those ranges (REVIEW-26 P1b). The page tables are the next 4 KiB pages after the earlier bump, at the low end of the pool, not at that top. No K register changes for this.
+3. `gpu_bo_release` unmaps every range of the buffer and flushes VMID 1. A parked buffer keeps its entries until its last sequence has retired. After a teapot that reached `vkQueueWaitIdle`, the first 2 MiB is the cleared value, not the RADV mapping. The stick log shows the four words after those teapots and before the submit.
+4. `amdgpu_vm_pt_create` and `amdgpu_vm_pde_update` do not special-case the first PDB0 or PDB1 of the high range. The clear is the same for every entry. Nothing else in `gmc_v9_0_get_vm_pde` runs for GC 9.3 with `translate_further` off.
+
+Z2. Stage U keeps U-self, U2a-n, U2a-f and U2b-n, then `u4b-pair` (VRAM at `0xffff800000001000` with the next page mapped), then VRAM at `0xffffffffffbfc000`, `0xffff800100000000`, `0xffff808000000000`, `0xffff800040000000`, `0xffff800000200000`, low `0x100000`, and U4b alone. `gpu_debug` prints `va map` with the address, the size and the domain. The `clflush` at submit stays.
+
+`jam -q @r5-raw` finished at 13:28 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick23-m4.image`, 2147483648 bytes, sha256 `b5c7feeea0595f9d233db568448ba2160a6654d55663a61b8f897a74b89b054b`. The stick file is the anyboot from 6 Nov 2026, 21:11 Europe/Amsterdam, with that image as the BeFS partition. The settings are the six lines plus `gpu_debug true`. It is 2156724224 bytes, sha256 `2636976ed935187dd7c9e649a8fdb8d0e033c3f6d1826877309cea265c3aaf8d`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 13:29 to 13:33 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 13:33. Disk 0 was not opened. Not booted.
+
+### Stick 22: the cached read landed, and the high VRAM step hung
+
+Logs are `generated/boot-5625u-22/`. The settings file is the same six lines. Stage P, through `p33 IB24 ok 1 ms`, ran before the teapots. No fix in this commit.
+
+U-self stored `51550000` through `51550007` and read the same eight words through the page and through a second mapping. The cached GTT page is physical `00000000226eb000`. The VRAM page is physical `0000000811096000`.
+
+| Step | Result |
+|---|---|
+| U-self GTT | equal, both mappings, PAT not printed on this line |
+| U-self VRAM | equal, both mappings |
+| U2a-n | ok, 1 ms, seq 37 seen 37, word `deadbeef`, CP 0, dest `00000000226eb000`, PAT 0 |
+| U2a-f | ok, 1 ms, seq 38 seen 38, word `deadbeef`, CP 0, dest `00000000226eb000`, PAT 0 |
+| U2b-n | ok, 1 ms, seq 39 seen 39, word `deadbeef`, CP 0, dest `0000000811096000`, PAT 4 |
+| U4b | hang, 5000 ms, seq 40 seen 39, word 0, CP `84008600`, dest `0000000811096000`, PAT 4 |
+| U2e, U2f, U2d, U2g | not run |
+| U2l, U2b, U2b-f, U1, U4, U3, U2, U5 | not run |
+
+U2a-n is a VRAM indirect buffer and a fresh cached GTT destination, read without `clflush`. U2a-f is that read with `clflush`. U2b-n wrote a cached GTT indirect buffer without `clflush`, and the GPU wrote `deadbeef` into VRAM. The eight indirect-buffer words of U4b were present on the CPU (`c0033700 … deadbeef`). `CP_IB1` shows `0000800000001000` for the buffer at `ffff800000001000`. Size and offset are 0. The page-table entry of the full address is `0600000811096071`. `fault` is 0. The series stopped. The watchdog then printed `gpu lost`. The userspace indirect-buffer stage still ran and printed `fence timeout` and `gpu read 00000000`. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
+The variable MTRRs are the same before and after stage U. Cap `0000000000000508`, count 8. Register 0 is base `00000000ff000005`, mask `0000ffffff000800`. Register 1 is base `0000000000000006`, mask `0000ffff80000800`. Register 2 is base `0000000080000006`, mask `0000ffffc0000800`. Register 3 is base `00000000c0000006`, mask `0000fffff0000800`. Register 4 is base `00000000cf000000`, mask `0000ffffff000800`. Registers 5, 6 and 7 are zero. None of the types is 1.
+
+Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir. The Vulkan readback line is still type 2, flags `00000006`, heap 0. The buffer is 589824 bytes. The kernel used domain 2 for that size with requested flags `00000004` and used flags `00000000`, snooped 1. libdrm printed `kernel bo domain 2 flags 00000000 bytes 589824`. A VRAM buffer of the same size stayed domain 1, flags 0, snooped 0.
+
+SAM pixels are `pixels ok`: `(24,24)` and `(192,80)` are `262e38ff`, `(192,192)` is `853b16ff`, `(192,134)` is `a64a1cff`, `(90,192)` is `873c17ff`, `(280,192)` is `692e11ff`. The normal run is `pixels MISMATCH`. All six samples are `00000000`.
+
+### Stick 22 drops write-combined RAM
+
+Y1 read the sources this image builds and described the PAT skip as Haiku. That skip is R5's own patch in `distro/kernel/src/system/kernel/arch/x86/arch_vm.cpp` (`82cd27fbc8`). Haiku programs a variable MTRR for a write-combining RAM range. The rest of this path is Haiku. `vm_set_area_memory_type()` (`src/system/kernel/vm/vm.cpp`) sets the area type and calls `ProtectArea`, which rewrites every page-table entry, then `arch_vm_set_memory_type()`. On x86 that records a range of the area's physical base and size and rebuilds the variable MTRRs. For `B_WRITE_COMBINING_MEMORY`, `MemoryTypeToPageTableEntryFlags` sets only `X86_64_PTE_PAT` when `x86_use_pat()` is true, which is PAT index 4. The same function returns 0 for write-back. The R5 patch in `update_mtrrs()` skips a write-combining range when PAT is on, both while collecting ranges and while emitting registers, so that range is not a variable MTRR. `set_mtrrs()` still runs and calls `disable_caches()` then `enable_caches()` on every CPU: CR0 cache-disable, `wbinvd`, a global TLB flush, the register write, `wbinvd` again, caches back on. `wbinvd` writes dirty lines back. It does not drop them. `delete_area()` calls `arch_vm_unset_memory_type()`, which removes the recorded range and rebuilds the MTRRs the same way.
+
+Stick 21's page `0x2d037000` was a 4096-byte GTT area. With PAT on, the recorded range is base `0x2d037000`, size `0x1000`, and no variable MTRR covers it. The boot write-back MTRR is the one that still covers that RAM. A power-of-two WC MTRR of that page would be base `0x2d037000` size `0x1000` only if PAT were off and `add_mtrrs_for_range` ran. This image does not do that. Linux `set_memory_wc()` / `set_pages_array_wc()` (`arch/x86/mm/pat/set_memory.c`) changes the PAT bits of the pages and flushes those lines. It does not add a variable MTRR for RAM. TTM uses that for `ttm_write_combined`. R5 already has the PAT-only skip for a write-combining RAM range. The stick 21 read was still wrong through the same pointer, before the GPU ran, so the write-combined CPU mapping of RAM stays off until that is understood. The variable-MTRR list is printed before and after stage U so a boot can show whether it moved.
+
+`R5_GPU_BO_WC` is still accepted. No RAM area is given a write-combined memory type. Every GTT page is cached and `SNOOPED`. That is Linux `amdgpu_bo_support_uswc()` false (`amdgpu_object.c`). The `clflush` before a GTT indirect buffer is submitted stays. Stage U on this stick is U-self, U2a-n, U2a-f, U2b-n, then the high addresses with cached GTT, then U2l and the older steps. There is no write-combined step and no `-lx` step. `BO_CREATE` prints the domain, the requested flags and the flags that were used. libdrm prints `kernel bo domain` with those used flags, which is the teapot readback's buffer as well as the others.
+
+`jam -q @r5-raw` finished at 12:38 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick22-m4.image`, 2147483648 bytes, sha256 `3b1b3aa53dc755fcc6d9507f5e47c8a33c7e98367f414b39296c4fa3e007ae4f`. The stick file is the anyboot from 6 Nov 2026, 21:11 Europe/Amsterdam, with that image as the BeFS partition and the same six settings as stick 21. It is 2156724224 bytes, sha256 `b981ebd13e80072b143b62b8e61f2317aa7f8f32f8b26224fac671cef3ec6b19`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 12:40 to 12:43 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 12:44. Disk 0 was not opened. Not booted.
+
+### Stick 21: U2c hung, so the cached-read steps did not run
+
+Logs are `generated/boot-5625u-21/`. The settings file is the same six lines as stick 20. Stage P, all 33 steps, printed `ok 1 ms` before the teapots. Both teapots reached `vkQueueWaitIdle 0` on RADV Renoir. The readback buffer is type 2, flags `00000006`, heap 0, on the SAM run and on the normal run. `00000006` is host-visible and host-coherent. The device-local bit is not set.
+
+SAM pixels are `pixels MISMATCH`. Five of the six samples are the background `262e38ff`. `(192,192)` is `773514ff`. The normal run is also `pixels MISMATCH`. `(192,192)` is `00000000`. The other five are non-zero, with alpha `97` to `9b`.
+
+Stage U then stopped on its first step. `u2c hang 5000 ms seq 37 seen 36 word 00000000 cp 84008600 phys 00000008110a1000 pat 4`. The fence did not land and `CP_STAT` stayed busy. The indirect buffer is `00007ffffffb3000`, physical `000000002d037000`, PTE `000000002d037073`. The eight dwords read back as zero. `CP_IB1` size and offset are 0. `fault` is 0. The watchdog then printed `gpu lost`. `seen` was still 36. No fix in this commit.
+
+| Step | Result |
+|---|---|
+| U2c | hang, 5000 ms, CP `84008600`, seen 36 of sequence 37, word 0, PAT 4 |
+| U4b | not run |
+| U2e | not run |
+| U2f | not run |
+| U2d | not run |
+| U2g | not run |
+| U2a | not run |
+| U2a-f | not run |
+| U2a-n | not run |
+| u2a-sh-lx | not run |
+| u2a-f-sh-lx | not run |
+| u2a-ctx-lx | not run |
+| u2a-f-ctx-lx | not run |
+| U2l | not run |
+| U2b | not run |
+| U2b-f | not run |
+
+Boot still has `SH_MEM_CONFIG` `00001018` and `VM_CONTEXT1_CNTL` `007ffe07`. The `-lx` writes did not happen. After the hang the userspace indirect-buffer stage still ran and printed `fence timeout`. `R5_GPU_SELFTEST` returned 0. The errno beside it is `-2147483637`.
+
+### Stick 21 measures the cached read, on its own page
+
+Stick 20's U2a was a miss, not a hang. The log says `u2a timeout 5000 ms` with `cp 00000000`, the kernel fence equal to the ring pointer, and `seen 38`. The CPU still read 0. The series stopped there, so the high-address steps never ran. The destination was the same virtual address and the same physical page (`0x22ff4000`) as the U2c indirect buffer that had just been deleted. That buffer was write-combined. U2a mapped it cached and snooped.
+
+X1, against Linux 6.12 (`gfxhub_v1_0_init_tlb_regs`, `gc_9_0_sh_mask.h`, `vega10_enum.h`) and the 6 Nov 2026 watch file `watch-2-after-preamble.txt`. From the logged prior value `0x2501`, Linux's read-modify-write of `MC_VM_MX_L1_TLB_CNTL` is `0x3d59`. `ATC_EN` is 1, `MTYPE` is UC (3), and `ECO_BITS` is left at `0xA`. That register matches. `VM_L2_CNTL` `0x80603`, `VM_L2_CNTL2` (the invalidate bits read back 0), `VM_L2_CNTL3` `0x80130009` and `VM_L2_CNTL4` `0x1` match the watch. `VM_L2_CNTL4` is a saved read-modify-write in R5 and a default of `0xc1` with bits 6 and 7 cleared in Linux; the value on this machine is the same. The fence word `0x00238514` matches `gfx_v9_0_ring_emit_fence` without `EOP_TC_NC_ACTION_EN`.
+
+Two registers differ, both already the shipped choice. `SH_MEM_CONFIG` is `0x1018` for VMID 1 (unaligned, retry disabled). Linux `gfx_v9_0_constants_init` writes `0x18` when `gmc.noretry` is 0, which this watch shows for VMID 0. `VM_CONTEXT1_CNTL` is `0x007ffe07`. The watch reads `0x007ffe87`, retry on. Stage U writes the Linux value for those two, flushes, runs U2a and U2a-f, and writes R5's value back. The boot path and the K sequence stay as they are. `VM_CONTEXT0_CNTL` `0x007ffe01` is not the stage VMID.
+
+`vm_set_area_memory_type` sets the area type and `ProtectArea` rewrites every page's PTE from it, so a write-combined GTT object gets the PAT type on each page. The MTRR entry is one span from the first physical page, and the existing path skips that span when it covers the write-back boot range. `delete_area` drops the range when the type is not 0. A new area of that page starts as write-back. Linux `amdgpu_bo_support_uswc()` false is an option that ignores `CPU_GTT_USWC`. It stays an option until a boot shows the snoop.
+
+The stage line prints the sequence, the seen fence, the word, `CP_STAT`, the destination physical page, and the CPU PAT index of that line. Write-back is 0. Haiku's write-combining PTE, with PAT, is index 4. Each step uses a virtual address no earlier step used. U2d keeps `0xffff800000000000`. U4b is the next page. U2g has its own high buffer, one page after U4b, and the high VRAM page. U2a-n is allocated before any write-combining stage page and held until its turn. U2l is the five-dword `WRITE_DATA` of `gfx_v9_0_ring_test_ib`, poisoned with `0xCAFEDEAD`, read without `clflush`. A miss continues. A busy CP at 5 seconds, or the device already lost, stops the series. VulkanTeapot prints the readback type, its flags, and the heap for a self-test run.
+
+`jam -q @r5-raw` finished at 11:50 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`, and updated 1142 targets. The same run printed `mesa_packages_ok`, `ok package paths`, `ok egl vendor` and `mesa_exit=0`. The raw image is `/home/nickr/r5os/r5-stick21-m4.image`, 2147483648 bytes, sha256 `36da2dc8ac95e2efa0590d2a329c02aea83816add927fe856a91068a043f69ff`. `vulkanteapot-1.0.0-1` was rebuilt so the self-test prints that readback line, and the package has no `/home/nickr`. The stick file is the anyboot with that image as the BeFS partition and the same six settings as stick 20. It is 2156724224 bytes, sha256 `ec227c826917b5acfaca7d28d319c89ba522a66ac56062cf9ee655a3a9da267e`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 11:55 to 11:58 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 11:59. Disk 0 was not opened. Not booted.
+
+The 6 Nov 2026 capture grep does not show whether AMD-Vi was present. The host walk shows the software slots. It does not show what the hardware did.
+
+### Stick 20: U2a is the first miss
+
+The image is the 09:26 raw image, sha256 `695011c00b26791a8ee5e1e7f1056fbf7925079c1aabd0342548c86fdb75b551`, with the same six settings as stick 19. The stick file sha256 is `1056e1a2d8bcd575837af3edcf8cab6e0116209eae8c1bd92dc52e7bab06c450`. Logs are `generated/boot-5625u-20/`.
+
+U2c wrote `u2c ok 1 ms`. U2a wrote `u2a timeout 5000 ms`, with no fault, dest PTE `0000000022ff4077` (system, snooped, MTYPE_NC) and the CPU still reading 0. U2b, U4b, U2e, U2f, U2d, U1, U4, U3, U2 and U2g did not run. That is the cached low GTT write, not the high range. The PTE matches `gmc_v9_0_get_coherence_flags` as already coded. The log does not print U2a's sequence next to `seen 38`, so it does not say whether the fence retired. No image was built for stick 21. The next boot has to print that sequence, then `clflush` the destination and read it again.
+
+SAM: `pixels MISMATCH`. `(192,192)` `853b16ff` and `(192,134)` `a64a1cff` match stick 19. `(90,192)` is `6b2f12ff` and `(280,192)` is `262e38ff`. The normal run is also `pixels MISMATCH`, and every sampled pixel is non-zero (`(192,80)` `e0769bc5`). The later userspace IB at `0x800000000000` timed out and the watchdog printed `gpu lost`.
+
+### U2d changes only the indirect-buffer address
+
+U2d kept two differences from U2c: the indirect buffer at `0xffff800000000000`, and a write to the high VRAM page. The destination is now the low VRAM page, the same one U2c writes. U2g is a new last step: that same high buffer, writing the high VRAM page. The run still stops at the first hang. The fixed K sequence is unchanged.
+
+`jam -q @r5-raw` finished at 09:26 Europe/Amsterdam on 7 Nov 2026, `jam_exit=0`, and updated 8351 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `695011c00b26791a8ee5e1e7f1056fbf7925079c1aabd0342548c86fdb75b551`. The packages match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. None of those four contains `/home/nickr`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `u2e`, `u4b`, `u2f`, `u2d` and `u2g`. Not booted. No stick.
+
+### Image with the next stick's stages
+
+`jam -q @r5-raw` finished at 23:56 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`, and updated 8351 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `3d4960834a9adae35372d798544899b100c8a1a4b7dfe3677bf235212bf4fd18`. The packages in that image match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. None of those four packages contains `/home/nickr`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `u2e`, `u4b`, `u2f` and `u2d`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`, and the image contains that program. Not booted. No stick.
+
+### Log lines behind the settings file
+
+Errors stay on, and stop after 32 in a boot: a refusal, the syncobj limit, `gpu lost` with its dump, and a non-EOP interrupt. `gpu_debug true` (default off) prints `submit ib va`, the per-call lines, and a successful translator ioctl. `gpu_selftest true` still prints the stage lines. `rb num` is once per boot. The fixed K sequence is unchanged. The host test printed `ok gpu api 1.0 walk`. The first image build of the high-address check failed: `r5_gpu.cpp` called `r5_vm_va_fits` without including `r5_vm.h`. That include is in. The image that contains it is the section above.
+
+### High virtual address, checked on paper
+
+The nineteenth stick hung on write-combined GTT at `0xffff800000000000` and ran the same kind of buffer at a low address. The page-table walk for that address, for `0xffff800000200000`, for `0xffff800100000000`, and for the last high page is the same for GTT and VRAM apart from the page address and the SYSTEM, SNOOP, and MTYPE bits. A canonical address and the same address masked to 48 bits select the same slots. Adding the filled byte count does not wrap those pages, and an address inside the 48-bit hole is rejected. Linux 6.12 `amdgpu_gmc.h` starts the high range at `AMDGPU_GMC_HOLE_END` (`0xffff800000000000`) and does not reserve that first page. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off, which it is on this GPU. The 6 Nov 2026 capture grep does not show whether AMD-Vi was present. The host walk shows the software slots, not what the hardware did. The next stick runs U2c, U2a, U2b, U4b, U2e, U2f, then U2d, and stops at the first hang. Not booted.
+
+### Write-combined GTT for the command buffers
+
+Stick 18 drew the SAM teapot and left the teapot without SAM black. RADV puts those command buffers in GTT with `CPU_GTT_USWC`. Every GTT buffer was mapped cached and snooped, and the `clflush` at submit does not cover a chained buffer.
+
+`GEM_CREATE` now copies `CPU_GTT_USWC` onto `R5_GPU_BO_WC`. A GTT buffer with that flag is `B_WRITE_COMBINING_MEMORY` on the kernel area and on the user clone. With PAT the page type is the PTE: the range overlaps the write-back MTRR and is not programmed as another MTRR. The page-table entry is `MTYPE_NC` without `SNOOPED`. A cached GTT page stays `MTYPE_NC` and `SNOOPED`. Linux v6.12 `gmc_v9_0_get_coherence_flags` (the branch that is not GC 9.4) uses `MTYPE_NC` for both, and also for user VRAM. User VRAM stays `MTYPE_UC` until a boot compares it. The row is `kR5Gfx93Mtype`, `vram_live` 0. The K2 page and the kernel GART are unchanged. The `clflush` at `CS_SUBMIT` stays.
+
+After the teapots, stage U runs U2c, U2d, U2a and U2b, each with a 5 second wait, and stops at the first miss. U2c is a write-combined GTT indirect buffer. U2d is the same at `0xffff800000000000`. U2a writes from a VRAM buffer into cached GTT and the CPU reads without `clflush`. U2b writes a cached GTT buffer without `clflush` and the result is in VRAM. The userspace IB stage runs after that.
+
+The host tests printed `ok gpu api 1.0 walk` and `ok libdrm ioctl`.
+
+`jam -q @r5-raw` finished at 22:58 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `bddc2caced201434e8dfc904c548783d1cea4cf9a3681ddc5b0f37007c5f50a0`. The packages in that image match `distro/packages/x86_64`: `libdrm` `ed2ea0158a19d8d408768567799e037d5880663e384956b2aea598bdadb61783`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. `radeon_hd` contains `vmid1 fail ring`, `vmid1 ptb`, `gtt wc` and `u2c`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+The nineteenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `b93b79f1e4a7b7294455be4e2041c764f80048dc7c4ab89531e8e0794bc74737`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 23:01 to 23:04 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 23:05. Disk 0 was not opened.
+
+Booted on the 5625U (self-test 00:09 on 7 Nov on the R5 clock; the partition was read back at 23:14 Europe/Amsterdam on 6 Nov). The cache file is owned by uid 1001. K2 landed `0xDEADBEEF`. `rb num 2 mask 3`. There is no source 184. `gtt wc area` and `gtt wc clone` printed `status 0x0`, and so did `stage wc area`. `vulkaninfo --summary` exited 0 with llvmpipe and RADV Renoir. The SAM teapot submitted `ffff800100284000` (24 dwords) and `ffff800100001000` (752), `vkQueueWaitIdle` returned 0, and the six sample pixels matched (`pixels ok`, exit 0). The teapot without SAM used the same two buffers, `vkQueueWaitIdle` returned 0, and the samples were `00000000`, `b87214f0`, `00000000`, `00000000`, `00000000`, `00000000` (`pixels MISMATCH`, exit 2). U2c printed `ok 1 ms`. Its indirect buffer at `00007fffffffe000` starts `c0033700 00100500 ffffd040 00007fff deadbeef`. U2d then printed `timeout 5000 ms`. The eight dwords at `ffff800000000000` are `c0033700 00100500 ffbfc040 ffffffff deadbeef ffff1000 ffff1000 ffff1000`, and the page-table entry is `000000002442f073` (the write-combined page, no `SNOOPED`). `fault` stayed 0. `CP_IB1` base is `0000800000000000`, size 0, offset 0. `seen` stayed 37, the read pointer `0xa0`, the write pointer `0x2900`, and the ring words at the read pointer are `ffff1000`. U2a and U2b did not run. The userspace IB stage then printed `fence timeout` and `gpu read 00000000` for an 8-dword buffer at the same high address, with page-table entry `000000002cbd1077`. The watchdog printed `gpu lost watchdog` with `seen` still 37. After the U2d dump the kernel printed `assuming memory type 20000000` sixty-six times for physical page `0x2442f000`, the U2d page, because a later area overlapped that recorded write-combining range.
+
+The first link of `radeon_hd` failed because `vm_set_area_memory_type` was declared with C++ linkage and the kernel exports the C name. The next image was rejected because the new libdrm still contained `/home/nickr` in its debug info. The libraries were stripped, and the soname links `libdrm.so.2` and `libdrm_amdgpu.so.1` were put back, before the image that was written.
+
+### The device block names the render backends
+
+Stick 17 reached `vulkaninfo` and then source 184 inside the 744-dword buffer. The ME header dump started `c0047600 c0037600 c0017600 c0027600`, and `0000020c` was read as a packet header. That dword is the low address of the next `SET_SH_REG`. Mesa 25.3.6 sets `max_render_backends` from `num_rb_pipes`. R5 left that field 0, so the GFX9 end-of-pipe clear was a `WRITE_DATA` with a count of 2 and no data dword. The command processor then consumed the next packet.
+
+`GET_INFO` now fills the vendor block the way Linux 6.12 `AMDGPU_INFO_DEV_INFO` does for the fields Mesa reads. `num_rb_pipes` is 2. `enabled_rb_pipes_mask` comes from `CC_RB_BACKEND_DISABLE` and `GC_USER_RB_BACKEND_DISABLE`, the same bits as `gfx_v9_0_setup_rb`. One shader engine means `GRBM_GFX_INDEX` is not written. The self-test prints `rb num … mask …`. The table is `generated/gpu-m4/DEV-INFO.md`. Clocks and the memory type are the Mesa record for device `15e7` (`1800000` kHz, `1333000` kHz, LPDDR4, 128 bits). The SMU and the UMC table are not read. `gb_addr_config` stays the `READ_MMR_REG` of `0x063e`.
+
+A user job now starts with two `SWITCH_BUFFER` packets, as `amdgpu_vm_flush` does before `COND_EXEC`. The first submit for context 1 uses `CONTEXT_CONTROL` `0x81018003`. A later submit for the same context uses `0x80000000`. `COND_EXEC` and the pipeline-sync `WAIT_REG_MEM` are not written. One VMID does not need them. That stays on the M5 list.
+
+Linux 6.12 `gfx_v9_0_init_golden_registers` returns before `golden_settings_gc_9_x_common` for IP 9.3.0. The comment is that Renoir does not need it. After the K golden list and the `CP_DEBUG`/`SPI` step, R5 reads `CP_SD_CNTL`, `GRBM_CAM_INDEX` and `GRBM_CAM_DATA` and does not write them. The twelve-slot list is unchanged.
+
+`AMDGPU_CTX_OP_QUERY_STATE2` returns 0 while the device is usable. After the watchdog it returns `RESET` and `GUILTY`, which Mesa turns into `VK_ERROR_DEVICE_LOST` (`-4`). The watchdog is 10 seconds, the GFX value of `amdgpu.lockup_timeout`. The GFX ring stays 1024 dwords. A larger ring is an M6 item.
+
+`jam -q @r5-raw` finished at 21:54 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `2f39eb41981bc0d91c34944c202c62dcdfcb880e2889f455bc89481f9aad2e77`. The packages in that image match `distro/packages/x86_64`: `libdrm` `23de8c87948e7335c145e6d6becd477b43c70778c2b99a84501dc4863f777b04`, `mesa` `295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`, `mesa_radv` `06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`, `vulkanteapot` `cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`. The `radeon_hd` driver in the image contains `vmid1 fail ring`, `vmid1 ptb` and `rb num`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+The eighteenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `25403c18576ed17f64e35b65f2913bb99f8e614f620a62a137005896f6ee694b`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 22:01 to 22:04 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash matched at 22:05. Disk 0 was not opened.
+
+Booted on the 5625U (self-test 23:10 on the R5 clock; the partition was read back at 22:15, Europe/Amsterdam). Sign-in was uid 1001. K2 landed `0xDEADBEEF`. `CP_DEBUG`, `SPI_CONFIG_CNTL` and `SPI_CONFIG_CNTL_1` already read `00400000`, `0062c688` and `01000104`. The common-golden step logged `gc 9.3 skips golden_settings_gc_9_x_common` with `CP_SD_CNTL 0000001f`, `GRBM_CAM_INDEX ffffffff` and `GRBM_CAM_DATA ffffffff`, and did not write them. `rb num 2 mask 3`. `p1` through `p33` printed `ok 1 ms`. There is no source 184. `vulkaninfo --summary` exited 0 with llvmpipe and RADV Renoir. The SAM teapot submitted `ffff800100284000` (24 dwords) and `ffff800100001000` (752), `vkQueueWaitIdle` returned 0, and the six sample pixels matched (`pixels ok`, exit 0). The teapot without SAM used the same two buffers, `vkQueueWaitIdle` returned 0, and every sample pixel was `00000000` (`pixels MISMATCH`, exit 2). The IB stage then printed `fence timeout` and `gpu read 00000000`. The kernel dump for that job is an 8-dword buffer at `ffff800000000000` whose first words are `c0033700 00100500 00000040 ffff8000 deadbeef`. The word at `ffff800000000040` stayed 0. `fault` stayed 0. Five seconds later `u1` printed `timeout` with `seen 36`, read pointer `0x3a0`, write pointer `0x2800`. The watchdog then printed `gpu lost watchdog` and later submits were refused. `pixels ok` was not printed for the teapot without SAM.
+
+### U4 waits behind the teapot
+
+Stick 16 ran `p1` through `p33` and then `u4` still inside stage P. The one-second wait printed timeout while the fence was still sequence 34. The dump immediately afterwards had sequence 35, an idle CP, and `deadbeef` at the high VA. `gpu_lost` had already run, so vulkaninfo and both teapots were skipped.
+
+U4 and U2 are no longer part of stage P. They run in stage U, after vulkaninfo and both teapots. A P or U step that has no fence at 1 second keeps waiting until 5 seconds. A fence in that window is `late` with the duration in milliseconds, and the next step runs. At 5 seconds the step prints `timeout`, dumps the ring, and leaves the job for the watchdog. The watchdog is what marks the device lost. Every P and U step logs its duration.
+
+The seventeenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `395850c2d45b988fb85313081219abe596e4f5a4420ff7536558093cdd6c9c20`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 21:13 to 21:18 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash of those bytes matched at 21:18. Disk 0 was not opened.
+
+Booted on the 5625U (self-test 22:22 on the R5 clock; the partition was read back at 21:27, Europe/Amsterdam). Sign-in was uid 1001. `p1` through `p33` printed `ok 1 ms`. There was no `late` line. `vulkaninfo --summary` exited 0 with llvmpipe and RADV Renoir. The SAM teapot submitted `ffff800100284000` (24 dwords) and `ffff800100001000` (744). Source 184 fired at once on VMID 1. `CP_IB1` stayed on the 744-dword buffer, size `0x40`, offset 0, IB2 size 0. The ME header dump still starts `c0047600 c0037600 c0017600 c0027600`, the same words as stick 14. The fence stayed at 34. Five seconds later the watchdog printed `gpu lost watchdog` with `seen 34`, read pointer `0x1a0`, write pointer `0x2600`. `vkQueueWaitIdle` returned -13 and the teapot exited 1. The second teapot, the IB stage and stage U are `skipped, gpu lost`. `pixels ok` was not printed.
+
+### The NOP pad was one dword too long
+
+Stick 15 booted on the 5625U (self-test 21:20 on the R5 clock; the partition was read back at 20:27, Europe/Amsterdam). Sign-in was uid 1001. K2 landed `0xDEADBEEF` at write pointer `0x3b6`. `CP_DEBUG`, `SPI_CONFIG_CNTL` and `SPI_CONFIG_CNTL_1` already read `00400000`, `0062c688` and `01000104`, so nothing was rewritten. `VM_CONTEXT1_CNTL` stayed `007ffe07`. The marker self-test landed sequence 1. `p1 WRITE_DATA` then timed out with `seen 1`: that is the marker fence, not p1. `CP_ME_CNTL` was `94008200`, the read pointer was `0x98` against write pointer `0x500`, and the PFP header dump ended on `c02c1000`.
+
+`gfx_v9_ring_insert_nop` writes one dword as `0xFFFF1000`. A longer pad is `PACKET3(NOP, min(count - 2, 0x3FFE))` and then `count - 1` times `0xFFFF1000`. The fifteenth image used `count - 1` in the header, so the packet claimed one dword past the pad and the next job never retired. The host test now builds the two-IB job from `r5_cs_user_body` and `r5_cs_pad`, which is what `r5_gfx9_user_submit` writes, and compares it with `ring-after-2-amdgpu_ring_gfx.bin` from `CONTEXT_CONTROL` through the last NOP. At ring index `0x73e` both pads are 161 dwords and the header is `c09f1000`. The only differing dword is the 32-bit fence sequence (`00000006` on Linux, `00000003` here). Addresses, sizes and the 64-bit sequence match that capture. The waiter still reads the 64-bit user fence. The EOP interrupt only wakes retire, and retire reads that same word.
+
+The sixteenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `94a6206791f7ed3e8c4727f24ee9d17eb89a8884ee3cae7c195e505827db9715`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 20:46 to 20:50 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash of those bytes matched at 20:50. Disk 0 was not opened.
+
+Booted on the 5625U (self-test 21:52 on the R5 clock; the partition was read back at 20:57, Europe/Amsterdam). Sign-in was uid 1001. K2 landed `0xDEADBEEF`. `p1` through `p33` printed `ok`. The PFP header dump ends on `c0e11000`, the corrected pad. `u4` then printed `timeout wb 00000000 seq 35 seen 34`. The dump straight after that has `seen 35`, the read pointer on the write pointer `0x2600`, `CP_ME_CNTL` 0, no fault, and the high-VA word `0xffffffffffbfc040` is `deadbeef`. The one-second wait gave up, `gpu_lost` ran, and vulkaninfo and both teapots printed `skipped, gpu lost`. There is no source 184. `pixels ok` was not printed.
+
+### User submit follows the Linux frame
+
+`r5_gfx9_user_submit` now writes, per job, `CONTEXT_CONTROL` `80000000 00000000`, `FRAME_CONTROL` start, the indirect buffers with the full upper address half, `FRAME_CONTROL` end, a 64-bit `RELEASE_MEM` without an interrupt, a 32-bit `RELEASE_MEM` with `INT_SEL` 2, `SWITCH_BUFFER`, and the Linux NOP pad so the write pointer is a multiple of 256 dwords. The K ring bytes are unchanged. At GFX start the driver reads `CP_DEBUG` and `SPI_CONFIG_CNTL` / `_1`, logs them, and writes `00400000`, `0062c688` and `01000104` when they differ, citing `golden_settings_gc_9_1_rn`. `VM_CONTEXT1_CNTL` bit 7 stays off. `GET_INFO` reports the high VA range again. U4 and U2 run at the end of stage P, before the teapot, and again in stage U. This image has not been booted.
+
+The fifteenth stick uses the same settings file as the fourteenth. The stick file is 2156724224 bytes, sha256 `8348ff24a05019a66a8b132d1aeb711e7b6c48a51a80f973cebb79c1425e74c9`. The first open of `\\.\PhysicalDrive1` returned error 5. The same writer, started with administrator rights, wrote it to the General UDisk (disk 1, USB bus 7) from 20:14 to 20:18 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The device hash of those bytes matched at 20:18. Disk 0 was not opened.
+
+### Linux ring around one RADV submit
+
+The second Alpine stick booted on the 5625U and powered off by itself. `r5ref.log` starts at 19:41 Europe/Amsterdam. Capture `capture-20261106-194121` is on the FAT. `apk add` ended `rc=0`. `modprobe amdgpu` ended `rc=0` and `renderD128` was already there. `vkcube` exited 0 three times on RADV Renoir. Firmware matches the fourteenth stick (ME `0xa7`, PFP `0xc5`, MEC `0x1e3`, feature 54). The comparison is `generated/linux-ref/DIFF.md`.
+
+The two `INDIRECT_BUFFER` packets of one submit are adjacent. `regs-idle` and `regs-after` are `0xffffffff` because the GPU was in GFXOFF; `DIFF.md` uses the watch dumps only. The next change to `r5_gfx9_user_submit` is the non-MCBP frame around those buffers (`CONTEXT_CONTROL` `80000000 00000000`, `FRAME_CONTROL`, the buffers, `RELEASE_MEM`, `SWITCH_BUFFER`, pad to 256). The same stick should print `CP_DEBUG` and `SPI_CONFIG_CNTL` while GFX is on. K0, K1 and K2 stay as they are. No driver change in this step.
+
+### The Linux reference stick reached a login and did not capture
+
+The first Alpine stick booted to `(none) login`. There was no `capture-*` directory and no `run.log` on the FAT. The screen showed `modprobe: can't change directory to '/lib/modules'` and apk looking for `/media/R5REF/r5pkgs/x86_64/APKINDEX.tar.gz` and `/media/R5REF/apks/x86_64/x86_64/APKINDEX.tar.gz`. `boot/modloop-lts` was already on the stick (334491648 bytes).
+
+The ISO's own GRUB line is `modules=loop,squashfs,sd-mod,usb-storage quiet`. It does not contain `modloop=`. The OpenRC modloop service mounts `/boot/modloop-lts` when that option is set, and the initramfs only enables the service when the apkovl contains the empty marker `etc/.default_boot_services`. That marker was missing, so the service never ran. apk appends `x86_64` itself, so the repository file must name the roots `/media/R5REF/apks` and `/media/R5REF/r5pkgs`, with the extra packages and `APKINDEX.tar.gz` in `r5pkgs/x86_64/`. nlplug mounts the partition read-only on `/media/usb`. BusyBox `blkid` has no `-L`, and a second mount of `sda1` is refused, so the start script exited before it could write a log. modloop also links `/lib/firmware` into the squashfs; the amdgpu firmware package then fails with a read-only filesystem unless that link is replaced by a directory.
+
+The kernel line is now the ISO line plus `modloop=/boot/modloop-lts` and `modprobe.blacklist=amdgpu`. The apkovl is root-owned and adds the marker, `sysinit/modloop`, and `r5ref.start`, which logs each phase to the console and to `/media/R5REF/r5ref.log`. It remounts the existing FAT writable and bind-mounts it on `/media/R5REF`.
+
+QEMU with OVMF, on this machine, booted that image as a USB disk. KVM was not usable (`/dev/kvm` is root:kvm). The guest clock was UTC. modloop was `/dev/loop0` on `/.modloop`, `/lib/modules` contained `6.18.60-0-lts`, and `apk add` ended `rc=0` (`OK: 332.3 MiB in 70 packages`). The capture script started, reached `done`, and the machine powered itself off. QEMU exited 0 at 19:34 Europe/Amsterdam. There is no AMD GPU in that VM, so `vulkaninfo` and `vkcube` exited 1 and there is no ring dump. That is not a 5625U boot.
+
+The image is 2139621376 bytes, sha256 `7cf29f6db38ec4192847d5e8aa50c9f86575988846850731bda49c9b3739a702`. Python wrote it to the General UDisk (disk 1, USB bus 7, 8053063680 bytes) from 19:35 to 19:39 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 1048576 and at 2139555840. The device hash of those bytes matched at 19:39. Disk 0 was not opened.
+
+### Linux reference stick for the Renoir preamble
+
+Stage P on the fourteenth stick returned `ok` for every isolated packet, including the preamble and the 24-dword IB, and the teapot still stopped on source 184. The next step is a Linux capture of the kernel ring around one RADV submit, and of the registers at the moment the preamble's IB2 size returns to 0. This stick has not been booted. `DIFF.md` is not written.
+
+The image is Alpine extended 3.24.4 (`linux-lts` 6.18.60-r0) plus the eighteen packages the user approved, from `v3.24/main` for x86_64. `umr` is not in that release or in edge. VulkanTeapot stays off: its self-test path uses `BBitmap` and `BApplication`. The capture runs `vkcube` (`--wsi headless` when that option exists, otherwise `--wsi display`). `RADV_DEBUG=hang` stays off. The pixels will not match the R5 teapot.
+
+`apk.static` 3.0.9 still accepts `--initdb` and then refuses to open `lib/apk/db`, so the host did not simulate the install. The capture adds from both `/media/R5REF/r5pkgs` and `/media/R5REF/apks/x86_64`. The ISO repository holds the sonames the extra index warned about (`musl`, `libgcc`, `libstdc++`, `libexpat`, `libffi`, `xz-libs`, `zlib`, `zstd-libs`, `eudev-libs`, `libelf`, `hwdata-pci`).
+
+The kernel line, in GRUB and in syslinux, is `modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu quiet`. It does not set `apkovl=`. `nlplug-findfs` finds `r5ref.apkovl.tar.gz` in the FAT root. The overlay is root-owned: `etc/local.d/r5ref.start` mode 0755, `etc/runlevels/default/local` linked to `/etc/init.d/local`, `etc/modprobe.d/r5-amdgpu.conf` containing `blacklist amdgpu`, and `etc/apk/repositories` naming both stick repositories. `efi/boot/bootx64.efi` is on the image. One FAT32 partition, type `0x0c`, active, label `R5REF`, starts at LBA 2048 and is 4176900 sectors.
+
+The image is 2139621376 bytes, sha256 `1be325727a734d046f36eb2afa3313080dddad26ce122cf4463cfb6bd9dc5df0`. Python wrote it to the General UDisk (disk 1, USB bus 7, 8053063680 bytes) from 18:58 to 19:02 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 1048576 and at 2139555840. The device hash of those 2139621376 bytes matched at 19:02. Disk 0 was not opened. The per-file hashes of the files added on top of the ISO are in `generated/linux-ref/added-sha256.txt`.
+
+### Stage P walks the packets before the first marker
+
+The thirteenth stick ran `p1` through `p18` as `ok`, and the teapot still stopped on source 184. `mark 0x50000` stayed 0, so `RELEASE_MEM` of the value 1 in the 744-dword buffer did not run. The fault is earlier: the 24-dword IB, the preamble IB2, or the first `0x25` dwords of the main IB.
+
+At the start of stage P a `WRITE_DATA` stores `0xA5A5A5A5` on the test page. The same marker reader reads that word back and prints `mark selftest ok` or `mark selftest bad`. Every marker line now also prints the page-table entry and the physical address (`pte`, `pa`). The reader still uses the VMID 1 kernel mapping.
+
+The privilege dump reads segment 0, from `gc_9_0_offset.h`: `CP_STALLED_STAT3` `0x019c`, `STAT1` `0x019d`, `STAT2` `0x019e`, `CP_PFP_INSTR_PNTR` `0x01a5`, `CP_ME_INSTR_PNTR` `0x01a6`, and eight reads each of `CP_ME_HEADER_DUMP` `0x01a1` and `CP_PFP_HEADER_DUMP` `0x01a2`. The lines are `stall3`, `me_ip`, `pfp_ip`, `me hdr` and `pfp hdr`. MMIO only. K0, K1 and K2 still write the same packets. The K path still ends at `0x3b6`.
+
+`p1` through `p18` stay first. Then each new step is its own VMID 1 indirect buffer on kernel VRAM, with its own one-second fence. The first `priv`, timeout or room marks the device lost and the rest print `skipped, gpu lost`.
+
+- `p19 IB2` calls a second buffer that `WRITE_DATA`s the marker value. The control word is the size 6, VMID 0, no chain bit.
+- `p20 CONTEXT_CONTROL` is `80000000 80000000`. `p21` is `CLEAR_STATE`.
+- `p22` is `EVENT_WRITE` `0x19`. `p23` is `0x1a`.
+- `p24` through `p27` are `SET_UCONFIG_REG` of `0x30a00` (count 2, zeros), `0x30920` (count 3, `ffffffff 0 0`), `0x30968` (count 1) and `0x30e00` (count 2, zeros).
+- `p28 CONTEXT4` is the first four `SET_CONTEXT_REG` packets of the preamble.
+- `p29 SH_PREFIX` is every `SET_SH_REG` that starts in the first `0x20` dwords of the main IB. `WRITE_DATA`, `EVENT_WRITE` and `RELEASE_MEM` are left out.
+- `p30 PREAMBLE_LO` is the first `0x34` dwords of the preamble, `p31 PREAMBLE_HI` the second `0x34`, and `p32 PREAMBLE` all `0x68`.
+- `p33 IB24` is the 24-dword IB. The thirteenth-stick syslog recorded `submit ib va 0000000100284000 dw 24` and did not dump those dwords. This copy is an IB2 of the preamble (control `0x68`), `PFP_SYNC_ME`, `ACQUIRE_MEM` with bases 0 and coherency `0x28c40000` (`SH_ICACHE|SH_KCACHE|TC|TCL1|TC_WB` from Linux v6.12 `gc_9_0_sh_mask.h`), `EVENT_WRITE` `0x19`, and a NOP that makes the length 24. There is no scratch address. That VA was not in the log.
+
+The review counted the three preamble pieces as one step and the 24-dword IB as the next. They are separate steps here so a privilege fault names the half. The constant arrays live in `r5_stage_p.h`. The host test reads `generated/boot-5625u-13/syslog` and compares them. It also checks that the 24-dword buffer was not hex-dumped.
+
+The AMD64 jam on 6 Nov 2026 finished at 18:22 (Europe/Amsterdam) with `jam_exit=0`, `mesa_packages_ok` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `d6a8b5f8165856363b286bab76f240af5d24bfc38674397449bb3c1be4fb6f3a`. The same four packages match `distro/packages/x86_64`. The driver contains `mark selftest`, `me hdr`, `pfp hdr`, `PREAMBLE_LO` and `IB24`.
+
+Booted on the 5625U (self-test and syslog 19:33 on the R5 clock; the partition was read back at 18:38, Europe/Amsterdam). Sign-in was uid 1001. K2 landed `0xDEADBEEF` and the ring write pointer is still `0x3b6`. `vmid1 sh_mem` reads `config 00001018 bases 20001000`. `mark selftest ok`: the test page at `0x7fffffff9000` read back `a5a5a5a5`, PTE `060000081109f071`, physical `060000081109f000`. `p1` through `p33` printed `ok`, including both preamble halves, the whole preamble, and `IB24`. `vulkaninfo --summary` exited 0 with llvmpipe and RADV Renoir. The SAM teapot printed `vkQueueWaitIdle -13` and exited 1. Source 184 then fired on the same pair as the thirteenth stick: the 24-dword buffer at `0x100284000` and the 744-dword buffer at `0x100001000`. `CP_IB1` size is `0x40`, offset 0, IB2 size 0. `mark 0x50000` is still 0 and `mark 0x50008` is still `c0017600`, with a real PTE (`0600000811288071`, physical `0600000811288000`), so the marker reader is not the miss. The interrupt dump reads `stall3 00000000 stall1 20000c00 stall2 00030000 me_ip 00000879 pfp_ip 00000ada`. The eight ME header reads start `c0047600 c0037600 c0017600 c0027600 0000020c`. The eight PFP header reads start `c0053c00 c0064900 c0024600 c0004600`. No single stage P step trapped, so the fault is a dependency between the buffers, not one of those packets on its own. `pixels ok` was not printed. The later stages are `skipped, gpu lost`.
+
+The fourteenth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `bf3f48622c0be650141e1739930ee34d63911f916f6c9c9f59a01b8c23f97b5d`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 18:25 to 18:29 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 18:29. Disk 0 was not opened.
+
+### The ring read pointer is an offset
+
+The twelfth stick's `p8 EVENT_410 timeout` was a full-ring answer from `r5_gfx9_ring_space`. The write pointer was `0x40a` and `CP_RB_RPTR` was `0x0a`, the same count modulo 1024. The CP reports that pointer as a position in the ring. The space function treated it as a continuing count, so every submit after the first wrap failed. K2 ends at `0x3b6`, still inside the first 1024 dwords, so this did not show up before stage P.
+
+`r5_gfx9_rptr_count` turns that offset back into the continuing count: `wptr - ((wptr - offset) & (dwords - 1))`. One slot stays free, so a distance of 0 is empty. `r5_ring_has_room` is the only decision that uses it. That is the room check for user submits and for `radeon_gfx9_submit`. K0, K1 and K2 still write the same packets in the same order: their write pointer never wraps, and below 1024 the converted read pointer equals the register. The watchdog still follows the user fence. The dumps still print the raw register. The opt-in workload check `rptr != wptr` is unchanged.
+
+A stage P step that finds no room prints `p<n> <name> room wptr … rptr …` and status `R5_GPU_P_ROOM`. It does not call that a timeout. The host test submits 300 times, 12 dwords and 16 dwords, with a read pointer that wraps, including past 1024 and 2048, and one full ring that waits and then continues. The twelfth-stick pair `0x40a` / `0x0a` has room for 12.
+
+The AMD64 jam on 6 Nov 2026 finished at 17:00 (Europe/Amsterdam) with `jam_exit=0`, `mesa_packages_ok` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `54a44321e6a2d0255c900d84d3ddaf5c1c45ea054cff032960a81ad53a7019fc`. The same four packages match `distro/packages/x86_64`. The driver contains `room wptr`. The self-test contains `room`. The stick file, same settings, is 2156724224 bytes, sha256 `6ea884cb5ddfcac8be2a37372f75ed0c483dd1874819b0d77fb0d82784b398e3`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 17:39 to 17:44 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 17:44. Disk 0 was not opened.
+
+Booted on the 5625U (self-test and syslog 18:48, Europe/Amsterdam). Sign-in was uid 1001. K2 landed `0xDEADBEEF`. `vmid1 sh_mem` reads `config 00001018 bases 20001000`. `p1` through `p18` printed `ok`, including `EVENT_410`, `SH_RSRC3_VS` and `DISPATCH`. The ring wrap no longer stops stage P. `vulkaninfo --summary` exited 0 with llvmpipe and RADV Renoir. The SAM teapot printed `vkQueueWaitIdle -13` and exited 1. Source 184 fired on the 744-dword buffer at `0x100001000`. `CP_IB1` size is `0x40`, offset 0, and IB2 size is 0. `mark 0x50000` stayed `00000000`, so the `RELEASE_MEM` that stores 1 (ib `+0x26`) did not run. The two `WRITE_DATA`s before it did: `0x50000` is 0 and `0x50008` is `c0017600`. The packets in between are `SET_SH_REG` of `0xb830`, `0xb848`, `0xb854`, `0xb81c` and `0xb908`, then `EVENT_WRITE` `0x2c` and ZPASS. Stage P already passed those opcodes with other values. `0xb854` and `0xb908` were not in stage P. `pixels ok` was not printed. The later stages are `skipped, gpu lost`.
+
+### Stage P names the packet, and the decoder prints the index
+
+The eleventh stick's `0xc000b118` line is `SPI_SHADER_PGM_RSRC3_VS` (`0xB118`) with index 3 in bits 28–31. Mesa 25.3.6 emits that from `radeon_set_sh_reg_idx` on every GFX9 vertex shader. `uses_kernel_cu_mask` is hardcoded false, so the preamble's `ac_pm4_set_reg_idx3` writes `RSRC3_PS` without an index, and that IB2 finished. Linux programs `COMPUTE_STATIC_THREAD_MGMT_SE*` only for the EDC init, not before a graphics IB. No CU mask is written. `generated/gpu-m4/RADV-REGS.md` records that. The decoder now prints `reg 0xb118 idx 3`.
+
+`R5_GPU_STAGE_P` runs eighteen one-packet indirect buffers in VMID 1, on kernel VRAM mappings, before vulkaninfo. The dwords are the eleventh-stick packets with the addresses moved onto the test page. Each line is `p<n> <name> ok`, `timeout` or `priv`. The first failure marks the device lost. A `PRIV_REG` reads every `RELEASE_MEM` and memory `WRITE_DATA` target (`mark 0x50000 = …`) and `CP_ROQ_IB1_STAT` (`mmCP_ROQ_IB1_STAT`, segment 0, `0x01e1`). The self-test also prints the ME firmware feature word.
+
+The AMD64 jam on 6 Nov 2026 finished at 16:23 (Europe/Amsterdam) with `jam_exit=0`, `mesa_packages_ok` and `ok egl vendor`. The raw image is 2147483648 bytes, sha256 `9a6c91c055b0d9930137d271f6a23ba5a2a78c047482ec50d967988a1b3724c3`. The same four packages match `distro/packages/x86_64`. The driver in that image contains `SH_RSRC3_VS` and `roq ib1`. The self-test contains `stage P`. This stick is not booted. Which step faults, and whether the teapot then prints `pixels ok`, is unproven.
+
+The twelfth stick uses the same settings file. The stick file is 2156724224 bytes, sha256 `92b42db1ceef604b2c78e2304d4de270dfbc954946a3338c59dd53b5e679ac81`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 16:26 to 16:30 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 16:30. Disk 0 was not opened.
+
+Booted on the 5625U the same afternoon (self-test file 17:38, syslog 17:42, Europe/Amsterdam). Sign-in was uid 1001. K2 landed `0xDEADBEEF`. `vmid1 sh_mem` reads `config 00001018 bases 20001000`. The ME firmware feature word is 54. `p1` through `p7` printed `ok`. `p8 EVENT_410` printed `timeout` because `r5_gfx9_user_submit` returned before the packet was written: the ring is 1024 dwords, the monotonic write pointer was `0x40a` and `CP_RB_RPTR` was `0x0a` (the same count with the wrap bit dropped), so `r5_gfx9_ring_space` reported no room. The seven fences had landed (`seen 7`). There is no `ih client` line, `CP_ME_CNTL` is 0, and the VM fault status is 0. `CP_IB1` size is 0. The self-test then skipped vulkaninfo and both teapots. One later `CS_SUBMIT` was refused `lost` / `ECANCELED` (`0x8000702f`). That is the VulkanTeapot alert. `SH_RSRC3_VS` did not run. `pixels ok` was not printed.
+
+### A lost GPU wakes its waiters, and the indirect buffer is decoded
+
+The tenth stick's first low indirect buffers ran in VMID 1 until source 184, `PRIV_REG`. `generated/gpu-m4/RADV-REGS.md` walks Mesa 25.3.6. The 24-dword buffer is RADV's IB2 (`PKT3_INDIRECT_BUFFER` with the size and no VMID); Linux emits that same word and the CP keeps the parent VMID. The ME firmware reported to Mesa is 167, so the indexed uconfig packet is the one RADV uses. No one register is isolated, so none is changed. The fault is late in the 744-dword buffer.
+
+At a non-EOP CP interrupt the handler reads `CP_IB1` and `CP_IB2` (`gc_9_0_offset.h` `0x20cc`–`0x20d1`, offsets `0x2092` and `0x2093`) and logs them. The retire thread then copies up to 1024 dwords through the VMID 1 table, eight per line, and prints `pm4 +offset` for `SET_CONFIG_REG`, `SET_CONTEXT_REG`, `SET_SH_REG`, `SET_UCONFIG_REG`, `SET_UCONFIG_REG_INDEX`, a register `WRITE_DATA`, a register or perf `COPY_DATA`, and a register `WAIT_REG_MEM`. A nested `INDIRECT_BUFFER` is dumped once. The copy uses the kernel VRAM window or `map_physical_memory`. It does not take a user pointer.
+
+The watchdog marks every pending job finished with an error and wakes the waiters. `FENCE_WAIT`, `SYNCOBJ_WAIT`, `SYNCOBJ_WAIT_LIST`, a submit waiting on a sync, the ring-room wait and a transfer of a point that has not landed return `ECANCELED`. A later `CS_SUBMIT` does too. Closing the render node releases that client's buffers and VMID 1 mappings when the device is lost, instead of parking them on a fence that will not land. `GET_INFO` sets `R5_GPU_CAP_LOST`. `R5_GPU_SELFTEST` then prints `skipped, gpu lost` and does not submit. The self-test kills the stage's process group (`kill(-pid)`) and the shell team (`kill_team`), and skips the later GPU stages after that capability bit is set. Mesa's syncobj wait maps `ECANCELED` to `VK_ERROR_UNKNOWN`. The command-submission path maps it to `VK_ERROR_DEVICE_LOST`.
+
+The AMD64 jam on 6 Nov 2026 at 15:37 (Europe/Amsterdam) finished with `jam_exit=0`, `mesa_packages_ok` and `ok egl vendor`. The eleventh stick is the General UDisk. Booted on the 5625U the same afternoon (self-test file 16:48, syslog 16:49, Europe/Amsterdam). K2 landed `0xDEADBEEF`. `vulkaninfo --summary` exited 0 with llvmpipe and RADV Renoir. The SAM teapot printed `vkQueueWaitIdle -13` and exited 1. The desktop error is that alert (`VK_ERROR_UNKNOWN`). The later stages printed `skipped, gpu lost`. Source 184 fired with `CP_IB1` still `0x100001000`, size `0x40`, offset 0, and IB2 size 0. The 744-dword dump contains Mesa's `SET_SH_REG` of `SPI_SHADER_PGM_RSRC3_VS` (`0xB118`) with index 3 in bits 28–31 (`0x30000046`, value `0x003ffffe`). The preamble IB2 had already returned; it wrote `CP_COHER_START_DELAY` (`0x301ec`) and `TA_CS_BC_BASE_ADDR` (`0x30e00`). A later `CS_SUBMIT` was refused `lost` / `ECANCELED` (`0x8000702f`). The log has no `mapped` refusal and no abort. `CP_IB1_OFFSET` stayed 0, so the dword that trapped is not named.
+
+### A job is done only when its fence lands, and the high range stays off
+
+The ninth stick reached the desktop. Both teapots selected RADV Renoir and `vkQueueWaitIdle` returned success while the user fence stayed 0. Each run then got `B_BUSY` from `SYNCOBJ_DESTROY` because the job was still live. The queue sync object is created signaled (point and submitted are 1). RADV signals it with timeline point 0, which did not move `submitted`, so a transfer treated that sync as already done and the wait returned at once. U1 then timed out on a command processor that was already halted: the first indirect buffers were in the high range, and bit 47 halts the ME without a VM fault.
+
+A job is finished only when its own sequence is on the user fence page (offset 2048). The ring read pointer does not finish it, and neither does the submit. A timeline signal of point 0 is that job's sequence, the same as a binary signal. `submitted` rises when the job is queued. `point` rises when the fence shows the sequence. A transfer or a wait on a sync that a live job still lists waits for that job. `SYNCOBJ_DESTROY` detaches the sync and succeeds. The retire thread reads the user fence on its one-second timeout as well as on an interrupt, then the watchdog looks at the oldest unfinished job. "Lost" is still that watchdog, after 5 seconds.
+
+`GET_INFO` reports `high_va_offset` and `high_va_max` as 0, in the common block and in the AMD vendor block. libdrm 2.4.124 then drops `AMDGPU_VA_RANGE_HIGH` and uses the low managers, so `address32_hi` is 0. A map above `va_max` is refused with `high va disabled`. U4 and U2 print `skipped, high va disabled` and do not run. The first 16 submits log `submit ib va … dw …`. The Linux Renoir layout (three levels, `translate_further`, 128 TB plus 512 GB) is on the M5 list. The high range is reported again only after that exists.
+
+`VulkanTeapot --selftest` compares the six Lavapipe pixels (`262e38ff`, `262e38ff`, `853b16ff`, `a64a1cff`, `873c17ff`, `692e11ff`) with ±2 per channel. It prints `pixels ok` or `pixels MISMATCH` and exits 2 on a mismatch. It also prints `vkQueueWaitIdle` and `vkDeviceWaitIdle` with the Vulkan result.
+
+`CP_INT_CNTL_RING0` (`0x106a`) now enables the EOP bit (shift `0x1a`) and, from `gc_9_0_sh_mask.h`, `PRIV_INSTR` (`0x16`), `PRIV_REG` (`0x17`) and `OPCODE_ERROR` (`0x18`). A non-EOP interrupt entry is logged, at most 32 lines per boot: client, source, ring, VMID and the eight raw dwords. Source ids 184 and 185 are the privilege faults. On a timeout or the watchdog the last indirect buffer is read through the VMID 1 table (a kernel mapping of that page, never a user pointer) and printed as 16 dwords, with `CP_IB1_BASE`, `CP_IB1_BUFSZ` and `CP_IB1_OFFSET`.
+
+The host replay covers a signaled sync whose fence never lands: `WAIT_FOR_SUBMIT|WAIT_ALL` returns `ETIME`, `WAIT_CS` is not expired, the empty-submit transfer waits, destroy succeeds, and the aged job then returns lost. `ok gpu api 1.0 walk`, `ok libdrm symbols`, `ok ac drm family RV cu 7 firmware map` and `ok libdrm ioctl`. `/usr/local/share/libdrm/amdgpu.ids` is still missing on the host. That is the old name warning.
+
+`jam -q @r5-raw` finished at 14:43 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`, 1169 targets. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `3f59f6de66a36a2bfea6df14c367b7dfdff140ebf3998c2ec9c31bb0ee512f28`. From that image, `libdrm-2.4.124-1` (`23de8c87948e7335c145e6d6becd477b43c70778c2b99a84501dc4863f777b04`), `mesa-25.3.6-2` (`295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`), `mesa_radv-25.3.6-1` (`06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`) and `vulkanteapot-1.0.0-1` (`cf78f6d7244203690652e5af0648707ce4eba11c51bd156953e92852822fba7a`) match `distro/packages/x86_64`. The driver contains `vmid1 fail ring`, `vmid1 ptb`, `vmid1 fail default`, `k2 baseline` and `vmid1 sh_mem`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+That raw image, with the same settings file, is the BeFS partition of the tenth stick. The stick file is 2156724224 bytes, sha256 `1def771b36ad166aa538686e44441c784b9cd7956865d9bd016baa958ed25361`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 14:45 to 14:48 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 14:49. Disk 0 was not opened.
+
+That stick reached the desktop on the Ryzen 5 5625U. Sign-in was uid 1001. K0, K1 and K2 completed. `vmid1 sh_mem` reads `config 00001018 bases 20001000`. The self-test's own high map at `0xffff800000000000` is refused with `high va disabled` (`B_BAD_VALUE`). Its `vulkaninfo --summary` still exited 0 and listed llvmpipe and RADV Renoir. The first real submit is two low indirect buffers, `0x100284000` (24 dwords) and `0x100001000` (744 dwords). The 24-dword buffer starts with `PKT3_INDIRECT_BUFFER` (`c0023f00`) chaining to `0x100015000` with control `0x68` (104 dwords, VMID field 0). The interrupt handler then logs one non-EOP line: client 20, source 184 (`CP_PRIV_REG_FAULT`), ring 0, VMID 1. The user fence stays 0. Five seconds later the watchdog marks the GPU lost. `CP_ME_CNTL` is 0, the VM fault status is 0, and `CP_IB1` is `0x100001000` size `0x40` offset 0. The page-table entry `060000081129b031` is that VRAM page. After that, a new `VA_MAP` of `0x100000000` is refused with `mapped`. `/bin/vulkaninfo` and a later `/bin/vulkaninfo --summary` throw in `AppGpu` and `abort()`. The self-test file stops at `stage VulkanTeapot (sam)`. U1 through U5 did not run. `usb_disk` `Invalid field in CDB` is the stick.
+
+### VMID 1 shader bases, GTT type, and a self-test that does not run on open
+
+The eighth stick reached the desktop on the Ryzen 5 5625U. U1 wrote `deadbeef` at `0x7fffffffd000` (`seq 1 seen 1`). U2 timed out with `CP_IB1_BASE` still U1's address, size 0, fault status 0 and `CP_ME_CNTL` `0x15000000`. The watchdog then marked the GPU lost. `vulkaninfo` exited 0 (llvmpipe and RADV Renoir). VulkanTeapot got `VK_ERROR_DEVICE_LOST`. U3, U4 and U5 did not run. `CP_IB1_BASE_HI` is a 16-bit field in the hardware mask as well, so that mask was left as it is. The high address and GTT were still the same step.
+
+`r5_gfx9_vmid1_setup` now writes `SH_MEM_CONFIG` `0x1018` and `SH_MEM_BASES` `0x20001000` for VMID 1 through 15, with `GRBM_GFX_CNTL` selecting that VMID, then restores `GRBM_GFX_CNTL` to 0. VMID 0 stays the ring contract. The line is `vmid1 sh_mem`. The registers are MMIO. Callers already hold `gpu_lock`.
+
+`R5_GPU_SELFTEST` is `R5_GPU_OP_BASE + 23`. It runs only when `gpu_selftest` is true, and returns `B_NOT_ALLOWED` otherwise. The first open of the render node no longer runs the steps. The order is U1 low VRAM, U2a (VRAM indirect buffer, write into a low GTT page, CPU read), U4 high VRAM, U3 low GTT, U2 high GTT, then U5. The first miss stops the series. The eight dwords and the physical address are printed from the kernel mapping before the submit. Those pages are kernel areas. No user pointer is dereferenced.
+
+User GTT entries are `MTYPE_NC` and `SNOOPED`. The K2 page stays `MTYPE_UC`. A GTT indirect buffer is `clflush`ed, then `mfence`, at submit. That flush is temporary. The 48-bit form of a high address walks the same indexes as the sign-extended form, and `PAGE_TABLE_END` already covers it.
+
+`r5-gpu-selftest` now runs, in order: the buffer stage without an indirect buffer, `vulkaninfo`, VulkanTeapot with `RADV_PERFTEST=sam`, VulkanTeapot, the self-test indirect buffer, then `R5_GPU_SELFTEST`. This has not been booted.
+
+`jam -q @r5-raw` finished at 13:54 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `29ede4b51132e326e014eaad021b723e4868e92e14eac7fa32616a77414900c3`. From that image, `libdrm-2.4.124-1` (`23de8c87948e7335c145e6d6becd477b43c70778c2b99a84501dc4863f777b04`), `mesa-25.3.6-2` (`295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`), `mesa_radv-25.3.6-1` (`06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`) and `vulkanteapot-1.0.0-1` (`99553754e2a4633752119b047a349e56550d0fd0e43d2d45ad23290409ee322d`) match `distro/packages/x86_64`. The driver contains `vmid1 fail ring`, `vmid1 ptb`, `vmid1 fail default`, `k2 baseline` and `vmid1 sh_mem`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+That raw image, with the same settings file, is the BeFS partition of the ninth stick. The stick file is 2156724224 bytes, sha256 `493f28dfe0af262692c04e07a56b2048fc893771c0430c3d6fae8547db227b92`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 13:57 to 13:59 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 14:01. Disk 0 was not opened.
+
+That stick reached the desktop on the Ryzen 5 5625U. Sign-in was uid 1001. K0, K1 and K2 completed. `vmid1 sh_mem` reads `config 00001018 bases 20001000`. Stage `bo` without an indirect buffer read back `5a5a5a5a`. `vulkaninfo` exited 0 and listed llvmpipe and RADV Renoir. Both VulkanTeapot runs (with `RADV_PERFTEST=sam`, then without) selected RADV Renoir, submitted, and waited without a Vulkan error. All six sample pixels are `00000000`. Each run destroyed a sync object while a job was still live (`DRM_IOCTL_SYNCOBJ_DESTROY`, `B_BUSY`). The self-test indirect buffer then returned from submit and the fence timed out, CPU read `00000000`. `R5_GPU_SELFTEST` ran U1 only. The eight dwords are the `WRITE_DATA` of `deadbeef` at `0x7fffffffd040`, and the page-table entry `0600000811498071` is that VRAM page. U1 timed out: `wb 00000000`, `seq 4`, `seen 0`, `CP_ME_CNTL 0x15000000`, fault status 0, `CP_IB1` still the K2 GART base `0xf3f0000000` with size 0. The ring read pointer caught the write pointer at `0x3ee` (56 dwords after K2's `0x3b6`). The watchdog then marked the GPU lost. U2a, U4, U3, U2 and U5 did not run. `usb_disk` `Invalid field in CDB` is the stick.
+
+### Fault redirect, the four VMID 1 pages, and the SQTT mutex
+
+U1 on the seventh stick fetched the VMID 1 indirect buffer and then wrote the kernel fence page. That page is not mapped in VMID 1, so the command processor halted (`CP_ME_CNTL` `0x15000000`). `VM_CONTEXT1_CNTL` already had the per-context default bits. `VM_L2_PROTECTION_FAULT_DEFAULT_ADDR` (`0x084e`/`0x084f`) is now the K2 dummy page, written again when VMID 1 is built, and `VM_L2_PROTECTION_FAULT_CNTL` (`0x0847`) gets the Linux default: the `ENABLE_DEFAULT` fields on, `CRASH_ON_NO_RETRY_FAULT` and `CRASH_ON_RETRY_FAULT` off. The baseline line prints that address and that control register. A faulting write no longer has physical address 0 as its target.
+
+Stage U no longer writes a VMID 0 address. Each indirect buffer writes `0xDEADBEEF` at its own VA plus 64. The kernel reads that word through the kernel mapping, then unmaps the VA and frees the page. The VAs sit just below `va_max` and `high_va_max`. U1 is low VRAM, U2 is high GTT, U3 is low GTT, U4 is high VRAM. U5 runs only after those four and writes an unmapped VA. The expected result is a VMID 1 fault, a fence that lands, and a command processor that is not halted. The pages are kernel mappings. This has not been booted.
+
+`vulkaninfo` died in `radv_unregister_queue` (`radv_sqtt.c`) while destroying the device. The SQTT queue mutex is only initialised when RGP is on, and the teardown locks it anyway. A zeroed `pthread_mutex_t` is a valid initialiser on glibc and is not on Haiku. `radv_device_init_rgp` now initialises those mutexes on every device. `AMDGPU_INFO` `0x21` returns a zero codec table for decode and encode. That is not the mutex. This has not been booted.
+
+`jam -q @r5-raw` finished at 13:10 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `86589c574660ae6979664047270453fde1673974b5b27d61dfe08074786ddcc0`. From that image, `libdrm-2.4.124-1` (`23de8c87948e7335c145e6d6becd477b43c70778c2b99a84501dc4863f777b04`), `mesa-25.3.6-2` (`295e7d641927876bc63d82ae620867cf2f6b95d4c950b26ed97e00b4f51e10ec`), `mesa_radv-25.3.6-1` (`06e3de76ec49cf7e84cdc302dac3de6930bd7d772fbce23a988c2937647b157e`) and `vulkanteapot-1.0.0-1` (`99553754e2a4633752119b047a349e56550d0fd0e43d2d45ad23290409ee322d`) match `distro/packages/x86_64`. The driver contains `vmid1 fail ring`, `vmid1 ptb`, `vmid1 fail default` and `k2 baseline`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+That raw image, with the same settings file, is the BeFS partition of the eighth stick. The stick file is 2156724224 bytes, sha256 `26414bff05381d5bc4100dbd33dbd24cc3e814f002da0ce573fc32655ca29051`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 13:14 to 13:17 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 13:18. Disk 0 was not opened. This stick has not been booted.
+
+### Stage U, CPU map, and the IB count
+
+The sixth stick reached the desktop on the Ryzen 5 5625U. K0, K1 and K2 completed. Stage `bo` read back `5a5a5a5a`. The indirect buffer was the K2 `WRITE_DATA` padded with `0xFFFF1000`. The CP did not retire it: `fence timeout`, `gpu read 00000000`, then `gpu lost watchdog` with `cp 80008200`, `grbm a0003028`, `seen 0`, fault status 0, and `CP_IB1` still the kernel GART base `0xf3f0000000` with size 0. The page-table entry of the buffer was a valid GTT mapping. There was no `refuse VA_MAP`. `vulkaninfo` and VulkanTeapot both issued `DRM_AMDGPU_GEM_MMAP` (`0x41`), which is ENOSYS, and then died in `libvulkan_radeon.so` (mutex owner, then a segment violation).
+
+The first open of the render node, with `gpu_selftest`, now runs stage U after VMID 1 is built. U0 submits the K2 `WRITE_DATA` from the VMID 0 GART page through `r5_gfx9_user_submit` with VMID 0. U1 uses a VRAM page mapped at the low address in VMID 1. U2 uses a kernel GTT page mapped at the high address in VMID 1. Each wait is one second and does not mark the GPU lost. The first miss stops the series. A timeout and the watchdog print `CP_RB0_RPTR`, both write pointers, the doorbell, the kernel write pointer, eight ring dwords at the read pointer, `CP_IB1` including the offset, `CP_ME_CNTL`, `CP_STAT`, the three stall registers, both GRBM status registers, and the VM fault. The same line is written once after K2 as `k2 baseline`. K0 and K2 do not pad a commit to 256 dwords: K0's write pointer was `0x392`. Linux `amdgpu_ring_commit` does, with `PACKET3(NOP, 0x3FFF)`. Linux also writes the full upper address half, and a non-zero VMID job emits a VM flush, pipeline sync and `SWITCH_BUFFER` before the indirect buffer. Those packets are not added here. The stage writes only through kernel mappings.
+
+`ac_drm_bo_cpu_map` and RADV's buffer map call `r5_bo_cpu_map` on Haiku. `0x10`, `0x11` and `0x17` return the live buffer bytes. `0x22` returns 8 for GFX and 0 for the other IPs. `0x21` stays ENOSYS. This has not been booted.
+
+`jam -q @r5-raw` wrote the image at 12:21 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `4b3237254d03606d19da55fb7e69c83d479f97efdb16d659937f71d3ef2c106d`. From that image, `libdrm-2.4.124-1` (`dae2a8eb2d21af20448942caa3bb18a48f02f8fbb2628c034efbe697df6a2e98`), `mesa-25.3.6-2` (`03b4602384c068f8ae16357de10759cf71249431c66636dadbe3d05458805b5a`), `mesa_radv-25.3.6-1` (`a2640e3601c62ac4e0c6a6ca8548bed5adaa91cbf0de28621665367ccc629792`) and `vulkanteapot-1.0.0-1` (`99553754e2a4633752119b047a349e56550d0fd0e43d2d45ad23290409ee322d`) match `distro/packages/x86_64`. The driver contains `vmid1 fail ring`, `vmid1 ptb`, the stage U skip text and `k2 baseline`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`.
+
+That raw image, with the same settings file (`gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true`, `gpu_selftest true`, and neither `gfx9_workload` nor `gfx9_compute`), is the BeFS partition of the seventh stick. The first 6 MiB is the anyboot boot code already on disk. The stick file is 2156724224 bytes, sha256 `1423a3f1b063d66e9de9d446534799d828affc0c0d89c3dd37794f6e090e3ffa`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 12:24 to 12:27 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 12:28. Disk 0 was not opened.
+
+That stick reached the desktop on the Ryzen 5 5625U. Sign-in was uid 1001. K0, K1 and K2 completed, and `k2 baseline` shows `CP_STAT` 0, `CP_ME_CNTL` 0 and read pointer `0x3b6`. U0 wrote `deadbeef` (`seq 1 seen 1`). U1 timed out: `wb 00000000`, `seq 2 seen 1`. `CP_IB1_BASE` is `0x10000` with size 0. The fault status `0x00140d58` is a CPG write (client 6, RW 1, permission `0x5`, mapping error 1, walker error 4) at page `0xf4007ea000`, the kernel fence page. `CP_ME_CNTL` is `0x15000000`. The self-test read back `5a5a5a5a` through `r5_bo_cpu_map`. Its low `GEM_VA` at `0x10000` is `B_BAD_VALUE` because U1 left that page mapped. The high map succeeded, the indirect buffer did not retire, and the watchdog marked the device lost on the same fault. `vulkaninfo` then stopped in `AppGpu` on `mutex->owner == -1` while destroying the device. VulkanTeapot reached `vkQueueSubmit` and got `VK_ERROR_DEVICE_LOST`. `AMDGPU_INFO` `0x21` is the only ENOSYS line. U2 did not run.
+
+### Indirect buffer, watchdog, and PRT
+
+The fifth stick (sha256 `b97e9be5d9cca87ed9dfcb5c7ebff8add96852a7c0b759c9ba930b3a15704aeb`) reached the desktop on the Ryzen 5 5625U. K0, K1 and K2 completed. Stage `bo` created both buffers, mapped both, and read back `5a5a5a5a`. The indirect buffer was one type-2 dword, `0x80000000`. The CP did not retire it (`seen 0`). The one-second fence wait called `gpu_lost`, so the device stayed lost for the rest of the boot. `vulkaninfo` passed `vkCreateDevice` and stopped on a PRT reserve: `refuse VA_MAP bo` handle 0, `B_BAD_VALUE`, VA `0xffff800100001000`. It remained in the debugger. VulkanTeapot then hit `refuse VA_MAP mapped` on the same VMID 1 address.
+
+The self-test buffer is now the K2 `WRITE_DATA` of `0xDEADBEEF` at `highVa + 64`, padded to 8 dwords with the GFX9 type-3 NOP `0xFFFF1000` (`PACKET3(PACKET3_NOP, 0x3FFF)`). Mesa's `ib_pad_dw_mask` for GFX is `0x7`. The ring `align_mask` `0xff` is the ring pointer; padding the indirect buffer to 256 dwords would cover the write at offset 64. The file prints `fence ok` or `fence timeout`, then the CPU value at offset 64. `vulkaninfo` has to exit before VulkanTeapot. If it is still running after 120 seconds, the self-test kills it and writes that in the file.
+
+A client wait returns `B_TIMED_OUT` and does not mark the device lost. The retire thread does, when the oldest job has been in the ring for 5 seconds. The lost line adds `VM_L2_PROTECTION_FAULT_STATUS`, the fault address, `CP_IB1_BASE_LO`, `CP_IB1_BASE_HI`, `CP_IB1_BUFSZ`, and the VMID 1 page-table entry of the indirect buffer. Those register indexes are from `gc_9_0_offset.h`. Closing a buffer no longer waits: the buffer stays reserved until its job retires, or until the watchdog. There is no reset.
+
+`VA_MAP` with handle 0 is valid only with the PRT flag. The page-table entry is Linux `AMDGPU_PTE_PRT`, bit 51, with `VALID` clear. `gmc_v9_0_get_vm_pte` does that and programs no further GMC 9 register for the mapping. That path writes the entry only. It does not read or write a user address. `VA_REPLACE` and `VA_CLEAR` are new calls after `SYNCOBJ_TRANSFER`. `REPLACE` clears the range and then maps the buffer, or writes PRT again when the handle is 0. `CLEAR` writes empty entries. DRM stays 3.42.0, so sparse binding stays advertised.
+
+The host replay's stand-in records the page-table value. A PRT map, a replace, a clear and an unmap were checked there. A short wait on a job that has not retired leaves the device usable; a job aged past 5 seconds makes the next submit fail. That stand-in is not the kernel retire thread. `jam -q @r5-raw` finished at 11:38 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `90b0cf645fbc8d9be4a5b6ce877ca3cfc9a8cdc06f38737b9469081a9289cc4b`. From that image, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The driver contains `gpu lost fault`. `r5-gpu-selftest` contains `fence ok` and `killed, it did not exit`. `libvulkan_radeon.so` has no undefined `ioctl`.
+
+That raw image, with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`, is the BeFS partition of the sixth stick. The settings do not set `gfx9_workload` or `gfx9_compute`. The first 6 MiB is the anyboot boot code already on disk. The stick file is 2156724224 bytes, sha256 `9c42b8a485fb4de56778ae018c9dafe90dfbbed4f804b9333e57b7b7c2ae60c1`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 11:45 to 11:48 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 11:49. Disk 0 was not opened. This stick has not been booted.
+
+### Fifth M4 stick
+
+The image jammed at 10:54 Europe/Amsterdam on 6 Nov 2026 is the BeFS partition of this stick. The settings are `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. They do not set `gfx9_workload` or `gfx9_compute`. The stick file is 2156724224 bytes, sha256 `b97e9be5d9cca87ed9dfcb5c7ebff8add96852a7c0b759c9ba930b3a15704aeb`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 10:59 to 11:02 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 11:03. Disk 0 was not opened. The boot is in the section above.
+
+### GTT map and the user clone
+
+The fourth stick (sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`) reached the desktop on the Ryzen 5 5625U. K0, K1 and K2 completed. `vmid1 ptb` is present and there is no `vmid1 fail`. Stage `bo` created both buffers. `GEM_VA` of the VRAM buffer at the low address returned 0. `GEM_VA` of the GTT buffer at `0xffff800000000000` was `refuse VA_MAP short status 0x80000010` (`B_BAD_DATA`) with `map 0`. RADV's first buffer was the same refusal at `0xffff800100000000`. `vulkaninfo` aborted in `vkCreateDevice` with `VK_ERROR_OUT_OF_DEVICE_MEMORY`. `GEM_MMAP` returned `-2147483648` (`B_NO_MEMORY`) and the syslog has no `BO_MAP` refusal.
+
+`get_memory_map` returns `B_OK` and ends the table with a size-0 entry, so the old count was always 0. GTT `VA_MAP` now calls `get_memory_map_etc` on the kernel area and continues when the table needs more than 256 entries. `clone_area` in the kernel clones into the kernel address space and adds the kernel protection bits. `BO_MAP` now clones into the calling team with `B_READ_AREA | B_WRITE_AREA` only. The kernel does not write through that clone. A second map from that team returns the same area. Another team gets `B_NOT_ALLOWED` until M5. The clone is deleted when the buffer is released, and left alone when the team has already ended. The source area is no longer `B_CLONEABLE_AREA`. libdrm does not delete the clone on unmap.
+
+A failed `AMDGPU_INFO` line now includes `query 0x..`. The queries RADV 25.3.6 treats as optional stay ENOSYS. The host replay's `get_memory_map` stand-in returns 0 and a size-0 end entry, and a clone belongs to a team. A GTT map at the high address and a CPU map both pass on that stand-in. The self-test prints the CPU write and the value read back.
+
+`jam -q @r5-raw` finished at 10:54 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. The image is 2147483648 bytes, sha256 `f41c5822d307e48f755b0e128eb64a46cb1fb40b046f183330618860ffe9d217`. From that image, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The driver contains `vm_clone_area` and `get_memory_map_etc`. `r5-gpu-selftest` contains `cpu write`. `libvulkan_radeon.so` has no undefined `ioctl`. Not booted.
+
+### Fourth M4 stick
+
+The image jammed at 10:13:47 Europe/Amsterdam on 6 Nov 2026 is `r5-os.image`, 2147483648 bytes. From that image, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The `radeon_hd` driver contains `radeon_hd: refuse`, `BO_CREATE`, `vmid1 fail ring` and `vmid1 ptb`. `r5-gpu-selftest` contains `stage bo`. `libvulkan_radeon.so` has no undefined `ioctl`. Login contains `r5-gpu-selftest`. The same jam printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`.
+
+That raw image, with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`, is the BeFS partition of the stick. The settings do not set `gfx9_workload` or `gfx9_compute`. The first 6 MiB is the anyboot boot code already on disk. The stick file is 2156724224 bytes, sha256 `8f819d94c04358f78c998e2b14b52ed5d9a392884a85dc263508da698a5a4538`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 10:26 to 10:28 Europe/Amsterdam. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 10:30. Disk 0 was not opened. The boot is in the section above.
+
+### Device creation is logged, and not reproduced on the host
+
+`BO_CREATE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP` and `CS_SUBMIT` each print one `radeon_hd: refuse` line for a status other than `B_OK`. The line has the reason and the handle, domain, size, VA, offset, map size and flags. The first 32 lines of a boot are kept. A `VA_MAP` that fails after writing page-table entries clears those entries and flushes. Linux `AMDGPU_GMC_HOLE_MASK` is `0x0000ffffffffffff`; the walk uses bits 12–47, so the canonical high address and the masked address select the same slots. The host VM test maps the first and last page of the high range.
+
+The translator prints one stderr line for an ioctl error: the name, the Linux number, and errno. `GEM_CREATE` adds domains, flags, size and alignment. `GEM_VA` adds the operation. `REPLACE` and `CLEAR` also go through `r5_unknown`, with the operation in that text.
+
+The self-test runs stage `bo` before `vulkaninfo`: 4 KiB VRAM and GTT, a low and a high `GEM_VA`, a CPU map, a NOP indirect buffer and a fence, then unmap and map of the same VA. That stage has not run on the 5625U.
+
+A Linux `libvulkan_radeon.so` was not built. This machine has no `llvm-config` and no `pkg-config`, and the existing Mesa build is the Haiku cross build. The host replay of the first RADV buffer path (`amdgpu_va_range_alloc` with `AMDGPU_VA_RANGE_HIGH`, a 4 KiB VRAM `GEM_CREATE`, and `GEM_VA` `MAP`) returned success. A direct `GEM_VA` `REPLACE` returns `ENOSYS`. An allocation above 64 MiB is refused. Neither of those is the call inside `vkCreateDevice` on the stick. `vkCreateDevice` and an empty `vkQueueSubmit` were not run. No fourth stick.
+
+### Third M4 stick boot: VMID 1 is up, vkCreateDevice is not
+
+The stick sha256 `205969430991f2dd842ded1eacee228a20dc25ed261c3cf9aa0e69743b96019b` reached the desktop on the Ryzen 5 5625U. Sign-in was uid 1001. The syslog has `enable SMEP` and `enable SMAP`. K0, K1 and K2 completed (`scratch deadbeef`, `rptr 0x392`, `k2 inv 007c0001`, `k2 dma pattern 262144 cafe 0 other 0`). There is no panic. The self-test file is `stage render node: api 1.0 device 15e7 cu 7` and firmware me 167, pfp 197, mec 483.
+
+`CTX_CREATE` built VMID 1. The syslog has `vmid1 ptb 0000000811096001 cntl 007ffe07 pages 1` and `vmid1 identity low ffffffff 0000000f high 00000000 00000000`. There is no `vmid1 fail`. The next kernel line is `abort() called` in `vulkaninfo` (`AppGpu` constructor). `vulkaninfo --summary` and VulkanTeapot both stop in `vkCreateDevice` with `VK_ERROR_OUT_OF_DEVICE_MEMORY` (-2). The captured stderr has no `Failed to allocate a buffer` and no `Failed to reserve a PRT VA region`. The syslog has no `bo limit`, no `syncobj limit` and no GPU page fault. RADV returns that Vulkan code without the buffer line when the high-VA reservation fails, or when the map after a successful allocation fails. `~/config/cache/mesa_shader_cache` has cache buckets, so shader compilation started. There is no `driverID 3` and there are no teapot pixels. Lavapipe threads were running in the debugger when `vulkaninfo` aborted; the summary never prints because that abort ends the process. No fourth stick.
+
+### Third M4 stick
+
+The MIDI work stays in its own work tree. This tree stayed on `cursor/gpu-m4-teapot` at `6e6e0f875e` for the jam and the image steps. `jam -q @r5-raw` finished at 09:06 Europe/Amsterdam on 6 Nov 2026, `jam_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. `pin-mesa-packages.sh` could not open the HaikuPorts repository file and stopped before writing `r5-opengl.repo`. Jam continued and warned that `mesa_swpipe` and `mawk` are not available. The image still has the pinned packages.
+
+`jam -q @r5-anyboot` started at 09:13 and finished at 09:15, `jam_exit=0`, 1168 targets. The anyboot is 2156724224 bytes. The BeFS partition at 6291456 is 2147483648 bytes and is not byte-identical to `r5-os.image`. From that partition, `libdrm-2.4.124-1`, `mesa-25.3.6-2`, `mesa_radv-25.3.6-1` and `vulkanteapot-1.0.0-1` match `distro/packages/x86_64`. The `radeon_hd` driver contains `vmid1 fail ring` and `vmid1 ptb`. `libvulkan_radeon.so` has no undefined `ioctl`. The Login binary contains `r5-gpu-selftest`.
+
+A copy gained `/boot/home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. It does not set `gfx9_workload` or `gfx9_compute`. That stick image is sha256 `205969430991f2dd842ded1eacee228a20dc25ed261c3cf9aa0e69743b96019b`. Python wrote it to the General UDisk (disk 1, USB bus 7) from 09:19 to 09:23 Europe/Amsterdam on 6 Nov 2026. Read-back matched at 0, at 6291456 and at 2153775104. The whole device hash matched at 09:23. Disk 0 was not opened. This stick has not been booted.
+
+### VMID 1 turns off when the flush fails
+
+A failed `r5_gfx9_vmid1_flush` had already written `VM_CONTEXT1_CNTL` (`0x0881`) with the enable bit. The next attempt then programmed a new root while that context was still on. The failure path now writes `0x0881` back to 0. The pages are kept and the next attempt rewrites the base from that same root. They are not freed: `vm_page_alloc` has no free, and the page stays valid. A wait without `FOR_SUBMIT` checks every handle once, before the wait. A signalled handle no longer hides a later unsubmitted one. A reset during the wait is a timeout. The host replay covers `[signalled, fresh]` without `WAIT_ALL`. Not booted.
+
+### M4 drafts after the second stick
+
+`docs/GRAPHICS.md` records the render node, the VMID 1 layout, the submission format and the user fence as drafts. Each section says it is not proven on the stick. The 6 Nov 2026 boot answered `GET_INFO` and stopped in `CTX_CREATE`. `docs/GPU-ARCHITECTURE.md` marks M4 not done, with that result. The design is unchanged. `AGENTS.md` and What's new are unchanged. `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md` name libdrm 2.4.124 and the Mesa RADV, Lavapipe and Zink files that were read. The packages were not audited file by file.
+
+### Syncobj wait, VRAM sizes, and the package root
+
+A wait without `FOR_SUBMIT` on an unsubmitted syncobj returns `B_BAD_VALUE`. On Haiku that is `EINVAL`, which is what Linux `drm_syncobj_array_wait` returns. A timeout stays for a point that was submitted and has not retired. The host replay `ok libdrm ioctl` covers a fresh syncobj, a reset syncobj, and a list that mixes a fresh syncobj with a signalled one. `FOR_SUBMIT` still waits, and that wait times out.
+
+`GET_INFO` sets `vram_bytes` from `shared_info->frame_buffer_size` (KiB) times 1024, and copies that into `gtt_bytes`. On the 5625U, `CONFIG_MEMSIZE` reads as `0x3fffff` and is ignored, so the size is the PCI framebuffer BAR. The UMA carveout is 512 MiB. Windows shows 495 MB. The driver does not read the carveout. This is written in `distro/gpu/COMPAT`.
+
+`/boot/home/config` is the packagefs root. The second stick's session log has `settings chown /boot/home/config: Read-only file system` once per program. `r5-desktop` no longer calls `chown` or `chmod` on `config`. The first caller in a boot writes one line, `config … is the package root and is left alone`. `config/settings`, `settings/system`, `settings/kernel`, `settings/kernel/drivers` and `config/cache` are still given to the session user. The image install of those directories is unchanged.
+
+### Second M4 stick: context create stops on the VMID 1 ack
+
+The stick written at 00:21 Europe/Amsterdam on 6 Nov 2026 was booted on the Ryzen 5 5625U. The self-test file records the render node (`api 1.0 device 15e7 cu 7`, firmware me 167, pfp 197, mec 483) and then:
+
+```
+radv/amdgpu: radv_amdgpu_cs_ctx_create2 failed. (2147483635)
+vkCreateDevice failed with ERROR_OUT_OF_HOST_MEMORY
+```
+
+2147483635 is `-B_NO_INIT`. libdrm's `drm_ioctl` returns `-errno`, and Haiku's `B_NO_INIT` is already negative. RADV treats any context-create result other than `-EACCES` as `VK_ERROR_OUT_OF_HOST_MEMORY`. vulkaninfo throws that and `abort()`s. The syslog has no panic. It has `radeon_hd: vmid1 fail tlb` immediately before that debugger stop. K0, K1 and K2 completed on the same boot (`k2 inv 007c0001`). There are no teapot pixels, no `driverID 3`, and no `r5 libdrm: ioctl nr … is not translated`. IB flags, `QUERY_STATE2`, `GEM_CREATE`, the BO and syncobj limits, and a high `VA_MAP` were not reached: context create returns before any of those.
+
+`r5_gfx9_vmid1_flush` wrote `r5_gfx9_tlb_req(1, 0)` and polled ack bit 0. That bit is VMID 0. Linux `gmc_v9_0_flush_gpu_tlb` waits on `ack & (1 << vmid)`. The VMID 1 poll now waits on bit 1 (`r5_gfx9_tlb_ack_mask`). The VMID 0 poll in the K2 sequence and in the stop path still waits on bit 0. The K2 invalidate word is unchanged. A failed setup clears `sVm` and names the path (`ring`, `retry`, `page`, `align`, `info`, `tlb`), so a later open does not stay stuck on `sVm.used`. `gpu_counter_freq` for PCI 15e7 is 100000 kHz, the value in Mesa's captured amdgpu query for that device. The host check `ok pte gart ih` covers the ack mask. This is not booted. No third stick was written.
+
+### Lavapipe teapot reference
+
+VirtualBox of the image jammed at 23:46 Europe/Amsterdam on 5 Nov 2026 wrote `~/config/cache/r5-gpu-selftest.txt`. The render node and vulkaninfo lines both say `not available, no supported GPU`. `vulkaninfo --summary` lists only llvmpipe and has no `failed` line. GLTeapot runs. VulkanTeapot shows a turning teapot. `VulkanTeapot --selftest` on Lavapipe printed:
+
+```
+device llvmpipe (LLVM 21.1.8, 256 bits), deviceType 4, driverID 13
+pixel 24 24 262e38ff
+pixel 192 80 262e38ff
+pixel 192 192 853b16ff
+pixel 192 134 a64a1cff
+pixel 90 192 873c17ff
+pixel 280 192 692e11ff
+```
+
+`jam -q @r5-anyboot` from `446d138551` started at 23:59 Europe/Amsterdam on 5 Nov 2026 and finished at 00:02 on 6 Nov 2026, `jam_exit=0`, 1199 targets. The anyboot is 2156724224 bytes. A copy gained `/boot/home/config/settings/kernel/drivers/radeon_hd` with `gfx9_ring true`, `gfx9_kernel true`, `gfx9_irq true`, `gfx9_gart true`, `gpu_render true` and `gpu_selftest true`. It does not set `gfx9_workload` or `gfx9_compute`. That stick image is sha256 `58fe0fc5e88b4cdda150b659294b4afbf3961cbf466f40b27873bd51b260d14b`. Python wrote it to the General UDisk at 00:21 Europe/Amsterdam on 6 Nov 2026. The device hash matched at 00:22. Read-back matched at 0, at 6291456 and at 2153775104. Disk 0, the NVMe, was not opened. The boot of this stick is the section above.
+
+### RADV ioctl path, package paths, and the self-test launch
+
+RADV's `ac_drm_query_gpu_info` failed on the 5625U because Mesa's `drm_ioctl()` in `src/util/os_drm.h` calls `ioctl()` and never reaches `r5_drm_ioctl()`. The missing `amdgpu.ids` line is only libdrm's ASIC-name warning. `patches/haiku-os-drm-ioctl.patch` makes `drm_ioctl()` call libdrm's `drmIoctl` on Haiku, and also when `R5_HOST_TEST` is set so the host replay uses the same branch. `drm_ioctl_write` and `drm_ioctl_write_read` go through that helper. A search of `src/amd` and `src/vulkan` found no other `ioctl()` on the DRM fd. The virtio path already uses `drmIoctl`.
+
+`scripts/check-libdrm-symbols.py` fails if `libvulkan_radeon.so` or `libvulkan_lvp.so` has an undefined `ioctl` or `__ioctl`. The one allow-list entry is `__ioctl` for `SYNC_IOC_MERGE` (`0xc0303e03`) on a sync-file descriptor, in `radv_amdgpu_winsys_cs_submit`, `wsi_create_sync_for_image_syncobj`, and `vk_drm_syncobj_copy_payloads`. That fd is not the render node. The check reads the request immediate and rejects any other value. It printed `ok libdrm symbols`.
+
+The host replay compiles the real `ac_linux_drm.c` against the patched header and the fake kernel. It printed `ok ac drm family RV cu 7 firmware` and `ok libdrm ioctl`. Family RV, 7 CUs, ME `0x11`, PFP `0xc5`, MEC `0x1e3`. The shared libdrm link still fails under `--no-undefined` because `r5_host_ioctl` is supplied by the test; the replay links the objects instead.
+
+libdrm is built with prefix `/boot/system` and datadir `/boot/system/data`. `libdrm_amdgpu.so` now contains `/boot/system/data/libdrm/amdgpu.ids`. The unmodified `amdgpu.ids` from libdrm 2.4.124 is shipped at `data/libdrm/amdgpu.ids` in the libdrm package. Shipped binaries are stripped, and a build-machine RPATH is rewritten to `/boot/system/lib`. `scripts/install-mesa-packages.sh` extracts libdrm, mesa, mesa_radv, mesa_lavapipe, and vulkanteapot and fails if any file still contains `/home/nickr`. The package tool path in that script pointed at `bfs_shell/package`. It is `tools/package/package`.
+
+Login starts `/system/bin/r5-gpu-selftest` after `dstcheck`. The launch job `x-vnd.R5OS-gpu-selftest` is removed, so it cannot start twice. The program writes `~/config/cache/r5-gpu-selftest.txt` even when `/dev/gpu/radeon_hd/0` is absent. That file is the VirtualBox check. This image has not been booted.
+
+Jam of `@r5-raw` started at 23:44 CET on 5 Nov 2026 and finished at 23:46 CET, `jam_exit=0`, 1184 targets. The image is `generated.x86_64/r5-os.image`. The package check then printed `mesa_packages_ok`, `ok package paths`, and `ok egl vendor`. No VirtualBox boot and no second stick.
+
+### Why chown of /boot/home/config returns EROFS
+
+`r5-session.log` from the 5625U stick repeats `settings chown /boot/home/config: Read-only file system` and the same for `chmod`. `package_daemon` registers a volume at `/boot/home/config`. That directory is the packagefs root. packagefs does not implement `write_stat`, so `chown` and `chmod` of the mount return `B_READ_ONLY_DEVICE`. `r5-desktop` runs that call before every session program, which is why the line repeats. `config/settings` and `config/cache` are the writable directories packagefs stitches in. On the stick those two are uid 1001 mode 0700, and Mesa created `mesa_shader_cache` there as uid 1001. `config` itself stayed uid 0 mode 0755. A session user can write settings and cache. Creating a file directly in `config` fails. The same packagefs mount is how every boot, including VirtualBox, exposes `~/config`. A VirtualBox session log was not read. No code change.
 
 ### Teapot patches follow freeglut
 

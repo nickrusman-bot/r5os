@@ -534,6 +534,10 @@ LoginApp::_LaunchSessionHooks()
 	if (status != B_OK)
 		r5_session_log("dstcheck: %s", strerror(status));
 
+	status = _LaunchSessionApp("/system/bin/r5-gpu-selftest");
+	if (status != B_OK)
+		r5_session_log("r5-gpu-selftest: %s", strerror(status));
+
 	BPath home;
 	if (_SessionHome(home) != B_OK)
 		return;

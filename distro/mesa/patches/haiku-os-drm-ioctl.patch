@@ -2,6 +2,10 @@ Haiku declares ioctl in unistd.h. sys/ioctl.h does not. Mesa 25.3.6
 src/util/os_drm.h included only sys/ioctl.h, so the first use of ioctl
 failed and then conflicted with the later unistd.h declaration.
 
+On Haiku, drm_ioctl() calls libdrm's drmIoctl. RADV uses this inline
+helper instead of drmIoctl, so a direct ioctl kept the Linux request
+number and never reached the R5 translation.
+
 --- a/src/util/os_drm.h
 +++ b/src/util/os_drm.h
 @@ -14,6 +14,7 @@
@@ -12,3 +16,14 @@ failed and then conflicted with the later unistd.h declaration.
  #include <sys/ioctl.h>
  #include <errno.h>
  #include <xf86drm.h>
+@@ -24,9 +25,14 @@ drm_ioctl(int fd, uint32_t request, void *arg)
+    int ret;
+ 
+    do {
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++      /* libdrm translates the Linux request. A direct ioctl does not. */
++      ret = drmIoctl(fd, request, arg);
++#else
+       ret = ioctl(fd, request, arg);
++#endif
+    } while (ret == -1 && (errno == EINTR || errno == EAGAIN));

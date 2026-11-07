@@ -24,15 +24,38 @@ directory: it owns the same EGL file. `mesa_devel` and `mesa_lavapipe` require
 
 DRM version reported to RADV is 3.42.0. That is the oldest version
 `ac_gpu_info.c` accepts. Every `drm_minor >= 45` gate in that file stays off,
-including gang submit, GPUVM faults and conformant trunc.
+including gang submit, GPUVM faults and conformant trunc. Sparse binding
+stays advertised. It is not turned off by lowering this version.
+
+`GEM_VA` `MAP` with handle 0 is valid only with `AMDGPU_VM_PAGE_PRT`. The
+kernel writes a PRT page-table entry: Linux `AMDGPU_PTE_PRT` is bit 51 on
+GC 9.3 (`kR5Gfx9PtePrt`), and `VALID` stays clear. `gmc_v9_0_get_vm_pte`
+does that and writes no further GMC 9 register for the mapping.
+`REPLACE` clears the entries in the range and then maps the buffer, or
+writes PRT again when the handle is 0 and the PRT flag is set. `CLEAR`
+writes empty entries, the way `amdgpu_vm_bo_clear_mappings` removes the
+interval. A second team still gets `B_NOT_ALLOWED` until M5.
+
+A client wait that times out returns `B_TIMED_OUT` and leaves the device
+usable. The retire thread marks the device lost when the oldest job has
+been in the ring for 10 seconds (`kWatchdogUs`), the GFX value of
+`amdgpu.lockup_timeout`. Closing a buffer does not
+wait: the buffer stays reserved until that job retires, or until the
+watchdog. There is no reset in M4.
 
 A binary syncobj follows the latest submit. It is signalled when `submitted`
 is greater than 0 and `point` has caught up with `submitted`. `submitted` 0
 means it was never submitted, or it was reset. A job signals it with that
-job's sequence, never with 1. `submitted` rises when the job is queued.
-`point` rises when the job retires. `CREATE_SIGNALED` sets both to 1. A host
-signal sets both to the greater of the current values and the highest
-sequence, or 1 when no job has run. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
+job's sequence, never with 1. A timeline signal whose point is 0 is that
+same sequence: RADV's queue syncobj is created with `CREATE_SIGNALED` and
+then signaled at point 0. `submitted` rises when the job is queued.
+`point` rises when that job's sequence is on the user fence page. The ring
+read pointer and the act of submitting do not finish the job.
+`CREATE_SIGNALED` sets both to 1. A host signal sets both to the greater of
+the current values and the highest sequence, or 1 when no job has run. A
+transfer or a wait on a sync that a live job still lists waits for that
+job. `SYNCOBJ_DESTROY` detaches the sync from any live job and succeeds.
+The job does not signal a sync that has been destroyed. `DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` and
 `PRIME` return ENOSYS. `SYNCOBJ_TRANSFER` is `R5_GPU_SYNCOBJ_TRANSFER`.
 Any other untranslated ioctl returns ENOSYS and is
 named once on stderr. `GEM_MMAP` is one of those: CPU mapping uses `BO_MAP`.
@@ -44,9 +67,25 @@ has no context field, so that call uses context 1. A dependency chunk waits
 on that sequence for five seconds and is not dropped. `WAIT_CS` uses the same
 fence wait. The submit wait is five seconds and returns a timeout.
 
+`GET_INFO` reports `high_va_offset` `0xffff800000000000` and `high_va_max`
+`0xffffffffffbfe000`, in the common block and in the AMD vendor block.
+That is the range `amdgpu_kms.c` reports for this VM. libdrm then keeps
+`AMDGPU_VA_RANGE_HIGH`, and RADV places 32-bit buffers at `address32_hi`
+(`0xffff800000000000`). A map in that range uses the existing 4-level
+page tables. U4 (VRAM) and U2 (GTT) run at the end of stage P, and again
+in stage U. The first 16 `CS_SUBMIT` calls log `submit ib va … dw …`.
+
 The host replay (`ok libdrm ioctl`, then `replay peaks bo 1 sync 10`) used one
 buffer and ten syncobjs. The kernel tables are 256 buffers, 256 buffers per
 client, 128 syncobjs and 64 jobs. A full RADV device was not run.
+
+## VRAM and GTT
+
+`GET_INFO` sets `vram_bytes` from `shared_info->frame_buffer_size` times 1024. That field is KiB. `gtt_bytes` is the same number. It is not a quarter of system memory.
+
+On Tahiti and later, including the 5625U, `CONFIG_MEMSIZE` is read as megabytes. A value of 0 or above 65536 MB is ignored. Raven leaves the register at `0x3fffff`, so it is ignored. `graphics_memory_size` stays 0 and `frame_buffer_size` becomes the PCI framebuffer BAR, in KiB. The driver does not read the UMA carveout.
+
+The carveout on the 5625U is 512 MiB. Windows shows 495 MB for that reservation. The number `GET_INFO` returns is the PCI BAR, which can be larger than the carveout.
 
 | Call | Result |
 |---|---|
@@ -61,7 +100,7 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | `AMDGPU_INFO_READ_MMR_REG` `0x263e` | translated as `0x063e` |
 | `DRM_CAP_SYNCOBJ` and `DRM_CAP_SYNCOBJ_TIMELINE` | translated, value 1 |
 | syncobj create, reset, signal, query | translated |
-| syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point |
+| syncobj wait, one list, one timeout | translated. A timeout is `ETIME`. Without `WAIT_ALL` the first signalled handle wins. `WAIT_AVAILABLE` waits for the submitted point. Without `WAIT_FOR_SUBMIT` an unsubmitted syncobj returns `EINVAL` instead of a timeout |
 | `SYNCOBJ_HANDLE_TO_FD`, `FD_TO_HANDLE` | ENOSYS on purpose |
 | `SYNCOBJ_TRANSFER` | translated. `src_point` 0 is the binary fence and is reached only when that syncobj is signalled. A reached source signals the destination the way a host signal does. Otherwise the live job that brings the source to its latest value gets the destination: `job->sequence` when `dst_point` is 0, otherwise `dst_point`, and `submitted` rises at once. No such job is `EINVAL` (`drm_syncobj_find_fence` in Linux 6.12 returns `-EINVAL` when the syncobj has no fence). A missing handle is `ENOENT`. A full job list is `ENOMEM`. `flags` and `pad` must be 0. Sync-file export and import stay ENOSYS |
 | `PRIME` | ENOSYS on purpose |
@@ -69,7 +108,33 @@ client, 128 syncobjs and 64 jobs. A full RADV device was not run.
 | `CS` timeline chunk | translated |
 | `CS` dependencies | translated, fence wait before submit |
 | `WAIT_CS` | translated |
-| `GEM_MMAP` | ENOSYS on purpose |
+| `GEM_MMAP` | ENOSYS on purpose. CPU mapping is `BO_MAP`. RADV calls `r5_bo_cpu_map` instead of this ioctl |
+
+`BO_MAP` clones the kernel buffer into the calling team with `vm_clone_area(..., B_READ_AREA | B_WRITE_AREA, REGION_NO_PRIVATE_MAP, ..., kernel = true)`. The kernel does not read or write that clone. `get_memory_map_etc` reads the kernel area only. The user bits stay in the program's team, so SMAP is not asked to accept user pages in the kernel address space. A second `BO_MAP` from that team returns the same area. Another team gets `B_NOT_ALLOWED` until M5. The kernel deletes the clone with `vm_delete_area(team, area, true)` when the buffer is released, and does nothing when that team has already ended. The source area is not `B_CLONEABLE_AREA`. libdrm does not clone it, and it does not delete the user clone on unmap.
+
+`VA_MAP` of a GTT buffer uses `get_memory_map_etc`. Haiku's `get_memory_map` returns `B_OK` and a size-0 end entry, so it covers no pages. More than 256 physical pieces continues; a piece that still does not cover the range is `B_BAD_DATA` (`refuse VA_MAP short`).
+
+A user GTT page-table entry is `MTYPE_NC` and `SNOOPED`. Linux v6.12 `amdgpu_bo_support_uswc()` (`drivers/gpu/drm/amd/amdgpu/amdgpu_object.c`) returns false on the path air/OS uses, and `AMDGPU_GEM_CREATE_CPU_GTT_USWC` is then ignored: every GTT buffer is cached and snooped. R5 takes that mode. `AMDGPU_GEM_CREATE_CPU_GTT_USWC` is still `R5_GPU_BO_WC` and the kernel stores the bit, but no RAM area is given a write-combined memory type, and the page-table entry is the cached one (`r5_gfx9_user_pte` with write-combined 0). The reply flags have that bit clear. `BO_CREATE` prints `bo domain`, the requested flags, the used flags and `snooped 1` while `gpu_selftest` is on. libdrm prints `kernel bo domain` with those used flags. Linux v6.12 `gmc_v9_0_get_coherence_flags` (the branch that is not GC 9.4) uses `MTYPE_NC` and then sets `SNOOPED` on every system page. `ttm_tt_pte_flags` leaves `SNOOPED` clear for `ttm_write_combined`; that entry is not used while this mode is on. The same Linux function maps user VRAM that is not uncached as `MTYPE_NC`. That VRAM entry stays `MTYPE_UC` until a boot compares it with the page that already draws. The row is `kR5Gfx93Mtype` (`vram_live` 0). The K2 page and the kernel GART stay `MTYPE_UC`. The VRAM window is unchanged. A write-combined RAM type comes back only with a PAT-only path, and not in M4. Before a GTT indirect buffer is submitted the kernel `clflush`es that range and then `mfence`. The address is the kernel area. This flush stays until a boot shows the snoop. `CP_IB1_BASE_HI` is 16 bits in the hardware mask as well, so the packet still masks the high half with `0xffff`. A chained indirect buffer uses the same domain and the same packet.
+
+Three log keys, read from the radeon_hd settings file. Errors are always on, and at most 32 of them in a boot: `refuse`, `syncobj limit`, `gpu lost` with the indirect-buffer dump and the PM4 lines of that dump, and the non-EOP interrupt lines (a VM fault, `PRIV_REG`, `PRIV_INSTR`, an opcode error). `gpu_debug true` (default off) prints `submit ib va`, `va map` with the address, the size and the domain, the per-call lines such as `vmid1 reused`, and the translator's successful ioctl line. `gpu_selftest true` prints the stage bo/P/U lines, the self-test indirect buffer, and the teapot stages. `rb num` is printed once per boot. The fixed K sequence logs as it does now.
+
+`R5_GPU_SELFTEST` (`R5_GPU_OP_BASE + 23`) runs the VMID 1 steps when `gpu_selftest` is true. Otherwise it is `B_NOT_ALLOWED`. The first open of the render node does not run them. Stage U prints the variable MTRRs before the steps and after them. U-self stores eight words on one cached GTT page and one VRAM page, reads them through that pointer and through a second mapping of the same physical page, and stops the series if they differ. A new leaf table is `0x10`. A new directory page is `AMDGPU_PDE_PTE`. An unmap writes `0x10`, and a PRT entry stays. Then U2a-n (VRAM indirect buffer, fresh cached GTT, CPU read without `clflush`), U2a-f (the same read with `clflush`), U2b-n (cached GTT indirect buffer, CPU write without `clflush`, VRAM destination), U4b-pair (VRAM at `0xffff800000001000` and the next page), then VRAM at `0xffffffffffbfc000`, `0xffff800100000000`, `0xffff808000000000`, `0xffff800040000000`, `0xffff800000200000`, low `0x100000`, and U4b. Before each of those submits the four table words are read through a fresh mapping of the table page. There is no write-combined step and no `-lx` step. Each step has its own virtual address. A miss continues. A busy command processor at 5 seconds stops the series. The `clflush` on `CS_SUBMIT` stays. The line before the submit prints the first eight dwords and the physical address of the indirect-buffer page.
+
+These `AMDGPU_INFO` queries stay ENOSYS on purpose. RADV 25.3.6 does not need them to create a device:
+
+| Query | RADV 25.3.6 |
+|---|---|
+| `0x05` `TIMESTAMP` | `query_value` returns 0 |
+| `0x0f` `NUM_BYTES_MOVED` | `query_value` returns 0 |
+| `0x18` `NUM_EVICTIONS` | `query_value` returns 0 |
+| `0x1d` `SENSOR` (clocks and temperature) | `query_value` returns 0 |
+| `0x1e` `NUM_VRAM_CPU_PAGE_FAULTS` | `query_value` returns 0 |
+| `0x21` `VIDEO_CAPS` decode and encode | a zeroed `drm_amdgpu_info_video_caps`. That is the Linux answer for a chip without the codec. Any other subquery is `EINVAL`. There is no video block |
+| `0x23` `GPUVM_FAULT` | the winsys prints a line and reports no fault |
+
+`0x10` `VRAM_USAGE`, `0x11` `GTT_USAGE` and `0x17` `VIS_VRAM_USAGE` are the live buffer bytes. Visible VRAM equals VRAM: the whole BAR is CPU-visible. `0x22` `MAX_IBS` is 8 for GFX and 0 for every other IP. The kernel accepts 8 indirect buffers on the GFX ring.
+
+A failed `AMDGPU_INFO` line includes `query 0x..`.
 
 ## Error signs on Haiku
 

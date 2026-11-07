@@ -360,6 +360,20 @@ memory_type(VkPhysicalDevice gpu, uint32_t bits, VkMemoryPropertyFlags flags)
 }
 
 
+static int
+memory_type_or(VkPhysicalDevice gpu, uint32_t bits, VkMemoryPropertyFlags flags)
+{
+	VkPhysicalDeviceMemoryProperties properties;
+	vkGetPhysicalDeviceMemoryProperties(gpu, &properties);
+	for (uint32_t i = 0; i < properties.memoryTypeCount; i++) {
+		if ((bits & (1u << i))
+			&& (properties.memoryTypes[i].propertyFlags & flags) == flags)
+			return (int)i;
+	}
+	return -1;
+}
+
+
 struct DrawState {
 	VkDevice		device;
 	VkQueue			queue;
@@ -372,8 +386,10 @@ struct DrawState {
 	VkBuffer		indexBuffer;
 	VkImage			color;
 	VkBuffer		readback;
+	VkBuffer		readbackVram;
 	uint32_t		indexCount;
 	uint8_t*		pixels;
+	uint8_t*		pixelsVram;
 };
 
 
@@ -415,13 +431,19 @@ draw_frame(DrawState* draw, const float matrix[16])
 	copy.imageExtent.depth = 1;
 	vkCmdCopyImageToBuffer(draw->cmd, draw->color,
 		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, draw->readback, 1, &copy);
+	if (draw->readbackVram != VK_NULL_HANDLE) {
+		vkCmdCopyImageToBuffer(draw->cmd, draw->color,
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, draw->readbackVram, 1, &copy);
+	}
 	check("vkEndCommandBuffer", vkEndCommandBuffer(draw->cmd));
 	VkSubmitInfo submit = {};
 	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submit.commandBufferCount = 1;
 	submit.pCommandBuffers = &draw->cmd;
 	check("vkQueueSubmit", vkQueueSubmit(draw->queue, 1, &submit, VK_NULL_HANDLE));
-	check("vkQueueWaitIdle", vkQueueWaitIdle(draw->queue));
+	VkResult waited = vkQueueWaitIdle(draw->queue);
+	printf("vkQueueWaitIdle %d\n", (int)waited);
+	check("vkQueueWaitIdle", waited);
 }
 
 
@@ -877,6 +899,24 @@ main(int argc, char** argv)
 	check("vkAllocateMemory", vkAllocateMemory(device, &alloc, NULL, &readMemory));
 	vkBindBufferMemory(device, readback, readMemory, 0);
 
+	VkBuffer readbackVram = VK_NULL_HANDLE;
+	VkDeviceMemory readVramMemory = VK_NULL_HANDLE;
+	int vramType = -1;
+	check("vkCreateBuffer", vkCreateBuffer(device, &bufferInfo, NULL, &readbackVram));
+	vkGetBufferMemoryRequirements(device, readbackVram, &requirements);
+	vramType = memory_type_or(gpu, requirements.memoryTypeBits,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+	if (vramType < 0) {
+		vkDestroyBuffer(device, readbackVram, NULL);
+		readbackVram = VK_NULL_HANDLE;
+	} else {
+		alloc.allocationSize = requirements.size;
+		alloc.memoryTypeIndex = (uint32_t)vramType;
+		check("vkAllocateMemory",
+			vkAllocateMemory(device, &alloc, NULL, &readVramMemory));
+		vkBindBufferMemory(device, readbackVram, readVramMemory, 0);
+	}
+
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -903,10 +943,17 @@ main(int argc, char** argv)
 	draw.indexBuffer = indexBuffer;
 	draw.color = color;
 	draw.readback = readback;
+	draw.readbackVram = readbackVram;
 	draw.indexCount = mesh.indexCount;
+	draw.pixelsVram = NULL;
 	check("vkMapMemory", vkMapMemory(device, readMemory, 0, kSize * kSize * 4, 0,
 		(void**)&draw.pixels));
+	if (readVramMemory != VK_NULL_HANDLE) {
+		check("vkMapMemory", vkMapMemory(device, readVramMemory, 0,
+			kSize * kSize * 4, 0, (void**)&draw.pixelsVram));
+	}
 
+	int pixelStatus = 0;
 	if (selftest) {
 		draw_frame(&draw, matrix);
 		const int sampleAt[][2] = {
@@ -920,15 +967,48 @@ main(int argc, char** argv)
 			printf("driverID unknown\n");
 		printf("frames 1\n");
 		printf("fps 0\n");
+		VkPhysicalDeviceMemoryProperties memoryProperties;
+		vkGetPhysicalDeviceMemoryProperties(gpu, &memoryProperties);
+		if (alloc.memoryTypeIndex < memoryProperties.memoryTypeCount) {
+			printf("readback type %u flags %08x heap %u\n",
+				alloc.memoryTypeIndex,
+				(unsigned)memoryProperties.memoryTypes[
+					alloc.memoryTypeIndex].propertyFlags,
+				memoryProperties.memoryTypes[alloc.memoryTypeIndex].heapIndex);
+		}
+		/* Lavapipe on the image of 5 Nov 2026, 23:46 Europe/Amsterdam.
+		 * The second sample is the same background as the first. */
+		static const uint8_t reference[6][4] = {
+			{0x26, 0x2e, 0x38, 0xff},
+			{0x26, 0x2e, 0x38, 0xff},
+			{0x85, 0x3b, 0x16, 0xff},
+			{0xa6, 0x4a, 0x1c, 0xff},
+			{0x87, 0x3c, 0x17, 0xff},
+			{0x69, 0x2e, 0x11, 0xff}
+		};
 		int mismatch = 0;
 		for (int i = 0; i < 6; i++) {
 			int x = sampleAt[i][0];
 			int y = sampleAt[i][1];
 			const uint8_t* p = draw.pixels + (y * kSize + x) * 4;
 			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
-			(void)mismatch;
+			for (int channel = 0; channel < 4; channel++) {
+				int delta = (int)p[channel] - (int)reference[i][channel];
+				if (delta < 0)
+					delta = -delta;
+				if (delta > 2)
+					mismatch = 1;
+			}
 		}
-		printf("pixels recorded\n");
+		if (draw.pixelsVram != NULL) {
+			const uint8_t* vramPixel = draw.pixelsVram + (192 * kSize + 192) * 4;
+			printf("pixel-vram 192 192 %02x%02x%02x%02x\n",
+				vramPixel[0], vramPixel[1], vramPixel[2], vramPixel[3]);
+		} else
+			printf("pixel-vram none\n");
+		printf("%s\n", mismatch ? "pixels MISMATCH" : "pixels ok");
+		if (mismatch)
+			pixelStatus = 2;
 	} else {
 		if (be_app == NULL)
 			new BApplication("application/x-vnd.R5OS-VulkanTeapot");
@@ -944,9 +1024,19 @@ main(int argc, char** argv)
 		be_app->Run();
 	}
 
-	vkDeviceWaitIdle(device);
+	{
+		VkResult waited = vkDeviceWaitIdle(device);
+		printf("vkDeviceWaitIdle %d\n", (int)waited);
+		check("vkDeviceWaitIdle", waited);
+	}
 	vkUnmapMemory(device, readMemory);
+	if (draw.pixelsVram != NULL)
+		vkUnmapMemory(device, readVramMemory);
 	vkDestroyCommandPool(device, pool, NULL);
+	if (readbackVram != VK_NULL_HANDLE)
+		vkDestroyBuffer(device, readbackVram, NULL);
+	if (readVramMemory != VK_NULL_HANDLE)
+		vkFreeMemory(device, readVramMemory, NULL);
 	vkDestroyBuffer(device, readback, NULL);
 	vkFreeMemory(device, readMemory, NULL);
 	vkDestroyBuffer(device, indexBuffer, NULL);
@@ -971,5 +1061,5 @@ main(int argc, char** argv)
 	free(mesh.indices);
 	free(gpus);
 	free(familyInfo);
-	return 0;
+	return pixelStatus;
 }

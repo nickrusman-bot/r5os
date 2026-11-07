@@ -30,4 +30,28 @@ r5_wait_step(uint64_t seen, uint64_t target, uint64_t timeoutUs, int expired)
 	return R5_WAIT_AGAIN;
 }
 
+
+enum {
+	R5_PACE_OK = 0,
+	R5_PACE_LATE = 1,
+	R5_PACE_TIMEOUT = 2,
+	R5_PACE_WAIT = 3
+};
+
+
+/* A fence before 1s is on time. From 1s until 5s the step is late and
+ * still continues. At 5s without that fence the step times out. */
+static inline int
+r5_pace(uint64_t elapsedUs, int landed)
+{
+	if (landed) {
+		if (elapsedUs >= 1000000ull)
+			return R5_PACE_LATE;
+		return R5_PACE_OK;
+	}
+	if (elapsedUs >= 5000000ull)
+		return R5_PACE_TIMEOUT;
+	return R5_PACE_WAIT;
+}
+
 #endif

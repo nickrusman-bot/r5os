@@ -6,6 +6,7 @@
  */
 #include "r5_gpu.h"
 #include "r5_translate.h"
+#include "gfx9_check.h"
 
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
@@ -20,6 +21,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+int ac_drm_replay(int fd);
+
 
 static int
 host_err(int err)
@@ -46,12 +50,22 @@ static uint32_t gWaitHandle;
 static uint64_t gWaitPoint;
 static int gClones;
 static int gCloneFreed;
+static int gCurrentTeam = 1;
+static int gForceKernelClone;
 static uint64_t gSequence;
 static uint32_t gCsContext;
 static uint32_t gSyncPeak;
 static uint32_t gBoPeak;
 static int gEnosys;
 static int gDeferRetire;
+static int gJobAgeUs;
+static int gWatch;
+static int gLost;
+static uint64_t gPageVa;
+static uint64_t gPageBytes;
+static uint64_t gPagePte;
+static int gPageEmpty;
+static int gStrictVa;
 
 struct host_job {
 	int		live;
@@ -70,10 +84,20 @@ static struct host_job gJob;
 	} \
 } while (0)
 
-static void *gMem[64];
-static size_t gBytes[64];
+static void *gMem[256];
+static size_t gBytes[256];
+static uint32_t gDomain[256];
+static uint32_t gBoFlags[256];
+static uint64_t gVramUsed;
+
+#define HOST_BO_SLOTS 256u
+#define HOST_MAX_BO (64ull << 20)
+#define HOST_VRAM_POOL 0xf817000ull
 static void *gArea[32];
 static int gAreaLive[32];
+static int gAreaTeam[32];
+static int gBoArea[256];
+static int gBoTeam[256];
 static uint64_t gSyncPoint[128];
 static uint64_t gSyncSubmitted[128];
 static int gSyncLive[128];
@@ -105,6 +129,24 @@ host_signalled(uint64_t value, uint64_t submitted, uint64_t target, int binary)
 }
 
 
+static int
+host_blocks(uint32_t handle, uint64_t target, int binary)
+{
+	uint32_t n;
+	if (!gJob.live || handle == 0 || handle > 128)
+		return 0;
+	for (n = 0; n < gJob.count; n++) {
+		if (gJob.handle[n] != handle)
+			continue;
+		if (binary)
+			return 1;
+		if (gJob.point[n] >= target && gSyncPoint[handle - 1] < target)
+			return 1;
+	}
+	return 0;
+}
+
+
 static void
 host_signal_binary(uint32_t index)
 {
@@ -123,6 +165,8 @@ r5_area_address(int area)
 {
 	if (area <= 0 || area >= 32 || !gAreaLive[area])
 		return NULL;
+	if (gAreaTeam[area] != gCurrentTeam)
+		return NULL;
 	return gArea[area];
 }
 
@@ -133,8 +177,92 @@ r5_area_destroy(int area)
 		return -1;
 	gAreaLive[area] = 0;
 	gArea[area] = NULL;
+	gAreaTeam[area] = 0;
 	gCloneFreed++;
 	return 0;
+}
+
+
+struct host_span {
+	uint64_t	address;
+	uint64_t	size;
+};
+
+
+/* Haiku __get_memory_map_haiku returns B_OK and ends the table with size 0. */
+static int
+host_get_memory_map(struct host_span *table, int slots)
+{
+	if (slots > 0) {
+		table[0].address = 0;
+		table[0].size = 0;
+	}
+	return 0;
+}
+
+
+/* 0 is B_OK. 1 is B_BUFFER_OVERFLOW. `pieces` is the number of 4 KiB pieces.
+ * One piece covers the whole range.
+ */
+static int
+host_get_memory_map_etc(size_t bytes, struct host_span *table, unsigned *count,
+	unsigned pieces)
+{
+	unsigned room = *count;
+	unsigned n;
+	unsigned i;
+	size_t left = bytes;
+	if (room == 0 || pieces == 0)
+		return -1;
+	n = pieces < room ? pieces : room;
+	for (i = 0; i < n && left > 0; i++) {
+		size_t take = pieces == 1 ? left : 4096;
+		if (take > left)
+			take = left;
+		table[i].address = 0x2000ull + (uint64_t)i * 4096ull;
+		table[i].size = take;
+		left -= take;
+	}
+	*count = i;
+	return left > 0 ? 1 : 0;
+}
+
+
+/* old_api is Haiku get_memory_map. The fixed path loops on overflow. */
+static int
+host_cover(int old_api, size_t bytes, unsigned pieces)
+{
+	size_t filled = 0;
+	if (old_api) {
+		struct host_span table[8];
+		host_get_memory_map(table, 8);
+		return table[0].size == 0 ? 0 : -1;
+	}
+	while (filled < bytes) {
+		struct host_span table[256];
+		unsigned count = 256;
+		int status = host_get_memory_map_etc(bytes - filled, table, &count,
+			pieces);
+		size_t step = 0;
+		unsigned i;
+		if (status < 0)
+			return -1;
+		for (i = 0; i < count && filled < bytes; i++) {
+			uint64_t chunk = table[i].size;
+			while (chunk >= 4096 && filled < bytes) {
+				chunk -= 4096;
+				filled += 4096;
+				step += 4096;
+			}
+		}
+		if (step == 0 || status == 0)
+			break;
+		if (pieces > count)
+			pieces -= count;
+		else
+			pieces = 1;
+	}
+	return (int)(filled / 4096);
 }
 
 int
@@ -161,8 +289,10 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		info->vendor = 0x1002;
 		info->device = 0x15e7;
 		info->capabilities = R5_GPU_CAP_RENDER;
+		if (gLost)
+			info->capabilities |= R5_GPU_CAP_LOST;
 		info->vram_bytes = 256ull << 20;
-		info->gtt_bytes = 512ull << 20;
+		info->gtt_bytes = 256ull << 20;
 		info->va_offset = R5_GPU_VA_OFFSET;
 		info->va_max = R5_GPU_VA_MAX;
 		info->high_va_offset = R5_GPU_HIGH_VA_OFFSET;
@@ -174,6 +304,9 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		info->func = 0;
 		info->subsystem_vendor = 0x1002;
 		info->subsystem_device = 0x15e7;
+		info->vram_usage = 0x3000;
+		info->visible_vram_usage = 0x3000;
+		info->gtt_usage = 0x4000;
 		amd->size = (uint32_t)sizeof(*amd);
 		amd->version = 1;
 		amd->device.device_id = 0x15e7;
@@ -181,6 +314,29 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		amd->device.family = R5_AMDGPU_FAMILY_RV;
 		amd->device.ids_flags = R5_AMDGPU_IDS_FLAGS_FUSION;
 		amd->device.cu_active_number = 7;
+		amd->device.num_shader_engines = 1;
+		amd->device.num_shader_arrays_per_engine = 1;
+		amd->device.num_cu_per_sh = 8;
+		amd->device.num_rb_pipes = 2;
+		amd->device.enabled_rb_pipes_mask = 3;
+		amd->device.num_hw_gfx_contexts = 8;
+		amd->device.gpu_counter_freq = 100000;
+		amd->device.max_engine_clock = 1800000;
+		amd->device.min_engine_clock = 1800000;
+		amd->device.max_memory_clock = 1333000;
+		amd->device.min_memory_clock = 1333000;
+		amd->device.ce_ram_size = 0x8000;
+		amd->device.pte_fragment_size = 2097152;
+		amd->device.gart_page_size = 4096;
+		amd->device.vram_type = 11;
+		amd->device.vram_bit_width = 128;
+		amd->device.gc_double_offchip_lds_buf = 1;
+		amd->device.wave_front_size = 64;
+		amd->device.num_shader_visible_vgprs = 256;
+		amd->device.num_tcc_blocks = 4;
+		amd->device.gs_vgt_table_depth = 32;
+		amd->device.gs_prim_buffer_depth = 1792;
+		amd->device.max_gs_waves_per_vgt = 32;
 		amd->device.virtual_address_offset = R5_GPU_VA_OFFSET;
 		amd->device.virtual_address_max = R5_GPU_VA_MAX;
 		amd->device.virtual_address_alignment = 4096;
@@ -223,25 +379,49 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		if (bytes < sizeof(r5_gpu_bo))
 			return host_err(EINVAL);
 		r5_gpu_bo *bo = buf;
-		for (uint32_t i = 0; i < 64; i++) {
+		if (bo->bytes == 0 || bo->bytes > HOST_MAX_BO)
+			return host_err(EINVAL);
+		if (bo->domain != R5_GPU_DOMAIN_VRAM && bo->domain != R5_GPU_DOMAIN_GTT)
+			return host_err(EINVAL);
+		uint64_t rounded = (bo->bytes + 4095ull) & ~4095ull;
+		if (bo->domain == R5_GPU_DOMAIN_VRAM
+			&& gVramUsed + rounded > HOST_VRAM_POOL)
+			return host_err(ENOMEM);
+		for (uint32_t i = 0; i < HOST_BO_SLOTS; i++) {
 			if (gMem[i] != NULL)
 				continue;
-			gMem[i] = calloc(1, bo->bytes ? bo->bytes : 1);
-			gBytes[i] = bo->bytes;
+			gMem[i] = calloc(1, (size_t)rounded);
+			if (gMem[i] == NULL)
+				return host_err(ENOMEM);
+			gBytes[i] = (size_t)rounded;
+			gDomain[i] = bo->domain;
+			gBoFlags[i] = bo->flags;
+			if (bo->domain == R5_GPU_DOMAIN_VRAM)
+				gVramUsed += rounded;
 			bo->handle = i + 1;
 			gBoDomain = bo->domain;
-			if ((uint32_t)i + 1u > gBoPeak)
-				gBoPeak = (uint32_t)i + 1u;
-			return gMem[i] ? 0 : host_err(ENOMEM);
+			if (i + 1u > gBoPeak)
+				gBoPeak = i + 1u;
+			return 0;
 		}
 		return host_err(ENOMEM);
 	}
 	if (op == R5_GPU_BO_FREE) {
 		r5_gpu_bo *bo = buf;
-		if (bo->handle == 0 || bo->handle > 64)
+		if (bo->handle == 0 || bo->handle > HOST_BO_SLOTS)
 			return host_err(EINVAL);
+		if (gDomain[bo->handle - 1] == R5_GPU_DOMAIN_VRAM
+			&& gVramUsed >= gBytes[bo->handle - 1])
+			gVramUsed -= gBytes[bo->handle - 1];
 		free(gMem[bo->handle - 1]);
 		gMem[bo->handle - 1] = NULL;
+		gBytes[bo->handle - 1] = 0;
+		gDomain[bo->handle - 1] = 0;
+		gBoFlags[bo->handle - 1] = 0;
+		if (gBoArea[bo->handle - 1] > 0)
+			r5_area_destroy(gBoArea[bo->handle - 1]);
+		gBoArea[bo->handle - 1] = 0;
+		gBoTeam[bo->handle - 1] = 0;
 		return 0;
 	}
 	if (op == R5_GPU_BO_MAP) {
@@ -256,29 +436,115 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			bo->area = 7;
 			return 0;
 		}
-		if (bo->handle == 0 || bo->handle > 64 || gMem[bo->handle - 1] == NULL)
+		if (bo->handle == 0 || bo->handle > HOST_BO_SLOTS
+			|| gMem[bo->handle - 1] == NULL)
 			return host_err(ENOENT);
+		if (gBoArea[bo->handle - 1] > 0) {
+			if (gBoTeam[bo->handle - 1] != gCurrentTeam)
+				return host_err(EPERM);
+			bo->area = gBoArea[bo->handle - 1];
+			return 0;
+		}
 		for (int i = 1; i < 32; i++) {
 			if (gAreaLive[i])
 				continue;
 			gArea[i] = gMem[bo->handle - 1];
 			gAreaLive[i] = 1;
+			/* clone_area lands in the kernel team. vm_clone_area uses
+			 * the calling team. gForceKernelClone selects the old path.
+			 */
+			gAreaTeam[i] = gForceKernelClone ? 0 : gCurrentTeam;
+			gBoArea[bo->handle - 1] = i;
+			gBoTeam[bo->handle - 1] = gAreaTeam[i];
 			bo->area = i;
 			gClones++;
 			return 0;
 		}
 		return host_err(ENOMEM);
 	}
-	if (op == R5_GPU_VA_MAP || op == R5_GPU_VA_UNMAP) {
+	if (op == R5_GPU_VA_MAP || op == R5_GPU_VA_UNMAP
+		|| op == R5_GPU_VA_REPLACE || op == R5_GPU_VA_CLEAR) {
 		if (bytes < sizeof(r5_gpu_va))
 			return host_err(EINVAL);
 		r5_gpu_va *va = buf;
+		uint64_t end = va->gpu_va + va->map_bytes;
+		int low = end >= va->gpu_va && va->gpu_va >= R5_GPU_VA_OFFSET
+			&& end <= R5_GPU_VA_MAX;
+		int high = end >= va->gpu_va && va->gpu_va >= R5_GPU_HIGH_VA_OFFSET
+			&& end <= R5_GPU_HIGH_VA_MAX;
+		if (va->map_bytes == 0 || (va->map_bytes & 0xfff) != 0
+			|| (!low && !high))
+			return host_err(EINVAL);
+		if (op == R5_GPU_VA_CLEAR) {
+			gPageVa = va->gpu_va;
+			gPageBytes = va->map_bytes;
+			gPagePte = 0;
+			gPageEmpty = 1;
+			gVa = va->gpu_va;
+			gMapBytes = va->map_bytes;
+			return 0;
+		}
+		if ((op == R5_GPU_VA_MAP || op == R5_GPU_VA_REPLACE)
+			&& va->handle == 0) {
+			if ((va->flags & R5_GPU_VA_PRT) == 0)
+				return host_err(EINVAL);
+			gPageVa = va->gpu_va;
+			gPageBytes = va->map_bytes;
+			/* gfx9_check.h kR5Gfx9PtePrt, Linux AMDGPU_PTE_PRT bit 51. */
+			gPagePte = 1ull << 51;
+			gPageEmpty = 0;
+			gVa = va->gpu_va;
+			gMapBytes = va->map_bytes;
+			return 0;
+		}
+		if (op == R5_GPU_VA_UNMAP && gPageEmpty && va->gpu_va == gPageVa)
+			return host_err(EINVAL);
+		if (va->handle == 0 || va->handle > HOST_BO_SLOTS
+			|| gMem[va->handle - 1] == NULL)
+			return host_err(EINVAL);
+		if (va->bo_offset > gBytes[va->handle - 1]
+			|| va->map_bytes > gBytes[va->handle - 1] - va->bo_offset)
+			return host_err(EINVAL);
+		if (gStrictVa && op == R5_GPU_VA_MAP && !gPageEmpty
+			&& gPageBytes != 0
+			&& va->gpu_va < gPageVa + gPageBytes
+			&& va->gpu_va + va->map_bytes > gPageVa)
+			return host_err(EINVAL);
+		if ((op == R5_GPU_VA_MAP || op == R5_GPU_VA_REPLACE)
+			&& gDomain[va->handle - 1] == R5_GPU_DOMAIN_GTT) {
+			int pages = host_cover(0, (size_t)va->map_bytes, 1);
+			if ((uint64_t)pages * 4096 != va->map_bytes)
+				return host_err(EIO);
+		}
 		gVa = va->gpu_va;
 		gBoOffset = va->bo_offset;
 		gMapBytes = va->map_bytes;
+		gPageVa = va->gpu_va;
+		gPageBytes = va->map_bytes;
+		gPagePte = op == R5_GPU_VA_UNMAP ? 0 : 1ull;
+		if (op != R5_GPU_VA_UNMAP && va->handle != 0
+			&& va->handle <= HOST_BO_SLOTS
+			&& gMem[va->handle - 1] != NULL) {
+			int gtt = gDomain[va->handle - 1] == R5_GPU_DOMAIN_GTT;
+			int wc = (gBoFlags[va->handle - 1] & R5_GPU_BO_WC) != 0;
+			uint64_t access = (uint64_t)R5_GFX9_PTE_VALID
+				| (uint64_t)R5_GFX9_PTE_READABLE;
+			if ((va->flags & R5_GPU_VA_WRITE) != 0)
+				access |= (uint64_t)R5_GFX9_PTE_WRITEABLE;
+			if ((va->flags & R5_GPU_VA_EXEC) != 0)
+				access |= (uint64_t)R5_GFX9_PTE_EXECUTABLE;
+			gPagePte = r5_gfx9_user_pte(0, access, gtt, wc, &kR5Gfx93Mtype);
+		}
+		gPageEmpty = 0;
 		return 0;
 	}
 	if (op == R5_GPU_CS_SUBMIT) {
+		if (gLost)
+			return host_err(EIO);
+		if (gWatch && gJob.live && gJobAgeUs >= 5000000) {
+			gLost = 1;
+			return host_err(EIO);
+		}
 		if (bytes < sizeof(r5_gpu_cs))
 			return host_err(EINVAL);
 		r5_gpu_cs *cs = buf;
@@ -327,7 +593,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 				uint64_t point;
 				if (handle == 0 || handle > 128 || !gSyncLive[handle - 1])
 					continue;
-				if ((signal[i].flags & R5_GPU_CS_SYNC_BINARY) != 0)
+				if ((signal[i].flags & R5_GPU_CS_SYNC_BINARY) != 0
+					|| signal[i].point == 0)
 					point = gSequence;
 				else
 					point = signal[i].point;
@@ -355,6 +622,13 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		if (bytes < sizeof(r5_gpu_fence))
 			return host_err(EINVAL);
 		r5_gpu_fence *fence = buf;
+		if (gLost)
+			return host_err(ECANCELED);
+		if (gJob.live && fence->sequence == gJob.sequence)
+			return host_err(ETIMEDOUT);
+		if (gWatch && gJob.live && fence->sequence == gJob.sequence
+			&& gJobAgeUs < 5000000)
+			return host_err(ETIMEDOUT);
 		if (fence->sequence == 0 || fence->sequence > gSequence)
 			return host_err(ETIMEDOUT);
 		return 0;
@@ -388,6 +662,13 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			return host_err(EINVAL);
 		uint32_t index = sync->handle - 1u;
 		if (op == R5_GPU_SYNCOBJ_DESTROY) {
+			uint32_t n;
+			if (gJob.live) {
+				for (n = 0; n < gJob.count; n++) {
+					if (gJob.handle[n] == sync->handle)
+						gJob.handle[n] = 0;
+				}
+			}
 			gSyncLive[index] = 0;
 			gSyncPoint[index] = 0;
 			gSyncSubmitted[index] = 0;
@@ -424,6 +705,13 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		}
 	}
 	if (op == R5_GPU_SYNCOBJ_WAIT_LIST) {
+		if (gWatch && gJob.live && gJobAgeUs >= 5000000) {
+			gLost = 1;
+			gJob.live = 0;
+			return host_err(ECANCELED);
+		}
+		if (gLost)
+			return host_err(ECANCELED);
 		r5_gpu_syncobj_wait *wait = buf;
 		uint32_t *handles;
 		uint64_t *points;
@@ -434,6 +722,20 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			return host_err(EINVAL);
 		handles = (uint32_t *)(uintptr_t)wait->handles;
 		points = (uint64_t *)(uintptr_t)wait->points;
+		if ((wait->flags & R5_GPU_WAIT_FOR_SUBMIT) == 0) {
+			for (i = 0; i < wait->count; i++) {
+				uint64_t target = points == NULL ? 0 : points[i];
+				int submitted;
+				if (handles[i] == 0 || handles[i] > 128
+					|| !gSyncLive[handles[i] - 1])
+					return host_err(EINVAL);
+				submitted = (wait->flags & R5_GPU_WAIT_BINARY) != 0
+					? gSyncSubmitted[handles[i] - 1] > 0
+					: gSyncSubmitted[handles[i] - 1] >= target;
+				if (!submitted)
+					return host_err(EINVAL);
+			}
+		}
 		for (i = 0; i < wait->count; i++) {
 			uint64_t value;
 			uint64_t target;
@@ -443,8 +745,13 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			value = (wait->flags & R5_GPU_WAIT_AVAILABLE) != 0
 				? gSyncSubmitted[handles[i] - 1] : gSyncPoint[handles[i] - 1];
 			target = points == NULL ? 0 : points[i];
-			ready = host_signalled(value, gSyncSubmitted[handles[i] - 1], target,
-				(wait->flags & R5_GPU_WAIT_BINARY) != 0);
+			if ((wait->flags & R5_GPU_WAIT_AVAILABLE) == 0
+				&& host_blocks(handles[i], target,
+					(wait->flags & R5_GPU_WAIT_BINARY) != 0))
+				ready = 0;
+			else
+				ready = host_signalled(value, gSyncSubmitted[handles[i] - 1],
+					target, (wait->flags & R5_GPU_WAIT_BINARY) != 0);
 			if (!ready)
 				continue;
 			met++;
@@ -464,6 +771,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		return host_err(ETIMEDOUT);
 	}
 	if (op == R5_GPU_SYNCOBJ_TRANSFER) {
+		if (gLost)
+			return host_err(ECANCELED);
 		r5_gpu_syncobj_transfer *transfer = buf;
 		uint32_t src;
 		uint32_t dst;
@@ -480,8 +789,10 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			return host_err(ENOENT);
 		if (transfer->src_point == 0 && gSyncSubmitted[src - 1] == 0)
 			return host_err(EINVAL);
-		reached = host_signalled(gSyncPoint[src - 1], gSyncSubmitted[src - 1],
-			transfer->src_point, transfer->src_point == 0);
+		reached = !host_blocks(src, transfer->src_point,
+				transfer->src_point == 0)
+			&& host_signalled(gSyncPoint[src - 1], gSyncSubmitted[src - 1],
+				transfer->src_point, transfer->src_point == 0);
 		if (reached) {
 			if (transfer->dst_point == 0)
 				host_signal_binary(dst - 1);
@@ -774,6 +1085,8 @@ info_query(int fd, uint32_t query, uint32_t hw, void *out, size_t bytes)
 	info.query = query;
 	if (query == AMDGPU_INFO_HW_IP_INFO || query == AMDGPU_INFO_HW_IP_COUNT)
 		info.query_hw_ip.type = hw;
+	else if (query == AMDGPU_INFO_VIDEO_CAPS)
+		info.video_cap.type = hw;
 	else if (query == AMDGPU_INFO_FW_VERSION)
 		info.query_fw.fw_type = hw;
 	else if (query == AMDGPU_INFO_READ_MMR_REG) {
@@ -864,6 +1177,19 @@ submit_zero(int node)
 	CHECK(errno == ETIME);
 	r5_host_retire();
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) == 0);
+
+	memset(&created, 0, sizeof(created));
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+	fresh = created.handle;
+	memset(&waited, 0, sizeof(waited));
+	waited.handles = (uintptr_t)&fresh;
+	waited.count_handles = 1;
+	waited.timeout_nsec = 1000000000LL;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+	CHECK(errno == EINVAL);
+	waited.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
+	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+	CHECK(errno == ETIME);
 }
 
 
@@ -910,6 +1236,16 @@ cs_binary(int node, uint32_t signalHandle, uint32_t waitHandle, int defer)
 	int ret = drmCommandWriteRead(node, DRM_AMDGPU_CS, &cs, sizeof(cs));
 	gDeferRetire = 0;
 	return ret;
+}
+
+
+static void
+r5_host_drop_client(void)
+{
+	gPageEmpty = 1;
+	gPagePte = 0;
+	gPageBytes = 0;
+	gVa = 0;
 }
 
 
@@ -963,7 +1299,139 @@ binary_replay(int node)
 	waited.handles = (uintptr_t)&reused;
 	waited.count_handles = 1;
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
-	CHECK(errno == ETIME);
+	CHECK(errno == EINVAL);
+
+	/* A signaled queue sync plus a job whose fence never lands.
+	 * The transfer is the empty vkQueueWaitIdle submit. */
+	{
+		struct drm_amdgpu_cs_chunk_ib ib;
+		struct drm_amdgpu_cs_chunk_syncobj signal;
+		struct drm_amdgpu_cs_chunk chunks[2];
+		uint64_t chunkPtr[2];
+		union drm_amdgpu_cs cs;
+		union drm_amdgpu_wait_cs fence;
+		uint32_t queue;
+		uint32_t dst;
+		memset(&created, 0, sizeof(created));
+		created.flags = DRM_SYNCOBJ_CREATE_SIGNALED;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+		queue = created.handle;
+		memset(&ib, 0, sizeof(ib));
+		memset(&signal, 0, sizeof(signal));
+		memset(chunks, 0, sizeof(chunks));
+		ib.va_start = 0x1000;
+		ib.ib_bytes = 4;
+		ib.ip_type = AMDGPU_HW_IP_GFX;
+		signal.handle = queue;
+		signal.point = 0;
+		chunks[0].chunk_id = AMDGPU_CHUNK_ID_IB;
+		chunks[0].length_dw = (uint32_t)(sizeof(ib) / 4);
+		chunks[0].chunk_data = (uint64_t)(uintptr_t)&ib;
+		chunks[1].chunk_id = AMDGPU_CHUNK_ID_SYNCOBJ_TIMELINE_SIGNAL;
+		chunks[1].length_dw = (uint32_t)(sizeof(signal) / 4);
+		chunks[1].chunk_data = (uint64_t)(uintptr_t)&signal;
+		chunkPtr[0] = (uint64_t)(uintptr_t)&chunks[0];
+		chunkPtr[1] = (uint64_t)(uintptr_t)&chunks[1];
+		memset(&cs, 0, sizeof(cs));
+		cs.in.ctx_id = 1;
+		cs.in.num_chunks = 2;
+		cs.in.chunks = (uint64_t)(uintptr_t)chunkPtr;
+		gJob.live = 0;
+		gDeferRetire = 1;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_CS, &cs, sizeof(cs)) == 0);
+		gDeferRetire = 0;
+		memset(&created, 0, sizeof(created));
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+		dst = created.handle;
+		memset(&transfer, 0, sizeof(transfer));
+		transfer.src_handle = queue;
+		transfer.dst_handle = dst;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_TRANSFER, &transfer) == 0);
+		memset(&waited, 0, sizeof(waited));
+		waited.handles = (uintptr_t)&dst;
+		waited.count_handles = 1;
+		waited.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT
+			| DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL;
+		waited.timeout_nsec = 1000000LL;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+		CHECK(errno == ETIME);
+		memset(&fence, 0, sizeof(fence));
+		fence.in.handle = gSequence;
+		fence.in.timeout = 1000000000ull;
+		fence.in.ip_type = AMDGPU_HW_IP_GFX;
+		fence.in.ctx_id = 1;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_WAIT_CS, &fence,
+			sizeof(fence)) == 0);
+		CHECK(fence.out.status == 1);
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_DESTROY, &(struct drm_syncobj_destroy){
+			.handle = dst }) == 0);
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_DESTROY, &(struct drm_syncobj_destroy){
+			.handle = queue }) == 0);
+		gWatch = 1;
+		gJobAgeUs = 6000000;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_CS, &cs, sizeof(cs)) != 0);
+		CHECK(errno == EIO);
+		CHECK(gLost == 1);
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+		CHECK(errno == ECANCELED);
+		gWatch = 0;
+		gLost = 0;
+		gJob.live = 0;
+		gJobAgeUs = 0;
+	}
+	{
+		struct drm_syncobj_create created;
+		struct drm_syncobj_wait waited;
+		struct drm_syncobj_destroy destroy;
+		r5_gpu_bo bo;
+		r5_gpu_va va;
+		uint32_t handle;
+		memset(&created, 0, sizeof(created));
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_CREATE, &created) == 0);
+		handle = created.handle;
+		gJob.live = 1;
+		gJob.count = 1;
+		gJob.handle[0] = handle;
+		gJob.point[0] = 1;
+		gSyncSubmitted[handle - 1] = 1;
+		gSyncPoint[handle - 1] = 0;
+		gWatch = 1;
+		gJobAgeUs = 5000000;
+		gLost = 0;
+		memset(&waited, 0, sizeof(waited));
+		waited.handles = (uintptr_t)&handle;
+		waited.count_handles = 1;
+		waited.timeout_nsec = INT64_MAX;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &waited) != 0);
+		CHECK(errno == ECANCELED);
+		CHECK(gLost == 1);
+		CHECK(gJob.live == 0);
+		memset(&destroy, 0, sizeof(destroy));
+		destroy.handle = handle;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_DESTROY, &destroy) == 0);
+		gWatch = 0;
+		gLost = 0;
+		gJobAgeUs = 0;
+
+		memset(&bo, 0, sizeof(bo));
+		bo.bytes = 4096;
+		bo.domain = R5_GPU_DOMAIN_GTT;
+		CHECK(r5_host_ioctl(0, R5_GPU_BO_CREATE, &bo, sizeof(bo)) == 0);
+		r5_host_drop_client();
+		gStrictVa = 1;
+		memset(&va, 0, sizeof(va));
+		va.handle = bo.handle;
+		va.gpu_va = 0x100000000ull;
+		va.map_bytes = 4096;
+		va.flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
+		CHECK(r5_host_ioctl(0, R5_GPU_VA_MAP, &va, sizeof(va)) == 0);
+		CHECK(r5_host_ioctl(0, R5_GPU_VA_MAP, &va, sizeof(va)) != 0);
+		r5_host_drop_client();
+		CHECK(r5_host_ioctl(0, R5_GPU_VA_MAP, &va, sizeof(va)) == 0);
+		r5_host_drop_client();
+		gStrictVa = 0;
+		CHECK(r5_host_ioctl(0, R5_GPU_BO_FREE, &bo, sizeof(bo)) == 0);
+	}
 }
 
 
@@ -1092,7 +1560,38 @@ radv_replay(int fd)
 	CHECK(memory.gtt.max_allocation <= (64ull << 20));
 	memset(&heap, 0, sizeof(heap));
 	CHECK(info_query(node, AMDGPU_INFO_VRAM_GTT, 0, &heap, sizeof(heap)) == 0);
-	CHECK(heap.gtt_size == (512ull << 20));
+	{
+		uint64_t usage = 0;
+		uint32_t maxibs[AMDGPU_HW_IP_NUM];
+		memset(maxibs, 0, sizeof(maxibs));
+		CHECK(info_query(node, AMDGPU_INFO_VRAM_USAGE, 0, &usage,
+			sizeof(usage)) == 0);
+		CHECK(usage == 0x3000);
+		CHECK(info_query(node, AMDGPU_INFO_VIS_VRAM_USAGE, 0, &usage,
+			sizeof(usage)) == 0);
+		CHECK(usage == 0x3000);
+		CHECK(info_query(node, AMDGPU_INFO_GTT_USAGE, 0, &usage,
+			sizeof(usage)) == 0);
+		CHECK(usage == 0x4000);
+		CHECK(info_query(node, AMDGPU_INFO_MAX_IBS, 0, maxibs,
+			sizeof(maxibs)) == 0);
+		CHECK(maxibs[AMDGPU_HW_IP_GFX] == 8);
+		CHECK(maxibs[AMDGPU_HW_IP_COMPUTE] == 0);
+		CHECK(maxibs[2] == 0);
+		struct drm_amdgpu_info_video_caps caps;
+		memset(&caps, 0xa5, sizeof(caps));
+		CHECK(info_query(node, AMDGPU_INFO_VIDEO_CAPS,
+			AMDGPU_INFO_VIDEO_CAPS_DECODE, &caps, sizeof(caps)) == 0);
+		CHECK(caps.codec_info[0].valid == 0);
+		CHECK(caps.codec_info[AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_AV1].max_width == 0);
+		memset(&caps, 0xa5, sizeof(caps));
+		CHECK(info_query(node, AMDGPU_INFO_VIDEO_CAPS,
+			AMDGPU_INFO_VIDEO_CAPS_ENCODE, &caps, sizeof(caps)) == 0);
+		CHECK(caps.codec_info[AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_HEVC].valid == 0);
+		CHECK(info_query(node, AMDGPU_INFO_VIDEO_CAPS, 9, &caps,
+			sizeof(caps)) != 0);
+	}
+	CHECK(heap.gtt_size == (256ull << 20));
 	memset(&ip, 0, sizeof(ip));
 	CHECK(info_query(node, AMDGPU_INFO_HW_IP_INFO, AMDGPU_HW_IP_COMPUTE, &ip,
 		sizeof(ip)) == 0);
@@ -1135,7 +1634,7 @@ radv_replay(int fd)
 		binaryWait.count_handles = 1;
 		binaryWait.timeout_nsec = 0;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &binaryWait) != 0);
-		CHECK(errno == ETIME);
+		CHECK(errno == EINVAL);
 	}
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_SIGNAL, &list) == 0);
 	CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_QUERY, &timeline) == 0);
@@ -1153,9 +1652,19 @@ radv_replay(int fd)
 		anyWait.handles = (uint64_t)(uintptr_t)both;
 		anyWait.count_handles = 2;
 		anyWait.timeout_nsec = 0;
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
+		CHECK(errno == EINVAL);
+		both[0] = handles[0];
+		both[1] = handles[1];
+		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
+		CHECK(errno == EINVAL);
+		both[0] = handles[1];
+		both[1] = handles[0];
+		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) == 0);
 		CHECK(anyWait.first_signaled == 1);
-		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL;
+		anyWait.flags = DRM_SYNCOBJ_WAIT_FLAGS_WAIT_FOR_SUBMIT
+			| DRM_SYNCOBJ_WAIT_FLAGS_WAIT_ALL;
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_WAIT, &anyWait) != 0);
 		CHECK(errno == ETIME);
 	}
@@ -1245,6 +1754,100 @@ radv_replay(int fd)
 	}
 	submit_zero(node);
 	binary_replay(node);
+
+	CHECK(((1ull << 51) & 1ull) == 0);
+	{
+		struct drm_amdgpu_gem_va va;
+		union drm_amdgpu_gem_create gem;
+		memset(&va, 0, sizeof(va));
+		va.operation = AMDGPU_VA_OP_MAP;
+		va.va_address = 0xffff800000002000ull;
+		va.map_size = 4096;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) != 0);
+		CHECK(errno == EINVAL);
+		va.flags = AMDGPU_VM_PAGE_PRT;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == (1ull << 51));
+		CHECK(gVa == 0xffff800000002000ull);
+		va.flags = 0;
+		va.va_address = 0x200000000ull;
+		va.flags = AMDGPU_VM_PAGE_PRT;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == (1ull << 51));
+		memset(&gem, 0, sizeof(gem));
+		gem.in.bo_size = 4096;
+		gem.in.alignment = 4096;
+		gem.in.domains = AMDGPU_GEM_DOMAIN_GTT;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_CREATE, &gem,
+			sizeof(gem)) == 0);
+		va.handle = gem.out.handle;
+		va.operation = AMDGPU_VA_OP_REPLACE;
+		va.flags = AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == 0x67ull);
+		CHECK(gBoFlags[gem.out.handle - 1] == 0);
+		gem.in.domain_flags = AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_CREATE, &gem,
+			sizeof(gem)) == 0);
+		CHECK(gBoFlags[gem.out.handle - 1] == R5_GPU_BO_WC);
+		va.handle = gem.out.handle;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == 0x63ull);
+		CHECK((gPagePte & 4ull) == 0);
+		va.handle = 0;
+		va.operation = AMDGPU_VA_OP_CLEAR;
+		va.flags = 0;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) == 0);
+		CHECK(gPagePte == 0);
+		va.handle = gem.out.handle;
+		va.operation = AMDGPU_VA_OP_UNMAP;
+		CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_VA, &va,
+			sizeof(va)) != 0);
+		CHECK(errno == EINVAL);
+		CHECK(gPagePte == 0);
+	}
+	gJob.live = 0;
+	gWatch = 1;
+	gJobAgeUs = 0;
+	gLost = 0;
+	gDeferRetire = 1;
+	ib.flags = 0;
+	ib.ip_type = AMDGPU_HW_IP_GFX;
+	chunks[0].chunk_id = AMDGPU_CHUNK_ID_IB;
+	chunks[0].length_dw = sizeof(ib) / 4;
+	chunks[0].chunk_data = (uint64_t)(uintptr_t)&ib;
+	{
+		uint64_t held = 0;
+		uint32_t expired = 1;
+		struct amdgpu_cs_fence query;
+		uint32_t working = 0;
+		CHECK(amdgpu_cs_submit_raw2(dev, context, 0, 1, chunks, &held) == 0);
+		gDeferRetire = 0;
+		memset(&query, 0, sizeof(query));
+		query.context = context;
+		query.ip_type = AMDGPU_HW_IP_GFX;
+		query.fence = held;
+		CHECK(amdgpu_cs_query_fence_status(&query, 1000, 0, &expired) == 0);
+		CHECK(expired == 0);
+		CHECK(gLost == 0);
+		CHECK(info_query(node, AMDGPU_INFO_ACCEL_WORKING, 0, &working,
+			sizeof(working)) == 0);
+		gJobAgeUs = 6000000;
+		CHECK(amdgpu_cs_submit_raw2(dev, context, 0, 1, chunks, &held) != 0);
+		CHECK(errno == EIO);
+		CHECK(gLost == 1);
+	}
+	gWatch = 0;
+	gLost = 0;
+	gJob.live = 0;
+	gJobAgeUs = 0;
+
 	printf("replay peaks bo %u sync %u\n", gBoPeak, gSyncPeak);
 	close(node);
 	return gFail;
@@ -1276,7 +1879,38 @@ main(void)
 	CHECK(ret == 0);
 	CHECK(device.family == R5_AMDGPU_FAMILY_RV);
 	CHECK(device.high_va_offset == R5_GPU_HIGH_VA_OFFSET);
+	CHECK(device.high_va_max == R5_GPU_HIGH_VA_MAX);
 	CHECK(device.cu_active_number == 7);
+	CHECK(device.num_rb_pipes == 2);
+	CHECK(device.enabled_rb_pipes_mask == 3);
+	CHECK(device.num_tcc_blocks == 4);
+	CHECK(device.max_engine_clock == 1800000);
+	CHECK(device.max_memory_clock == 1333000);
+	CHECK(device.num_shader_visible_vgprs == 256);
+	CHECK(device.wave_front_size == 64);
+	CHECK(device.vram_type == 11);
+	CHECK(device.vram_bit_width == 128);
+	CHECK(device.pa_sc_tile_steering_override == 0);
+	CHECK(device.tcc_disabled_mask == 0);
+	CHECK(device.prim_buf_gpu_addr == 0);
+	CHECK(device.tcp_cache_size == 0);
+	CHECK(device.shadow_size == 0);
+	CHECK(device.vce_harvest_config == 0);
+	{
+		union drm_amdgpu_ctx query;
+		memset(&query, 0, sizeof(query));
+		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
+		query.in.ctx_id = 1;
+		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
+		CHECK(query.out.state.flags == 0);
+		gLost = 1;
+		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
+		query.in.ctx_id = 1;
+		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
+		CHECK(query.out.state.flags == (AMDGPU_CTX_QUERY2_FLAGS_RESET
+			| AMDGPU_CTX_QUERY2_FLAGS_GUILTY));
+		gLost = 0;
+	}
 
 	uint32_t fwVer = 0;
 	uint32_t fwFeature = 0;
@@ -1294,9 +1928,58 @@ main(void)
 	CHECK(ip.hw_ip_version_minor == 3);
 	CHECK(ip.available_rings == 1);
 
+	uint64_t radvVa = 0;
+	amdgpu_va_handle radvRange = NULL;
+	ret = amdgpu_va_range_alloc(dev, amdgpu_gpu_va_range_general, 4096, 4096,
+		0, &radvVa, &radvRange, AMDGPU_VA_RANGE_HIGH);
+	if (ret != 0)
+		printf("f2 fail amdgpu_va_range_alloc %d\n", ret);
+	else {
+		struct amdgpu_bo_alloc_request radvRequest;
+		memset(&radvRequest, 0, sizeof(radvRequest));
+		radvRequest.alloc_size = 4096;
+		radvRequest.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+		amdgpu_bo_handle radvBo = NULL;
+		ret = amdgpu_bo_alloc(dev, &radvRequest, &radvBo);
+		if (ret != 0)
+			printf("f2 fail GEM_CREATE %d\n", ret);
+		else {
+			ret = amdgpu_bo_va_op(radvBo, 0, 4096, radvVa, 0, AMDGPU_VA_OP_MAP);
+			if (ret != 0)
+				printf("f2 fail GEM_VA MAP %d\n", ret);
+			else
+				printf("f2 device path: no refusal\n");
+			amdgpu_bo_va_op(radvBo, 0, 4096, radvVa, 0, AMDGPU_VA_OP_UNMAP);
+			amdgpu_bo_free(radvBo);
+		}
+		amdgpu_va_range_free(radvRange);
+	}
+	{
+		struct amdgpu_bo_alloc_request huge;
+		memset(&huge, 0, sizeof(huge));
+		huge.alloc_size = HOST_MAX_BO + 4096;
+		huge.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+		amdgpu_bo_handle hugeBo = NULL;
+		ret = amdgpu_bo_alloc(dev, &huge, &hugeBo);
+		printf("f2 oversize GEM_CREATE %d\n", ret);
+		if (hugeBo != NULL)
+			amdgpu_bo_free(hugeBo);
+	}
+	{
+		struct drm_amdgpu_gem_va replace;
+		memset(&replace, 0, sizeof(replace));
+		replace.operation = AMDGPU_VA_OP_REPLACE;
+		replace.handle = 1;
+		replace.va_address = R5_GPU_HIGH_VA_OFFSET;
+		replace.map_size = 4096;
+		ret = drmIoctl(fd, DRM_IOCTL_AMDGPU_GEM_VA, &replace);
+		printf("f2 direct GEM_VA REPLACE ret %d errno %d\n", ret, errno);
+	}
+	printf("f2 vkCreateDevice: not run\n");
+
 	struct amdgpu_bo_alloc_request request;
 	memset(&request, 0, sizeof(request));
-	request.alloc_size = 4096;
+	request.alloc_size = 8192;
 	request.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
 	amdgpu_bo_handle bo = NULL;
 	ret = amdgpu_bo_alloc(dev, &request, &bo);
@@ -1311,7 +1994,62 @@ main(void)
 	ret = amdgpu_bo_cpu_unmap(bo);
 	CHECK(ret == 0);
 	CHECK(gClones == 1);
-	CHECK(gCloneFreed == 1);
+	CHECK(gCloneFreed == 0);
+	{
+		void *again = NULL;
+		ret = amdgpu_bo_cpu_map(bo, &again);
+		CHECK(ret == 0);
+		CHECK(again == cpu);
+		CHECK(gClones == 1);
+		amdgpu_bo_cpu_unmap(bo);
+	}
+	{
+		int saved = gCurrentTeam;
+		r5_gpu_bo other;
+		uint32_t mapped = 0;
+		uint32_t i;
+		for (i = 0; i < HOST_BO_SLOTS; i++) {
+			if (gBoArea[i] > 0)
+				mapped = i + 1;
+		}
+		gCurrentTeam = 2;
+		memset(&other, 0, sizeof(other));
+		other.handle = mapped;
+		CHECK(mapped != 0);
+		CHECK(r5_host_ioctl(fd, R5_GPU_BO_MAP, &other, sizeof(other)) != 0);
+		gCurrentTeam = saved;
+	}
+	CHECK(host_cover(1, 4096, 1) == 0);
+	CHECK(host_cover(0, 4096, 1) == 1);
+	CHECK(host_cover(0, 257u * 4096u, 257) == 257);
+	{
+		amdgpu_bo_handle kernelBo = NULL;
+		struct amdgpu_bo_alloc_request kernelRequest;
+		void *kernelCpu = NULL;
+		memset(&kernelRequest, 0, sizeof(kernelRequest));
+		kernelRequest.alloc_size = 4096;
+		kernelRequest.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
+		gForceKernelClone = 1;
+		ret = amdgpu_bo_alloc(dev, &kernelRequest, &kernelBo);
+		CHECK(ret == 0);
+		ret = amdgpu_bo_cpu_map(kernelBo, &kernelCpu);
+		CHECK(ret != 0);
+		CHECK(kernelCpu == NULL);
+		gForceKernelClone = 0;
+		amdgpu_bo_free(kernelBo);
+	}
+	{
+		uint64_t gttHigh = 0;
+		amdgpu_va_handle gttRange = NULL;
+		ret = amdgpu_va_range_alloc(dev, amdgpu_gpu_va_range_general, 4096,
+			4096, 0, &gttHigh, &gttRange, AMDGPU_VA_RANGE_HIGH);
+		CHECK(ret == 0);
+		CHECK(gttHigh >= R5_GPU_HIGH_VA_OFFSET);
+		CHECK(gttHigh < R5_GPU_HIGH_VA_MAX);
+		ret = amdgpu_bo_va_op(bo, 0, 4096, gttHigh, 0, AMDGPU_VA_OP_MAP);
+		CHECK(ret == 0);
+		amdgpu_va_range_free(gttRange);
+	}
 
 	uint64_t low = 0;
 	uint64_t high = 0;
@@ -1376,6 +2114,9 @@ main(void)
 	CHECK(gCalls > 0);
 	CHECK(gShort == 0);
 	radv_replay(fd);
+
+	if (ac_drm_replay(fd) != 0)
+		gFail++;
 
 	if (gFail == 0)
 		printf("ok libdrm ioctl\n");

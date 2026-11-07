@@ -6,10 +6,39 @@ from pathlib import Path
 
 HAIKU = Path("/home/nickr/r5os/haiku")
 PKG = HAIKU / "generated.x86_64/objects/linux/x86_64/release/tools/package/package"
+STRIP = HAIKU / "generated.x86_64/cross-tools-x86_64/bin/x86_64-unknown-haiku-strip"
 OUT = Path("/mnt/c/Users/nickr/Projects/R5OS/distro/packages/x86_64")
 SYS = Path("/home/nickr/r5os/r5-sysroot/lib")
 RADV = Path("/home/nickr/r5os/mesa-build/mesa-25.3.6/build-radv")
+IDS = Path("/home/nickr/r5os/src-third/libdrm-2.4.124/data/amdgpu.ids")
 STAGE = Path("/tmp/r5-gpu-pkg")
+
+
+def drop_build_path(path):
+    """A shipped file must not name the build machine. RPATH is rewritten to the system lib directory."""
+    data = bytearray(path.read_bytes())
+    needle = b"/home/nickr"
+    start = 0
+    while True:
+        index = data.find(needle, start)
+        if index < 0:
+            break
+        end = data.find(b"\x00", index)
+        if end < 0:
+            raise SystemExit(f"unterminated build path in {path}")
+        replacement = b"/boot/system/lib"
+        if end - index < len(replacement):
+            raise SystemExit(f"build path is shorter than the system path in {path}")
+        data[index:index + len(replacement)] = replacement
+        data[index + len(replacement):end] = b"\x00" * (end - index - len(replacement))
+        start = end
+    path.write_bytes(data)
+
+
+def ship(src, dest):
+    shutil.copy2(src, dest)
+    subprocess.check_call([str(STRIP), "--strip-unneeded", str(dest)])
+    drop_build_path(dest)
 
 
 def info(path, text):
@@ -30,7 +59,10 @@ def libdrm():
     lib = root / "lib"
     lib.mkdir(parents=True)
     for name in ("libdrm.so.2.124.0", "libdrm_amdgpu.so.1.124.0"):
-        shutil.copy2(SYS / name, lib / name)
+        ship(SYS / name, lib / name)
+    data = root / "data" / "libdrm"
+    data.mkdir(parents=True)
+    shutil.copy2(IDS, data / "amdgpu.ids")
     (lib / "libdrm.so.2").symlink_to("libdrm.so.2.124.0")
     (lib / "libdrm_amdgpu.so.1").symlink_to("libdrm_amdgpu.so.1.124.0")
     info(root / ".PackageInfo", """name\t\t\tlibdrm
@@ -61,7 +93,7 @@ def radv():
     icd = root / "add-ons/vulkan/icd.d"
     lib.mkdir(parents=True)
     icd.mkdir(parents=True)
-    shutil.copy2(RADV / "src/amd/vulkan/libvulkan_radeon.so", lib / "libvulkan_radeon.so")
+    ship(RADV / "src/amd/vulkan/libvulkan_radeon.so", lib / "libvulkan_radeon.so")
     (icd / "radeon_icd.json").write_text(
         "{\n"
         '\t"file_format_version": "1.0.0",\n'
@@ -100,7 +132,7 @@ def zink():
     vendor = root / "add-ons/opengl/egl_vendor.d"
     vendor.mkdir(parents=True)
     src = RADV / "src/egl/libEGL_mesa.so.0.0.0"
-    shutil.copy2(src, vendor / "libEGL_mesa.so.0.0.0")
+    ship(src, vendor / "libEGL_mesa.so.0.0.0")
     (vendor / "libEGL_mesa.so.0").symlink_to("libEGL_mesa.so.0.0.0")
     (vendor / "libEGL_mesa.so").symlink_to("libEGL_mesa.so.0")
     (vendor / "50_mesa.json").write_text(

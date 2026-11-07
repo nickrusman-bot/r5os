@@ -13,12 +13,51 @@
 #include <stdint.h>
 
 #include "gfx9_check.h"
+#include "r5_gpu.h"
 
-/* PDB2 is level 3, the page table is level 0. Nine bits each. */
+/* PDB2 is level 3, the page table is level 0. Nine bits each.
+ * Bits 63:48 are not part of the walk. Linux amdgpu_gmc.h
+ * AMDGPU_GMC_HOLE_MASK is 0x0000ffffffffffff, so a canonical high
+ * address and that masked address select the same slots. */
 static inline uint32_t
 r5_vm_index(uint64_t va, uint32_t level)
 {
 	return (uint32_t)((va >> (12u + 9u * level)) & 0x1ffu);
+}
+
+/* Linux amdgpu_gem_va_ioctl rejects an address in the hole
+ * (amdgpu_gmc.h AMDGPU_GMC_HOLE_START .. AMDGPU_GMC_HOLE_END).
+ * The high range starts at AMDGPU_GMC_HOLE_END. Nothing extra is
+ * reserved on that first page. */
+static inline int
+r5_vm_va_fits(uint64_t va, uint64_t bytes)
+{
+	uint64_t end;
+	int low;
+	int high;
+	if (bytes == 0 || (va & 0xfffull) != 0 || (bytes & 0xfffull) != 0)
+		return 0;
+	end = va + bytes;
+	if (end < va)
+		return 0;
+	low = va >= R5_GPU_VA_OFFSET && end <= R5_GPU_VA_MAX;
+	high = va >= R5_GPU_HIGH_VA_OFFSET && end <= R5_GPU_HIGH_VA_MAX;
+	return low || high;
+}
+
+/* gpu_va_map adds the filled byte count to the GPU address. The sum
+ * stays canonical. It is not masked before the walk. */
+static inline int
+r5_vm_page_va(uint64_t va, uint64_t filled, uint64_t* page)
+{
+	uint64_t sum;
+	if ((va & 0xfffull) != 0 || (filled & 0xfffull) != 0 || page == 0)
+		return 0;
+	sum = va + filled;
+	if (sum < va)
+		return 0;
+	*page = sum;
+	return 1;
 }
 
 /* Physical address of a page-table page, then VALID. Same alignment rule
@@ -27,6 +66,27 @@ static inline uint64_t
 r5_vm_pde(uint64_t physical)
 {
 	return (physical & ~0xfffull) | (uint64_t)R5_GFX9_PTE_VALID;
+}
+
+
+/* Linux v6.12 amdgpu_vm.h. AMDGPU_PTE_EXECUTABLE is bit 4.
+ * AMDGPU_PDE_PTE is bit 54. amdgpu_vm_pt.c amdgpu_vm_pt_clear fills a
+ * new leaf table with EXECUTABLE and an empty directory entry with
+ * PDE_PTE. amdgpu_vm_pte_update_flags writes EXECUTABLE on an unmap
+ * that is not VALID and not PRT. gmc_v9_0_get_vm_pde adds nothing else
+ * while translate_further is off. */
+static const uint64_t kR5VmPteEmpty = 0x10ull;
+static const uint64_t kR5VmPdeEmpty = 1ull << 54;
+
+
+static inline int
+r5_vm_is_table(uint64_t entry)
+{
+	if ((entry & (uint64_t)R5_GFX9_PTE_VALID) == 0)
+		return 0;
+	if ((entry & kR5VmPdeEmpty) != 0)
+		return 0;
+	return 1;
 }
 
 
@@ -56,8 +116,9 @@ r5_vm_find(const r5_vm* vm, uint64_t entry)
 }
 
 
+/* leaf is a page table. A directory page is every other level. */
 static inline int
-r5_vm_new_page(r5_vm* vm)
+r5_vm_new_page(r5_vm* vm, int leaf)
 {
 	if (vm->used >= vm->capacity || vm->alloc == NULL)
 		return 0;
@@ -67,8 +128,9 @@ r5_vm_new_page(r5_vm* vm)
 		return 0;
 	if (!r5_gfx9_pde_aligned(physical))
 		return 0;
+	uint64_t fill = leaf ? kR5VmPteEmpty : kR5VmPdeEmpty;
 	for (int i = 0; i < 512; i++)
-		cpu[i] = 0;
+		cpu[i] = fill;
 	vm->pages[vm->used].physical = physical;
 	vm->pages[vm->used].cpu = cpu;
 	vm->used++;
@@ -83,14 +145,14 @@ r5_vm_map_page(r5_vm* vm, uint64_t va, uint64_t pte)
 {
 	if (vm == NULL || (va & 0xfffull) != 0)
 		return 0;
-	if (vm->used == 0 && !r5_vm_new_page(vm))
+	if (vm->used == 0 && !r5_vm_new_page(vm, 0))
 		return 0;
 	int index = 0;
 	for (int level = 3; level >= 1; level--) {
 		uint32_t slot = r5_vm_index(va, (uint32_t)level);
 		uint64_t entry = vm->pages[index].cpu[slot];
-		if (entry == 0) {
-			if (!r5_vm_new_page(vm))
+		if (!r5_vm_is_table(entry)) {
+			if (!r5_vm_new_page(vm, level == 1))
 				return 0;
 			vm->pages[index].cpu[slot] = r5_vm_pde(
 				vm->pages[vm->used - 1].physical);
@@ -101,7 +163,13 @@ r5_vm_map_page(r5_vm* vm, uint64_t va, uint64_t pte)
 				return 0;
 		}
 	}
-	vm->pages[index].cpu[r5_vm_index(va, 0)] = pte;
+	uint32_t leaf = r5_vm_index(va, 0);
+	if (pte == 0) {
+		uint64_t current = vm->pages[index].cpu[leaf];
+		if ((current & kR5Gfx9PtePrt) == 0)
+			vm->pages[index].cpu[leaf] = kR5VmPteEmpty;
+	} else
+		vm->pages[index].cpu[leaf] = pte;
 	return 1;
 }
 
@@ -114,7 +182,7 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 	int index = 0;
 	for (int level = 3; level >= 1; level--) {
 		uint64_t entry = vm->pages[index].cpu[r5_vm_index(va, (uint32_t)level)];
-		if (entry == 0)
+		if (!r5_vm_is_table(entry))
 			return 0;
 		index = r5_vm_find(vm, entry);
 		if (index < 0)
@@ -123,7 +191,7 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 	uint64_t leaf = vm->pages[index].cpu[r5_vm_index(va, 0)];
 	if (pte != NULL)
 		*pte = leaf;
-	return leaf != 0;
+	return (leaf & (uint64_t)R5_GFX9_PTE_VALID) != 0;
 }
 
 #endif
