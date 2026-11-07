@@ -1490,7 +1490,7 @@ gpu_fence_wait(gpu_client* client, void* buffer, size_t length)
 	status = gpu_wait_value(client, NULL, in.sequence, in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		if (gR5GpuOps.dump != NULL)
-		gR5GpuOps.dump("fence timeout");
+			gR5GpuOps.dump("fence timeout");
 	return status;
 }
 
@@ -1580,7 +1580,7 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 			in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		if (gR5GpuOps.dump != NULL)
-		gR5GpuOps.dump("sync wait");
+			gR5GpuOps.dump("sync wait");
 	return status;
 }
 

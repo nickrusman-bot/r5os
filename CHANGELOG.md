@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Designated backend ops, and the dump call is indented
+
+`gR5GpuOps` uses designated initialisers, so a new op cannot shift the ones before it. The `dump` call in `gpu_fence_wait` and `gpu_sync_wait` sits inside its `if`, the same way the other dump calls do.
+
 ### The core does not name the vendor block
 
 `GET_INFO` asks `vendor_size` for the tail and lets `fill_vendor_info` write those bytes. The core no longer declares `r5_gpu_amd_info`. The host test rejects that name in the core.

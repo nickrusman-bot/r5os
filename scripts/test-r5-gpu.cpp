@@ -882,6 +882,8 @@ ops_status()
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
 			&text) != 0)
 		return 1;
+	if (strstr(text, ".vendor_size = amd_vendor_size") == NULL)
+		return fail("ops designated");
 	if (strstr(text, "!gR5GpuOps.") != NULL || strstr(text, "? 1 : 0;") != NULL) {
 		free(text);
 		return fail("op backend bang");
