@@ -659,19 +659,15 @@ main()
 	const char* stageOrder[] = {
 		"gpu_stage_p(",
 		"gpu_stage_u(",
-		"\"u2c\"",
+		"\"u-self\"",
+		"\"u2a-n\"",
+		"\"u2a-f\"",
+		"\"u2b-n\"",
 		"\"u4b\"",
 		"\"u2e\"",
 		"\"u2f\"",
 		"\"u2d\"",
 		"\"u2g\"",
-		"\"u2a\"",
-		"\"u2a-f\"",
-		"\"u2a-n\"",
-		"\"u2a-sh-lx\"",
-		"\"u2a-f-sh-lx\"",
-		"\"u2a-ctx-lx\"",
-		"\"u2a-f-ctx-lx\"",
 		"\"u2l\"",
 		"\"u2b\"",
 		"\"u2b-f\"",
@@ -692,8 +688,40 @@ main()
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 23) != 0)
+			stageOrder, 19) != 0)
 		return 1;
+	{
+		FILE* driver = fopen(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+			"rb");
+		if (driver == NULL)
+			return fail("r5_gpu.cpp");
+		if (fseek(driver, 0, SEEK_END) != 0) {
+			fclose(driver);
+			return fail("r5_gpu.cpp");
+		}
+		long bytes = ftell(driver);
+		if (bytes < 0) {
+			fclose(driver);
+			return fail("r5_gpu.cpp");
+		}
+		rewind(driver);
+		char* text = (char*)malloc((size_t)bytes + 1);
+		if (text == NULL || fread(text, 1, (size_t)bytes, driver) != (size_t)bytes) {
+			free(text);
+			fclose(driver);
+			return fail("r5_gpu.cpp");
+		}
+		text[bytes] = 0;
+		fclose(driver);
+		if (strstr(text, "B_WRITE_COMBINING_MEMORY") != NULL
+			|| strstr(text, "\"u2c\"") != NULL
+			|| strstr(text, "u2a-sh-lx") != NULL) {
+			free(text);
+			return fail("uswc still on");
+		}
+		free(text);
+	}
 
 	{
 		/* REVIEW-25 X1. Four high addresses, GTT and VRAM. */

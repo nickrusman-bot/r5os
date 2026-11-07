@@ -373,6 +373,8 @@ r5_gem_create(int fd, union drm_amdgpu_gem_create *gem)
 		bo.flags |= R5_GPU_BO_WC;
 	if (r5_call(fd, R5_GPU_BO_CREATE, &bo, sizeof(bo)) != 0)
 		return -1;
+	fprintf(stderr, "kernel bo domain %u flags %08x bytes %llu\n",
+		bo.domain, bo.flags, (unsigned long long)bo.bytes);
 	gem->out.handle = bo.handle;
 	return 0;
 }

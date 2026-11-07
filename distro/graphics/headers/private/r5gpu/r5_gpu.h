@@ -77,8 +77,9 @@ typedef struct {
 #define R5_GPU_DOMAIN_VRAM 1u
 #define R5_GPU_DOMAIN_GTT 2u
 
-/* AMDGPU_GEM_CREATE_CPU_GTT_USWC, bit 2. A GTT buffer with this bit is
- * write-combined. A VRAM buffer ignores it. */
+/* AMDGPU_GEM_CREATE_CPU_GTT_USWC, bit 2. The kernel accepts the bit.
+ * No RAM area is given a write-combined memory type. A GTT page stays
+ * cached and snooped, the same as amdgpu_bo_support_uswc() false. */
 #define R5_GPU_BO_WC 4u
 
 #define R5_GPU_VA_READ 1u

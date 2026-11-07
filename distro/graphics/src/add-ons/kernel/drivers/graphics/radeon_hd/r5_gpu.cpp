@@ -680,6 +680,9 @@ gpu_bo_release(gpu_bo* bo)
 }
 
 
+static bool gpu_selftest_enabled();
+
+
 static status_t
 gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 {
@@ -733,29 +736,21 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		if (area < 0 || kernel == NULL)
 			return gpu_refuse("BO_CREATE", "gtt", area < 0 ? area : B_NO_MEMORY,
 				0, in.domain, bytes, 0, 0, 0, in.flags);
-		if ((in.flags & R5_GPU_BO_WC) != 0) {
-			physical_entry entry;
-			memset(&entry, 0, sizeof(entry));
-			uint32 count = 1;
-			status_t typed = get_memory_map_etc(B_CURRENT_TEAM, kernel, 4096,
-				&entry, &count);
-			if (typed == B_OK && count == 0)
-				typed = B_ERROR;
-			if (typed == B_OK) {
-				typed = vm_set_area_memory_type(area, entry.address,
-					B_WRITE_COMBINING_MEMORY);
-			}
-			if (gpu_debug_enabled())
-			dprintf("radeon_hd: gtt wc area %ld status %#lx\n",
-				(long)area, (unsigned long)typed);
-			if (typed != B_OK) {
-				delete_area(area);
-				return gpu_refuse("BO_CREATE", "wc", typed, 0, in.domain,
-					bytes, 0, 0, 0, in.flags);
-			}
-		}
 		bo->kernelArea = area;
 		bo->kernel = kernel;
+	}
+	/* R5_GPU_BO_WC stays stored. The RAM area stays write-back, and a
+	 * GTT page is snooped. The reply carries the flags that were used. */
+	{
+		uint32 used = in.flags & ~R5_GPU_BO_WC;
+		if (gpu_selftest_enabled()) {
+			dprintf("radeon_hd: bo domain %lu requested %08lx used %08lx "
+				"bytes %llu snooped %d\n",
+				(unsigned long)in.domain, (unsigned long)in.flags,
+				(unsigned long)used, (unsigned long long)bytes,
+				in.domain == R5_GPU_DOMAIN_GTT ? 1 : 0);
+		}
+		in.flags = used;
 	}
 	bo->live = true;
 	bo->owner = client;
@@ -901,27 +896,6 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	if (area < 0)
 		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
 			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-	if (bo->domain == R5_GPU_DOMAIN_GTT && (bo->flags & R5_GPU_BO_WC) != 0) {
-		physical_entry entry;
-		memset(&entry, 0, sizeof(entry));
-		uint32 count = 1;
-		status_t typed = get_memory_map_etc(B_CURRENT_TEAM, bo->kernel, 4096,
-			&entry, &count);
-		if (typed == B_OK && count == 0)
-			typed = B_ERROR;
-		if (typed == B_OK) {
-			typed = vm_set_area_memory_type(area, entry.address,
-				B_WRITE_COMBINING_MEMORY);
-		}
-		if (gpu_debug_enabled())
-		dprintf("radeon_hd: gtt wc clone %ld status %#lx\n",
-			(long)area, (unsigned long)typed);
-		if (typed != B_OK) {
-			vm_delete_area(team, area, true);
-			return gpu_refuse("BO_MAP", "wc", typed, in.handle, bo->domain,
-				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-		}
-	}
 	bo->area = area;
 	bo->mapTeam = team;
 	in.area = area;
@@ -1234,8 +1208,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 							in.flags);
 					}
 					uint64 pte = r5_gfx9_user_pte(address,
-						gpu_pte_flags(flags), 1,
-						(bo->flags & R5_GPU_BO_WC) != 0, &kR5Gfx93Mtype);
+						gpu_pte_flags(flags), 1, 0, &kR5Gfx93Mtype);
 					if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
 						gpu_va_clear(in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
@@ -2308,27 +2281,8 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 		if (page->area < 0 || system == NULL)
 			return false;
-		if (wc) {
-			physical_entry typed;
-			memset(&typed, 0, sizeof(typed));
-			uint32 typedCount = 1;
-			status_t typeStatus = get_memory_map_etc(B_CURRENT_TEAM, system,
-				4096, &typed, &typedCount);
-			if (typeStatus == B_OK && typedCount == 0)
-				typeStatus = B_ERROR;
-			if (typeStatus == B_OK) {
-				typeStatus = vm_set_area_memory_type(page->area,
-					typed.address, B_WRITE_COMBINING_MEMORY);
-			}
-			if (gpu_selftest_enabled())
-			dprintf("radeon_hd: stage wc area %ld status %#lx\n",
-				(long)page->area, (unsigned long)typeStatus);
-			if (typeStatus != B_OK) {
-				delete_area(page->area);
-				page->area = -1;
-				return false;
-			}
-		}
+		/* wc is accepted and ignored. A stage GTT page stays cached. */
+		(void)wc;
 		page->cpu = (uint8*)system;
 		page->gtt = true;
 		physical_entry entry;
@@ -2344,7 +2298,7 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 		phys = entry.address;
 	}
 	page->phys = phys;
-	uint64 pte = r5_gfx9_user_pte(phys, flags, gtt ? 1 : 0, wc ? 1 : 0,
+	uint64 pte = r5_gfx9_user_pte(phys, flags, gtt ? 1 : 0, 0,
 		&kR5Gfx93Mtype);
 	if (!r5_gfx9_vmid1_map(va, pte) || !r5_gfx9_vmid1_flush()) {
 		gpu_stage_release(page);
@@ -2429,16 +2383,6 @@ gpu_stage_pat(void* cpu)
 		table = entry & 0x000ffffffffff000ull;
 	}
 	return 0xffffffffu;
-}
-
-
-static void
-gpu_stage_reg(radeon_info* info, uint32 index, uint32 value)
-{
-	uint32 byte = (kGcSegment + index) * 4u;
-	if (info == NULL || info->registers == 0)
-		return;
-	*(volatile uint32*)(info->registers + byte) = value;
 }
 
 
@@ -2563,6 +2507,86 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 }
 
 
+static uint64
+gpu_stage_rdmsr(uint32 index)
+{
+	uint32 lo = 0;
+	uint32 hi = 0;
+	asm volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(index));
+	return ((uint64)hi << 32) | lo;
+}
+
+
+static void
+gpu_stage_mtrr(const char* when)
+{
+	uint64 cap = gpu_stage_rdmsr(0xfeu);
+	uint32 count = (uint32)(cap & 0xffu);
+	if (count > 16)
+		count = 16;
+	dprintf("radeon_hd: mtrr %s cap %016llx count %lu\n",
+		when, (unsigned long long)cap, (unsigned long)count);
+	for (uint32 i = 0; i < count; i++) {
+		uint64 base = gpu_stage_rdmsr(0x200u + i * 2u);
+		uint64 mask = gpu_stage_rdmsr(0x201u + i * 2u);
+		dprintf("radeon_hd: mtrr %s %lu base %016llx mask %016llx\n",
+			when, (unsigned long)i, (unsigned long long)base,
+			(unsigned long long)mask);
+	}
+}
+
+
+/* Eight words through the page's own pointer, then through a second
+ * mapping of the same physical page. A mismatch stops the series. */
+static bool
+gpu_stage_visible(const char* name, gpu_stage_page* page)
+{
+	uint32 store[8];
+	uint32 same[8];
+	uint32 other[8];
+	if (page == NULL || page->cpu == NULL)
+		return false;
+	for (uint32 i = 0; i < 8; i++)
+		store[i] = 0x51550000u + i;
+	memcpy(page->cpu, store, sizeof(store));
+	asm volatile("sfence" ::: "memory");
+	memcpy(same, page->cpu, sizeof(same));
+	memset(other, 0, sizeof(other));
+	void* alias = NULL;
+	area_id id = map_physical_memory("r5 stage alias",
+		(phys_addr_t)page->phys, 4096, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA, &alias);
+	bool mapped = id >= B_OK && alias != NULL;
+	if (mapped)
+		memcpy(other, alias, sizeof(other));
+	if (id >= B_OK)
+		delete_area(id);
+	dprintf("radeon_hd: %s cpu phys %016llx "
+		"same %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx "
+		"other %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
+		name, (unsigned long long)page->phys,
+		(unsigned long)same[0], (unsigned long)same[1],
+		(unsigned long)same[2], (unsigned long)same[3],
+		(unsigned long)same[4], (unsigned long)same[5],
+		(unsigned long)same[6], (unsigned long)same[7],
+		(unsigned long)other[0], (unsigned long)other[1],
+		(unsigned long)other[2], (unsigned long)other[3],
+		(unsigned long)other[4], (unsigned long)other[5],
+		(unsigned long)other[6], (unsigned long)other[7]);
+	bool equal = mapped;
+	for (uint32 i = 0; i < 8; i++) {
+		if (same[i] != store[i] || other[i] != store[i])
+			equal = false;
+	}
+	if (!equal) {
+		dprintf("radeon_hd: %s pat %lu\n", name,
+			(unsigned long)gpu_stage_pat(page->cpu));
+		gpu_stage_mtrr("mismatch");
+	}
+	return equal;
+}
+
+
 static bool
 gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
 {
@@ -2570,6 +2594,10 @@ gpu_stage_one(radeon_info* info, const char* name, uint64 va, bool gtt)
 	if (!gpu_stage_map(info, &page, va, gtt)) {
 		dprintf("radeon_hd: %s map\n", name);
 		return true;
+	}
+	if (!gpu_stage_visible(name, &page)) {
+		gpu_stage_release(&page);
+		return false;
 	}
 	bool go = gpu_stage_step(info, name, &page, page.cpu, va + 64, page.phys,
 		true, true, true, 0, 8, false);
@@ -2584,6 +2612,10 @@ gpu_stage_fault(radeon_info* info)
 	gpu_stage_page page;
 	if (!gpu_stage_map(info, &page, kStageLowVram, false)) {
 		dprintf("radeon_hd: u5 map\n");
+		return false;
+	}
+	if (!gpu_stage_visible("u5", &page)) {
+		gpu_stage_release(&page);
 		return false;
 	}
 	bool landed = gpu_stage_step(info, "u5", &page, NULL, kStageFault + 64, 0,
@@ -2622,6 +2654,11 @@ gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
 		dprintf("radeon_hd: %s map\n", name);
 		gpu_stage_release(&ib);
 		return true;
+	}
+	if (!gpu_stage_visible(name, &ib) || !gpu_stage_visible(name, &dest)) {
+		gpu_stage_release(&dest);
+		gpu_stage_release(&ib);
+		return false;
 	}
 	bool go = gpu_stage_step(info, name, &ib, dest.cpu, dest.va + 64,
 		dest.phys, true, ibFlush, readFlush, fill, dwords, linuxWords);
@@ -2834,10 +2871,16 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 
 
 static bool
-gpu_stage_cached(radeon_info* info, const char* name, bool readFlush)
+gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 {
-	return gpu_stage_pair(info, name, gpu_stage_fresh(), false, false,
-		gpu_stage_fresh(), true, false, true, readFlush, 0, 8, false);
+	gpu_stage_page page;
+	if (!gpu_stage_map(info, &page, gpu_stage_fresh(), gtt, false)) {
+		dprintf("radeon_hd: %s map\n", name);
+		return false;
+	}
+	bool ok = gpu_stage_visible(name, &page);
+	gpu_stage_release(&page);
+	return ok;
 }
 
 
@@ -2851,79 +2894,40 @@ gpu_stage_u(radeon_info* info)
 		return B_NO_INIT;
 	}
 	sStageFresh = 0;
-	/* Held before any write-combining stage page, so u2a-n is not the
-	 * page U2c just released. */
-	gpu_stage_page nIb;
-	gpu_stage_page nDest;
-	memset(&nIb, 0, sizeof(nIb));
-	memset(&nDest, 0, sizeof(nDest));
-	nIb.area = -1;
-	nDest.area = -1;
-	bool nIbOk = gpu_stage_map(info, &nIb, gpu_stage_fresh(), false, false);
-	bool held = nIbOk
-		&& gpu_stage_map(info, &nDest, gpu_stage_fresh(), true, false);
-	if (nIbOk && !held)
-		gpu_stage_release(&nIb);
-	if (!held)
-		dprintf("radeon_hd: u2a-n map\n");
+	gpu_stage_mtrr("before");
 	bool stop = false;
-	if (!gpu_stage_pair(info, "u2c", gpu_stage_fresh(), true, true,
-			gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+	if (!gpu_stage_self(info, "u-self", true)
+		|| !gpu_stage_self(info, "u-self", false))
 		stop = true;
-	/* U2d keeps the first high page, the stick 19 address. U4b is the
-	 * next page. */
+	/* U2a-n: VRAM indirect buffer, fresh cached GTT, no clflush on the
+	 * read. U2a-f is the same read with clflush. U2b-n writes a cached
+	 * GTT indirect buffer without clflush. No write-combined step. */
+	if (!stop && !gpu_stage_pair(info, "u2a-n", gpu_stage_fresh(), false,
+			false, gpu_stage_fresh(), true, false, true, false, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2a-f", gpu_stage_fresh(), false,
+			false, gpu_stage_fresh(), true, false, true, true, 0, 8, false))
+		stop = true;
+	if (!stop && !gpu_stage_pair(info, "u2b-n", gpu_stage_fresh(), true,
+			false, gpu_stage_fresh(), false, false, false, false, 0, 8, false))
+		stop = true;
 	if (!stop && !gpu_stage_one(info, "u4b",
 			R5_GPU_HIGH_VA_OFFSET + 0x1000ull, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "u2e", 0xffff800100000000ull, true,
-			true, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+			false, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "u2f", 0xffff800000200000ull, true,
-			true, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+			false, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "u2d", R5_GPU_HIGH_VA_OFFSET, true,
-			true, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
+			false, gpu_stage_fresh(), false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "u2g",
-			R5_GPU_HIGH_VA_OFFSET + 0x2000ull, true, true,
+			R5_GPU_HIGH_VA_OFFSET + 0x2000ull, true, false,
 			kStageHighVram, false, false, true, true, 0, 8, false))
 		stop = true;
-	if (!stop && !gpu_stage_cached(info, "u2a", false))
-		stop = true;
-	if (!stop && !gpu_stage_cached(info, "u2a-f", true))
-		stop = true;
-	if (!stop && held && !gpu_stage_step(info, "u2a-n", &nIb, nDest.cpu,
-			nDest.va + 64, nDest.phys, true, true, false, 0, 8, false))
-		stop = true;
-	if (!stop) {
-		dprintf("radeon_hd: sh_mem 00000018\n");
-		gpu_stage_reg(info, 0x0022, 1u << 4);
-		gpu_stage_reg(info, 0x030d, 0x18);
-		gpu_stage_reg(info, 0x0022, 0);
-		r5_gfx9_vmid1_flush();
-		if (!gpu_stage_cached(info, "u2a-sh-lx", false))
-			stop = true;
-		if (!stop && !gpu_stage_cached(info, "u2a-f-sh-lx", true))
-			stop = true;
-		dprintf("radeon_hd: sh_mem 00001018\n");
-		gpu_stage_reg(info, 0x0022, 1u << 4);
-		gpu_stage_reg(info, 0x030d, 0x1018);
-		gpu_stage_reg(info, 0x0022, 0);
-		r5_gfx9_vmid1_flush();
-	}
-	if (!stop) {
-		dprintf("radeon_hd: context1 007ffe87\n");
-		gpu_stage_reg(info, 0x0881, 0x007ffe87);
-		r5_gfx9_vmid1_flush();
-		if (!gpu_stage_cached(info, "u2a-ctx-lx", false))
-			stop = true;
-		if (!stop && !gpu_stage_cached(info, "u2a-f-ctx-lx", true))
-			stop = true;
-		dprintf("radeon_hd: context1 007ffe07\n");
-		gpu_stage_reg(info, 0x0881, 0x007ffe07);
-		r5_gfx9_vmid1_flush();
-	}
-	if (!stop && !gpu_stage_pair(info, "u2l", gpu_stage_fresh(), true, true,
+	if (!stop && !gpu_stage_pair(info, "u2l", gpu_stage_fresh(), true, false,
 			gpu_stage_fresh(), true, false, false, false, 0xCAFEDEAD, 5, true))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "u2b", gpu_stage_fresh(), true, false,
@@ -2943,10 +2947,7 @@ gpu_stage_u(radeon_info* info)
 		stop = true;
 	if (!stop)
 		gpu_stage_fault(info);
-	if (held) {
-		gpu_stage_release(&nDest);
-		gpu_stage_release(&nIb);
-	}
+	gpu_stage_mtrr("after");
 	return B_OK;
 }
 
