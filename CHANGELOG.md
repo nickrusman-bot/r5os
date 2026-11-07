@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Stick 24 boot 1 on the 5625U
+
+Logs are `generated/boot-5625u-24/`. The settings file on that boot is the six lines plus `gpu_debug true`. U2b-n was ok. B1 missed, B2 missed, B3 wrote `deadbeef`, B4 copied the GTT page, and B5 missed. A2, a VRAM indirect buffer at `0xffff800100000000`, hung at 5000 ms with CP `84008600` and the fence still on 44. A1 through C1 did not run.
+
+VulkanTeapot (sam) printed `pixels ok`, and `pixel-vram 192 192 853b16ff`. VulkanTeapot printed `pixels MISMATCH`, every GTT sample `00000000`, and `pixel-vram 192 192 853b16ff`. Not a second boot.
+
 ### Stick 24: stage U walks the known-good steps first
 
 Stick 23 hung on `u4b-pair` before the later addresses ran. The page-table walk of `0xffff800000001000` was right at every level, so that step is no longer first. Stage U still starts with U-self, U2a-n, U2a-f and U2b-n. Group B then writes or copies with the indirect buffer at a fresh low address: B1 VRAM `0xffff800000041040`, B2 GTT at that address, B3 VRAM `0xffff800000001040`, B4 a `DMA_DATA` read of the GTT page at `0xffff800000041000`, B5 the same read of the VRAM page. Group A fetches a VRAM indirect buffer from A2 `0xffff800100000000`, A1 `0xffffffffffbfc000`, A3 `0xffff808000000000`, A8 `0x01000000`, A7 `0x00100000`, A4 `0xffff8000c0000000`, A5 `0xffff800040000000`, then A6 `0xffff800000200000`. C1, the stick 23 pair at `0xffff800000001000`, is last. A miss continues. A busy command processor at 5 seconds stops the rest.
