@@ -73,6 +73,7 @@ struct gpu_job {
 	uint32			count;
 	gpu_sync*		syncs[kMaxList];
 	uint64			points[kMaxList];
+	gpu_client*		owner;
 };
 
 

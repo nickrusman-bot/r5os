@@ -53,6 +53,7 @@ lock sGpuLock;
 ConditionVariable sEop;
 bool sReady = false;
 bool sLost = false;
+static void* sGuiltyAs = NULL;
 int32 sContexts = 0;
 sem_id sRetireSem = -1;
 thread_id sRetireThread = -1;
@@ -398,8 +399,15 @@ gpu_get_info(gpu_client* client, radeon_info* info, void* buffer, size_t length)
 	out.revision = info->pci->revision;
 	if (gpu_render_enabled())
 		out.capabilities = R5_GPU_CAP_RENDER;
-	if (gpu_space_lost(client))
+	bool fileLost = false;
+	if (client != NULL && client->address != NULL
+		&& gR5GpuOps.space_lost != NULL)
+		fileLost = gR5GpuOps.space_lost(client->address) != B_OK;
+	if (sLost || fileLost)
 		out.capabilities |= R5_GPU_CAP_LOST;
+	if (fileLost || (client != NULL && client->address != NULL
+			&& client->address == sGuiltyAs))
+		out.capabilities |= R5_GPU_CAP_GUILTY;
 	out.va_offset = R5_GPU_VA_OFFSET;
 	out.va_max = R5_GPU_VA_MAX;
 	/* Linux v6.12 VM manager: the hole ends at the high range start
@@ -658,6 +666,8 @@ gpu_watchdog()
 	}
 	if (oldest == NULL || now - oldest->submitted < kWatchdogUs)
 		return;
+	if (oldest->owner != NULL && oldest->owner->address != NULL)
+		sGuiltyAs = oldest->owner->address;
 	gpu_lost(sInfo, "gpu lost watchdog");
 	gpu_release_parked(~0ull);
 	if (gR5GpuOps.note_retired != NULL)
@@ -1446,6 +1456,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		if (sync != NULL && job->points[i] > sync->submitted)
 			sync->submitted = job->points[i];
 	}
+	job->owner = client;
 	job->live = true;
 	client->lastSequence = sequence;
 	if (gpu_seen() >= sequence)

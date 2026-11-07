@@ -1699,6 +1699,10 @@ main()
 		if (r5_gfx9_vmid_ctx_regs(0, &regs) || r5_gfx9_vmid_ctx_regs(16, &regs))
 			return fail("vmid range");
 	}
+	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
+		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
+		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
+		return fail("guilty");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

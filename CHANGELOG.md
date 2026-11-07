@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A hang marks one file guilty
+
+The watchdog remembers the address space of the oldest job that did not finish. `GET_INFO` sets `R5_GPU_CAP_LOST` on every file after the device is lost, and `R5_GPU_CAP_GUILTY` only on the file that hung or took the page fault. `QUERY_STATE2` reports a reset to every file. It adds `GUILTY` only when that capability is set. The other files get an innocent reset.
+
 ### A page fault names the file by PASID
 
 Each address space gets a 16-bit PASID. The VM switch writes it into `IH_VMID_n_LUT` after the pipeline sync and before the page-table base. That switch is 36 dwords. The interrupt handler only queues the PASID, the VMID and the address. The retire thread, which already holds the GPU lock, marks the matching file and logs `vm fault pasid … addr`. An unknown PASID is logged and marks no file. The host test checks the 36 dwords, the LUT address for VMID 2, and a PASID of 0 being refused.
