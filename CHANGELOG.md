@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### GET_INFO reads its counters under the GPU lock
+
+The lost bit, the guilty address space and the live buffer bytes are read while `gpu_lock` is held. The copy to the caller, and the vendor-block fill, stay outside that lock.
+
 ### The MMIO TLB flush uses engine 17
 
 `r5_gfx9_tlb_flush_vmid` writes `VM_INVALIDATE_ENG17_REQ`. That is the engine Linux uses for an MMIO flush. The GFX ring's VM switch stays on engine 0. The K2 stop and the K2 invalidate already used engine 17, and those lines are unchanged.

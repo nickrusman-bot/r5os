@@ -1836,6 +1836,18 @@ main()
 			return fail("discovery checksum");
 	}
 	{
+		char text[8000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+				"gpu_get_info(", "user_memcpy(buffer, &out", text, sizeof(text)) != 0)
+			return 1;
+		const char* locked = strstr(text, "gpu_lock()");
+		const char* bos = locked != NULL ? strstr(locked, "sBo[i].live") : NULL;
+		const char* unlocked = bos != NULL ? strstr(bos, "gpu_unlock()") : NULL;
+		if (locked == NULL || bos == NULL || unlocked == NULL)
+			return fail("info lock");
+	}
+	{
 		char text[4000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
