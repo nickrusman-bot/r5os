@@ -327,6 +327,7 @@ struct gpu_prt {
 	bool			live;
 	uint64			va;
 	uint64			bytes;
+	r5_vm*			vm;
 };
 
 
@@ -455,6 +456,7 @@ static void gpu_sync_host(gpu_sync* sync);
 
 
 static void gpu_release_parked(uint64 seen);
+static void gpu_prt_release_tree(r5_vm* vm);
 static void gpu_defer_stamp(uint64 sequence);
 static void gpu_watchdog();
 
@@ -752,6 +754,7 @@ r5_file_tree_free(r5_file_tree* tree)
 {
 	if (tree->owner != 0)
 		r5_vmid_release(&sFileVmids, tree->owner, tree->seen);
+	gpu_prt_release_tree(&tree->vm);
 	free(tree->pages);
 	free(tree);
 }
@@ -1126,14 +1129,25 @@ gpu_span_inside(uint64 innerVa, uint64 innerBytes, uint64 va, uint64 bytes)
 
 
 static bool
-gpu_bo_partial(uint64 va, uint64 bytes)
+gpu_same_vm(r5_vm* rangeVm, r5_vm* vm)
+{
+	if (rangeVm == NULL)
+		rangeVm = r5_gfx9_shared_vm();
+	if (vm == NULL)
+		vm = r5_gfx9_shared_vm();
+	return rangeVm == vm;
+}
+
+
+static bool
+gpu_bo_partial(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	for (uint32 b = 0; b < kMaxBo; b++) {
 		if (!sBo[b].live)
 			continue;
 		for (uint32 i = 0; i < kMaxRange; i++) {
 			gpu_range* range = &sBo[b].ranges[i];
-			if (!range->live)
+			if (!range->live || !gpu_same_vm(range->vm, vm))
 				continue;
 			if (!r5_range_overlap(va, bytes, range->va, range->bytes))
 				continue;
@@ -1146,15 +1160,15 @@ gpu_bo_partial(uint64 va, uint64 bytes)
 
 
 static bool
-gpu_va_bo_overlap(uint64 va, uint64 bytes)
+gpu_va_bo_overlap(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	for (uint32 b = 0; b < kMaxBo; b++) {
 		if (!sBo[b].live)
 			continue;
 		for (uint32 i = 0; i < kMaxRange; i++) {
 			gpu_range* range = &sBo[b].ranges[i];
-			if (range->live && r5_range_overlap(va, bytes, range->va,
-					range->bytes))
+			if (range->live && gpu_same_vm(range->vm, vm)
+				&& r5_range_overlap(va, bytes, range->va, range->bytes))
 				return true;
 		}
 	}
@@ -1163,11 +1177,11 @@ gpu_va_bo_overlap(uint64 va, uint64 bytes)
 
 
 static bool
-gpu_prt_overlaps(uint64 va, uint64 bytes)
+gpu_prt_overlaps(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	for (uint32 i = 0; i < kMaxPrt; i++) {
-		if (sPrt[i].live && r5_range_overlap(va, bytes, sPrt[i].va,
-				sPrt[i].bytes))
+		if (sPrt[i].live && gpu_same_vm(sPrt[i].vm, vm)
+			&& r5_range_overlap(va, bytes, sPrt[i].va, sPrt[i].bytes))
 			return true;
 	}
 	return false;
@@ -1175,10 +1189,10 @@ gpu_prt_overlaps(uint64 va, uint64 bytes)
 
 
 static bool
-gpu_prt_covers(uint64 va, uint64 bytes)
+gpu_prt_covers(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	for (uint32 i = 0; i < kMaxPrt; i++) {
-		if (!sPrt[i].live)
+		if (!sPrt[i].live || !gpu_same_vm(sPrt[i].vm, vm))
 			continue;
 		if (gpu_span_inside(va, bytes, sPrt[i].va, sPrt[i].bytes))
 			return true;
@@ -1188,13 +1202,13 @@ gpu_prt_covers(uint64 va, uint64 bytes)
 
 
 static void
-gpu_ranges_drop_contained(uint64 va, uint64 bytes)
+gpu_ranges_drop_contained(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	for (uint32 b = 0; b < kMaxBo; b++) {
 		for (uint32 i = 0; i < kMaxRange; i++) {
 			gpu_range* range = &sBo[b].ranges[i];
-			if (range->live && gpu_span_inside(range->va, range->bytes, va,
-					bytes))
+			if (range->live && gpu_same_vm(range->vm, vm)
+				&& gpu_span_inside(range->va, range->bytes, va, bytes))
 				range->live = false;
 		}
 	}
@@ -1202,20 +1216,32 @@ gpu_ranges_drop_contained(uint64 va, uint64 bytes)
 
 
 static void
-gpu_prt_drop_contained(uint64 va, uint64 bytes)
+gpu_prt_drop_contained(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	for (uint32 i = 0; i < kMaxPrt; i++) {
-		if (sPrt[i].live && gpu_span_inside(sPrt[i].va, sPrt[i].bytes, va,
-				bytes))
+		if (sPrt[i].live && gpu_same_vm(sPrt[i].vm, vm)
+			&& gpu_span_inside(sPrt[i].va, sPrt[i].bytes, va, bytes))
+			sPrt[i].live = false;
+	}
+}
+
+
+static void
+gpu_prt_release_tree(r5_vm* vm)
+{
+	if (vm == NULL || vm == r5_gfx9_shared_vm())
+		return;
+	for (uint32 i = 0; i < kMaxPrt; i++) {
+		if (sPrt[i].live && sPrt[i].vm == vm)
 			sPrt[i].live = false;
 	}
 }
 
 
 static status_t
-gpu_prt_add(uint64 va, uint64 bytes)
+gpu_prt_add(r5_vm* vm, uint64 va, uint64 bytes)
 {
-	if (gpu_prt_covers(va, bytes))
+	if (gpu_prt_covers(vm, va, bytes))
 		return B_OK;
 	for (uint32 i = 0; i < kMaxPrt; i++) {
 		if (sPrt[i].live)
@@ -1223,6 +1249,7 @@ gpu_prt_add(uint64 va, uint64 bytes)
 		sPrt[i].live = true;
 		sPrt[i].va = va;
 		sPrt[i].bytes = bytes;
+		sPrt[i].vm = vm;
 		return B_OK;
 	}
 	return B_NO_MEMORY;
@@ -1264,8 +1291,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		if ((in.flags & R5_GPU_VA_PRT) == 0 || in.bo_offset != 0)
 			return gpu_refuse("VA_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
-		if (gpu_prt_overlaps(in.gpu_va, in.map_bytes)
-			|| gpu_va_bo_overlap(in.gpu_va, in.map_bytes))
+		if (gpu_prt_overlaps(gpu_vm(client), in.gpu_va, in.map_bytes)
+			|| gpu_va_bo_overlap(gpu_vm(client), in.gpu_va, in.map_bytes))
 			return gpu_refuse("VA_MAP", "overlap", B_BAD_VALUE, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		if (!r5_gfx9_vmid1_setup())
@@ -1282,7 +1309,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		if (status != B_OK)
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
-		status = gpu_prt_add(in.gpu_va, in.map_bytes);
+		status = gpu_prt_add(gpu_vm(client), in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
 			gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
@@ -1290,7 +1317,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		}
 		return B_OK;
 	}
-	if (!sReplacing && gpu_prt_overlaps(in.gpu_va, in.map_bytes))
+	if (!sReplacing && gpu_prt_overlaps(gpu_vm(client), in.gpu_va, in.map_bytes))
 		return gpu_refuse("VA_MAP", "overlap", B_BAD_VALUE, in.handle, 0, 0,
 			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	gpu_bo* bo = gpu_bo_get(client, in.handle);
@@ -1449,16 +1476,16 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 	if (!clearOnly && in.handle != 0 && gpu_bo_get(client, in.handle) == NULL)
 		return gpu_refuse(op, "bo", B_BAD_VALUE, in.handle, 0, 0, in.gpu_va,
 			in.bo_offset, in.map_bytes, in.flags);
-	if (gpu_bo_partial(in.gpu_va, in.map_bytes))
+	if (gpu_bo_partial(gpu_vm(client), in.gpu_va, in.map_bytes))
 		return gpu_refuse(op, "overlap", B_BAD_VALUE, in.handle, 0, 0,
 			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	if (!r5_gfx9_vmid1_setup())
 		return gpu_refuse(op, "vmid", B_NO_INIT, in.handle, 0, 0, in.gpu_va,
 			in.bo_offset, in.map_bytes, in.flags);
 	gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
-	gpu_ranges_drop_contained(in.gpu_va, in.map_bytes);
+	gpu_ranges_drop_contained(gpu_vm(client), in.gpu_va, in.map_bytes);
 	if (clearOnly) {
-		gpu_prt_drop_contained(in.gpu_va, in.map_bytes);
+		gpu_prt_drop_contained(gpu_vm(client), in.gpu_va, in.map_bytes);
 		return B_OK;
 	}
 	if (in.handle == 0) {
@@ -1466,7 +1493,7 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 		if (status != B_OK)
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
 				in.bo_offset, in.map_bytes, in.flags);
-		status = gpu_prt_add(in.gpu_va, in.map_bytes);
+		status = gpu_prt_add(gpu_vm(client), in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
 			gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,

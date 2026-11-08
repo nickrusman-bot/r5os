@@ -644,6 +644,73 @@ main()
 			|| strstr(body, "r5_file_tree_drop(tree)") == NULL)
 			return fail("parked drop");
 	}
+	{
+		/* Two trees, one virtual address. Clearing one leaves the other. */
+		static host_page bookA[8];
+		static host_page bookB[8];
+		int nextA = 0;
+		int nextB = 0;
+		auto allocA = [](void* cookie, uint64_t* physical,
+			uint64_t** cpu) -> int {
+			int* next = (int*)cookie;
+			if (*next >= 8)
+				return 0;
+			host_page* page = &bookA[*next];
+			page->physical = 0x910000000ull + (uint64_t)(*next) * 4096ull;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			*next += 1;
+			return 1;
+		};
+		auto allocB = [](void* cookie, uint64_t* physical,
+			uint64_t** cpu) -> int {
+			int* next = (int*)cookie;
+			if (*next >= 8)
+				return 0;
+			host_page* page = &bookB[*next];
+			page->physical = 0x920000000ull + (uint64_t)(*next) * 4096ull;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			*next += 1;
+			return 1;
+		};
+		r5_vm_page slotsA[8];
+		r5_vm_page slotsB[8];
+		r5_vm spaceA;
+		r5_vm spaceB;
+		memset(&spaceA, 0, sizeof(spaceA));
+		memset(&spaceB, 0, sizeof(spaceB));
+		spaceA.pages = slotsA;
+		spaceB.pages = slotsB;
+		spaceA.capacity = 8;
+		spaceB.capacity = 8;
+		spaceA.alloc = allocA;
+		spaceB.alloc = allocB;
+		spaceA.cookie = &nextA;
+		spaceB.cookie = &nextB;
+		const uint64_t leaf = 0x0600000123450071ull;
+		uint64_t gotBook = 0;
+		if (!r5_vm_map_page(&spaceA, va, leaf)
+			|| !r5_vm_map_page(&spaceB, va, leaf))
+			return fail("space map");
+		if (!r5_vm_map_page(&spaceA, va, 0))
+			return fail("space clear");
+		if (r5_vm_lookup(&spaceA, va, &gotBook) != 0
+			|| gotBook != kR5VmPteEmpty)
+			return fail("space cleared");
+		if (!r5_vm_lookup(&spaceB, va, &gotBook) || gotBook != leaf)
+			return fail("space other");
+		const char* book[] = {
+			"gpu_prt_release_tree(&tree->vm)",
+			"gpu_same_vm(range->vm, vm)",
+			"gpu_same_vm(sPrt[i].vm, vm)",
+			"sPrt[i].vm = vm"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", book, 4) != 0)
+			return 1;
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Virtual-address checks stay inside one file tree
+
+`gfx9_vmid_per_file` stays off. Overlap, a partial range and a dropped range compare the caller's page table with the range that was stored. A PRT entry records that table and is dropped when the table is freed. Clearing one table leaves the same virtual address mapped in the other. The host test maps `0xffff800000001000` in two trees, clears the first, and the second page-table entry stays. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A parked buffer unmaps in a tree that is still live
 
 `gfx9_vmid_per_file` stays off. The file page table, its pages and its VMID owner are one object with a reference count. The open file holds one. A buffer parked because its job is still in the ring holds one more. The object is freed when the last reference goes, so the retire unmap does not use the freed client. `gpu_free` reads the fence once and stores that value on the tree. The host test closes with a job in flight, unmaps in the still-live tree, and checks the counters are back at zero. There is no What's new section and `distro/BUILD` stays the same.
