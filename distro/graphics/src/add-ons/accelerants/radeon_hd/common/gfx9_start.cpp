@@ -2154,6 +2154,10 @@ static int sFlushFence = 0;
 static int sCondExec = 0;
 static int sGdsSwitch = 0;
 static struct r5_gds sGdsState;
+static uint32 sJobPasid = 0;
+static uint64 sJobFile = 0;
+static uint32 sPasidOfVmid[16];
+static uint64 sFileOfVmid[16];
 
 
 bool
@@ -2518,6 +2522,32 @@ r5_gfx9_set_gds_switch(int on)
 }
 
 
+void
+r5_gfx9_set_job_pasid(uint32 pasid, uint64 file)
+{
+	sJobPasid = pasid;
+	sJobFile = file;
+}
+
+
+uint64
+r5_gfx9_file_for_vmid(uint32 vmid)
+{
+	if (vmid > 15u)
+		return 0;
+	return sFileOfVmid[vmid];
+}
+
+
+uint32
+r5_gfx9_pasid_for_vmid(uint32 vmid)
+{
+	if (vmid > 15u)
+		return 0;
+	return sPasidOfVmid[vmid];
+}
+
+
 bool
 r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64 fenceCtx, int32* preambleSeen, uint64* _sequence)
@@ -2568,6 +2598,9 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	int gds = sGdsSwitch && r5_gds_switch_needed(&sGdsState, &jobGds);
 	if (gds)
 		prefix += 20u;
+	int pasidMap = sJobPasid != 0 && sPasidOfVmid[1] != sJobPasid;
+	if (pasidMap)
+		prefix += 5u;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint32 body = r5_cs_user_words(count);
 	if (flushFence)
@@ -2577,6 +2610,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint32 cap = flush ? 512u : 320u;
 	if (gds)
 		cap += 20u;
+	if (pasidMap)
+		cap += 5u;
 	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
 		return false;
 	if (flush && (pd == 0 || ibVm[0] == 0))
@@ -2593,15 +2628,20 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	if (flush) {
 		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
 			sUserSequence);
-		if (flushFence) {
-			switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
-				flushSeq);
-		}
+	}
+	if (pasidMap) {
+		switched = r5_cs_pasid_map(packets, cap, switched, 1, sJobPasid);
+		sPasidOfVmid[1] = sJobPasid;
+		sFileOfVmid[1] = sJobFile;
 	}
 	if (gds) {
 		switched = r5_cs_gds_switch(packets, cap, switched, 1, &jobGds);
 		sGdsState = jobGds;
 		sGdsState.valid = 1;
+	}
+	if (flush && flushFence) {
+		switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
+			flushSeq);
 	}
 	uint32 condSlot = 0;
 	if (sCondExec) {

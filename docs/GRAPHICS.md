@@ -273,6 +273,10 @@ The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, whi
 
 The R5 command-submit ioctl has no GDS chunk, so the six values are 0. That is the GFX9 RADV job that does not ask for GDS. A chunk in the ioctl is what it would take to pass other sizes through.
 
+## PASID
+
+`amdgpu_pasid_alloc` in `amdgpu_ids.c` hands out an id from the top of the requested width first. Each open of the render node takes one. The bitmap here is 16 bits wide. The function accepts up to 31; a wider bitmap is not built. `gmc_v9_0_emit_pasid_mapping` writes `mmIH_VMID_0_LUT` plus the VMID through `gfx_v9_0_ring_emit_wreg` (`WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`) when that VMID's PASID changes. The 26-dword VM flush does not include it. A k2 fault line prints the PASID and the open-file pointer stored for that VMID.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

@@ -17,6 +17,7 @@
 #include "r5_stage_p.h"
 #include "r5_log.h"
 #include "r5_vm.h"
+#include "r5_pasid.h"
 
 #include <KernelExport.h>
 #include <condition_variable.h>
@@ -305,6 +306,8 @@ struct gpu_client {
 	int32			preamblePresented;
 	/* Handed out at CTX create. 0 means there is no live context. */
 	uint64			fenceCtx;
+	uint32			pasid;
+	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };
 
@@ -329,6 +332,8 @@ static bool sReady = false;
 static bool sLost = false;
 static int32 sContexts = 0;
 static r5_ctx_counter sCtxCounter;
+static r5_pasid_ida sPasids;
+static gpu_client* sClientList;
 static sem_id sRetireSem = -1;
 static thread_id sRetireThread = -1;
 
@@ -1601,6 +1606,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	job->count = in.signal_count;
 	uint64 sequence = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(client->pasid, (uint64)(addr_t)client);
 	if (client->contexts <= 0 || client->fenceCtx == 0)
 		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,
 			in.ib_count, 0, 0, in.ring, 0);
@@ -2539,6 +2545,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&ib, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
@@ -2722,6 +2729,7 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
 	uint64 sequence = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
@@ -2796,6 +2804,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 		return R5_GPU_P_ROOM;
 	}
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		if (step == 0)
 			dprintf("radeon_hd: mark selftest submit\n");
@@ -3083,6 +3092,17 @@ gpu_open(const char* name, uint32 flags, void** cookie)
 		return B_NO_MEMORY;
 	memset(client, 0, sizeof(*client));
 	client->info = gDeviceInfo[0];
+	gpu_lock();
+	int pasid = r5_pasid_alloc(&sPasids, 16);
+	if (pasid < 0) {
+		gpu_unlock();
+		free(client);
+		return B_NO_MEMORY;
+	}
+	client->pasid = (uint32)pasid;
+	client->next = sClientList;
+	sClientList = client;
+	gpu_unlock();
 	*cookie = client;
 	return B_OK;
 }
@@ -3132,6 +3152,18 @@ gpu_free(void* cookie)
 	for (uint32 i = 0; i < kMaxSync; i++) {
 		client->syncs[i].live = false;
 		client->syncs[i].owner = NULL;
+	}
+	if (client->pasid != 0)
+		r5_pasid_free(&sPasids, client->pasid);
+	if (sClientList == client)
+		sClientList = client->next;
+	else {
+		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+			if (scan->next == client) {
+				scan->next = client->next;
+				break;
+			}
+		}
 	}
 	if (client->contexts > 0) {
 		sContexts -= client->contexts;

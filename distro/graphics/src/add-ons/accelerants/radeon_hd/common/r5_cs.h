@@ -405,6 +405,28 @@ r5_cs_gc_reg(uint32_t index)
 }
 
 
+static inline uint32_t
+r5_cs_oss_reg(uint32_t index)
+{
+	return OSSSYS_BASE__INST0_SEG0 + index;
+}
+
+
+/* gmc_v9_0.c:gmc_v9_0_emit_pasid_mapping for GFXHUB.
+ * gfx_v9_0_ring_emit_wreg: WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM. */
+static inline uint32_t
+r5_cs_pasid_map(uint32_t* out, uint32_t cap, uint32_t n, uint32_t vmid,
+	uint32_t pasid)
+{
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0x40100000u);
+	n = r5_cs_put(out, n, cap, r5_cs_oss_reg(mmIH_VMID_0_LUT) + vmid);
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, pasid);
+	return n;
+}
+
+
 /* gfx_v9_0.c:gfx_v9_0_ring_emit_gds_switch. Twenty dwords. */
 static inline uint32_t
 r5_cs_gds_switch(uint32_t* out, uint32_t cap, uint32_t n, uint32_t vmid,

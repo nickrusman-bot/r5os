@@ -970,7 +970,7 @@ run_k2()
 		r5_gfx9_fault fault = r5_gfx9_fault_decode(faultStatus);
 		knote("k2 fault %08lx MORE_FAULTS %lu WALKER_ERROR %lu "
 			"PERMISSION_FAULTS %lu MAPPING_ERROR %lu CID %lu RW %lu "
-			"addr %016llx cntl %08lx cp %08lx grbm %08lx",
+			"addr %016llx cntl %08lx cp %08lx grbm %08lx pasid %lu file %016llx",
 			(unsigned long)faultStatus, (unsigned long)fault.more,
 			(unsigned long)fault.walker, (unsigned long)fault.permission,
 			(unsigned long)fault.mapping, (unsigned long)fault.cid,
@@ -978,7 +978,9 @@ run_k2()
 			(unsigned long long)r5_gfx9_fault_address(faultLo, faultHi),
 			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL)),
 			(unsigned long)kread(sInfo, gc_byte(mmCP_STAT)),
-			(unsigned long)kread(sInfo, gc_byte(mmGRBM_STATUS)));
+			(unsigned long)kread(sInfo, gc_byte(mmGRBM_STATUS)),
+			(unsigned long)r5_gfx9_pasid_for_vmid(fault.cid),
+			(unsigned long long)r5_gfx9_file_for_vmid(fault.cid));
 		uint32 me = gc_byte(mmCP_ME_CNTL);
 		uint32 saved = kread(sInfo, me);
 		kwrite(sInfo, me, saved | ((1u << 24) | (1u << 26) | (1u << 28)));

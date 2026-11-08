@@ -12,6 +12,7 @@
 
 #include "r5_gpu.h"
 #include "r5_cs.h"
+#include "r5_pasid.h"
 #include "r5_gc9_regs.h"
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
@@ -1188,6 +1189,25 @@ main()
 			|| pkt[17] != r5_cs_gc_reg(mmGDS_OA_VMID0) + 1u
 			|| pkt[19] != 0u)
 			return fail("gds switch");
+	}
+	{
+		struct r5_pasid_ida ida;
+		memset(&ida, 0, sizeof(ida));
+		int first = r5_pasid_alloc(&ida, 16);
+		int second = r5_pasid_alloc(&ida, 16);
+		r5_pasid_free(&ida, (uint32_t)first);
+		int again = r5_pasid_alloc(&ida, 16);
+		uint32_t pkt[8];
+		uint32_t n = r5_cs_pasid_map(pkt, 8, 0, 1, (uint32_t)first);
+		if (r5_pasid_alloc(0, 16) != -22 || r5_pasid_alloc(&ida, 0) != -22)
+			return fail("pasid bits");
+		if (first != 32768 || second != 32769 || again != first)
+			return fail("pasid alloc");
+		if (n != 5u || pkt[0] != r5_cs_packet3(0x37, 3)
+			|| pkt[1] != 0x40100000u
+			|| pkt[2] != r5_cs_oss_reg(mmIH_VMID_0_LUT) + 1u
+			|| pkt[4] != (uint32_t)first)
+			return fail("pasid map");
 	}
 	if (r5_gfx9_inv_engines() != 18u)
 		return fail("inv engines");
