@@ -724,27 +724,35 @@ main()
 			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
 			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
 			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
-			"stage_regs(out)"
+			"stage_regs(out)", "stage_regs(out)"
 		};
 		if (source_order(
 				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-				regsBefore, 10) != 0)
+				regsBefore, 11) != 0)
 			return 1;
 		const char* r1cLog[] = {
-			"r5_gfx9_log_state(\"r1c\")",
-			"radeon_hd: r1c gtt"
+			"stage_regs(out); stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull)"
 		};
 		if (source_order(
-				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", r1cLog, 2) != 0)
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				r1cLog, 1) != 0)
 			return 1;
-		const char* diskLog[] = {
-			"r5-gpu-regs.txt",
-			"fsync(fd)"
-		};
-		if (source_order(
+		char logBody[2000];
+		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/gfx9_k12.cpp", diskLog, 2) != 0)
+				"radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_log_state(", "r5_gfx9_inv_range_restore(",
+				logBody, sizeof(logBody)) != 0)
+			return 1;
+		if (strstr(logBody, "open(") != NULL
+			|| strstr(logBody, "fsync(") != NULL)
+			return fail("kernel log file");
+		if (strstr(logBody, "dprintf") == NULL)
+			return fail("kernel log dprintf");
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				(const char*[]){ "fputs(in.line, out)", "fsync(fileno(out))" },
+				2) != 0)
 			return 1;
 	}
 	if (source_order(

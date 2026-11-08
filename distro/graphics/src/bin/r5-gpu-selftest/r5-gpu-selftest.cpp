@@ -418,16 +418,24 @@ static void
 stage_regs(FILE* out)
 {
 	stage_at(out, "registers");
+	r5_gpu_log_regs in;
+	memset(&in, 0, sizeof(in));
+	in.size = (uint32_t)sizeof(in);
+	in.version = 1;
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
 		fprintf(out, "not available, no supported GPU\n");
 		fflush(out);
+		fsync(fileno(out));
 		return;
 	}
-	int ret = ioctl(fd, R5_GPU_LOG_REGS, NULL, 0);
+	int ret = ioctl(fd, R5_GPU_LOG_REGS, &in, sizeof(in));
 	fprintf(out, "R5_GPU_LOG_REGS %d errno %d\n", ret, errno);
+	if (ret == 0)
+		fputs(in.line, out);
 	close(fd);
 	fflush(out);
+	fsync(fileno(out));
 }
 
 
@@ -638,7 +646,7 @@ main()
 						skip_lost(out, "selftest");
 						skip_lost(out, "ib");
 					} else {
-						stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull);
+						stage_regs(out); stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull);
 						if (device_lost()) {
 							skip_lost(out, "selftest");
 							skip_lost(out, "ib");

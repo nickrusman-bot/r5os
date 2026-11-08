@@ -3189,7 +3189,6 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 r1c:
 	if (which != R5_GPU_R1_C)
 		goto out;
-	r5_gfx9_log_state("r1c");
 	dprintf("radeon_hd: r1c before inv %d hub %d vmids %d fence %d "
 		"cond %d gds %d pasid %d ce %d\n",
 		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(),
@@ -3538,8 +3537,17 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	} else if (op == R5_GPU_DEBUG_SWITCH)
 		status = gpu_debug_switch(buffer, length);
 	else if (op == R5_GPU_LOG_REGS) {
-		r5_gfx9_log_state("selftest");
-		status = B_OK;
+		r5_gpu_log_regs in;
+		status = gpu_copy_in(buffer, length, &in, sizeof(in));
+		if (status != B_OK)
+			;
+		else if (in.version != 1)
+			status = B_BAD_VALUE;
+		else {
+			r5_gfx9_log_state("selftest", in.line, sizeof(in.line));
+			in.length = (uint32)strlen(in.line);
+			status = gpu_copy_out(buffer, length, &in, sizeof(in));
+		}
 	} else if (op == R5_GPU_STAGE_R1) {
 		r5_gpu_stage_r1 in;
 		status = gpu_copy_in(buffer, length, &in, sizeof(in));

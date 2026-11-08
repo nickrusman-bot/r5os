@@ -790,14 +790,14 @@ r5_gfx9_inv_range_program(void)
 
 
 void
-r5_gfx9_log_state(const char* when)
+r5_gfx9_log_state(const char* when, char* line, size_t bytes)
 {
-	char line[512];
-	int fd;
-	int wrote;
+	if (line == NULL || bytes == 0)
+		return;
+	line[0] = 0;
 	if (sInfo == NULL || when == NULL)
 		return;
-	snprintf(line, sizeof(line),
+	snprintf(line, bytes,
 		"radeon_hd: t %lld regs %s "
 		"inv0 %08lx %08lx inv17 %08lx %08lx "
 		"l1 %08lx agp %08lx %08lx aper %08lx %08lx "
@@ -818,14 +818,6 @@ r5_gfx9_log_state(const char* when)
 		r5_gfx9_gds_switch_on(), r5_gfx9_pasid_map_on(),
 		r5_gfx9_ce_meta_on());
 	dprintf("%s", line);
-	fd = open("/boot/home/config/cache/r5-gpu-regs.txt",
-		O_WRONLY | O_CREAT | O_APPEND, 0644);
-	if (fd < 0)
-		return;
-	wrote = write(fd, line, strlen(line));
-	(void)wrote;
-	fsync(fd);
-	close(fd);
 }
 
 

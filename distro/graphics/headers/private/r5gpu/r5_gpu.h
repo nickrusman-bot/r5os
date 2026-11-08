@@ -413,6 +413,14 @@ typedef struct {
 	uint64_t	y;
 } r5_gpu_stage_r1;
 
+/* The kernel fills line and dprints it. The caller writes the file. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	length;
+	char		line[480];
+} r5_gpu_log_regs;
+
 /* The render node is published only when these three steps are on.
  * Without them the node does not exist, so RADV stays quiet. */
 static inline int
