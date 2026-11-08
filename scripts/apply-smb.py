@@ -85,6 +85,12 @@ def main() -> int:
         "\tNavMenu.cpp\n\tNetworkSharesSettings.cpp\n\tOpenWithWindow.cpp\n",
         "tracker catalog",
     )
+    insert(
+        HAIKU / "build" / "jam" / "repositories" / "Haiku",
+        "\t\tuserland_fs\n",
+        "\t\tuserland_fs\n\t\tsmbfs\n",
+        "haiku repository",
+    )
     return 0
 
 
