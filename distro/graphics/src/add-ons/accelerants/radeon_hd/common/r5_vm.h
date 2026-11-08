@@ -244,6 +244,26 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 }
 
 
+/* 1 when every page of the indirect buffer is still a valid leaf.
+ * A wait drops the lock; the submit calls this again and refuses a 0. */
+static inline int
+r5_ib_still_mapped(const r5_vm* vm, uint64_t va, uint32_t dwords)
+{
+	uint64_t first = 0;
+	uint64_t last = 0;
+	uint64_t page;
+	if (!r5_ib_span(va, dwords, &first, &last))
+		return 0;
+	for (page = first; ; page += 4096ull) {
+		if (!r5_vm_lookup(vm, page, NULL))
+			return 0;
+		if (page == last)
+			break;
+	}
+	return 1;
+}
+
+
 /* Linux amdgpu_map_static_csa. The same physical pages and the same
  * virtual address, written into this tree. */
 static inline int

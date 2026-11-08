@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A submit checks the indirect buffer again after the lock returns
+
+`gfx9_vmid_per_file` stays off. The sync wait and the ring-room wait drop the GPU lock. `gpu_submit` checks `gpu_ibs_mapped` again after each of those waits, before the cache flush. An unmap in that window refuses the submit. The host test maps a page, unmaps it, and the check returns false. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### The VM flush stays 26 dwords when the PASID settings are off
 
 `gfx9_vmid_per_file` stays off. `r5_cs_vm_switch` is the 26-dword flush again, with no PASID argument. `IH_VMID_n_LUT` is `r5_cs_pasid_map` after `PFP_SYNC_ME`, and only when `gfx9_pasid_map` or `gfx9_vmid_per_file` is on. With both off, a user job writes no LUT packet. The host test checks the 26 dwords and that the map follows them. It was not booted. There is no What's new section and `distro/BUILD` stays the same.

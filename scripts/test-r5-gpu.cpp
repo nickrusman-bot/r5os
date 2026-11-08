@@ -620,11 +620,24 @@ main()
 		uint64_t live = 0;
 		if (!r5_vm_lookup(&parked, va, &live) || live != page)
 			return fail("parked tree");
+		if (!r5_ib_still_mapped(&parked, va, 8))
+			return fail("ib mapped");
 		if (!r5_vm_map_page(&parked, va, 0))
 			return fail("parked unmap");
 		live = 0;
 		if (r5_vm_lookup(&parked, va, &live) != 0 || live != kR5VmPteEmpty)
 			return fail("parked unmap pte");
+		if (r5_ib_still_mapped(&parked, va, 8))
+			return fail("ib unmapped during wait");
+		const char* ibAgain[] = {
+			"gpu_wait_room(client->info, dwords)",
+			"gpu_ibs_mapped(client, ibs, in.ib_count, in.ring)",
+			"clflush"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", ibAgain, 3) != 0)
+			return 1;
 		if (r5_file_count_drop(&count, 1) == 0)
 			return fail("still held");
 		if (count.trees != 0 || count.pages != 0 || count.refs != 0)

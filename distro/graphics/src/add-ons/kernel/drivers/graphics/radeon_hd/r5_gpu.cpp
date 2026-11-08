@@ -1606,6 +1606,21 @@ gpu_ib_mapped(gpu_client* client, uint64 va, uint32 dwords)
 }
 
 
+/* The sync wait and the ring-room wait drop the lock. An unmap in that
+ * window must fail the submit before the cache flush and the doorbell. */
+static status_t
+gpu_ibs_mapped(gpu_client* client, const r5_gpu_ib* ibs, uint32 count,
+	uint32 ring)
+{
+	for (uint32 i = 0; i < count; i++) {
+		if (!gpu_ib_mapped(client, ibs[i].gpu_va, ibs[i].dwords))
+			return gpu_refuse("CS_SUBMIT", "mapped", B_BAD_ADDRESS,
+				1, 0, ibs[i].dwords, ibs[i].gpu_va, 0, ring, ibs[i].flags);
+	}
+	return B_OK;
+}
+
+
 static status_t
 gpu_wait_room(radeon_info* info, uint32 dwords)
 {
@@ -1691,10 +1706,10 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		if (ibs[i].flags != 0)
 			return gpu_refuse("CS_SUBMIT", "flags", B_BAD_VALUE, in.context, 0,
 				in.ib_count, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
-		if (!gpu_ib_mapped(client, ibs[i].gpu_va, ibs[i].dwords))
-			return gpu_refuse("CS_SUBMIT", "mapped", B_BAD_ADDRESS, in.context, 0,
-				ibs[i].dwords, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
 	}
+	status = gpu_ibs_mapped(client, ibs, in.ib_count, in.ring);
+	if (status != B_OK)
+		return status;
 	for (uint32 i = 0; i < in.wait_count; i++) {
 		if (waits[i].handle == 0 || waits[i].handle > kMaxSync)
 			return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
@@ -1720,6 +1735,9 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 			status_t waited = entry.Wait(
 				B_CAN_INTERRUPT | B_RELATIVE_TIMEOUT, deadline - now);
 			gpu_lock();
+			status = gpu_ibs_mapped(client, ibs, in.ib_count, in.ring);
+			if (status != B_OK)
+				return status;
 			if (!sync->live)
 				return gpu_refuse("CS_SUBMIT", "sync", B_BAD_VALUE, in.context, 0,
 					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
@@ -1761,6 +1779,9 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
 			ibs[0].gpu_va, 0, in.ring, 0);
+	status = gpu_ibs_mapped(client, ibs, in.ib_count, in.ring);
+	if (status != B_OK)
+		return status;
 	/* Temporary. A GTT indirect buffer is MTYPE_NC and snooped. clflush
 	 * plus mfence makes the CPU stores visible before the doorbell. The
 	 * pointer is the kernel area, never the user clone (SMAP).
