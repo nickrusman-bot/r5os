@@ -1471,6 +1471,19 @@ main()
 	}
 	if (R5_GPU_DEBUG_SWITCH != R5_GPU_OP_BASE + 25u)
 		return fail("debug switch opcode");
+	if (R5_GPU_SWITCH_CE_META != 256u)
+		return fail("ce switch bit");
+	{
+		const char* ceBoot[] = {
+			"R5_GPU_SWITCH_CE_META",
+			"gfx9_ce_meta is a boot setting",
+			"r5_gfx9_switch_registers("
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", ceBoot, 3) != 0)
+			return 1;
+	}
 	{
 		const char* switchOrder[] = {
 			"Idle first. The flush is after the registers move.",

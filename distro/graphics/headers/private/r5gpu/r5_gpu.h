@@ -368,7 +368,8 @@ typedef struct {
 } r5_gpu_syncobj_transfer;
 
 /* which is a bit per setting. on is 0 or 1 for every bit that is set.
- * Bit 7 (gfx9_vmid_per_file) is refused until each file has a root. */
+ * Bit 7 (gfx9_vmid_per_file) is refused until each file has a root.
+ * Bit 8 (gfx9_ce_meta) is a boot setting: the CSA is mapped only then. */
 #define R5_GPU_SWITCH_INV_RANGE 1u
 #define R5_GPU_SWITCH_HUB_LINUX 2u
 #define R5_GPU_SWITCH_VMIDS 4u
@@ -377,6 +378,7 @@ typedef struct {
 #define R5_GPU_SWITCH_GDS 32u
 #define R5_GPU_SWITCH_DEFERRED 64u
 #define R5_GPU_SWITCH_VMID_PER_FILE 128u
+#define R5_GPU_SWITCH_CE_META 256u
 
 typedef struct {
 	uint32_t	size;

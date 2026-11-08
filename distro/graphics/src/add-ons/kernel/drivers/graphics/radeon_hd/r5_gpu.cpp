@@ -3246,6 +3246,10 @@ gpu_debug_switch(void* buffer, size_t length)
 		return B_NOT_ALLOWED;
 	if ((in.which & R5_GPU_SWITCH_VMID_PER_FILE) != 0)
 		return B_NOT_ALLOWED;
+	if ((in.which & R5_GPU_SWITCH_CE_META) != 0) {
+		dprintf("radeon_hd: gfx9_ce_meta is a boot setting\n");
+		return B_NOT_ALLOWED;
+	}
 	/* Idle first. The flush is after the registers move. */
 	bigtime_t deadline = system_time() + 5000000;
 	while (r5_gfx9_user_seen() < sHighestSequence) {
