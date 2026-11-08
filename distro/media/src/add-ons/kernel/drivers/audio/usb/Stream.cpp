@@ -20,6 +20,14 @@
 #include "Settings.h"
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Transfers that fail in a row before the callback stops the stream.
+static const int32 kMaxTransferErrors = 32;
+// SPDX-SnippetEnd
+
+
 Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	:
 	AudioStreamingInterface(&device->AudioControl(), interface, List),
@@ -39,7 +47,8 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fStartingFrame(0),
 	fProcessedBuffers(0),
 	fInsideNotify(0),
-	fQueueStopped(0)
+	fQueueStopped(0),
+	fTransferErrors(0)
 {
 }
 
@@ -386,7 +395,16 @@ Stream::Start()
 {
 	status_t result = B_BUSY;
 	if (!fIsRunning) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// A stream the callback stopped after repeated errors may still have
+		// a transfer queued. Cancel it so both buffers are not queued twice.
+		if (fStreamEndpoint != 0)
+			Stop();
+// SPDX-SnippetEnd
 		atomic_set(&fQueueStopped, 0);
+		atomic_set(&fTransferErrors, 0);
 		for (size_t i = 0; i < kSamplesBufferCount; i++)
 			result = _QueueNextTransfer(i, i == 0);
 		fIsRunning = result == B_OK;
@@ -465,10 +483,28 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 
 	release_sem_etc(stream->fDevice->fBuffersReadySem, 1, B_DO_NOT_RESCHEDULE);
 
-	// An error that comes straight back (babble, missed service) would
-	// otherwise queue the next packet in a tight loop (Haiku #18842).
-	if (status != B_OK)
-		snooze(1000);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// This callback runs in the USB stack's finisher thread, so it must not
+	// sleep: a snooze here held up every other transfer on the controller.
+	// An error that keeps coming straight back (babble, missed service,
+	// Haiku #18842) now stops the stream after kMaxTransferErrors in a row
+	// instead of looping. The next buffer exchange starts it again.
+	if (status != B_OK) {
+		if (atomic_add(&stream->fTransferErrors, 1) + 1 >= kMaxTransferErrors) {
+			dprintf("usb_audio: %s stream stopped after %" B_PRId32
+				" transfer errors in a row (last %#" B_PRIx32 ")\n",
+				stream->fIsInput ? "record" : "play", kMaxTransferErrors,
+				status);
+			atomic_set(&stream->fQueueStopped, 1);
+			stream->fIsRunning = false;
+			atomic_add(&stream->fInsideNotify, -1);
+			return;
+		}
+	} else
+		atomic_set(&stream->fTransferErrors, 0);
+// SPDX-SnippetEnd
 
 	stream->fCurrentBuffer = (stream->fCurrentBuffer + 1) % kSamplesBufferCount;
 	status_t queued = stream->_QueueNextTransfer(stream->fCurrentBuffer, false);

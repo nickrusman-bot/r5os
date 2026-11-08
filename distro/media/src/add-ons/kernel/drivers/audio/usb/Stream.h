@@ -63,6 +63,11 @@ protected:
 			int32			fProcessedBuffers;
 			int32			fInsideNotify;
 			int32			fQueueStopped;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			int32			fTransferErrors;
+// SPDX-SnippetEnd
 
 private:
 			status_t		_ChooseAlternate();
