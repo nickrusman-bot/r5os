@@ -58,9 +58,9 @@ static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
 
 static const uint32 kIhBytes = 64 * 1024;
-static const uint32 kOssBase = 0x10A0;
-static const uint32 kGcBase = 0x2000;
-static const uint32 kNbioBase = 0x0D20;
+static const uint32 kOssBase = OSSSYS_BASE__INST0_SEG0;
+static const uint32 kGcBase = GC_BASE__INST0_SEG0;
+static const uint32 kNbioBase = NBIO_BASE__INST0_SEG2;
 static const uint32 kClientCp = 0x14;
 static const uint32 kSourceEop = 181;
 static r5_gfx9_ib_now sPrivIb1;
@@ -305,7 +305,7 @@ ih_handler(void* data)
 		walked++;
 	}
 	sIhRptr = rptr;
-	*(volatile uint32*)(sInfo->registers + oss_byte(0x0083)) = rptr;
+	*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_RPTR)) = rptr;
 	return woke ? B_INVOKE_SCHEDULER : B_HANDLED_INTERRUPT;
 }
 
@@ -315,8 +315,8 @@ ih_off()
 {
 	if (sInfo == NULL)
 		return;
-	*(volatile uint32*)(sInfo->registers + oss_byte(0x0080)) = 0;
-	*(volatile uint32*)(sInfo->registers + gc_byte(0x106a)) = 0;
+	*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_CNTL)) = 0;
+	*(volatile uint32*)(sInfo->registers + gc_byte(mmCP_INT_CNTL_RING0)) = 0;
 	if (sIhInstalled) {
 		remove_io_interrupt_handler(sIrq, ih_handler, sInfo);
 		sIhInstalled = false;
@@ -364,7 +364,7 @@ map_pool(radeon_info& info)
 static bool
 map_carveout(radeon_info& info)
 {
-	uint32 fb = kread(&info, gc_byte(0x096b));
+	uint32 fb = kread(&info, gc_byte(mmMC_VM_FB_OFFSET));
 	uint64 base = r5_gpu_carveout_base(fb);
 	uint64 bytes = info.shared_info->vram_window_bytes;
 	if (base == 0 || bytes == 0 || (bytes & 4095) != 0 || (base & 4095) != 0) {
@@ -446,22 +446,22 @@ void
 r5_gfx9_kernel_stop()
 {
 	if (sInfo != NULL && sInfo->registers_area >= 0 && sInfo->registers != 0) {
-		uint32 me = gc_byte(0x01b6);
-		uint32 mec = gc_byte(0x008d);
+		uint32 me = gc_byte(mmCP_ME_CNTL);
+		uint32 mec = gc_byte(mmCP_MEC_CNTL);
 		kwrite(sInfo, me, kread(sInfo, me)
 			| (1u << 24) | (1u << 26) | (1u << 28));
 		kwrite(sInfo, mec, kread(sInfo, mec) | (1u << 30) | (1u << 28));
 		if (sVmCntlSavedValid)
-			kwrite(sInfo, gc_byte(0x0880), sVmCntlSaved);
+			kwrite(sInfo, gc_byte(mmVM_CONTEXT0_CNTL), sVmCntlSaved);
 		const uint32 eng = 17;
-		kwrite(sInfo, gc_byte(0x08a3 + eng), r5_gfx9_tlb_req(0, 0));
+		kwrite(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng), r5_gfx9_tlb_req(0, 0));
 		for (int i = 0; i < 1000; i++) {
-			if ((kread(sInfo, gc_byte(0x08b5 + eng)) & 1u) != 0)
+			if ((kread(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_ACK + eng)) & 1u) != 0)
 				break;
 			snooze(10);
 		}
-		*(volatile uint32*)(sInfo->registers + oss_byte(0x0080)) = 0;
-		*(volatile uint32*)(sInfo->registers + gc_byte(0x106a)) = 0;
+		*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_CNTL)) = 0;
+		*(volatile uint32*)(sInfo->registers + gc_byte(mmCP_INT_CNTL_RING0)) = 0;
 		if (sIhInstalled) {
 			remove_io_interrupt_handler(sIrq, ih_handler, sInfo);
 			sIhInstalled = false;
@@ -509,7 +509,7 @@ ih_on()
 	sIhRing = ring;
 	sIhWriteback = (volatile uint32*)(ring + kIhBytes);
 	sIhRptr = 0;
-	uint32 location = kread(sInfo, gc_byte(0x0980));
+	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
 	uint64 ringMc = ((uint64)(location & 0x00ffffffu) << 24) + ringOffset;
 	uint64 wbMc = ringMc + kIhBytes;
 
@@ -518,27 +518,27 @@ ih_on()
 	if (sHost.vram_alloc(sInfo, 4096, 4096, &dummyOffset, &dummy) != B_OK)
 		return false;
 	memset(dummy, 0, 4096);
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
 
-	kwrite(sInfo, oss_byte(0x0080), 0);
-	kwrite(sInfo, oss_byte(0x0088), 0);
-	kwrite(sInfo, oss_byte(0x0090), 0);
-	kwrite(sInfo, nbio_byte(0x00f2), (uint32)(dummyPa >> 8));
-	uint32 interrupt = kread(sInfo, nbio_byte(0x00f1));
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL_RING1), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL_RING2), 0);
+	kwrite(sInfo, nbio_byte(mmINTERRUPT_CNTL2), (uint32)(dummyPa >> 8));
+	uint32 interrupt = kread(sInfo, nbio_byte(mmINTERRUPT_CNTL));
 	interrupt &= ~(1u << 0);
 	interrupt &= ~(1u << 3);
-	kwrite(sInfo, nbio_byte(0x00f1), interrupt);
+	kwrite(sInfo, nbio_byte(mmINTERRUPT_CNTL), interrupt);
 
-	kwrite(sInfo, oss_byte(0x0081), (uint32)(ringMc >> 8));
-	kwrite(sInfo, oss_byte(0x0082), (uint32)((ringMc >> 40) & 0xffu));
-	kwrite(sInfo, oss_byte(0x0086), (uint32)wbMc);
-	kwrite(sInfo, oss_byte(0x0085), (uint32)(wbMc >> 32) & 0xffffu);
-	kwrite(sInfo, oss_byte(0x0084), 0);
-	kwrite(sInfo, oss_byte(0x0083), 0);
-	kwrite(sInfo, oss_byte(0x0087), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_BASE), (uint32)(ringMc >> 8));
+	kwrite(sInfo, oss_byte(mmIH_RB_BASE_HI), (uint32)((ringMc >> 40) & 0xffu));
+	kwrite(sInfo, oss_byte(mmIH_RB_WPTR_ADDR_LO), (uint32)wbMc);
+	kwrite(sInfo, oss_byte(mmIH_RB_WPTR_ADDR_HI), (uint32)(wbMc >> 32) & 0xffffu);
+	kwrite(sInfo, oss_byte(mmIH_RB_WPTR), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_RPTR), 0);
+	kwrite(sInfo, oss_byte(mmIH_DOORBELL_RPTR), 0);
 
-	uint32 cntl = kread(sInfo, oss_byte(0x0080));
+	uint32 cntl = kread(sInfo, oss_byte(mmIH_RB_CNTL));
 	cntl &= ~0x3eu;
 	cntl |= 14u << 1;
 	cntl |= 1u << 7;
@@ -555,9 +555,9 @@ ih_on()
 		cntl &= ~(1u << 21);
 	cntl |= 1u << 0;
 	cntl |= 1u << 17;
-	kwrite(sInfo, oss_byte(0x0080), cntl);
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), cntl);
 
-	uint32 cp = kread(sInfo, gc_byte(0x106a));
+	uint32 cp = kread(sInfo, gc_byte(mmCP_INT_CNTL_RING0));
 	/* gc_9_0_sh_mask.h CP_INT_CNTL_RING0. TIME_STAMP is the EOP
 	 * (shift 0x1a). PRIV_INSTR 0x16, PRIV_REG 0x17 and OPCODE_ERROR
 	 * 0x18 match gfx_v9_0_set_priv_inst_fault_state and
@@ -567,7 +567,7 @@ ih_on()
 	cp |= 1u << 0x17;
 	cp |= 1u << 0x18;
 	cp |= 1u << 0x1a;
-	kwrite(sInfo, gc_byte(0x106a), cp);
+	kwrite(sInfo, gc_byte(mmCP_INT_CNTL_RING0), cp);
 	return true;
 }
 
@@ -616,8 +616,8 @@ run_k1()
 		knote("k1_wait_us %ld", (long)elapsed);
 		return;
 	}
-	uint32 rptr = kread(sInfo, oss_byte(0x0083));
-	uint32 wptr = kread(sInfo, oss_byte(0x0084));
+	uint32 rptr = kread(sInfo, oss_byte(mmIH_RB_RPTR));
+	uint32 wptr = kread(sInfo, oss_byte(mmIH_RB_WPTR));
 	uint32 wb = sIhWriteback != NULL ? *sIhWriteback : 0;
 	knote("k1 fail %s irq %lu eop %lu client %lu src %lu ring %lu",
 		sMsi ? "msi" : "legacy", (unsigned long)sIrq,
@@ -626,9 +626,9 @@ run_k1()
 	knote("k1_wait_us %ld", (long)elapsed);
 	knote("k1 rptr %08lx wptr %08lx wb %08lx intcntl %08lx cp %08lx status %08lx",
 		(unsigned long)rptr, (unsigned long)wptr, (unsigned long)wb,
-		(unsigned long)kread(sInfo, nbio_byte(0x00f1)),
-		(unsigned long)kread(sInfo, gc_byte(0x106a)),
-		(unsigned long)kread(sInfo, gc_byte(0x104a)));
+		(unsigned long)kread(sInfo, nbio_byte(mmINTERRUPT_CNTL)),
+		(unsigned long)kread(sInfo, gc_byte(mmCP_INT_CNTL_RING0)),
+		(unsigned long)kread(sInfo, gc_byte(mmCP_INT_STATUS)));
 	for (uint32 i = 0; i < 4; i++) {
 		const uint32* dwords = (const uint32*)sFirstRaw[i];
 		knote("k1 raw%lu %08lx %08lx %08lx %08lx", (unsigned long)i,
@@ -655,14 +655,14 @@ static const uint32 kFaultCrashMask = 0xc0000000u;
 static void
 run_k2()
 {
-	uint32 location = kread(sInfo, gc_byte(0x0980));
+	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
 	uint64 fbStart = (uint64)(location & 0x00ffffffu) << 24;
-	uint32 aperLo = kread(sInfo, gc_byte(0x0985));
-	uint32 aperHi = kread(sInfo, gc_byte(0x0986));
+	uint32 aperLo = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));
+	uint32 aperHi = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
 	uint64 aperStart = (uint64)aperLo << 18;
 	uint64 aperEnd = (uint64)aperHi << 18;
-	uint32 agpBot = kread(sInfo, gc_byte(0x0983));
-	uint32 agpTop = kread(sInfo, gc_byte(0x0982));
+	uint32 agpBot = kread(sInfo, gc_byte(mmMC_VM_AGP_BOT));
+	uint32 agpTop = kread(sInfo, gc_byte(mmMC_VM_AGP_TOP));
 	uint64 agpStart = 0;
 	uint64 agpEnd = 0;
 	int agpOn = r5_gfx9_agp_window(agpBot, agpTop, &agpStart, &agpEnd);
@@ -696,7 +696,7 @@ run_k2()
 		knote("k2 fail dummy");
 		return;
 	}
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
 	sK2DummyPa = dummyPa;
 	uint64 flags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM | R5_GFX9_PTE_SNOOPED
@@ -763,13 +763,13 @@ run_k2()
 		return;
 	}
 	uint64 tableBase = r5_gfx9_page_table_base(fb, tableOffset);
-	uint32 savedCntl = kread(sInfo, gc_byte(0x0880));
+	uint32 savedCntl = kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL));
 	sVmCntlSaved = savedCntl;
 	sVmCntlSavedValid = true;
-	kwrite(sInfo, gc_byte(0x08eb), (uint32)tableBase);
-	kwrite(sInfo, gc_byte(0x08ec), (uint32)(tableBase >> 32));
-	uint32 baseLo = kread(sInfo, gc_byte(0x08eb));
-	uint32 baseHi = kread(sInfo, gc_byte(0x08ec));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32), (uint32)tableBase);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32), (uint32)(tableBase >> 32));
+	uint32 baseLo = kread(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32));
+	uint32 baseHi = kread(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32));
 	knote("k2 ptb %016llx got %08lx %08lx",
 		(unsigned long long)tableBase, (unsigned long)baseLo,
 		(unsigned long)baseHi);
@@ -777,22 +777,22 @@ run_k2()
 		knote("k2 fail ptb readback");
 		return;
 	}
-	kwrite(sInfo, gc_byte(0x090b), (uint32)(gartStart >> 12));
-	kwrite(sInfo, gc_byte(0x090c), (uint32)(gartStart >> 44));
-	kwrite(sInfo, gc_byte(0x092b), (uint32)((gartEnd - 1) >> 12));
-	kwrite(sInfo, gc_byte(0x092c), (uint32)((gartEnd - 1) >> 44));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32), (uint32)(gartStart >> 12));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32), (uint32)(gartStart >> 44));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32), (uint32)((gartEnd - 1) >> 12));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32), (uint32)((gartEnd - 1) >> 44));
 	uint32 cntl = savedCntl;
 	cntl |= 1u << 0;
 	cntl &= ~0x6u;
 	cntl &= ~(0xfu << 3);
 	cntl &= ~(1u << 7);
-	kwrite(sInfo, gc_byte(0x0880), cntl);
-	kwrite(sInfo, gc_byte(0x084e), (uint32)(dummyPa >> 12));
-	kwrite(sInfo, gc_byte(0x084f), (uint32)(dummyPa >> 44));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_CNTL), cntl);
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32), (uint32)(dummyPa >> 12));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32), (uint32)(dummyPa >> 44));
 
 	const uint32 eng = 17;
-	uint32 req = gc_byte(0x08a3 + eng);
-	uint32 ack = gc_byte(0x08b5 + eng);
+	uint32 req = gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng);
+	uint32 ack = gc_byte(mmVM_INVALIDATE_ENG0_ACK + eng);
 	uint32 inv = r5_gfx9_tlb_req(0, 0);
 	knote("k2 inv %08lx", (unsigned long)inv);
 	kwrite(sInfo, req, inv);
@@ -867,9 +867,9 @@ run_k2()
 		r5_gfx9_cp_dump("k2 baseline", 0);
 	}
 	if (!(dmaOk && ib)) {
-		uint32 faultStatus = kread(sInfo, gc_byte(0x084b));
-		uint32 faultLo = kread(sInfo, gc_byte(0x084c));
-		uint32 faultHi = kread(sInfo, gc_byte(0x084d));
+		uint32 faultStatus = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_STATUS));
+		uint32 faultLo = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_ADDR_LO32));
+		uint32 faultHi = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_ADDR_HI32));
 		r5_gfx9_fault fault = r5_gfx9_fault_decode(faultStatus);
 		knote("k2 fault %08lx MORE_FAULTS %lu WALKER_ERROR %lu "
 			"PERMISSION_FAULTS %lu MAPPING_ERROR %lu CID %lu RW %lu "
@@ -879,13 +879,13 @@ run_k2()
 			(unsigned long)fault.mapping, (unsigned long)fault.cid,
 			(unsigned long)fault.rw,
 			(unsigned long long)r5_gfx9_fault_address(faultLo, faultHi),
-			(unsigned long)kread(sInfo, gc_byte(0x0880)),
-			(unsigned long)kread(sInfo, gc_byte(0x01a0)),
-			(unsigned long)kread(sInfo, gc_byte(0x0004)));
-		uint32 me = gc_byte(0x01b6);
+			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL)),
+			(unsigned long)kread(sInfo, gc_byte(mmCP_STAT)),
+			(unsigned long)kread(sInfo, gc_byte(mmGRBM_STATUS)));
+		uint32 me = gc_byte(mmCP_ME_CNTL);
 		uint32 saved = kread(sInfo, me);
 		kwrite(sInfo, me, saved | ((1u << 24) | (1u << 26) | (1u << 28)));
-		kwrite(sInfo, gc_byte(0x0880), savedCntl);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT0_CNTL), savedCntl);
 	}
 	(void)sequence;
 	(void)flushed;
@@ -925,7 +925,7 @@ vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
 	uint8* cpuPage = r5_gfx9_vram_cpu(offset);
 	if (cpuPage == NULL)
 		return 0;
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 	*physical = r5_gpu_carveout_base(fb) + offset;
 	*cpu = (uint64_t*)cpuPage;
 	return 1;
@@ -989,11 +989,11 @@ r5_gfx9_vmid1_flush()
 	 * Engine 0 belongs to the GFX ring. The K sequence already uses 17. */
 	const uint32 eng = 17;
 	uint32 inv = r5_gfx9_tlb_req(1, 0);
-	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
-	(void)kread(sInfo, gc_byte(0x08a3 + eng));
+	kwrite(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng), inv);
+	(void)kread(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng));
 	const uint32 ackBit = r5_gfx9_tlb_ack_mask(1);
 	for (int i = 0; i < 10000; i++) {
-		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & ackBit) != 0)
+		if ((kread(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_ACK + eng)) & ackBit) != 0)
 			return true;
 		snooze(10);
 	}
@@ -1023,7 +1023,7 @@ r5_gfx9_vmid1_setup()
 			return false;
 		}
 		memset(dummy, 0, 4096);
-		uint32 fb = kread(sInfo, gc_byte(0x096b));
+		uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 		sK2DummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
 	}
 	/* The root page is kept after a failed flush. The next attempt
@@ -1049,25 +1049,25 @@ r5_gfx9_vmid1_setup()
 	}
 	uint64 rootPa = sVm.pages[0].physical;
 	uint64 tableBase = rootPa | (uint64)R5_GFX9_PTE_VALID;
-	kwrite(sInfo, gc_byte(0x0851), 0xffffffffu);
-	kwrite(sInfo, gc_byte(0x0852), 0xfu);
-	kwrite(sInfo, gc_byte(0x0853), 0);
-	kwrite(sInfo, gc_byte(0x0854), 0);
-	kwrite(sInfo, gc_byte(0x08ed), (uint32)tableBase);
-	kwrite(sInfo, gc_byte(0x08ee), (uint32)(tableBase >> 32));
-	kwrite(sInfo, gc_byte(0x090d), 0);
-	kwrite(sInfo, gc_byte(0x090e), 0);
-	kwrite(sInfo, gc_byte(0x092d), 0xffffffffu);
-	kwrite(sInfo, gc_byte(0x092e), 0xfu);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32), 0xffffffffu);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32), 0xfu);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32), 0);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32), 0);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32), (uint32)tableBase);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_HI32), (uint32)(tableBase >> 32));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32), 0);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32), 0);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32), 0xffffffffu);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32), 0xfu);
 	/* A faulting VMID 1 access lands on the K2 dummy page, not at
 	 * physical 0. The page number is the MC address >> 12.
 	 */
-	kwrite(sInfo, gc_byte(0x084e), (uint32)(sK2DummyPa >> 12));
-	kwrite(sInfo, gc_byte(0x084f), (uint32)(sK2DummyPa >> 44));
-	uint32 faultCntl = kread(sInfo, gc_byte(0x0847));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32), (uint32)(sK2DummyPa >> 12));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32), (uint32)(sK2DummyPa >> 44));
+	uint32 faultCntl = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL));
 	uint32 faultNext = (faultCntl | kFaultDefaultMask) & ~kFaultCrashMask;
 	if (faultNext != faultCntl)
-		kwrite(sInfo, gc_byte(0x0847), faultNext);
+		kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL), faultNext);
 	/* RETRY_PERMISSION_OR_INVALID_PAGE_FAULT is bit 7. Linux sets it
 	 * (0x007ffe87). R5 has no retry-fault handler, so the bit stays off
 	 * and the value stays 0x007ffe07. */
@@ -1079,13 +1079,13 @@ r5_gfx9_vmid1_setup()
 	cntl |= (1u << 17) | (1u << 18);
 	cntl |= (1u << 19) | (1u << 20);
 	cntl |= (1u << 21) | (1u << 22);
-	kwrite(sInfo, gc_byte(0x0881), cntl);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), cntl);
 	if (!r5_gfx9_vmid1_flush()) {
 		/* CNTL is already enabled. Turn the context off so a later
 		 * attempt does not run on the half-written state. The pages
 		 * above stay for that attempt.
 		 */
-		kwrite(sInfo, gc_byte(0x0881), 0);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), 0);
 		return false;
 	}
 	/* gfx_v9_0_constants_init for VMID 1..15. ALIGNMENT_MODE unaligned
@@ -1098,14 +1098,14 @@ r5_gfx9_vmid1_setup()
 	const uint32 shConfig = (3u << 3) | (1u << 12);
 	const uint32 shBases = (0x2000u << 16) | 0x1000u;
 	for (uint32 vmid = 1; vmid <= 15; vmid++) {
-		kwrite(sInfo, gc_byte(0x0022), vmid << 4);
-		kwrite(sInfo, gc_byte(0x030d), shConfig);
-		kwrite(sInfo, gc_byte(0x030a), shBases);
+		kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), vmid << 4);
+		kwrite(sInfo, gc_byte(mmSH_MEM_CONFIG), shConfig);
+		kwrite(sInfo, gc_byte(mmSH_MEM_BASES), shBases);
 	}
-	kwrite(sInfo, gc_byte(0x0022), 1u << 4);
-	uint32 shRead = kread(sInfo, gc_byte(0x030d));
-	uint32 baseRead = kread(sInfo, gc_byte(0x030a));
-	kwrite(sInfo, gc_byte(0x0022), 0);
+	kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), 1u << 4);
+	uint32 shRead = kread(sInfo, gc_byte(mmSH_MEM_CONFIG));
+	uint32 baseRead = kread(sInfo, gc_byte(mmSH_MEM_BASES));
+	kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), 0);
 	sVmid1 = true;
 	knote("vmid1 sh_mem config %08lx bases %08lx",
 		(unsigned long)shRead, (unsigned long)baseRead);
@@ -1115,10 +1115,10 @@ r5_gfx9_vmid1_setup()
 	knote("vmid1 default %016llx fault %08lx",
 		(unsigned long long)sK2DummyPa, (unsigned long)faultNext);
 	knote("vmid1 identity low %08lx %08lx high %08lx %08lx",
-		(unsigned long)kread(sInfo, gc_byte(0x0851)),
-		(unsigned long)kread(sInfo, gc_byte(0x0852)),
-		(unsigned long)kread(sInfo, gc_byte(0x0853)),
-		(unsigned long)kread(sInfo, gc_byte(0x0854)));
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32)),
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32)),
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32)),
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32)));
 	r5_gfx9_vmid1_set_root(tableBase);
 	return true;
 }
@@ -1156,7 +1156,7 @@ r5_gfx9_vmid1_levels(const char* name, uint64 va)
 	if (name == NULL || !sVmid1 || sVm.used == 0 || sInfo == NULL
 		|| sInfo->shared_info == NULL)
 		return;
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 	uint64 base = r5_gpu_carveout_base(fb);
 	int index = 0;
 	for (int level = 3; level >= 0; level--) {
@@ -1217,7 +1217,7 @@ r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
 			return false;
 		cpu = (uint8*)address;
 	} else if (sInfo != NULL && sInfo->carveout != NULL) {
-		uint32 fb = kread(sInfo, gc_byte(0x096b));
+		uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 		uint64 base = r5_gpu_carveout_base(fb);
 		if (page < base || r5_gfx9_vram_cpu(page - base) == NULL)
 			return false;

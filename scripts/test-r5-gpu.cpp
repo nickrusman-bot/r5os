@@ -12,6 +12,7 @@
 
 #include "r5_gpu.h"
 #include "r5_cs.h"
+#include "r5_gc9_regs.h"
 #include "r5_span.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
@@ -1115,6 +1116,12 @@ main()
 		return fail("ib va sign");
 	if (r5_cs_ib_va(0x00001000u, 0x0001u) != 0x000100001000ull)
 		return fail("ib va low");
+	#define R5_GC9_WAS(name, was) \
+		if ((uint32_t)(name) != (uint32_t)(was)) return fail(#name);
+	#include "r5-gc9-regs-check.inc"
+	#undef R5_GC9_WAS
+	if (r5_cs_gc_reg(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32) != 0x28ebu)
+		return fail("ptb packet address");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

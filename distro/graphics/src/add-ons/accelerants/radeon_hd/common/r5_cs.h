@@ -12,6 +12,8 @@
 #ifndef R5_CS_H
 #define R5_CS_H
 
+#include "r5_gc9_regs.h"
+
 #include <stdint.h>
 
 #include "gfx9_check.h"
@@ -283,7 +285,7 @@ r5_cs_pad(uint32_t* out, uint32_t count)
 static inline uint32_t
 r5_cs_gc_reg(uint32_t index)
 {
-	return 0x2000u + index;
+	return GC_BASE__INST0_SEG0 + index;
 }
 
 
@@ -316,7 +318,7 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 		return 0;
 	inv = r5_gfx9_tlb_req(vmid, 0);
 	ack = r5_gfx9_tlb_ack_mask(vmid);
-	lo = r5_cs_gc_reg(0x08ebu + vmid * 2u);
+	lo = r5_cs_gc_reg(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32 + vmid * R5_GC9_CTX_ADDR_DISTANCE);
 	/* Pipeline sync on the previous user fence. Memory, equal, PFP.
 	 * Control 0x113 is function 3, memory space, engine 1.
 	 * The poll interval is 4, as in the Linux v6.12 pipeline sync. */
@@ -344,8 +346,8 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	 * and engine 1 (PFP). reg0 is the request, reg1 the ack. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x3c, 5));
 	n = r5_cs_put(out, n, cap, 0x143u);
-	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08a3u));
-	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(0x08b5u));
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(mmVM_INVALIDATE_ENG0_REQ));
+	n = r5_cs_put(out, n, cap, r5_cs_gc_reg(mmVM_INVALIDATE_ENG0_ACK));
 	n = r5_cs_put(out, n, cap, inv);
 	n = r5_cs_put(out, n, cap, ack);
 	n = r5_cs_put(out, n, cap, 0x20u);
