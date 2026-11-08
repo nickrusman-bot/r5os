@@ -2,11 +2,11 @@
 
 ### About R5 opens at the mockup width
 
-The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. The heading stays together; the glue takes the extra width. `distro/BUILD` stays 10049.
+The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. That width is the window. The content minimum is the same width minus the two big insets, so the insets are not added a second time. The heading stays together; the glue takes the extra width. `distro/BUILD` stays 10049.
 
 ### Volumes use the drive, not the cabinet
 
-`R_HardDiskIcon` is the beige cabinet. The boot volume uses the drive icon again, and the R5 mark still covers the ladybug. Any other disk, including VBox Share, uses that drive with the ladybug shapes removed. A CD keeps its own icon. `distro/BUILD` stays 10049.
+`R_HardDiskIcon` is the beige cabinet. The boot volume uses the drive icon again, and the R5 mark still covers the ladybug. Any other disk, including VBox Share, uses that drive with the ladybug removed, including the black body that was left after the first cut. A CD keeps its own icon. `distro/BUILD` stays 10049.
 
 ### About R5 uses two cards
 

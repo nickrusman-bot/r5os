@@ -483,16 +483,17 @@ AboutWindow::AboutWindow()
 
 	UpdateSizeLimits();
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	// Open at the mockup width. The layout max stays unlimited, so the
 	// window can grow and shrink on both axes.
 	float mockupWidth = r5_about_width();
-	if (Bounds().Width() < mockupWidth)
-		ResizeTo(mockupWidth, Bounds().Height());
-
-	// Resize according to golden rule
-	float width = Bounds().IntegerWidth();
-	if (width * 0.618 > Bounds().Height())
-		ResizeTo(width, width * 0.618);
+	float height = Bounds().Height();
+	if (mockupWidth * 0.618f > height)
+		height = mockupWidth * 0.618f;
+	ResizeTo(mockupWidth, height);
+// SPDX-SnippetEnd
 
 	CenterOnScreen();
 }
@@ -553,11 +554,20 @@ r5_allow_wide(BView* view)
 }
 
 
-// The mockup window is 540 wide at 12 pt.
+// The mockup window is 540 wide at 12 pt. That is the window, not the
+// content inside the big insets.
 static float
 r5_about_width()
 {
 	return be_plain_font->Size() * 45.0f;
+}
+
+
+static float
+r5_about_content_width()
+{
+	float inset = be_control_look->ComposeSpacing(B_USE_BIG_SPACING);
+	return r5_about_width() - 2.0f * inset;
 }
 
 
@@ -1602,7 +1612,11 @@ AboutView::AttachedToWindow()
 	float headerHeight = fLogoView->MinSize().height;
 	float infoWidth = fSysInfoView->MinWidth();
 	fCachedMinWidth = std::max(infoWidth, fLogoView->MinSize().width);
-	fCachedMinWidth = std::max(fCachedMinWidth, r5_about_width());
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	fCachedMinWidth = std::max(fCachedMinWidth, r5_about_content_width());
+// SPDX-SnippetEnd
 	float tabHeight = 180.0f;
 	fCachedMinHeight = headerHeight + fSysInfoView->MinHeight() + tabHeight;
 	if (fTabView != NULL)
