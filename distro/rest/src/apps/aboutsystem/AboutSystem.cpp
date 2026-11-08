@@ -682,8 +682,8 @@ R5Header::R5Header()
 	BGroupView* line = new BGroupView(B_HORIZONTAL, B_USE_SMALL_SPACING);
 	r5_make_transparent(line);
 	BLayoutBuilder::Group<>(line)
-		.Add(fTitle)
-		.Add(fOperating)
+		.Add(fTitle, 0.0f)
+		.Add(fOperating, 0.0f)
 		.AddGlue();
 
 	BGroupView* text = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);

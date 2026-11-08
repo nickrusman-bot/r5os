@@ -81,6 +81,7 @@ All rights reserved.
 #include <Volume.h>
 
 #include <fs_info.h>
+#include <string.h>
 
 #include "Bitmaps.h"
 // SPDX-SnippetBegin
@@ -624,16 +625,24 @@ IconCache::GetVolumeIcon(AutoLock<SimpleIconCache>*nodeCacheLocker,
 	if (entry == NULL || !entry->HaveIconBitmap(NORMAL_ICON_ONLY, size)) {
 		BVolume volume(model->NodeRef()->device);
 
-		if (volume.IsShared()) {
+		fs_info volumeInfo;
+		bool optical = false;
+		if (fs_stat_dev(volume.Device(), &volumeInfo) == B_OK) {
+			optical = strcmp(volumeInfo.fsh_name, "iso9660") == 0
+				|| strcmp(volumeInfo.fsh_name, "cdda") == 0;
+		}
+
+		if (volume.IsShared() || !optical) {
 			// check if it's a network share and give it a special icon
 			BBitmap* bitmap = lazyBitmap->Get();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-			// The legacy share icon is the beige cabinet. A share is a drive.
+			// The legacy volume and share icons are the beige cabinet.
 			if (BIconUtils::GetVectorIcon(kR5DriveIcon, kR5DriveIconSize, bitmap)
 					!= B_OK) {
-				GetTrackerResources()->GetIconResource(R_ShareIcon,
+				GetTrackerResources()->GetIconResource(
+					volume.IsShared() ? R_ShareIcon : R_HardDiskIcon,
 					icon_size_for(size), bitmap);
 			}
 // SPDX-SnippetEnd
