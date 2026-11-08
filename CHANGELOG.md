@@ -6,7 +6,7 @@ Imported from air/OS (`github.com/airos-works/haiku`) into `distro/smb` and the 
 
 The mount parameter string does not contain `password=`. `userlandfs_server` is started with three arguments: the server path, the file system name, and the port. The add-on's `main()` receives the mount parameters. `password=` is refused there and the value is not written to the log. smbfs reads the same keystore entry. The syslog lines name the share, the server, and the error.
 
-`distro/BUILD` is 10050. Not jammed yet. A Windows share was not mounted. VirtualBox bridged was not run. QEMU usernet cannot see a Windows share.
+`distro/BUILD` is 10050. `jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0` at 16:30 Europe/Amsterdam on 8 Nov 2026. The image is `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image`, 2147483648 bytes. `smbfs.o`, `Tracker.o`, and `NetworkShares.o` were produced, and the add-on is copied to `system/non-packaged/add-ons/userlandfs`. Putting `smbfs.hpkg` in `system/packages` made the image solver try to download `userland_fs` from the public repository, which returned 404, so the add-on is installed beside the package instead. A Windows share was not mounted. VirtualBox bridged was not run. QEMU usernet cannot see a Windows share.
 
 ### The boot splash is black, and the Deskbar mark is centered
 
