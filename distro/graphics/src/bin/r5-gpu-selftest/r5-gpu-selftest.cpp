@@ -593,6 +593,19 @@ main()
 								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
 								120);
 						if (pass == 0 && !device_lost())
+							pass = run_stage(out, "VulkanTeapot",
+								"/bin/VulkanTeapot --selftest 2>&1", 120);
+					}
+					if (pass == 0 && !device_lost()) {
+						fprintf(out, "confirm teapots\n");
+						fflush(out);
+						pass = run_stage(out, "VulkanTeapot",
+							"/bin/VulkanTeapot --selftest 2>&1", 120);
+						if (pass == 0 && !device_lost())
+							pass = run_stage(out, "VulkanTeapot (sam)",
+								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
+								120);
+						if (pass == 0 && !device_lost())
 							run_stage(out, "VulkanTeapot",
 								"/bin/VulkanTeapot --selftest 2>&1", 120);
 					}

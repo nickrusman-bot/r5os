@@ -687,6 +687,7 @@ main()
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
 		"R5_GPU_SWITCH_FLUSH_FENCE",
+		"confirm teapots",
 		"stage_selftest(out)",
 		"highVa, true"
 	};
@@ -715,7 +716,7 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 12) != 0)
+			selftestOrder, 13) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
