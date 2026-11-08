@@ -19,3 +19,4 @@ Thumbs.db
 /query.csv
 /distro/artwork/*.bgr
 !/distro/artwork/r5-os-splash.bgr
+!/distro/artwork/splash_icons.bgr
