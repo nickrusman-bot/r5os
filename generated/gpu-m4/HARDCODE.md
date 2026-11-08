@@ -62,3 +62,5 @@ Paper inventory from `generated/gpu-m4/HARDCODE-AUDIT.md` step 1. Line numbers a
 | 51 | `gfx9_start.cpp` GDS job | GDS, GWS and OA sizes | 0 | the command-submit ioctl has no GDS chunk. A GFX9 RADV job that does not ask for GDS sends 0 | medium | the chunk, when the ioctl grows one |
 | 52 | `r5_gpu.cpp` `sDefer` | deferred-free slots | 256 | one per `kMaxBo` (row 22). A full list frees that offset immediately | low | stays with the buffer-object limit |
 | 53 | `r5_cs.h` `r5_cs_vm_switch_words` | VM-flush packet | 26 dwords | unchanged. The PASID write is five more dwords, separate | low | stays |
+| 54 | `r5_inv_range.h` `r5_gfx9_inv_range_lo_value` | invalidation range low | `0xffffffff` | Linux v6.12 `gfxhub_v1_0.c:gfxhub_v1_0_program_invalidation`, the `VM_INVALIDATE_ENGn_ADDR_RANGE_LO32` store | low | stays. It is that store, written for all 18 engines |
+| 55 | `r5_inv_range.h` `r5_gfx9_inv_range_hi_value` | invalidation range high | `0x1f` | Linux v6.12 `gfxhub_v1_0.c:gfxhub_v1_0_program_invalidation`, the `VM_INVALIDATE_ENGn_ADDR_RANGE_HI32` store | low | stays. It is that store |
