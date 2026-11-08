@@ -286,11 +286,10 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 
 
 /* Linux v6.12 gfx_v9_0.c:gfx_v9_0_ring_emit_fence with
- * AMDGPU_FENCE_FLAG_INT, then the two SWITCH_BUFFER packets.
- * The event word is the same CACHE_FLUSH_AND_INV_TS index 5 packet
- * the job fence uses. 32-bit data, interrupt. 12 dwords. */
+ * AMDGPU_FENCE_FLAG_INT. Eight dwords. The two SWITCH_BUFFER packets
+ * are added by r5_cs_flush_fence, after a VM flush only. */
 static inline uint32_t
-r5_cs_flush_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
+r5_cs_eop_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
 	uint64_t seq)
 {
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x49, 6));
@@ -301,11 +300,28 @@ r5_cs_flush_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
 	n = r5_cs_put(out, n, cap, (uint32_t)seq);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, 0);
+	return n;
+}
+
+
+static inline uint32_t
+r5_cs_flush_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
+	uint64_t seq)
+{
+	n = r5_cs_eop_fence(out, cap, n, addr, seq);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
 	n = r5_cs_put(out, n, cap, 0);
 	return n;
+}
+
+
+/* gfx9_pasid_map. Off leaves the ring without the LUT write. */
+static inline int
+r5_pasid_map_due(int setting, uint32_t last, uint32_t pasid)
+{
+	return setting && pasid != 0u && pasid != last;
 }
 
 

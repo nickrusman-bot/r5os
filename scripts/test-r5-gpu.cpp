@@ -1218,6 +1218,33 @@ main()
 			|| pkt[2] != r5_cs_oss_reg(mmIH_VMID_0_LUT) + 1u
 			|| pkt[4] != (uint32_t)first)
 			return fail("pasid map");
+		if (r5_pasid_map_due(0, 0, (uint32_t)first) != 0
+			|| r5_pasid_map_due(0, (uint32_t)first, (uint32_t)second) != 0)
+			return fail("pasid map off");
+		uint32_t bodyA[64];
+		uint32_t bodyB[64];
+		uint64_t ib = 0x1000;
+		uint32_t dw = 4;
+		uint32_t vm = 1;
+		uint32_t na = r5_cs_user_body(bodyA, 64, &ib, &dw, &vm, 1,
+			0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
+		uint32_t nb = r5_cs_user_body(bodyB, 64, &ib, &dw, &vm, 1,
+			0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
+		if (na == 0 || na != nb || memcmp(bodyA, bodyB, na * 4u) != 0)
+			return fail("two clients, settings off");
+		uint32_t eop[8];
+		if (r5_cs_eop_fence(eop, 8, 0, 0x401040ull, 4) != 8u
+			|| eop[0] != r5_cs_packet3(0x49, 6) || eop[5] != 4u)
+			return fail("pasid fence");
+		const char* pasidOrder[] = {
+			"r5_pasid_map_due(",
+			"r5_cs_pasid_map(",
+			"r5_cs_eop_fence("
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", pasidOrder, 3) != 0)
+			return 1;
 	}
 	if (r5_gfx9_inv_engines() != 18u)
 		return fail("inv engines");
