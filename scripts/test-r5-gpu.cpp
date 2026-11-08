@@ -16,6 +16,7 @@
 #include "r5_vmid.h"
 #include "r5_defer.h"
 #include "r5_gc9_regs.h"
+#include "r5_agp.h"
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
 #include "r5_span.h"
@@ -1292,6 +1293,16 @@ main()
 				"radeon_hd/gfx9_k12.cpp", vmidOrder, 2) != 0)
 			return 1;
 	}
+	{
+		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(0, 0x3fffffffull);
+		if (agp.bot != 0xffffffu || agp.top != 0u || agp.low != 0u
+			|| agp.high != ((0x3fffffffull >> 18) + 1ull))
+			return fail("agp default");
+		struct r5_agp_aperture above = r5_gfx9_agp_aperture(
+			0x1000000000000ull, 0x1000000000000ull);
+		if (above.low != (uint32_t)(0xffffffffffffull >> 18))
+			return fail("agp min");
+	}
 	if (mmMC_VM_AGP_BASE != 0x984u
 		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32 != 0x855u
 		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32 != 0x856u
@@ -1300,14 +1311,16 @@ main()
 		return fail("hub linux regs");
 	{
 		const char* hubOrder[] = {
-			"if (!sHubLinux)",
+			"if (!sHubLinux || sInfo == NULL)",
 			"gc_byte(mmMC_VM_AGP_BASE), 0",
+			"gc_byte(mmMC_VM_AGP_BOT), agp.bot",
+			"gc_byte(mmMC_VM_AGP_TOP), agp.top",
 			"mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0",
 			"mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0"
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/gfx9_k12.cpp", hubOrder, 4) != 0)
+				"radeon_hd/gfx9_k12.cpp", hubOrder, 6) != 0)
 			return 1;
 	}
 	{
@@ -1369,6 +1382,15 @@ main()
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/r5_gpu.cpp", switchOrder, 4) != 0)
+			return 1;
+		const char* apertureOrder[] = {
+			"mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));",
+			"sHubProgram(frame, fbEnd, aperLow, aperHigh);",
+			"mmMC_VM_MX_L1_TLB_CNTL"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", apertureOrder, 3) != 0)
 			return 1;
 		const char* storeOrder[] = {
 			"r5_gfx9_k2_store();",

@@ -8,6 +8,7 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_agp.h"
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
 #include "r5_vm.h"
@@ -108,6 +109,10 @@ static bool sVmidBaseHave = false;
 static uint32 sK2InvLo[18];
 static uint32 sK2InvHi[18];
 static uint32 sK2AgpBase = 0;
+static uint32 sK2AgpBot = 0;
+static uint32 sK2AgpTop = 0;
+static uint32 sK2AperLow = 0;
+static uint32 sK2AperHigh = 0;
 static uint32 sK2IdentityLo = 0;
 static uint32 sK2IdentityHi = 0;
 static uint32 sK2Fault2 = 0;
@@ -138,6 +143,10 @@ r5_gfx9_k2_store(void)
 	}
 	if (!sK2HubHave) {
 		sK2AgpBase = kread(sInfo, gc_byte(mmMC_VM_AGP_BASE));
+		sK2AgpBot = kread(sInfo, gc_byte(mmMC_VM_AGP_BOT));
+		sK2AgpTop = kread(sInfo, gc_byte(mmMC_VM_AGP_TOP));
+		sK2AperLow = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));
+		sK2AperHigh = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
 		sK2IdentityLo = kread(sInfo, gc_byte(
 			mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32));
 		sK2IdentityHi = kread(sInfo, gc_byte(
@@ -801,7 +810,6 @@ r5_gfx9_inv_range_restore(void)
 static void
 r5_gfx9_hub_linux(void)
 {
-	uint32 fault;
 	if (sInfo == NULL)
 		return;
 	r5_gfx9_k2_store();
@@ -829,27 +837,35 @@ r5_gfx9_hub_linux(void)
 				gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2)),
 			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL)));
 	}
-	if (!sHubLinux)
+}
+
+
+void
+r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow, uint32 highNow)
+{
+	struct r5_agp_aperture agp;
+	uint32 fault;
+	r5_gfx9_k2_store();
+	if (!sHubLinux || sInfo == NULL)
 		return;
-	/* gfxhub_v1_0_init_system_aperture_regs writes AGP_BASE 0.
-	 * BOT and TOP need amdgpu_gmc_agp_location. That function is
-	 * not in this driver, so those two stay as the hardware left them. */
+	agp = r5_gfx9_agp_aperture(fbStart, fbEnd);
+	knote("hub linux low now %08lx linux %08lx high now %08lx linux %08lx "
+		"bot %08lx top %08lx",
+		(unsigned long)lowNow, (unsigned long)agp.low,
+		(unsigned long)highNow, (unsigned long)agp.high,
+		(unsigned long)agp.bot, (unsigned long)agp.top);
+	/* v6.18 gfxhub_v1_0_init_system_aperture_regs. AGP_BASE is 0.
+	 * BOT and TOP are set_agp_default, not agp_location. */
 	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BASE), 0);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BOT), agp.bot);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_TOP), agp.top);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR), agp.low);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR), agp.high);
 	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0);
 	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0);
 	fault = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2));
 	fault |= 1u << VM_L2_PROTECTION_FAULT_CNTL2__ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY__SHIFT;
 	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2), fault);
-	if (sGpuDebug) {
-		knote("hub linux agp base %08lx identity %08lx %08lx fault2 %08lx",
-			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BASE)),
-			(unsigned long)kread(sInfo, gc_byte(
-				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32)),
-			(unsigned long)kread(sInfo, gc_byte(
-				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32)),
-			(unsigned long)kread(sInfo,
-				gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2)));
-	}
 }
 
 
@@ -1263,6 +1279,10 @@ r5_gfx9_hub_restore(void)
 	if (!sK2HubHave || sInfo == NULL)
 		return;
 	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BASE), sK2AgpBase);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BOT), sK2AgpBot);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_TOP), sK2AgpTop);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR), sK2AperLow);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR), sK2AperHigh);
 	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32),
 		sK2IdentityLo);
 	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32),
@@ -1289,11 +1309,22 @@ r5_gfx9_switch_registers(int inv, int hub, int vmids)
 		r5_gfx9_inv_range_restore();
 	}
 	if (hub == 1) {
-		r5_gfx9_k2_store();
+		uint32 location = 0;
+		uint64 fbStart = 0;
+		uint64 bytes = 0;
 		sHubLinux = true;
-		r5_gfx9_hub_linux();
+		r5_gfx9_set_hub_aperture(1);
+		if (sInfo != NULL && sInfo->shared_info != NULL) {
+			location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
+			fbStart = (uint64)(location & 0x00ffffffu) << 24;
+			bytes = (uint64)sInfo->shared_info->frame_buffer_size * 1024ull;
+			r5_gfx9_hub_program(fbStart, fbStart + bytes - 1ull,
+				kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
+				kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)));
+		}
 	} else if (hub == 0) {
 		sHubLinux = false;
+		r5_gfx9_set_hub_aperture(0);
 		r5_gfx9_hub_restore();
 	}
 	if (vmids == 1) {
@@ -1682,6 +1713,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 	sHost.doorbell = info.doorbell;
 	sHost.doorbellBytes = info.shared_info->doorbell_bytes;
 	sHost.cookie = &info;
+	r5_gfx9_set_hub_aperture(sHubLinux ? 1 : 0);
+	r5_gfx9_set_hub_program(r5_gfx9_hub_program);
 	uint64 vramBytes = (uint64)info.shared_info->frame_buffer_size * 1024;
 	memset(&sResults, 0, sizeof(sResults));
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;

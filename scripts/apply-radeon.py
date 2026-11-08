@@ -41,6 +41,7 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/common/r5_pasid.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_vmid.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_defer.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_agp.h",
     "src/add-ons/accelerants/radeon_hd/Jamfile",
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h",

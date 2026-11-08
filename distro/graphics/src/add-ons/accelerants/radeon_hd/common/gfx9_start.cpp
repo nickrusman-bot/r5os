@@ -9,6 +9,7 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_agp.h"
 
 #include "clearstate_defs.h"
 #include "clearstate_gfx9.h"
@@ -29,6 +30,22 @@ static uint32 sPciId = 0;
 static uint64 sVramBytes = 0;
 static r5_gfx9_results* sResults = NULL;
 static bool sK0Ok = false;
+static int sHubAperture = 0;
+static r5_gfx9_hub_fn sHubProgram = NULL;
+
+
+void
+r5_gfx9_set_hub_aperture(int on)
+{
+	sHubAperture = on ? 1 : 0;
+}
+
+
+void
+r5_gfx9_set_hub_program(r5_gfx9_hub_fn fn)
+{
+	sHubProgram = fn;
+}
 
 enum { OUT = 0 };
 
@@ -1521,13 +1538,24 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 	uint32 aperHigh = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
 	uint32 lowNow = aperLow;
 	uint32 highNow = aperHigh;
-	if (aperLow > lowNeed) {
-		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, mmMC_VM_SYSTEM_APERTURE_LOW_ADDR), lowNeed);
-		lowNow = lowNeed;
-	}
-	if (aperHigh < highNeed) {
-		Write32(OUT, radeon_gfx9_byte(kGfx9Seg0, mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR), highNeed);
-		highNow = highNeed;
+	/* Linux writes the AGP aperture in gfxhub_v1_0_gart_enable, before
+	 * any ring. Off leaves the widen below, which is the K0 path. */
+	if (sHubAperture && sHubProgram != NULL) {
+		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(frame, fbEnd);
+		sHubProgram(frame, fbEnd, aperLow, aperHigh);
+		lowNow = agp.low;
+		highNow = agp.high;
+	} else {
+		if (aperLow > lowNeed) {
+			Write32(OUT, radeon_gfx9_byte(kGfx9Seg0,
+				mmMC_VM_SYSTEM_APERTURE_LOW_ADDR), lowNeed);
+			lowNow = lowNeed;
+		}
+		if (aperHigh < highNeed) {
+			Write32(OUT, radeon_gfx9_byte(kGfx9Seg0,
+				mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR), highNeed);
+			highNow = highNeed;
+		}
 	}
 
 	uint64 scratchPa = radeon_gfx9_pa_addr(fbOffset, scratchOffset);

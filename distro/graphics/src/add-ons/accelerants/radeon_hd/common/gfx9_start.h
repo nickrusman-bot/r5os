@@ -143,6 +143,13 @@ void r5_gfx9_set_job_pasid(uint32 pasid, uint64 file);
 void r5_gfx9_set_defer_stamp(void (*fn)(uint64 sequence));
 void r5_gfx9_set_inv_range(int on);
 void r5_gfx9_set_hub_linux(int on);
+/* gfx9_hub_linux writes, from prepare_hw, before the ring runs. */
+typedef void (*r5_gfx9_hub_fn)(uint64 fbStart, uint64 fbEnd,
+	uint32 lowNow, uint32 highNow);
+void r5_gfx9_set_hub_aperture(int on);
+void r5_gfx9_set_hub_program(r5_gfx9_hub_fn fn);
+void r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow,
+	uint32 highNow);
 void r5_gfx9_set_vmids(int on);
 int r5_gfx9_inv_range_on(void);
 int r5_gfx9_hub_linux_on(void);
