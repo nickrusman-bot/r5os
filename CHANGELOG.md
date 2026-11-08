@@ -36,6 +36,46 @@
 
 `gfx9_vmid_per_file` stays off. The file page table, its pages and its VMID owner are one object with a reference count. The open file holds one. A buffer parked because its job is still in the ring holds one more. The object is freed when the last reference goes, so the retire unmap does not use the freed client. `gpu_free` reads the fence once and stores that value on the tree. The host test closes with a job in flight, unmaps in the still-live tree, and checks the counters are back at zero. There is no What's new section and `distro/BUILD` stays the same.
 
+### Boot icons are in the boot header
+
+The boot loader reads `kSplashIcons24BitCompressedImage` from `images-sans-tm.h`. That header is checked in, and jam does not rebuild it. Copying `splash_icons.png` into `data/artwork/boot_splash/` never reached the screen. The seven Haiku stage icons now live as SVG in `distro/artwork/boot_splash/icons-src/`, rendered once to 160 px PNGs. The generator builds the 308×80 white strip and `splash_icons.bgr` from those PNGs. Apply compresses that BGR into the header, next to the logo. Width and height stay 308 and 80. The 8-bit image is unchanged. `haiku-splash-icons.png` is gone. `distro/BUILD` stays 10049.
+
+### About R5 opens at the mockup width
+
+The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. That width is the window. The content minimum is the same width minus the two big insets, so the insets are not added a second time. The heading stays together; the glue takes the extra width. `distro/BUILD` stays 10049.
+
+### Volumes use the drive, not the cabinet
+
+`R_HardDiskIcon` is the beige cabinet. The boot volume uses the drive icon again, and the R5 mark still covers the ladybug. Any other disk, including VBox Share, uses that drive with the ladybug removed, including the black body that was left after the first cut. A CD keeps its own icon. `distro/BUILD` stays 10049.
+
+### About R5 uses two cards
+
+The header is a document card: the mark at four times the font size, then “R5” and “Operating System” at twice the font size, and the version line below in `B_DARKEN_2_TINT`. The system information is a panel card in a 2×2 grid: processors and kernel on the left, memory and time on the right. Labels are bold. Values use the same tint. `Build N` stays small and in `B_LIGHTEN_1_TINT` under that grid. The gap between the cards and the window edge is `B_USE_BIG_SPACING`. AboutSystem links `libr5ui.so`. The time line is drawn on the card fill. The replicant is still `SysInfoView` and is not rebuilt from a deep archive. VirtualBox on 8 Nov 2026 showed the window; the time line wraps in the right column. Dark mode, an 18-point font, and the replicant were not tried. `distro/BUILD` stays 10049.
+
+### BCard is a rounded group in libr5ui
+
+`BAppearanceKit::BCard` is a view with a group layout, a one-pixel border, and a corner that follows the font size. Document and panel are the two fills. Colors come from `ui_color()`. `<Card.h>` sits next to `<R5UI.h>`. About R5 is the first caller. `distro/BUILD` stays 10049.
+
+### libr5ui and libr5icons are MIT
+
+The C++ in `distro/ui` and `distro/icons` is MIT, copyright 2026 R5OS Contributors. Any application can link the libraries. The Tracker and Haiku icon bytes keep their own notices. No call changed. `distro/BUILD` stays 10049.
+
+### About R5 uses the Wave Pebble as its icon
+
+`AboutSystem.rdef` no longer carries the Haiku leaf. The vector icon is an HVIF of `r5-symbol.svg`: the pebble and the wave, with the same four-stop diagonal. `scripts/generate-r5-artwork.py` writes `r5-symbol.hvif` and the resource. `--check` compares both. This has not been booted. `distro/BUILD` stays 10049.
+
+### About splits the version and the build
+
+The header reads `Version <R5_OS_VERSION> • <arch>`. `Build <R5_OS_BUILD>` is smaller text in `B_LIGHTEN_1_TINT` at the bottom of the system information. Both come from `r5_os_version.h`. The header stays above the tabs. The build line stays in `SysInfoView`, including when that view is a replicant, and the replicant shows the same version line. This has not been booted. `distro/BUILD` stays 10049.
+
+### The boot disk uses the ordinary hard-disk icon
+
+The well-known boot volume asks for `R_HardDiskIcon` instead of the nightly disk. Tracker still draws the R5 mark on that volume. The mark sits where the ladybug sat, from (10, 40) to (24, 56) in the 64-unit icon. This has not been booted. `distro/BUILD` stays 10049.
+
+### The boot splash is white
+
+The splash is 372×96 on `#FFFFFF`, with the dark wordmark and no border. The bootloader clears a 24-bit framebuffer to `#FFFFFF` (`fillByte` `0xff`, `fillWord` `0x00ffffff`). An 8-bit screen stays black. `distro/boot/platform/generic/video_splash.cpp` is the Haiku file with that fill in an SPDX snippet. `scripts/apply-branding.py` copies it. The progress strip stays Haiku's 308×80 layout. `haiku-splash-icons.png` is the unmodified MIT original. The generator lifts the rim off black onto white and draws the R5 mark on icon 4, where the leaf was. `apply-overlay.sh` installs `splash_icons.png`. `--check` covers the splash and the strip. This has not been booted. `distro/BUILD` stays 10049.
+
 ### A file does not get VMID 1
 
 `gfx9_vmid_per_file` stays off. The file pool is VMID 2-15. VMID 1 stays the shared table. If the setting is on and `gfx9_vmids` is off, startup logs `gfx9_vmid_per_file needs gfx9_vmids` and leaves every job on VMID 1. The host test reserves fourteen file ids and none of them is 1. There is no What's new section and `distro/BUILD` stays the same.
@@ -704,6 +744,50 @@ Jam of `@r5-raw` started at 23:44 CET on 5 Nov 2026 and finished at 23:46 CET, `
 ### Why chown of /boot/home/config returns EROFS
 
 `r5-session.log` from the 5625U stick repeats `settings chown /boot/home/config: Read-only file system` and the same for `chmod`. `package_daemon` registers a volume at `/boot/home/config`. That directory is the packagefs root. packagefs does not implement `write_stat`, so `chown` and `chmod` of the mount return `B_READ_ONLY_DEVICE`. `r5-desktop` runs that call before every session program, which is why the line repeats. `config/settings` and `config/cache` are the writable directories packagefs stitches in. On the stick those two are uid 1001 mode 0700, and Mesa created `mesa_shader_cache` there as uid 1001. `config` itself stayed uid 0 mode 0755. A session user can write settings and cache. Creating a file directly in `config` fails. The same packagefs mount is how every boot, including VirtualBox, exposes `~/config`. A VirtualBox session log was not read. No code change.
+
+### One protocol per UMP endpoint
+
+`libmidi2.so` and the public MIDI headers are MIT. That is the same kind of exception as the GPU header and the R5 DRM library: every MIDI program loads them. The USB MIDI driver and the R5 parts of the MIDI server stay GPL-3.0-or-later. `Midi2Library.cpp` carries the MIT header. The R5 functions in `MidiLocalConsumer.cpp` and `MidiLocalProducer.cpp` are marked with MIT snippet tags. The R5 parts of `usb_midi.cpp` and `PortDrivers.cpp` are marked GPL-3.0-or-later. The Haiku functions around them keep the MIT header.
+
+Until a Stream Configuration message arrives, an endpoint uses MIDI 1.0 protocol. `midi2_endpoint_init` stores protocol 1. `midi2_stream_configure` stores 1 or 2 and rejects any other protocol byte. A USB device starts at protocol 1 and updates that byte when a stream configuration of status `0x005` arrives.
+
+With protocol 1, a MIDI 1.0 channel write stays type 0x2, including a note-on of velocity 0. System bytes stay type 0x1. With protocol 2, every channel voice message becomes type 0x4 (M2-104-UM D.3). A note-on of velocity 0 becomes a note-off at `0x8000`. Poly pressure and channel pressure use the 7-to-32 scale. Pitch bend uses the 14-to-32 scale, so center `8192` is `0x80000000`. Control changes 0 and 32 are held as the bank. A program change then sends the bank-valid bit with those bytes. Controllers 101 and 100, or 99 and 98, select an RPN or NRPN. The first data byte is held. Controller 38, or a later controller 6, sends status `0x2` or `0x3`. Address `0x7F`/`0x7F` is not sent. One group does not mix type 0x2 and type 0x4 channel voice.
+
+`midi2test` checks both protocols, the scaled controller, the bank, and the RPN. That program was not run. The driver copy of the little-endian load was unused; the parser header already has `usb_midi_load_le32`, so the copy is gone. The image build treats that unused function as an error. The translator compares pointers with `0`, because a kernel file that includes the header does not have `NULL` yet. A host compile of the translator printed `ok midi protocol`. The host fuzzer, linked with `Midi2Library.cpp`, ran kernel, payload, Property Exchange, profiles, stream, and USB for 60 seconds each under AddressSanitizer and printed `ok`. No USB MIDI device was attached. `midi2test` was not run in VirtualBox.
+
+### MIDI parsers live in libmidi2.so
+
+Property Exchange, profiles, stream messages, and the USB descriptor parser were inline in the public headers. Those functions are now defined in `Midi2Library.cpp` and linked into `libmidi2.so`. The headers keep the names and the arguments. `midi2_pe_put14`, `midi2_pe_get14`, `midi2_stream_pack`, `midi2_stream_status`, and `midi2_profile_same` stay inline. `scripts/apply-media.py` copies the library source, `Midi2Translate.h`, and the two driver parser headers. A Haiku cross compile of `Midi2Library.cpp` succeeded. The host fuzzer, linked with that file, ran each target for one second under AddressSanitizer and printed `ok`. `midi2test` was not run. No device was attached. The library was not jammed into an image.
+
+### MIDI parsers have a host fuzz run
+
+`interpret_ump_buffer`, `expand_ump_to_midi1`, and `sysex7_bytes` call `usb_midi_parse.h`. The host harness includes that file, so it runs the driver code. `scripts/fuzz-midi2.sh` builds it with AddressSanitizer and UndefinedBehaviorSanitizer (`g++` 15.2.0 on WSL). The kernel target ran first for 600 seconds, then payload, Property Exchange, profiles, stream messages, and the USB descriptor parser, 600 seconds each. Each log printed `ok`. There was no sanitizer report. `midi2test` was not run. No device was attached.
+
+### MIDI 2.0 channel voice reaches MIDI 1.0 hooks
+
+Type 0x4 was translated only for note-off, note-on, and control change. Appendix D, Translation (D.2), also covers poly pressure, channel pressure (D.2.2), pitch bend with the least significant byte first (D.2.5), program change with the bank bit (D.2.4), and registered and assignable controllers as four control changes (D.2.3). `BMidiLocalConsumer`, `read()`, and a send to a MIDI 1.0 device use `midi2_channel_voice_to_midi1`. The pending `read()` buffer is 16 bytes, which holds the 12-byte controller sequence. Appendix D, Messages That Cannot Be Translated to MIDI 1.0 (D.2.8), stays UMP: relative controllers, per-note controllers, per-note management, and per-note pitch bend. `midi2test` checks those bytes. That program was not run. A host compile of the helper with `static_assert` passed. No device was attached.
+
+### A MIDI 2.0 note-on of velocity 0 stays a note-on
+
+`midi2_note_on_midi1_velocity(0)` returned 0, and MIDI 1.0 treats a note-on of velocity 0 as a note-off. Appendix D, MIDI 2.0 Note On Velocity (D.2.1), replaces a translated 0 with 1. The helper now returns at least 1 for every note-on, including 0. The same formula is `usb_midi_note_on_midi1_velocity` in the driver, because the driver does not include `Midi2Defs.h`. `midi2test` compares the two.
+
+The other way, Appendix D, Note On/Off (D.3.1): a MIDI 1.0 note-on of velocity 0 written to a UMP endpoint becomes a type 0x4 note-off with velocity `0x8000`. Velocity 1 becomes `0x0200`. Attribute type and attribute value stay 0. Other channel bytes on that write stay type 0x2, so one group can still carry both types. `midi2test` checks both velocities and that the driver copy matches. That program was not run. A host compile of the same checks with `static_assert` passed. No device was attached.
+
+### The wide spray overloads were not in a release
+
+`SprayNoteOn(uchar, uchar, uint16)` and `SprayControlChange(uchar, uchar, uint32)` were exported from `libmidi2.so` in development builds from `f0c74f2520`. Renaming them to `SprayNoteOn2` and `SprayControlChange2` drops those symbols. No file in `distro/` except `midi2test` called the wide forms, and that program now uses the new names. `PortDrivers.cpp` calls the MIDI 1.0 forms. There is no HaikuPorts recipe in this tree and no package that references the symbols. `distro/VERSION` is `2026.1-dev`. The symbols are removed, not kept as aliases.
+
+### SysEx7 is assembled per group
+
+`BMidiLocalConsumer` kept one SysEx buffer per consumer. Two groups that start a message at the same time overwrote that buffer. The buffer is now keyed by the consumer and the group in bits 27..24 of the first word. Closing the consumer frees every group. `midi2test` does not send two groups. This is not run on a device.
+
+### A quiet MIDI 2.0 note-on stays a note-on
+
+`value >> 9` turned a MIDI 2.0 velocity below 512 into MIDI 1.0 velocity 0, which is a note-off. `midi2_note_on_midi1_velocity` returns at least 1 when the 16-bit velocity is not 0. Velocity 0 stays 0. Note-off is unchanged. The same rule is in `expand_ump_to_midi1`, `send_ump_as_midi1`, and the `NoteOn` hook. `midi2test` checks 1, 511 and 512. That program was not run. A cross compile of the helper with `static_assert` is the host check.
+
+### MIDI 2.0 spray calls have their own names
+
+`SprayNoteOn(uchar, uchar, uchar)` and `SprayControlChange(uchar, uchar, uchar)` are again the only candidates for a bare integer. `SprayNoteOn(0, 60, 100)` compiles and is a MIDI 1.0 note. The 16-bit velocity call is `SprayNoteOn2`. The 32-bit controller call is `SprayControlChange2`. The methods stay non-virtual. A cross compile of those four calls with the Haiku g++ succeeded (`n1_compile_ok`). `midi2test` was not run: it needs the MIDI server.
 
 ### Teapot patches follow freeglut
 

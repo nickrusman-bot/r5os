@@ -99,8 +99,11 @@ BMidiLocalProducer::SprayNoteOn(uchar channel, uchar note,
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
 void
-BMidiLocalProducer::SprayNoteOn(uchar channel, uchar note,
+BMidiLocalProducer::SprayNoteOn2(uchar channel, uchar note,
 	uint16 velocity, bigtime_t time) const
 {
 	if (channel >= 16) {
@@ -112,6 +115,7 @@ BMidiLocalProducer::SprayNoteOn(uchar channel, uchar note,
 	midi2_encode_note_on(channel, note, velocity, words);
 	SprayUMP(words, 2, time);
 }
+// SPDX-SnippetEnd
 
 
 void
@@ -148,8 +152,11 @@ BMidiLocalProducer::SprayControlChange(uchar channel,
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
 void
-BMidiLocalProducer::SprayControlChange(uchar channel, uchar controller,
+BMidiLocalProducer::SprayControlChange2(uchar channel, uchar controller,
 	uint32 value, bigtime_t time) const
 {
 	if (channel >= 16) {
@@ -161,6 +168,7 @@ BMidiLocalProducer::SprayControlChange(uchar channel, uchar controller,
 	midi2_encode_control_change(channel, controller, value, words);
 	SprayUMP(words, 2, time);
 }
+// SPDX-SnippetEnd
 
 
 void
@@ -285,6 +293,9 @@ BMidiLocalProducer::SprayTempoChange(int32 beatsPerMinute,
 
 
 status_t
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
 BMidiLocalProducer::SprayUMP(const uint32* ump, size_t wordCount,
 	bigtime_t time) const
 {
@@ -302,6 +313,7 @@ BMidiLocalProducer::SprayUMP(const uint32* ump, size_t wordCount,
 	SprayEvent(payload, 8 + wordCount * 4, true, time);
 	return B_OK;
 }
+// SPDX-SnippetEnd
 
 //------------------------------------------------------------------------------
 

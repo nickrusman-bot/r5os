@@ -175,6 +175,55 @@ midi2_note_velocity(const uint32* words, size_t wordCount)
 }
 
 
+/* Appendix D, MIDI 2.0 Note On Velocity (D.2.1). Every note-on is at least 1.
+ * The same formula is usb_midi_note_on_midi1_velocity. Keep the two copies
+ * the same.
+ */
+inline constexpr uint8
+midi2_note_on_midi1_velocity(uint16 velocity)
+{
+	uint8 scaled = (uint8)(velocity >> 9);
+	return scaled == 0 ? 1 : scaled;
+}
+
+
+/* Appendix D, Min-Center-Max (D.1.3), 7 bits to 16. The same formula is
+ * usb_midi_scale_up_7_to_16. Keep the two copies the same.
+ */
+inline constexpr uint16
+midi2_scale_up_7_to_16(uint8 value7)
+{
+	uint16 bitShifted = (uint16)value7 << 9;
+	if (value7 <= 64)
+		return bitShifted;
+	uint16 repeat = (uint16)value7 & 0x3f;
+	return bitShifted | (uint16)(repeat << 3) | (uint16)(repeat >> 3);
+}
+
+
+/* Appendix D, Note On/Off (D.3.1). A MIDI 1.0 note-on of velocity 0 is a
+ * MIDI 2.0 note-off at 0x8000. Attribute type and attribute value stay 0.
+ * The same formula is usb_midi_translate_midi1_note. Keep the two copies
+ * the same.
+ */
+inline constexpr void
+midi2_translate_midi1_note(uint8 channel, uint8 note, uint8 velocity,
+	bool noteOn, uint32 words[2])
+{
+	uint8 status = 0x8;
+	uint16 wide = 0x8000;
+	if (!(noteOn && velocity == 0)) {
+		status = noteOn ? 0x9 : 0x8;
+		wide = midi2_scale_up_7_to_16(velocity);
+	}
+	words[0] = (0x4u << 28)
+		| ((uint32)status << 20)
+		| ((uint32)(channel & 0x0f) << 16)
+		| ((uint32)(note & 0x7f) << 8);
+	words[1] = (uint32)wide << 16;
+}
+
+
 inline bool
 midi2_is_control(const uint32* words, size_t wordCount)
 {
@@ -339,6 +388,7 @@ midi2_sysex_payload(const uint32* words, size_t wordCount, uint8* _status,
 }
 
 
+#include "Midi2Translate.h"
 #include <Midi2Property.h>
 #include <Midi2Profile.h>
 #include <Midi2Stream.h>

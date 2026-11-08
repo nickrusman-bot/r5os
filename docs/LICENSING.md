@@ -10,6 +10,8 @@ A file-by-file audit of the Haiku tree, the build packages, firmware, and genera
 
 New source that R5 owns — applications, services, and drivers — defaults to **GPL-3.0-or-later**, when R5 has the rights to license that file.
 
+A library or public header that applications link or include is MIT when R5 holds the rights to all of it. GPL-3.0-or-later stays the default for the rest of the OS, and GPL code stays GPL.
+
 ```cpp
 // SPDX-FileCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -18,6 +20,8 @@ New source that R5 owns — applications, services, and drivers — defaults to 
 Use that header only for a file R5 can license as a whole. Do not put it on a Haiku file, on third-party code, or on a file whose origin is unclear.
 
 Existing Haiku code keeps its original license and copyright notices. Do not relicense the Haiku tree, and do not strip MIT, BSD, GPL, or other notices.
+
+The public MIDI kit (the headers plus `libmidi2.so`) is MIT. That is an exception to the GPL default, like the R5 GPU interface and the R5 DRM library, because every MIDI program links it. The R5 parts of the USB MIDI driver and of the MIDI server stay GPL-3.0-or-later.
 
 ## Kernel and drivers
 
@@ -172,6 +176,10 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 
 | Path | SPDX | Why |
 |---|---|---|
+| `distro/ui/` | MIT | `libr5ui.so` and `<R5UI.h>`. Copyright 2026 R5OS Contributors. Applications link this library, so the C++ is MIT |
+| `distro/icons/` except `standard_icons.inc`, `lock_icons.inc`, `TRACKER_ICON_NOTICE.txt`, and `HAIKU_ICON_NOTICE.txt` | MIT | `libr5icons.so` and `<R5Icons.h>`. Copyright 2026 R5OS Contributors. Applications link this library, so the C++ is MIT. The picture bytes are not relicensed |
+| `distro/icons/standard_icons.inc`, `TRACKER_ICON_NOTICE.txt` | Open Tracker | Unmodified Tracker HVIF. The notice file stays |
+| `distro/icons/lock_icons.inc`, `HAIKU_ICON_NOTICE.txt` | MIT | Unmodified Haiku `Action_Login` and `Action_Logout`. The notice file stays |
 | `distro/login/LockWindow.*`, `R5Desktop.cpp`, `SessionLog.h`, `TrayApp.cpp`, `default_deskbar_items.sh` | GPL-3.0-or-later | New R5 files. They link into Login. The other Login sources stay MIT (François Revol, 2008). The Login binary is one combined work; the MIT notices stay on those files |
 | `distro/login/Login*.cpp`, `Login*.h`, `DesktopWindow.*`, `main.cpp`, `Login.rdef` | MIT, unchanged | Haiku Login |
 | `distro/users/` | GPL-3.0-or-later | New Users & Accounts preference |
@@ -194,6 +202,7 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 | `distro/firmware/amdgpu/renoir_pfp.bin`, `renoir_me.bin`, `renoir_ce.bin`, `renoir_rlc.bin`, `renoir_mec.bin`, `green_sardine_pfp.bin`, `green_sardine_me.bin`, `green_sardine_ce.bin`, `green_sardine_rlc.bin`, `green_sardine_mec.bin`, `green_sardine_mec2.bin`, and `LICENSE.amdgpu` | AMD GPU microcode license (binary redistribution) | Unmodified blobs from linux-firmware. `1636` and `164c` use the `renoir` set. Barcelo `15e7` and Cezanne `1638` use `green_sardine`. Copyright 2024 Advanced Micro Devices, Inc. Not an open-source license. The license text ships next to the blobs. Installed at `system/non-packaged/data/firmware/amdgpu/`. Linux sends these through the PSP |
 | `distro/kernel/src/system/kernel/arch/x86/arch_timer.cpp` and `arch_cpu.cpp` | MIT and NewOS, with GPL-3.0-or-later snippets | Copies of the Haiku kernel files. Original copyright and MIT/NewOS headers stay. R5 edits (TSC divide guards, Haiku #20400, `r5_pstate_publish`, microcode `installed_cpu` match) are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-kernel-bugs.py` copies the files. The combined kernel follows GPL-3.0-or-later and the original notices stay |
 | `distro/artwork/r5-symbol.svg`, `r5-symbol.png`, `r5-os-deskbar.png`, `r5-os-logo.png`, `r5-os-splash.png`, `r5-os-splash.bgr`, `distro/artwork/brand-kit/`, and `distro/desktop/src/kits/tracker/r5_disk_badge.h` | GPL-3.0-or-later | New R5 mark, the Wave Pebble. Copyright 2026 R5OS Contributors. `scripts/generate-r5-artwork.py` writes them from the SVG. The words are set in Manrope, which stays OFL-1.1 and is not relicensed. The badge header is the same picture as bytes so Tracker can draw it on the boot disk |
+| `distro/artwork/boot_splash/icons-src/` | MIT | Seven unmodified Haiku icons: Kernel, Harddisk_Development, Devices, Harddisk, Virtual_Memory, Config_Folder, and Window. Copyright Haiku, Inc. and its contributors. `SOURCES.md` names each file. `png/1.png`–`7.png` are 160 px renders of those SVGs. `splash_icons.png` and `splash_icons.bgr` are the 308×80 strip built from the PNGs |
 | `distro/desktop/` interface, Tracker, Deskbar, locale, control look, preferences, `Desktop.cpp`, `DefaultDecorator.cpp` | MIT, with GPL-3.0-or-later snippets | Copies of the Haiku sources. Copyright and MIT header stay. R5 edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-desktop-native.py` copies them. The combined libraries and programs follow GPL-3.0-or-later and the MIT notices stay |
 | `distro/rest/` except `getaddrinfo.c` and `ping6.c` | MIT, or MIT and NewOS, with GPL-3.0-or-later snippets | Copies of the remaining Haiku sources: network stack, net server, package volume, input, DriveSetup, accounts, locked preferences, LaunchDaemon, Installer, boot prompt, About, Deskbar `icons.rdef`, the home desktop resource, `ServerApp.cpp`, `runtime_loader.cpp`, and the interface and locale headers. Original copyright and MIT/NewOS headers stay. `runtime_loader.cpp` also keeps the NewOS notice. R5 edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. `scripts/apply-rest-native.py` copies them. The combined binaries follow GPL-3.0-or-later and the original notices stay. The IPP sources had no license header; the Takagi date line stays |
 | `distro/rest/src/system/libnetwork/netresolv/net/getaddrinfo.c` and `src/bin/network/ping/ping6.c` | BSD-3-Clause, with GPL-3.0-or-later snippets | WIDE Project copyright, and for `ping6.c` also the Regents of the University of California. Those license texts stay. R5 edits are `SPDX-Snippet` blocks, copyright 2026 R5OS Contributors, GPL-3.0-or-later. The combined `libnetwork.so` and `ping` follow GPL-3.0-or-later and the BSD notices stay |

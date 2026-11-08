@@ -854,15 +854,15 @@ r5_draw_boot_badge(Model* model, BView* view, BPoint where, BSize size)
 	if (badge == NULL)
 		return;
 
-	float side = size.Width() + 1;
-	float badgeSide = floorf(side * 0.42f);
-	if (badgeSide < 8.0f && side >= 8.0f)
-		badgeSide = 8.0f;
-	if (badgeSide > side)
-		badgeSide = side;
-
-	BRect dest(where.x + side - badgeSide, where.y,
-		where.x + side - 1, where.y + badgeSide - 1);
+	// The ladybug on the old boot disk occupies (10, 40) to (24, 56)
+	// in the 64-unit icon. The mark takes that rectangle.
+	float iconWidth = size.Width() + 1.0f;
+	float iconHeight = size.Height() + 1.0f;
+	float left = where.x + iconWidth * 10.0f / 64.0f;
+	float top = where.y + iconHeight * 40.0f / 64.0f;
+	float right = where.x + iconWidth * 24.0f / 64.0f;
+	float bottom = where.y + iconHeight * 56.0f / 64.0f;
+	BRect dest(left, top, right - 1.0f, bottom - 1.0f);
 	view->PushState();
 	view->SetDrawingMode(B_OP_ALPHA);
 	view->DrawBitmap(badge, badge->Bounds(), dest, B_FILTER_BITMAP_BILINEAR);

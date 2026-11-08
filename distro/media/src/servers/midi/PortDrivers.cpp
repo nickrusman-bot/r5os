@@ -38,6 +38,9 @@ MidiPortConsumer::Data(uchar* data, size_t length,
 
 	uint32 words[4];
 	size_t wordCount = 0;
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
 	if (midi2_ump_from_payload(data, length, words, 4, &wordCount) == B_OK) {
 		midi_ump_packet packet;
 		packet.word_count = (uint32)wordCount;
@@ -49,6 +52,7 @@ MidiPortConsumer::Data(uchar* data, size_t length,
 		}
 		return;
 	}
+	// SPDX-SnippetEnd
 
 	if (write(fFileDescriptor, data, length) == -1) {
 		perror("Error sending data to driver");
@@ -110,6 +114,9 @@ MidiPortProducer::GetData()
 	size_t sysexBufferSize = B_PAGE_SIZE;
 	size_t sysexSize = 0;
 
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
 	// A MIDI 2.0 driver queues the original packet. read() still returns
 	// MIDI 1.0 bytes for a program that does not use this ioctl. This reader
 	// uses the packet, so NoteOn stays 7-bit and Data() keeps the full value.
@@ -136,6 +143,7 @@ MidiPortProducer::GetData()
 				break;
 			}
 		}
+		// SPDX-SnippetEnd
 
 		if (bytesCount == 0) {
 			bytesCount = read(fFileDescriptor, bytes, sizeof(bytes));
