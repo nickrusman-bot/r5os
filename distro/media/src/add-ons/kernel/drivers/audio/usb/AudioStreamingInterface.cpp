@@ -78,7 +78,8 @@ ASEndpointDescriptor::ASEndpointDescriptor(usb_endpoint_descriptor* Endpoint,
 	fLockDelay(0),
 	fMaxPacketSize(0),
 	fEndpointAddress(0),
-	fEndpointAttributes(0)
+	fEndpointAttributes(0),
+	fInterval(1)
 {
 	fCSAttributes = Descriptor->attributes;
 	fLockDelayUnits = Descriptor->lock_delay_units;
@@ -88,6 +89,11 @@ ASEndpointDescriptor::ASEndpointDescriptor(usb_endpoint_descriptor* Endpoint,
 	fEndpointAttributes = Endpoint->attributes;
 	fEndpointAddress = Endpoint->endpoint_address;
 	fMaxPacketSize = Endpoint->max_packet_size;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	fInterval = Endpoint->interval;
+// SPDX-SnippetEnd
 
 	TRACE(UAC, "fCSAttributes:%d\n", fCSAttributes);
 	TRACE(UAC, "fLockDelayUnits:%d\n", fLockDelayUnits);

@@ -31,6 +31,7 @@ FILES = (
     "src/add-ons/kernel/drivers/audio/usb/Stream.cpp",
     "src/add-ons/kernel/drivers/audio/usb/Stream.h",
     "src/add-ons/kernel/drivers/audio/usb/UsbAudioFormat.h",
+    "src/add-ons/kernel/drivers/audio/usb/usb_audio_packets.h",
     "src/add-ons/kernel/drivers/audio/usb/AudioControlInterface.cpp",
     "src/add-ons/kernel/drivers/audio/usb/AudioControlInterface.h",
     "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.cpp",

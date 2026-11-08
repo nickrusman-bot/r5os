@@ -18,6 +18,15 @@
 #include "Device.h"
 #include "Driver.h"
 #include "Settings.h"
+#include "UsbAudioFormat.h"
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Transfers that fail in a row before the callback stops the stream.
+static const int32 kMaxTransferErrors = 32;
+// SPDX-SnippetEnd
 
 
 Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
@@ -39,8 +48,17 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fStartingFrame(0),
 	fProcessedBuffers(0),
 	fInsideNotify(0),
-	fQueueStopped(0)
+	fQueueStopped(0),
+	fTransferErrors(0),
+	fRegionBytes(0),
+	fCarry(NULL),
+	fCarryFrames(0),
+	fActualBytes(NULL),
+	fPadded(0),
+	fDropped(0),
+	fClockId(0)
 {
+	memset(&fPlan, 0, sizeof(fPlan));
 }
 
 
@@ -48,7 +66,14 @@ Stream::~Stream()
 {
 	delete_area(fArea);
 	delete_area(fKernelArea);
-	delete fDescriptors;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// fDescriptors comes from new[].
+	delete[] fDescriptors;
+	free(fCarry);
+	free(fActualBytes);
+// SPDX-SnippetEnd
 }
 
 
@@ -184,8 +209,83 @@ status_t
 Stream::Init()
 {
 	fStatus = _ChooseAlternate();
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (fStatus == B_OK && fControlInterface != NULL
+		&& fControlInterface->SpecReleaseNumber() >= 0x0200) {
+		_QueryClockRates();
+	}
+// SPDX-SnippetEnd
 	return fStatus;
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// UAC 2.0 has no rate list in the format descriptor. The clock source that
+// drives this stream answers a RANGE request on its sampling frequency
+// control (UAC 2.0 § 5.2.5.1.1). Before this, every UAC 2.0 stream offered
+// 44.1-96 kHz whatever the device could do, and SET_CUR went to the
+// terminal's clock entity even when that was a selector.
+void
+Stream::_QueryClockRates()
+{
+	_AudioControl* terminal = fControlInterface->Find(TerminalLink());
+	uint8 clock = terminal != NULL
+		? fControlInterface->ResolveClockSource(terminal->ClockSourceId()) : 0;
+	fClockId = clock;
+	if (clock == 0) {
+		dprintf("usb_audio: %s stream has no clock source, keeping the "
+			"default rates\n", fIsInput ? "record" : "play");
+		return;
+	}
+
+	// wNumSubRanges first, then the whole answer (two steps, as Linux does,
+	// for devices that stall on a long wLength).
+	uint8 range[2 + 12 * 16];
+	size_t actualLength = 0;
+	uint16 value = USB_AUDIO_SAMPLING_FREQ_CONTROL << 8;
+	uint16 index = (clock << 8) | (fControlInterface->InterfaceNumber() & 0xff);
+	status_t status = gUSBModule->send_request(fDevice->fDevice,
+		USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_CLASS, 0x02, value, index, 2,
+		range, &actualLength);
+	if (status == B_OK && actualLength == 2) {
+		uint16 count = (uint16)range[0] | ((uint16)range[1] << 8);
+		if (count > 16)
+			count = 16;
+		size_t length = 2 + (size_t)count * 12;
+		status = gUSBModule->send_request(fDevice->fDevice,
+			USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_CLASS, 0x02, value, index,
+			length, range, &actualLength);
+	} else if (status == B_OK)
+		status = B_BAD_DATA;
+
+	usb_audio_parsed_format parsed;
+	if (status != B_OK
+		|| usb_audio_parse_rate_range(range, actualLength, &parsed) == 0) {
+		dprintf("usb_audio: clock %u gave no sample rates (%s), keeping the "
+			"default rates\n", clock, strerror(status));
+		return;
+	}
+
+	for (int i = 0; i < fAlternates.Count(); i++) {
+		_ASFormatDescriptor* base = fAlternates[i]->Format();
+		if (base == NULL || base->fFormatType != USB_AUDIO_FORMAT_TYPE_I)
+			continue;
+		TypeIFormatDescriptor* format
+			= static_cast<TypeIFormatDescriptor*>(base);
+		format->fSampleFrequencyType = parsed.rateCount;
+		format->fSampleFrequencies.MakeEmpty();
+		for (uint8 r = 0; r < parsed.rateCount; r++)
+			format->fSampleFrequencies.PushBack(parsed.rates[r]);
+	}
+	dprintf("usb_audio: clock %u offers %u sample rates, %" B_PRIu32 " to %"
+		B_PRIu32 " Hz\n", clock, parsed.rateCount, parsed.rates[0],
+		parsed.rates[parsed.rateCount - 1]);
+}
+// SPDX-SnippetEnd
 
 
 void
@@ -232,61 +332,66 @@ latency_frames(bool input)
 status_t
 Stream::_SetupBuffers()
 {
-	// allocate buffer for worst (maximal size) case
 	TypeIFormatDescriptor* format = static_cast<TypeIFormatDescriptor*>(
 		fAlternates[fActiveAlternate]->Format());
+	const ASEndpointDescriptor* endpoint
+		= fAlternates[fActiveAlternate]->Endpoint();
 
 	uint32 samplingRate = fAlternates[fActiveAlternate]->GetSamplingRate();
 	uint32 sampleSize = format->fNumChannels * format->fSubframeSize;
 
-	// data size pro 1 ms USB 1 frame
-	size_t packetSize = samplingRate * sampleSize / 1000;
-	TRACE(INF, "packetSize:%ld\n", packetSize);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// One ISO descriptor is one service interval of the endpoint: 1 ms at
+	// full speed, 125 us at high speed (times 2^(bInterval-1)). The old code
+	// sized every packet for 1 ms and clamped it to wMaxPacketSize, which on
+	// high speed sent 7 frames per microframe to a 48 kHz device, and at
+	// 44.1 kHz sent 44 frames per ms. usb_audio_packets.h gives each packet
+	// its share of an exact frame count per buffer.
+	uint16 uacVersion = fControlInterface != NULL
+		? fControlInterface->SpecReleaseNumber() : 0x0100;
+	bool highSpeed = usb_audio_high_speed(uacVersion, samplingRate, sampleSize,
+		endpoint->fMaxPacketSize);
 
-	if (packetSize == 0) {
-		TRACE(ERR, "computed packet size is 0!");
+	// 0 keeps the historical 2048 frames per buffer. A Media preference
+	// writes 256 or 128. The count is rounded up to whole packets with an
+	// exact number of frames.
+	uint32 frames = latency_frames(fIsInput);
+	uint32 wantFrames = frames != 0 ? frames : kSamplesBufferSize;
+
+	usb_audio_packet_plan plan;
+	if (!usb_audio_plan_packets(samplingRate, sampleSize,
+			endpoint->fMaxPacketSize, endpoint->fInterval, highSpeed,
+			wantFrames, fIsInput, &plan)) {
+		dprintf("usb_audio: %s alternate cannot carry %" B_PRIu32 " Hz in "
+			"%u-byte packets (frame %" B_PRIu32 " bytes, bInterval %u)\n",
+			fIsInput ? "record" : "play", samplingRate,
+			(unsigned)(endpoint->fMaxPacketSize & 0x7ff), sampleSize,
+			(unsigned)endpoint->fInterval);
 		return B_BAD_VALUE;
-	}
-
-	// Do not ask the host controller for a packet bigger than the endpoint.
-	// High-speed UAC2 microframes are smaller than a full-speed 1 ms packet.
-	uint16 maxPacket = fAlternates[fActiveAlternate]->Endpoint()->fMaxPacketSize
-		& 0x7ff;
-	if (maxPacket > 0 && packetSize > maxPacket) {
-		packetSize = maxPacket - (maxPacket % sampleSize);
-		if (packetSize == 0) {
-			TRACE(ERR, "endpoint packet %u is smaller than one frame\n",
-				maxPacket);
-			return B_BAD_VALUE;
-		}
 	}
 
 	if (fArea != -1) {
 		Stop();
 		delete_area(fArea);
 		delete_area(fKernelArea);
-		delete fDescriptors;
+		fArea = fKernelArea = -1;
+		delete[] fDescriptors;
+		fDescriptors = NULL;
 	}
+	free(fCarry);
+	fCarry = NULL;
+	free(fActualBytes);
+	fActualBytes = NULL;
+	fCarryFrames = 0;
+	fPadded = fDropped = 0;
 
-	// 0 keeps the historical area (2048 samples times two buffers). A Media
-	// preference writes 256 or 128. USB packets are 1 ms, so the frame count
-	// is rounded up to a whole packet. The extra bytes of the page stay unused.
-	uint32 frames = latency_frames(fIsInput);
-	uint32 packetCount = 0;
-	if (frames == 0) {
-		fAreaSize = sampleSize * kSamplesBufferSize * kSamplesBufferCount;
-	} else {
-		uint32 samplesPerPacket = packetSize / sampleSize;
-		if (samplesPerPacket == 0) {
-			TRACE(ERR, "samples per packet is 0\n");
-			return B_BAD_VALUE;
-		}
-		uint32 aligned = ((frames + samplesPerPacket - 1) / samplesPerPacket)
-			* samplesPerPacket;
-		packetCount = (aligned / samplesPerPacket) * kSamplesBufferCount;
-		fAreaSize = packetCount * packetSize;
-	}
+	fPlan = plan;
+	fRegionBytes = plan.regionBytes;
+	fAreaSize = fRegionBytes * kSamplesBufferCount;
 	TRACE(INF, "estimate fAreaSize:%d\n", fAreaSize);
+// SPDX-SnippetEnd
 
 	// round up to B_PAGE_SIZE and create area
 	fAreaSize = (fAreaSize + (B_PAGE_SIZE - 1)) &~ (B_PAGE_SIZE - 1);
@@ -315,29 +420,43 @@ Stream::_SetupBuffers()
 	TRACE(INF, "Created area id:%d at addr:%#010x size:%#010lx\n",
 		fArea, fDescriptors, fAreaSize);
 
-	if (frames == 0) {
-		fDescriptorsCount = fAreaSize / packetSize;
-		// we need same size sub-buffers. round it
-		fDescriptorsCount = ROUNDDOWN(fDescriptorsCount, kSamplesBufferCount);
-	} else
-		fDescriptorsCount = packetCount;
-	fDescriptors = new usb_iso_packet_descriptor[fDescriptorsCount];
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	fDescriptorsCount = (size_t)plan.packetsPerBuffer * kSamplesBufferCount;
+	fDescriptors = new(std::nothrow) usb_iso_packet_descriptor[fDescriptorsCount];
+	if (fDescriptors == NULL)
+		return B_NO_MEMORY;
+	if (fIsInput) {
+		fActualBytes = (uint32*)malloc(sizeof(uint32) * plan.packetsPerBuffer);
+		fCarry = (uint8*)malloc(
+			((size_t)usb_audio_carry_capacity(&plan) + 1) * sampleSize);
+		if (fActualBytes == NULL || fCarry == NULL)
+			return B_NO_MEMORY;
+	}
 	TRACE(INF, "descriptorsCount:%d\n", fDescriptorsCount);
 
-	// samples count
-	fSamplesCount = fDescriptorsCount * packetSize / sampleSize;
+	fSamplesCount = (size_t)plan.framesPerBuffer * kSamplesBufferCount;
 	fConfiguredFrames = frames;
 	dprintf("usb_audio: %s buffer %" B_PRIu32 " frames (setting %" B_PRIu32
-		")\n", fIsInput ? "record" : "play",
-		(uint32)(fSamplesCount / kSamplesBufferCount), frames);
+		"), %" B_PRIu32 " packets of up to %" B_PRIu32 " frames, %" B_PRIu32
+		" packets/s, %s speed\n", fIsInput ? "record" : "play",
+		plan.framesPerBuffer, frames, plan.packetsPerBuffer,
+		fIsInput ? plan.requestFrames : plan.nominalMaxFrames,
+		plan.packetsPerSecond, highSpeed ? "high" : "full");
 	TRACE(INF, "samplesCount:%d\n", fSamplesCount);
 
-	// initialize descriptors array
+	// Playback packets carry their share of the buffer's frames. Recording
+	// packets ask for as many frames as wMaxPacketSize holds; the device
+	// sends what its clock needs and the callback joins them.
 	for (size_t i = 0; i < fDescriptorsCount; i++) {
-		fDescriptors[i].request_length = packetSize;
+		uint32 packetFrames = fIsInput ? plan.requestFrames
+			: usb_audio_packet_frames(&plan, i % plan.packetsPerBuffer);
+		fDescriptors[i].request_length = (int16)(packetFrames * sampleSize);
 		fDescriptors[i].actual_length = 0;
 		fDescriptors[i].status = B_OK;
 	}
+// SPDX-SnippetEnd
 
 	return fStatus;
 }
@@ -386,7 +505,16 @@ Stream::Start()
 {
 	status_t result = B_BUSY;
 	if (!fIsRunning) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// A stream the callback stopped after repeated errors may still have
+		// a transfer queued. Cancel it so both buffers are not queued twice.
+		if (fStreamEndpoint != 0)
+			Stop();
+// SPDX-SnippetEnd
 		atomic_set(&fQueueStopped, 0);
+		atomic_set(&fTransferErrors, 0);
 		for (size_t i = 0; i < kSamplesBufferCount; i++)
 			result = _QueueNextTransfer(i, i == 0);
 		fIsRunning = result == B_OK;
@@ -413,13 +541,14 @@ Stream::Stop()
 status_t
 Stream::_QueueNextTransfer(size_t queuedBuffer, bool start)
 {
-	TypeIFormatDescriptor* format = static_cast<TypeIFormatDescriptor*>(
-		fAlternates[fActiveAlternate]->Format());
-
-	size_t bufferSize = format->fNumChannels * format->fSubframeSize;
-	bufferSize *= fSamplesCount / kSamplesBufferCount;
-
-	size_t packetsCount = fDescriptorsCount / kSamplesBufferCount;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A region is the bytes of one buffer's packets: exactly one buffer of
+	// frames for playback, room for the largest packets for recording.
+	size_t bufferSize = fRegionBytes;
+	size_t packetsCount = fPlan.packetsPerBuffer;
+// SPDX-SnippetEnd
 
 	TRACE(DTA, "buffers:%#010x[%#x]\ndescrs:%#010x[%#x]\n",
 		fKernelBuffers + bufferSize * queuedBuffer, bufferSize,
@@ -463,12 +592,40 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 		TRACE(ERR, "Processed buffers overflow:%d\n", stream->fProcessedBuffers);
 	stream->fRealTime = system_time();
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// Recording: join the packets of the buffer that just completed into
+	// exactly one buffer of frames before the reader is woken. The buffer
+	// that completed is the one after fCurrentBuffer.
+	if (stream->fIsInput)
+		stream->_JoinRecorded((stream->fCurrentBuffer + 1) % kSamplesBufferCount);
+// SPDX-SnippetEnd
+
 	release_sem_etc(stream->fDevice->fBuffersReadySem, 1, B_DO_NOT_RESCHEDULE);
 
-	// An error that comes straight back (babble, missed service) would
-	// otherwise queue the next packet in a tight loop (Haiku #18842).
-	if (status != B_OK)
-		snooze(1000);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// This callback runs in the USB stack's finisher thread, so it must not
+	// sleep: a snooze here held up every other transfer on the controller.
+	// An error that keeps coming straight back (babble, missed service,
+	// Haiku #18842) now stops the stream after kMaxTransferErrors in a row
+	// instead of looping. The next buffer exchange starts it again.
+	if (status != B_OK) {
+		if (atomic_add(&stream->fTransferErrors, 1) + 1 >= kMaxTransferErrors) {
+			dprintf("usb_audio: %s stream stopped after %" B_PRId32
+				" transfer errors in a row (last %#" B_PRIx32 ")\n",
+				stream->fIsInput ? "record" : "play", kMaxTransferErrors,
+				status);
+			atomic_set(&stream->fQueueStopped, 1);
+			stream->fIsRunning = false;
+			atomic_add(&stream->fInsideNotify, -1);
+			return;
+		}
+	} else
+		atomic_set(&stream->fTransferErrors, 0);
+// SPDX-SnippetEnd
 
 	stream->fCurrentBuffer = (stream->fCurrentBuffer + 1) % kSamplesBufferCount;
 	status_t queued = stream->_QueueNextTransfer(stream->fCurrentBuffer, false);
@@ -478,6 +635,36 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 
 	atomic_add(&stream->fInsideNotify, -1);
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+void
+Stream::_JoinRecorded(size_t buffer)
+{
+	if (fActualBytes == NULL || fCarry == NULL || fPlan.packetsPerBuffer == 0)
+		return;
+
+	usb_iso_packet_descriptor* descriptors
+		= fDescriptors + buffer * fPlan.packetsPerBuffer;
+	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++) {
+		fActualBytes[i] = descriptors[i].status == B_OK
+				&& descriptors[i].actual_length > 0
+			? (uint32)descriptors[i].actual_length : 0;
+	}
+
+	uint32 before = fPadded + fDropped;
+	usb_audio_compact_record(&fPlan, fKernelBuffers + fRegionBytes * buffer,
+		fActualBytes, fCarry, &fCarryFrames, &fPadded, &fDropped);
+	uint32 after = fPadded + fDropped;
+	// One line per second of frames that had to be repeated or dropped.
+	if (after / fPlan.rate != before / fPlan.rate) {
+		dprintf("usb_audio: record clock drift, %" B_PRIu32 " frames padded, %"
+			B_PRIu32 " dropped so far\n", fPadded, fDropped);
+	}
+}
+// SPDX-SnippetEnd
 
 
 void
@@ -579,8 +766,23 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
 
 	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
-		_AudioControl* control = fControlInterface->Find(TerminalLink());
-		uint8 clock = control != NULL ? control->ClockSourceId() : 0;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// The rate is set on the clock source, not on a selector in front
+		// of it. Init() found it; refuse rather than send clock 0.
+		uint8 clock = fClockId;
+		if (clock == 0) {
+			_AudioControl* control = fControlInterface->Find(TerminalLink());
+			clock = control != NULL ? fControlInterface->ResolveClockSource(
+				control->ClockSourceId()) : 0;
+		}
+		if (clock == 0) {
+			dprintf("usb_audio: no clock source to set %" B_PRIu32 " Hz on\n",
+				samplingRate);
+			return B_ERROR;
+		}
+// SPDX-SnippetEnd
 		uint32 rate = samplingRate;
 		status = gUSBModule->send_request(fDevice->fDevice,
 			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,
@@ -607,9 +809,18 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 status_t
 Stream::GetBuffers(multi_buffer_list* List)
 {
-// TODO: check the available buffers count!
 	if (fAreaSize == 0)
 		return B_NO_INIT;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The loop below fills kSamplesBufferCount entries of the caller's array.
+	if ((fIsInput ? List->request_record_buffers
+			: List->request_playback_buffers) < (int32)kSamplesBufferCount) {
+		return B_BAD_VALUE;
+	}
+// SPDX-SnippetEnd
 
 	int32 startChannel = List->return_playback_channels;
 	buffer_desc** Buffers = List->playback_buffers;
@@ -648,7 +859,13 @@ Stream::GetBuffers(multi_buffer_list* List)
 			uint32 stride = format->fSubframeSize * format->fNumChannels;
 			descs[channel].stride = stride;
 
-			size_t bufferSize = (fSamplesCount / kSamplesBufferCount) * stride;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// Buffers start one region apart. A recording region is larger
+			// than its frames; the frames are joined at its start.
+			size_t bufferSize = fRegionBytes;
+// SPDX-SnippetEnd
 			descs[channel].base = (char*)fBuffers;
 			descs[channel].base += buffer * bufferSize;
 			descs[channel].base += channel * format->fSubframeSize;
