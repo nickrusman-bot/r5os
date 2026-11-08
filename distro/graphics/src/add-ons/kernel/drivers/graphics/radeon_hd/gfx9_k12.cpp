@@ -57,7 +57,7 @@ static uint8 sFirstRaw[4][32];
 static area_id sSystemArea = -1;
 static bool sGfx9Started = false;
 static bool sGpuDebug = false;
-static bool sInvRange = false;
+static bool sInvRange = true;
 static bool sHubLinux = false;
 static bool sVmids = false;
 
@@ -1765,7 +1765,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 		sGpuDebug = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);
 		sInvRange = get_driver_boolean_parameter(settings, "gfx9_inv_range",
-			false, true);
+			true, true);
 		sHubLinux = get_driver_boolean_parameter(settings, "gfx9_hub_linux",
 			false, true);
 		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",

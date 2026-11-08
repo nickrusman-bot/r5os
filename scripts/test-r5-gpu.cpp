@@ -1387,6 +1387,39 @@ main()
 		|| r5_gfx9_inv_range_hi_value() != 0x1fu)
 		return fail("inv values");
 	{
+		uint32_t lo[18];
+		uint32_t hi[18];
+		uint32_t engine;
+		uint32_t wrote;
+		memset(lo, 0, sizeof(lo));
+		memset(hi, 0, sizeof(hi));
+		if (r5_gfx9_inv_range_chosen(0, 0) != 1
+			|| r5_gfx9_inv_range_chosen(0, 1) != 1)
+			return fail("inv default");
+		if (r5_gfx9_inv_range_chosen(1, 0) != 0)
+			return fail("inv off");
+		if (r5_gfx9_inv_range_chosen(1, 1) != 1)
+			return fail("inv on");
+		wrote = r5_gfx9_inv_range_write(lo, hi, r5_gfx9_inv_range_chosen(0, 0));
+		if (wrote != 18u)
+			return fail("inv engines written");
+		for (engine = 0; engine < wrote; engine++) {
+			if (lo[engine] != 0xffffffffu || hi[engine] != 0x1fu)
+				return fail("inv engine value");
+		}
+		if (r5_gfx9_inv_range_write(lo, hi, r5_gfx9_inv_range_chosen(1, 0)) != 0)
+			return fail("inv off write");
+		const char* invDefault[] = {
+			"static bool sInvRange = true;",
+			"get_driver_boolean_parameter(settings, \"gfx9_inv_range\",\n"
+				"\t\t\ttrue, true);"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", invDefault, 2) != 0)
+			return 1;
+	}
+	{
 		struct r5_vm_size size = r5_vm_adjust(256u * 1024u, 3u, 48u, 16u);
 		uint32_t cntl = r5_gfx9_vmid_cntl(&size, 0);
 		uint32_t depthBits = VM_CONTEXT0_CNTL__PAGE_TABLE_BLOCK_SIZE__SHIFT

@@ -54,4 +54,31 @@ r5_gfx9_inv_range_hi_value(void)
 }
 
 
+/* No settings line leaves the range on. A line that says false turns
+ * it off. An empty line uses the same default as a missing line. */
+static inline int
+r5_gfx9_inv_range_chosen(int line_present, int line_on)
+{
+	if (!line_present)
+		return 1;
+	return line_on ? 1 : 0;
+}
+
+
+/* One store per engine, the same pair gfxhub_v1_0_program_invalidation
+ * writes. Off writes nothing and returns 0. */
+static inline uint32_t
+r5_gfx9_inv_range_write(uint32_t* lo, uint32_t* hi, int on)
+{
+	uint32_t engine;
+	if (!on || lo == NULL || hi == NULL)
+		return 0;
+	for (engine = 0; engine < r5_gfx9_inv_engines(); engine++) {
+		lo[engine] = r5_gfx9_inv_range_lo_value();
+		hi[engine] = r5_gfx9_inv_range_hi_value();
+	}
+	return r5_gfx9_inv_engines();
+}
+
+
 #endif
