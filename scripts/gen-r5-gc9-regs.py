@@ -26,6 +26,7 @@ CHECK = ROOT / "scripts/r5-gc9-regs-check.inc"
 
 SOURCES = [
     "gc_9_0_offset.h",
+    "gc_9_0_sh_mask.h",
     "gc_9_1_offset.h",
     "osssys_4_0_offset.h",
     "nbio_7_0_offset.h",
@@ -87,6 +88,14 @@ ALWAYS = [
     "mmVM_CONTEXT1_CNTL",
     "mmVM_CONTEXT0_CNTL",
     "mmIH_VMID_0_LUT",
+    "mmMC_VM_AGP_BASE",
+    "mmVM_L2_PROTECTION_FAULT_CNTL2",
+    "mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32",
+    "mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32",
+]
+
+SHIFTS = [
+    "VM_L2_PROTECTION_FAULT_CNTL2__ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY__SHIFT",
 ]
 
 TARGETS = [
@@ -332,7 +341,7 @@ def main() -> int:
     else:
         for symbol in ALWAYS + BASES:
             used[symbol] = table[symbol][0]
-    for symbol in ALWAYS + BASES:
+    for symbol in ALWAYS + BASES + SHIFTS:
         used.setdefault(symbol, table[symbol][0])
     emit(table, used)
     print(f"wrote {HEADER.relative_to(ROOT).as_posix()} ({len(used)} names)")

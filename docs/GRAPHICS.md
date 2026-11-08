@@ -243,6 +243,24 @@ The GDS switch, the PASID mapping and the SPM VMID update are the VMID-switch pa
 
 The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, which is `0xFFFF1000`, and aligns the ring to 256 dwords. Later packets overwrite that padding. A submission that crosses 1024 uses the wrap in `GFX9 kernel on GC 9.3 (fixed)`. The 15:29 boot ran that submission: `k2_ib` sequence 10 was seen.
 
+## GFXHUB setup compared with Linux
+
+`gfxhub_v1_0_gart_enable` in Linux v6.12. R5 already writes the L1 TLB, the L2 cache controls, the system aperture (high address plus one, which is the Renoir and Green Sardine workaround), and the identity aperture low and high. Those stay. `gfx9_hub_linux` defaults off and adds only the rows marked write.
+
+| Register | Linux | R5 with the setting off | `gfx9_hub_linux` |
+|---|---|---|---|
+| `MC_VM_MX_L1_TLB_CNTL` | enable, access mode 3, advanced model, unmapped 0, MTYPE UC, ATC | same fields (`0x3859` after the clear of `0x3879`) | no extra write |
+| `VM_L2_CNTL`, `CNTL2`, `CNTL3`, `CNTL4` | cache on, invalidate L1 and L2, bank 9, bigk 6, physical taps off | same fields in `radeon_gfx9_prepare_hw` | no extra write |
+| `MC_VM_AGP_BASE` | 0 | not written | write 0 |
+| `MC_VM_AGP_BOT`, `MC_VM_AGP_TOP` | `agp_start >> 24`, `agp_end >> 24` from `amdgpu_gmc_agp_location` | read only | not written. That function is not ported |
+| system aperture low, high, default | from `fb_start`, `fb_end` and the scratch page. High is `fb_end >> 18` plus 1 on Renoir and Green Sardine | already done in `radeon_gfx9_prepare_hw` | no extra write |
+| `VM_L2_PROTECTION_FAULT_DEFAULT_ADDR` | dummy page | K2 dummy page | no extra write |
+| `VM_L2_PROTECTION_FAULT_CNTL2` retry bit | 1 | not written | set bit 0x12 |
+| identity physical offset low and high | 0 | not written | write 0 |
+| `VM_CONTEXT0_CNTL` | `enable_system_domain` | K2. Fixed contract | print only, behind `gpu_debug` |
+
+`gpu_debug` prints the L1, L2, aperture, AGP, identity, fault and VMID 0 registers whether or not `gfx9_hub_linux` is on.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

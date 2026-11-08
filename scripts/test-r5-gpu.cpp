@@ -1139,6 +1139,24 @@ main()
 	if (r5_gfx9_inv_range_lo_value() != 0xffffffffu
 		|| r5_gfx9_inv_range_hi_value() != 0x1fu)
 		return fail("inv values");
+	if (mmMC_VM_AGP_BASE != 0x984u
+		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32 != 0x855u
+		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32 != 0x856u
+		|| VM_L2_PROTECTION_FAULT_CNTL2__ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY__SHIFT
+			!= 0x12u)
+		return fail("hub linux regs");
+	{
+		const char* hubOrder[] = {
+			"if (!sHubLinux)",
+			"gc_byte(mmMC_VM_AGP_BASE), 0",
+			"mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0",
+			"mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", hubOrder, 4) != 0)
+			return 1;
+	}
 	{
 		const char* invOrder[] = {
 			"kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), cntl);",

@@ -56,6 +56,7 @@ static area_id sSystemArea = -1;
 static bool sGfx9Started = false;
 static bool sGpuDebug = false;
 static bool sInvRange = false;
+static bool sHubLinux = false;
 static bool sVmCntlSavedValid = false;
 static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
@@ -687,6 +688,62 @@ r5_gfx9_inv_range_program(void)
 			r5_gfx9_inv_range_hi_value());
 	}
 	r5_gfx9_inv_range_read("wrote");
+}
+
+
+/* Linux v6.12 gfxhub_v1_0.c gart_enable, the registers R5 does not
+ * already write. VMID 0 stays the K2 contract: this only prints it. */
+static void
+r5_gfx9_hub_linux(void)
+{
+	uint32 fault;
+	if (sInfo == NULL)
+		return;
+	if (sGpuDebug) {
+		knote("hub l1 %08lx l2 %08lx %08lx %08lx %08lx",
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_MX_L1_TLB_CNTL)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL2)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL3)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL4)));
+		knote("hub aper %08lx %08lx agp %08lx %08lx %08lx",
+			(unsigned long)kread(sInfo,
+				gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
+			(unsigned long)kread(sInfo,
+				gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)),
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BASE)),
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BOT)),
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_TOP)));
+		knote("hub identity %08lx %08lx fault2 %08lx vmid0 %08lx",
+			(unsigned long)kread(sInfo, gc_byte(
+				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32)),
+			(unsigned long)kread(sInfo, gc_byte(
+				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32)),
+			(unsigned long)kread(sInfo,
+				gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL)));
+	}
+	if (!sHubLinux)
+		return;
+	/* gfxhub_v1_0_init_system_aperture_regs writes AGP_BASE 0.
+	 * BOT and TOP need amdgpu_gmc_agp_location. That function is
+	 * not in this driver, so those two stay as the hardware left them. */
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BASE), 0);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0);
+	fault = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2));
+	fault |= 1u << VM_L2_PROTECTION_FAULT_CNTL2__ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY__SHIFT;
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2), fault);
+	if (sGpuDebug) {
+		knote("hub linux agp base %08lx identity %08lx %08lx fault2 %08lx",
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BASE)),
+			(unsigned long)kread(sInfo, gc_byte(
+				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32)),
+			(unsigned long)kread(sInfo, gc_byte(
+				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32)),
+			(unsigned long)kread(sInfo,
+				gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2)));
+	}
 }
 
 
@@ -1357,6 +1414,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		sInvRange = get_driver_boolean_parameter(settings, "gfx9_inv_range",
 			false, true);
+		sHubLinux = get_driver_boolean_parameter(settings, "gfx9_hub_linux",
+			false, true);
 		unload_driver_settings(settings);
 	}
 	uint32 pci = info.pciID;
@@ -1385,6 +1444,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;
 	r5_gfx9_prepare(&sHost, vramBytes);
 	bool ok = r5_gfx9_start(&sHost, pci, vramBytes, workload, compute, &sResults);
+	if (ok)
+		r5_gfx9_hub_linux();
 	r5_gfx9_copy_firmware(info.fw_version, info.fw_feature, 32);
 	knote("k0 %s fence", ok ? "ok" : "fail");
 	if (ok && irq)
