@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### BCard is a rounded group in libr5ui
+
+`BAppearanceKit::BCard` is a view with a group layout, a one-pixel border, and a corner that follows the font size. Document and panel are the two fills. Colors come from `ui_color()`. `<Card.h>` sits next to `<R5UI.h>`. Nothing calls it yet. `distro/BUILD` stays 10049.
+
 ### libr5ui and libr5icons are MIT
 
 The C++ in `distro/ui` and `distro/icons` is MIT, copyright 2026 R5OS Contributors. Any application can link the libraries. The Tracker and Haiku icon bytes keep their own notices. No call changed. `distro/BUILD` stays 10049.

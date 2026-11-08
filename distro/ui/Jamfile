@@ -25,5 +25,6 @@ SubDir HAIKU_TOP src preferences r5ui ;
 # Both images install it through HaikuImageGetSystemLibs.
 SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
 	R5UI.cpp
+	Card.cpp
 	: be [ TargetLibstdc++ ]
 	;
