@@ -1165,6 +1165,10 @@ r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu)
 static r5_vm sVm;
 static r5_vm_page sVmPages[1024];
 static bool sVmid1 = false;
+/* gfx9_vmid_per_file. The shared tree stays sVm. An open file selects its own. */
+static bool sVmidPerFile = false;
+static r5_vm* sActiveVm = &sVm;
+static uint64 sSharedRoot = 0;
 
 
 static int
@@ -1526,6 +1530,7 @@ r5_gfx9_vmid1_setup()
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32)),
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32)),
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32)));
+	sSharedRoot = tableBase;
 	r5_gfx9_vmid1_set_root(tableBase);
 	/* Linux programs the engine ranges after setup_vmid_config. */
 	r5_gfx9_vmids_program();
@@ -1574,12 +1579,60 @@ r5_gfx9_csa_map(void)
 }
 
 
+static r5_vm*
+current_vm(void)
+{
+	if (sActiveVm != NULL && sActiveVm->pages != NULL && sActiveVm->used > 0)
+		return sActiveVm;
+	return &sVm;
+}
+
+
+bool
+r5_gfx9_vmid_per_file(void)
+{
+	return sVmidPerFile;
+}
+
+
+void
+r5_gfx9_vm_select(r5_vm* vm)
+{
+	sActiveVm = vm != NULL ? vm : &sVm;
+}
+
+
+uint64
+r5_gfx9_vmid1_shared_root(void)
+{
+	return sSharedRoot;
+}
+
+
+bool
+r5_gfx9_file_vm_init(r5_vm* vm, r5_vm_page* pages, uint32 capacity)
+{
+	if (vm == NULL || pages == NULL || capacity < 2 || !sVmid1)
+		return false;
+	memset(vm, 0, sizeof(*vm));
+	memset(pages, 0, sizeof(r5_vm_page) * capacity);
+	vm->pages = pages;
+	vm->capacity = capacity;
+	vm->alloc = vm_page_alloc;
+	if (!r5_vm_new_page(vm, 0))
+		return false;
+	if (!r5_gfx9_pde_aligned(vm->pages[0].physical))
+		return false;
+	return true;
+}
+
+
 bool
 r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 {
 	if (!sVmid1)
 		return false;
-	if (!r5_vm_map_page(&sVm, va, pte))
+	if (!r5_vm_map_page(current_vm(), va, pte))
 		return false;
 	asm volatile("sfence" ::: "memory");
 	/* A cleared PTE is an unmap. The next user job flushes that. */
@@ -1594,7 +1647,7 @@ r5_gfx9_vmid1_lookup(uint64 va)
 	uint64 pte = 0;
 	if (!sVmid1)
 		return false;
-	if (r5_vm_lookup(&sVm, va & ~0xfffull, &pte) == 0)
+	if (r5_vm_lookup(current_vm(), va & ~0xfffull, &pte) == 0)
 		return false;
 	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
 }
@@ -1603,16 +1656,17 @@ r5_gfx9_vmid1_lookup(uint64 va)
 void
 r5_gfx9_vmid1_levels(const char* name, uint64 va)
 {
-	if (name == NULL || !sVmid1 || sVm.used == 0 || sInfo == NULL
+	r5_vm* vm = current_vm();
+	if (name == NULL || !sVmid1 || vm->used == 0 || sInfo == NULL
 		|| sInfo->shared_info == NULL)
 		return;
 	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 	uint64 base = r5_gpu_carveout_base(fb);
 	int index = 0;
 	for (int level = 3; level >= 0; level--) {
-		uint64 phys = sVm.pages[index].physical;
+		uint64 phys = vm->pages[index].physical;
 		uint64 off = phys - base;
-		uint64* table = sVm.pages[index].cpu;
+		uint64* table = vm->pages[index].cpu;
 		uint64 word = 0;
 		bool ok = table != NULL;
 		if (ok) {
@@ -1624,7 +1678,7 @@ r5_gfx9_vmid1_levels(const char* name, uint64 va)
 			(unsigned long long)word);
 		if (level == 0 || !ok || !r5_vm_is_table(word))
 			break;
-		index = r5_vm_find(&sVm, word);
+		index = r5_vm_find(vm, word);
 		if (index < 0)
 			break;
 	}
@@ -1636,7 +1690,7 @@ r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
 {
 	if (pte == NULL || !sVmid1)
 		return false;
-	return r5_vm_lookup(&sVm, va & ~0xfffull, pte) != 0;
+	return r5_vm_lookup(current_vm(), va & ~0xfffull, pte) != 0;
 }
 
 
@@ -1770,6 +1824,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",
 			false, true);
+		sVmidPerFile = get_driver_boolean_parameter(settings,
+			"gfx9_vmid_per_file", false, true);
 		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
 			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);

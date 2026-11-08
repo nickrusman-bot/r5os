@@ -4,7 +4,8 @@
  *
  * Render node /dev/gpu/radeon_hd/<n>. The graphics node is unchanged.
  * Without gpu_render the node only answers GET_INFO. VMID 1 is one
- * shared address space. A job that stays in the ring for 5 seconds
+ * shared address space unless gfx9_vmid_per_file is set. A job that
+ * stays in the ring for 5 seconds
  * marks the device lost. A client wait does not. There is no reset.
  * The GFX watchdog is 10 seconds, the same as amdgpu.lockup_timeout.
  */
@@ -19,6 +20,7 @@
 #include "r5_log.h"
 #include "r5_vm.h"
 #include "r5_pasid.h"
+#include "r5_vmid.h"
 #include "r5_defer.h"
 
 #include <KernelExport.h>
@@ -323,6 +325,11 @@ struct gpu_client {
 	/* Handed out at CTX create. 0 means there is no live context. */
 	uint64			fenceCtx;
 	uint32			pasid;
+	/* Own page table when gfx9_vmid_per_file is on. Off leaves these empty. */
+	r5_vm			fileVm;
+	r5_vm_page*		filePages;
+	uint32			fileOwner;
+	bool			fileRoot;
 	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };
@@ -341,6 +348,9 @@ static uint32 sLastIbN;
 /* Kernel jobs (mark, stage P, the copies) use fence context 0. */
 static int32 sKernelPreamble;
 static radeon_info* sInfo;
+static r5_vmid_mgr sFileVmids;
+static bool sFileVmidsReady = false;
+static uint32 sNextFileOwner = 1;
 static bool sReplacing;
 static lock sGpuLock;
 static ConditionVariable sEop;
@@ -368,6 +378,7 @@ gpu_lock()
 static void
 gpu_unlock()
 {
+	r5_gfx9_vm_select(NULL);
 	release_lock(&sGpuLock);
 }
 
@@ -1583,6 +1594,10 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		ringIbs[i].flags = ibs[i].flags;
 	}
 	uint32 dwords = r5_gfx9_user_commit_dwords(in.ib_count);
+	/* The file's page-table base is written after the room wait, so the
+	 * count includes one VM flush that touch() will make due. */
+	if (client->fileRoot && dwords != 0)
+		dwords += r5_cs_vm_switch_words();
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
@@ -1644,15 +1659,42 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	}
 	job->count = in.signal_count;
 	uint64 sequence = 0;
+	int fileHeld = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(client->pasid, (uint64)(addr_t)client);
 	if (client->contexts <= 0 || client->fenceCtx == 0)
 		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,
 			in.ib_count, 0, 0, in.ring, 0);
+	if (client->fileRoot) {
+		int flush = 0;
+		uint32 fileVmid = r5_vmid_reserve(&sFileVmids, client->fileOwner,
+			r5_gfx9_user_seen(), client->fileVm.used, &flush);
+		if (fileVmid == 0)
+			return gpu_refuse("CS_SUBMIT", "vmid", B_BUSY, in.context, 0,
+				in.ib_count, 0, 0, in.ring, 0);
+		fileHeld = 1;
+		(void)flush;
+		for (uint32 i = 0; i < in.ib_count; i++)
+			ringIbs[i].vmid = fileVmid;
+		r5_gfx9_vmid1_set_root(client->fileVm.pages[0].physical
+			| (uint64)R5_GFX9_PTE_VALID);
+		r5_gfx9_vmid1_touch();
+	}
 	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, client->fenceCtx,
-			&client->preamblePresented, &sequence))
+			&client->preamblePresented, &sequence)) {
+		if (fileHeld) {
+			r5_vmid_cancel(&sFileVmids);
+			r5_gfx9_vmid1_set_root(r5_gfx9_vmid1_shared_root());
+			r5_gfx9_vmid1_touch();
+		}
 		return gpu_refuse("CS_SUBMIT", "ring", B_ERROR, in.context, 0,
 			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
+	}
+	if (fileHeld) {
+		r5_vmid_arm(&sFileVmids, sequence);
+		r5_gfx9_vmid1_set_root(r5_gfx9_vmid1_shared_root());
+		r5_gfx9_vmid1_touch();
+	}
 	job->sequence = sequence;
 	job->submitted = system_time();
 	if (in.ib_count > 0)
@@ -3375,6 +3417,12 @@ gpu_free(void* cookie)
 	}
 	if (client->pasid != 0)
 		r5_pasid_free(&sPasids, client->pasid);
+	if (client->fileRoot) {
+		r5_vmid_release(&sFileVmids, client->fileOwner, r5_gfx9_user_seen());
+		free(client->filePages);
+		client->filePages = NULL;
+		client->fileRoot = false;
+	}
 	if (sClientList == client)
 		sClientList = client->next;
 	else {
@@ -3468,6 +3516,36 @@ gpu_debug_switch(void* buffer, size_t length)
 
 
 static status_t
+gpu_file_root(gpu_client* client)
+{
+	if (!r5_gfx9_vmid_per_file() || client == NULL)
+		return B_OK;
+	if (client->fileRoot)
+		return B_OK;
+	if (!r5_gfx9_vmid1_setup())
+		return B_NO_INIT;
+	client->filePages = (r5_vm_page*)malloc(sizeof(r5_vm_page) * 256);
+	if (client->filePages == NULL)
+		return B_NO_MEMORY;
+	if (!r5_gfx9_file_vm_init(&client->fileVm, client->filePages, 256)) {
+		free(client->filePages);
+		client->filePages = NULL;
+		return B_NO_MEMORY;
+	}
+	if (!sFileVmidsReady) {
+		r5_vmid_init(&sFileVmids);
+		sFileVmidsReady = true;
+	}
+	client->fileOwner = sNextFileOwner;
+	sNextFileOwner++;
+	if (sNextFileOwner == 0)
+		sNextFileOwner = 1;
+	client->fileRoot = true;
+	return B_OK;
+}
+
+
+static status_t
 gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	gpu_client* client = (gpu_client*)cookie;
@@ -3482,6 +3560,14 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 
 	gpu_lock();
 	sInfo = client->info;
+	if (r5_gfx9_vmid_per_file()) {
+		status_t root = gpu_file_root(client);
+		if (root != B_OK) {
+			gpu_unlock();
+			return root;
+		}
+		r5_gfx9_vm_select(&client->fileVm);
+	}
 	status_t status = B_BAD_VALUE;
 	if (op == R5_GPU_READ_REG) {
 		r5_gpu_read_reg in;
@@ -3630,8 +3716,9 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 				status = gpu_copy_out(buffer, length, &in, sizeof(in));
 			}
 		}
-	} else
+	} 	else
 		status = B_UNSUPPORTED;
+	r5_gfx9_vm_select(NULL);
 	gpu_unlock();
 	return status;
 }

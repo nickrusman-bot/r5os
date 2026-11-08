@@ -281,7 +281,7 @@ The R5 command-submit ioctl has no GDS chunk, so the six values are 0. That is t
 
 `r5_vmid.h` is `amdgpu_vmid_grab` for VMIDs 1–15: an idle VMID, the same owner while its fence has not retired, otherwise the least recently used idle VMID, and a flush when the owner or the recorded TLB sequence changes. Fifteen busy VMIDs make the next grab return none. VMID 0 is not in the table.
 
-The grab is not called from the submit path. `amdgpu_vm_init` gives each open file its own root page table, and the ring flush then writes that root into the VMID it grabbed. R5 still has one root, built for VMID 1 in `r5_gfx9_vmid1_setup`. Pointing two VMIDs at that one root would be a different machine from Linux. What it takes is one root, and the page-table pages under it, per open file, from the same allocator that builds the VMID 1 root. `gfx9_vmid_per_file` is not read until that exists. This is the stop in night step N9.
+`gfx9_vmid_per_file` defaults off. Off keeps the one root from `r5_gfx9_vmid1_setup` and submits on VMID 1. On, the first call for an open file builds a root with the same page allocator, and a submit grabs a VMID with `r5_vmid_reserve`. The existing VM flush writes that file's root into the grabbed VMID, then writes the shared root back so a later VMID 1 job is unchanged. The debug switch still refuses the bit: the root is created from the boot setting, not from a flip while files are open. Page-table pages are not freed until the next boot. A grabbed VMID above 1 still needs `gfx9_vmids` for its context bounds. The host test maps one address in two trees and reads two pages. It has not been booted.
 
 ## Deferred free
 
@@ -332,7 +332,7 @@ Built, and not needed for M4, still default off: `gfx9_hub_linux`, `gfx9_vmids`,
 
 ## Self-test switch
 
-`R5_GPU_DEBUG_SWITCH` is accepted only while `gpu_debug` is on. It flushes VMID 1 and waits until the newest user fence has been seen, then sets the bits for `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free`. `gfx9_vmid_per_file` is refused. The line carries the time and the bits.
+`R5_GPU_DEBUG_SWITCH` is accepted only while `gpu_debug` is on. It flushes VMID 1 and waits until the newest user fence has been seen, then sets the bits for `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free`. `gfx9_vmid_per_file` is still refused by this switch. The boot setting of that name is separate and defaults off. The line carries the time and the bits.
 
 R1a and R1b run once after stage P. R1c runs after the teapots. The result file prints pass when the old page is `11111111` and the new page is `22222222`.
 

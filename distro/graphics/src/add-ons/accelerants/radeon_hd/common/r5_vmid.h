@@ -2,7 +2,7 @@
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * VMIDs 1-15, one owner at a time. Linux v6.12 amdgpu_ids.c
+ * VMIDs 1-15, one owner at a time. Linux v6.18 amdgpu_ids.c
  * amdgpu_vmid_grab keeps a VMID while that address space has a job
  * in flight, and flushes when the VMID is given to another owner.
  * VMID 0 stays the kernel ring and is not in this table.

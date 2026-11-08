@@ -83,6 +83,16 @@ bool r5_gfx9_stage_ib(uint8* cpu, uint64 destVa);
 bool r5_gfx9_stage_wb(uint8* cpu, uint64 destVa);
 void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
+/* gfx9_vmid_per_file. Off unless the radeon_hd setting says so.
+ * NULL selects the shared VMID 1 tree. */
+struct r5_vm;
+struct r5_vm_page;
+bool r5_gfx9_vmid_per_file(void);
+void r5_gfx9_vm_select(struct r5_vm* vm);
+bool r5_gfx9_file_vm_init(struct r5_vm* vm, struct r5_vm_page* pages,
+	uint32 capacity);
+/* Physical address with the valid bit, the root r5_gfx9_vmid1_setup wrote. */
+uint64 r5_gfx9_vmid1_shared_root(void);
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
 /* Page-table base for the ring flush: physical address with the valid bit. */

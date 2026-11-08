@@ -530,6 +530,45 @@ main()
 	uint64_t got = 0;
 	if (!r5_vm_lookup(&vm, va, &got) || got != leaf)
 		return fail("lookup");
+	{
+		/* Two open files, one virtual address, two page tables. */
+		static host_page filePages[16];
+		int fileNext = 0;
+		alloc_state fileState = { filePages, &fileNext };
+		r5_vm_page slotsA[8];
+		r5_vm_page slotsB[8];
+		r5_vm fileA;
+		r5_vm fileB;
+		memset(&fileA, 0, sizeof(fileA));
+		memset(&fileB, 0, sizeof(fileB));
+		fileA.pages = slotsA;
+		fileB.pages = slotsB;
+		fileA.capacity = 8;
+		fileB.capacity = 8;
+		fileA.alloc = alloc;
+		fileB.alloc = alloc;
+		fileA.cookie = &fileState;
+		fileB.cookie = &fileState;
+		const uint64_t pageA = 0x111000000ull
+			| (uint64_t)R5_GFX9_PTE_VALID | (uint64_t)R5_GFX9_PTE_READABLE;
+		const uint64_t pageB = 0x222000000ull
+			| (uint64_t)R5_GFX9_PTE_VALID | (uint64_t)R5_GFX9_PTE_READABLE;
+		if (!r5_vm_map_page(&fileA, va, pageA))
+			return fail("file a map");
+		if (!r5_vm_map_page(&fileB, va, pageB))
+			return fail("file b map");
+		uint64_t gotA = 0;
+		uint64_t gotB = 0;
+		if (!r5_vm_lookup(&fileA, va, &gotA) || gotA != pageA)
+			return fail("file a page");
+		if (!r5_vm_lookup(&fileB, va, &gotB) || gotB != pageB)
+			return fail("file b page");
+		if (gotA == gotB)
+			return fail("files share a page");
+		if (fileA.pages[0].physical == 0
+			|| fileA.pages[0].physical == fileB.pages[0].physical)
+			return fail("files share a root");
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)
