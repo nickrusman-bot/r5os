@@ -1549,14 +1549,15 @@ static bool
 gpu_ib_mapped(gpu_client* client, uint64 va, uint32 dwords)
 {
 	r5_vm* vm = gpu_vm(client);
-	if (dwords == 0 || (va & 3ull) != 0)
+	uint64 first = 0;
+	uint64 last = 0;
+	if (!r5_ib_span(va, dwords, &first, &last))
 		return false;
-	uint64 bytes = (uint64)dwords * 4ull;
-	uint64 first = va & ~0xfffull;
-	uint64 last = (va + bytes - 1ull) & ~0xfffull;
-	for (uint64 page = first; page <= last; page += 4096) {
+	for (uint64 page = first; ; page += 4096) {
 		if (!r5_gfx9_vm_lookup(vm, page))
 			return false;
+		if (page == last)
+			break;
 	}
 	return true;
 }

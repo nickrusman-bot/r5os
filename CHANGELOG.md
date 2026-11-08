@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### An indirect buffer cannot wrap the address space
+
+`gfx9_vmid_per_file` stays off. `gpu_ib_mapped` refuses a dword count of 0 or above `0xfffff`, an unaligned address, and a range whose byte sum does not fit in 64 bits. The pages have to fit the virtual-address layout. The walk stops on the last page, so the page counter does not wrap. The host test rejects an address near the top of 64 bits and a count of `0x100000`, and accepts eight dwords on the last page of that span. There is no What's new section and `distro/BUILD` stays the same.
+
 ### The file tree is published under the GPU lock
 
 `gfx9_vmid_per_file` stays off. `gpu_open` builds the file tree, when the setting is on, while the lock is held, and returns the cookie after the lock is dropped. A failed tree takes the client back off the list. `gpu_control` still calls the same function under the lock. The host test checks that order in both functions. There is no What's new section and `distro/BUILD` stays the same.

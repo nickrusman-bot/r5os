@@ -743,6 +743,17 @@ main()
 		if (locked == NULL || opened == NULL || unlocked == NULL)
 			return fail("control lock");
 	}
+	{
+		uint64_t first = 0;
+		uint64_t last = 1;
+		if (r5_ib_span(~0ull - 7ull, 4, &first, &last))
+			return fail("ib wrap");
+		if (r5_ib_span(0xffff800000001004ull, 0x100000u, &first, &last))
+			return fail("ib cap");
+		if (!r5_ib_span(0xffff800000001004ull, 8, &first, &last)
+			|| first != 0xffff800000001000ull || last != first)
+			return fail("ib last");
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)
