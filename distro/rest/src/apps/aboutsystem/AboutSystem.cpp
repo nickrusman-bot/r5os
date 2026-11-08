@@ -38,6 +38,7 @@
 #include <AppFileInfo.h>
 #include <Application.h>
 #include <Bitmap.h>
+#include <Card.h>
 #include <ColorConversion.h>
 #include <ControlLook.h>
 #include <DateTimeFormat.h>
@@ -46,6 +47,8 @@
 #include <File.h>
 #include <FindDirectory.h>
 #include <Font.h>
+#include <GridView.h>
+#include <GroupView.h>
 #include <fs_attr.h>
 #include <LayoutBuilder.h>
 #include <MessageRunner.h>
@@ -207,25 +210,39 @@ public:
 };
 
 
-class LogoView : public BView {
-public:
-							LogoView();
-	virtual					~LogoView();
-
-	virtual	BSize			MinSize();
-	virtual	BSize			MaxSize();
-
-	virtual void			Draw(BRect updateRect);
-
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-			BSize			_DisplaySize() const;
+class R5MarkView : public BView {
+public:
+							R5MarkView();
+	virtual					~R5MarkView();
 
-// SPDX-SnippetEnd
+	virtual	void			Draw(BRect updateRect);
+	virtual	void			AttachedToWindow();
+			void			ApplySize();
+
 private:
 			BBitmap*		fLogo;
 };
+
+
+class R5Header : public BAppearanceKit::BCard {
+public:
+							R5Header();
+
+	virtual	void			AttachedToWindow();
+	virtual	void			MessageReceived(BMessage* message);
+
+private:
+			void			_ApplyFonts();
+
+			R5MarkView*		fMark;
+			BStringView*	fTitle;
+			BStringView*	fOperating;
+			BStringView*	fVersion;
+};
+// SPDX-SnippetEnd
 
 
 class CropView : public BView {
@@ -259,7 +276,7 @@ private:
 };
 
 
-class SysInfoView : public BView {
+class SysInfoView : public BAppearanceKit::BCard {
 public:
 							SysInfoView();
 	virtual					~SysInfoView();
@@ -363,7 +380,7 @@ private:
 	typedef std::map<std::string, PackageCredit*> PackageCreditMap;
 
 			void			_CreateScrollRunner();
-			LogoView*		_CreateLogoView();
+			BView*			_CreateLogoView();
 			SysInfoView*	_CreateSysInfoView();
 			CropView*		_CreateCreditsView();
 // SPDX-SnippetBegin
@@ -381,7 +398,7 @@ private:
 
 
 private:
-			LogoView*		fLogoView;
+			BView*			fLogoView;
 			SysInfoView*	fSysInfoView;
 			HyperTextView*	fCreditsView;
 // SPDX-SnippetBegin
@@ -501,13 +518,69 @@ r5_arch_name()
 // SPDX-SnippetEnd
 
 
-LogoView::LogoView()
-	:
-	BView("logo", B_WILL_DRAW)
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static void
+r5_make_transparent(BView* view)
 {
-	SetDrawingMode(B_OP_ALPHA);
-	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	if (view == NULL)
+		return;
+	view->SetViewColor(B_TRANSPARENT_COLOR);
+	view->SetFlags(view->Flags() | B_TRANSPARENT_BACKGROUND);
+}
 
+
+static void
+r5_color_named(BView* root, const char* name, rgb_color color)
+{
+	BView* view = root->FindView(name);
+	if (view != NULL)
+		view->SetHighColor(color);
+}
+
+
+static void
+r5_color_system_info(BView* root, rgb_color text)
+{
+	rgb_color muted = tint_color(text, B_DARKEN_2_TINT);
+	const char* labels[] = {
+		"cpulabel", "memlabel", "kernellabel", "uptimelabel", NULL
+	};
+	const char* values[] = {
+		"cputext", "ramusagetext", "kerneltext", NULL
+	};
+	for (int32 index = 0; labels[index] != NULL; index++)
+		r5_color_named(root, labels[index], text);
+	for (int32 index = 0; values[index] != NULL; index++)
+		r5_color_named(root, values[index], muted);
+	BTextView* uptime = dynamic_cast<BTextView*>(root->FindView("uptimetext"));
+	if (uptime != NULL)
+		uptime->SetFontAndColor(NULL, 0, &muted);
+}
+
+
+static BGroupView*
+r5_info_cell(BView* label, BView* value)
+{
+	BGroupView* cell = new BGroupView(B_VERTICAL, 0);
+	r5_make_transparent(cell);
+	r5_make_transparent(label);
+	r5_make_transparent(value);
+	BLayoutBuilder::Group<>(cell)
+		.Add(label)
+		.Add(value);
+	return cell;
+}
+
+
+R5MarkView::R5MarkView()
+	:
+	BView("r5-mark", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	fLogo(NULL)
+{
+	r5_make_transparent(this);
+	SetDrawingMode(B_OP_ALPHA);
 #ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	rgb_color bgColor = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 	if (bgColor.IsLight())
@@ -517,133 +590,119 @@ LogoView::LogoView()
 #else
 	fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "r5_symbol.png");
 #endif
-
-	// Set view color to panel background color when fLogo is NULL
-	// to prevent a white pixel from being drawn.
-	if (fLogo == NULL)
-		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 }
 
 
-LogoView::~LogoView()
+R5MarkView::~R5MarkView()
 {
 	delete fLogo;
 }
 
 
-BSize
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-LogoView::_DisplaySize() const
-// SPDX-SnippetEnd
+void
+R5MarkView::Draw(BRect updateRect)
 {
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-	const float inset = 14.0f;
-	const float symbol = 56.0f;
-	BFont title(be_bold_font);
-	title.SetSize(24.0f);
-	BFont operating(be_plain_font);
-	operating.SetSize(20.0f);
-	BFont plain(be_plain_font);
-	float titleWidth = title.StringWidth("R5") + 8.0f
-		+ operating.StringWidth("Operating System");
-	BString version;
-	version.SetToFormat("Version %s • %s", R5_OS_VERSION, r5_arch_name());
-	float textWidth = std::max(titleWidth, plain.StringWidth(version.String()));
-	font_height titleHeight;
-	title.GetHeight(&titleHeight);
-	font_height plainHeight;
-	plain.GetHeight(&plainHeight);
-	float textHeight = ceilf(titleHeight.ascent + titleHeight.descent
-		+ 6.0f + plainHeight.ascent + plainHeight.descent);
-	float height = inset * 2 + std::max(symbol, textHeight);
-	float width = inset + symbol + 12.0f + textWidth + inset;
-	return BSize(ceilf(width), ceilf(height));
-}
-
-
-BSize
-LogoView::MinSize()
-{
-	return _DisplaySize();
-// SPDX-SnippetEnd
-}
-
-
-BSize
-LogoView::MaxSize()
-{
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-	BSize size = _DisplaySize();
-	if (size.width > 0)
-		size.width = B_SIZE_UNLIMITED;
-	return size;
-// SPDX-SnippetEnd
+	(void)updateRect;
+	if (fLogo == NULL)
+		return;
+	DrawBitmap(fLogo, fLogo->Bounds(), Bounds(), B_FILTER_BITMAP_BILINEAR);
 }
 
 
 void
-LogoView::Draw(BRect updateRect)
+R5MarkView::AttachedToWindow()
 {
-	BRect bounds(Bounds());
-	rgb_color background = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
-	SetLowColor(background);
-	FillRect(bounds, B_SOLID_LOW);
+	BView::AttachedToWindow();
+	ApplySize();
+}
 
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-	rgb_color border = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		B_DARKEN_2_TINT);
-	SetHighColor(border);
-	StrokeRect(bounds);
 
-	const float inset = 14.0f;
-	const float symbol = 56.0f;
-	if (fLogo != NULL) {
-		float top = floorf((bounds.Height() - symbol) / 2);
-		BRect dest(inset, top, inset + symbol - 1, top + symbol - 1);
-		DrawBitmap(fLogo, fLogo->Bounds(), dest, B_FILTER_BITMAP_BILINEAR);
-	}
+void
+R5MarkView::ApplySize()
+{
+	float side = be_plain_font->Size() * 4.0f;
+	SetExplicitMinSize(BSize(side, side));
+	SetExplicitMaxSize(BSize(side, side));
+	Invalidate();
+}
 
-	BFont title(be_bold_font);
-	title.SetSize(24.0f);
-	BFont operating(be_plain_font);
-	operating.SetSize(20.0f);
-	BFont plain(be_plain_font);
-	font_height titleHeight;
-	title.GetHeight(&titleHeight);
-	font_height plainHeight;
-	plain.GetHeight(&plainHeight);
-	float block = titleHeight.ascent + titleHeight.descent + 6.0f
-		+ plainHeight.ascent + plainHeight.descent;
-	float blockTop = floorf((bounds.Height() - block) / 2);
-	float baseline = blockTop + titleHeight.ascent;
-	float textLeft = inset + symbol + 12.0f;
 
-	rgb_color text = ui_color(B_DOCUMENT_TEXT_COLOR);
-	SetHighColor(text);
-	SetFont(&title);
-	DrawString("R5", BPoint(textLeft, baseline));
-	float r5Width = title.StringWidth("R5");
-	SetHighColor(tint_color(text, B_LIGHTEN_1_TINT));
-	SetFont(&operating);
-	DrawString("Operating System", BPoint(textLeft + r5Width + 8.0f, baseline));
-
+R5Header::R5Header()
+	:
+	BAppearanceKit::BCard("logo", BAppearanceKit::B_CARD_DOCUMENT,
+		B_HORIZONTAL),
+	fMark(NULL),
+	fTitle(NULL),
+	fOperating(NULL),
+	fVersion(NULL)
+{
+	fMark = new R5MarkView();
+	fTitle = new BStringView("r5-title", "R5");
+	fOperating = new BStringView("r5-operating", "Operating System");
 	BString version;
 	version.SetToFormat("Version %s • %s", R5_OS_VERSION, r5_arch_name());
-	float versionBaseline = baseline + titleHeight.descent + 6.0f
-		+ plainHeight.ascent;
-	SetHighColor(text);
-	SetFont(&plain);
-	DrawString(version.String(), BPoint(textLeft, versionBaseline));
-// SPDX-SnippetEnd
+	fVersion = new BStringView("r5-version", version);
+	r5_make_transparent(fTitle);
+	r5_make_transparent(fOperating);
+	r5_make_transparent(fVersion);
+
+	BGroupView* line = new BGroupView(B_HORIZONTAL, B_USE_SMALL_SPACING);
+	r5_make_transparent(line);
+	BLayoutBuilder::Group<>(line)
+		.Add(fTitle)
+		.Add(fOperating)
+		.AddGlue();
+
+	BGroupView* text = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
+	r5_make_transparent(text);
+	BLayoutBuilder::Group<>(text)
+		.Add(line)
+		.Add(fVersion);
+
+	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
+		.Add(fMark)
+		.Add(text);
+	_ApplyFonts();
 }
+
+
+void
+R5Header::AttachedToWindow()
+{
+	BView::AttachedToWindow();
+	_ApplyFonts();
+}
+
+
+void
+R5Header::MessageReceived(BMessage* message)
+{
+	if (message->what == B_FONTS_UPDATED || message->what == B_COLORS_UPDATED)
+		_ApplyFonts();
+	BCard::MessageReceived(message);
+}
+
+
+void
+R5Header::_ApplyFonts()
+{
+	float size = be_plain_font->Size();
+	BFont title(be_bold_font);
+	title.SetSize(size * 2.0f);
+	fTitle->SetFont(&title, B_FONT_FAMILY_AND_STYLE | B_FONT_SIZE);
+	BFont operating(be_plain_font);
+	operating.SetSize(size * 2.0f);
+	fOperating->SetFont(&operating, B_FONT_FAMILY_AND_STYLE | B_FONT_SIZE);
+	fVersion->SetFont(be_plain_font, B_FONT_FAMILY_AND_STYLE);
+
+	rgb_color text = ui_color(B_DOCUMENT_TEXT_COLOR);
+	fTitle->SetHighColor(text);
+	fOperating->SetHighColor(text);
+	fVersion->SetHighColor(tint_color(text, B_DARKEN_2_TINT));
+	if (fMark != NULL)
+		fMark->ApplySize();
+}
+// SPDX-SnippetEnd
 
 
 //	#pragma mark - CropView
@@ -744,7 +803,7 @@ SysInfoDragger::MessageReceived(BMessage* message)
 
 SysInfoView::SysInfoView()
 	:
-	BView("AboutSystem", B_WILL_DRAW | B_PULSE_NEEDED),
+	BAppearanceKit::BCard("AboutSystem", BAppearanceKit::B_CARD_PANEL),
 	fVersionLabelView(NULL),
 	fVersionInfoView(NULL),
 	fCPULabelView(NULL),
@@ -760,6 +819,8 @@ SysInfoView::SysInfoView()
 	fCachedBaseHeight(kSysInfoMinHeight),
 	fCachedMinHeight(kSysInfoMinHeight)
 {
+	SetFlags(Flags() | B_PULSE_NEEDED);
+
 	// Begin construction of system information controls.
 	system_info sysInfo;
 	get_system_info(&sysInfo);
@@ -808,45 +869,27 @@ SysInfoView::SysInfoView()
 	fBuildView->SetFont(&buildFont, B_FONT_FAMILY_AND_STYLE | B_FONT_SIZE);
 // SPDX-SnippetEnd
 
-	// Now comes the layout
+	// Processors and kernel on the left, memory and time on the right.
+	BGridView* grid = new BGridView(B_USE_BIG_SPACING, B_USE_BIG_SPACING);
+	r5_make_transparent(grid);
+	BLayoutBuilder::Grid<>((BGridLayout*)grid->GetLayout())
+		.Add(r5_info_cell(fCPULabelView, fCPUInfoView), 0, 0)
+		.Add(r5_info_cell(fMemSizeView, fMemUsageView), 1, 0)
+		.Add(r5_info_cell(kernelLabel, fKernelDateTimeView), 0, 1)
+		.Add(r5_info_cell(uptimeLabel, fUptimeView), 1, 1)
+		.SetColumnWeight(0, 1.0f)
+		.SetColumnWeight(1, 1.0f);
 
-	const float offset = be_control_look->DefaultLabelSpacing();
-	const float inset = offset;
-
-	SetLayout(new BGroupLayout(B_VERTICAL, 0));
 	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
-		// Version:
 		.Add(fVersionLabelView)
 		.Add(fVersionInfoView)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 		.Add(abiView)
+		.Add(grid)
+		.Add(fBuildView);
 // SPDX-SnippetEnd
-		.AddStrut(offset)
-		// Processors:
-		.Add(fCPULabelView)
-		.Add(fCPUInfoView)
-		.AddStrut(offset)
-		// Memory:
-		.Add(fMemSizeView)
-		.Add(fMemUsageView)
-		.AddStrut(offset)
-		// Kernel:
-		.Add(kernelLabel)
-		.Add(fKernelDateTimeView)
-		.AddStrut(offset)
-		// Time running:
-		.Add(uptimeLabel)
-		.Add(fUptimeView)
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-		.Add(fBuildView)
-// SPDX-SnippetEnd
-		.AddGlue()
-		.SetInsets(inset)
-		.End();
 
 	_CreateDragger();
 }
@@ -906,6 +949,8 @@ SysInfoView::AttachedToWindow()
 		BView* abiView = FindView("abitext");
 		if (abiView != NULL)
 			abiView->Hide();
+		if (fDragger != NULL)
+			fDragger->Hide();
 	}
 	DoLayout();
 
@@ -948,19 +993,28 @@ SysInfoView::CacheInitialSize()
 		/ (fCachedMinWidth - insets));
 	float uptimeHeight = fUptimeView->LineHeight(0) * lineCount;
 	fCachedMinHeight = fCachedBaseHeight + uptimeHeight;
+	if (GetLayout() != NULL) {
+		BSize layoutSize = GetLayout()->MinSize();
+		if (layoutSize.width > fCachedMinWidth)
+			fCachedMinWidth = layoutSize.width;
+		if (layoutSize.height > 0)
+			fCachedMinHeight = layoutSize.height;
+	}
 
 	// set view limits
 	float maxWidth = _IsReplicant() ? fCachedMinWidth : B_SIZE_UNLIMITED;
 	SetExplicitMinSize(BSize(fCachedMinWidth, B_SIZE_UNSET));
-	SetExplicitMaxSize(BSize(maxWidth, fCachedMinHeight));
-	fUptimeView->SetExplicitMaxSize(BSize(fCachedMinWidth - insets, uptimeHeight));
+	SetExplicitMaxSize(BSize(maxWidth,
+		_IsReplicant() ? fCachedMinHeight : B_SIZE_UNSET));
+	fUptimeView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED,
+		fUptimeView->LineHeight(0)));
 }
 
 
 void
 SysInfoView::Draw(BRect updateRect)
 {
-	BView::Draw(updateRect);
+	BAppearanceKit::BCard::Draw(updateRect);
 
 	// stroke a line around the view
 	if (_IsReplicant() && fDragger != NULL && fDragger->AreDraggersDrawn())
@@ -1052,6 +1106,7 @@ SysInfoView::_UpdateColors()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
+		r5_color_system_info(this, textColor);
 		if (fBuildView != NULL) {
 			rgb_color buildColor = tint_color(textColor, B_LIGHTEN_1_TINT);
 			fBuildView->SetDrawingMode(B_OP_ALPHA);
@@ -1063,13 +1118,13 @@ SysInfoView::_UpdateColors()
 		}
 // SPDX-SnippetEnd
 	} else {
-		fUptimeView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-		fUptimeView->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 		rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
-		fUptimeView->SetFontAndColor(NULL, 0, &textColor);
+		r5_make_transparent(fUptimeView);
+		fUptimeView->SetDrawingMode(B_OP_ALPHA);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
+		r5_color_system_info(this, textColor);
 		if (fBuildView != NULL)
 			fBuildView->SetHighColor(tint_color(textColor, B_LIGHTEN_1_TINT));
 // SPDX-SnippetEnd
@@ -1127,6 +1182,7 @@ SysInfoView::_UpdateLabel(BStringView* label)
 	label->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
 		B_ALIGN_VERTICAL_UNSET));
 	label->SetFont(be_bold_font, B_FONT_FAMILY_AND_STYLE);
+	r5_make_transparent(label);
 }
 
 
@@ -1146,6 +1202,7 @@ SysInfoView::_UpdateSubtext(BStringView* subtext)
 	subtext->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
 		B_ALIGN_VERTICAL_UNSET));
 	subtext->SetFont(be_plain_font, B_FONT_FAMILY_AND_STYLE);
+	r5_make_transparent(subtext);
 }
 
 
@@ -1469,10 +1526,11 @@ AboutView::AboutView()
 	fBeOSRedColor = mix_color(fTextColor, kIdealBeOSRed, 191);
 	fBeOSBlueColor = mix_color(fTextColor, kIdealBeOSBlue, 191);
 
-	SetLayout(new BGroupLayout(B_VERTICAL, 0));
+	SetLayout(new BGroupLayout(B_VERTICAL, B_USE_BIG_SPACING));
 	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
-		.Add(_CreateLogoView())
-		.Add(_CreateSysInfoView())
+		.SetInsets(B_USE_BIG_SPACING)
+		.Add(_CreateLogoView(), 0.0f)
+		.Add(_CreateSysInfoView(), 0.0f)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -1811,10 +1869,10 @@ AboutView::_CreateScrollRunner()
 }
 
 
-LogoView*
+BView*
 AboutView::_CreateLogoView()
 {
-	fLogoView = new(std::nothrow) LogoView();
+	fLogoView = new(std::nothrow) R5Header();
 
 	return fLogoView;
 }
