@@ -1566,14 +1566,14 @@ main()
 			|| words[0] != r5_cs_packet3(0x49, 6) || words[5] != 0x22222222u)
 			return fail("r1 release");
 		const char* r1Order[] = {
-			"radeon_hd: r1a gtt",
-			"radeon_hd: r1a vram",
-			"radeon_hd: r1b gtt",
-			"radeon_hd: r1b vram",
+			"gpu_stage_r1_line(\"r1a gtt\"",
+			"gpu_stage_r1_line(\"r1a vram\"",
+			"gpu_stage_r1_line(\"r1b gtt\"",
+			"gpu_stage_r1_line(\"r1b vram\"",
 			"r1c:",
-			"radeon_hd: r1c gtt",
-			"radeon_hd: r1c vram",
-			"radeon_hd: r1 free a"
+			"gpu_stage_r1_line(\"r1c gtt\"",
+			"gpu_stage_r1_line(\"r1c vram\"",
+			"gpu_stage_r1_line(\"r1 free a\""
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
@@ -1594,6 +1594,17 @@ main()
 			return 1;
 		if (strstr(r1Body, "0xffff800000100000") != NULL)
 			return fail("r1 shared va");
+		char r1Line[1500];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_stage_r1_line(const char*", "gpu_stage_r1(radeon_info*",
+				r1Line, sizeof(r1Line)) != 0)
+			return 1;
+		if (strstr(r1Line, "t %lld") == NULL
+			|| strstr(r1Line, "inv %d") == NULL
+			|| strstr(r1Line, "ce %d") == NULL)
+			return fail("r1 line");
 	}
 	{
 		const char* ceBoot[] = {

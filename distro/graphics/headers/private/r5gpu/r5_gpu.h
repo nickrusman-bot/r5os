@@ -99,9 +99,11 @@ typedef struct {
  * amdgpu_kms.c:968 is high_va_max = AMDGPU_GMC_HOLE_END | vm_size,
  * and vm_size subtracts AMDGPU_VA_RESERVED_TOP (trap 8 KiB + seq64
  * 2 MiB + CSA 2 MiB = 0x402000). That is 0xffffffffffbfe000.
- * v6.12.60 has the same trap define. v6.18.60 changes it to
- * (1ULL << 16); this value stays the v6.18 one, which GET_INFO
- * reported on stick 28. */
+ * v6.12.60 has the same trap define. Mainline
+ * 31b8de5e55666f26ea7ece5f412b83eab3f56dbb changes it to
+ * (1ULL << 16); stable 4487571ef17a30d274600b3bd6965f497a881299
+ * is that change in v6.18.60. This value stays the v6.18 one,
+ * which GET_INFO reported on stick 28. */
 #define R5_GPU_VA_OFFSET 0x10000ull
 #define R5_GPU_VA_MAX 0x800000000000ull
 #define R5_GPU_HIGH_VA_OFFSET 0xffff800000000000ull

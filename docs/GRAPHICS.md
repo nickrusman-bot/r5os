@@ -181,7 +181,7 @@ VMID 1 is one shared address space. The walk is four levels and 48 bits. `PAGE_T
 | `virtual_address_offset` | `0x10000` | `AMDGPU_VA_RESERVED_BOTTOM` |
 | `virtual_address_max` | `0x800000000000` | `AMDGPU_GMC_HOLE_START` |
 | `high_va_offset` | `0xffff800000000000` | `AMDGPU_GMC_HOLE_END` |
-| `high_va_max` | `0xffffffffffbfe000` | hole end or the byte size, minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`). v6.18 `amdgpu_vm.h:175` is `AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12)`. v6.18.60 changes that trap to `(1ULL << 16)`. |
+| `high_va_max` | `0xffffffffffbfe000` | hole end or the byte size, minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`). v6.18 `amdgpu_vm.h:175` is `AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12)`. The line becomes `(1ULL << 16)` in `31b8de5e55666f26ea7ece5f412b83eab3f56dbb` (`drm/amdgpu: Change AMDGPU_VA_RESERVED_TRAP_SIZE to 64KB`); stable carries it as `4487571ef17a30d274600b3bd6965f497a881299`, which is what v6.18.60 has. R5 keeps the v6.18 value. |
 
 Linux 6.12 `amdgpu_gmc.h` does not reserve the first page of that high range. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off. The 6 Nov 2026 capture grep does not show whether AMD-Vi was present. A canonical high address and the same address masked with `AMDGPU_GMC_HOLE_MASK` (`0x0000ffffffffffff`) select the same slots. The host walk shows the software slots. It does not show what the hardware did. Adding the filled byte count to a GPU address inside the range does not wrap, and an address inside the hole is rejected.
 

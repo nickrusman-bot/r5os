@@ -3104,6 +3104,20 @@ gpu_stage_r1_job(radeon_info* info, const char* name, gpu_stage_page* ib,
 }
 
 
+static void
+gpu_stage_r1_line(const char* what, uint64 x, uint64 y)
+{
+	dprintf("radeon_hd: t %lld %s x %016llx y %016llx "
+		"inv %d hub %d vmids %d fence %d cond %d gds %d pasid %d ce %d\n",
+		(long long)system_time(), what == NULL ? "" : what,
+		(unsigned long long)x, (unsigned long long)y,
+		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(),
+		r5_gfx9_vmids_on(), r5_gfx9_flush_fence_on(),
+		r5_gfx9_cond_exec_on(), r5_gfx9_gds_switch_on(),
+		r5_gfx9_pasid_map_on(), r5_gfx9_ce_meta_on());
+}
+
+
 /* R1a WRITE_DATA and R1b RELEASE_MEM, or R1c the IB fetch.
  * Page A stays allocated until this returns, so a stale write still
  * has a page to land on. R1c is a separate call: a miss there can hang. */
@@ -3116,6 +3130,7 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 	gpu_stage_page dest;
 	uint32 words[8];
 	uint32 n;
+	char what[80];
 	memset(&a, 0, sizeof(a));
 	memset(&b, 0, sizeof(b));
 	memset(&cmd, 0, sizeof(cmd));
@@ -3124,8 +3139,7 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 		|| !gpu_stage_map(info, &cmd, gpu_stage_fresh(), false)
 		|| !gpu_stage_map(info, &b, gpu_stage_fresh(), false)
 		|| !gpu_stage_map(info, &dest, y, false)) {
-		dprintf("radeon_hd: r1 map x %016llx y %016llx\n",
-			(unsigned long long)x, (unsigned long long)y);
+		gpu_stage_r1_line("r1 map", x, y);
 		gpu_stage_release(&dest);
 		gpu_stage_release(&b);
 		gpu_stage_release(&cmd);
@@ -3139,26 +3153,24 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 	if (which != R5_GPU_R1_AB)
 		goto r1c;
 	n = r5_r1_write(words, 8, x, 0x11111111u);
-	dprintf("radeon_hd: r1a gtt x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1a gtt", x, y);
 	if (n == 0 || gpu_stage_r1_job(info, "r1a-gtt", &cmd, words, n)
 			!= R5_GPU_P_OK) {
-		dprintf("radeon_hd: r1a gtt job\n");
+		gpu_stage_r1_line("r1a gtt job", x, y);
 		goto out;
 	}
 	gpu_stage_unbind(&a);
 	if (!gpu_stage_bind(&b, x))
 		goto out;
 	n = r5_r1_write(words, 8, x, 0x22222222u);
-	dprintf("radeon_hd: r1a vram x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1a vram", x, y);
 	if (n == 0 || gpu_stage_r1_job(info, "r1a-vram", &cmd, words, n)
 			!= R5_GPU_P_OK)
 		goto out;
-	dprintf("radeon_hd: r1a gtt %08lx vram %08lx x %016llx y %016llx\n",
+	snprintf(what, sizeof(what), "r1a gtt %08lx vram %08lx",
 		(unsigned long)gpu_stage_r1_word(&a),
-		(unsigned long)gpu_stage_r1_word(&b),
-		(unsigned long long)x, (unsigned long long)y);
+		(unsigned long)gpu_stage_r1_word(&b));
+	gpu_stage_r1_line(what, x, y);
 
 	gpu_stage_unbind(&b);
 	if (!gpu_stage_bind(&a, x))
@@ -3166,8 +3178,7 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 	memset(a.cpu, 0, 4);
 	memset(b.cpu, 0, 4);
 	n = r5_r1_release(words, 8, x, 0x11111111u);
-	dprintf("radeon_hd: r1b gtt x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1b gtt", x, y);
 	if (n == 0 || gpu_stage_r1_job(info, "r1b-gtt", &cmd, words, n)
 			!= R5_GPU_P_OK)
 		goto out;
@@ -3175,32 +3186,25 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 	if (!gpu_stage_bind(&b, x))
 		goto out;
 	n = r5_r1_release(words, 8, x, 0x22222222u);
-	dprintf("radeon_hd: r1b vram x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1b vram", x, y);
 	if (n == 0 || gpu_stage_r1_job(info, "r1b-vram", &cmd, words, n)
 			!= R5_GPU_P_OK)
 		goto out;
-	dprintf("radeon_hd: r1b gtt %08lx vram %08lx x %016llx y %016llx\n",
+	snprintf(what, sizeof(what), "r1b gtt %08lx vram %08lx",
 		(unsigned long)gpu_stage_r1_word(&a),
-		(unsigned long)gpu_stage_r1_word(&b),
-		(unsigned long long)x, (unsigned long long)y);
+		(unsigned long)gpu_stage_r1_word(&b));
+	gpu_stage_r1_line(what, x, y);
 	goto out;
 
 r1c:
 	if (which != R5_GPU_R1_C)
 		goto out;
-	dprintf("radeon_hd: r1c before inv %d hub %d vmids %d fence %d "
-		"cond %d gds %d pasid %d ce %d\n",
-		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(),
-		r5_gfx9_vmids_on(), r5_gfx9_flush_fence_on(),
-		r5_gfx9_cond_exec_on(), r5_gfx9_gds_switch_on(),
-		r5_gfx9_pasid_map_on(), r5_gfx9_ce_meta_on());
+	gpu_stage_r1_line("r1c before", x, y);
 	gpu_stage_unbind(&b);
 	if (!gpu_stage_bind(&a, x))
 		goto out;
 	n = r5_r1_write(words, 8, y, 0x33333333u);
-	dprintf("radeon_hd: r1c gtt x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1c gtt", x, y);
 	if (n == 0 || gpu_stage_r1_job(info, "r1c-gtt", &a, words, n)
 			!= R5_GPU_P_OK)
 		goto out;
@@ -3210,19 +3214,17 @@ r1c:
 	n = r5_r1_write(words, 8, y, 0x44444444u);
 	memcpy(b.cpu, words, n * 4);
 	r5_gfx9_stage_bytes(b.cpu, n * 4);
-	dprintf("radeon_hd: r1c vram x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1c vram", x, y);
 	if (gpu_stage_r1_job(info, "r1c-vram", &b, words, n) != R5_GPU_P_OK)
 		goto out;
-	dprintf("radeon_hd: r1c dest %08lx x %016llx y %016llx\n",
-		(unsigned long)gpu_stage_r1_word(&dest),
-		(unsigned long long)x, (unsigned long long)y);
+	snprintf(what, sizeof(what), "r1c dest %08lx",
+		(unsigned long)gpu_stage_r1_word(&dest));
+	gpu_stage_r1_line(what, x, y);
 out:
 	gpu_stage_release(&dest);
 	gpu_stage_release(&b);
 	gpu_stage_release(&cmd);
-	dprintf("radeon_hd: r1 free a x %016llx y %016llx\n",
-		(unsigned long long)x, (unsigned long long)y);
+	gpu_stage_r1_line("r1 free a", x, y);
 	gpu_stage_release(&a);
 }
 
