@@ -4,7 +4,7 @@ Shared libraries that R5 adds beside `libbe`. `libbe` stays the Haiku Interface 
 
 Do not move a call from here into `libbe`. Do not add a function here only to rename a `libbe` call. A helper belongs here when R5 wrote it and more than one program uses it.
 
-The C++ in both libraries is GPL-3.0-or-later. Linking one of them combines that program with this license. A program that does not link it is unchanged. The icon pictures have their own notices in `docs/ICONS.md`.
+The C++ is MIT, so any application can link these libraries. Code added to them must be MIT-compatible. A program that does not link it is unchanged. The icon pictures have their own notices in `docs/ICONS.md`.
 
 ## Libraries
 
