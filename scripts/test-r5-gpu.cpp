@@ -1446,6 +1446,22 @@ main()
 		};
 		if (source_order("docs/ROADMAP.md", m5Next, 2) != 0)
 			return 1;
+		const char* m4Record[] = {
+			"### M4: the second program failed because the invalidation range covered nothing",
+			"The boot position, before the first user job, has not been booted.",
+			"distro/BUILD` stays the same"
+		};
+		if (source_order("CHANGELOG.md", m4Record, 3) != 0)
+			return 1;
+		const char* hardcode[] = {
+			"r5_gfx9_inv_range_lo_value",
+			"`0xffffffff`",
+			"gfxhub_v1_0_program_invalidation",
+			"r5_gfx9_inv_range_hi_value",
+			"`0x1f`"
+		};
+		if (source_order("generated/gpu-m4/HARDCODE.md", hardcode, 5) != 0)
+			return 1;
 	}
 	{
 		struct r5_vm_size size = r5_vm_adjust(256u * 1024u, 3u, 48u, 16u);
