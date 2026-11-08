@@ -277,6 +277,12 @@ The R5 command-submit ioctl has no GDS chunk, so the six values are 0. That is t
 
 `amdgpu_pasid_alloc` in `amdgpu_ids.c` hands out an id from the top of the requested width first. Each open of the render node takes one. The bitmap here is 16 bits wide. The function accepts up to 31; a wider bitmap is not built. `gmc_v9_0_emit_pasid_mapping` writes `mmIH_VMID_0_LUT` plus the VMID through `gfx_v9_0_ring_emit_wreg` (`WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`) when that VMID's PASID changes. The 26-dword VM flush does not include it. A k2 fault line prints the PASID and the open-file pointer stored for that VMID.
 
+## VMID per open file
+
+`r5_vmid.h` is `amdgpu_vmid_grab` for VMIDs 1–15: an idle VMID, the same owner while its fence has not retired, otherwise the least recently used idle VMID, and a flush when the owner or the recorded TLB sequence changes. Fifteen busy VMIDs make the next grab return none. VMID 0 is not in the table.
+
+The grab is not called from the submit path. `amdgpu_vm_init` gives each open file its own root page table, and the ring flush then writes that root into the VMID it grabbed. R5 still has one root, built for VMID 1 in `r5_gfx9_vmid1_setup`. Pointing two VMIDs at that one root would be a different machine from Linux. What it takes is one root, and the page-table pages under it, per open file, from the same allocator that builds the VMID 1 root. `gfx9_vmid_per_file` is not read until that exists. This is the stop in night step N9.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

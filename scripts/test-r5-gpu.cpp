@@ -13,6 +13,7 @@
 #include "r5_gpu.h"
 #include "r5_cs.h"
 #include "r5_pasid.h"
+#include "r5_vmid.h"
 #include "r5_gc9_regs.h"
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
@@ -1282,6 +1283,29 @@ main()
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/gfx9_k12.cpp", invOrder, 2) != 0)
 			return 1;
+	}
+	{
+		struct r5_vmid_mgr mgr;
+		int flush = 0;
+		uint32_t i;
+		uint32_t got[16];
+		r5_vmid_init(&mgr);
+		for (i = 1; i <= 15u; i++) {
+			got[i] = r5_vmid_reserve(&mgr, i, 0, 1, &flush);
+			if (got[i] == 0 || got[i] > 15u)
+				return fail("vmid grab");
+			r5_vmid_arm(&mgr, 10);
+		}
+		if (got[1] == got[2])
+			return fail("two vmids");
+		if (r5_vmid_reserve(&mgr, 16, 0, 1, &flush) != 0)
+			return fail("sixteenth vmid");
+		r5_vmid_release(&mgr, 1, 10);
+		flush = 0;
+		uint32_t again = r5_vmid_reserve(&mgr, 20, 10, 1, &flush);
+		if (again == 0 || flush == 0)
+			return fail("closed file");
+		r5_vmid_cancel(&mgr);
 	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
