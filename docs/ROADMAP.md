@@ -14,7 +14,7 @@ Tree `2026.1-dev`, build 10047. There is no public release yet. The details, bui
 | Accounts | Sign in, Log out, Lock screen, Users & Accounts, private home folders, the administrator off uid 0 after the first Sign in, locked machine settings (`docs/MULTIUSER.md`) |
 | Network | Wi-Fi join and remember, IPv6 (link-local, SLAAC, DAD, DHCPv6), AirPrint/IPP, AirPlay 1 to speakers, the network tray |
 | Sound and MIDI | Better resampling, a latency choice, USB channel layouts, HDMI output names, virtual surround, MIDI 2.0 (`docs/MIDI2.md`) |
-| Graphics | Software OpenGL (llvmpipe) and Vulkan (Lavapipe). On the Ryzen 5 5625U: the kernel owns the GPU and runs the command ring, indirect buffers, DMA, compute, an interrupt fence and a GART write, opt-in, with no rendering yet (`docs/GRAPHICS.md`, milestones M0–M3 in `docs/GPU-ARCHITECTURE.md`) |
+| Graphics | Software OpenGL (llvmpipe) and Vulkan (Lavapipe). On the Ryzen 5 5625U, M0–M4 are done and the GPU stays opt-in: the kernel owns the ring, and `vulkaninfo` plus VulkanTeapot use RADV when the radeon_hd settings are on (`docs/GRAPHICS.md`, `docs/GPU-ARCHITECTURE.md`). The desktop picture is still software |
 | Virtual machines | VirtualBox 7.2.22 Guest Additions (`docs/VBOX-GUEST.md`) |
 | Licensing | Multi-license policy, notices, and licenses in About (`docs/LICENSING.md`) |
 
@@ -26,7 +26,8 @@ The order is impact, not ticket number.
 
 1. **GPU on the reference machine.** Following `docs/GPU-ARCHITECTURE.md`:
    - **M3 is done:** the kernel driver owns the GPU, with interrupts and GART. The keys stay opt-in.
-   - **Next, M4:** the R5 GPU interface, the R5 DRM library, and RADV visible in `vulkaninfo`.
+   - **M4 is done:** the R5 GPU interface, the R5 DRM library, and RADV on the 5625U. Experimental and opt-in. The M4 row in `docs/GPU-ARCHITECTURE.md` has the evidence.
+   - **Next, M5:** an address space per open of the render node.
    - **The goal:** when a supported GPU passes its checks, R5 renders on the GPU by default; otherwise in software. Haiku applications stay unchanged.
    - Display (DCN modesetting, more than one screen, vsync) is a separate track. Today the picture is still the firmware one.
 2. **Finish multi-user** ([#63](https://github.com/nickrusman-bot/r5os/issues/63)).

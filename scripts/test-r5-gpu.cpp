@@ -1434,6 +1434,18 @@ main()
 		};
 		if (source_order("docs/GRAPHICS.md", invContract, 6) != 0)
 			return 1;
+		const char* m4Close[] = {
+			"done, experimental, opt-in",
+			"The GPU stays opt-in per machine until M10."
+		};
+		if (source_order("docs/GPU-ARCHITECTURE.md", m4Close, 2) != 0)
+			return 1;
+		const char* m5Next[] = {
+			"**M4 is done:**",
+			"**Next, M5:**"
+		};
+		if (source_order("docs/ROADMAP.md", m5Next, 2) != 0)
+			return 1;
 	}
 	{
 		struct r5_vm_size size = r5_vm_adjust(256u * 1024u, 3u, 48u, 16u);
