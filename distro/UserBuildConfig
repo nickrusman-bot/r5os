@@ -54,7 +54,11 @@ rule UserBuildConfigRulePreImage
 {
 	switch $(HAIKU_BUILD_PROFILE) {
 		case "r5-*" : {
-			AddPackageFilesToHaikuImage system packages : smbfs.hpkg ;
+			# The separate package is built, and the add-on is also copied
+			# here. The image solver would otherwise try to download
+			# userland_fs from the public repository.
+			AddFilesToHaikuImage system non-packaged add-ons userlandfs
+				: smbfs ;
 		}
 	}
 }
