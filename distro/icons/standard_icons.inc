@@ -1,6 +1,6 @@
 // Unmodified HVIF from haiku/src/kits/tracker/TrackerIcons.rdef.
 // Open Tracker license: distro/icons/TRACKER_ICON_NOTICE.txt.
-// Do not add a GPL header to this file.
+// Do not add a license header to this file.
 
 // R_ResBackNav
 static const uint8 kBackIcon[] = {

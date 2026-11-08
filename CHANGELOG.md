@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+### About R5 uses two cards
+
+The header is a document card: the mark at four times the font size, then “R5” and “Operating System” at twice the font size, and the version line below in `B_DARKEN_2_TINT`. The system information is a panel card in a 2×2 grid: processors and kernel on the left, memory and time on the right. Labels are bold. Values use the same tint. `Build N` stays small and in `B_LIGHTEN_1_TINT` under that grid. The gap between the cards and the window edge is `B_USE_BIG_SPACING`. AboutSystem links `libr5ui.so`. The time line is drawn on the card fill. The replicant is still `SysInfoView` and is not rebuilt from a deep archive. VirtualBox on 8 Nov 2026 showed the window; the time line wraps in the right column. Dark mode, an 18-point font, and the replicant were not tried. `distro/BUILD` stays 10049.
+
+### BCard is a rounded group in libr5ui
+
+`BAppearanceKit::BCard` is a view with a group layout, a one-pixel border, and a corner that follows the font size. Document and panel are the two fills. Colors come from `ui_color()`. `<Card.h>` sits next to `<R5UI.h>`. About R5 is the first caller. `distro/BUILD` stays 10049.
+
+### libr5ui and libr5icons are MIT
+
+The C++ in `distro/ui` and `distro/icons` is MIT, copyright 2026 R5OS Contributors. Any application can link the libraries. The Tracker and Haiku icon bytes keep their own notices. No call changed. `distro/BUILD` stays 10049.
+
 ### About R5 uses the Wave Pebble as its icon
 
 `AboutSystem.rdef` no longer carries the Haiku leaf. The vector icon is an HVIF of `r5-symbol.svg`: the pebble and the wave, with the same four-stop diagonal. `scripts/generate-r5-artwork.py` writes `r5-symbol.hvif` and the resource. `--check` compares both. This has not been booted. `distro/BUILD` stays 10049.

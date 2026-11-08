@@ -21,7 +21,7 @@ Application Example :
 
 On a running system the file is `/system/lib/libr5icons.so`. The soname is `libr5icons.so`, with no version suffix, the same way `libbe.so` is named. The regular image and the minimum image both install it. A program that is linked against it will not start if that file is missing.
 
-The C++ is GPL-3.0-or-later. That is the license of the shared library. The four navigation pictures are unmodified Tracker HVIF and stay under the Open Tracker license (`distro/icons/TRACKER_ICON_NOTICE.txt`). The open and closed locks are unmodified Haiku artwork, `Action_Login` and `Action_Logout`, under the MIT license (`distro/icons/HAIKU_ICON_NOTICE.txt`). Do not put a GPL header on `standard_icons.inc` or `lock_icons.inc`. Do not move these calls into `libbe`. `libbe` stays MIT. A program that links `libr5icons.so` combines with this GPL library. A program that does not link it is unchanged.
+The C++ is MIT, so any application can link this library. Code added to it must be MIT-compatible. The four navigation pictures are unmodified Tracker HVIF and stay under the Open Tracker license (`distro/icons/TRACKER_ICON_NOTICE.txt`). The open and closed locks are unmodified Haiku artwork, `Action_Login` and `Action_Logout`, under the MIT license (`distro/icons/HAIKU_ICON_NOTICE.txt`). Do not put a license header on `standard_icons.inc` or `lock_icons.inc`. Do not move these calls into `libbe`. `libbe` stays MIT. A program that does not link `libr5icons.so` is unchanged.
 
 Adding a function, or a new `r5_icon` value at the end of the enum, keeps old programs working. Changing a function’s arguments, removing a function, or renumbering an icon breaks programs already built against this soname. Do that only with a written note in this file and in `CHANGELOG.md`.
 
@@ -44,7 +44,7 @@ None of these pictures gets the preferences wrench. That overlay belongs to the 
 
 The numbers are part of the contract. Do not change a number that already shipped. A new predefined icon is added at the end of `enum r5_icon`, with the next number, the unmodified picture, and a row in this table.
 
-The bytes for 1–4 are unmodified HVIF from `src/kits/tracker/TrackerIcons.rdef`, stored in `distro/icons/standard_icons.inc`. The Open Tracker notice is `distro/icons/TRACKER_ICON_NOTICE.txt`. The lock bytes are unmodified HVIF in `distro/icons/lock_icons.inc`. The MIT notice is `distro/icons/HAIKU_ICON_NOTICE.txt`. Do not put a GPL header on either byte file. The C++ around the bytes is GPL-3.0-or-later.
+The bytes for 1–4 are unmodified HVIF from `src/kits/tracker/TrackerIcons.rdef`, stored in `distro/icons/standard_icons.inc`. The Open Tracker notice is `distro/icons/TRACKER_ICON_NOTICE.txt`. The lock bytes are unmodified HVIF in `distro/icons/lock_icons.inc`. The MIT notice is `distro/icons/HAIKU_ICON_NOTICE.txt`. Do not put a license header on either byte file. The C++ around the bytes is MIT.
 
 ```cpp
 BBitmap* icon = r5_icon_bitmap(R5_ICON_BACK, 16);

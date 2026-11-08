@@ -10,6 +10,8 @@ A file-by-file audit of the Haiku tree, the build packages, firmware, and genera
 
 New source that R5 owns — applications, services, and drivers — defaults to **GPL-3.0-or-later**, when R5 has the rights to license that file.
 
+A library or public header that applications link or include is MIT when R5 holds the rights to all of it. GPL-3.0-or-later stays the default for the rest of the OS, and GPL code stays GPL.
+
 ```cpp
 // SPDX-FileCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -172,6 +174,10 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 
 | Path | SPDX | Why |
 |---|---|---|
+| `distro/ui/` | MIT | `libr5ui.so` and `<R5UI.h>`. Copyright 2026 R5OS Contributors. Applications link this library, so the C++ is MIT |
+| `distro/icons/` except `standard_icons.inc`, `lock_icons.inc`, `TRACKER_ICON_NOTICE.txt`, and `HAIKU_ICON_NOTICE.txt` | MIT | `libr5icons.so` and `<R5Icons.h>`. Copyright 2026 R5OS Contributors. Applications link this library, so the C++ is MIT. The picture bytes are not relicensed |
+| `distro/icons/standard_icons.inc`, `TRACKER_ICON_NOTICE.txt` | Open Tracker | Unmodified Tracker HVIF. The notice file stays |
+| `distro/icons/lock_icons.inc`, `HAIKU_ICON_NOTICE.txt` | MIT | Unmodified Haiku `Action_Login` and `Action_Logout`. The notice file stays |
 | `distro/login/LockWindow.*`, `R5Desktop.cpp`, `SessionLog.h`, `TrayApp.cpp`, `default_deskbar_items.sh` | GPL-3.0-or-later | New R5 files. They link into Login. The other Login sources stay MIT (François Revol, 2008). The Login binary is one combined work; the MIT notices stay on those files |
 | `distro/login/Login*.cpp`, `Login*.h`, `DesktopWindow.*`, `main.cpp`, `Login.rdef` | MIT, unchanged | Haiku Login |
 | `distro/users/` | GPL-3.0-or-later | New Users & Accounts preference |
