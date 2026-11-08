@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A VA replace maps the request it already copied
+
+`gfx9_vmid_per_file` stays off. `gpu_va_replace` copies the user request once. The follow-up map reads that kernel copy, so a second user read cannot change the range while `sReplacing` skips the PRT check. The host test checks that the replace function calls `gpu_va_map_copied` and does not call `gpu_va_map` with the user buffer. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A submit checks the indirect buffer again after the lock returns
 
 `gfx9_vmid_per_file` stays off. The sync wait and the ring-room wait drop the GPU lock. `gpu_submit` checks `gpu_ibs_mapped` again after each of those waits, before the cache flush. An unmap in that window refuses the submit. The host test maps a page, unmaps it, and the check returns false. It was not booted. There is no What's new section and `distro/BUILD` stays the same.

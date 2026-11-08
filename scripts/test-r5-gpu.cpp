@@ -638,11 +638,19 @@ main()
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/r5_gpu.cpp", ibAgain, 3) != 0)
 			return 1;
+		char body[12000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_va_replace(", "gpu_va_unmap(", body, sizeof(body)) != 0)
+			return 1;
+		if (strstr(body, "gpu_va_map_copied") == NULL
+			|| strstr(body, "gpu_va_map(client, buffer") != NULL)
+			return fail("va replace copy");
 		if (r5_file_count_drop(&count, 1) == 0)
 			return fail("still held");
 		if (count.trees != 0 || count.pages != 0 || count.refs != 0)
 			return fail("counters back");
-		char body[12000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/r5_gpu.cpp",
