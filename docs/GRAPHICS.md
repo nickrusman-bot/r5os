@@ -267,6 +267,12 @@ The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, whi
 
 `gfx_v9_0_ring_emit_de_meta` runs only from `gfx_v9_0_ring_emit_ib_gfx` when the IB has `AMDGPU_IB_FLAG_PREEMPT` (`gfx_v9_0.c` at that `if`). R5 still rejects every IB flag, so the flag is 0 and the meta is not emitted. The packet writes `struct v9_de_ib_state` to the CSA (`amdgpu_csa_vaddr`). That struct and the CSA mapping are not copied while the flag cannot be set. This is the stop in night step N5.
 
+## GDS switch
+
+`gfx_v9_0_ring_emit_gds_switch` writes `GDS_VMIDn_BASE`, `SIZE`, `GWS` and `OA` with four `WRITE_DATA` packets. `amdgpu_vmid_gds_switch_needed` is true when those six values differ, and `amdgpu_vm_flush` also forces it after a GPU reset. `gfx9_gds_switch` defaults off. The first job after start is that forced write. Later jobs with the same values do not write again.
+
+The R5 command-submit ioctl has no GDS chunk, so the six values are 0. That is the GFX9 RADV job that does not ask for GDS. A chunk in the ioctl is what it would take to pass other sizes through.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

@@ -330,6 +330,48 @@ r5_cs_cond_exec_patch(uint32_t* out, uint32_t slot, uint32_t follow)
 }
 
 
+/* The GDS resources last written for one VMID. valid is clear until
+ * the first switch, which is the same force as a GPU reset in
+ * amdgpu_vm_flush. */
+struct r5_gds {
+	uint32_t	gds_base;
+	uint32_t	gds_size;
+	uint32_t	gws_base;
+	uint32_t	gws_size;
+	uint32_t	oa_base;
+	uint32_t	oa_size;
+	int		valid;
+};
+
+
+/* amdgpu_ids.c:amdgpu_vmid_gds_switch_needed. */
+static inline int
+r5_gds_switch_needed(const struct r5_gds* id, const struct r5_gds* job)
+{
+	if (id == 0 || job == 0 || id->valid == 0)
+		return 1;
+	return id->gds_base != job->gds_base || id->gds_size != job->gds_size
+		|| id->gws_base != job->gws_base || id->gws_size != job->gws_size
+		|| id->oa_base != job->oa_base || id->oa_size != job->oa_size;
+}
+
+
+/* gfx_v9_0.c:gfx_v9_0_write_data_to_reg. Engine 0, register destination,
+ * no write confirm, so the second dword is 0. PACKET3_WRITE_DATA is
+ * 0x37 in sid.h. */
+static inline uint32_t
+r5_cs_write_reg(uint32_t* out, uint32_t cap, uint32_t n, uint32_t reg,
+	uint32_t value)
+{
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, reg);
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, value);
+	return n;
+}
+
+
 /* gfx_v9_ring_insert_nop. One dword is the single nop 0xFFFF1000.
  * A longer pad is PACKET3(NOP, min(count - 2, 0x3FFE)) and then
  * count - 1 times that nop. count - 1 in the header reads one dword
@@ -360,6 +402,29 @@ static inline uint32_t
 r5_cs_gc_reg(uint32_t index)
 {
 	return GC_BASE__INST0_SEG0 + index;
+}
+
+
+/* gfx_v9_0.c:gfx_v9_0_ring_emit_gds_switch. Twenty dwords. */
+static inline uint32_t
+r5_cs_gds_switch(uint32_t* out, uint32_t cap, uint32_t n, uint32_t vmid,
+	const struct r5_gds* job)
+{
+	uint32_t oa = 0;
+	if (job->oa_base < 32u && job->oa_size < 32u
+		&& job->oa_base + job->oa_size < 32u)
+		oa = (1u << (job->oa_size + job->oa_base))
+			- (1u << job->oa_base);
+	n = r5_cs_write_reg(out, cap, n,
+		r5_cs_gc_reg(mmGDS_VMID0_BASE) + 2u * vmid, job->gds_base);
+	n = r5_cs_write_reg(out, cap, n,
+		r5_cs_gc_reg(mmGDS_VMID0_SIZE) + 2u * vmid, job->gds_size);
+	n = r5_cs_write_reg(out, cap, n,
+		r5_cs_gc_reg(mmGDS_GWS_VMID0) + vmid,
+		(job->gws_size << GDS_GWS_VMID0__SIZE__SHIFT) | job->gws_base);
+	n = r5_cs_write_reg(out, cap, n,
+		r5_cs_gc_reg(mmGDS_OA_VMID0) + vmid, oa);
+	return n;
 }
 
 

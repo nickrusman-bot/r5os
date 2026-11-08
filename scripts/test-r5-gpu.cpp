@@ -1166,6 +1166,29 @@ main()
 				"gfx9_start.cpp", condOrder, 2) != 0)
 			return 1;
 	}
+	{
+		struct r5_gds empty;
+		struct r5_gds zero;
+		memset(&empty, 0, sizeof(empty));
+		memset(&zero, 0, sizeof(zero));
+		zero.valid = 1;
+		struct r5_gds sized = zero;
+		sized.gds_size = 1;
+		uint32_t pkt[24];
+		uint32_t n = r5_cs_gds_switch(pkt, 24, 0, 1, &zero);
+		if (r5_gds_switch_needed(&empty, &zero) == 0
+			|| r5_gds_switch_needed(&zero, &zero) != 0
+			|| r5_gds_switch_needed(&zero, &sized) == 0)
+			return fail("gds needed");
+		if (n != 20u || pkt[0] != r5_cs_packet3(0x37, 3) || pkt[1] != 0u
+			|| pkt[2] != r5_cs_gc_reg(mmGDS_VMID0_BASE) + 2u
+			|| pkt[4] != 0u
+			|| pkt[7] != r5_cs_gc_reg(mmGDS_VMID0_SIZE) + 2u
+			|| pkt[12] != r5_cs_gc_reg(mmGDS_GWS_VMID0) + 1u
+			|| pkt[17] != r5_cs_gc_reg(mmGDS_OA_VMID0) + 1u
+			|| pkt[19] != 0u)
+			return fail("gds switch");
+	}
 	if (r5_gfx9_inv_engines() != 18u)
 		return fail("inv engines");
 	if (r5_gfx9_inv_range_lo(0) != 0x8c7u

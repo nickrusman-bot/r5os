@@ -2152,6 +2152,8 @@ static r5_cs_ring_ctx sRingCtx;
 static int sGpuDebug = 0;
 static int sFlushFence = 0;
 static int sCondExec = 0;
+static int sGdsSwitch = 0;
+static struct r5_gds sGdsState;
 
 
 bool
@@ -2509,6 +2511,13 @@ r5_gfx9_set_cond_exec(int on)
 }
 
 
+void
+r5_gfx9_set_gds_switch(int on)
+{
+	sGdsSwitch = on ? 1 : 0;
+}
+
+
 bool
 r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64 fenceCtx, int32* preambleSeen, uint64* _sequence)
@@ -2552,6 +2561,13 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		prefix += 12u;
 	if (sCondExec)
 		prefix += 5u;
+	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
+	 * zeros, and the packet runs once for this VMID. */
+	struct r5_gds jobGds;
+	memset(&jobGds, 0, sizeof(jobGds));
+	int gds = sGdsSwitch && r5_gds_switch_needed(&sGdsState, &jobGds);
+	if (gds)
+		prefix += 20u;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint32 body = r5_cs_user_words(count);
 	if (flushFence)
@@ -2559,6 +2575,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint32 total = body == 0 ? 0 : prefix + body
 		+ r5_cs_pad_dwords(wptr + prefix + body);
 	uint32 cap = flush ? 512u : 320u;
+	if (gds)
+		cap += 20u;
 	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
 		return false;
 	if (flush && (pd == 0 || ibVm[0] == 0))
@@ -2570,7 +2588,7 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64 flushSeq = sUserSequence + 1;
 	uint64 sequence = flushFence ? flushSeq + 1 : flushSeq;
 	uint32 cntx = r5_cs_cntx(haveSwitch, preamble);
-	uint32 packets[512];
+	uint32 packets[544];
 	uint32 switched = 0;
 	if (flush) {
 		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
@@ -2579,6 +2597,11 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 			switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
 				flushSeq);
 		}
+	}
+	if (gds) {
+		switched = r5_cs_gds_switch(packets, cap, switched, 1, &jobGds);
+		sGdsState = jobGds;
+		sGdsState.valid = 1;
 	}
 	uint32 condSlot = 0;
 	if (sCondExec) {

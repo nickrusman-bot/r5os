@@ -37,6 +37,9 @@
 /* Linux v6.12 vega10_ip_offset.h */
 #define GC_BASE__INST0_SEG0 0x2000u
 #define GC_BASE__INST0_SEG1 0xa000u
+/* Linux v6.12 gc_9_0_sh_mask.h */
+#define GDS_GWS_VMID0__SIZE__SHIFT 0x10u
+/* Linux v6.12 vega10_ip_offset.h */
 #define NBIO_BASE__INST0_SEG2 0xd20u
 #define OSSSYS_BASE__INST0_SEG0 0x10a0u
 /* Linux v6.12 gc_9_0_sh_mask.h */
@@ -104,6 +107,10 @@
 /* Linux v6.12 gc_9_1_offset.h */
 #define mmGCEA_PROBE_MAP 0x70cu
 /* Linux v6.12 gc_9_0_offset.h */
+#define mmGDS_GWS_VMID0 0x1320u
+#define mmGDS_OA_VMID0 0x1330u
+#define mmGDS_VMID0_BASE 0x1300u
+#define mmGDS_VMID0_SIZE 0x1301u
 #define mmGRBM_CAM_DATA 0x5a05u
 #define mmGRBM_CAM_INDEX 0x5a04u
 #define mmGRBM_CNTL 0x0u

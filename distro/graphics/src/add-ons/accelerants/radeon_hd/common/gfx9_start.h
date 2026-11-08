@@ -132,5 +132,7 @@ void r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count);
 void r5_gfx9_set_flush_fence(int on);
 /* gfx9_cond_exec. Off unless the radeon_hd setting says so. */
 void r5_gfx9_set_cond_exec(int on);
+/* gfx9_gds_switch. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_gds_switch(int on);
 
 #endif
