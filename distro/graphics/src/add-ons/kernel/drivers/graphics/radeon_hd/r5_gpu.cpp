@@ -3123,7 +3123,8 @@ gpu_stage_r1_line(const char* what, uint64 x, uint64 y)
  * Page A stays allocated until this returns, so a stale write still
  * has a page to land on. R1c is a separate call: a miss there can hang. */
 static void
-gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
+gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y,
+	uint32_t* oldWord, uint32_t* newWord)
 {
 	gpu_stage_page a;
 	gpu_stage_page b;
@@ -3136,6 +3137,10 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 	memset(&b, 0, sizeof(b));
 	memset(&cmd, 0, sizeof(cmd));
 	memset(&dest, 0, sizeof(dest));
+	if (oldWord != NULL)
+		*oldWord = 0;
+	if (newWord != NULL)
+		*newWord = 0;
 	if (!gpu_stage_map(info, &a, x, true)
 		|| !gpu_stage_map(info, &cmd, gpu_stage_fresh(), false)
 		|| !gpu_stage_map(info, &b, gpu_stage_fresh(), false)
@@ -3172,6 +3177,10 @@ gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y)
 		(unsigned long)gpu_stage_r1_word(&a),
 		(unsigned long)gpu_stage_r1_word(&b));
 	gpu_stage_r1_line(what, x, y);
+	if (oldWord != NULL)
+		*oldWord = gpu_stage_r1_word(&a);
+	if (newWord != NULL)
+		*newWord = gpu_stage_r1_word(&b);
 
 	gpu_stage_unbind(&b);
 	if (!gpu_stage_bind(&a, x))
@@ -3571,8 +3580,12 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			dprintf("radeon_hd: r1 skip vmid\n");
 			status = B_NO_INIT;
 		} else {
-			gpu_stage_r1(client->info, in.which, in.x, in.y);
+			gpu_stage_r1(client->info, in.which, in.x, in.y,
+				&in.old_word, &in.new_word);
 			status = sLost ? ECANCELED : B_OK;
+			status_t copied = gpu_copy_out(buffer, length, &in, sizeof(in));
+			if (copied != B_OK)
+				status = copied;
 		}
 	}
 	else if (op == R5_GPU_SELFTEST) {

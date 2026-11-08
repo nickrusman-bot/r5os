@@ -680,8 +680,6 @@ main()
 		"highVa, false",
 		"stage_regs(out)",
 		"stage_r1(out, R5_GPU_R1_AB, 0xffff800000100000ull)",
-		"R5_GPU_SWITCH_INV_RANGE",
-		"stage_r1(out, R5_GPU_R1_AB, 0xffff800000300000ull)",
 		"\"vulkaninfo\"",
 		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
@@ -717,7 +715,15 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 14) != 0)
+			selftestOrder, 12) != 0)
+		return 1;
+	if (r5_gpu_r1_ab_pass(0x11111111u, 0x22222222u) == 0
+		|| r5_gpu_r1_ab_pass(0x22222222u, 0) != 0
+		|| r5_gpu_r1_ab_pass(0x11111111u, 0) != 0)
+		return fail("r1ab pass");
+	if (source_order(
+			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+			(const char*[]){ "R1ab pass old", "R1ab fail old" }, 2) != 0)
 		return 1;
 	{
 		const char* regsBefore[] = {

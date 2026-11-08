@@ -413,7 +413,20 @@ typedef struct {
 	 * this round has freed. */
 	uint64_t	x;
 	uint64_t	y;
+	/* Filled by the kernel from the R1a readback. old_word is the
+	 * page that was mapped first. new_word is the page mapped after. */
+	uint32_t	old_word;
+	uint32_t	new_word;
 } r5_gpu_stage_r1;
+
+
+/* R1a passes when the first page still holds the first write and the
+ * page mapped afterwards holds the second write. */
+static inline int
+r5_gpu_r1_ab_pass(uint32_t old_word, uint32_t new_word)
+{
+	return old_word == 0x11111111u && new_word == 0x22222222u;
+}
 
 /* The kernel fills line and dprints it. The caller writes the file. */
 typedef struct {

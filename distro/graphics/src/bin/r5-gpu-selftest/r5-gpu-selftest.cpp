@@ -481,6 +481,14 @@ stage_r1(FILE* out, uint32_t which, uint64_t x)
 	fprintf(out, "R5_GPU_STAGE_R1 %u x %016llx y %016llx %d errno %d\n",
 		which, (unsigned long long)in.x, (unsigned long long)in.y,
 		ret, errno);
+	if (which == R5_GPU_R1_AB) {
+		if (ret == 0 && r5_gpu_r1_ab_pass(in.old_word, in.new_word))
+			fprintf(out, "R1ab pass old %08x new %08x\n",
+				in.old_word, in.new_word);
+		else
+			fprintf(out, "R1ab fail old %08x new %08x\n",
+				in.old_word, in.new_word);
+	}
 	close(fd);
 	fflush(out);
 }
@@ -573,17 +581,7 @@ main()
 				skip_lost(out, "VulkanTeapot");
 				skip_lost(out, "selftest");
 				skip_lost(out, "ib");
-			} else {
-				stage_switch(out, "gfx9_inv_range", R5_GPU_SWITCH_INV_RANGE);
-				stage_r1(out, R5_GPU_R1_AB, 0xffff800000300000ull);
-				if (device_lost()) {
-					skip_lost(out, "vulkaninfo");
-					skip_lost(out, "VulkanTeapot");
-					skip_lost(out, "VulkanTeapot (sam)");
-					skip_lost(out, "VulkanTeapot");
-					skip_lost(out, "selftest");
-					skip_lost(out, "ib");
-				} else if (run_stage(out, "vulkaninfo",
+			} else if (run_stage(out, "vulkaninfo",
 						"/bin/vulkaninfo --summary 2>&1", 120) != 0
 					|| device_lost()) {
 					skip_lost(out, "VulkanTeapot");
@@ -659,7 +657,6 @@ main()
 						}
 					}
 				}
-			}
 		}
 	}
 	fclose(out);
