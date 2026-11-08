@@ -51,13 +51,25 @@ The image installs only these:
 | [`../distro/artwork/r5-os-deskbar.png`](../distro/artwork/r5-os-deskbar.png) | Deskbar button. The 16 pixel small pebble, centered in 28×22. |
 | [`../distro/artwork/r5-os-logo.png`](../distro/artwork/r5-os-logo.png) | Horizontal lockup on a transparent ground. |
 | [`../distro/artwork/r5-os-splash.png`](../distro/artwork/r5-os-splash.png) and [`../distro/artwork/r5-os-splash.bgr`](../distro/artwork/r5-os-splash.bgr) | Boot splash, 372×96, background `#FFFFFF`. Dark text, no border. |
-| [`../distro/artwork/splash_icons.png`](../distro/artwork/splash_icons.png) | Boot progress, Haiku's 308×80 icons on white, with the R5 mark on the disk. |
+| [`../distro/artwork/splash_icons.png`](../distro/artwork/splash_icons.png) and [`../distro/artwork/splash_icons.bgr`](../distro/artwork/splash_icons.bgr) | Boot progress, 308×80. Seven Haiku icons on white. The top row is in color. The bottom row is gray. |
 | [`../distro/artwork/r5-symbol.png`](../distro/artwork/r5-symbol.png) | The mark in About R5. |
 | [`../distro/desktop/src/kits/tracker/r5_disk_badge.h`](../distro/desktop/src/kits/tracker/r5_disk_badge.h) | The same mark as bytes, drawn on the boot volume. |
 
 Previews (`r5-about-window-preview.png`, the lockup cards, and the system-disk mockups) stay in the brand kit. They are not installed.
 
 `python3 scripts/generate-r5-artwork.py --check` rebuilds the product files in a temporary directory and compares hashes. `scripts/apply-overlay.sh` runs that check. Pillow 13.0.0 is required. The PNGs do not store a time.
+
+## Replacing a boot icon
+
+The seven stages are the Haiku SVGs in [`../distro/artwork/boot_splash/icons-src/`](../distro/artwork/boot_splash/icons-src/). `1. Kernel.svg` through `7. Window.svg`. `SOURCES.md` names the stage and the license.
+
+To replace one icon, put the new SVG in that folder under the same name. Render it once:
+
+`rsvg-convert -w 160 -h 160 -o distro/artwork/boot_splash/icons-src/png/N.png "the file.svg"`
+
+`N` is 1 through 7. Then run `python3 scripts/generate-r5-artwork.py --install`. The generator reads those PNGs. It crops each one to its painted pixels, scales the long side to 38 px, and centers it in a 40×40 cell. `--check` compares the strip to the committed PNGs, so it does not depend on the rsvg version.
+
+The boot loader reads `kSplashIcons24BitCompressedImage` in `images-sans-tm.h`. That header is checked in. Jam does not rebuild it. `scripts/generate_images_sans_tm.py` writes the compressed `splash_icons.bgr` into the header when `scripts/apply-overlay.sh` runs. Copying `splash_icons.png` into `data/artwork` does not reach the boot.
 
 ## 5. Brand kit
 
@@ -79,6 +91,7 @@ Previews (`r5-about-window-preview.png`, the lockup cards, and the system-disk m
 | [`../distro/artwork/brand-kit/r5-os-splash.png`](../distro/artwork/brand-kit/r5-os-splash.png) | 372×96 | Same as the installed splash |
 | [`../distro/artwork/brand-kit/r5-os-splash.bgr`](../distro/artwork/brand-kit/r5-os-splash.bgr) | 107136 bytes | Same as the installed BGR |
 | [`../distro/artwork/brand-kit/splash_icons.png`](../distro/artwork/brand-kit/splash_icons.png) | 308×80 | Same as the installed progress strip |
+| [`../distro/artwork/brand-kit/splash_icons.bgr`](../distro/artwork/brand-kit/splash_icons.bgr) | 73920 bytes | Same picture as 24-bit BGR |
 | [`../distro/artwork/brand-kit/r5-lockup-light-card.png`](../distro/artwork/brand-kit/r5-lockup-light-card.png) | example | Preview. Not installed |
 | [`../distro/artwork/brand-kit/r5-lockup-dark-card.png`](../distro/artwork/brand-kit/r5-lockup-dark-card.png) | example | Preview. Not installed |
 | [`../distro/artwork/brand-kit/r5-about-window-preview.png`](../distro/artwork/brand-kit/r5-about-window-preview.png) | example | Preview. Not installed |
@@ -94,6 +107,6 @@ Dit is dezelfde gids. Het Engels hierboven is het hoofddocument.
 
 Het product heet **R5 Operating System**, kort **R5**. De enige tekening van het merk is [`../distro/artwork/r5-symbol.svg`](../distro/artwork/r5-symbol.svg). Het script [`../scripts/generate-r5-artwork.py`](../scripts/generate-r5-artwork.py) maakt de plaatjes. De kleuren heten Signal Blue, Sky Blue, Seafoam en Amber. **R5** staat in Manrope Bold, **Operating System** in Manrope Regular. Productplaatjes hebben geen versie en geen build. Voorbeeldkaarten lezen `../distro/VERSION` en `../distro/BUILD` en dragen het label `example`.
 
-In het image komen alleen de Deskbar-knop, het logo, de splash, de voortgangsiconen, het symbool voor About R5, en de disk-badge. De previews in de brand kit blijven erbuiten. De splash is 372×96 op wit (`#FFFFFF`), met donkere tekst en zonder rand. De voortgangsiconen houden de indeling van Haiku, op wit, met het R5-merk op de schijf. De Deskbar gebruikt de dikkere golf van 16 pixels, verticaal gecentreerd.
+In het image komen alleen de Deskbar-knop, het logo, de splash, de voortgangsiconen, het symbool voor About R5, en de disk-badge. De previews in de brand kit blijven erbuiten. De splash is 372×96 op wit (`#FFFFFF`), met donkere tekst en zonder rand. De voortgangsiconen zijn de zeven Haiku-SVG's in `distro/artwork/boot_splash/icons-src/`. Een icoon vervangen: dezelfde bestandsnaam, één keer `rsvg-convert -w 160 -h 160` naar `icons-src/png/N.png`, daarna `python3 scripts/generate-r5-artwork.py --install`. De boot leest de ingecheckte header, niet `data/artwork`. De Deskbar gebruikt de dikkere golf van 16 pixels, verticaal gecentreerd.
 
 About R5 toont in de kop `Version YYYY.N-dev • architectuur`. `Build N` staat kleiner en grijs onder de systeeminformatie. Beide komen uit `r5_os_version.h` en blijven zichtbaar op elk tabblad, ook bij What's new.

@@ -6,7 +6,8 @@
 Outputs all 21 brand kit files into `distro/artwork/brand-kit/` and writes the
 master vector `distro/artwork/r5-symbol.svg`. Pass `--install` to also overwrite
 the active `r5-os-deskbar.png`, `r5-os-logo.png`, `r5-os-splash.png`,
-`r5-os-splash.bgr`, and `splash_icons.png` in `distro/artwork/`.
+`r5-os-splash.bgr`, `splash_icons.png`, and `splash_icons.bgr` in
+`distro/artwork/`.
 """
 from __future__ import annotations
 
@@ -372,154 +373,75 @@ def render_boot_splash() -> tuple[Image.Image, bytes]:
     return final_png, bgr_bytes
 
 
-HAIKU_SPLASH_ICONS = ROOT / "distro" / "artwork" / "haiku-splash-icons.png"
-# Icon 4 of the 308×80 strip. The leaf sits in this box of each 40×40 tile.
-SPLASH_DISK_INDEX = 3
-SPLASH_LEAF_BOX = (5, 21, 18, 34)
+SPLASH_ICON_DIR = ARTWORK_DIR / "boot_splash" / "icons-src" / "png"
+SPLASH_W = 308
+SPLASH_H = 80
+SPLASH_CELL = 40
+SPLASH_MAX = 38
 
 
-def _near_black(pixel: tuple[int, int, int]) -> bool:
-    return max(pixel) < 16
+def _crop_to_alpha(image: Image.Image) -> Image.Image:
+    rgba = image.convert("RGBA")
+    box = rgba.getchannel("A").getbbox()
+    if box is None:
+        raise SystemExit("boot icon has no pixels")
+    return rgba.crop(box)
 
 
-def lift_splash_icons_off_black(source: Image.Image) -> Image.Image:
-    """The Haiku strip is painted on black. The rim is a few pixels of that
-    color mixed with black. Recover the coverage and put the tiles on white."""
-    rgb = source.convert("RGB")
-    width, height = rgb.size
-    pixels = rgb.load()
-    output = Image.new("RGB", (width, height), (255, 255, 255))
-    out = output.load()
-    # The rounded plate fades across three pixels. Farther than that is the icon.
-    rim = 3
-    distance = [[rim + 1] * width for _ in range(height)]
-    # Only the black around the tiles. Black inside an icon stays part of the icon.
-    seen = [[False] * width for _ in range(height)]
-    pending = []
-    for y in range(height):
-        for x in range(width):
-            if x not in (0, width - 1) and y not in (0, height - 1):
+def _fit_icon(image: Image.Image) -> Image.Image:
+    """Crop to the painted pixels, fit the long side in 38 px, center in 40."""
+    cropped = _crop_to_alpha(image)
+    width, height = cropped.size
+    scale = SPLASH_MAX / float(max(width, height))
+    fitted = cropped.resize(
+        (max(1, round(width * scale)), max(1, round(height * scale))),
+        Image.Resampling.LANCZOS,
+    )
+    cell = Image.new("RGBA", (SPLASH_CELL, SPLASH_CELL), (0, 0, 0, 0))
+    cell.alpha_composite(
+        fitted,
+        ((SPLASH_CELL - fitted.size[0]) // 2, (SPLASH_CELL - fitted.size[1]) // 2),
+    )
+    return cell
+
+
+def _gray_icon(icon: Image.Image) -> Image.Image:
+    """Luminance, 45% icon and 55% white, then 80% of the alpha."""
+    gray = Image.new("RGBA", icon.size, (0, 0, 0, 0))
+    src = icon.load()
+    dst = gray.load()
+    for y in range(icon.size[1]):
+        for x in range(icon.size[0]):
+            red, green, blue, alpha = src[x, y]
+            if alpha == 0:
                 continue
-            if not _near_black(pixels[x, y]) or seen[y][x]:
-                continue
-            seen[y][x] = True
-            pending.append((x, y))
-    head = 0
-    while head < len(pending):
-        x, y = pending[head]
-        head += 1
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                nx, ny = x + dx, y + dy
-                if nx < 0 or ny < 0 or nx >= width or ny >= height or seen[ny][nx]:
-                    continue
-                if not _near_black(pixels[nx, ny]):
-                    continue
-                seen[ny][nx] = True
-                pending.append((nx, ny))
-    for y in range(height):
-        for x in range(width):
-            if seen[y][x]:
-                distance[y][x] = 0
-    head = 0
-    while head < len(pending):
-        x, y = pending[head]
-        head += 1
-        step = distance[y][x] + 1
-        if step > rim:
-            continue
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
-                if dx == 0 and dy == 0:
-                    continue
-                nx, ny = x + dx, y + dy
-                if nx < 0 or ny < 0 or nx >= width or ny >= height:
-                    continue
-                if distance[ny][nx] <= step:
-                    continue
-                distance[ny][nx] = step
-                pending.append((nx, ny))
-
-    for y in range(height):
-        for x in range(width):
-            color = pixels[x, y]
-            if distance[y][x] == 0:
-                continue
-            if distance[y][x] > rim:
-                out[x, y] = color
-                continue
-            neighbors = []
-            for dy in range(-5, 6):
-                for dx in range(-5, 6):
-                    nx, ny = x + dx, y + dy
-                    if nx < 0 or ny < 0 or nx >= width or ny >= height:
-                        continue
-                    if distance[ny][nx] <= rim:
-                        continue
-                    neighbors.append(pixels[nx, ny])
-            if neighbors:
-                solid = tuple(
-                    sum(channel[index] for channel in neighbors) // len(neighbors)
-                    for index in range(3)
-                )
-            else:
-                solid = color
-            strongest = max(solid)
-            if strongest < 1:
-                continue
-            channel = max(range(3), key=lambda index: solid[index])
-            coverage = min(1.0, color[channel] / float(strongest))
-            out[x, y] = tuple(
-                int(round(solid[index] * coverage + 255 * (1.0 - coverage)))
-                for index in range(3)
-            )
-    return output
+            lum = 0.299 * red + 0.587 * green + 0.114 * blue
+            level = int(round(0.45 * lum + 0.55 * 255.0))
+            if level < 0:
+                level = 0
+            elif level > 255:
+                level = 255
+            dst[x, y] = (level, level, level, int(round(alpha * 0.8)))
+    return gray
 
 
-def _splash_tile_origin(index: int, row: int) -> tuple[int, int]:
-    return 2 + index * 44, row * 40
-
-
-def render_splash_icons(source: Image.Image) -> Image.Image:
-    """Keep Haiku's seven icons. White ground, and the R5 mark on the disk."""
-    if source.size != (308, 80):
-        raise SystemExit(f"splash icons must be 308x80, got {source.size}")
-    image = lift_splash_icons_off_black(source).convert("RGBA")
-    left, top, right, bottom = SPLASH_LEAF_BOX
-    badge_w = right - left
-    badge_h = bottom - top
-    color_badge = render_wave_pebble(max(badge_w, badge_h), mode="color", with_shadow=False)
-    color_badge = color_badge.resize((badge_w, badge_h), Image.Resampling.LANCZOS)
-    for row in (0, 1):
-        origin_x, origin_y = _splash_tile_origin(SPLASH_DISK_INDEX, row)
-        box = (
-            origin_x + left,
-            origin_y + top,
-            origin_x + right,
-            origin_y + bottom,
-        )
-        sample = image.getpixel((origin_x + 24, origin_y + 14))
-        cleared = Image.new("RGBA", (badge_w, badge_h), sample)
-        image.paste(cleared, (box[0], box[1]))
-        badge = color_badge
-        if row == 1:
-            # The lower row is the dimmed set. Match its disk.
-            color_disk = image.getpixel((_splash_tile_origin(SPLASH_DISK_INDEX, 0)[0] + 24, 14))
-            scale = max(sample[0], sample[1], sample[2]) / float(
-                max(color_disk[0], color_disk[1], color_disk[2], 1)
-            )
-            gray = Image.new("RGBA", color_badge.size)
-            src = color_badge.load()
-            dst = gray.load()
-            for y in range(color_badge.size[1]):
-                for x in range(color_badge.size[0]):
-                    red, green, blue, alpha = src[x, y]
-                    level = (red + green + blue) / 3.0
-                    value = int(round(level * scale))
-                    dst[x, y] = (value, value, value, alpha)
-            badge = gray
-        image.alpha_composite(badge, (box[0], box[1]))
-    return image.convert("RGB")
+def render_splash_icons() -> tuple[Image.Image, bytes]:
+    """Seven stage icons. Color on the top row, gray on the bottom, white ground."""
+    strip = Image.new("RGBA", (SPLASH_W, SPLASH_H), (255, 255, 255, 255))
+    for index in range(7):
+        path = SPLASH_ICON_DIR / f"{index + 1}.png"
+        if not path.is_file():
+            raise SystemExit(f"missing {path}")
+        cell = _fit_icon(Image.open(path))
+        x = 2 + index * 44
+        strip.alpha_composite(cell, (x, 0))
+        strip.alpha_composite(_gray_icon(cell), (x, 40))
+    rgb = strip.convert("RGB")
+    red, green, blue = rgb.split()
+    bgr = Image.merge("RGB", (blue, green, red)).tobytes()
+    if len(bgr) != SPLASH_W * SPLASH_H * 3:
+        raise SystemExit(f"splash icons BGR is {len(bgr)} bytes")
+    return rgb, bgr
 
 
 # --- 4. Isometric System Disk Icon with R5 Wave Pebble Overlay (air/OS style) ---
@@ -984,6 +906,7 @@ PRODUCT_NAMES = (
     "r5-os-splash.png",
     "r5-os-splash.bgr",
     "splash_icons.png",
+    "splash_icons.bgr",
     "r5-symbol.hvif",
 )
 
@@ -995,6 +918,7 @@ INSTALLED_NAMES = (
     "r5-os-splash.png",
     "r5-os-splash.bgr",
     "splash_icons.png",
+    "splash_icons.bgr",
     "r5-symbol.hvif",
 )
 
@@ -1056,10 +980,9 @@ def produce(artwork_dir: pathlib.Path, kit_dir: pathlib.Path, badge_path: pathli
     save_png(splash_png, kit_dir / "r5-os-splash.png")
     (kit_dir / "r5-os-splash.bgr").write_bytes(splash_bgr)
 
-    if not HAIKU_SPLASH_ICONS.is_file():
-        raise SystemExit(f"missing {HAIKU_SPLASH_ICONS}")
-    icons = render_splash_icons(Image.open(HAIKU_SPLASH_ICONS))
-    save_png(icons, kit_dir / "splash_icons.png")
+    icons_png, icons_bgr = render_splash_icons()
+    save_png(icons_png, kit_dir / "splash_icons.png")
+    (kit_dir / "splash_icons.bgr").write_bytes(icons_bgr)
 
     hvif = render_symbol_hvif()
     (kit_dir / "r5-symbol.hvif").write_bytes(hvif)
