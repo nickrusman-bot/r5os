@@ -55,7 +55,7 @@ These libraries sit next to `libbe`. They do not replace it. A Haiku program tha
 A helper written for R5, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is MIT, so any application can link these libraries. Code added to them must be MIT-compatible. A program that does not link it is unchanged.
 
 - `libr5icons.so`, header `R5Icons.h`, source `distro/icons`. Icons. `docs/ICONS.md`.
-- `libr5ui.so`, header `R5UI.h`, source `distro/ui`. The screen picture. `docs/LIBR5.md`.
+- `libr5ui.so`, headers `R5UI.h` and `Card.h`, source `distro/ui`. The screen picture, and the Appearance Kit classes (`BAppearanceKit::BCard`). `docs/LIBR5.md`. Which class to use for what: `docs/APPEARANCE-KIT.md`.
 
 The regular image and the minimum image both install them in `/system/lib`. The soname has no version suffix.
 
