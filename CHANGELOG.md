@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### An unknown PCI id does not load Green Sardine firmware
+
+`radeon_gfx9_fw_stem()` follows the four ids in the radeon_hd device table. 1636 and 164c stay `renoir`. 15e7 and 1638 stay `green_sardine`. Any other id returns NULL. The PSP load and the direct engine load stop, and the stem logs one line. The firmware blobs and the ring are unchanged. The host test checks the four ids and an unknown id. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
 
 Review points A1–A7 and M1 of the usb_audio and usb_midi review (8 Nov 2026). Branch `claude/usb-audio-midi-fixes`.
