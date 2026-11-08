@@ -46,7 +46,9 @@ enum {
 	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23,
 	/* One packet type per step, before any other GPU client. Older
 	 * callers never send this opcode. */
-	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24
+	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24,
+	/* gpu_debug only. Switches the named GFX9 settings for the self-test. */
+	R5_GPU_DEBUG_SWITCH = R5_GPU_OP_BASE + 25
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -361,6 +363,24 @@ typedef struct {
 	uint32_t	flags;
 	uint32_t	_pad;
 } r5_gpu_syncobj_transfer;
+
+/* which is a bit per setting. on is 0 or 1 for every bit that is set.
+ * Bit 7 (gfx9_vmid_per_file) is refused until each file has a root. */
+#define R5_GPU_SWITCH_INV_RANGE 1u
+#define R5_GPU_SWITCH_HUB_LINUX 2u
+#define R5_GPU_SWITCH_VMIDS 4u
+#define R5_GPU_SWITCH_FLUSH_FENCE 8u
+#define R5_GPU_SWITCH_COND_EXEC 16u
+#define R5_GPU_SWITCH_GDS 32u
+#define R5_GPU_SWITCH_DEFERRED 64u
+#define R5_GPU_SWITCH_VMID_PER_FILE 128u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	which;
+	uint32_t	on;
+} r5_gpu_debug_switch;
 
 /* The render node is published only when these three steps are on.
  * Without them the node does not exist, so RADV stays quiet. */

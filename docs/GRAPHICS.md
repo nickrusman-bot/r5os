@@ -287,6 +287,16 @@ The grab is not called from the submit path. `amdgpu_vm_init` gives each open fi
 
 `gfx9_deferred_free` defaults off. When it is on, a freed VRAM offset stays out of the allocator until the next user-job VM flush has been submitted and that fence has been seen. The retire thread prints the offset when it comes back. An unmap still clears the page-table entry at once. The list holds 256 offsets, one per buffer object. A full list frees that offset immediately.
 
+## Self-test switch
+
+`R5_GPU_DEBUG_SWITCH` is accepted only while `gpu_debug` is on. It flushes VMID 1 and waits until the newest user fence has been seen, then sets the bits for `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free`. `gfx9_vmid_per_file` is refused. The line carries the time and the bits.
+
+R1a, R1b and R1c are not submitted. Each one needs a virtual address mapped at a GTT page, then the same address mapped at a VRAM page, and a job on the user ring (`WRITE_DATA`, then `RELEASE_MEM`, then an indirect buffer). That remap is not built. The existing stage P write stays as it was.
+
+## vulkaninfo
+
+The driver watchdog is 10 seconds (`kWatchdogUs`), the same value as `amdgpu.lockup_timeout`. No other R5 wait of about 10 seconds was found on the vulkaninfo path. Whether the pause is that watchdog or the Vulkan loader is not known until a QEMU run shows the stack. QEMU has no Renoir, so it does not run the GFX ring.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

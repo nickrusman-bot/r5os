@@ -59,6 +59,26 @@ static bool sGpuDebug = false;
 static bool sInvRange = false;
 static bool sHubLinux = false;
 static bool sVmids = false;
+
+void
+r5_gfx9_set_inv_range(int on)
+{
+	sInvRange = on ? true : false;
+}
+
+
+void
+r5_gfx9_set_hub_linux(int on)
+{
+	sHubLinux = on ? true : false;
+}
+
+
+void
+r5_gfx9_set_vmids(int on)
+{
+	sVmids = on ? true : false;
+}
 static bool sVmCntlSavedValid = false;
 static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;

@@ -1322,6 +1322,8 @@ main()
 		if (r5_defer_take(held, 2, 8, &page) == 0 || page != 0x1000ull)
 			return fail("defer after fence");
 	}
+	if (R5_GPU_DEBUG_SWITCH != R5_GPU_OP_BASE + 25u)
+		return fail("debug switch opcode");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

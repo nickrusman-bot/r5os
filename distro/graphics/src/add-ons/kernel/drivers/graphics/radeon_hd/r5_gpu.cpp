@@ -3230,6 +3230,55 @@ gpu_write(void* cookie, off_t position, const void* buffer, size_t* numBytes)
 
 
 static status_t
+gpu_debug_switch(void* buffer, size_t length)
+{
+	r5_gpu_debug_switch in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return status;
+	if (!gpu_debug_enabled())
+		return B_NOT_ALLOWED;
+	if ((in.which & R5_GPU_SWITCH_VMID_PER_FILE) != 0)
+		return B_NOT_ALLOWED;
+	if (!r5_gfx9_vmid1_flush())
+		return B_ERROR;
+	bigtime_t deadline = system_time() + 5000000;
+	while (r5_gfx9_user_seen() < sHighestSequence) {
+		if (system_time() > deadline)
+			return B_TIMED_OUT;
+		snooze(1000);
+	}
+	if ((in.which & R5_GPU_SWITCH_INV_RANGE) != 0)
+		r5_gfx9_set_inv_range(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_HUB_LINUX) != 0)
+		r5_gfx9_set_hub_linux(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_VMIDS) != 0)
+		r5_gfx9_set_vmids(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_FLUSH_FENCE) != 0)
+		r5_gfx9_set_flush_fence(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_COND_EXEC) != 0)
+		r5_gfx9_set_cond_exec(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_GDS) != 0)
+		r5_gfx9_set_gds_switch(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_DEFERRED) != 0) {
+		sDeferred = in.on ? 1 : 0;
+		r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
+	}
+	dprintf("radeon_hd: t %lld switch which %lu on %lu "
+		"inv %d hub %d vmids %d fence %d cond %d gds %d defer %d\n",
+		(long long)system_time(), (unsigned long)in.which,
+		(unsigned long)in.on, in.on && (in.which & R5_GPU_SWITCH_INV_RANGE),
+		in.on && (in.which & R5_GPU_SWITCH_HUB_LINUX),
+		in.on && (in.which & R5_GPU_SWITCH_VMIDS),
+		in.on && (in.which & R5_GPU_SWITCH_FLUSH_FENCE),
+		in.on && (in.which & R5_GPU_SWITCH_COND_EXEC),
+		in.on && (in.which & R5_GPU_SWITCH_GDS),
+		in.on && (in.which & R5_GPU_SWITCH_DEFERRED));
+	return B_OK;
+}
+
+
+static status_t
 gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	gpu_client* client = (gpu_client*)cookie;
@@ -3308,7 +3357,9 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			if (copied != B_OK)
 				status = copied;
 		}
-	} else if (op == R5_GPU_SELFTEST) {
+	} else if (op == R5_GPU_DEBUG_SWITCH)
+		status = gpu_debug_switch(buffer, length);
+	else if (op == R5_GPU_SELFTEST) {
 		if (sLost) {
 			dprintf("radeon_hd: skipped, gpu lost\n");
 			status = ECANCELED;
