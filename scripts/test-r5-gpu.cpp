@@ -678,6 +678,7 @@ main()
 
 	const char* selftestOrder[] = {
 		"highVa, false",
+		"stage_r1(out)",
 		"\"vulkaninfo\"",
 		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
@@ -710,12 +711,21 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 7) != 0)
+			selftestOrder, 8) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
 			stageOrder, 16) != 0)
 		return 1;
+	{
+		char uBody[8000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+				"gpu_stage_u(", "return B_OK;", uBody, sizeof(uBody)) != 0)
+			return 1;
+		if (strstr(uBody, "gpu_stage_r1(") != NULL)
+			return fail("r1 still in u");
+	}
 	{
 		FILE* driver = fopen(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
@@ -1472,6 +1482,8 @@ main()
 	}
 	if (R5_GPU_DEBUG_SWITCH != R5_GPU_OP_BASE + 25u)
 		return fail("debug switch opcode");
+	if (R5_GPU_STAGE_R1 != R5_GPU_OP_BASE + 26u)
+		return fail("stage r1 opcode");
 	if (R5_GPU_SWITCH_CE_META != 256u)
 		return fail("ce switch bit");
 	{

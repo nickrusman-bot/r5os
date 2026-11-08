@@ -48,7 +48,9 @@ enum {
 	 * callers never send this opcode. */
 	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24,
 	/* gpu_debug only. Switches the named GFX9 settings for the self-test. */
-	R5_GPU_DEBUG_SWITCH = R5_GPU_OP_BASE + 25
+	R5_GPU_DEBUG_SWITCH = R5_GPU_OP_BASE + 25,
+	/* R1 remap test. Older callers never send this opcode. */
+	R5_GPU_STAGE_R1 = R5_GPU_OP_BASE + 26
 };
 
 #define R5_GPU_CAP_RENDER 1u

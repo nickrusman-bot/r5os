@@ -3224,9 +3224,6 @@ gpu_stage_u(radeon_info* info)
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
-	gpu_stage_r1(info);
-	if (sLost)
-		return ECANCELED;
 	bool stop = false;
 	/* The HDP probe ran first and does not use the GPU. Group B then
 	 * writes only, with the indirect buffer at a fresh low address.
@@ -3524,6 +3521,20 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		}
 	} else if (op == R5_GPU_DEBUG_SWITCH)
 		status = gpu_debug_switch(buffer, length);
+	else if (op == R5_GPU_STAGE_R1) {
+		if (sLost) {
+			dprintf("radeon_hd: skipped, gpu lost\n");
+			status = ECANCELED;
+		} else if (!gpu_render_enabled() || !gpu_selftest_enabled())
+			status = B_NOT_ALLOWED;
+		else if (!r5_gfx9_vmid1_setup()) {
+			dprintf("radeon_hd: r1 skip vmid\n");
+			status = B_NO_INIT;
+		} else {
+			gpu_stage_r1(client->info);
+			status = sLost ? ECANCELED : B_OK;
+		}
+	}
 	else if (op == R5_GPU_SELFTEST) {
 		if (sLost) {
 			dprintf("radeon_hd: skipped, gpu lost\n");

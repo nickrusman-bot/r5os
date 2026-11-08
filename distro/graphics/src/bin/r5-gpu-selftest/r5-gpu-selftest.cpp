@@ -410,6 +410,22 @@ stage_p(FILE* out)
 
 
 static void
+stage_r1(FILE* out)
+{
+	stage_at(out, "R1");
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd < 0) {
+		fprintf(out, "not available, no supported GPU\n");
+		return;
+	}
+	int ret = ioctl(fd, R5_GPU_STAGE_R1, NULL, 0);
+	fprintf(out, "R5_GPU_STAGE_R1 %d errno %d\n", ret, errno);
+	close(fd);
+	fflush(out);
+}
+
+
+static void
 stage_selftest(FILE* out)
 {
 	stage_at(out, "selftest");
@@ -477,6 +493,10 @@ main()
 			highVa = reported->high_va_offset;
 		stage_bo(out, lowVa, highVa, false);
 		stage_p(out);
+		if (device_lost())
+			skip_lost(out, "R1");
+		else
+			stage_r1(out);
 		if (device_lost()) {
 			skip_lost(out, "vulkaninfo");
 			skip_lost(out, "VulkanTeapot");
