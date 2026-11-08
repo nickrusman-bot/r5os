@@ -1264,6 +1264,13 @@ main()
 		if (r5_pasid_map_due(0, 0, (uint32_t)first) != 0
 			|| r5_pasid_map_due(0, (uint32_t)first, (uint32_t)second) != 0)
 			return fail("pasid map off");
+		/* Settings off, no VM flush: r5_gfx9_user_submit writes this
+		 * body and nothing in front of it. That is the frame from
+		 * before the PASID LUT write. Two clients must match it
+		 * dword for dword, and neither frame contains the LUT. */
+		const uint32_t beforeN8[] = {
+			0x8bu, 0x8bu, 0x28u, 0x90u, 0x3fu, 0x90u, 0x49u, 0x49u, 0x8bu
+		};
 		uint32_t bodyA[64];
 		uint32_t bodyB[64];
 		uint64_t ib = 0x1000;
@@ -1273,16 +1280,28 @@ main()
 			0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
 		uint32_t nb = r5_cs_user_body(bodyB, 64, &ib, &dw, &vm, 1,
 			0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
-		if (na == 0 || na != nb || memcmp(bodyA, bodyB, na * 4u) != 0)
+		if (na == 0 || na != nb || na != r5_cs_user_words(1))
 			return fail("two clients, settings off");
-		uint32_t eop[8];
-		if (r5_cs_eop_fence(eop, 8, 0, 0x401040ull, 4) != 8u
-			|| eop[0] != r5_cs_packet3(0x49, 6) || eop[5] != 4u)
-			return fail("pasid fence");
+		uint32_t lut = r5_cs_oss_reg(mmIH_VMID_0_LUT);
+		uint32_t seen = 0;
+		for (uint32_t i = 0; i < na; i++) {
+			if (bodyA[i] != bodyB[i])
+				return fail("two clients differ");
+			if (bodyA[i] == lut || bodyA[i] == lut + 1u)
+				return fail("lut in the off frame");
+			if ((bodyA[i] >> 30) == 3u) {
+				uint32_t op = (bodyA[i] >> 8) & 0xffu;
+				if (seen >= 9u || op != beforeN8[seen])
+					return fail("before N8");
+				seen++;
+			}
+		}
+		if (seen != 9u)
+			return fail("before N8 count");
 		const char* pasidOrder[] = {
-			"r5_pasid_map_due(",
-			"r5_cs_pasid_map(",
-			"r5_cs_eop_fence("
+			"int inBlock = flush || gds;",
+			"int pasidMap = inBlock",
+			"r5_cs_pasid_map("
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"

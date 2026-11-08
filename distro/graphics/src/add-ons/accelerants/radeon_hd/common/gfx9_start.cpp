@@ -2676,21 +2676,25 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	 * sHighestSequence. gpu_stage_pace_wait uses == on the job number,
 	 * so the earlier flush value does not finish that wait. */
 	int flushFence = sFlushFence && flush;
-	int pasidMap = r5_pasid_map_due(sPasidMap, sPasidOfVmid[1], sJobPasid);
-	/* A PASID mapping without a VM flush still gets the EOP fence when
-	 * gfx9_flush_fence is on. amdgpu_vm_flush emits that fence for
-	 * either reason. The two SWITCH_BUFFER packets stay with the VM
-	 * flush only. */
-	int pasidFence = sFlushFence && pasidMap && !flush;
-	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
-	 * zeros, and the packet runs once for this VMID. */
+	/* v6.18 amdgpu_vm_flush returns before any packet unless a VM
+	 * flush, a GDS switch, a pipeline sync or the cleaner shader is
+	 * needed. A PASID change alone writes nothing. Inside the block
+	 * the mapping is written. The block then ends with one fence, when
+	 * gfx9_flush_fence is on and a flush or a mapping happened, and
+	 * the two SWITCH_BUFFER packets. */
 	struct r5_gds jobGds;
 	memset(&jobGds, 0, sizeof(jobGds));
 	int gds = sGdsSwitch && r5_gds_switch_needed(&sGdsState, &jobGds);
+	int inBlock = flush || gds;
+	int pasidMap = inBlock
+		&& r5_pasid_map_due(sPasidMap, sPasidOfVmid[1], sJobPasid);
+	int endFence = sFlushFence && (flush || pasidMap);
+	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
+	 * zeros, and the packet runs once for this VMID. */
 	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
 	if (flushFence)
 		prefix += sCondExec ? 8u : 12u;
-	if (pasidFence)
+	else if (endFence)
 		prefix += 8u;
 	/* v6.18 amdgpu_vm_flush emits one COND_EXEC before the pipe sync
 	 * and patches it before the double SWITCH_BUFFER. v6.12 does the
@@ -2724,7 +2728,7 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		cap += 20u;
 	if (pasidMap)
 		cap += 5u;
-	if (pasidFence)
+	if (endFence && !flushFence)
 		cap += 8u;
 	if (sCondExec)
 		cap += 10u + 4u;
@@ -2739,7 +2743,7 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		return false;
 	uint64 irqMc = fenceMc + (kR5UserIrqOffset - kR5UserFenceOffset);
 	uint64 flushSeq = sUserSequence + 1;
-	uint64 sequence = (flushFence || pasidFence) ? flushSeq + 1 : flushSeq;
+	uint64 sequence = endFence ? flushSeq + 1 : flushSeq;
 	uint32 cntx = r5_cs_cntx(haveSwitch, preamble);
 	uint32 packets[576];
 	uint32 switched = 0;
@@ -2758,9 +2762,6 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		switched = r5_cs_pasid_map(packets, cap, switched, 1, sJobPasid);
 		sPasidOfVmid[1] = sJobPasid;
 		sFileOfVmid[1] = sJobFile;
-		if (pasidFence)
-			switched = r5_cs_eop_fence(packets, cap, switched, irqMc,
-				flushSeq);
 	}
 	if (gds) {
 		switched = r5_cs_gds_switch(packets, cap, switched, 1, &jobGds);
@@ -2774,6 +2775,9 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		else
 			switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
 				flushSeq);
+	} else if (endFence) {
+		switched = r5_cs_eop_fence(packets, cap, switched, irqMc,
+			flushSeq);
 	}
 	if (condFlush)
 		r5_cs_cond_exec_patch(packets, slotA, switched - (slotA + 1u));
