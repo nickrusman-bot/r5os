@@ -14,6 +14,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### Exited thread stack
+
+Location: `distro/kernel/src/system/kernel/thread.cpp`.
+
+The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+
 ### Teapot control points
 
 Location: `distro/apps/vulkanteapot/fg_teapot_data.h`.
