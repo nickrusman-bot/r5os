@@ -607,9 +607,18 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 status_t
 Stream::GetBuffers(multi_buffer_list* List)
 {
-// TODO: check the available buffers count!
 	if (fAreaSize == 0)
 		return B_NO_INIT;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The loop below fills kSamplesBufferCount entries of the caller's array.
+	if ((fIsInput ? List->request_record_buffers
+			: List->request_playback_buffers) < (int32)kSamplesBufferCount) {
+		return B_BAD_VALUE;
+	}
+// SPDX-SnippetEnd
 
 	int32 startChannel = List->return_playback_channels;
 	buffer_desc** Buffers = List->playback_buffers;
