@@ -627,6 +627,7 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 	out.revision = info->pci->revision;
 	if (gpu_render_enabled())
 		out.capabilities = R5_GPU_CAP_RENDER;
+	gpu_lock();
 	if (sLost)
 		out.capabilities |= R5_GPU_CAP_LOST;
 	if (sLost && client != NULL
@@ -660,6 +661,7 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 	}
 	/* The whole BAR is CPU-visible on this APU. There is no invisible heap. */
 	out.visible_vram_usage = out.vram_usage;
+	gpu_unlock();
 	size_t copy = sizeof(out);
 	if (length < copy)
 		copy = length;

@@ -665,6 +665,21 @@ main()
 			return fail("lost retire");
 		if (lost.trees != 0 || lost.pages != 0 || lost.refs != 0)
 			return fail("lost counters");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_get_info(", "user_memcpy(buffer, &out", body,
+				sizeof(body)) != 0)
+			return 1;
+		{
+			const char* locked = strstr(body, "gpu_lock()");
+			const char* bos = locked != NULL
+				? strstr(locked, "sBo[i].live") : NULL;
+			const char* unlocked = bos != NULL
+				? strstr(bos, "gpu_unlock()") : NULL;
+			if (locked == NULL || bos == NULL || unlocked == NULL)
+				return fail("info lock");
+		}
 		const char* lostSeen[] = {
 			"A lost device never retires",
 			"seen = ~0ull;",

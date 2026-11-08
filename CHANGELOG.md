@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### GET_INFO reads the live counters under the GPU lock
+
+`gfx9_vmid_per_file` stays off. The lost bit, the guilty file and the buffer bytes are sampled while the lock is held. The copy back to the caller stays outside the lock. The host test checks that order. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A lost GPU releases parked buffers and their file trees
 
 `gfx9_vmid_per_file` stays off. After `gpu lost`, the retire treats every fence as passed. Parked buffers are released, and the last reference drops the file tree, its pages and its VMID. The host test holds a tree for a parked buffer, drops it as lost, and the counters are back at zero. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
