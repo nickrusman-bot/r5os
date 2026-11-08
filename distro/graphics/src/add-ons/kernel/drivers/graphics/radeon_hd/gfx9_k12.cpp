@@ -1227,8 +1227,14 @@ r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset)
 	status_t status = r5_gfx9_alloc_vram(bytes, 4096, &bumped, &address);
 	if (status != B_OK)
 		return status;
+	if (address != NULL)
+		memset(address, 0, (size_t)bytes);
 	if (!r5_span_add(sUserSpans, 64, bumped, bytes))
 		return B_NO_MEMORY;
+	for (int i = 0; i < 64; i++) {
+		if (sUserSpans[i].live && sUserSpans[i].offset == bumped)
+			sUserSpans[i].cpu = address;
+	}
 	*offset = bumped;
 	return B_OK;
 }

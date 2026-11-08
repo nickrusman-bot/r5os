@@ -884,6 +884,23 @@ main()
 	if (!r5_span_take(spans, 4, 0x1000, &taken) || taken != 0x1000)
 		return fail("span take");
 	r5_span_free(spans, 4, taken);
+	if (R5_GPU_BO_VRAM_CLEARED != 8u)
+		return fail("vram cleared flag");
+	{
+		uint8_t mem[0x2000];
+		memset(mem, 0xab, sizeof(mem));
+		memset(spans, 0, sizeof(spans));
+		spans[0].live = 1;
+		spans[0].used = 0;
+		spans[0].offset = 0x2000;
+		spans[0].bytes = 0x2000;
+		spans[0].cpu = mem;
+		taken = 0;
+		if (!r5_span_take(spans, 4, 0x1000, &taken) || taken != 0x2000)
+			return fail("vram take");
+		if (mem[0] != 0 || mem[0xfff] != 0 || mem[0x1000] != 0xab)
+			return fail("vram zero");
+	}
 	if (r5_wait_step(5, 5, 10, 0) != R5_WAIT_DONE)
 		return fail("wait done");
 	if (r5_wait_step(1, 5, 0, 0) != R5_WAIT_POLL)

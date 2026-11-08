@@ -87,6 +87,9 @@ typedef struct {
  * No RAM area is given a write-combined memory type. A GTT page stays
  * cached and snooped, the same as amdgpu_bo_support_uswc() false. */
 #define R5_GPU_BO_WC 4u
+/* AMDGPU_GEM_CREATE_VRAM_CLEARED, bit 3. User VRAM is cleared on every
+ * allocation, including a span a previous owner freed. */
+#define R5_GPU_BO_VRAM_CLEARED 8u
 
 #define R5_GPU_VA_READ 1u
 #define R5_GPU_VA_WRITE 2u

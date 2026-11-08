@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### User VRAM is cleared before the next owner sees it
+
+`gfx9_vmid_per_file` stays off. A fresh VRAM bump is zeroed before it is published. A span that a previous owner freed is zeroed through the kernel address stored with it, whether or not the caller set `R5_GPU_BO_VRAM_CLEARED` (bit 3, the Linux `AMDGPU_GEM_CREATE_VRAM_CLEARED` flag). The host test frees a span, takes it again, and reads zeros for the taken bytes. There is no What's new section and `distro/BUILD` stays the same.
+
 ### An indirect buffer cannot wrap the address space
 
 `gfx9_vmid_per_file` stays off. `gpu_ib_mapped` refuses a dword count of 0 or above `0xfffff`, an unaligned address, and a range whose byte sum does not fit in 64 bits. The pages have to fit the virtual-address layout. The walk stops on the last page, so the page counter does not wrap. The host test rejects an address near the top of 64 bits and a count of `0x100000`, and accepts eight dwords on the last page of that span. There is no What's new section and `distro/BUILD` stays the same.
