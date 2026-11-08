@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### About R5 opens at the mockup width
+
+The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. Text in the cards does not cap the width. `distro/BUILD` stays 10049.
+
 ### Volumes use the drive, not the cabinet
 
 `R_HardDiskIcon` is the beige cabinet. The boot volume uses the drive icon again, and the R5 mark still covers the ladybug. A shared volume, including VBox Share, uses that drive with the ladybug shapes removed. `distro/BUILD` stays 10049.
