@@ -855,16 +855,21 @@ NetworkShares::_Mount(int32 id, bool byUser)
 		// the key store may not be there yet when the system starts, and
 		// to try without would have the server say the password is wrong,
 		// which is where trying ends.
-		BString password;
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		// The password stays in the key store. smbfs reads it. It is not a
+		// mount parameter, so it is not in the file system argument list.
 		if (!copy.user.IsEmpty()) {
-			error = _GetPassword(copy, password);
+			error = _HasPassword(copy);
 			if (error == B_OK)
-				hasPassword = !password.IsEmpty();
+				hasPassword = true;
 			else if (error == B_ENTRY_NOT_FOUND) {
 				hasPassword = false;
 				error = B_OK;
 			}
 		}
+		// SPDX-SnippetEnd
 
 		if (error == B_OK)
 			error = _CreateMountPoint(copy, mountPoint);
@@ -879,8 +884,6 @@ NetworkShares::_Mount(int32 id, bool byUser)
 				parameters << " path=" << encode(copy.path);
 			if (!copy.user.IsEmpty())
 				parameters << " user=" << encode(copy.user);
-			if (!password.IsEmpty())
-				parameters << " password=" << encode(password);
 			if (!copy.domain.IsEmpty())
 				parameters << " domain=" << encode(copy.domain);
 			if (copy.readOnly)
@@ -891,11 +894,6 @@ NetworkShares::_Mount(int32 id, bool byUser)
 			dev_t volume = fs_mount_volume(mountPoint.String(), NULL,
 				"userlandfs", copy.readOnly ? B_MOUNT_READ_ONLY : 0,
 				parameters.String());
-
-			// it has the password in it
-			memset(parameters.LockBuffer(parameters.Length()), 0,
-				parameters.Length());
-			parameters.UnlockBuffer(0);
 
 			if (volume < 0) {
 				error = volume;

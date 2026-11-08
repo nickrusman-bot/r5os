@@ -11,8 +11,7 @@
 		mount -t userlandfs -p "smbfs server=<host> share=<name> ..." <where>
 
 	The parameters are words of the form key=value, see parse_options(). A
-	value has its special characters written %XX as in a URL, which is how a
-	password with a blank in it gets here in one piece.
+	value has its special characters written %XX as in a URL.
 
 	userlandfs has one volume per FUSE file system. To mount several shares,
 	give each an instance name: "smbfs:music server=...".
@@ -38,8 +37,19 @@
 
 #include <ctype.h>
 #include <fs_info.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <Key.h>
+#include <KeyStore.h>
+// SPDX-SnippetEnd
 #include <MimeType.h>
 #include <OS.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <String.h>
+// SPDX-SnippetEnd
 
 #include <smb2/smb2.h>
 #include <smb2/libsmb2.h>
@@ -1229,7 +1239,6 @@ decode(const char* value)
 		path=<directory>		the part of the share to mount, all of it if
 								not given
 		user=<name>				guest if not given
-		password=<password>
 		domain=<name>
 		name=<name>				what to call the volume, the share's name if
 								not given
@@ -1258,8 +1267,15 @@ parse_options(int argc, const char* const* argv)
 			sOptions.path = value;
 		else if (key == "user")
 			sOptions.user = value;
-		else if (key == "password")
-			sOptions.password = value;
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		else if (key == "password") {
+			// The value is not logged. The product path does not send it.
+			syslog(LOG_ERR, "smbfs: the password is read from the keystore\n");
+			return B_BAD_VALUE;
+		}
+		// SPDX-SnippetEnd
 		else if (key == "domain")
 			sOptions.domain = value;
 		else if (key == "name")
@@ -1298,6 +1314,23 @@ parse_options(int argc, const char* const* argv)
 
 	sOptions.timeout = std::max(5, std::min(sOptions.timeout, 300));
 	sOptions.connections = std::max(1, std::min(sOptions.connections, 8));
+
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// Same identifier the mount server stored: smb://server/share, user name.
+	if (sOptions.password.empty() && !sOptions.user.empty()) {
+		BString identifier;
+		identifier.SetToFormat("smb://%s/%s", sOptions.server.c_str(),
+			sOptions.share.c_str());
+		BKeyStore keyStore;
+		BPasswordKey key;
+		if (keyStore.GetKey(B_KEY_TYPE_PASSWORD, identifier.String(),
+				sOptions.user.c_str(), false, key) == B_OK) {
+			sOptions.password = key.Password();
+		}
+	}
+	// SPDX-SnippetEnd
 
 	return B_OK;
 }
