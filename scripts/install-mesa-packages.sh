@@ -39,6 +39,29 @@ do
 	fi
 done
 echo mesa_packages_ok
+PKGDIR="$(cd "$(dirname "$0")/.." && pwd)/distro/packages/x86_64"
+if [[ ! -d "$PKGDIR" ]]; then
+	PKGDIR=/mnt/c/Users/nickr/Projects/R5OS/distro/packages/x86_64
+fi
+PKG="$HAIKU/generated.x86_64/objects/linux/x86_64/release/tools/package/package"
+LEAK="$(mktemp -d)"
+for name in \
+	libdrm-2.4.124-1-x86_64.hpkg \
+	mesa-25.3.6-2-x86_64.hpkg \
+	mesa_radv-25.3.6-1-x86_64.hpkg \
+	mesa_lavapipe-25.3.6-1-x86_64.hpkg \
+	vulkanteapot-1.0.0-1-x86_64.hpkg
+do
+	rm -rf "$LEAK/$name"
+	mkdir -p "$LEAK/$name"
+	"$PKG" extract -C "$LEAK/$name" "$PKGDIR/$name"
+done
+if grep -R -a -l '/home/nickr' "$LEAK"; then
+	echo "a shipped package still contains /home/nickr" >&2
+	exit 1
+fi
+rm -rf "$LEAK"
+echo ok package paths
 CHECK="$(cd "$(dirname "$0")" && pwd)/check-egl-vendor.py"
 if [[ ! -f "$CHECK" ]]; then
 	CHECK="/mnt/c/Users/nickr/Projects/R5OS/scripts/check-egl-vendor.py"

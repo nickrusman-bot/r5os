@@ -8,6 +8,8 @@ R5 is an independent system based on Haiku. Haiku’s own copyright notices and 
 
 The preferences wrench on Settings page icons and home cards is Haiku’s unmodified `data/artwork/icons/Overlay_prefs`, copied to `distro/settings/overlay-prefs.hvif`. `data/artwork/ReadMe` releases the icons under the MIT license. About R5 does not use that wrench.
 
+The seven boot-progress icons are unmodified Haiku drawings, MIT, copyright Haiku, Inc. and its contributors: Kernel, Harddisk_Development, Devices, Harddisk, Virtual_Memory, Config_Folder, and Window. The SVGs and the list are in `distro/artwork/boot_splash/icons-src/`. `SOURCES.md` names each file. The 308×80 strip is built from renders of those SVGs.
+
 The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF from Haiku’s `src/kits/tracker/TrackerIcons.rdef` (`R_ResBackNav`, `R_ResForwNav`, `R_ResUpNav`, `R_HomeDirIcon`). The bytes live in `distro/icons/standard_icons.inc`. The Open Tracker notice is `distro/icons/TRACKER_ICON_NOTICE.txt`. The open and closed locks are unmodified HVIF of Haiku’s `Action_Login` and `Action_Logout` artwork. The bytes live in `distro/icons/lock_icons.inc`. The MIT notice is `distro/icons/HAIKU_ICON_NOTICE.txt`. The C++ around them is GPL-3.0-or-later, and that is the license of the shared library as shipped. The picture bytes keep their own notices. Those pictures do not get the preferences wrench. Settings does not read Tracker’s private resources at run time. `r5_button_set_lock()` is the public call that puts one of those locks on a button.
 
 ## Identified in this repository
@@ -56,6 +58,10 @@ Location: `distro/packages/x86_64`. Copied onto the image after jam. Mesa 22.0.5
 | vulkaninfo 1.4.367 (`vulkan_tools`) | The Khronos Group Inc., Valve Corporation, LunarG, Inc., RasterGrid Kft. | Apache-2.0 |
 
 The LLVM license text shipped inside the runtime package is `LICENSES/Apache-2.0-with-LLVM-exception.txt`. These packages were not audited file by file. This is CPU drawing, not the graphics chip.
+
+The same Mesa 25.3.6 build also ships RADV (`libvulkan_radeon.so`), Lavapipe and Zink. `src/amd/vulkan/radv_device.c` is SPDX MIT, copyright 2016 Red Hat and Bas Nieuwenhuizen, and says it is based in part on ANV, copyright 2015 Intel Corporation. `src/gallium/frontends/lavapipe/lvp_device.c` is MIT, copyright 2019 Red Hat. `src/gallium/drivers/zink/zink_context.c` is MIT, copyright 2018 Collabora Ltd. Mesa's `docs/license.rst` says the core is MIT and that individual files can differ. These three files were read. The packages were not audited file by file.
+
+libdrm 2.4.124 is built in this tree and installed as `libdrm.so.2` and `libdrm_amdgpu.so.1`. `xf86drm.c` is MIT, copyright 1999 Precision Insight, Inc. and 2000 VA Linux Systems, Inc. `amdgpu/amdgpu.h` is MIT, copyright 2014 Advanced Micro Devices, Inc. `data/amdgpu.ids` ships unmodified. Its first lines are a syntax comment and `1.0.0`. They name no copyright holder. The libdrm tree was not audited file by file.
 
 ### Manrope
 

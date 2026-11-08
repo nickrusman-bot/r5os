@@ -40,19 +40,70 @@ enum {
 	R5_GPU_BO_EXPORT = R5_GPU_OP_BASE + 17,
 	R5_GPU_BO_IMPORT = R5_GPU_OP_BASE + 18,
 	R5_GPU_SYNCOBJ_WAIT_LIST = R5_GPU_OP_BASE + 19,
-	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20
+	R5_GPU_SYNCOBJ_TRANSFER = R5_GPU_OP_BASE + 20,
+	R5_GPU_VA_REPLACE = R5_GPU_OP_BASE + 21,
+	R5_GPU_VA_CLEAR = R5_GPU_OP_BASE + 22,
+	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23,
+	/* One packet type per step, before any other GPU client. Older
+	 * callers never send this opcode. */
+	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24,
+	/* gpu_debug only. Switches the named GFX9 settings for the self-test. */
+	R5_GPU_DEBUG_SWITCH = R5_GPU_OP_BASE + 25,
+	/* R1 remap test. Older callers never send this opcode. */
+	R5_GPU_STAGE_R1 = R5_GPU_OP_BASE + 26,
+	/* Read-only register and setting print for the self-test. */
+	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27
 };
 
 #define R5_GPU_CAP_RENDER 1u
+/* Set after the watchdog cancels the device. Older callers ignore it. */
+#define R5_GPU_CAP_LOST 2u
+
+/* Stage P. status is R5_GPU_P_OK, TIMEOUT, PRIV, SKIP or ROOM.
+ * first_fail is the 1-based step, or 0 when every step landed.
+ * name is the step. ROOM means the packet was not written. */
+/* Grown with the extra stage P steps. An older caller fails the
+ * size check. The opcode number is unchanged. */
+#define R5_GPU_P_STEPS 33u
+#define R5_GPU_P_OK 0u
+#define R5_GPU_P_TIMEOUT 1u
+#define R5_GPU_P_PRIV 2u
+#define R5_GPU_P_SKIP 3u
+#define R5_GPU_P_ROOM 4u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	count;
+	uint32_t	first_fail;
+	uint32_t	status[R5_GPU_P_STEPS];
+	char		name[R5_GPU_P_STEPS][24];
+} r5_gpu_stage_p;
 
 #define R5_GPU_DOMAIN_VRAM 1u
 #define R5_GPU_DOMAIN_GTT 2u
 
+/* AMDGPU_GEM_CREATE_CPU_GTT_USWC, bit 2. The kernel accepts the bit.
+ * No RAM area is given a write-combined memory type. A GTT page stays
+ * cached and snooped, the same as amdgpu_bo_support_uswc() false. */
+#define R5_GPU_BO_WC 4u
+
 #define R5_GPU_VA_READ 1u
 #define R5_GPU_VA_WRITE 2u
 #define R5_GPU_VA_EXEC 4u
+/* Linux AMDGPU_VM_PAGE_PRT. Handle 0 is valid only with this flag. */
+#define R5_GPU_VA_PRT 8u
 
-/* Linux v6.12 amdgpu_kms.c for a 48-bit GC 9.3 VM. See GRAPHICS.md. */
+/* v6.18 amdgpu_vm.h:175
+ *   #define AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12)
+ * amdgpu_kms.c:968 is high_va_max = AMDGPU_GMC_HOLE_END | vm_size,
+ * and vm_size subtracts AMDGPU_VA_RESERVED_TOP (trap 8 KiB + seq64
+ * 2 MiB + CSA 2 MiB = 0x402000). That is 0xffffffffffbfe000.
+ * v6.12.60 has the same trap define. Mainline
+ * 31b8de5e55666f26ea7ece5f412b83eab3f56dbb changes it to
+ * (1ULL << 16); stable 4487571ef17a30d274600b3bd6965f497a881299
+ * is that change in v6.18.60. This value stays the v6.18 one,
+ * which GET_INFO reported on stick 28. */
 #define R5_GPU_VA_OFFSET 0x10000ull
 #define R5_GPU_VA_MAX 0x800000000000ull
 #define R5_GPU_HIGH_VA_OFFSET 0xffff800000000000ull
@@ -81,6 +132,10 @@ typedef struct {
 	uint32_t	func;
 	uint32_t	subsystem_vendor;
 	uint32_t	subsystem_device;
+	/* Live buffer bytes. Visible VRAM is the whole BAR on this APU. */
+	uint64_t	vram_usage;
+	uint64_t	visible_vram_usage;
+	uint64_t	gtt_usage;
 } r5_gpu_info;
 
 /* AMDGPU_FAMILY_RV from libdrm amdgpu_drm.h. The vendor block below is that
@@ -280,7 +335,8 @@ typedef struct {
  * AVAILABLE waits for the submitted point, not the finished point.
  * BINARY waits until the point is greater than 0. FOR_SUBMIT blocks
  * until the point has been submitted. Without it an unsubmitted point
- * times out at once. */
+ * returns B_BAD_VALUE, which is EINVAL, as Linux drm_syncobj_array_wait
+ * does. A timeout is only for a point that was submitted. */
 #define R5_GPU_WAIT_ALL 1u
 #define R5_GPU_WAIT_AVAILABLE 2u
 #define R5_GPU_WAIT_BINARY 4u
@@ -320,5 +376,81 @@ typedef struct {
 	uint32_t	flags;
 	uint32_t	_pad;
 } r5_gpu_syncobj_transfer;
+
+/* which is a bit per setting. on is 0 or 1 for every bit that is set.
+ * Bit 7 (gfx9_vmid_per_file) is refused until each file has a root.
+ * Bit 8 (gfx9_ce_meta) is a boot setting: the CSA is mapped only then. */
+#define R5_GPU_SWITCH_INV_RANGE 1u
+#define R5_GPU_SWITCH_HUB_LINUX 2u
+#define R5_GPU_SWITCH_VMIDS 4u
+#define R5_GPU_SWITCH_FLUSH_FENCE 8u
+#define R5_GPU_SWITCH_COND_EXEC 16u
+#define R5_GPU_SWITCH_GDS 32u
+#define R5_GPU_SWITCH_DEFERRED 64u
+#define R5_GPU_SWITCH_VMID_PER_FILE 128u
+#define R5_GPU_SWITCH_CE_META 256u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	which;
+	uint32_t	on;
+} r5_gpu_debug_switch;
+
+/* which is R5_GPU_R1_AB (the writes and the fence) or R5_GPU_R1_C
+ * (the indirect-buffer fetch). R1c can stop the command processor, so
+ * the self-test runs it after the teapots. */
+#define R5_GPU_R1_AB 1u
+#define R5_GPU_R1_C 2u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	which;
+	uint32_t	_pad;
+	/* This round's pages. y is the next page. A later round uses
+	 * another pair, so a leftover translation cannot write a page
+	 * this round has freed. */
+	uint64_t	x;
+	uint64_t	y;
+	/* Filled by the kernel from the R1a readback. old_word is the
+	 * page that was mapped first. new_word is the page mapped after. */
+	uint32_t	old_word;
+	uint32_t	new_word;
+} r5_gpu_stage_r1;
+
+
+/* R1a passes when the first page still holds the first write and the
+ * page mapped afterwards holds the second write. */
+static inline int
+r5_gpu_r1_ab_pass(uint32_t old_word, uint32_t new_word)
+{
+	return old_word == 0x11111111u && new_word == 0x22222222u;
+}
+
+/* The kernel fills line and dprints it. The caller writes the file. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	length;
+	char		line[480];
+} r5_gpu_log_regs;
+
+/* The render node is published only when these three steps are on.
+ * Without them the node does not exist, so RADV stays quiet. */
+static inline int
+r5_gpu_node_on(int kernel, int irq, int gart)
+{
+	return kernel && irq && gart;
+}
+
+/* MC_VM_FB_OFFSET is in 16 MiB units. On an APU that value, shifted,
+ * is the system physical address of the carveout. Linux gmc_v9_0_mc_init
+ * uses it as aper_base. The low 24 bits of the register are the field. */
+static inline uint64_t
+r5_gpu_carveout_base(uint32_t fbOffset)
+{
+	return (uint64_t)(fbOffset & 0x00ffffffu) << 24;
+}
 
 #endif

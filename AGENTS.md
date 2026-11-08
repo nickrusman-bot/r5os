@@ -52,10 +52,10 @@ Do not open Tracker’s private resources, and do not read `libtracker.so`, to d
 
 These libraries sit next to `libbe`. They do not replace it. A Haiku program that links only `libbe` keeps that ABI. Do not add these calls to `libbe`. Do not add a function here only to rename a `libbe` call.
 
-A helper written for R5, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is GPL-3.0-or-later. A program that links one of these libraries combines with that license. A program that does not link it is unchanged.
+A helper written for R5, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is MIT, so any application can link these libraries. Code added to them must be MIT-compatible. A program that does not link it is unchanged.
 
 - `libr5icons.so`, header `R5Icons.h`, source `distro/icons`. Icons. `docs/ICONS.md`.
-- `libr5ui.so`, header `R5UI.h`, source `distro/ui`. The screen picture. `docs/LIBR5.md`.
+- `libr5ui.so`, headers `R5UI.h` and `Card.h`, source `distro/ui`. The screen picture, and the Appearance Kit classes (`BAppearanceKit::BCard`). `docs/LIBR5.md`. Which class to use for what: `docs/APPEARANCE-KIT.md`.
 
 The regular image and the minimum image both install them in `/system/lib`. The soname has no version suffix.
 
@@ -71,7 +71,7 @@ If a break is required: document why, what it hits, and the migration path.
 
 Full policy, inventory, and the VirtualBox 7.2.22 assessment: `docs/LICENSING.md`. User-facing list: `THIRD_PARTY_NOTICES.md`. Unmodified texts: `LICENSES/`.
 
-R5 is multi-license. New R5-owned files default to `GPL-3.0-or-later` with an SPDX header, when R5 has the rights to that whole file. Haiku files keep their original license and copyright. Do not replace an MIT header with GPL. Do not relicense GPL-2.0-only code as GPL-3.0. Do not combine GPL-2.0-only with GPL-3.0 in one work. A separate kernel module does not by itself make GPL code independent of the kernel.
+R5 is multi-license. New R5-owned files default to `GPL-3.0-or-later` with an SPDX header, when R5 has the rights to that whole file. A library or public header that applications link or include is MIT when R5 holds the rights to all of it. GPL-3.0-or-later stays the default for the rest of the OS, and GPL code stays GPL. Haiku files keep their original license and copyright. Do not replace an MIT header with GPL. Do not relicense GPL-2.0-only code as GPL-3.0. Do not combine GPL-2.0-only with GPL-3.0 in one work. A separate kernel module does not by itself make GPL code independent of the kernel.
 
 Do not assume the Haiku tree is all MIT. Do not drop a suitable driver only to keep a single license. Do not rewrite license headers in bulk. The file-by-file audit, REUSE lint, and About credits view are not done.
 
@@ -168,7 +168,7 @@ GitHub issues on `origin` are the lead, including open Haiku Trac tickets. Those
 
 Public: **R5 YYYY.N**, in full R5 Operating System YYYY.N (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`.
 
-Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `Version YYYY.N-dev Build N` from `r5_os_version.h` generated at apply/jam (`R5_OS_VERSION`, `R5_OS_BUILD`). Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
+Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `Version YYYY.N-dev` in the header and `Build N` in small text under the system information, both from `r5_os_version.h`. Both stay visible while What's new is selected. Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
 
 Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh --revision`), not the build number. Do not use Haiku `hrev` as the distro version. Keep upstream hrev only where it is still needed for debugging.
 

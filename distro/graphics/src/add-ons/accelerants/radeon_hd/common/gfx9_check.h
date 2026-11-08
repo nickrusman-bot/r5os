@@ -19,6 +19,23 @@ enum {
 	R5_GFX9_PTE_WRITEABLE = 1u << 6
 };
 
+/* Linux v6.12 amdgpu_vm.h: AMDGPU_PTE_PRT is bit 51 before GFX12.
+ * GFX12 moves it to bit 56. GC 9.3 uses bit 51. gmc_v9_0_get_vm_pte
+ * sets this bit and clears VALID. No other GMC 9 register is written
+ * for a PRT mapping. */
+static const uint64_t kR5Gfx9PtePrt = 1ull << 51;
+
+/* 2 is a valid mapping, 1 is PRT, 0 is an empty entry. */
+static inline int
+r5_gfx9_pte_kind(uint64_t pte)
+{
+	if ((pte & (uint64_t)R5_GFX9_PTE_VALID) != 0)
+		return 2;
+	if ((pte & kR5Gfx9PtePrt) != 0)
+		return 1;
+	return 0;
+}
+
 /* amdgpu_vm.h AMDGPU_PTE_MTYPE_VG10 shifts by 57 and keeps two bits.
  * vega10_enum.h MTYPE_UC is 3. gmc_v9_0_gart_init stores
  * AMDGPU_PTE_MTYPE_VG10(0, MTYPE_UC) | AMDGPU_PTE_EXECUTABLE. */
@@ -33,6 +50,65 @@ r5_gfx9_gart_pte(uint64_t physical, uint64_t flags)
 {
 	const uint64_t mask = kR5Gfx9MtypeUc << kR5Gfx9MtypeShift;
 	return (physical & ~0xfffull) | (flags & ~mask) | mask;
+}
+
+
+/* Linux v6.12 gmc_v9_0.c gmc_v9_0_get_coherence_flags, the branch that
+ * is not GC 9.4. A system page that is not UNCACHED and not COHERENT
+ * is MTYPE_NC. That function also maps user VRAM the same way.
+ * vram_live stays 0, so a user VRAM page still goes through
+ * r5_gfx9_gart_pte (MTYPE_UC) until a boot compares the two.
+ * Coherence sets SNOOPED on every system page, including write
+ * combined. ttm_tt_pte_flags leaves SNOOPED clear for
+ * ttm_write_combined, and that is the snoop bit used here. */
+struct r5_gfx9_mtype_policy {
+	uint32_t	gc_major;
+	uint32_t	gc_minor;
+	uint32_t	system_mtype;
+	uint32_t	vram_mtype;
+	int		vram_live;
+	const char*	source;
+};
+
+static const struct r5_gfx9_mtype_policy kR5Gfx93Mtype = {
+	9, 3, 0, 0, 0,
+	"Linux v6.12 gmc_v9_0.c:gmc_v9_0_get_coherence_flags"
+};
+
+/* KernelExport.h: B_WRITE_COMBINING_MEMORY is (2 << 28). 0 is the
+ * default write-back area type. */
+static inline uint32_t
+r5_gfx9_cpu_memory_type(int writeCombined)
+{
+	return writeCombined ? (2u << 28) : 0u;
+}
+
+static inline uint64_t
+r5_gfx9_user_pte(uint64_t physical, uint64_t flags, int gtt,
+	int writeCombined, const struct r5_gfx9_mtype_policy* policy)
+{
+	const uint64_t mask = kR5Gfx9MtypeUc << kR5Gfx9MtypeShift;
+	uint64_t pte = (physical & ~0xfffull) | (flags & ~mask);
+	uint32_t mtype;
+	if (!gtt) {
+		if (policy == 0 || policy->vram_live == 0)
+			return r5_gfx9_gart_pte(physical, flags);
+		mtype = policy->vram_mtype;
+	} else {
+		mtype = policy == 0 ? 0u : policy->system_mtype;
+		pte |= (uint64_t)R5_GFX9_PTE_SYSTEM;
+		if (!writeCombined)
+			pte |= (uint64_t)R5_GFX9_PTE_SNOOPED;
+	}
+	pte &= ~mask;
+	pte |= ((uint64_t)(mtype & 3u)) << kR5Gfx9MtypeShift;
+	return pte;
+}
+
+static inline uint64_t
+r5_gfx9_cached_gtt_pte(uint64_t physical, uint64_t flags)
+{
+	return r5_gfx9_user_pte(physical, flags, 1, 0, &kR5Gfx93Mtype);
 }
 
 
@@ -79,14 +155,25 @@ r5_gfx9_tlb_req(uint32_t vmid, uint32_t flushType)
 }
 
 
-struct r5_gfx9_fault {
+/* Bit in VM_INVALIDATE_ENG*_ACK. Linux gmc_v9_0_flush_gpu_tlb waits on
+ * ack & (1 << vmid). VMID 0 is bit 0, so the K2 poll of bit 0 stays. */
+static inline uint32_t
+r5_gfx9_tlb_ack_mask(uint32_t vmid)
+{
+	if (vmid >= 16)
+		return 0;
+	return 1u << vmid;
+}
+
+
+typedef struct r5_gfx9_fault {
 	uint32_t	more;
 	uint32_t	walker;
 	uint32_t	permission;
 	uint32_t	mapping;
 	uint32_t	cid;
 	uint32_t	rw;
-};
+} r5_gfx9_fault;
 
 /* gc_9_0_sh_mask.h VM_L2_PROTECTION_FAULT_STATUS. */
 static inline r5_gfx9_fault
@@ -121,8 +208,20 @@ r5_gfx9_ring_index(uint64_t wptr, uint32_t i, uint32_t dwords)
 }
 
 
+/* The CP reports rptr as an offset in the ring. wptr keeps counting.
+ * ringDwords is a power of two. The result is rptr in that same count.
+ * One slot stays free, so a distance of 0 is empty and never a full lap. */
+static inline uint64_t
+r5_gfx9_rptr_count(uint32_t ringDwords, uint64_t wptr, uint64_t rptrOffset)
+{
+	uint64_t mask = (uint64_t)ringDwords - 1u;
+	return wptr - ((wptr - (rptrOffset & mask)) & mask);
+}
+
+
 /* Free dwords, leaving one slot so the write pointer does not land on
- * the read pointer. rptr and wptr are both the continuing dword count. */
+ * the read pointer. wptr and rptr are both the continuing dword count.
+ * rptr comes from r5_gfx9_rptr_count, not from the CP register. */
 static inline uint64_t
 r5_gfx9_ring_space(uint32_t ringDwords, uint64_t wptr, uint64_t rptr)
 {
@@ -172,11 +271,11 @@ r5_gfx9_gart_range(uint64_t fbStart, uint64_t apertureStart,
 	return 1;
 }
 
-struct r5_gfx9_ih_entry {
+typedef struct r5_gfx9_ih_entry {
 	uint32_t	client;
 	uint32_t	source;
 	uint32_t	ring;
-};
+} r5_gfx9_ih_entry;
 
 /* amdgpu_ih_decode_iv_helper: client is bits 7:0, source 15:8, ring 23:16. */
 static inline r5_gfx9_ih_entry

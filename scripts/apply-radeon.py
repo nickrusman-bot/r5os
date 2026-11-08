@@ -14,9 +14,9 @@ import sys
 
 CLEARSTATE_SHA256 = {
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h":
-        "70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285",
+        "59b4b9ad8370461554f6fedd12e63037c9087be7537fa17e8ae9a9d752076c57",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h":
-        "e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5",
+        "c0813551a629a5748cc1967232835c33bb3401a3ea2665a3b89dfe584e94e2f9",
 }
 
 FILES = (
@@ -33,6 +33,16 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/common/gfx9_check.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_vm.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_cs.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_log.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_stage_r1.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_gc9_regs.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_inv_range.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_vm_size.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_pasid.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_vmid.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_defer.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_agp.h",
     "src/add-ons/accelerants/radeon_hd/Jamfile",
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h",
@@ -133,13 +143,10 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
         "\t\tno_safemode\n"
         "\t}\n"
     )
-    if "x-vnd.R5OS-gpu-selftest" not in text:
-        anchor = "\tjob x-vnd.R5OS-vbox-clip {\n"
-        if anchor not in text:
-            raise SystemExit("selftest anchor missing in launch user")
-        launch.write_text(text.replace(anchor, job + "\n" + anchor, 1),
+    if job in text:
+        launch.write_text(text.replace(job + "\n", "", 1).replace(job, "", 1),
             encoding="utf-8")
-        print("patched launch user selftest")
+        print("removed launch user selftest")
 
 
 def main() -> None:

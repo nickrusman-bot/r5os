@@ -998,6 +998,7 @@ radeon_gpu_ring_boot(uint32 ringType)
 			r5_gfx9_host host;
 			r5_host_fill(&host);
 			r5_gfx9_prepare(&host, gInfo->fb.vramSize);
+			r5_gfx9_set_aperture_plus(gInfo->shared_info->aperturePlus);
 			uint32 pciID = gInfo->shared_info->pciID;
 			if (pciID == 0x15e7 || pciID == 0x1636 || pciID == 0x1638) {
 				r5_gfx9_results results;

@@ -4,7 +4,7 @@ Shared libraries that R5 adds beside `libbe`. `libbe` stays the Haiku Interface 
 
 Do not move a call from here into `libbe`. Do not add a function here only to rename a `libbe` call. A helper belongs here when R5 wrote it and more than one program uses it.
 
-The C++ in both libraries is GPL-3.0-or-later. Linking one of them combines that program with this license. A program that does not link it is unchanged. The icon pictures have their own notices in `docs/ICONS.md`.
+The C++ is MIT, so any application can link these libraries. Code added to them must be MIT-compatible. A program that does not link it is unchanged. The icon pictures have their own notices in `docs/ICONS.md`.
 
 ## Libraries
 
@@ -50,3 +50,23 @@ ExampleView::Draw(BRect updateRect)
 `r5_screen_caption()` draws one line centered in that rectangle. A NULL or empty string draws nothing. Text that does not fit is skipped. It does not draw a label under the frame. The caller does that in the area below `bounds`.
 
 Pass `NULL` for the view and either call returns without drawing.
+
+## Card
+
+`BAppearanceKit::BCard` is a view with a group layout inside it. The header is `<Card.h>`, installed next to `<R5UI.h>`. It is not Haiku's `BCardView`. Children are added through `GetLayout()`, the same way as a `BGroupView`.
+
+`B_CARD_DOCUMENT` fills with `B_DOCUMENT_BACKGROUND_COLOR`. `B_CARD_PANEL` fills with `B_PANEL_BACKGROUND_COLOR` tinted by `B_DARKEN_1_TINT`. The border is one pixel, `B_PANEL_BACKGROUND_COLOR` tinted by `B_DARKEN_2_TINT`. The corner radius is a quarter of `be_plain_font->Size()` (3 px at 12 pt). The inner margin is `B_USE_BIG_SPACING`. Every color comes from `ui_color()`.
+
+`Archive()` and `Instantiate()` keep the style. The archived class name is `BAppearanceKit::BCard`.
+
+```cpp
+#include <Card.h>
+#include <LayoutBuilder.h>
+#include <StringView.h>
+
+BAppearanceKit::BCard* card = new BAppearanceKit::BCard("info",
+	BAppearanceKit::B_CARD_PANEL);
+BLayoutBuilder::Group<>((BGroupLayout*)card->GetLayout())
+	.Add(new BStringView("title", "Processors"))
+	.Add(new BStringView("value", "2"));
+```

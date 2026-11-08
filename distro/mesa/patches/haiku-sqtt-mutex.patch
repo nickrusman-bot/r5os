@@ -1,0 +1,51 @@
+Haiku's pthread mutex is not valid when it is only zeroed. glibc treats
+that pattern as PTHREAD_MUTEX_INITIALIZER. Device teardown locks the
+SQTT queue list even when RGP is off, which is the vulkaninfo
+mutex->owner == -1 in radv_unregister_queue. Initialise those mutexes
+for every device.
+
+--- a/src/amd/vulkan/radv_device.c
++++ b/src/amd/vulkan/radv_device.c
+@@ -580,6 +580,15 @@ radv_device_init_rgp(struct radv_device *device)
+    const struct radv_physical_device *pdev = radv_device_physical(device);
+    const struct radv_instance *instance = radv_physical_device_instance(pdev);
+ 
++   /* Haiku's pthread mutex is not valid when it is only zeroed. glibc
++    * accepts that bit pattern as PTHREAD_MUTEX_INITIALIZER. Teardown
++    * always locks the SQTT queue list, including when RGP is off.
++    */
++   ac_sqtt_init(&device->sqtt);
++   simple_mtx_init(&device->sqtt_command_pool_mtx, mtx_plain);
++   simple_mtx_init(&device->sqtt_timestamp_mtx, mtx_plain);
++   list_inithead(&device->sqtt_timestamp.list);
++
+    if (!(instance->vk.trace_mode & RADV_TRACE_MODE_RGP))
+       return VK_SUCCESS;
+ 
+--- a/src/amd/vulkan/radv_sqtt.c
++++ b/src/amd/vulkan/radv_sqtt.c
+@@ -286,9 +286,8 @@ radv_sqtt_init_queue_event(struct radv_device *device)
+ 
+       device->sqtt_command_pool[1] = vk_command_pool_from_handle(cmd_pool);
+    }
+-
+-   simple_mtx_init(&device->sqtt_command_pool_mtx, mtx_plain);
+-
+-   simple_mtx_init(&device->sqtt_timestamp_mtx, mtx_plain);
+-   list_inithead(&device->sqtt_timestamp.list);
+-
++   /* The mutexes and the timestamp list are created in
++    * radv_device_init_rgp, before this function runs. */
+    return true;
+ }
+@@ -447,8 +446,8 @@ radv_sqtt_init(struct radv_device *device)
+    if (!radv_device_acquire_performance_counters(device))
+       return false;
+ 
+-   ac_sqtt_init(sqtt);
+-
++   /* ac_sqtt_init already ran from radv_device_init_rgp. A second init
++    * would leak the mutexes. */
+    radv_register_queues(device, sqtt);
+ 
+    return true;

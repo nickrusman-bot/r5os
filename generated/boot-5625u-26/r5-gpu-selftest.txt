@@ -1,0 +1,77 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 feature 54 pfp 197 mec 483
+rb num 2 mask 3
+stage bo
+r5 libdrm: ioctl linux 0xc0286405 nr 0x5
+r5 libdrm: DRM_IOCTL_VERSION linux 0xc0406400 nr 0
+r5 libdrm: DRM_IOCTL_VERSION linux 0xc0406400 nr 0
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 query 0
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 query 0x16
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 query 0x15
+kernel bo domain 1 flags 00000000 bytes 4096
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_CREATE linux 0xc0206440 nr 0x40 domains 0x4 flags 0 size 4096 align 0
+kernel bo domain 2 flags 00000000 bytes 4096
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_CREATE linux 0xc0206440 nr 0x40 domains 0x2 flags 0 size 4096 align 0
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0x10000 size 4096 flags 0xe
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 2 va 0xffff800000000000 size 4096 flags 0xe
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe
+r5 libdrm: DRM_IOCTL_GEM_CLOSE linux 0x80086409 nr 0x9
+r5 libdrm: DRM_IOCTL_GEM_CLOSE linux 0x80086409 nr 0x9
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 0
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+IB skipped
+GEM_VA unmap 0
+GEM_VA remap 0
+close 0
+stage P
+p1 WRITE_DATA skipped, gpu lost
+p2 RELEASE_MEM skipped, gpu lost
+p3 ACQUIRE_MEM skipped, gpu lost
+p4 EVENT_2C skipped, gpu lost
+p5 EVENT_2E skipped, gpu lost
+p6 EVENT_0E skipped, gpu lost
+p7 EVENT_407 skipped, gpu lost
+p8 EVENT_410 skipped, gpu lost
+p9 EVENT_ZPASS skipped, gpu lost
+p10 DMA_DATA skipped, gpu lost
+p11 LOAD_CONTEXT skipped, gpu lost
+p12 INDEX_PRIM skipped, gpu lost
+p13 INDEX_TYPE skipped, gpu lost
+p14 IA_MULTI_VGT skipped, gpu lost
+p15 MULTI_PRIM_RESET skipped, gpu lost
+p16 CP_COHER_DELAY skipped, gpu lost
+p17 SH_RSRC3_VS skipped, gpu lost
+p18 DISPATCH skipped, gpu lost
+p19 IB2 skipped, gpu lost
+p20 CONTEXT_CONTROL skipped, gpu lost
+p21 CLEAR_STATE skipped, gpu lost
+p22 EVENT_19 skipped, gpu lost
+p23 EVENT_1A skipped, gpu lost
+p24 UC_30A00 skipped, gpu lost
+p25 UC_30920 skipped, gpu lost
+p26 UC_30968 skipped, gpu lost
+p27 UC_30E00 skipped, gpu lost
+p28 CONTEXT4 skipped, gpu lost
+p29 SH_PREFIX skipped, gpu lost
+p30 PREAMBLE_LO skipped, gpu lost
+p31 PREAMBLE_HI skipped, gpu lost
+p32 PREAMBLE skipped, gpu lost
+p33 IB24 skipped, gpu lost
+stage vulkaninfo
+skipped, gpu lost
+stage VulkanTeapot
+skipped, gpu lost
+stage VulkanTeapot (sam)
+skipped, gpu lost
+stage VulkanTeapot
+skipped, gpu lost
+stage selftest
+skipped, gpu lost
+stage ib
+skipped, gpu lost

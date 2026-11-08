@@ -162,30 +162,183 @@ These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not th
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, written at 15:29 Europe/Amsterdam, reached the desktop. The lines are `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, `k1_wait_us 1132`, `k2 map count 8 pages 256`, `k2 ptb 0000000812c18001 got 12c18001 00000008`, `k2 inv 007c0001`, `k2 ok gart`, `k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 10 seen 10`. There is no `k2 fault` line. The user shut that session down and reported no panic. The syslog exported while the desktop was up does not contain the stop lines. A boot with `gfx9_kernel` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
 
-## GFX9 user address space (M4, not fixed)
+## GFX9 user address space (draft)
 
-This is the layout `amdgpu` reports for GC 9.3, from Linux v6.12 `gmc_v9_0.c` and `amdgpu_kms.c`. It is written down before the page-table code. It is not a fixed sequence: no boot has programmed VMID 1 yet.
+This section is still a draft. Stick 19 did not draw the teapot without SAM (`pixels MISMATCH`). The register list is what the code programs. The stick lines below are what booted. The K sections above are not part of this draft.
 
-`amdgpu_vm_adjust_size(adev, 256 * 1024, 9, 3, 48)` asks for 256 TiB, 9-bit blocks, at most 3 levels above the page table, and 48 VA bits. The minimum and the maximum are the same 262144 GiB, so the VM size does not depend on the RAM size. `max_pfn` is `262144 << 18` (2^36 pages). The byte size minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`: 8 KiB trap, 2 MiB seq64, 2 MiB CSA) is `0xffffffbfe000`.
+## Render node (draft)
 
-| Field | Value |
-|---|---|
-| `virtual_address_offset` | `0x10000` (`AMDGPU_VA_RESERVED_BOTTOM`, 64 KiB) |
-| `virtual_address_max` | `0x800000000000` (`AMDGPU_GMC_HOLE_START`) |
-| `high_va_offset` | `0xffff800000000000` (`AMDGPU_GMC_HOLE_END`) |
-| `high_va_max` | `0xffffffffffbfe000` (`AMDGPU_GMC_HOLE_END` or the byte size) |
+The node is `/dev/gpu/radeon_hd/<n>`, and it is published only when `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` are on. Without those three it does not exist. The interface is API 1.0. The calls, from `R5_GPU_OP_BASE` 30479, are `GET_INFO`, `READ_REG`, `CTX_CREATE`, `CTX_DESTROY`, `BO_CREATE`, `BO_FREE`, `BO_MAP`, `VA_MAP`, `VA_UNMAP`, `CS_SUBMIT`, `FENCE_WAIT`, and the syncobj calls through `SYNCOBJ_TRANSFER`, then `VA_REPLACE`, `VA_CLEAR`, and `SELFTEST` (`R5_GPU_OP_BASE + 23`). `SELFTEST` runs when `gpu_selftest` is true and returns `B_NOT_ALLOWED` otherwise. It does not run on open. A shipped call does not change.
 
-The high range contains `address32_hi` `0xffff8000`. The walk is four levels: root PDB2, then PDB1, PDB0 and the page table. `PAGE_TABLE_DEPTH` is 3. `PAGE_TABLE_BLOCK_SIZE` is 0 because `translate_further` is off on GC 9.3 and the block field is `block_size - 9`. Each level takes 9 bits. The page is 4 KiB. A PDE is the physical address (`FB_OFFSET << 24` plus the table offset) with `VALID`, and it is rejected when it fails `0xFFFF00000000003F`. A system PTE uses the same flags as the K2 page, including `MTYPE_UC` at bit 57.
+Stick 18 and stick 19 both reached the desktop with this node. On stick 19, `vulkaninfo --summary` exited 0 and named RADV Renoir next to llvmpipe. The SAM teapot submitted indirect buffers `ffff800100284000` (24 dwords) and `ffff800100001000` (752 dwords), `vkQueueWaitIdle` returned 0, and the six sample pixels matched (`pixels ok`, exit 0). The teapot without SAM used the same two buffers, `vkQueueWaitIdle` returned 0, and the samples were `00000000`, `b87214f0`, `00000000`, `00000000`, `00000000`, `00000000` (`pixels MISMATCH`, exit 2).
 
-`MC_VM_MX_L1_TLB_CNTL` `SYSTEM_ACCESS_MODE` is 3 in `gfxhub_v1_0_init_tlb_regs`, and `SYSTEM_APERTURE_UNMAPPED_ACCESS` is 0. `VM_L2_CNTL` `CONTEXT1_IDENTITY_ACCESS_MODE` is 1, and the identity aperture is then programmed to an empty range (`LOW` `0xffffffff`/`0xf`, `HIGH` 0). A user indirect buffer uses VMID 1 page tables, not the VMID 0 tables. With the identity aperture empty, an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. That is the recorded check. M4 does not change `SYSTEM_ACCESS_MODE`.
+## VMID 1 (draft)
 
-The kernel writes that empty identity aperture (`gc` `0x0851`–`0x0854`) when it builds VMID 1. The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). Depth is 3 and the block size is 0 in `VM_CONTEXT1_CNTL` (`0x0881`). The start address is 0 and the end page is `2^36 - 1` (`0x092d`/`0x092e`). The TLB flush uses engine 0, not engine 17. A user submission is one or more indirect buffers with VMID 1 in bits 24–27. `IB_BASE_HI` is the upper 32 bits masked with `0xffff`, the same write as Linux `gfx_v9_0_ring_emit_ib_gfx`. The `RELEASE_MEM` that follows is in the ring, so its address is the kernel MC address of the fence page plus 2048, not a VMID 1 virtual address. The fence page is not mapped in VMID 1. `INT_SEL` is 2. No boot has confirmed these writes yet.
+VMID 1 is one shared address space. The walk is four levels and 48 bits. `PAGE_TABLE_DEPTH` is 3 and `PAGE_TABLE_BLOCK_SIZE` is 0, because `translate_further` is off on GC 9.3. The 6 Nov 2026 Linux capture on this machine logs `vm size is 262144 GB, 4 levels, block size is 9-bit, fragment size is 9-bit`.
+
+| Field | Value | Source |
+|---|---|---|
+| `virtual_address_offset` | `0x10000` | `AMDGPU_VA_RESERVED_BOTTOM` |
+| `virtual_address_max` | `0x800000000000` | `AMDGPU_GMC_HOLE_START` |
+| `high_va_offset` | `0xffff800000000000` | `AMDGPU_GMC_HOLE_END` |
+| `high_va_max` | `0xffffffffffbfe000` | hole end or the byte size, minus `AMDGPU_VA_RESERVED_TOP` (`0x402000`). v6.18 `amdgpu_vm.h:175` is `AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12)`. The line becomes `(1ULL << 16)` in `31b8de5e55666f26ea7ece5f412b83eab3f56dbb` (`drm/amdgpu: Change AMDGPU_VA_RESERVED_TRAP_SIZE to 64KB`); stable carries it as `4487571ef17a30d274600b3bd6965f497a881299`, which is what v6.18.60 has. R5 keeps the v6.18 value. |
+
+Linux 6.12 `amdgpu_gmc.h` does not reserve the first page of that high range. `gmc_v9_0_get_vm_pde` adds no flags when translate-further is off. The 6 Nov 2026 capture grep does not show whether AMD-Vi was present. A canonical high address and the same address masked with `AMDGPU_GMC_HOLE_MASK` (`0x0000ffffffffffff`) select the same slots. The host walk shows the software slots. It does not show what the hardware did. Adding the filled byte count to a GPU address inside the range does not wrap, and an address inside the hole is rejected.
+
+The root is `VM_CONTEXT1_PAGE_TABLE_BASE_ADDR` (`0x08ed`/`0x08ee`). The end page is `2^36 - 1` (`0x092d`/`0x092e`). `VM_CONTEXT1_CNTL` (`0x0881`) is `0x007ffe07` on the third stick of 6 Nov 2026, and bit 7 (retry) stays off. The identity aperture (`0x0851`–`0x0854`) is empty (`LOW` `0xffffffff`/`0xf`, `HIGH` 0), so an unmapped VMID 1 address faults instead of becoming a system-aperture physical address. `SYSTEM_ACCESS_MODE` stays 3. The TLB flush uses engine 17, the MMIO engine. Engine 0 belongs to the GFX ring. A user job also writes that flush on the ring when the page table changed: pipeline sync, the page-table base as two `WRITE_DATA` packets with control `0x40100000` (`WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`), one `WAIT_REG_MEM` with control `0x143` (write-wait-write on the PFP, request `0x28a3`, ack `0x28b5`), and `PFP_SYNC_ME`, 26 dwords, with no PASID. The register fields are dword offsets `0x2000 + index` (`0x28ed`, `0x28ee`, `0x28a3`, `0x28b5` for VMID 1, engine 0), not the MMIO byte address. VMID 1 through 15 get `SH_MEM_CONFIG` `0x1018` and `SH_MEM_BASES` `0x20001000`. VMID 0 stays bases 0. Stick 19 logged `vmid1 ptb` and no `vmid1 fail`.
+
+`CP_IB1_BASE_HI` keeps bits 15:0. A user indirect buffer writes the full upper 32 bits, as Linux does. On stick 19 the hung U2d buffer at `0xffff800000000000` read back as `CP_IB1` base `0000800000000000`, size 0, offset 0.
+
+A user GTT page is `MTYPE_NC` and `SNOOPED`. `CPU_GTT_USWC` is accepted and does not change the RAM type or the snoop bit. User VRAM stays `MTYPE_UC` until its own boot. The K2 page stays `MTYPE_UC`. Stick 19 printed `gtt wc area`, `gtt wc clone` and `stage wc area` with `status 0x0`. U2c, a write-combined GTT indirect buffer at `00007fffffffe000`, printed `ok 1 ms`. U2d, the same packet at `0xffff800000000000`, printed `timeout 5000 ms`. The page-table entry was `000000002442f073` (write-combined, no `SNOOPED`) and `fault` stayed 0. Stick 21's U2c, on a fresh write-combined page, hung: the CPU read of that page was zeros before the submit. Stick 22 does not give a RAM area a write-combined type. A new leaf table is filled with `AMDGPU_PTE_EXECUTABLE` (`0x10`). A new directory page is filled with `AMDGPU_PDE_PTE` (bit 54). An unmap writes `0x10`, and a PRT entry is left as it is. Stage U prints the variable MTRRs, then U-self, U2a-n, U2a-f and U2b-n. Group B keeps the indirect buffer at a fresh low address: B1 writes VRAM at `0xffff800000041040`, B2 writes GTT there, B3 writes VRAM at `0xffff800000001040`, B4 copies 128 bytes from GTT at `0xffff800000041000` into a fresh low VRAM page, and B5 copies from VRAM at that address. Group A then fetches a VRAM indirect buffer, with the destination on the next page, in this order: A2 `0xffff800100000000`, A1 `0xffffffffffbfc000`, A3 `0xffff808000000000`, A8 `0x01000000`, A7 `0x00100000`, A4 `0xffff8000c0000000`, A5 `0xffff800040000000`, A6 `0xffff800000200000`. C1 is last: a VRAM indirect buffer at `0xffff800000001000` and the next page. Each of those steps prints the page-table words. A miss continues. A busy command processor at 5 seconds stops the series, which is why C1 is last. There is no write-combined step and no `-lx` step. The `clflush` before a GTT indirect buffer is submitted stays.
+
+Stick 25 maps a second CPU window at `MC_VM_FB_OFFSET << 24` for VMID 1 and later. The K sequence keeps the BAR window. Stage U on that stick is the HDP probe first (eight BAR writes, read back through the carveout, then again after `sfence`), then B1, B2, B3, B5, A2, A1, A3, A8, A7, A4, A5, A6, and C1 last. Boot 1 read every probe word back. The carveout stays. The misses are a stale VMID 1 translation, which the ring flush above is for.
+
+## User job (draft)
+
+A user job is the non-MCBP frame Linux puts around the indirect buffers: two `SWITCH_BUFFER` packets, `CONTEXT_CONTROL`, both `FRAME_CONTROL` packets, the indirect buffers, both `RELEASE_MEM` packets, and a closing `SWITCH_BUFFER`. `CONTEXT_CONTROL` follows Linux v6.12 `gfx_v9_ring_emit_cntxcntl`. `load_enable` (`0x80000000`) is always set. `amdgpu_ib_schedule` sets `AMDGPU_HAVE_CTX_SWITCH` when `ring->current_ctx` differs from the job's fence context. R5 keeps that as the open file plus the `AMDGPU_CTX` id. A switch adds `0x8001`, `0x01000000` and `0x10002`, which is `0x81018003`. The same file and the same id again stay at `0x80000000`. Kernel jobs (`mark`, stage P, the copies) are file 0 and id 0, so the first of those loads and a later one of those does not. Each RADV process is its own file, so each gets the load bits on its first job. `AMDGPU_PREAMBLE_IB_PRESENT` on a switch, or `AMDGPU_PREAMBLE_IB_PRESENT_FIRST` without one, also sets `load_ce_ram` (`0x10000000`). A preamble IB is left out only when there is no switch and it is not that first presentation. The ioctl still rejects every IB flag, including `AMDGPU_IB_FLAG_PREAMBLE`, so RADV's jobs do not take that path. `COND_EXEC` and the pipeline-sync `WAIT_REG_MEM` are not written while every client shares VMID 1. The indirect-buffer packet is opcode `0x3f`. The VMID is bits 24–27.
+
+`CP_IB1_BASE_HI` and `CP_IB2_BASE_HI` keep bits 15:0. The dump sign-extends VA bit 47, so `0x800100001000` is read back as `0xffff800100001000` and matches the length stored at submit. With `gpu_debug`, each user job logs `system_time()`, whether the VM flush prefix was written, the `cntx` dword, the file and context id, and the first eight dwords on the ring. The self-test stage lines carry `system_time()` as well.
+
+The user fence is the kernel MC address of the fence page plus 2048, a 64-bit sequence, `INT_SEL` 0. The interrupt fence is 16 bytes later, 32-bit, `INT_SEL` 2. The fence page is not mapped in VMID 1. Stick 19's SAM teapot reached `vkQueueWaitIdle` 0, so that fence retired. The userspace IB stage after U2d printed `fence timeout` and the watchdog printed `gpu lost watchdog` with `seen` still 37.
+
+`AMDGPU_CTX_OP_QUERY_STATE2` returns 0 while the device is usable. After the watchdog it returns `RESET` and `GUILTY`. The watchdog is 10 seconds. A client timeout does not mark the device lost.
+
+## E2, not applied
+
+Stick 27 run 2 stopped in RADV's `WAIT_REG_MEM` for its own `RELEASE_MEM` (`CACHE_FLUSH_AND_INV_TS_EVENT`). The page at `0xffff800000040000` was still 0. This names the Linux path that write takes, and the VMID-switch work Linux can emit that R5 does not. Nothing in this section is in the ring.
+
+The data dword is written by the command processor. Linux v6.12 `gfx_v9_0_ring_emit_fence` (`gfx_v9_0.c`, from line 5279) builds `PACKET3(PACKET3_RELEASE_MEM, 6)`. The event dword is `CACHE_FLUSH_AND_INV_TS_EVENT` with `EVENT_INDEX(5)` and `EOP_TC_WB_ACTION_EN`. Unless the fence is `AMDGPU_FENCE_FLAG_TC_WB_ONLY`, it also sets `EOP_TCL1_ACTION_EN`, `EOP_TC_ACTION_EN` and `EOP_TC_MD_ACTION_EN`. `DATA_SEL` is 2 for a 64-bit write. That is an end-of-pipe timestamp: the CP writes it through the texture cache and GL2, and the write leaves through the memory client (EA) into the page the packet's VMID translates. The TLB is the GFXHUB TLB of that VMID. These jobs use VMID 1. It is not the VMID 0 TLB and it is not an HDP store. A stale GFXHUB L1 or L2 translation for VMID 1 sends the dword to the previous page.
+
+`amdgpu_ib_schedule` (`amdgpu_ib.c`) calls `amdgpu_vm_flush` before `CONTEXT_CONTROL`. `amdgpu_vm_flush` (`amdgpu_vm.c`, from line 642) returns at once when there is no VM flush, no GDS switch and no pipeline sync. Otherwise, in order:
+
+- `amdgpu_ring_emit_pipeline_sync` when `need_pipe_sync` is true. `amdgpu_vm_need_pipeline_sync` (from line 608) is false for VMID 0. For any other VMID it is true when `job->vm_needs_flush` is set, when the ring has the compute VM bug, when a GDS switch is needed, or when that VMID saw a GPU reset.
+- `amdgpu_ring_emit_vm_flush` when `job->vm_needs_flush`, the ring has `emit_vm_flush`, and the page-table address is valid. R5's 26-dword prefix is this GFX9 packet (pipeline sync, the page-table base, the invalidate, `PFP_SYNC_ME`). It is not the rest of this function.
+- `amdgpu_gmc_emit_pasid_mapping` when the VMID's PASID mapping is missing or not yet signaled. R5 does not emit this.
+- `update_spm_vmid` when `job->spm_update_needed`. R5 does not emit this.
+- `emit_gds_switch` (`gfx_v9_0_ring_emit_gds_switch`, from line 4022) when `job->gds_switch_needed`. That writes `GDS_VMID0_BASE`, `GDS_VMID0_SIZE`, `GDS_GWS_VMID0` and `GDS_OA_VMID0` for the VMID. RADV's GFX context can set `gds_switch_needed`. R5 never writes these.
+- After a VM flush or a PASID update, `amdgpu_fence_emit` on that flush.
+- Two `emit_switch_buffer` packets that `COND_EXEC` must not cover. The body above can sit under `COND_EXEC`. These two cannot. R5's user frame already opens with two `SWITCH_BUFFER` packets. It does not emit this extra pair after the flush.
+
+A cleaner shader can be emitted before that early return, and only when `enable_cleaner_shader`, `emit_cleaner_shader` and `job->enforce_isolation` are all set. R5 does not emit one.
+
+`amdgpu_ib_schedule` also calls `amdgpu_device_flush_hdp` before `emit_cntxcntl`, and `amdgpu_device_invalidate_hdp` after the indirect buffers (`amdgpu_device.c`). On GFX9 the flush function would be `gfx_v9_0_ring_emit_hdp_flush` (from line 5098): a `WAIT_REG_MEM` on the NBIO HDP flush request and done registers, engine 1 (PFP) for the GFX ring, reference `ref_and_mask_cp0`. On x86-64 that function returns before the packet when the device is an APU and not a passthrough. Renoir is that APU, including device `15e7`. `invalidate_hdp` returns on the same condition and does not write a ring packet. So Linux does not put an HDP flush on this machine's GFX ring. The CPU `clflush` of a GTT indirect buffer is a different step. `emit_mem_sync` runs only when the IB has `AMDGPU_IB_FLAG_EMIT_MEM_SYNC`. Stick 27's jobs had flags 0, so that call was not taken.
+
+The GDS switch, the PASID mapping and the SPM VMID update are the VMID-switch packets R5 does not emit. They stay out of the ring until a later stick copies one Linux function.
+
+## Device info (draft)
+
+`GET_INFO` fills the vendor block. `num_rb_pipes` and `enabled_rb_pipes_mask` come from `CC_RB_BACKEND_DISABLE` and `GC_USER_RB_BACKEND_DISABLE`. Stick 19 logged `rb num 2 mask 3` on every read of that pair. One shader engine means `GRBM_GFX_INDEX` is not written. `num_shader_engines` is 1 and `num_cu_per_sh` is 8 until the device passport (M5) reads them from the source Linux uses. Clocks (`1800000` kHz, `1333000` kHz), memory type LPDDR4 and 128 bits are the Mesa record for device `15e7`. The SMU and the UMC table are not read. `gb_addr_config` is the `READ_MMR_REG` of `0x063e`. `gpu_counter_freq` is `100000` kHz for device `15e7` only.
+
+## Submission (draft)
+
+`CS_SUBMIT` takes one context, one ring, and at most eight indirect buffers. Stick 19's two teapots both submitted the 24-dword and 752-dword buffers named above. The `clflush` of a GTT indirect buffer at submit is still there. It does not cover a chained buffer. It stays until a stick shows the write-combined mapping is enough.
+
+## Fence by interrupt (draft)
+
+`FENCE_WAIT` waits on the sequence `CS_SUBMIT` returned. The K1 interrupt in `GFX9 kernel on GC 9.3 (fixed)` is a different fence and stays as it is. Stick 19 has no source 184. The SAM teapot's wait returned. The wait after the U2d hang did not: `seen` stayed 37 and the watchdog fired.
 
 ## Known GFX9 differences
 
 `MC_VM_MX_L1_TLB_CNTL` keeps `ECO_BITS`. Linux writes 0 in those bits. The boot that landed the fence left the register at `0x3d59`, so those bits stay.
 
 The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, which is `0xFFFF1000`, and aligns the ring to 256 dwords. Later packets overwrite that padding. A submission that crosses 1024 uses the wrap in `GFX9 kernel on GC 9.3 (fixed)`. The 15:29 boot ran that submission: `k2_ib` sequence 10 was seen.
+
+## GFXHUB setup compared with Linux
+
+`gfxhub_v1_0_gart_enable` in Linux v6.12. R5 already writes the L1 TLB, the L2 cache controls, the system aperture (high address plus one, which is the Renoir and Green Sardine workaround), and the identity aperture low and high. Those stay. `gfx9_hub_linux` defaults off and adds only the rows marked write.
+
+| Register | Linux | R5 with the setting off | `gfx9_hub_linux` |
+|---|---|---|---|
+| `MC_VM_MX_L1_TLB_CNTL` | enable, access mode 3, advanced model, unmapped 0, MTYPE UC, ATC | same fields (`0x3859` after the clear of `0x3879`) | no extra write |
+| `VM_L2_CNTL`, `CNTL2`, `CNTL3`, `CNTL4` | cache on, invalidate L1 and L2, bank 9, bigk 6, physical taps off | same fields in `radeon_gfx9_prepare_hw` | no extra write |
+| `MC_VM_AGP_BASE` | 0 | not written | write 0 |
+| `MC_VM_AGP_BOT`, `MC_VM_AGP_TOP` | `agp_start >> 24`, `agp_end >> 24` from `amdgpu_gmc_agp_location` | read only | not written. That function is not ported |
+| system aperture low, high, default | from `fb_start`, `fb_end` and the scratch page. High is `fb_end >> 18` plus 1 on Renoir and Green Sardine | already done in `radeon_gfx9_prepare_hw` | no extra write |
+| `VM_L2_PROTECTION_FAULT_DEFAULT_ADDR` | dummy page | K2 dummy page | no extra write |
+| `VM_L2_PROTECTION_FAULT_CNTL2` retry bit | 1 | not written | set bit 0x12 |
+| identity physical offset low and high | 0 | not written | write 0 |
+| `VM_CONTEXT0_CNTL` | `enable_system_domain` | K2. Fixed contract | print only, behind `gpu_debug` |
+
+`gpu_debug` prints the L1, L2, aperture, AGP, identity, fault and VMID 0 registers whether or not `gfx9_hub_linux` is on.
+
+## COND_EXEC and the DE meta
+
+`amdgpu_ib_schedule` calls `init_cond_exec` when the ring has that function (`amdgpu_ib.c` around the call before the context control). The GFX ring does (`gfx_v9_0_ring_funcs_gfx`). `gfx_v9_0_ring_emit_init_cond_exec` writes `PACKET3_COND_EXEC` (`0x22`) and a dword count that `amdgpu_ring_patch_cond_exec` fills in. The CP skips those dwords only when the dword at `cond_exe_gpu_addr` is 0. Linux keeps that dword at 1, so the packet does not skip the frame. `gfx9_cond_exec` does the same and defaults off. The dword is fence-page offset 32.
+
+`gfx_v9_0_ring_emit_de_meta` runs only from `gfx_v9_0_ring_emit_ib_gfx` when the IB has `AMDGPU_IB_FLAG_PREEMPT` (`gfx_v9_0.c` at that `if`). R5 still rejects every IB flag, so the flag is 0 and the meta is not emitted. The packet writes `struct v9_de_ib_state` to the CSA (`amdgpu_csa_vaddr`). That struct and the CSA mapping are not copied while the flag cannot be set. This is the stop in night step N5.
+
+## GDS switch
+
+`gfx_v9_0_ring_emit_gds_switch` writes `GDS_VMIDn_BASE`, `SIZE`, `GWS` and `OA` with four `WRITE_DATA` packets. `amdgpu_vmid_gds_switch_needed` is true when those six values differ, and `amdgpu_vm_flush` also forces it after a GPU reset. `gfx9_gds_switch` defaults off. The first job after start is that forced write. Later jobs with the same values do not write again.
+
+The R5 command-submit ioctl has no GDS chunk, so the six values are 0. That is the GFX9 RADV job that does not ask for GDS. A chunk in the ioctl is what it would take to pass other sizes through.
+
+## PASID
+
+`amdgpu_pasid_alloc` in `amdgpu_ids.c` hands out an id from the top of the requested width first. Each open of the render node takes one. The bitmap here is 16 bits wide. The function accepts up to 31; a wider bitmap is not built. `gmc_v9_0_emit_pasid_mapping` writes `mmIH_VMID_0_LUT` plus the VMID through `gfx_v9_0_ring_emit_wreg` (`WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM`) when that VMID's PASID changes. The 26-dword VM flush does not include it. A k2 fault line prints the PASID and the open-file pointer stored for that VMID.
+
+## VMID per open file
+
+`r5_vmid.h` is `amdgpu_vmid_grab` for VMIDs 1–15: an idle VMID, the same owner while its fence has not retired, otherwise the least recently used idle VMID, and a flush when the owner or the recorded TLB sequence changes. Fifteen busy VMIDs make the next grab return none. VMID 0 is not in the table.
+
+The grab is not called from the submit path. `amdgpu_vm_init` gives each open file its own root page table, and the ring flush then writes that root into the VMID it grabbed. R5 still has one root, built for VMID 1 in `r5_gfx9_vmid1_setup`. Pointing two VMIDs at that one root would be a different machine from Linux. What it takes is one root, and the page-table pages under it, per open file, from the same allocator that builds the VMID 1 root. `gfx9_vmid_per_file` is not read until that exists. This is the stop in night step N9.
+
+## Deferred free
+
+`gfx9_deferred_free` defaults off. When it is on, a freed VRAM offset stays out of the allocator until the next user-job VM flush has been submitted and that fence has been seen. The retire thread prints the offset when it comes back. An unmap still clears the page-table entry at once. The list holds 256 offsets, one per buffer object. A full list frees that offset immediately.
+
+## REVIEW-39 section 2
+
+| # | Linux | R5 | Setting | Commit |
+|---|---|---|---|---|
+| H1 | `gfxhub_v1_0_program_invalidation` | read of engines 0 and 17 always; write of all 18 engines after VMID setup | `gfx9_inv_range` on unless the line says false | `b5c0df3d66` |
+| H2 | `init_tlb_regs` | the value already matches the field set | none | `2a619add46` names |
+| H3 | `init_cache_regs` | already written | none | `2a619add46` names |
+| H4 | `init_system_aperture_regs` | AGP base 0, identity offsets 0, migration retry. AGP bot and top are not written | `gfx9_hub_linux` off | `6226ff8f85` |
+| H5 | `enable_system_domain` | VMID 0 stays the K2 contract | none | unchanged |
+| H6 | `disable_identity_aperture` | the physical offsets are the hub setting | `gfx9_hub_linux` off | `6226ff8f85` |
+| H7 | `setup_vmid_config` | VMIDs 1–15 | `gfx9_vmids` off | `06480f993f` |
+| J1 | pipeline sync | unchanged | none | — |
+| J2 | `emit_vm_flush` | 26 dwords, unchanged | none | — |
+| J3 | fence after the VM flush | `RELEASE_MEM` then the job takes the next sequence | `gfx9_flush_fence` off | `98b0f8dd21` |
+| J4 | two `SWITCH_BUFFER` after that fence | they move with J3 | `gfx9_flush_fence` off | `98b0f8dd21` |
+| J5 | `COND_EXEC` and the DE meta | `COND_EXEC` only. The meta needs `AMDGPU_IB_FLAG_PREEMPT` and the CSA | `gfx9_cond_exec` off | `0dd5c153b6` |
+| J6 | HDP flush | no packet on this APU, same as Linux | none | — |
+| J7 | `dma_fence_context_alloc` | a counter that only goes up. 0 is the kernel | always | `c7304b3ae0` |
+| J8 | frame, user fence, ring fence | unchanged when the new settings are off | none | — |
+| J9 | `emit_gds_switch` | four `WRITE_DATA`s, once, sizes 0 | `gfx9_gds_switch` off | `cbee68e33d` |
+| J10 | `emit_mem_sync` | IB flags stay rejected | none | — |
+| J11 | `emit_pasid_mapping` | one PASID per open, LUT write when it changes | always | `040026c7c9` |
+| P1 | `amdgpu_vmid_grab` | the allocator is tested and not called | not read | `52a1f44b64` |
+| P2 | root and PASID per file | PASID is J11. The root is still one | not read | `040026c7c9`, `52a1f44b64` |
+| P3 | `amdgpu_vm_clear_freed` | VRAM offset waits for the next flush fence | `gfx9_deferred_free` off | `64f47ab138` |
+
+## GFXHUB invalidation range (fixed)
+
+`gfxhub_v1_0_program_invalidation` writes 18 engines. The addresses are `mmVM_INVALIDATE_ENG0_ADDR_RANGE_LO32` (`0x8c7`) and `mmVM_INVALIDATE_ENG0_ADDR_RANGE_HI32` (`0x8c8`) in `r5_gc9_regs.h`, plus `engine * R5_GC9_ENG_ADDR_DISTANCE`. The stored values are `0xffffffff` and `0x1f`. The write is `r5_gfx9_inv_range_program`, called from `r5_gfx9_vmid1_setup` after the VMID setup. `gfx9_inv_range` defaults on. `gfx9_inv_range false` leaves the registers as they were.
+
+Stick 29, `generated/boot-5625u-29/syslog`, is the evidence:
+
+- At K2 the range covered no addresses: line 2321 `inv range k2 eng 0 lo 00000000 hi 00000000`, line 2322 the same for engine 17.
+- With the setting off, R1a and R1b wrote the second value onto the old GTT page: line 3268 `r1a gtt 22222222 vram 00000000`, line 3275 `r1b gtt 22222222 vram 00000000`.
+- The run-time switch then wrote the range: line 3277 `inv range wrote eng 0 lo ffffffff hi 0000001f`, line 3278 the same for engine 17.
+- With that range on, the old page kept `11111111` and the new page received `22222222`: line 3286 for R1a, line 3293 for R1b. R1c's destination was `44444444` (line 3731).
+- Each new process took the next fence context, 2 through 8, with the load bits `81018003`: lines 3396, 3465, 3527, 3590, 3660, 3722 and 3951.
+- The log has no `vm fault` and no `gpu lost`.
+
+**Limit.** Stick 29 wrote the range at run time, after stage P. The boot position, before the first user job, has not been booted. The next GPU stick confirms it.
+
+Built, and not needed for M4, still default off: `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_pasid_map`, `gfx9_gds_switch`, `gfx9_ce_meta`, `gfx9_deferred_free`.
+
+## Self-test switch
+
+`R5_GPU_DEBUG_SWITCH` is accepted only while `gpu_debug` is on. It flushes VMID 1 and waits until the newest user fence has been seen, then sets the bits for `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free`. `gfx9_vmid_per_file` is refused. The line carries the time and the bits.
+
+R1a and R1b run once after stage P. R1c runs after the teapots. The result file prints pass when the old page is `11111111` and the new page is `22222222`.
+
+## vulkaninfo
+
+The driver watchdog is 10 seconds (`kWatchdogUs`), the same value as `amdgpu.lockup_timeout`. No other R5 wait of about 10 seconds was found on the vulkaninfo path. Whether the pause is that watchdog or the Vulkan loader is not known until a QEMU run shows the stack. QEMU has no Renoir, so it does not run the GFX ring.
 
 ## Fallback
 

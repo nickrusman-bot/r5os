@@ -133,7 +133,9 @@ These tasks move from the accelerant into the kernel driver:
   - **A job that runs past its time limit** marks its address space "lost" in the same way. M5 does not reset the GPU. If the ring stays blocked, the GPU stays off until the next boot (see "When things go wrong"). The reset with a ring restart belongs to M10.
   - **Clean-up:** when a file closes, or its team ends or crashes, its jobs are retired or cancelled, and its buffers, page tables and VMID are released.
   - **Memory limits per address space**, as starting values in the radeon_hd settings: VRAM at most half of the carveout (256 MiB on the 5625U, whose carveout is 512 MiB; Windows reports 495 MB), and GTT at most a quarter of system memory. A limit that is hit returns `ENOMEM`, so RADV can fall back or report it. The largest single buffer goes up from the 64 MiB of M4 to the same limits.
-- **Security.** Until M5 is done, the render node only accepts submissions when `gpu_render true` is in the driver settings. That is a development switch. With it off, the node only answers `GET_INFO`, so `vulkaninfo` shows the GPU and RADV reports that it cannot create a device; Vulkan then uses Lavapipe. Whether user IBs can reach VMID 0 addresses through the system aperture is checked in M4 and recorded in `GRAPHICS.md`. **After M5**, `gpu_render` is no longer needed. Every account may use the render node, including standard accounts, as soon as the GPU steps in the radeon_hd settings are on. Isolation comes from M5, not from who is signed in. The GPU stays opt-in per machine until M10.
+  - **Pipeline sync.** Linux writes `COND_EXEC` and `WAIT_REG_MEM` when the VMID changes or the page tables are flushed. R5 has one VMID 1, so a user job does not write those packets. Two address spaces in M5 need them.
+  - **Renoir page tables.** The 6 Nov 2026 capture `capture-20261106-194121` logs `vm size is 262144 GB, 4 levels, block size is 9-bit, fragment size is 9-bit`, and its indirect buffers sit at `0xffff8001…`. M4 programs that four-level, 48-bit table (`VM_CTX1_PT_END` `0x0000000fffffffff`). M5 keeps that table. `GET_INFO` reports `high_va_offset` `0xffff800000000000` and `high_va_max` `0xffffffffffbfe000`, the range v6.18 `amdgpu_kms.c` reports for this VM (`AMDGPU_VA_RESERVED_TRAP_SIZE` is `(2ULL << 12)`). `VM_CONTEXT1_CNTL` bit 7 (retry) stays off: R5 does not handle a retry fault.
+- **Security.** The render node is published only when `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` are on. Without those three the node does not exist, so RADV and the Vulkan loader stay quiet, as on Linux without amdgpu. Until M5 is done, a published node only accepts submissions when `gpu_render true` is in the driver settings. That is a development switch. With the node published and that switch off, the node only answers `GET_INFO`, so `vulkaninfo` shows the GPU and RADV reports that it cannot create a device; Vulkan then uses Lavapipe. Whether user IBs can reach VMID 0 addresses through the system aperture is checked in M4 and recorded in `GRAPHICS.md`. **After M5**, `gpu_render` is no longer needed. Every account may use the render node, including standard accounts, as soon as the GPU steps in the radeon_hd settings are on. Isolation comes from M5, not from who is signed in. The GPU stays opt-in per machine until M10.
 
 ## R5 DRM library (userland)
 
@@ -199,9 +201,9 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 | M1 | IB and DMA fill | Pattern correct, time grows with the work | done (#4092) |
 | M2 | Compute shader | Waves compute and write; time scales | done on the 5625U: every checked dword correct, 16 MiB took 3.9× as long as 4 MiB (#4094) |
 | M3 | Kernel driver owns the GPU, plus interrupts and GART | The fixed sequences run from the kernel; a fence arrives by interrupt; the GPU writes into system memory | done on the 5625U: kernel runs the sequences, MSI irq 61 client 20 source 181, GART DMA 262144 dwords of `0xA5A5A5A5`, GART IB sequence 10, Shutdown without a panic (`docs/GRAPHICS.md`, `GFX9 kernel on GC 9.3 (fixed)`) |
-| M4 | R5 GPU interface v1, the R5 DRM library, the Mesa build with RADV, and VulkanTeapot | `vulkaninfo` names the 5625U GPU as RADV, next to Lavapipe. **VulkanTeapot** (a fork of GLTeapot) draws the teapot through RADV, offscreen with a copy into a `BBitmap`, and shows the device name; on a machine without a supported GPU it draws through Lavapipe | |
+| M4 | R5 GPU interface v1, the R5 DRM library, the Mesa build with RADV, and VulkanTeapot | `vulkaninfo` names the 5625U GPU as RADV, next to Lavapipe. **VulkanTeapot** (a fork of GLTeapot) draws the teapot through RADV, offscreen with a copy into a `BBitmap`, and shows the device name; on a machine without a supported GPU it draws through Lavapipe | done, experimental, opt-in. Stick 29 on the 5625U: `vulkaninfo` names RADV RENOIR next to llvmpipe, and the teapot runs, including SAM, draw. The second program failed because the invalidation range covered no addresses. With the range on, the old page kept `11111111` and the new page received `22222222`. The GPU stays opt-in per machine until M10. With no radeon_hd settings the 5625U reaches the desktop on Lavapipe |
 | M5 | Address space per open render node | Two VulkanTeapots draw at the same time, each with the correct image. A test program that reads the other's GPU address gets a page fault and `VK_ERROR_DEVICE_LOST`, while the teapots keep running. A program killed halfway returns all its GPU memory. A standard account draws through RADV without `gpu_render` | |
-| M6 | RADV workload | VulkanTeapot and `vkcube` offscreen with a correct image (checked pixels against Lavapipe), GPU time measured | |
+| M6 | RADV workload | VulkanTeapot and `vkcube` offscreen with a correct image (checked pixels against Lavapipe), GPU time measured. The GFX ring is 1024 dwords. Linux pads a job to 256 dwords, so about three jobs fit and every frame waits for room. A larger ring needs the ring-contract procedure and a stick. | |
 | M7 | Presentation | `vkcube` in a window; falls back to software if that fails | |
 | M8 | app_server uses the GPU for the last copy | Measured gain; Painter fallback works | |
 | M9 | Zink for OpenGL | GLTeapot on the GPU; llvmpipe as fallback | |
@@ -230,9 +232,42 @@ The work, after M4 on AMD:
 
 Do not add Intel code before I0, and do not change shipped interface calls for Intel. A new need is a new call or a new field at the end.
 
+## GPU Driver Kit
+
+Decided on 7 Nov 2026: it must be easy for anyone to add a GPU to R5. Someone who knows a chip should only have to write the hardware part, and find the rest ready. That is the BeOS idea of a driver model that draws hardware support to the platform.
+
+A driver author does three things:
+1. describe the chip (a table row);
+2. fill in the backend (the vendor ops);
+3. run the conformance tests until they pass.
+
+R5 provides everything around that.
+
+| # | Part | What it does |
+|---|---|---|
+| 1 | **The backend interface** | The table of vendor ops (`r5_gpu_backend.h`). Each op has a written contract: what it must do, what it may do, its error codes, and whether it is required or optional. Required ops are checked once at attach. The interface is additive, like the R5 GPU interface. |
+| 2 | **The common core** | Everything that is not hardware: clients, buffers, sync objects, jobs, the VMID allocator, limits, user-memory copies under SMAP, faults, the watchdog. A backend never touches user memory itself. |
+| 3 | **The device passport from data** | Values come from the hardware or a handover (IP discovery, firmware headers, ATOM), not from code. A new chip of a known generation is one row in the device table. |
+| 4 | **A template backend** | A backend that emulates a GPU on the CPU and implements every op. It is the starting point for a new driver, and it lets the core and the conformance tests run without hardware, also in QEMU. |
+| 5 | **Conformance tests** | The self-test stages (buffers, the packet stage, the memory stage, isolation, the kill test, two programs at once), made vendor-neutral so that they run on any backend. Later a subset of the Vulkan conformance tests. A backend is "conformant" when these pass. |
+| 6 | **The Linux reference kit** | The Linux capture stick (scripts, register lists, ring and IB capture), made into a tool. An author records what Linux does on their own machine, and compares R5 against it. This was the most useful tool in M4. |
+| 7 | **One diagnostic standard** | The same log keys, error budget, and dumps (ring, IB, fault) for every driver. |
+| 8 | **One front end per vendor in the R5 DRM library** | The translation from a Mesa driver's Linux calls (RADV, ANV, NVK, Turnip, Panfrost and others) to the R5 GPU interface, with a table that documents each mapping. Mesa stays unchanged. |
+| 9 | **The porting guide** | The steps R5 took on the 5625U, as a checklist with the test that proves each step: start the GPU, first fence, interrupt, GART, address space, user submit, the Mesa driver, presentation. |
+| 10 | **Clear licences** | The interface header, the R5 DRM library, the common core and the backend interface are MIT. A backend is MIT or GPL-3.0-or-later, as its author chooses (see "Licensing"). |
+
+**Phases:**
+1. **Within M5 and M6** (partly done): write the op contracts (required and optional), make the self-test stages vendor-neutral, and finish the diagnostic standard.
+2. **Before Intel step I0:** the template backend, the porting guide, and the Linux reference kit as a tool.
+3. **Intel is built with the kit.** Intel is the proof that the kit works. Whatever is hard there is fixed in the kit, not only in the Intel driver.
+
+The same path serves a new AMD generation (for example GC 11 in the Ryzen 7640U, which needs its own backend with MES), and the ARM GPUs that other Haiku forks support (V3D, Mali, Adreno). Their drivers are a reference, not code to copy, as described in `docs/ROADMAP.md`. A new backend starts only when there is hardware to test it on.
+
 ## Licensing
 
 - The R5 GPU interface (the kernel header) and the R5 DRM library are R5's own code, and they are **MIT** (decided by the user, 5 Nov 2026). Mesa, RADV and every Vulkan or OpenGL application load that library. With GPL-3.0, those applications would become part of a GPL-3.0 combination. Haiku's own driver interfaces are MIT for the same reason. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`.
+- The **common GPU core and the backend interface** are **MIT** (decided by the user, 7 Nov 2026). These are the files in `src/add-ons/kernel/drivers/graphics/r5gpu/` (`r5_gpu_core.cpp`, `r5_gpu_backend.h`, `r5_gpu_internal.h`). The reason is the GPU Driver Kit: the contract between hardware and software is MIT throughout, like Haiku's own driver interfaces, so that Haiku and other Haiku forks (several accept only MIT) can take the core and write drivers for it. That code is R5's own, moved out of `r5_gpu.cpp`, so R5 may relicense it. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`, per file, not a bulk header change.
+- **A GPU backend** is MIT or GPL-3.0-or-later, as its author chooses. GPL-2.0-only code is never part of a backend.
 - The GFX9 start code in the kernel add-on (`gfx9_start.cpp`) is GPL-3.0-or-later (decided by the user, 5 Nov 2026). Applications do not link it.
 - The kernel driver `radeon_hd` stays as it is: the Haiku parts MIT, the R5 snippets GPL-3.0-or-later.
 - Mesa and libdrm headers are MIT. Most files of Linux `amdgpu` carry an MIT-style notice from AMD, and most of `i915` is `SPDX-License-Identifier: MIT`. The Linux kernel as a whole is GPL-2.0, and some DRM core files are GPL-2.0-only. So: register offsets, values and their order are taken as facts. A single file or table may be taken over only when that file itself is MIT, with its notice kept, a row in `THIRD_PARTY_NOTICES.md`, and never from a GPL-2.0-only file.

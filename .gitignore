@@ -1,3 +1,4 @@
+/haiku
 /haiku/generated*
 /haiku/download/
 /buildtools/
@@ -17,3 +18,5 @@ __pycache__/
 Thumbs.db
 /query.csv
 /distro/artwork/*.bgr
+!/distro/artwork/r5-os-splash.bgr
+!/distro/artwork/splash_icons.bgr
