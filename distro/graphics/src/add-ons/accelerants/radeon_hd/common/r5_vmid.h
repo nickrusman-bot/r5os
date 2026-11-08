@@ -32,6 +32,9 @@ struct r5_vmid_mgr {
 	uint32_t			hold_owner_prev;
 	uint64_t			hold_fence_prev;
 	uint64_t			pending_tlb;
+	/* Lowest VMID this manager may hand out. 0 means 1-15.
+	 * A file manager sets 2. VMID 1 stays the shared table. */
+	uint32_t			low;
 };
 
 
@@ -42,6 +45,27 @@ r5_vmid_init(struct r5_vmid_mgr* m)
 	memset(m, 0, sizeof(*m));
 	for (i = 0; i < 15u; i++)
 		m->lru[i] = i + 1u;
+}
+
+
+/* VMID 1 is the shared table. Files use 2-15 only. */
+static inline void
+r5_vmid_init_files(struct r5_vmid_mgr* m)
+{
+	uint32_t i;
+	r5_vmid_init(m);
+	m->low = 2u;
+	for (i = 0; i < 14u; i++)
+		m->lru[i] = i + 2u;
+	m->lru[14] = 0;
+}
+
+
+/* gfx9_vmid_per_file needs the VMID 1-15 context registers. */
+static inline int
+r5_vmid_file_ok(int perFile, int vmids)
+{
+	return perFile != 0 && vmids != 0;
 }
 
 
@@ -72,6 +96,8 @@ r5_vmid_reserve(struct r5_vmid_mgr* m, uint32_t owner, uint64_t retired,
 		return 0;
 	m->pending_tlb = tlb;
 	for (i = 1; i <= 15u; i++) {
+		if (i < m->low)
+			continue;
 		if (m->slot[i].owner != owner)
 			continue;
 		if (m->slot[i].fence == ~0ull || m->slot[i].fence <= retired)
@@ -83,6 +109,8 @@ r5_vmid_reserve(struct r5_vmid_mgr* m, uint32_t owner, uint64_t retired,
 	}
 	for (i = 0; i < 15u; i++) {
 		uint32_t v = m->lru[i];
+		if (v < m->low || v > 15u)
+			continue;
 		if (m->slot[v].fence == ~0ull)
 			continue;
 		if (m->slot[v].fence > retired)

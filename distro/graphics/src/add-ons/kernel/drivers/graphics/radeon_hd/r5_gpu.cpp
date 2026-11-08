@@ -3551,7 +3551,7 @@ gpu_file_root(gpu_client* client)
 		return B_NO_MEMORY;
 	}
 	if (!sFileVmidsReady) {
-		r5_vmid_init(&sFileVmids);
+		r5_vmid_init_files(&sFileVmids);
 		sFileVmidsReady = true;
 	}
 	client->fileOwner = sNextFileOwner;

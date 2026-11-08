@@ -1689,6 +1689,18 @@ main()
 		if (again == 0 || flush == 0)
 			return fail("closed file");
 		r5_vmid_cancel(&mgr);
+		r5_vmid_init_files(&mgr);
+		for (i = 0; i < 14u; i++) {
+			uint32_t file = r5_vmid_reserve(&mgr, 100u + i, 0, 1, &flush);
+			if (file < 2u || file > 15u)
+				return fail("file vmid");
+			r5_vmid_arm(&mgr, 1);
+		}
+		if (r5_vmid_reserve(&mgr, 200, 0, 1, &flush) != 0)
+			return fail("file pool");
+		if (r5_vmid_file_ok(1, 0) != 0 || r5_vmid_file_ok(1, 1) == 0
+			|| r5_vmid_file_ok(0, 1) != 0)
+			return fail("file needs vmids");
 	}
 	{
 		struct r5_defer held[2];

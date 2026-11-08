@@ -12,6 +12,7 @@
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
 #include "r5_vm.h"
+#include "r5_vmid.h"
 #include "r5_gpu.h"
 #include "r5_span.h"
 #include "radeon_hd_private.h"
@@ -1862,6 +1863,10 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		sVmidPerFile = get_driver_boolean_parameter(settings,
 			"gfx9_vmid_per_file", false, true);
+		if (sVmidPerFile && r5_vmid_file_ok(1, sVmids ? 1 : 0) == 0) {
+			knote("gfx9_vmid_per_file needs gfx9_vmids");
+			sVmidPerFile = false;
+		}
 		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
 			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);

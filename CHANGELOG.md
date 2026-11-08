@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A file does not get VMID 1
+
+`gfx9_vmid_per_file` stays off. The file pool is VMID 2-15. VMID 1 stays the shared table. If the setting is on and `gfx9_vmids` is off, startup logs `gfx9_vmid_per_file needs gfx9_vmids` and leaves every job on VMID 1. The host test reserves fourteen file ids and none of them is 1. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A file table maps the CSA
 
 `gfx9_vmid_per_file` stays off. When `gfx9_ce_meta` is on, each new file tree maps the same 128 KiB CSA at the same virtual address as the shared tree. The setting off leaves the tables alone. The host test maps that address in a new tree and reads the page back. There is no What's new section and `distro/BUILD` stays the same.
