@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+python3 "$ROOT/scripts/generate-r5-artwork.py" --check
 DEST="$ROOT/haiku/build/jam/UserBuildConfig"
 REV="$("$ROOT/scripts/r5-version.sh" --revision)"
 VER="$("$ROOT/scripts/r5-version.sh")"

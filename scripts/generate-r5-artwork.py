@@ -11,10 +11,22 @@ the active `r5-os-deskbar.png`, `r5-os-logo.png`, `r5-os-splash.png`, and
 from __future__ import annotations
 
 import argparse
+import hashlib
 import pathlib
 import re
 import shutil
+import sys
+import tempfile
+
+import PIL
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+REQUIRED_PILLOW = "13.0.0"
+if PIL.__version__ != REQUIRED_PILLOW:
+    raise SystemExit(
+        f"Pillow {REQUIRED_PILLOW} is required so the artwork hashes stay stable. "
+        f"This interpreter has {PIL.__version__}."
+    )
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ARTWORK_DIR = ROOT / "distro" / "artwork"
@@ -24,6 +36,12 @@ WALLPAPER_SRC = ARTWORK_DIR / "r5-wallpaper.jpg"
 
 BOLD_TTF = FONT_DIR / "Manrope-Bold.ttf"
 REGULAR_TTF = FONT_DIR / "Manrope-Regular.ttf"
+
+
+def save_png(image: Image.Image, path: pathlib.Path) -> None:
+    """PNG with no time, no comment, and a fixed zlib level."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path, format="PNG", optimize=False, compress_level=9)
 
 
 # --- 1. Cubic Bezier & SVG Path Helpers ---
@@ -102,8 +120,8 @@ def parse_evenodd(d: str) -> list[list[tuple[tuple[float, float], ...]]]:
     return rings
 
 
-def load_pebble_paths() -> dict[str, list[list[tuple[tuple[float, float], ...]]]]:
-    text = (ARTWORK_DIR / "r5-symbol.svg").read_text(encoding="utf-8")
+def load_pebble_paths(svg_path: pathlib.Path) -> dict[str, list[list[tuple[tuple[float, float], ...]]]]:
+    text = svg_path.read_text(encoding="utf-8")
     paths: dict[str, list[list[tuple[tuple[float, float], ...]]]] = {}
     for name, body in re.findall(r'id="(r5-[a-z]+)" d="([^"]+)"', text):
         paths[name] = parse_evenodd(body)
@@ -452,10 +470,7 @@ def read_release() -> tuple[str, str]:
     return first_line(ROOT / "distro" / "VERSION"), first_line(ROOT / "distro" / "BUILD")
 
 
-def write_disk_badge(png: bytes) -> None:
-    destination = (
-        ROOT / "distro" / "desktop" / "src" / "kits" / "tracker" / "r5_disk_badge.h"
-    )
+def write_disk_badge(png: bytes, destination: pathlib.Path) -> None:
     rows = []
     for start in range(0, len(png), 12):
         chunk = ", ".join(f"0x{byte:02x}" for byte in png[start : start + 12])
@@ -638,7 +653,7 @@ def render_about_r5_mockup(version: str, build: str) -> Image.Image:
     return bg.convert("RGB")
 
 
-def write_svg_files() -> None:
+def write_svg_files(artwork_dir: pathlib.Path, kit_dir: pathlib.Path) -> None:
     svg_color = """<!--
   SPDX-FileCopyrightText: 2026 R5OS Contributors
   SPDX-License-Identifier: GPL-3.0-or-later
@@ -658,8 +673,144 @@ def write_svg_files() -> None:
         fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.38"/>
 </svg>
 """
-    (OUT_DIR / "r5-symbol.svg").write_text(svg_color, encoding="utf-8")
-    (ARTWORK_DIR / "r5-symbol.svg").write_text(svg_color, encoding="utf-8")
+    kit_dir.mkdir(parents=True, exist_ok=True)
+    artwork_dir.mkdir(parents=True, exist_ok=True)
+    (kit_dir / "r5-symbol.svg").write_text(svg_color, encoding="utf-8", newline="\n")
+    (artwork_dir / "r5-symbol.svg").write_text(svg_color, encoding="utf-8", newline="\n")
+
+
+PRODUCT_NAMES = (
+    "r5-symbol.svg",
+    "r5-symbol.png",
+    "r5-symbol-1024.png",
+    "r5-symbol-512.png",
+    "r5-symbol-256.png",
+    "r5-symbol-128.png",
+    "r5-symbol-64.png",
+    "r5-symbol-32.png",
+    "r5-symbol-22.png",
+    "r5-symbol-16.png",
+    "r5-symbol-mono-white.png",
+    "r5-symbol-mono-dark.png",
+    "r5-os-deskbar.png",
+    "r5-os-logo.png",
+    "r5-os-splash.png",
+    "r5-os-splash.bgr",
+)
+
+INSTALLED_NAMES = (
+    "r5-symbol.svg",
+    "r5-symbol.png",
+    "r5-os-deskbar.png",
+    "r5-os-logo.png",
+    "r5-os-splash.png",
+    "r5-os-splash.bgr",
+)
+
+
+def sha256(path: pathlib.Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def produce(artwork_dir: pathlib.Path, kit_dir: pathlib.Path, badge_path: pathlib.Path) -> None:
+    version, build = read_release()
+    write_svg_files(artwork_dir, kit_dir)
+    global PEBBLE_PATHS
+    PEBBLE_PATHS = load_pebble_paths(artwork_dir / "r5-symbol.svg")
+
+    for sz in (1024, 512, 256, 128, 64, 32, 22, 16):
+        img = render_wave_pebble(
+            sz, mode="color", with_shadow=(sz >= 64), simplified=(sz <= 22)
+        )
+        save_png(img, kit_dir / f"r5-symbol-{sz}.png")
+
+    mark = render_wave_pebble(16, mode="color", with_shadow=False, simplified=True)
+    deskbar = Image.new("RGBA", (28, 22), (0, 0, 0, 0))
+    deskbar.alpha_composite(mark, ((28 - 16) // 2, (22 - 16) // 2))
+    save_png(deskbar, kit_dir / "r5-os-deskbar.png")
+
+    save_png(
+        render_wave_pebble(512, mode="white", with_shadow=False),
+        kit_dir / "r5-symbol-mono-white.png",
+    )
+    save_png(
+        render_wave_pebble(512, mode="dark", with_shadow=False),
+        kit_dir / "r5-symbol-mono-dark.png",
+    )
+
+    save_png(
+        render_horizontal_lockup(height=140, theme="light", transparent=True),
+        kit_dir / "r5-os-logo.png",
+    )
+    save_png(
+        render_horizontal_lockup(
+            height=160,
+            theme="light",
+            transparent=False,
+            subtitle=example_version_line(version, build),
+        ),
+        kit_dir / "r5-lockup-light-card.png",
+    )
+    save_png(
+        render_horizontal_lockup(
+            height=160,
+            theme="dark",
+            transparent=False,
+            subtitle=example_version_line(version, build),
+        ),
+        kit_dir / "r5-lockup-dark-card.png",
+    )
+
+    splash_png, splash_bgr = render_boot_splash()
+    save_png(splash_png, kit_dir / "r5-os-splash.png")
+    (kit_dir / "r5-os-splash.bgr").write_bytes(splash_bgr)
+
+    for sz in (128, 64, 32):
+        save_png(render_system_disk_icon(sz), kit_dir / f"r5-system-disk-{sz}.png")
+
+    save_png(
+        render_about_r5_mockup(version, build),
+        kit_dir / "r5-about-window-preview.png",
+    )
+
+    symbol = render_wave_pebble(256, mode="color", with_shadow=False)
+    save_png(symbol, kit_dir / "r5-symbol.png")
+    write_disk_badge((kit_dir / "r5-symbol.png").read_bytes(), badge_path)
+
+    for name in INSTALLED_NAMES:
+        if name == "r5-symbol.svg":
+            continue
+        shutil.copy2(kit_dir / name, artwork_dir / name)
+
+
+def check_artwork() -> int:
+    badge = ROOT / "distro" / "desktop" / "src" / "kits" / "tracker" / "r5_disk_badge.h"
+    with tempfile.TemporaryDirectory(prefix="r5-artwork-") as temporary:
+        root = pathlib.Path(temporary)
+        artwork = root / "artwork"
+        kit = root / "brand-kit"
+        fresh_badge = root / "r5_disk_badge.h"
+        produce(artwork, kit, fresh_badge)
+        mismatches = []
+        for name in INSTALLED_NAMES:
+            live = ARTWORK_DIR / name
+            fresh = artwork / name
+            if sha256(live) != sha256(fresh):
+                mismatches.append(str(live.relative_to(ROOT)))
+        for name in PRODUCT_NAMES:
+            live = OUT_DIR / name
+            fresh = kit / name
+            if sha256(live) != sha256(fresh):
+                mismatches.append(str(live.relative_to(ROOT)))
+        if sha256(badge) != sha256(fresh_badge):
+            mismatches.append(str(badge.relative_to(ROOT)))
+    if mismatches:
+        print("artwork does not match the generator:", file=sys.stderr)
+        for item in mismatches:
+            print(f"  {item}", file=sys.stderr)
+        return 1
+    print("artwork matches the generator")
+    return 0
 
 
 def main() -> int:
@@ -667,65 +818,27 @@ def main() -> int:
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Also copy r5-os-deskbar.png, r5-os-logo.png, r5-os-splash.png, and r5-os-splash.bgr into distro/artwork/",
+        help="Write the product artwork into distro/artwork/ and the disk-badge header.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Regenerate the product artwork in a temporary directory and compare hashes.",
     )
     args = parser.parse_args()
+    if args.check and args.install:
+        raise SystemExit("--check does not write the tree")
+    if args.check:
+        return check_artwork()
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    version, build = read_release()
-    write_svg_files()
-    global PEBBLE_PATHS
-    PEBBLE_PATHS = load_pebble_paths()
-
-    for sz in (1024, 512, 256, 128, 64, 32, 22, 16):
-        img = render_wave_pebble(
-            sz, mode="color", with_shadow=(sz >= 64), simplified=(sz <= 22)
-        )
-        img.save(OUT_DIR / f"r5-symbol-{sz}.png")
-
-    mark = render_wave_pebble(16, mode="color", with_shadow=False, simplified=True)
-    deskbar = Image.new("RGBA", (28, 22), (0, 0, 0, 0))
-    deskbar.alpha_composite(mark, ((28 - 16) // 2, (22 - 16) // 2))
-    deskbar.save(OUT_DIR / "r5-os-deskbar.png")
-
-    render_wave_pebble(512, mode="white", with_shadow=False).save(OUT_DIR / "r5-symbol-mono-white.png")
-    render_wave_pebble(512, mode="dark", with_shadow=False).save(OUT_DIR / "r5-symbol-mono-dark.png")
-
-    logo_light = render_horizontal_lockup(height=140, theme="light", transparent=True)
-    logo_light.save(OUT_DIR / "r5-os-logo.png")
-    render_horizontal_lockup(
-        height=160,
-        theme="light",
-        transparent=False,
-        subtitle=example_version_line(version, build),
-    ).save(OUT_DIR / "r5-lockup-light-card.png")
-    render_horizontal_lockup(
-        height=160,
-        theme="dark",
-        transparent=False,
-        subtitle=example_version_line(version, build),
-    ).save(OUT_DIR / "r5-lockup-dark-card.png")
-
-    splash_png, splash_bgr = render_boot_splash()
-    splash_png.save(OUT_DIR / "r5-os-splash.png")
-    (OUT_DIR / "r5-os-splash.bgr").write_bytes(splash_bgr)
-
-    for sz in (128, 64, 32):
-        render_system_disk_icon(sz).save(OUT_DIR / f"r5-system-disk-{sz}.png")
-
-    render_about_r5_mockup(version, build).save(OUT_DIR / "r5-about-window-preview.png")
-
-    symbol = render_wave_pebble(256, mode="color", with_shadow=False)
-    symbol_path = OUT_DIR / "r5-symbol.png"
-    symbol.save(symbol_path)
-    write_disk_badge(symbol_path.read_bytes())
-
+    badge = ROOT / "distro" / "desktop" / "src" / "kits" / "tracker" / "r5_disk_badge.h"
     if args.install:
-        for name in ("r5-os-deskbar.png", "r5-os-logo.png", "r5-os-splash.png", "r5-os-splash.bgr"):
-            shutil.copy2(OUT_DIR / name, ARTWORK_DIR / name)
-        shutil.copy2(symbol_path, ARTWORK_DIR / "r5-symbol.png")
+        produce(ARTWORK_DIR, OUT_DIR, badge)
         print("Installed active artwork assets into:", ARTWORK_DIR)
-
+    else:
+        kit = OUT_DIR
+        with tempfile.TemporaryDirectory(prefix="r5-artwork-") as temporary:
+            produce(pathlib.Path(temporary), kit, badge)
     print("Generated all R5 Brand Kit assets in:", OUT_DIR)
     return 0
 
