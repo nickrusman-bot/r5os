@@ -14,6 +14,7 @@
 #include "r5_cs.h"
 #include "r5_gc9_regs.h"
 #include "r5_inv_range.h"
+#include "r5_vm_size.h"
 #include "r5_span.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
@@ -1139,6 +1140,36 @@ main()
 	if (r5_gfx9_inv_range_lo_value() != 0xffffffffu
 		|| r5_gfx9_inv_range_hi_value() != 0x1fu)
 		return fail("inv values");
+	{
+		struct r5_vm_size size = r5_vm_adjust(256u * 1024u, 3u, 48u, 16u);
+		uint32_t cntl = r5_gfx9_vmid_cntl(&size, 0);
+		uint32_t depthBits = VM_CONTEXT0_CNTL__PAGE_TABLE_BLOCK_SIZE__SHIFT
+			- VM_CONTEXT0_CNTL__PAGE_TABLE_DEPTH__SHIFT;
+		if (size.num_level != 3u || size.block_size != 9u)
+			return fail("vm levels");
+		if (size.max_pfn != (256ull * 1024ull) << 18)
+			return fail("vm pfn");
+		if (((cntl >> VM_CONTEXT0_CNTL__PAGE_TABLE_DEPTH__SHIFT)
+				& ((1u << depthBits) - 1u)) != 3u)
+			return fail("vmid depth");
+		if (((cntl >> VM_CONTEXT0_CNTL__PAGE_TABLE_BLOCK_SIZE__SHIFT)
+				& 0xfu) != 0u)
+			return fail("vmid block");
+		if ((cntl & (1u << VM_CONTEXT0_CNTL__RETRY_PERMISSION_OR_INVALID_PAGE_FAULT__SHIFT))
+				!= 0)
+			return fail("vmid retry");
+		if (r5_gfx9_sh_mem_config() != 0x1018u
+			|| r5_gfx9_sh_mem_bases() != 0x20001000u)
+			return fail("sh mem");
+		const char* vmidOrder[] = {
+			"if (!sVmids || sInfo == NULL)",
+			"for (i = 0; i <= 14u; i++)"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", vmidOrder, 2) != 0)
+			return 1;
+	}
 	if (mmMC_VM_AGP_BASE != 0x984u
 		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32 != 0x855u
 		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32 != 0x856u

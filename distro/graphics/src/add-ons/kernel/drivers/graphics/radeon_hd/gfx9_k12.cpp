@@ -9,6 +9,7 @@
 
 #include "gfx9_start.h"
 #include "r5_inv_range.h"
+#include "r5_vm_size.h"
 #include "r5_vm.h"
 #include "r5_gpu.h"
 #include "r5_span.h"
@@ -57,6 +58,7 @@ static bool sGfx9Started = false;
 static bool sGpuDebug = false;
 static bool sInvRange = false;
 static bool sHubLinux = false;
+static bool sVmids = false;
 static bool sVmCntlSavedValid = false;
 static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
@@ -1098,6 +1100,39 @@ r5_gfx9_vmid1_flush()
 }
 
 
+/* Linux v6.12 gfxhub_v1_0.c:gfxhub_v1_0_setup_vmid_config.
+ * i runs 0..14, which is context i + 1. The page-table base is not
+ * written here. */
+static void
+r5_gfx9_vmids_program(void)
+{
+	struct r5_vm_size size;
+	uint32 cntl;
+	uint32 i;
+	uint64 end;
+	if (!sVmids || sInfo == NULL)
+		return;
+	size = r5_vm_adjust(256u * 1024u, 3u, 48u, 0);
+	cntl = r5_gfx9_vmid_cntl(&size, 0);
+	end = size.max_pfn - 1ull;
+	for (i = 0; i <= 14u; i++) {
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE), cntl);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), 0);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), 0);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), (uint32)end);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), (uint32)(end >> 32));
+	}
+	if (sGpuDebug)
+		knote("vmids 1-15 cntl %08lx end %016llx",
+			(unsigned long)cntl, (unsigned long long)end);
+}
+
+
 bool
 r5_gfx9_vmid1_setup()
 {
@@ -1191,8 +1226,8 @@ r5_gfx9_vmid1_setup()
 	 * (bases 0) and is not written here. Callers hold gpu_lock, the same
 	 * lock as the other GRBM_GFX_CNTL users. These are registers only.
 	 */
-	const uint32 shConfig = (3u << 3) | (1u << 12);
-	const uint32 shBases = (0x2000u << 16) | 0x1000u;
+	const uint32 shConfig = r5_gfx9_sh_mem_config();
+	const uint32 shBases = r5_gfx9_sh_mem_bases();
 	for (uint32 vmid = 1; vmid <= 15; vmid++) {
 		kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), vmid << 4);
 		kwrite(sInfo, gc_byte(mmSH_MEM_CONFIG), shConfig);
@@ -1217,6 +1252,7 @@ r5_gfx9_vmid1_setup()
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32)));
 	r5_gfx9_vmid1_set_root(tableBase);
 	/* Linux programs the engine ranges after setup_vmid_config. */
+	r5_gfx9_vmids_program();
 	r5_gfx9_inv_range_program();
 	return true;
 }
@@ -1415,6 +1451,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 		sInvRange = get_driver_boolean_parameter(settings, "gfx9_inv_range",
 			false, true);
 		sHubLinux = get_driver_boolean_parameter(settings, "gfx9_hub_linux",
+			false, true);
+		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",
 			false, true);
 		unload_driver_settings(settings);
 	}
