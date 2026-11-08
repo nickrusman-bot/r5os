@@ -45,6 +45,8 @@ A userlandfs add-on from air/OS (`github.com/airos-works/haiku`). Copyright 2026
 
 The mount server side is `distro/smb/src/servers/mount` and `distro/smb/headers/private/mount/MountServer.h`. Same origin, MIT. Passwords are stored with `BKeyStore` under `smb://server/share`. The server retries a share that failed because the network was not up, and posts a notification when the failure is not that kind.
 
+Tracker preferences gain the Network shares page, and the Mount menu lists shares that are not mounted. Those files are `distro/desktop/src/kits/tracker/NetworkSharesSettings.cpp`, `NetworkSharesSettings.h`, `MountMenu.cpp`, `TrackerSettingsWindow.cpp`, and `TrackerSettingsWindow.h`. MIT, from the same air/OS import. The message handling added to `Tracker.cpp` is an R5 snippet.
+
 The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is `LICENSES/Unlicense.txt`. The Apache-2.0 text is not in `LICENSES/` yet.
 
 R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
