@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+python3 "$ROOT/scripts/generate-r5-artwork.py" --check
 DEST="$ROOT/haiku/build/jam/UserBuildConfig"
 REV="$("$ROOT/scripts/r5-version.sh" --revision)"
 VER="$("$ROOT/scripts/r5-version.sh")"
@@ -37,6 +38,16 @@ deskDst="$ROOT/haiku/data/artwork/R5OS-deskbar.png"
 if [[ -f "$deskSrc" ]]; then
 	cp "$deskSrc" "$deskDst"
 	echo "Wrote $deskDst"
+fi
+
+# The image gets the Deskbar mark, the logo, the splash, and the About symbol.
+# Previews in distro/artwork/brand-kit/ stay out of the image. The disk badge
+# is compiled from r5_disk_badge.h.
+symbolSrc="$ROOT/distro/artwork/r5-symbol.png"
+symbolDst="$ROOT/haiku/data/artwork/r5-symbol.png"
+if [[ -f "$symbolSrc" ]]; then
+	cp "$symbolSrc" "$symbolDst"
+	echo "Wrote $symbolDst"
 fi
 
 paperSrc="$ROOT/distro/artwork/r5-wallpaper.jpg"

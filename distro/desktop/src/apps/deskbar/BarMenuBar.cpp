@@ -139,7 +139,12 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 	fAppListMenuItem(NULL),
 	fSeparatorItem(NULL),
 	fTeamIconData(NULL),
-	fTeamIconSize(0)
+	fTeamIconSize(0),
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	fSymbolWidth(0)
+// SPDX-SnippetEnd
 {
 	SetItemMargins(0.0f, 0.0f, 0.0f, 0.0f);
 	SetFont(be_bold_font);
@@ -173,6 +178,8 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 // SPDX-License-Identifier: GPL-3.0-or-later
 #else
 	icon = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "r5_deskbar_logo.png");
+	if (icon != NULL)
+		fSymbolWidth = icon->Bounds().Width() + 1;
 #endif
 // SPDX-SnippetEnd
 
@@ -193,8 +200,21 @@ TBarMenuBar::SmartResize(float width, float height)
 		BRect frame = Frame();
 		width = frame.Width();
 		height = frame.Height();
-	} else
+	} else {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// The button is only the mark. Do not stretch it to the wide slot.
+		// A vertical bar and the mini team menu keep the width they were given.
+		if (fSymbolWidth > 0 && fAppListMenuItem == NULL
+			&& fBarView != NULL && !fBarView->Vertical()) {
+			width = fSymbolWidth;
+			if (fSeparatorItem != NULL)
+				width += kSepItemWidth;
+		}
+// SPDX-SnippetEnd
 		ResizeTo(width, height);
+	}
 
 	if (fSeparatorItem != NULL)
 		fDeskbarMenuItem->SetContentSize(width - kSepItemWidth, height);

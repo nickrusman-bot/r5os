@@ -18,3 +18,4 @@ __pycache__/
 Thumbs.db
 /query.csv
 /distro/artwork/*.bgr
+!/distro/artwork/r5-os-splash.bgr

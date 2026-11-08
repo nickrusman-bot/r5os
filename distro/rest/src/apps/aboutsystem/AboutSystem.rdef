@@ -40,6 +40,7 @@ resource(2, "logo_dark.png") #'PNG ' import "../../../data/artwork/HAIKU logo - 
 resource(1, "walter_logo.png") #'PNG ' import "../../../data/artwork/R5OS-logo.png";
 resource(3, "r5_whatsnew") #'CSTR' import "r5_whatsnew.txt";
 resource(4, "r5_licenses") #'CSTR' import "r5_licenses.txt";
+resource(5, "r5_symbol.png") #'PNG ' import "../../../data/artwork/r5-symbol.png";
 // SPDX-SnippetEnd
 #endif
 

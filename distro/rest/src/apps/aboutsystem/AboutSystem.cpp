@@ -478,11 +478,30 @@ AboutWindow::QuitRequested()
 //	#pragma mark - LogoView
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static const char*
+r5_arch_name()
+{
+	const char* archName = B_HAIKU_ABI_NAME;
+	if (strcmp(archName, "x86_64") == 0)
+		return "AMD64";
+	if (strcmp(archName, "aarch64") == 0)
+		return "ARM64";
+	if (strcmp(archName, "riscv64") == 0)
+		return "RISC-V 64";
+	return archName;
+}
+// SPDX-SnippetEnd
+
+
 LogoView::LogoView()
 	:
 	BView("logo", B_WILL_DRAW)
 {
-	SetDrawingMode(B_OP_OVER);
+	SetDrawingMode(B_OP_ALPHA);
+	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 
 #ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	rgb_color bgColor = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
@@ -491,7 +510,7 @@ LogoView::LogoView()
 	else
 		fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "logo_dark.png");
 #else
-	fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "walter_logo.png");
+	fLogo = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "r5_symbol.png");
 #endif
 
 	// Set view color to panel background color when fLogo is NULL
@@ -514,24 +533,31 @@ BSize
 LogoView::_DisplaySize() const
 // SPDX-SnippetEnd
 {
-	if (fLogo == NULL)
-		return BSize(0, 0);
-
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	// Unofficial Haiku used Walter logo.png (170x110). Keep the R5OS
-	// wordmark in that box so About does not grow with a 420px asset.
-	const float kMaxWidth = 170.0f;
-	const float kMaxHeight = 110.0f;
-	float width = fLogo->Bounds().Width();
-	float height = fLogo->Bounds().Height();
-	float scale = 1.0f;
-	if (width > kMaxWidth)
-		scale = kMaxWidth / width;
-	if (height * scale > kMaxHeight)
-		scale = kMaxHeight / height;
-	return BSize(width * scale, height * scale);
+	const float inset = 14.0f;
+	const float symbol = 56.0f;
+	BFont title(be_bold_font);
+	title.SetSize(24.0f);
+	BFont operating(be_plain_font);
+	operating.SetSize(20.0f);
+	BFont plain(be_plain_font);
+	float titleWidth = title.StringWidth("R5") + 8.0f
+		+ operating.StringWidth("Operating System");
+	BString version;
+	version.SetToFormat("Version %s Build %" B_PRId32 " • %s",
+		R5_OS_VERSION, (int32)R5_OS_BUILD, r5_arch_name());
+	float textWidth = std::max(titleWidth, plain.StringWidth(version.String()));
+	font_height titleHeight;
+	title.GetHeight(&titleHeight);
+	font_height plainHeight;
+	plain.GetHeight(&plainHeight);
+	float textHeight = ceilf(titleHeight.ascent + titleHeight.descent
+		+ 6.0f + plainHeight.ascent + plainHeight.descent);
+	float height = inset * 2 + std::max(symbol, textHeight);
+	float width = inset + symbol + 12.0f + textWidth + inset;
+	return BSize(ceilf(width), ceilf(height));
 }
 
 
@@ -560,20 +586,59 @@ LogoView::MaxSize()
 void
 LogoView::Draw(BRect updateRect)
 {
-	if (fLogo == NULL)
-		return;
-
 	BRect bounds(Bounds());
-	SetLowColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
+	rgb_color background = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	SetLowColor(background);
 	FillRect(bounds, B_SOLID_LOW);
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	BSize size = _DisplaySize();
-	float left = (bounds.Width() - size.width) / 2;
-	BRect dest(left, 0, left + size.width, size.height);
-	DrawBitmap(fLogo, fLogo->Bounds(), dest, B_FILTER_BITMAP_BILINEAR);
+	rgb_color border = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT);
+	SetHighColor(border);
+	StrokeRect(bounds);
+
+	const float inset = 14.0f;
+	const float symbol = 56.0f;
+	if (fLogo != NULL) {
+		float top = floorf((bounds.Height() - symbol) / 2);
+		BRect dest(inset, top, inset + symbol - 1, top + symbol - 1);
+		DrawBitmap(fLogo, fLogo->Bounds(), dest, B_FILTER_BITMAP_BILINEAR);
+	}
+
+	BFont title(be_bold_font);
+	title.SetSize(24.0f);
+	BFont operating(be_plain_font);
+	operating.SetSize(20.0f);
+	BFont plain(be_plain_font);
+	font_height titleHeight;
+	title.GetHeight(&titleHeight);
+	font_height plainHeight;
+	plain.GetHeight(&plainHeight);
+	float block = titleHeight.ascent + titleHeight.descent + 6.0f
+		+ plainHeight.ascent + plainHeight.descent;
+	float blockTop = floorf((bounds.Height() - block) / 2);
+	float baseline = blockTop + titleHeight.ascent;
+	float textLeft = inset + symbol + 12.0f;
+
+	rgb_color text = ui_color(B_DOCUMENT_TEXT_COLOR);
+	SetHighColor(text);
+	SetFont(&title);
+	DrawString("R5", BPoint(textLeft, baseline));
+	float r5Width = title.StringWidth("R5");
+	SetHighColor(tint_color(text, B_LIGHTEN_1_TINT));
+	SetFont(&operating);
+	DrawString("Operating System", BPoint(textLeft + r5Width + 8.0f, baseline));
+
+	BString version;
+	version.SetToFormat("Version %s Build %" B_PRId32 " • %s",
+		R5_OS_VERSION, (int32)R5_OS_BUILD, r5_arch_name());
+	float versionBaseline = baseline + titleHeight.descent + 6.0f
+		+ plainHeight.ascent;
+	SetHighColor(text);
+	SetFont(&plain);
+	DrawString(version.String(), BPoint(textLeft, versionBaseline));
 // SPDX-SnippetEnd
 }
 
@@ -812,6 +877,13 @@ SysInfoView::AttachedToWindow()
 	BView::AttachedToWindow();
 
 	Window()->SetPulseRate(500000);
+	if (!_IsReplicant()) {
+		fVersionLabelView->Hide();
+		fVersionInfoView->Hide();
+		BView* abiView = FindView("abitext");
+		if (abiView != NULL)
+			abiView->Hide();
+	}
 	DoLayout();
 
 	if (_IsReplicant()) {
@@ -855,8 +927,9 @@ SysInfoView::CacheInitialSize()
 	fCachedMinHeight = fCachedBaseHeight + uptimeHeight;
 
 	// set view limits
+	float maxWidth = _IsReplicant() ? fCachedMinWidth : B_SIZE_UNLIMITED;
 	SetExplicitMinSize(BSize(fCachedMinWidth, B_SIZE_UNSET));
-	SetExplicitMaxSize(BSize(fCachedMinWidth, fCachedMinHeight));
+	SetExplicitMaxSize(BSize(maxWidth, fCachedMinHeight));
 	fUptimeView->SetExplicitMaxSize(BSize(fCachedMinWidth - insets, uptimeHeight));
 }
 
@@ -914,8 +987,9 @@ SysInfoView::Pulse()
 	_ResizeBy(0, newHeight - fCachedMinHeight);
 	fCachedMinHeight = newHeight;
 
+	float maxWidth = _IsReplicant() ? fCachedMinWidth : B_SIZE_UNLIMITED;
 	SetExplicitMinSize(BSize(fCachedMinWidth, B_SIZE_UNSET));
-	SetExplicitMaxSize(BSize(fCachedMinWidth, fCachedMinHeight));
+	SetExplicitMaxSize(BSize(maxWidth, fCachedMinHeight));
 }
 
 
@@ -1078,9 +1152,15 @@ SysInfoView::_BaseHeight()
 	font_height boldFH;
 	be_bold_font->GetHeight(&boldFH);
 
-	return ceilf(((boldFH.ascent + boldFH.descent) * kLabelCount
-		+ (plainFH.ascent + plainFH.descent) * kSubtextCount
-		+ be_control_look->DefaultLabelSpacing() * kLabelCount));
+	uint8 labels = kLabelCount;
+	uint8 subtexts = kSubtextCount;
+	if (Window() != NULL && !_IsReplicant()) {
+		labels -= 1;
+		subtexts -= 2;
+	}
+	return ceilf(((boldFH.ascent + boldFH.descent) * labels
+		+ (plainFH.ascent + plainFH.descent) * subtexts
+		+ be_control_look->DefaultLabelSpacing() * labels));
 }
 
 
@@ -1347,13 +1427,10 @@ AboutView::AboutView()
 	fBeOSRedColor = mix_color(fTextColor, kIdealBeOSRed, 191);
 	fBeOSBlueColor = mix_color(fTextColor, kIdealBeOSBlue, 191);
 
-	SetLayout(new BGroupLayout(B_HORIZONTAL, 0));
+	SetLayout(new BGroupLayout(B_VERTICAL, 0));
 	BLayoutBuilder::Group<>((BGroupLayout*)GetLayout())
-		.AddGroup(B_VERTICAL, 0)
-			.Add(_CreateLogoView())
-			.Add(_CreateSysInfoView())
-			.AddGlue()
-			.End()
+		.Add(_CreateLogoView())
+		.Add(_CreateSysInfoView())
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -1385,19 +1462,13 @@ AboutView::AttachedToWindow()
 
 	fSysInfoView->CacheInitialSize();
 
-	float insets = be_control_look->DefaultLabelSpacing() * 2;
-	float infoWidth = fSysInfoView->MinWidth() + insets;
-	float creditsWidth = roundf(infoWidth * 1.25f);
-	fCachedMinWidth = std::max(infoWidth + creditsWidth,
-		fCachedMinWidth);
-		// set once
-	float logoViewHeight = fLogoView->Bounds().Height();
-	float sysInfoViewHeight = fSysInfoView->MinHeight() + insets;
-	fCachedMinHeight = std::max(logoViewHeight + sysInfoViewHeight,
-		fCachedMinHeight);
-		// updated when height changes in pulse
-	fCreditsView->SetExplicitMinSize(BSize(creditsWidth, fCachedMinHeight));
-		// set credits min height to logo height + sys-info height
+	float headerHeight = fLogoView->MinSize().height;
+	float infoWidth = fSysInfoView->MinWidth();
+	fCachedMinWidth = std::max(infoWidth, fLogoView->MinSize().width);
+	float tabHeight = 180.0f;
+	fCachedMinHeight = headerHeight + fSysInfoView->MinHeight() + tabHeight;
+	if (fTabView != NULL)
+		fTabView->SetExplicitMinSize(BSize(fCachedMinWidth, tabHeight));
 
 	SetEventMask(B_POINTER_EVENTS);
 	DoLayout();
@@ -1422,14 +1493,12 @@ AboutView::MouseDown(BPoint where)
 void
 AboutView::Pulse()
 {
-	// sys-info handles height because it may be a replicant
-	float insets = be_control_look->DefaultLabelSpacing() * 2;
-	float logoViewHeight = fLogoView->Bounds().Height();
-	float sysInfoViewHeight = fSysInfoView->MinHeight() + insets;
-	float newHeight = logoViewHeight + sysInfoViewHeight;
+	float tabHeight = 180.0f;
+	float newHeight = fLogoView->MinSize().height + fSysInfoView->MinHeight()
+		+ tabHeight;
 	if (newHeight != fCachedMinHeight) {
-		fCreditsView->SetExplicitMinSize(BSize(
-			fCachedMinWidth - (fSysInfoView->MinWidth() + insets), newHeight));
+		if (fTabView != NULL)
+			fTabView->SetExplicitMinSize(BSize(fCachedMinWidth, tabHeight));
 		fCachedMinHeight = newHeight;
 	}
 
@@ -1749,10 +1818,10 @@ AboutView::_CreateInfoTabs()
 		B_PLAIN_BORDER);
 
 	fTabView = new BTabView("aboutTabs", B_WIDTH_FROM_LABEL);
-	fTabView->AddTab(credits);
-	fTabView->TabAt(0)->SetLabel(B_TRANSLATE("Credits"));
 	fTabView->AddTab(newsScroller);
-	fTabView->TabAt(1)->SetLabel(B_TRANSLATE("What's new"));
+	fTabView->TabAt(0)->SetLabel(B_TRANSLATE("What's new"));
+	fTabView->AddTab(credits);
+	fTabView->TabAt(1)->SetLabel(B_TRANSLATE("Credits"));
 
 	BScrollView* licenseScroller = new BScrollView("licenseScroller",
 		fLicensesView, B_WILL_DRAW | B_FRAME_EVENTS, false, true,
