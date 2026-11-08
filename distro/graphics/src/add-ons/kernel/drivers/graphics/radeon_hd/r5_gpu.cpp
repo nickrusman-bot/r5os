@@ -457,6 +457,7 @@ static void gpu_sync_host(gpu_sync* sync);
 
 static void gpu_release_parked(uint64 seen);
 static void gpu_prt_release_tree(r5_vm* vm);
+static status_t gpu_file_root(gpu_client* client);
 static void gpu_defer_stamp(uint64 sequence);
 static void gpu_watchdog();
 
@@ -3474,6 +3475,15 @@ gpu_open(const char* name, uint32 flags, void** cookie)
 	client->pasid = (uint32)pasid;
 	client->next = sClientList;
 	sClientList = client;
+	/* The file tree is published before the cookie leaves the lock. */
+	status_t root = gpu_file_root(client);
+	if (root != B_OK) {
+		sClientList = client->next;
+		r5_pasid_free(&sPasids, client->pasid);
+		gpu_unlock();
+		free(client);
+		return root;
+	}
 	gpu_unlock();
 	*cookie = client;
 	return B_OK;

@@ -711,6 +711,38 @@ main()
 				"radeon_hd/r5_gpu.cpp", book, 4) != 0)
 			return 1;
 	}
+	{
+		char openBody[2500];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_open(const char* name", "gpu_close(void* cookie)",
+				openBody, sizeof(openBody)) != 0)
+			return 1;
+		const char* locked = strstr(openBody, "gpu_lock()");
+		const char* opened = locked != NULL
+			? strstr(locked, "gpu_file_root(client)") : NULL;
+		const char* unlocked = opened != NULL
+			? strstr(opened, "gpu_unlock()") : NULL;
+		const char* cookie = unlocked != NULL
+			? strstr(unlocked, "*cookie = client") : NULL;
+		if (locked == NULL || opened == NULL || unlocked == NULL
+			|| cookie == NULL)
+			return fail("open lock");
+		char controlBody[12000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_control(void* cookie", "device_hooks gR5GpuHooks",
+				controlBody, sizeof(controlBody)) != 0)
+			return 1;
+		locked = strstr(controlBody, "gpu_lock()");
+		opened = locked != NULL
+			? strstr(locked, "gpu_file_root(client)") : NULL;
+		unlocked = opened != NULL ? strstr(opened, "gpu_unlock()") : NULL;
+		if (locked == NULL || opened == NULL || unlocked == NULL)
+			return fail("control lock");
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)

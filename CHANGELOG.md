@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The file tree is published under the GPU lock
+
+`gfx9_vmid_per_file` stays off. `gpu_open` builds the file tree, when the setting is on, while the lock is held, and returns the cookie after the lock is dropped. A failed tree takes the client back off the list. `gpu_control` still calls the same function under the lock. The host test checks that order in both functions. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Virtual-address checks stay inside one file tree
 
 `gfx9_vmid_per_file` stays off. Overlap, a partial range and a dropped range compare the caller's page table with the range that was stored. A PRT entry records that table and is dropped when the table is freed. Clearing one table leaves the same virtual address mapped in the other. The host test maps `0xffff800000001000` in two trees, clears the first, and the second page-table entry stays. There is no What's new section and `distro/BUILD` stays the same.
