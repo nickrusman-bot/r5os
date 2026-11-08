@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A new thread's TLS vector starts at the current generation
+
+A new vector no longer starts at generation 0, so unloading a library with thread-local storage does not zero the blocks the thread just created. The file is Haiku's `elf_tls.cpp` (copyright 2014 Paweł Dziepak, MIT). The added lines are haiku-pi `5db923abc6`, copyright 2026 Witold Bołt, marked as a GPL-3.0-or-later snippet. `scripts/apply-rest-native.py` copies the file. The host test checks that the counter is set before the vector size. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
 
 Review points A1–A7 and M1 of the usb_audio and usb_midi review (8 Nov 2026). Branch `claude/usb-audio-midi-fixes`.
