@@ -3086,7 +3086,7 @@ gpu_stage_u(radeon_info* info)
 	if (!stop && !gpu_stage_pair(info, "a2", 0xffff800100000000ull, false,
 			false, 0xffff800100001000ull, false, false, true, true, 0, 8, false))
 		stop = true;
-	if (!stop && !gpu_stage_pair(info, "a1", 0xffffffffffbfc000ull, false,
+	if (!stop && !gpu_stage_pair(info, "a1", R5_GPU_HIGH_VA_MAX - 0x1000ull, false,
 			false, 0xffffffffffbfd000ull, false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "a3", 0xffff808000000000ull, false,

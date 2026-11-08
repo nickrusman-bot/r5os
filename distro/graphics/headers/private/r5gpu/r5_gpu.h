@@ -90,11 +90,14 @@ typedef struct {
 /* Linux AMDGPU_VM_PAGE_PRT. Handle 0 is valid only with this flag. */
 #define R5_GPU_VA_PRT 8u
 
-/* Linux v6.12 amdgpu_kms.c for a 48-bit GC 9.3 VM. See GRAPHICS.md. */
+/* v6.18 amdgpu_kms.c:968. vm_size is max_pfn pages minus
+ * AMDGPU_VA_RESERVED_TOP. v6.18 trap is 64 KiB, so the top reserve is
+ * 0x410000 and high_va_max is 0xffffffffffbf0000. v6.12 trap is 8 KiB,
+ * so that reserve was 0x402000 and the max was 0xffffffffffbfe000. */
 #define R5_GPU_VA_OFFSET 0x10000ull
 #define R5_GPU_VA_MAX 0x800000000000ull
 #define R5_GPU_HIGH_VA_OFFSET 0xffff800000000000ull
-#define R5_GPU_HIGH_VA_MAX 0xffffffffffbfe000ull
+#define R5_GPU_HIGH_VA_MAX 0xffffffffffbf0000ull
 
 typedef struct {
 	uint32_t	size;
