@@ -2534,7 +2534,8 @@ r5_gfx9_user_commit_dwords(uint32 count)
 	body = r5_cs_user_words(count);
 	if (body == 0)
 		return 0;
-	extra = r5_gfx9_vmid1_flush_due(&pd) ? r5_cs_vm_switch_words() : 0;
+	extra = r5_gfx9_vmid1_flush_due(&pd)
+		? r5_cs_vm_switch_words(sJobPasid) : 0;
 	return extra + body + r5_cs_pad_dwords(
 		sRadeonGfx9Ring.submitted + extra + body);
 }
@@ -2700,10 +2701,13 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	int inBlock = flush || gds;
 	int pasidMap = inBlock
 		&& r5_pasid_map_due(sPasidMap, sPasidOfVmid[1], sJobPasid);
+	/* A flush of VMID 1 already writes that LUT entry. */
+	if (flush && sJobPasid != 0 && count > 0 && ibVm[0] == 1)
+		pasidMap = 0;
 	int endFence = sFlushFence && (flush || pasidMap);
 	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
 	 * zeros, and the packet runs once for this VMID. */
-	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
+	uint32 prefix = flush ? r5_cs_vm_switch_words(sJobPasid) : 0;
 	if (flushFence)
 		prefix += sCondExec ? 8u : 12u;
 	else if (endFence)
@@ -2767,8 +2771,12 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 			r5_cs_cond_exec_mc(pageMc));
 	}
 	if (flush) {
-		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
-			sUserSequence);
+		switched = r5_cs_vm_switch(packets, cap, ibVm[0], sJobPasid, pd,
+			fenceMc, sUserSequence);
+		if (sJobPasid != 0 && ibVm[0] < 16u) {
+			sPasidOfVmid[ibVm[0]] = sJobPasid;
+			sFileOfVmid[ibVm[0]] = sJobFile;
+		}
 	}
 	if (pasidMap) {
 		switched = r5_cs_pasid_map(packets, cap, switched, 1, sJobPasid);

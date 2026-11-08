@@ -184,5 +184,8 @@ void r5_gfx9_log_state(const char* when, char* line, size_t bytes);
 /* The file last written into the IH LUT for this VMID. */
 uint64 r5_gfx9_file_for_vmid(uint32 vmid);
 uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);
+/* One queued page fault. 0 when the queue is empty. The interrupt
+ * handler only writes the queue. */
+int r5_gfx9_fault_take(uint32* pasid, uint32* vmid, uint64* addr);
 
 #endif

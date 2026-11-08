@@ -344,6 +344,8 @@ struct gpu_client {
 	uint32			pasid;
 	/* Own page table when gfx9_vmid_per_file is on. Off leaves this empty. */
 	r5_file_tree*	tree;
+	/* Set by the retire thread when this file's PASID faults. */
+	bool			faulted;
 	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };
@@ -456,6 +458,7 @@ static void gpu_sync_host(gpu_sync* sync);
 
 
 static void gpu_release_parked(uint64 seen);
+static void gpu_fault_retire();
 static void gpu_prt_release_tree(r5_vm* vm);
 static status_t gpu_file_root(gpu_client* client);
 static void gpu_defer_stamp(uint64 sequence);
@@ -477,6 +480,7 @@ gpu_retire_thread(void* data)
 		/* The one-second timeout is the check when no interrupt arrives.
 		 * Retire from the user fence first, then look at what is left. */
 		r5_gpu_eop();
+		gpu_fault_retire();
 		gpu_release_parked(r5_gfx9_user_seen());
 		gpu_dump_priv();
 		gpu_watchdog();
@@ -956,6 +960,33 @@ gpu_defer_reclaim(uint64 seen)
 		dprintf("radeon_hd: deferred page %llx reused\n",
 			(unsigned long long)page);
 		r5_gfx9_free_user_vram(page);
+	}
+}
+
+
+static void
+gpu_fault_retire()
+{
+	uint32 pasid = 0;
+	uint32 vmid = 0;
+	uint64 addr = 0;
+	while (r5_gfx9_fault_take(&pasid, &vmid, &addr)) {
+		gpu_client* found = NULL;
+		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+			if (scan->pasid != 0 && scan->pasid == pasid) {
+				found = scan;
+				break;
+			}
+		}
+		if (found == NULL) {
+			dprintf("radeon_hd: vm fault pasid %lu unknown addr %016llx\n",
+				(unsigned long)pasid, (unsigned long long)addr);
+			continue;
+		}
+		found->faulted = true;
+		dprintf("radeon_hd: vm fault pasid %lu vmid %lu addr %016llx\n",
+			(unsigned long)pasid, (unsigned long)vmid,
+			(unsigned long long)addr);
 	}
 }
 
@@ -1709,7 +1740,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	/* The file's page-table base is written after the room wait, so the
 	 * count includes one VM flush that touch() will make due. */
 	if (client->tree != NULL && dwords != 0)
-		dwords += r5_cs_vm_switch_words();
+		dwords += r5_cs_vm_switch_words(client->pasid);
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,

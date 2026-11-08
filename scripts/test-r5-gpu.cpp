@@ -754,6 +754,29 @@ main()
 			|| first != 0xffff800000001000ull || last != first)
 			return fail("ib last");
 	}
+	{
+		const char* faultQ[] = {
+			"sFaultQ[sFaultW].pasid = raw[3] & 0xffffu",
+			"sFaultQ[sFaultW].vmid = (raw[0] >> 24) & 0xfu",
+			"sFaultQ[sFaultW].addr = r5_gfx9_fault_address(raw[4], raw[5])",
+			"asm volatile(\"sfence\" ::: \"memory\")",
+			"sFaultW = next"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", faultQ, 5) != 0)
+			return 1;
+		const char* faultRetire[] = {
+			"r5_gfx9_fault_take(&pasid, &vmid, &addr)",
+			"scan->pasid == pasid",
+			"vm fault pasid %lu unknown addr",
+			"found->faulted = true"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", faultRetire, 4) != 0)
+			return 1;
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)
@@ -1342,35 +1365,43 @@ main()
 	}
 	{
 		uint32_t words[40];
-		uint32_t n = r5_cs_vm_switch(words, 40, 1, 0x812c18001ull,
+		uint32_t n = r5_cs_vm_switch(words, 40, 1, 0x42u, 0x812c18001ull,
 			0x9000ull, 7);
-		if (n != 26 || n != r5_cs_vm_switch_words())
+		if (n != 31 || n != r5_cs_vm_switch_words(0x42u))
 			return fail("vm switch words");
+		if (r5_cs_vm_switch_words(0) != 26u)
+			return fail("vm switch kernel");
 		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
 			|| words[4] != 7u || words[6] != 4u)
 			return fail("vm switch pipe");
+		if (words[7] != r5_cs_packet3(0x37, 3) || words[8] != 0x40100000u
+			|| words[9] != r5_cs_oss_reg(mmIH_VMID_0_LUT) + 1u
+			|| words[11] != 0x42u)
+			return fail("vm switch pasid");
 		/* gmc_v9_0_emit_flush_gpu_tlb, written by gfx_v9_0_ring_emit_wreg.
 		 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000.
 		 * VMID 1 is context 1: 0x2000 + 0x08ed and the next register.
 		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5. */
-		if (words[7] != r5_cs_packet3(0x37, 3) || words[8] != 0x40100000u
-			|| words[9] != 0x28edu || words[11] != 0x12c18001u
-			|| words[12] != r5_cs_packet3(0x37, 3) || words[13] != 0x40100000u
-			|| words[14] != 0x28eeu || words[16] != 0x8u)
+		if (words[12] != r5_cs_packet3(0x37, 3) || words[13] != 0x40100000u
+			|| words[14] != 0x28edu || words[16] != 0x12c18001u
+			|| words[17] != r5_cs_packet3(0x37, 3) || words[18] != 0x40100000u
+			|| words[19] != 0x28eeu || words[21] != 0x8u)
 			return fail("vm switch ptb");
 		/* gfx_v9_0_ring_emit_reg_write_reg_wait, me_fw_write_wait.
 		 * VMID 1 request is bit 1 plus the five invalidate bits. */
-		if (words[17] != r5_cs_packet3(0x3c, 5) || words[18] != 0x143u
-			|| words[19] != 0x28a3u || words[20] != 0x28b5u
-			|| words[21] != 0x007c0002u || words[22] != 0x2u
-			|| words[23] != 0x20u)
+		if (words[22] != r5_cs_packet3(0x3c, 5) || words[23] != 0x143u
+			|| words[24] != 0x28a3u || words[25] != 0x28b5u
+			|| words[26] != 0x007c0002u || words[27] != 0x2u
+			|| words[28] != 0x20u)
 			return fail("vm switch inv");
-		if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
+		if (words[29] != r5_cs_packet3(0x42, 0) || words[30] != 0)
 			return fail("vm switch pfp");
-		if (r5_cs_vm_switch(0, 0, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
+		if (r5_cs_vm_switch(0, 0, 0, 0x42u, 0x812c18001ull, 0x9000ull, 7) != 0)
 			return fail("vm switch vmid");
-		if (r5_cs_vm_switch(words, 40, 1, 0, 0x9000ull, 7) != 0)
+		if (r5_cs_vm_switch(words, 40, 1, 0x42u, 0, 0x9000ull, 7) != 0)
 			return fail("vm switch pd");
+		if (r5_cs_vm_switch(words, 40, 1, 0, 0x812c18001ull, 0x9000ull, 7) != 26u)
+			return fail("vm switch pasid0");
 		const char* tlbOrder[] = {
 			"r5_gfx9_vmid1_map(uint64 va, uint64 pte)",
 			"r5_gfx9_vmid1_touch()"

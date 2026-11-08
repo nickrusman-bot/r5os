@@ -534,29 +534,31 @@ r5_cs_gds_switch(uint32_t* out, uint32_t cap, uint32_t n, uint32_t vmid,
 /* Linux v6.12 amdgpu_vm_flush emits the pipeline sync first, then the
  * VM flush. gfx_v9_0_ring_emit_vm_flush then writes PACKET3(PFP_SYNC_ME, 0).
  * gmc_v9_0_use_invalidate_semaphore is true only for MMHUB, so this GFXHUB
- * sequence does not write VM_INVALIDATE_ENG0_SEM. PASID is not part of
- * this packet: 26 dwords. gfx_v9_0_check_fw_write_wait leaves
+ * sequence does not write VM_INVALIDATE_ENG0_SEM. A non-zero PASID adds
+ * gmc_v9_0_emit_pasid_mapping before the page-table base: 31 dwords.
+ * A zero PASID stays the 26-dword flush, so a kernel job is unchanged.
+ * gfx_v9_0_check_fw_write_wait leaves
  * me_fw_write_wait true in the default case, which is GC 9.3.
  * gfx_v9_0_ring_emit_wreg then writes a register with
  * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM (0x40100000). The invalidate
  * request and its ack are one WAIT_REG_MEM, as
  * gfx_v9_0_ring_emit_reg_write_reg_wait does when that flag is set. */
 static inline uint32_t
-r5_cs_vm_switch_words(void)
+r5_cs_vm_switch_words(uint32_t pasid)
 {
-	return 26u;
+	return pasid != 0 ? 31u : 26u;
 }
 
 
 static inline uint32_t
-r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
-	uint64_t fenceMc, uint64_t fenceSeq)
+r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint32_t pasid,
+	uint64_t pd, uint64_t fenceMc, uint64_t fenceSeq)
 {
 	uint32_t n = 0;
 	uint32_t inv;
 	uint32_t ack;
 	uint32_t lo;
-	if (vmid == 0 || vmid > 15u || pd == 0)
+	if (vmid == 0 || vmid > 15u || pd == 0 || pasid > 0xffffu)
 		return 0;
 	inv = r5_gfx9_tlb_req(vmid, 0);
 	ack = r5_gfx9_tlb_ack_mask(vmid);
@@ -571,6 +573,10 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	n = r5_cs_put(out, n, cap, (uint32_t)fenceSeq);
 	n = r5_cs_put(out, n, cap, 0xffffffffu);
 	n = r5_cs_put(out, n, cap, 4u);
+	/* gmc_v9_0_emit_pasid_mapping writes IH_VMID_n_LUT before the
+	 * page-table base. A zero PASID leaves the LUT packet out. */
+	if (pasid != 0)
+		n = r5_cs_pasid_map(out, cap, n, vmid, pasid);
 	/* gfx_v9_0_ring_emit_wreg on the GFX ring.
 	 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 3));
@@ -597,7 +603,7 @@ r5_cs_vm_switch(uint32_t* out, uint32_t cap, uint32_t vmid, uint64_t pd,
 	 * old translation. */
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x42, 0));
 	n = r5_cs_put(out, n, cap, 0);
-	if (n != r5_cs_vm_switch_words() || (out != 0 && n > cap))
+	if (n != r5_cs_vm_switch_words(pasid) || (out != 0 && n > cap))
 		return 0;
 	return n;
 }

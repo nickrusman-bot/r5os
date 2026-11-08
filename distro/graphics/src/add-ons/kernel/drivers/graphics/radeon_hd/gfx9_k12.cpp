@@ -346,6 +346,34 @@ publish()
 }
 
 
+struct r5_fault_note {
+	uint32		pasid;
+	uint32		vmid;
+	uint64		addr;
+};
+
+
+static r5_fault_note sFaultQ[32];
+static volatile uint32 sFaultW;
+static uint32 sFaultR;
+
+
+int
+r5_gfx9_fault_take(uint32* pasid, uint32* vmid, uint64* addr)
+{
+	if (pasid == NULL || vmid == NULL || addr == NULL)
+		return 0;
+	if (sFaultR == sFaultW)
+		return 0;
+	asm volatile("lfence" ::: "memory");
+	*pasid = sFaultQ[sFaultR].pasid;
+	*vmid = sFaultQ[sFaultR].vmid;
+	*addr = sFaultQ[sFaultR].addr;
+	sFaultR = (sFaultR + 1u) & 31u;
+	return 1;
+}
+
+
 static int32
 ih_handler(void* data)
 {
@@ -360,6 +388,22 @@ ih_handler(void* data)
 	uint32 walked = 0;
 	while (rptr != wptr && walked < (kIhBytes / 32)) {
 		r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(sIhRing + rptr);
+		/* Linux soc15_ih_clientid.h: VMC is 0x12, UTCL2 is 0x1b.
+		 * Source 0 is the fault. Queue only. The retire thread logs. */
+		if ((entry.client == 0x12u || entry.client == 0x1bu)
+			&& entry.source == 0) {
+			const uint32* raw = (const uint32*)(sIhRing + rptr);
+			uint32 next = (sFaultW + 1u) & 31u;
+			if (next != sFaultR) {
+				sFaultQ[sFaultW].pasid = raw[3] & 0xffffu;
+				sFaultQ[sFaultW].vmid = (raw[0] >> 24) & 0xfu;
+				sFaultQ[sFaultW].addr = r5_gfx9_fault_address(raw[4], raw[5]);
+				asm volatile("sfence" ::: "memory");
+				sFaultW = next;
+			}
+			r5_gpu_retire_wake();
+			woke = true;
+		} else {
 		if (sIhEntries < 4)
 			memcpy(sFirstRaw[sIhEntries], sIhRing + rptr, 32);
 		sIhEntries++;
@@ -406,6 +450,7 @@ ih_handler(void* data)
 					r5_gpu_retire_wake();
 				}
 			}
+		}
 		}
 		rptr = (rptr + 32) & (kIhBytes - 1);
 		walked++;
