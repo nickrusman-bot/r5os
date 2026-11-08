@@ -128,5 +128,7 @@ uint8* r5_gfx9_vram_cpu(uint64 offset);
 /* The BAR window. The K sequence and the HDP probe write use it. */
 uint8* r5_gfx9_vram_bar(uint64 offset);
 void r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count);
+/* gfx9_flush_fence. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_flush_fence(int on);
 
 #endif

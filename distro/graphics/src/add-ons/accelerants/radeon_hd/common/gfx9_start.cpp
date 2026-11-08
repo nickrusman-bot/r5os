@@ -2150,6 +2150,7 @@ static uint64 sUserSequence = 0;
 /* Linux ring->current_ctx. 0 valid means the next job is a switch. */
 static r5_cs_ring_ctx sRingCtx;
 static int sGpuDebug = 0;
+static int sFlushFence = 0;
 
 
 bool
@@ -2493,6 +2494,13 @@ r5_gfx9_set_debug(int on)
 }
 
 
+void
+r5_gfx9_set_flush_fence(int on)
+{
+	sFlushFence = on ? 1 : 0;
+}
+
+
 bool
 r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 	uint32 ctxId, int32* preambleSeen, uint64* _sequence)
@@ -2525,9 +2533,19 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 		return false;
 	uint64 pd = 0;
 	bool flush = r5_gfx9_vmid1_flush_due(&pd);
+	/* Sequence compares stay on the job number, which is the last
+	 * fence. The flush fence is the number before it. Compared with
+	 * >= or > in gpu_wait, the retire scan, the lost-client park, and
+	 * sHighestSequence. gpu_stage_pace_wait uses == on the job number,
+	 * so the earlier flush value does not finish that wait. */
+	int flushFence = sFlushFence && flush;
 	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
+	if (flushFence)
+		prefix += 12u;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint32 body = r5_cs_user_words(count);
+	if (flushFence)
+		body -= 4u;
 	uint32 total = body == 0 ? 0 : prefix + body
 		+ r5_cs_pad_dwords(wptr + prefix + body);
 	uint32 cap = flush ? 512u : 320u;
@@ -2539,18 +2557,24 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 	if (fenceMc == 0 || (fenceMc & 7ull) != 0)
 		return false;
 	uint64 irqMc = fenceMc + (kR5UserIrqOffset - kR5UserFenceOffset);
-	uint64 sequence = sUserSequence + 1;
+	uint64 flushSeq = sUserSequence + 1;
+	uint64 sequence = flushFence ? flushSeq + 1 : flushSeq;
 	uint32 cntx = r5_cs_cntx(haveSwitch, preamble);
 	uint32 packets[512];
 	uint32 switched = 0;
 	if (flush) {
 		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
 			sUserSequence);
+		if (flushFence) {
+			switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
+				flushSeq);
+		}
 		if (switched != prefix)
 			return false;
 	}
 	uint32 filled = r5_cs_user_body(packets + switched, cap - switched, ibVa,
-		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx);
+		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx,
+		flushFence ? 1u : 0u);
 	if (filled == 0)
 		return false;
 	filled += switched;

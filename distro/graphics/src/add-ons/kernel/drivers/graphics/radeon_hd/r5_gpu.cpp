@@ -93,8 +93,11 @@ gpu_cache_log_settings()
 			false, true);
 		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
 			false, true);
+		r5_gfx9_set_flush_fence(get_driver_boolean_parameter(settings,
+			"gfx9_flush_fence", false, true) ? 1 : 0);
 		unload_driver_settings(settings);
-	}
+	} else
+		r5_gfx9_set_flush_fence(0);
 	sDebugOn = debugOn ? 1 : 0;
 	sSelftestOn = selftestOn ? 1 : 0;
 }

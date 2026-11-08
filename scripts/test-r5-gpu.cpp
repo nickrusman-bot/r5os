@@ -149,7 +149,7 @@ linux_ring_frame()
 	}
 	uint32_t job[512];
 	uint32_t filled = r5_cs_user_body(job, 512, ibs, ibDw, ibVm, 2,
-		0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep);
+		0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
 	if (filled != body + 4u || job[0] != 0xc0008b00u || job[1] != 0
 		|| job[2] != 0xc0008b00u || job[3] != 0
 		|| job[5] != kR5CsCntxKeep) {
@@ -214,10 +214,10 @@ linux_ring_frame()
 	const uint32_t otherDw[] = { 4u, 8u };
 	uint32_t other[320];
 	uint32_t otherN = r5_cs_user_body(other, 320, otherIb, otherDw, ibVm, 2,
-		0xabc000ull, 9, 0xabd000ull, kR5CsCntxKeep);
+		0xabc000ull, 9, 0xabd000ull, kR5CsCntxKeep, 0);
 	uint32_t load[64];
 	uint32_t loadN = r5_cs_user_body(load, 64, otherIb, otherDw, ibVm, 1,
-		0xabc000ull, 9, 0xabd000ull, kR5CsCntxLoad);
+		0xabc000ull, 9, 0xabd000ull, kR5CsCntxLoad, 0);
 	if (loadN != r5_cs_user_words(1) || load[5] != kR5CsCntxLoad
 		|| load[6] != 0)
 		return fail("switch load");
@@ -588,7 +588,7 @@ main()
 	const uint64_t fenceMc = 0x812c18000ull + kR5UserFenceOffset;
 	const uint64_t irqMc = 0x812c18000ull + kR5UserIrqOffset;
 	uint32_t body = r5_cs_user_body(packet, 64, ibs, ibDw, ibVm, 1, fenceMc, 7,
-		irqMc, kR5CsCntxKeep);
+		irqMc, kR5CsCntxKeep, 0);
 	if (body != 33u || body != r5_cs_user_words(1))
 		return fail("frame size");
 	if (packet[0] != r5_cs_packet3(0x8b, 0) || packet[1] != 0
@@ -1124,6 +1124,25 @@ main()
 	#undef R5_GC9_WAS
 	if (r5_cs_gc_reg(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32) != 0x28ebu)
 		return fail("ptb packet address");
+	{
+		uint32_t fence[16];
+		uint32_t n = r5_cs_flush_fence(fence, 16, 0, 0x401040ull, 5);
+		uint32_t skipped[64];
+		uint64_t oneIb = 0x1000;
+		uint32_t oneDw = 4;
+		uint32_t oneVm = 1;
+		uint32_t plain = r5_cs_user_body(skipped, 64, &oneIb, &oneDw, &oneVm,
+			1, 0x66d000ull, 6, 0x401040ull, kR5CsCntxKeep, 1);
+		if (n != 12u || fence[0] != r5_cs_packet3(0x49, 6)
+			|| fence[1] != kR5CsEvent || fence[2] != kR5CsRel32Int
+			|| fence[3] != 0x401040u || fence[5] != 5u
+			|| fence[8] != r5_cs_packet3(0x8b, 0)
+			|| fence[10] != r5_cs_packet3(0x8b, 0))
+			return fail("flush fence");
+		if (plain + 4u != r5_cs_user_words(1)
+			|| skipped[0] != r5_cs_packet3(0x28, 1))
+			return fail("flush fence opens the frame");
+	}
 	if (r5_gfx9_inv_engines() != 18u)
 		return fail("inv engines");
 	if (r5_gfx9_inv_range_lo(0) != 0x8c7u

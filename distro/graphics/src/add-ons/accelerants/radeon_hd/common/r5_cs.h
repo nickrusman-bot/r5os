@@ -198,10 +198,11 @@ static inline uint32_t
 r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	const uint32_t* dwords, const uint32_t* vmid, uint32_t count,
 	uint64_t userFence, uint64_t sequence, uint64_t irqFence,
-	uint32_t cntx)
+	uint32_t cntx, uint32_t skipOpen)
 {
 	uint32_t n = 0;
 	uint32_t i;
+	uint32_t expect;
 	if (r5_cs_user_words(count) == 0 || ib == 0 || dwords == 0 || vmid == 0)
 		return 0;
 	if (cntx != r5_cs_cntx(0, 0) && cntx != r5_cs_cntx(1, 0)
@@ -210,12 +211,14 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 		&& cntx != r5_cs_cntx(1, kR5PreamblePresent | kR5PreambleFirst))
 		return 0;
 	/* Two SWITCH_BUFFER packets open the job, as in the capture.
-	 * When the page table changed, r5_cs_vm_switch is a prefix in
-	 * front of this frame. It is not part of these dwords. */
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
-	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
-	n = r5_cs_put(out, n, cap, 0);
+	 * gfx9_flush_fence moves that pair to after the flush fence, so
+	 * skipOpen leaves them out of this frame. */
+	if (skipOpen == 0) {
+		n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+		n = r5_cs_put(out, n, cap, 0);
+		n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+		n = r5_cs_put(out, n, cap, 0);
+	}
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x28, 1));
 	n = r5_cs_put(out, n, cap, cntx);
 	n = r5_cs_put(out, n, cap, 0);
@@ -250,8 +253,38 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
 	n = r5_cs_put(out, n, cap, 0);
-	if (n != r5_cs_user_words(count) || (out != 0 && n > cap))
+	expect = r5_cs_user_words(count);
+	if (skipOpen != 0) {
+		if (expect < 4u)
+			return 0;
+		expect -= 4u;
+	}
+	if (n != expect || (out != 0 && n > cap))
 		return 0;
+	return n;
+}
+
+
+/* Linux v6.12 gfx_v9_0.c:gfx_v9_0_ring_emit_fence with
+ * AMDGPU_FENCE_FLAG_INT, then the two SWITCH_BUFFER packets.
+ * The event word is the same CACHE_FLUSH_AND_INV_TS index 5 packet
+ * the job fence uses. 32-bit data, interrupt. 12 dwords. */
+static inline uint32_t
+r5_cs_flush_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
+	uint64_t seq)
+{
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x49, 6));
+	n = r5_cs_put(out, n, cap, kR5CsEvent);
+	n = r5_cs_put(out, n, cap, kR5CsRel32Int);
+	n = r5_cs_put(out, n, cap, (uint32_t)addr);
+	n = r5_cs_put(out, n, cap, (uint32_t)(addr >> 32));
+	n = r5_cs_put(out, n, cap, (uint32_t)seq);
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+	n = r5_cs_put(out, n, cap, 0);
 	return n;
 }
 
