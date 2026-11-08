@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### GFX9 settings from the Linux v6.12 hub and the ring
+
+Host tested, not booted. The register names come from the Linux v6.12 headers (`2a619add46`). `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free` default off. The context counter and the PASID are always on. With the settings off, the VM flush stays 26 dwords and the user frame still opens on `SWITCH_BUFFER`. `gfx9_vmid_per_file` is not read: each open file still needs its own root page table. The DE meta is not emitted: the IB preempt flag is still rejected, and the CSA is not mapped. R1a, R1b and R1c are not submitted. The only R5 wait of about 10 seconds on this path is the GFX watchdog, the same value as `amdgpu.lockup_timeout`. The table is in `docs/GRAPHICS.md`. QEMU is the boot check and has no Renoir.
+
 ### Stick 28 boot 1 draws the ordinary teapot, then loses the GPU on SAM
 
 The logs were read from the General UDisk at 00:50 Europe/Amsterdam on 8 Nov 2026. The volume stamps the files 01:33–01:34. There is one boot loader banner. Sign-in is uid 1001 at `system_time` 42458385. K0 landed the fence, K1 reported MSI 61, and K2 finished. `mark` was 0 ms and stage P `p1` through `p33` were ok. `vulkaninfo` named RADV Renoir. The ordinary teapot reached `vkQueueWaitIdle 0`, `pixels ok`, and `pixel-vram` `853b16ff`. SAM then returned `vkQueueWaitIdle -13`. The later teapot, stage selftest, and stage ib were skipped. There is no panic and no page fault. `usb_disk` opcode `0x35` failed three times, each with sense `0x05/0x24`. The syslog ends on the running desktop. Logs are `generated/boot-5625u-28/`.

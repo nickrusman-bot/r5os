@@ -287,6 +287,32 @@ The grab is not called from the submit path. `amdgpu_vm_init` gives each open fi
 
 `gfx9_deferred_free` defaults off. When it is on, a freed VRAM offset stays out of the allocator until the next user-job VM flush has been submitted and that fence has been seen. The retire thread prints the offset when it comes back. An unmap still clears the page-table entry at once. The list holds 256 offsets, one per buffer object. A full list frees that offset immediately.
 
+## REVIEW-39 section 2
+
+| # | Linux | R5 | Setting | Commit |
+|---|---|---|---|---|
+| H1 | `gfxhub_v1_0_program_invalidation` | read of engines 0 and 17 always; write behind the setting | `gfx9_inv_range` off | `b5c0df3d66` |
+| H2 | `init_tlb_regs` | the value already matches the field set | none | `2a619add46` names |
+| H3 | `init_cache_regs` | already written | none | `2a619add46` names |
+| H4 | `init_system_aperture_regs` | AGP base 0, identity offsets 0, migration retry. AGP bot and top are not written | `gfx9_hub_linux` off | `6226ff8f85` |
+| H5 | `enable_system_domain` | VMID 0 stays the K2 contract | none | unchanged |
+| H6 | `disable_identity_aperture` | the physical offsets are the hub setting | `gfx9_hub_linux` off | `6226ff8f85` |
+| H7 | `setup_vmid_config` | VMIDs 1–15 | `gfx9_vmids` off | `06480f993f` |
+| J1 | pipeline sync | unchanged | none | — |
+| J2 | `emit_vm_flush` | 26 dwords, unchanged | none | — |
+| J3 | fence after the VM flush | `RELEASE_MEM` then the job takes the next sequence | `gfx9_flush_fence` off | `98b0f8dd21` |
+| J4 | two `SWITCH_BUFFER` after that fence | they move with J3 | `gfx9_flush_fence` off | `98b0f8dd21` |
+| J5 | `COND_EXEC` and the DE meta | `COND_EXEC` only. The meta needs `AMDGPU_IB_FLAG_PREEMPT` and the CSA | `gfx9_cond_exec` off | `0dd5c153b6` |
+| J6 | HDP flush | no packet on this APU, same as Linux | none | — |
+| J7 | `dma_fence_context_alloc` | a counter that only goes up. 0 is the kernel | always | `c7304b3ae0` |
+| J8 | frame, user fence, ring fence | unchanged when the new settings are off | none | — |
+| J9 | `emit_gds_switch` | four `WRITE_DATA`s, once, sizes 0 | `gfx9_gds_switch` off | `cbee68e33d` |
+| J10 | `emit_mem_sync` | IB flags stay rejected | none | — |
+| J11 | `emit_pasid_mapping` | one PASID per open, LUT write when it changes | always | `040026c7c9` |
+| P1 | `amdgpu_vmid_grab` | the allocator is tested and not called | not read | `52a1f44b64` |
+| P2 | root and PASID per file | PASID is J11. The root is still one | not read | `040026c7c9`, `52a1f44b64` |
+| P3 | `amdgpu_vm_clear_freed` | VRAM offset waits for the next flush fence | `gfx9_deferred_free` off | `64f47ab138` |
+
 ## Self-test switch
 
 `R5_GPU_DEBUG_SWITCH` is accepted only while `gpu_debug` is on. It flushes VMID 1 and waits until the newest user fence has been seen, then sets the bits for `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free`. `gfx9_vmid_per_file` is refused. The line carries the time and the bits.
