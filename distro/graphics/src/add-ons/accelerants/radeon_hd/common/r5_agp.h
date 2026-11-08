@@ -30,19 +30,6 @@ struct r5_agp_aperture {
 };
 
 
-/* amdgpu_device.c:2139 amdgpu_device_init_apu_flags. CHIP_RENOIR:
- * 0x1636 and 0x164c are AMD_APU_IS_RENOIR, every other device of that
- * chip is AMD_APU_IS_GREEN_SARDINE. gfxhub_v1_0.c adds 1 to the aperture
- * high only for RAVEN2, RENOIR or GREEN_SARDINE. v6.12 uses the same
- * three flags. Raven2 is not in this table. */
-static inline int
-r5_gfx9_aperture_plus(uint32_t pciId)
-{
-	return pciId == 0x15e7u || pciId == 0x1636u || pciId == 0x1638u
-		|| pciId == 0x164cu;
-}
-
-
 /* MC_VM_FB_LOCATION_BASE__FB_BASE_MASK is the 24-bit field. The byte
  * address is that field shifted by 24, through the last byte of the
  * framebuffer. prepare_hw and the runtime switch both use this. */

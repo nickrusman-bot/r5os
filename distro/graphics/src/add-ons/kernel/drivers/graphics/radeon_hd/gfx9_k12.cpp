@@ -848,8 +848,7 @@ r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow, uint32 highNow)
 	r5_gfx9_k2_store();
 	if (!sHubLinux || sInfo == NULL)
 		return;
-	agp = r5_gfx9_agp_aperture(fbStart, fbEnd,
-		r5_gfx9_aperture_plus(sInfo->pciID));
+	agp = r5_gfx9_agp_aperture(fbStart, fbEnd, sInfo->aperturePlus);
 	knote("hub linux low now %08lx linux %08lx high now %08lx linux %08lx "
 		"bot %08lx top %08lx",
 		(unsigned long)lowNow, (unsigned long)agp.low,
@@ -1762,6 +1761,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	sHost.doorbellBytes = info.shared_info->doorbell_bytes;
 	sHost.cookie = &info;
 	r5_gfx9_set_hub_aperture(sHubLinux ? 1 : 0);
+	r5_gfx9_set_aperture_plus(info.aperturePlus);
 	r5_gfx9_set_hub_program(r5_gfx9_hub_program);
 	uint64 vramBytes = (uint64)info.shared_info->frame_buffer_size * 1024;
 	memset(&sResults, 0, sizeof(sResults));

@@ -150,6 +150,8 @@ void r5_gfx9_set_hub_linux(int on);
 typedef void (*r5_gfx9_hub_fn)(uint64 fbStart, uint64 fbEnd,
 	uint32 lowNow, uint32 highNow);
 void r5_gfx9_set_hub_aperture(int on);
+/* 1 when the device table says the aperture high adds 1. */
+void r5_gfx9_set_aperture_plus(int plus);
 void r5_gfx9_set_hub_program(r5_gfx9_hub_fn fn);
 void r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow,
 	uint32 highNow);

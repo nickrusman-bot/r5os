@@ -295,6 +295,8 @@ struct radeon_shared_info {
 	uint32			gfx9_owner;
 	char			gfx9_text[8192];
 	uint32			gfx9_text_used;
+	/* gfxhub aperture high + 1. Copied from the device table. */
+	uint8			aperturePlus;
 // SPDX-SnippetEnd
 };
 

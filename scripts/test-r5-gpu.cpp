@@ -1392,12 +1392,36 @@ main()
 			|| fbB != fbA + 256ull * 1024ull * 1024ull - 1ull
 			|| MC_VM_FB_LOCATION_BASE__FB_BASE_MASK != 0x00ffffffu)
 			return fail("fb range");
-		if (r5_gfx9_aperture_plus(0x1636u) != 1
-			|| r5_gfx9_aperture_plus(0x164cu) != 1
-			|| r5_gfx9_aperture_plus(0x15e7u) != 1
-			|| r5_gfx9_aperture_plus(0x1638u) != 1
-			|| r5_gfx9_aperture_plus(0x15ddu) != 0)
-			return fail("aperture plus ids");
+		{
+			const char* plusOrder[] = {
+				"gDeviceInfo[found]->aperturePlus = "
+					"kSupportedDevices[type].aperturePlus",
+				"info.shared_info->aperturePlus = info.aperturePlus",
+				"r5_gfx9_set_aperture_plus(info.aperturePlus)",
+				"sAperturePlus);",
+				"r5_gfx9_agp_aperture(fbStart, fbEnd, sInfo->aperturePlus)"
+			};
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/driver.cpp", plusOrder, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/radeon_hd.cpp", plusOrder + 1, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/gfx9_k12.cpp", plusOrder + 2, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+					"gfx9_start.cpp", plusOrder + 3, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/gfx9_k12.cpp", plusOrder + 4, 1) != 0)
+				return 1;
+		}
 		struct r5_agp_aperture above = r5_gfx9_agp_aperture(
 			0x1000000000000ull, 0x1000000000000ull, 1);
 		if (above.low != (uint32_t)(0xffffffffffffull >> 18))

@@ -78,6 +78,8 @@ struct radeon_info {
 	/* Filled once, when the PSP load reads the ucode headers. */
 	uint32			fw_version[32];
 	uint32			fw_feature[32];
+	/* gfxhub aperture high + 1. From kSupportedDevices. */
+	uint8			aperturePlus;
 // SPDX-SnippetEnd
 };
 

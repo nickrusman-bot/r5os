@@ -31,6 +31,7 @@ static uint64 sVramBytes = 0;
 static r5_gfx9_results* sResults = NULL;
 static bool sK0Ok = false;
 static int sHubAperture = 0;
+static int sAperturePlus = 0;
 static r5_gfx9_hub_fn sHubProgram = NULL;
 
 
@@ -38,6 +39,13 @@ void
 r5_gfx9_set_hub_aperture(int on)
 {
 	sHubAperture = on ? 1 : 0;
+}
+
+
+void
+r5_gfx9_set_aperture_plus(int plus)
+{
+	sAperturePlus = plus ? 1 : 0;
 }
 
 
@@ -1545,7 +1553,7 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 	 * any ring. Off leaves the widen below, which is the K0 path. */
 	if (sHubAperture && sHubProgram != NULL) {
 		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(frame, fbEnd,
-			r5_gfx9_aperture_plus(sPciId));
+			sAperturePlus);
 		sHubProgram(frame, fbEnd, aperLow, aperHigh);
 		lowNow = agp.low;
 		highNow = agp.high;

@@ -953,6 +953,7 @@ init_driver(void)
 		gDeviceInfo[found]->displayMinor = kSupportedDevices[type].displayMinor;
 		gDeviceInfo[found]->displayStepping = kSupportedDevices[type].displayStepping;
 		gDeviceInfo[found]->chipsetFlags = kSupportedDevices[type].chipsetFlags;
+		gDeviceInfo[found]->aperturePlus = kSupportedDevices[type].aperturePlus;
 
 		ERROR("%s: GPU(%" B_PRId32 ") %s, revision = 0x%x\n", __func__, found,
 			kSupportedDevices[type].deviceName, info->revision);
