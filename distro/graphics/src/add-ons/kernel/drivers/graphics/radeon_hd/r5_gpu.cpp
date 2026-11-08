@@ -26,6 +26,7 @@
 #include <kernel.h>
 
 #include <driver_settings.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
