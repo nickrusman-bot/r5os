@@ -219,4 +219,22 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 	return (leaf & (uint64_t)R5_GFX9_PTE_VALID) != 0;
 }
 
+
+/* Linux amdgpu_map_static_csa. The same physical pages and the same
+ * virtual address, written into this tree. */
+static inline int
+r5_csa_map_pages(r5_vm* vm, uint64_t va, const uint64_t* page,
+	uint32_t count, uint64_t flags)
+{
+	uint32_t i;
+	if (vm == NULL || page == NULL || count == 0 || (va & 0xfffull) != 0)
+		return 0;
+	for (i = 0; i < count; i++) {
+		if (!r5_vm_map_page(vm, va + (uint64_t)i * 4096ull,
+				page[i] | flags))
+			return 0;
+	}
+	return 1;
+}
+
 #endif

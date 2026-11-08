@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A file table maps the CSA
+
+`gfx9_vmid_per_file` stays off. When `gfx9_ce_meta` is on, each new file tree maps the same 128 KiB CSA at the same virtual address as the shared tree. The setting off leaves the tables alone. The host test maps that address in a new tree and reads the page back. There is no What's new section and `distro/BUILD` stays the same.
+
 ### An unmap stays in the tree that was mapped
 
 `gfx9_vmid_per_file` stays off. A mapped range stores its `r5_vm`. Map, unmap and lookup take that tree. There is no current tree, so closing one file does not clear the same virtual address in another file. The empty PTE stays `0x10` (not valid). The host test maps `0xffff800000001000` in two trees, clears the first, and the second page is unchanged. The ring order is unchanged. There is no What's new section and `distro/BUILD` stays the same.

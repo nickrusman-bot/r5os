@@ -1292,6 +1292,36 @@ main()
 			return fail("csa vaddr");
 		if (r5_vm_va_fits(r5_csa_vaddr(r5_gfx9_vm_size().max_pfn), 4096) != 0)
 			return fail("csa reserved");
+		{
+			static host_page csaPages[8];
+			int csaNext = 0;
+			alloc_state csaState = { csaPages, &csaNext };
+			r5_vm_page csaSlots[8];
+			r5_vm csaVm;
+			uint64_t pa = 0xabc000ull;
+			uint64_t csaVa = r5_csa_vaddr(r5_gfx9_vm_size().max_pfn);
+			uint64_t flags = (uint64_t)R5_GFX9_PTE_VALID
+				| (uint64_t)R5_GFX9_PTE_READABLE
+				| (uint64_t)R5_GFX9_PTE_WRITEABLE;
+			uint64_t got = 0;
+			memset(&csaVm, 0, sizeof(csaVm));
+			csaVm.pages = csaSlots;
+			csaVm.capacity = 8;
+			csaVm.alloc = alloc;
+			csaVm.cookie = &csaState;
+			if (!r5_csa_map_pages(&csaVm, csaVa, &pa, 1u, flags))
+				return fail("csa map");
+			if (!r5_vm_lookup(&csaVm, csaVa, &got) || got != (pa | flags))
+				return fail("csa page");
+			const char* csaOrder[] = {
+				"r5_gfx9_csa_into(vm)",
+				"return true;"
+			};
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/gfx9_k12.cpp", csaOrder, 2) != 0)
+				return 1;
+		}
 		if (r5_vm_va_fits(0xffffffffffbfd000ull, 4096) == 0)
 			return fail("high page");
 		if (r5_vm_va_fits(R5_GPU_VA_OFFSET, 4096) == 0

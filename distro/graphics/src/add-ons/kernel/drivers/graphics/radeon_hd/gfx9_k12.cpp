@@ -1540,9 +1540,11 @@ r5_gfx9_vmid1_setup()
 
 
 /* amdgpu_allocate_static_csa plus amdgpu_map_static_csa. One 128 KiB
- * VRAM buffer, zeroed, mapped at r5_csa_vaddr in this VM. Off leaves
- * the page tables alone. Per-file trees map the same buffer. */
+ * VRAM buffer, zeroed, mapped at r5_csa_vaddr. Off leaves the page
+ * tables alone. Each file tree maps these same physical pages. */
 static bool sCsaMapped = false;
+static uint64 sCsaVa = 0;
+static uint64 sCsaPa[32];
 
 
 static void
@@ -1568,13 +1570,38 @@ r5_gfx9_csa_map(void)
 		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
 	for (page = 0; page < 32u; page++) {
 		uint64 pa = r5_gpu_carveout_base(fb) + offset + (uint64)page * 4096ull;
+		sCsaPa[page] = pa;
 		if (!r5_gfx9_vmid1_map(va + (uint64)page * 4096ull, pa | flags)) {
 			knote("csa fail map");
 			return;
 		}
 	}
+	sCsaVa = va;
 	sCsaMapped = true;
 	knote("csa %016llx", (unsigned long long)va);
+}
+
+
+/* The shared tree is mapped in r5_gfx9_csa_map. A file tree gets the
+ * same pages. ce meta off has no buffer, so the tree is left alone. */
+static bool
+r5_gfx9_csa_into(r5_vm* vm)
+{
+	uint64 flags;
+	if (!r5_gfx9_ce_meta_on())
+		return true;
+	if (!sCsaMapped)
+		r5_gfx9_csa_map();
+	if (!sCsaMapped || vm == NULL)
+		return false;
+	if (vm == &sVm)
+		return true;
+	flags = (uint64)R5_GFX9_PTE_VALID | (uint64)R5_GFX9_PTE_READABLE
+		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
+	if (!r5_csa_map_pages(vm, sCsaVa, sCsaPa, 32u, flags))
+		return false;
+	r5_gfx9_vmid1_touch();
+	return true;
 }
 
 
@@ -1641,6 +1668,8 @@ r5_gfx9_file_vm_init(r5_vm* vm, r5_vm_page* pages, uint32 capacity)
 	if (!r5_vm_new_page(vm, 0))
 		return false;
 	if (!r5_gfx9_pde_aligned(vm->pages[0].physical))
+		return false;
+	if (!r5_gfx9_csa_into(vm))
 		return false;
 	return true;
 }
