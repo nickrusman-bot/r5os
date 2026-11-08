@@ -1945,6 +1945,23 @@ main()
 		return fail("stage r1 opcode");
 	if (R5_GPU_LOG_REGS != R5_GPU_OP_BASE + 27u)
 		return fail("log regs opcode");
+	if (R5_GPU_GET_COUNTERS != R5_GPU_OP_BASE + 28u)
+		return fail("counters opcode");
+	{
+		r5_gpu_counters same;
+		memset(&same, 0, sizeof(same));
+		same.bo_count = 3;
+		same.pt_pages = 9;
+		same.vmids = 1;
+		same.trees = 2;
+		same.tree_pages = 256;
+		r5_gpu_counters other = same;
+		other.tree_pages = 0;
+		if (r5_gpu_counters_match(&same, &same) != 1
+			|| r5_gpu_counters_match(&same, &other) != 0
+			|| r5_gpu_counters_match(0, &same) != 0)
+			return fail("counters");
+	}
 	if (R5_GPU_SWITCH_CE_META != 256u)
 		return fail("ce switch bit");
 	{

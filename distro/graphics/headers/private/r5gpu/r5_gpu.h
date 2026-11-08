@@ -52,7 +52,9 @@ enum {
 	/* R1 remap test. Older callers never send this opcode. */
 	R5_GPU_STAGE_R1 = R5_GPU_OP_BASE + 26,
 	/* Read-only register and setting print for the self-test. */
-	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27
+	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27,
+	/* Counts only. Older callers never send this opcode. */
+	R5_GPU_GET_COUNTERS = R5_GPU_OP_BASE + 28
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -463,6 +465,41 @@ static inline uint64_t
 r5_gpu_carveout_base(uint32_t fbOffset)
 {
 	return (uint64_t)(fbOffset & 0x00ffffffu) << 24;
+}
+
+/* Live objects. The *_space fields are this open file. The others are
+ * the whole device. trees and tree_pages are the per-file page tables. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	bo_count;
+	uint32_t	bo_count_space;
+	uint32_t	pt_pages;
+	uint32_t	pt_pages_space;
+	uint32_t	vmids;
+	uint32_t	vmids_space;
+	uint32_t	trees;
+	uint32_t	trees_space;
+	uint32_t	tree_pages;
+	uint32_t	tree_pages_space;
+} r5_gpu_counters;
+
+static inline int
+r5_gpu_counters_match(const r5_gpu_counters* before,
+	const r5_gpu_counters* after)
+{
+	if (before == 0 || after == 0)
+		return 0;
+	return before->bo_count == after->bo_count
+		&& before->bo_count_space == after->bo_count_space
+		&& before->pt_pages == after->pt_pages
+		&& before->pt_pages_space == after->pt_pages_space
+		&& before->vmids == after->vmids
+		&& before->vmids_space == after->vmids_space
+		&& before->trees == after->trees
+		&& before->trees_space == after->trees_space
+		&& before->tree_pages == after->tree_pages
+		&& before->tree_pages_space == after->tree_pages_space;
 }
 
 #endif

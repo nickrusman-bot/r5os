@@ -3721,6 +3721,55 @@ gpu_file_root(gpu_client* client)
 
 
 static status_t
+gpu_get_counters(gpu_client* client, void* buffer, size_t length)
+{
+	if (client == NULL || buffer == NULL || length < sizeof(r5_gpu_counters))
+		return B_BAD_VALUE;
+	if (!is_user_address_range(buffer, sizeof(r5_gpu_counters)))
+		return B_BAD_ADDRESS;
+	r5_gpu_counters out;
+	memset(&out, 0, sizeof(out));
+	out.size = (uint32)sizeof(out);
+	out.version = 1;
+	gpu_lock();
+	r5_vm* shared = r5_gfx9_shared_vm();
+	uint32 sharedPages = shared != NULL ? shared->used : 0;
+	uint32 trees = 0;
+	uint32 treePages = 0;
+	uint32 treeUsed = 0;
+	for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+		if (scan->tree == NULL)
+			continue;
+		trees++;
+		treePages += scan->tree->pagesN;
+		treeUsed += scan->tree->vm.used;
+	}
+	for (uint32 i = 0; i < kMaxBo; i++) {
+		if (!sBo[i].live)
+			continue;
+		out.bo_count++;
+		if (sBo[i].owner == client)
+			out.bo_count_space++;
+	}
+	out.pt_pages = sharedPages + treeUsed;
+	out.vmids = 1u + trees;
+	out.trees = trees;
+	out.tree_pages = treePages;
+	if (client->tree != NULL) {
+		out.pt_pages_space = client->tree->vm.used;
+		out.vmids_space = 1;
+		out.trees_space = 1;
+		out.tree_pages_space = client->tree->pagesN;
+	} else
+		out.pt_pages_space = sharedPages;
+	gpu_unlock();
+	if (user_memcpy(buffer, &out, sizeof(out)) != B_OK)
+		return B_BAD_ADDRESS;
+	return B_OK;
+}
+
+
+static status_t
 gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	gpu_client* client = (gpu_client*)cookie;
@@ -3728,6 +3777,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		return B_BAD_VALUE;
 	if (op == R5_GPU_GET_INFO)
 		return gpu_get_info(client, buffer, length);
+	if (op == R5_GPU_GET_COUNTERS)
+		return gpu_get_counters(client, buffer, length);
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)

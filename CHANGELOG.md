@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Buffers, page tables and VMIDs are counted
+
+`gfx9_vmid_per_file` stays off. `R5_GPU_GET_COUNTERS` is a new call at the end of the opcode list. It reports buffer objects, page-table pages and VMIDs for the open file and for the whole device, and the file trees and the pages those trees hold. The kill stage prints `counters back` when the counts match the reading from before the kill, and the difference when they do not. The host test checks that match, including a tree-page change. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Only the hung file is guilty
 
 `gfx9_vmid_per_file` stays off. After the watchdog, every open file sees the lost device. `R5_GPU_CAP_GUILTY` is set only on the file whose job was the oldest still in the ring, or whose PASID faulted. QUERY_STATE2 reports an innocent reset to the other files. The host test checks that lost without guilty is not a guilty query, and that both bits together are. There is no What's new section and `distro/BUILD` stays the same.
