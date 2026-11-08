@@ -125,6 +125,9 @@ static uint32 sVmidEndHi[15];
 
 /* The values before gfx9_inv_range and gfx9_hub_linux write. The first
  * call wins, so a later program does not replace the restore copy. */
+static uint32 gc_byte(uint32 index);
+static uint32 kread(void* cookie, uint32 offset);
+
 static void
 r5_gfx9_k2_store(void)
 {
