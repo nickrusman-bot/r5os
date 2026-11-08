@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Boot icons are in the boot header
+
+The boot loader reads `kSplashIcons24BitCompressedImage` from `images-sans-tm.h`. That header is checked in, and jam does not rebuild it. Copying `splash_icons.png` into `data/artwork/boot_splash/` never reached the screen. The seven Haiku stage icons now live as SVG in `distro/artwork/boot_splash/icons-src/`, rendered once to 160 px PNGs. The generator builds the 308×80 white strip and `splash_icons.bgr` from those PNGs. Apply compresses that BGR into the header, next to the logo. Width and height stay 308 and 80. The 8-bit image is unchanged. `haiku-splash-icons.png` is gone. `distro/BUILD` stays 10049.
+
 ### About R5 opens at the mockup width
 
 The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. That width is the window. The content minimum is the same width minus the two big insets, so the insets are not added a second time. The heading stays together; the glue takes the extra width. `distro/BUILD` stays 10049.
