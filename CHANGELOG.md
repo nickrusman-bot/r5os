@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
+
+Review points A1–A7 and M1 of the usb_audio and usb_midi review (8 Nov 2026). Branch `claude/usb-audio-midi-fixes`.
+
+- **Kernel safety (A1–A3).** `B_MULTI_GET_MIX` / `B_MULTI_SET_MIX` sized an `alloca` from the caller's `item_count` and copied from an unchecked pointer. `B_MULTI_GET_BUFFERS` sized two kernel stack arrays from the caller, and each stream wrote two entries even for a smaller request. `B_MULTI_GET_DESCRIPTION` wrote back to an unchecked pointer, a negative channel count became a huge copy, and the mix-control trace loop read past its allocation. Counts are capped (1024 mix items, 32 buffer descriptors), user pointers are checked, and the mix values use `malloc`.
+- **USB MIDI SysEx (M1).** A SysEx write of one or two bytes subtracted three from the counters, wrapped them, and filled packets past `out_buffer`. A three-byte SysEx went out as CIN 4 instead of CIN 7. Each packet's CIN and length now come from the bytes left in the message (`usb_midi_sysex_packet()`).
+- **No sleep in the USB callback (A6).** The stream callback slept 1 ms after every failed transfer, in the USB stack's finisher thread, forever. It now stops the stream after 32 failures in a row. The next buffer exchange starts it again.
+- **Packet timing (A4, A5).** A packet is one service interval (1 ms full speed, 125 µs high speed, times 2^(bInterval-1)), not always 1 ms. A high-speed 48 kHz device got 56000 frames a second, and 44.1 kHz was sent as 44 kHz (0.23 % slow, a click every few seconds). Buffers are now a whole number of packets with an exact frame count, with 44/45-frame packets at 44.1 kHz. Recording packets ask for a full `wMaxPacketSize`, and what arrives is joined into exactly one buffer of frames; a short buffer repeats its last frame. An alternate that needs more than bits 0–10 of `wMaxPacketSize` is refused, because Haiku's XHCI driver refuses those packets.
+- **UAC 2.0 rates (A7).** The rate list was a fixed 44.1–96 kHz. The driver now follows the terminal's clock entity through selectors and multipliers to the clock source, asks it for RANGE, and offers those rates. `SET_CUR` goes to that clock source. With no clock source it refuses instead of sending clock 0.
+
+Limits: the bus speed is guessed (UAC 2.0 counts as high speed; a UAC 1.0 alternate is high speed when 1 ms of audio does not fit its packet). Haiku's EHCI driver spreads a transfer evenly over its packets, so 44.1 kHz on a high-speed device behind EHCI is still not exact. Recording drift is handled by repeating or dropping frames, not by resampling. Not done: A8 (buffer exchange can hang on unplug), A9 (second stream in one direction), M2 (empty serial number).
+
+Tested: three host tests (`scripts/test-usb-audio-packets.cpp`, `scripts/test-usb-audio-range.cpp`, `scripts/test-usb-midi-sysex.cpp`) pass with AddressSanitizer and UBSan, and two deliberate faults in the packet helper made the first one fail. The changed usb_audio and usb_midi sources compile with the x86_64 Haiku cross compiler. Not tested: no jam image, no boot, no USB audio or MIDI device.
+
 ### Boot icons are in the boot header
 
 The boot loader reads `kSplashIcons24BitCompressedImage` from `images-sans-tm.h`. That header is checked in, and jam does not rebuild it. Copying `splash_icons.png` into `data/artwork/boot_splash/` never reached the screen. The seven Haiku stage icons now live as SVG in `distro/artwork/boot_splash/icons-src/`, rendered once to 160 px PNGs. The generator builds the 308×80 white strip and `splash_icons.bgr` from those PNGs. Apply compresses that BGR into the header, next to the logo. Width and height stay 308 and 80. The 8-bit image is unchanged. `haiku-splash-icons.png` is gone. `distro/BUILD` stays 10049.
