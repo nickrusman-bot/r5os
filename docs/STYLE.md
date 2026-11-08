@@ -5,6 +5,7 @@ How preference windows and account cards should look. Haiku controls, panel gray
 ## Forms
 
 - The window background is the normal panel (`B_PANEL_BACKGROUND_COLOR`). Do not put a white document card behind a form.
+- A heading or a summary (About, Information, an account) may sit in a `BCard` (`docs/APPEARANCE-KIT.md`). A form stays on the panel.
 - Labels share one column and are right-aligned. Values share the next column, start on the same vertical line, and are left-aligned.
 - A label and its field sit on one row and share that row's vertical center. A text field is one line high.
 - Do not let a grid row grow with the window or with a tall neighbor (an avatar, a list). Extra space is glue outside the form. Pin the text view's max height to one line.
