@@ -678,11 +678,15 @@ main()
 
 	const char* selftestOrder[] = {
 		"highVa, false",
+		"stage_regs(out)",
+		"stage_r1(out)",
+		"R5_GPU_SWITCH_INV_RANGE",
 		"stage_r1(out)",
 		"\"vulkaninfo\"",
 		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
+		"R5_GPU_SWITCH_FLUSH_FENCE",
 		"stage_selftest(out)",
 		"highVa, true"
 	};
@@ -711,7 +715,7 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 8) != 0)
+			selftestOrder, 12) != 0)
 		return 1;
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
@@ -1510,6 +1514,8 @@ main()
 		return fail("debug switch opcode");
 	if (R5_GPU_STAGE_R1 != R5_GPU_OP_BASE + 26u)
 		return fail("stage r1 opcode");
+	if (R5_GPU_LOG_REGS != R5_GPU_OP_BASE + 27u)
+		return fail("log regs opcode");
 	if (R5_GPU_SWITCH_CE_META != 256u)
 		return fail("ce switch bit");
 	{

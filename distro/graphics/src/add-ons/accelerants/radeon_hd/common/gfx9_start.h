@@ -165,6 +165,9 @@ int r5_gfx9_gds_switch_on(void);
 int r5_gfx9_pasid_map_on(void);
 /* -1 leaves that setting. 0 restores the K2 values. 1 programs them. */
 void r5_gfx9_switch_registers(int inv, int hub, int vmids);
+/* Read-only print of the invalidation ranges, the L1 TLB, AGP, the
+ * system aperture, and the live settings. */
+void r5_gfx9_log_state(const char* when);
 /* The file last written into the IH LUT for this VMID. */
 uint64 r5_gfx9_file_for_vmid(uint32 vmid);
 uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);

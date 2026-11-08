@@ -251,21 +251,21 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 }
 
 
-static void
+static int
 run_stage(FILE* out, const char* title, const char* command, int seconds)
 {
 	stage_at(out, title);
 	int fds[2];
 	if (pipe(fds) != 0) {
 		fprintf(out, "not available, %s\n", strerror(errno));
-		return;
+		return 1;
 	}
 	pid_t pid = fork();
 	if (pid < 0) {
 		close(fds[0]);
 		close(fds[1]);
 		fprintf(out, "not available, %s\n", strerror(errno));
-		return;
+		return 1;
 	}
 	if (pid == 0) {
 		setpgid(0, 0);
@@ -320,6 +320,11 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 	if (!killed && ended)
 		fprintf(out, "exit %d\n", status);
 	fflush(out);
+	if (killed || !ended)
+		return 1;
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+		return 0;
+	return 1;
 }
 
 
@@ -410,6 +415,44 @@ stage_p(FILE* out)
 
 
 static void
+stage_regs(FILE* out)
+{
+	stage_at(out, "registers");
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd < 0) {
+		fprintf(out, "not available, no supported GPU\n");
+		fflush(out);
+		return;
+	}
+	int ret = ioctl(fd, R5_GPU_LOG_REGS, NULL, 0);
+	fprintf(out, "R5_GPU_LOG_REGS %d errno %d\n", ret, errno);
+	close(fd);
+	fflush(out);
+}
+
+
+static void
+stage_switch(FILE* out, const char* name, uint32_t which)
+{
+	stage_at(out, name);
+	r5_gpu_debug_switch in;
+	memset(&in, 0, sizeof(in));
+	in.size = (uint32_t)sizeof(in);
+	in.version = 1;
+	in.which = which;
+	in.on = 1;
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	int ret = -1;
+	if (fd >= 0)
+		ret = ioctl(fd, R5_GPU_DEBUG_SWITCH, &in, sizeof(in));
+	fprintf(out, "R5_GPU_DEBUG_SWITCH %s %d errno %d\n", name, ret, errno);
+	if (fd >= 0)
+		close(fd);
+	fflush(out);
+}
+
+
+static void
 stage_r1(FILE* out)
 {
 	stage_at(out, "R1");
@@ -493,11 +536,9 @@ main()
 			highVa = reported->high_va_offset;
 		stage_bo(out, lowVa, highVa, false);
 		stage_p(out);
-		if (device_lost())
-			skip_lost(out, "R1");
-		else
-			stage_r1(out);
 		if (device_lost()) {
+			skip_lost(out, "registers");
+			skip_lost(out, "R1");
 			skip_lost(out, "vulkaninfo");
 			skip_lost(out, "VulkanTeapot");
 			skip_lost(out, "VulkanTeapot (sam)");
@@ -505,31 +546,56 @@ main()
 			skip_lost(out, "selftest");
 			skip_lost(out, "ib");
 		} else {
-		run_stage(out, "vulkaninfo", "/bin/vulkaninfo --summary 2>&1", 120);
-		if (device_lost()) {
-			skip_lost(out, "VulkanTeapot");
-			skip_lost(out, "VulkanTeapot (sam)");
-			skip_lost(out, "VulkanTeapot");
-			skip_lost(out, "selftest");
-			skip_lost(out, "ib");
-		} else {
-			run_stage(out, "VulkanTeapot",
-				"/bin/VulkanTeapot --selftest 2>&1", 120);
+			stage_regs(out);
+			stage_r1(out);
 			if (device_lost()) {
+				skip_lost(out, "vulkaninfo");
+				skip_lost(out, "VulkanTeapot");
 				skip_lost(out, "VulkanTeapot (sam)");
 				skip_lost(out, "VulkanTeapot");
 				skip_lost(out, "selftest");
 				skip_lost(out, "ib");
 			} else {
-				run_stage(out, "VulkanTeapot (sam)",
-					"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1", 120);
+				stage_switch(out, "gfx9_inv_range", R5_GPU_SWITCH_INV_RANGE);
+				stage_r1(out);
 				if (device_lost()) {
+					skip_lost(out, "vulkaninfo");
+					skip_lost(out, "VulkanTeapot");
+					skip_lost(out, "VulkanTeapot (sam)");
+					skip_lost(out, "VulkanTeapot");
+					skip_lost(out, "selftest");
+					skip_lost(out, "ib");
+				} else if (run_stage(out, "vulkaninfo",
+						"/bin/vulkaninfo --summary 2>&1", 120) != 0
+					|| device_lost()) {
+					skip_lost(out, "VulkanTeapot");
+					skip_lost(out, "VulkanTeapot (sam)");
 					skip_lost(out, "VulkanTeapot");
 					skip_lost(out, "selftest");
 					skip_lost(out, "ib");
 				} else {
-					run_stage(out, "VulkanTeapot",
+					int pass = run_stage(out, "VulkanTeapot",
 						"/bin/VulkanTeapot --selftest 2>&1", 120);
+					if (pass == 0 && !device_lost())
+						pass = run_stage(out, "VulkanTeapot (sam)",
+							"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
+							120);
+					if (pass == 0 && !device_lost())
+						pass = run_stage(out, "VulkanTeapot",
+							"/bin/VulkanTeapot --selftest 2>&1", 120);
+					if (pass != 0 && !device_lost()) {
+						stage_switch(out, "gfx9_flush_fence",
+							R5_GPU_SWITCH_FLUSH_FENCE);
+						pass = run_stage(out, "VulkanTeapot",
+							"/bin/VulkanTeapot --selftest 2>&1", 120);
+						if (pass == 0 && !device_lost())
+							pass = run_stage(out, "VulkanTeapot (sam)",
+								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
+								120);
+						if (pass == 0 && !device_lost())
+							run_stage(out, "VulkanTeapot",
+								"/bin/VulkanTeapot --selftest 2>&1", 120);
+					}
 					if (device_lost()) {
 						skip_lost(out, "selftest");
 						skip_lost(out, "ib");
@@ -542,7 +608,6 @@ main()
 					}
 				}
 			}
-		}
 		}
 	}
 	fclose(out);

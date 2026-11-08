@@ -789,6 +789,33 @@ r5_gfx9_inv_range_program(void)
 }
 
 
+void
+r5_gfx9_log_state(const char* when)
+{
+	if (sInfo == NULL || when == NULL)
+		return;
+	dprintf("radeon_hd: t %lld regs %s "
+		"inv0 %08lx %08lx inv17 %08lx %08lx "
+		"l1 %08lx agp %08lx %08lx aper %08lx %08lx "
+		"inv %d hub %d vmids %d fence %d cond %d gds %d pasid %d ce %d\n",
+		(long long)system_time(), when,
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_lo(0))),
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_hi(0))),
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_lo(17))),
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_hi(17))),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_MX_L1_TLB_CNTL)),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BOT)),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_TOP)),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
+		(unsigned long)kread(sInfo,
+			gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)),
+		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(), r5_gfx9_vmids_on(),
+		r5_gfx9_flush_fence_on(), r5_gfx9_cond_exec_on(),
+		r5_gfx9_gds_switch_on(), r5_gfx9_pasid_map_on(),
+		r5_gfx9_ce_meta_on());
+}
+
+
 static void
 r5_gfx9_inv_range_restore(void)
 {

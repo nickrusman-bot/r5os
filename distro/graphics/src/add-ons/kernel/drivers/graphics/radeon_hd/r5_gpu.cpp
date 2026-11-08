@@ -3521,7 +3521,10 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		}
 	} else if (op == R5_GPU_DEBUG_SWITCH)
 		status = gpu_debug_switch(buffer, length);
-	else if (op == R5_GPU_STAGE_R1) {
+	else if (op == R5_GPU_LOG_REGS) {
+		r5_gfx9_log_state("selftest");
+		status = B_OK;
+	} else if (op == R5_GPU_STAGE_R1) {
 		if (sLost) {
 			dprintf("radeon_hd: skipped, gpu lost\n");
 			status = ECANCELED;
