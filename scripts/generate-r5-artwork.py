@@ -5,14 +5,15 @@
 
 Outputs all 21 brand kit files into `distro/artwork/brand-kit/` and writes the
 master vector `distro/artwork/r5-symbol.svg`. Pass `--install` to also overwrite
-the active `r5-os-deskbar.png`, `r5-os-logo.png`, `r5-os-splash.png`, and
-`r5-os-splash.bgr` in `distro/artwork/`.
+the active `r5-os-deskbar.png`, `r5-os-logo.png`, `r5-os-splash.png`,
+`r5-os-splash.bgr`, and `splash_icons.png` in `distro/artwork/`.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import pathlib
+import struct
 import re
 import shutil
 import sys
@@ -331,16 +332,16 @@ def render_horizontal_lockup(
 # --- 3. Boot Splash Generator (exact 372x96 PNG + 24-bit BGR raw) ---
 
 def render_boot_splash() -> tuple[Image.Image, bytes]:
-    """Render the exact 372x96 boot splash matching the About R5 header lockup on black."""
+    """372×96 lockup on white. Dark text, no border."""
     W, H = 372, 96
     ss = 4
     sw, sh = W * ss, H * ss
 
-    img = Image.new("RGBA", (sw, sh), (0, 0, 0, 255))
+    img = Image.new("RGBA", (sw, sh), (255, 255, 255, 255))
     draw = ImageDraw.Draw(img)
 
     icon_px = 58 * ss
-    pebble = render_wave_pebble(icon_px, mode="color", with_shadow=False)
+    pebble = render_wave_pebble(icon_px, mode="color", with_shadow=True)
     icon_x = 22 * ss
     icon_y = (sh - icon_px) // 2
     img.alpha_composite(pebble, (icon_x, icon_y))
@@ -354,12 +355,12 @@ def render_boot_splash() -> tuple[Image.Image, bytes]:
     text_x = icon_x + icon_px + 14 * ss
     baseline_y = int(round(sh * 0.60))
 
-    draw.text((text_x, baseline_y), "R5", font=font_r5, fill=(255, 255, 255, 255), anchor="ls")
+    draw.text((text_x, baseline_y), "R5", font=font_r5, fill=(15, 23, 42, 255), anchor="ls")
     draw.text(
         (text_x + r5_w + 8 * ss, baseline_y),
         "Operating System",
         font=font_os,
-        fill=(203, 213, 225, 255),
+        fill=(51, 65, 85, 255),
         anchor="ls",
     )
 
@@ -369,6 +370,156 @@ def render_boot_splash() -> tuple[Image.Image, bytes]:
     bgr_bytes = bgr_img.tobytes()
     assert len(bgr_bytes) == 372 * 96 * 3
     return final_png, bgr_bytes
+
+
+HAIKU_SPLASH_ICONS = ROOT / "distro" / "artwork" / "haiku-splash-icons.png"
+# Icon 4 of the 308×80 strip. The leaf sits in this box of each 40×40 tile.
+SPLASH_DISK_INDEX = 3
+SPLASH_LEAF_BOX = (5, 21, 18, 34)
+
+
+def _near_black(pixel: tuple[int, int, int]) -> bool:
+    return max(pixel) < 16
+
+
+def lift_splash_icons_off_black(source: Image.Image) -> Image.Image:
+    """The Haiku strip is painted on black. The rim is a few pixels of that
+    color mixed with black. Recover the coverage and put the tiles on white."""
+    rgb = source.convert("RGB")
+    width, height = rgb.size
+    pixels = rgb.load()
+    output = Image.new("RGB", (width, height), (255, 255, 255))
+    out = output.load()
+    # The rounded plate fades across three pixels. Farther than that is the icon.
+    rim = 3
+    distance = [[rim + 1] * width for _ in range(height)]
+    # Only the black around the tiles. Black inside an icon stays part of the icon.
+    seen = [[False] * width for _ in range(height)]
+    pending = []
+    for y in range(height):
+        for x in range(width):
+            if x not in (0, width - 1) and y not in (0, height - 1):
+                continue
+            if not _near_black(pixels[x, y]) or seen[y][x]:
+                continue
+            seen[y][x] = True
+            pending.append((x, y))
+    head = 0
+    while head < len(pending):
+        x, y = pending[head]
+        head += 1
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                nx, ny = x + dx, y + dy
+                if nx < 0 or ny < 0 or nx >= width or ny >= height or seen[ny][nx]:
+                    continue
+                if not _near_black(pixels[nx, ny]):
+                    continue
+                seen[ny][nx] = True
+                pending.append((nx, ny))
+    for y in range(height):
+        for x in range(width):
+            if seen[y][x]:
+                distance[y][x] = 0
+    head = 0
+    while head < len(pending):
+        x, y = pending[head]
+        head += 1
+        step = distance[y][x] + 1
+        if step > rim:
+            continue
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                nx, ny = x + dx, y + dy
+                if nx < 0 or ny < 0 or nx >= width or ny >= height:
+                    continue
+                if distance[ny][nx] <= step:
+                    continue
+                distance[ny][nx] = step
+                pending.append((nx, ny))
+
+    for y in range(height):
+        for x in range(width):
+            color = pixels[x, y]
+            if distance[y][x] == 0:
+                continue
+            if distance[y][x] > rim:
+                out[x, y] = color
+                continue
+            neighbors = []
+            for dy in range(-5, 6):
+                for dx in range(-5, 6):
+                    nx, ny = x + dx, y + dy
+                    if nx < 0 or ny < 0 or nx >= width or ny >= height:
+                        continue
+                    if distance[ny][nx] <= rim:
+                        continue
+                    neighbors.append(pixels[nx, ny])
+            if neighbors:
+                solid = tuple(
+                    sum(channel[index] for channel in neighbors) // len(neighbors)
+                    for index in range(3)
+                )
+            else:
+                solid = color
+            strongest = max(solid)
+            if strongest < 1:
+                continue
+            channel = max(range(3), key=lambda index: solid[index])
+            coverage = min(1.0, color[channel] / float(strongest))
+            out[x, y] = tuple(
+                int(round(solid[index] * coverage + 255 * (1.0 - coverage)))
+                for index in range(3)
+            )
+    return output
+
+
+def _splash_tile_origin(index: int, row: int) -> tuple[int, int]:
+    return 2 + index * 44, row * 40
+
+
+def render_splash_icons(source: Image.Image) -> Image.Image:
+    """Keep Haiku's seven icons. White ground, and the R5 mark on the disk."""
+    if source.size != (308, 80):
+        raise SystemExit(f"splash icons must be 308x80, got {source.size}")
+    image = lift_splash_icons_off_black(source).convert("RGBA")
+    left, top, right, bottom = SPLASH_LEAF_BOX
+    badge_w = right - left
+    badge_h = bottom - top
+    color_badge = render_wave_pebble(max(badge_w, badge_h), mode="color", with_shadow=False)
+    color_badge = color_badge.resize((badge_w, badge_h), Image.Resampling.LANCZOS)
+    for row in (0, 1):
+        origin_x, origin_y = _splash_tile_origin(SPLASH_DISK_INDEX, row)
+        box = (
+            origin_x + left,
+            origin_y + top,
+            origin_x + right,
+            origin_y + bottom,
+        )
+        sample = image.getpixel((origin_x + 24, origin_y + 14))
+        cleared = Image.new("RGBA", (badge_w, badge_h), sample)
+        image.paste(cleared, (box[0], box[1]))
+        badge = color_badge
+        if row == 1:
+            # The lower row is the dimmed set. Match its disk.
+            color_disk = image.getpixel((_splash_tile_origin(SPLASH_DISK_INDEX, 0)[0] + 24, 14))
+            scale = max(sample[0], sample[1], sample[2]) / float(
+                max(color_disk[0], color_disk[1], color_disk[2], 1)
+            )
+            gray = Image.new("RGBA", color_badge.size)
+            src = color_badge.load()
+            dst = gray.load()
+            for y in range(color_badge.size[1]):
+                for x in range(color_badge.size[0]):
+                    red, green, blue, alpha = src[x, y]
+                    level = (red + green + blue) / 3.0
+                    value = int(round(level * scale))
+                    dst[x, y] = (value, value, value, alpha)
+            badge = gray
+        image.alpha_composite(badge, (box[0], box[1]))
+    return image.convert("RGB")
 
 
 # --- 4. Isometric System Disk Icon with R5 Wave Pebble Overlay (air/OS style) ---
@@ -576,9 +727,9 @@ def render_about_r5_mockup(version: str, build: str) -> Image.Image:
     draw.text((tx + r5_width + 8, ty), "Operating System", font=font_h_os, fill=(51, 65, 85, 255), anchor="ls")
     draw.text(
         (tx, card_top + 68),
-        example_version_line(version, build),
+        f"Version {version} • AMD64",
         font=font_ver,
-        fill=(100, 116, 139, 255),
+        fill=(15, 23, 42, 255),
         anchor="ls",
     )
 
@@ -605,6 +756,15 @@ def render_about_r5_mockup(version: str, build: str) -> Image.Image:
 
     draw.text((col2_x, row2_y), "Time running:", font=font_lbl, fill=(25, 25, 25, 255), anchor="ls")
     draw.text((col2_x, row2_y + 18), "24 minutes, 15 seconds", font=font_val, fill=(65, 65, 65, 255), anchor="ls")
+
+    font_build = ImageFont.truetype(str(REGULAR_TTF), 10)
+    draw.text(
+        (col1_x, info_bot - 8),
+        f"Build {build}",
+        font=font_build,
+        fill=(160, 160, 160, 255),
+        anchor="ls",
+    )
 
     tabs_top = info_bot + 14
     tab_bar_h = 24
@@ -679,6 +839,133 @@ def write_svg_files(artwork_dir: pathlib.Path, kit_dir: pathlib.Path) -> None:
     (artwork_dir / "r5-symbol.svg").write_text(svg_color, encoding="utf-8", newline="\n")
 
 
+def _write_coord(coord: float) -> bytes:
+    """HVIF coordinate. Matches write_coord() in FlatIconFormat.cpp."""
+    if coord < -128.0:
+        coord = -128.0
+    if coord > 192.0:
+        coord = 192.0
+    if int(coord * 100.0) == int(coord) * 100 and -32.0 <= coord <= 95.0:
+        return bytes([int(coord + 32.0) & 0xFF])
+    value = int((coord + 128.0) * 102.0) & 0x7FFF
+    value |= 0x8000
+    return bytes([(value >> 8) & 0xFF, value & 0xFF])
+
+
+def _write_float_24(value: float) -> bytes:
+    """24-bit float. Matches write_float_24() in FlatIconFormat.cpp."""
+    bits = struct.unpack("<I", struct.pack("<f", value))[0]
+    sign = (bits & 0x80000000) >> 31
+    exponent = ((bits & 0x7F800000) >> 23) - 127
+    mantissa = bits & 0x007FFFFF
+    if exponent >= 32 or exponent < -32:
+        return b"\x00\x00\x00"
+    short = (sign << 23) | ((exponent + 32) << 17) | (mantissa >> 6)
+    short &= 0xFFFFFF
+    return bytes([(short >> 16) & 0xFF, (short >> 8) & 0xFF, short & 0xFF])
+
+
+def _hvif_ring(segments: list, scale: float, reverse: bool) -> bytes:
+    count = len(segments)
+    points = []
+    for index in range(count):
+        anchor = segments[index][0]
+        out_control = segments[index][1]
+        in_control = segments[(index - 1) % count][2]
+        points.append((anchor, in_control, out_control))
+    if reverse:
+        points = [(anchor, out_control, in_control) for anchor, in_control, out_control in reversed(points)]
+    # Closed curves, no command list.
+    blob = bytes([0x02, count])
+    for anchor, in_control, out_control in points:
+        for point in (anchor, in_control, out_control):
+            blob += _write_coord(point[0] * scale)
+            blob += _write_coord(point[1] * scale)
+    return blob
+
+
+def render_symbol_hvif() -> bytes:
+    """The Wave Pebble as an HVIF. The inner ring is reversed so the
+    non-zero fill leaves the wave open. Coordinates are the SVG's 0–100
+    space scaled into the 0–64 icon grid."""
+    rings = PEBBLE_PATHS["r5-full"]
+    if len(rings) != 2:
+        raise SystemExit("r5-full must be the pebble and the wave")
+    scale = 64.0 / 100.0
+    # gradient_x runs from -64 to 64. Map the SVG diagonal onto that axis.
+    start = 12.0 * scale
+    end = 88.0 * scale
+    span = end - start
+    slope = 128.0 / (2.0 * span)
+    tx = -64.0 - slope * (start + start)
+    matrix = (slope, 0.0, slope, 1.0, tx, 0.0)
+    stops = (
+        (0, (0x00, 0x84, 0xFF, 0xFF)),
+        (int(round(0.45 * 255)), (0x38, 0x98, 0xFF, 0xFF)),
+        (int(round(0.72 * 255)), (0x65, 0xB8, 0x91, 0xFF)),
+        (255, (0xFF, 0xB8, 0x00, 0xFF)),
+    )
+    blob = b"ncif"
+    blob += bytes([1, 2, 0, 2, len(stops)])
+    for value in matrix:
+        blob += _write_float_24(value)
+    for offset, color in stops:
+        blob += bytes([offset, *color])
+    blob += bytes([2])
+    blob += _hvif_ring(rings[0], scale, reverse=False)
+    blob += _hvif_ring(rings[1], scale, reverse=True)
+    blob += bytes([1, 10, 0, 2, 0, 1, 0])
+    return blob
+
+
+def _hvif_hex(hvif: bytes) -> str:
+    lines = []
+    for start in range(0, len(hvif), 32):
+        chunk = hvif[start : start + 32]
+        lines.append('\t$"' + chunk.hex().upper() + '"')
+    return "\n".join(lines)
+
+
+ABOUT_RDEF = ROOT / "distro" / "rest" / "src" / "apps" / "aboutsystem" / "AboutSystem.rdef"
+
+
+def about_icon_resource(hvif: bytes) -> str:
+    return (
+        "// SPDX-SnippetBegin\n"
+        "// SPDX-SnippetCopyrightText: 2026 R5OS Contributors\n"
+        "// SPDX-License-Identifier: GPL-3.0-or-later\n"
+        "resource vector_icon {\n"
+        f"{_hvif_hex(hvif)}\n"
+        "};\n"
+        "// SPDX-SnippetEnd\n"
+    )
+
+
+def replace_about_icon(text: str, hvif: bytes) -> str:
+    start = text.find("resource vector_icon")
+    if start < 0:
+        raise SystemExit("AboutSystem.rdef has no vector_icon")
+    prefix = (
+        "// SPDX-SnippetBegin\n"
+        "// SPDX-SnippetCopyrightText: 2026 R5OS Contributors\n"
+        "// SPDX-License-Identifier: GPL-3.0-or-later\n"
+    )
+    if text[:start].endswith(prefix):
+        start -= len(prefix)
+    end = text.find("};", start)
+    if end < 0:
+        raise SystemExit("AboutSystem.rdef vector_icon is not closed")
+    end = text.find("\n", end)
+    if end < 0:
+        end = len(text)
+    else:
+        end += 1
+    tail = text[end:]
+    if tail.startswith("// SPDX-SnippetEnd\n"):
+        end += len("// SPDX-SnippetEnd\n")
+    return text[:start] + about_icon_resource(hvif) + text[end:]
+
+
 PRODUCT_NAMES = (
     "r5-symbol.svg",
     "r5-symbol.png",
@@ -696,6 +983,8 @@ PRODUCT_NAMES = (
     "r5-os-logo.png",
     "r5-os-splash.png",
     "r5-os-splash.bgr",
+    "splash_icons.png",
+    "r5-symbol.hvif",
 )
 
 INSTALLED_NAMES = (
@@ -705,6 +994,8 @@ INSTALLED_NAMES = (
     "r5-os-logo.png",
     "r5-os-splash.png",
     "r5-os-splash.bgr",
+    "splash_icons.png",
+    "r5-symbol.hvif",
 )
 
 
@@ -765,6 +1056,14 @@ def produce(artwork_dir: pathlib.Path, kit_dir: pathlib.Path, badge_path: pathli
     save_png(splash_png, kit_dir / "r5-os-splash.png")
     (kit_dir / "r5-os-splash.bgr").write_bytes(splash_bgr)
 
+    if not HAIKU_SPLASH_ICONS.is_file():
+        raise SystemExit(f"missing {HAIKU_SPLASH_ICONS}")
+    icons = render_splash_icons(Image.open(HAIKU_SPLASH_ICONS))
+    save_png(icons, kit_dir / "splash_icons.png")
+
+    hvif = render_symbol_hvif()
+    (kit_dir / "r5-symbol.hvif").write_bytes(hvif)
+
     for sz in (128, 64, 32):
         save_png(render_system_disk_icon(sz), kit_dir / f"r5-system-disk-{sz}.png")
 
@@ -804,6 +1103,10 @@ def check_artwork() -> int:
                 mismatches.append(str(live.relative_to(ROOT)))
         if sha256(badge) != sha256(fresh_badge):
             mismatches.append(str(badge.relative_to(ROOT)))
+        hvif = (kit / "r5-symbol.hvif").read_bytes()
+        live_icon = ABOUT_RDEF.read_text(encoding="utf-8")
+        if about_icon_resource(hvif) not in live_icon:
+            mismatches.append(str(ABOUT_RDEF.relative_to(ROOT)))
     if mismatches:
         print("artwork does not match the generator:", file=sys.stderr)
         for item in mismatches:
@@ -834,6 +1137,12 @@ def main() -> int:
     badge = ROOT / "distro" / "desktop" / "src" / "kits" / "tracker" / "r5_disk_badge.h"
     if args.install:
         produce(ARTWORK_DIR, OUT_DIR, badge)
+        hvif = (OUT_DIR / "r5-symbol.hvif").read_bytes()
+        ABOUT_RDEF.write_text(
+            replace_about_icon(ABOUT_RDEF.read_text(encoding="utf-8"), hvif),
+            encoding="utf-8",
+            newline="\n",
+        )
         print("Installed active artwork assets into:", ARTWORK_DIR)
     else:
         kit = OUT_DIR

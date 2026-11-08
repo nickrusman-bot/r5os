@@ -168,7 +168,7 @@ GitHub issues on `origin` are the lead, including open Haiku Trac tickets. Those
 
 Public: **R5 YYYY.N**, in full R5 Operating System YYYY.N (`2026.1`, …). New year resets N to 1. Unreleased: `YYYY.N-dev` in `distro/VERSION`.
 
-Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `Version YYYY.N-dev Build N` from `r5_os_version.h` generated at apply/jam (`R5_OS_VERSION`, `R5_OS_BUILD`). Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
+Integer **build** in `distro/BUILD` (authoritative). Sequence: `10001`, `10002`, `10003`, … Never reuse or reset. About shows `Version YYYY.N-dev` in the header and `Build N` in small text under the system information, both from `r5_os_version.h`. Both stay visible while What's new is selected. Do not hardcode a build number in About, splash, or `wsl-install-branding.sh`.
 
 Jam `HAIKU_REVISION` is `r5-` plus the VERSION string (`scripts/r5-version.sh --revision`), not the build number. Do not use Haiku `hrev` as the distro version. Keep upstream hrev only where it is still needed for debugging.
 

@@ -63,6 +63,15 @@ if [[ -f "$splashSrc" ]]; then
 	echo "Wrote splash_logo-empty.png"
 fi
 
+iconsSrc="$ROOT/distro/artwork/splash_icons.png"
+iconsDst="$ROOT/haiku/data/artwork/boot_splash/splash_icons.png"
+if [[ ! -f "$iconsSrc" ]]; then
+	echo "missing $iconsSrc" >&2
+	exit 1
+fi
+cp "$iconsSrc" "$iconsDst"
+echo "Wrote splash_icons.png"
+
 python3 "$ROOT/scripts/apply-desktop-native.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-rest-native.py" "$ROOT/haiku"
 python3 "$ROOT/scripts/apply-branding.py" "$ROOT/haiku"
