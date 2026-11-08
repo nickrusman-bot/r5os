@@ -9,6 +9,7 @@
 
 
 #include "AudioStreamingInterface.h"
+#include "usb_audio_packets.h"
 
 
 class Device;
@@ -67,6 +68,13 @@ protected:
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 			int32			fTransferErrors;
+			usb_audio_packet_plan fPlan;
+			size_t			fRegionBytes;	// one buffer's packets, in bytes
+			uint8*			fCarry;			// recording: frames for next time
+			uint32			fCarryFrames;
+			uint32*			fActualBytes;	// recording: bytes per packet
+			uint32			fPadded;
+			uint32			fDropped;
 // SPDX-SnippetEnd
 
 private:
@@ -76,6 +84,11 @@ private:
 	static	void			_TransferCallback(void* cookie, status_t status,
 								void* data, size_t actualLength);
 			void			_DumpDescriptors();
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			void			_JoinRecorded(size_t buffer);
+// SPDX-SnippetEnd
 };
 
 
