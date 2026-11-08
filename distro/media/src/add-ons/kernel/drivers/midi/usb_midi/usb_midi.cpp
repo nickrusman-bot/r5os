@@ -1244,8 +1244,14 @@ usb_midi_write(driver_cookie* cookie, off_t position,
 	if (midiDevice->ump_endpoint)
 		return write_midi1_as_ump(cookie, midiseq, num_bytes, midicode, cin);
 
-	buff_lim = midiDevice->outMaxPkt * 3 / 4;
-		/* max MIDI bytes buffer space */
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* max MIDI bytes per transfer: whole 4-byte packets of 3 MIDI bytes */
+	buff_lim = (midiDevice->outMaxPkt / sizeof(usb_midi_event_packet)) * 3;
+	if (buff_lim < 3)
+		return B_ERROR;
+// SPDX-SnippetEnd
 
 	DPRINTF_DEBUG((MY_ID "MIDI write (%" B_PRIuSIZE " bytes at %" B_PRIdOFF
 		")\n", *num_bytes, position));
@@ -1276,14 +1282,27 @@ usb_midi_write(driver_cookie* cookie, off_t position,
 			return status;
 
 		while (xfer_bytes) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			/* A SysEx packet takes its CIN and length from the bytes left in
+			 * the message, so a message of one or two bytes no longer
+			 * subtracts three and runs past out_buffer, and the last packet
+			 * of a three-byte message is an end packet (CIN 7). */
 			uint8 pkt_bytes = CINbytes[cin];
+			if (midicode == 0xF0)
+				usb_midi_sysex_packet(bytes_left, &cin, &pkt_bytes);
+			if (pkt_bytes > xfer_bytes)
+				pkt_bytes = (uint8)xfer_bytes;
+			if (pkt_bytes == 0)
+				break;
+// SPDX-SnippetEnd
 			memset(pkt, 0, sizeof(usb_midi_event_packet));
 			pkt->cin = cin;
 			pkt->cn = port->cable;
 
-			DPRINTF_DEBUG((MY_ID "using packet data (code %x -- %d bytes)"
-				" %x %x %x\n", pkt->cin, CINbytes[pkt->cin],
-				midiseq[0], midiseq[1], midiseq[2]));
+			DPRINTF_DEBUG((MY_ID "using packet data (code %x -- %d bytes)\n",
+				pkt->cin, pkt_bytes));
 
 			if (user_memcpy(pkt->midi, midiseq, pkt_bytes) != B_OK) {
 				release_sem(midiDevice->sem_send);
@@ -1299,11 +1318,10 @@ usb_midi_write(driver_cookie* cookie, off_t position,
 			midiseq += pkt_bytes;
 			packet_count++;
 			pkt++;
-
-			if (midicode == 0xF0 && bytes_left < 4) {
-				/* see USB-MIDI Spec */
-				cin = 4 + bytes_left;
-			}
+		}
+		if (packet_count == 0) {
+			release_sem(midiDevice->sem_send);
+			break;
 		}
 
 		status = gUSBModule->queue_bulk(midiDevice->ept_out->handle, midiDevice->out_buffer,
