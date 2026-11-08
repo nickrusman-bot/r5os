@@ -1178,10 +1178,12 @@ main()
 				"gfx9_start.cpp", condOrder, 3) != 0)
 			return 1;
 		uint32_t cond[8];
-		if (r5_csa_vaddr(48) != 0xffffffffffe00000ull)
+		if (r5_csa_vaddr(r5_gfx9_vm_size().max_pfn) != 0xffffffffffe00000ull
+			|| kR5CsaBytes != 128ull * 1024ull
+			|| kR5VaReservedCsa != (2ull << 20))
 			return fail("csa vaddr");
 		uint32_t meta[16];
-		if (r5_cs_ce_meta(meta, 16, 0, r5_csa_vaddr(48)) != 14u
+		if (r5_cs_ce_meta(meta, 16, 0, r5_csa_vaddr(r5_gfx9_vm_size().max_pfn)) != 14u
 			|| meta[0] != 0xc00c3700u || meta[1] != 0x80100800u
 			|| meta[2] != 0xffe00000u || meta[3] != 0xffffffffu
 			|| meta[4] != 0u || meta[13] != 0u)

@@ -80,6 +80,16 @@ r5_vm_adjust(uint32_t min_vm_gb, uint32_t max_level, uint32_t max_bits,
 }
 
 
+/* gmc_v9_0.c for IP 9.3.0: amdgpu_vm_adjust_size(adev, 256 * 1024, 9, 3, 48).
+ * The fragment-size argument is not stored here. phys_ram_gb 0 keeps the
+ * minimum, which is already the 48-bit maximum. */
+static inline struct r5_vm_size
+r5_gfx9_vm_size(void)
+{
+	return r5_vm_adjust(256u * 1024u, 3u, 48u, 0);
+}
+
+
 /* gfxhub_v1_0_setup_vmid_config. translate_further is false for GC 9.3,
  * so the block size loses 9 and the level stays. The retry bit stays
  * off: R5 has no retry-fault handler. */

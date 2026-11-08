@@ -1354,7 +1354,7 @@ r5_gfx9_vmids_program(void)
 	r5_gfx9_vmid_baseline();
 	if (!sVmids || sInfo == NULL)
 		return;
-	size = r5_vm_adjust(256u * 1024u, 3u, 48u, 0);
+	size = r5_gfx9_vm_size();
 	cntl = r5_gfx9_vmid_cntl(&size, 0);
 	end = size.max_pfn - 1ull;
 	for (i = 0; i <= 14u; i++) {
@@ -1518,14 +1518,14 @@ r5_gfx9_csa_map(void)
 	uint32 page;
 	if (!r5_gfx9_ce_meta_on() || sCsaMapped || sInfo == NULL)
 		return;
-	if (r5_gfx9_alloc_vram(128ull * 1024ull, 4096, &offset, &cpu) != B_OK
+	if (r5_gfx9_alloc_vram(kR5CsaBytes, 4096, &offset, &cpu) != B_OK
 		|| cpu == NULL) {
 		knote("csa fail alloc");
 		return;
 	}
-	memset(cpu, 0, 128 * 1024);
+	memset(cpu, 0, (size_t)kR5CsaBytes);
 	fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
-	va = r5_csa_vaddr(48);
+	va = r5_csa_vaddr(r5_gfx9_vm_size().max_pfn);
 	flags = (uint64)R5_GFX9_PTE_VALID | (uint64)R5_GFX9_PTE_READABLE
 		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
 	for (page = 0; page < 32u; page++) {

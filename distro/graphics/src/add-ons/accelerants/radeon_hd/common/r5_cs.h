@@ -13,6 +13,7 @@
 #define R5_CS_H
 
 #include "r5_gc9_regs.h"
+#include "r5_vm_size.h"
 
 #include <stdint.h>
 
@@ -212,14 +213,21 @@ r5_cs_put(uint32_t* out, uint32_t n, uint32_t cap, uint32_t word)
 }
 
 
-/* amdgpu_csa_vaddr for a vm_bits-wide space. 48-bit Renoir is
- * 0xffffffffffe00000: max_pfn << 12 minus the 2 MiB CSA reserve, then
- * amdgpu_gmc_sign_extend. The CE payload is at offset 0. */
+/* amdgpu_csa.h AMDGPU_CSA_SIZE is the buffer. amdgpu_vm.h
+ * AMDGPU_VA_RESERVED_CSA_SIZE (v6.18 line 168, 2 MiB) is the hole at
+ * the top of the VM. v6.12 uses the same two sizes. */
+static const uint64_t kR5CsaBytes = 128ull * 1024ull;
+static const uint64_t kR5VaReservedCsa = 2ull << 20;
+
+
+/* v6.18 amdgpu_csa.c:amdgpu_csa_vaddr. AMDGPU_VA_RESERVED_CSA_START is
+ * max_pfn << 12 minus the 2 MiB reserve, then amdgpu_gmc_sign_extend.
+ * max_pfn is r5_gfx9_vm_size(), the value VMID setup programs. The CE
+ * payload is at offset 0. */
 static inline uint64_t
-r5_csa_vaddr(uint32_t vmBits)
+r5_csa_vaddr(uint64_t maxPfn)
 {
-	uint64_t bytes = 1ull << vmBits;
-	uint64_t addr = bytes - (2ull << 20);
+	uint64_t addr = (maxPfn << 12) - kR5VaReservedCsa;
 	if (addr >= 0x0000800000000000ull)
 		addr |= 0xffff800000000000ull;
 	return addr;
@@ -271,7 +279,8 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 		n = r5_cs_put(out, n, cap, 0);
 	}
 	if (ceMeta != 0)
-		n = r5_cs_ce_meta(out, cap, n, r5_csa_vaddr(48));
+		n = r5_cs_ce_meta(out, cap, n,
+			r5_csa_vaddr(r5_gfx9_vm_size().max_pfn));
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x28, 1));
 	n = r5_cs_put(out, n, cap, cntx);
 	n = r5_cs_put(out, n, cap, 0);
