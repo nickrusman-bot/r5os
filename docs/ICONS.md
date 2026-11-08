@@ -1,5 +1,7 @@
 # Icons
 
+The Wave Pebble, the Deskbar button, the boot splash, and the boot-volume badge are the product mark. Their files, colors, and the generator are in [BRAND-GUIDE.md](BRAND-GUIDE.md). This page is the icon library, not that mark.
+
 Public helpers for a bitmap or a button icon. They live in the shared library `libr5icons.so`. The screen picture is a different library, `libr5ui.so`, described in `docs/LIBR5.md`.
 
 ## For developers
