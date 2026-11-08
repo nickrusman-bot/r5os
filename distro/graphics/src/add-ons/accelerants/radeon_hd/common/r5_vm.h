@@ -14,6 +14,7 @@
 
 #include "gfx9_check.h"
 #include "r5_gpu.h"
+#include "r5_vm_size.h"
 
 /* PDB2 is level 3, the page table is level 0. Nine bits each.
  * Bits 63:48 are not part of the walk. Linux amdgpu_gmc.h
@@ -25,10 +26,32 @@ r5_vm_index(uint64_t va, uint32_t level)
 	return (uint32_t)((va >> (12u + 9u * level)) & 0x1ffu);
 }
 
-/* Linux amdgpu_gem_va_ioctl rejects an address in the hole
- * (amdgpu_gmc.h AMDGPU_GMC_HOLE_START .. AMDGPU_GMC_HOLE_END).
- * The high range starts at AMDGPU_GMC_HOLE_END. Nothing extra is
- * reserved on that first page. */
+/* v6.18 amdgpu_gem.c:848 amdgpu_gem_va_ioctl. The bottom 64 KiB, the
+ * hole, and AMDGPU_VA_RESERVED_TOP are refused. v6.18 amdgpu_vm.h:175
+ * is AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12); SEQ64 and CSA are
+ * each (2ULL << 20) at lines 172 and 168. v6.12.60 has those same
+ * three defines. v6.18.60 changes only the trap, to (1ULL << 16).
+ * v6.12 compared the raw address and did not check the add for
+ * overflow. v6.18 clears the hole bits first. */
+static inline int
+r5_vm_va_reserved(uint64_t va, uint64_t bytes)
+{
+	const uint64_t kTrap = 2ull << 12;
+	const uint64_t kSeq64 = 2ull << 20;
+	const uint64_t kCsa = 2ull << 20;
+	const uint64_t top = kTrap + kSeq64 + kCsa;
+	uint64_t masked = va & 0x0000ffffffffffffull;
+	uint64_t vmSize = (r5_gfx9_vm_size().max_pfn << 12) - top;
+	if (va < (1ull << 16))
+		return 1;
+	if (va >= 0x0000800000000000ull && va < 0xffff800000000000ull)
+		return 1;
+	if (masked > ~0ull - bytes)
+		return 1;
+	return masked + bytes > vmSize;
+}
+
+
 static inline int
 r5_vm_va_fits(uint64_t va, uint64_t bytes)
 {
@@ -39,6 +62,8 @@ r5_vm_va_fits(uint64_t va, uint64_t bytes)
 		return 0;
 	end = va + bytes;
 	if (end < va)
+		return 0;
+	if (r5_vm_va_reserved(va, bytes))
 		return 0;
 	low = va >= R5_GPU_VA_OFFSET && end <= R5_GPU_VA_MAX;
 	high = va >= R5_GPU_HIGH_VA_OFFSET && end <= R5_GPU_HIGH_VA_MAX;

@@ -75,9 +75,17 @@ symbol(void* library, const char* name)
 
 
 static void
+stage_at(FILE* out, const char* title)
+{
+	fprintf(out, "stage %s t %lld\n", title, (long long)system_time());
+	fflush(out);
+}
+
+
+static void
 stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 {
-	fprintf(out, "stage bo\n");
+	stage_at(out, "bo");
 	void* library = dlopen("libdrm_amdgpu.so.1", RTLD_NOW);
 	if (library == NULL) {
 		fprintf(out, "not available, %s\n", dlerror());
@@ -170,7 +178,7 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 				uint32_t* dst = (uint32_t*)cpu;
 				dst[16] = 0;
 				if (submitIb) {
-				fprintf(out, "stage ib\n");
+				stage_at(out, "ib");
 				uint32_t packet[8];
 				packet[0] = (3u << 30) | (3u << 16) | (0x37u << 8);
 				packet[1] = (5u << 8) | (1u << 20);
@@ -243,22 +251,21 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 }
 
 
-static void
+static int
 run_stage(FILE* out, const char* title, const char* command, int seconds)
 {
-	fprintf(out, "stage %s\n", title);
-	fflush(out);
+	stage_at(out, title);
 	int fds[2];
 	if (pipe(fds) != 0) {
 		fprintf(out, "not available, %s\n", strerror(errno));
-		return;
+		return 1;
 	}
 	pid_t pid = fork();
 	if (pid < 0) {
 		close(fds[0]);
 		close(fds[1]);
 		fprintf(out, "not available, %s\n", strerror(errno));
-		return;
+		return 1;
 	}
 	if (pid == 0) {
 		setpgid(0, 0);
@@ -313,13 +320,18 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 	if (!killed && ended)
 		fprintf(out, "exit %d\n", status);
 	fflush(out);
+	if (killed || !ended)
+		return 1;
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+		return 0;
+	return 1;
 }
 
 
 static void
 write_command(FILE* out, const char* title, const char* command)
 {
-	fprintf(out, "stage %s\n", title);
+	stage_at(out, title);
 	FILE* pipe = popen(command, "r");
 	if (pipe == NULL) {
 		fprintf(out, "not available, %s\n", strerror(errno));
@@ -359,7 +371,8 @@ device_lost()
 static void
 skip_lost(FILE* out, const char* title)
 {
-	fprintf(out, "stage %s\nskipped, gpu lost\n", title);
+	fprintf(out, "stage %s t %lld\nskipped, gpu lost\n", title,
+		(long long)system_time());
 	fflush(out);
 }
 
@@ -367,7 +380,7 @@ skip_lost(FILE* out, const char* title)
 static void
 stage_p(FILE* out)
 {
-	fprintf(out, "stage P\n");
+	stage_at(out, "P");
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	r5_gpu_stage_p result;
 	const char* how[] = {
@@ -402,9 +415,89 @@ stage_p(FILE* out)
 
 
 static void
+stage_regs(FILE* out)
+{
+	stage_at(out, "registers");
+	r5_gpu_log_regs in;
+	memset(&in, 0, sizeof(in));
+	in.size = (uint32_t)sizeof(in);
+	in.version = 1;
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd < 0) {
+		fprintf(out, "not available, no supported GPU\n");
+		fflush(out);
+		fsync(fileno(out));
+		return;
+	}
+	int ret = ioctl(fd, R5_GPU_LOG_REGS, &in, sizeof(in));
+	fprintf(out, "R5_GPU_LOG_REGS %d errno %d\n", ret, errno);
+	if (ret == 0)
+		fputs(in.line, out);
+	close(fd);
+	fflush(out);
+	fsync(fileno(out));
+}
+
+
+static void
+stage_switch(FILE* out, const char* name, uint32_t which)
+{
+	stage_at(out, name);
+	r5_gpu_debug_switch in;
+	memset(&in, 0, sizeof(in));
+	in.size = (uint32_t)sizeof(in);
+	in.version = 1;
+	in.which = which;
+	in.on = 1;
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	int ret = -1;
+	if (fd >= 0)
+		ret = ioctl(fd, R5_GPU_DEBUG_SWITCH, &in, sizeof(in));
+	fprintf(out, "R5_GPU_DEBUG_SWITCH %s %d errno %d\n", name, ret, errno);
+	if (fd >= 0)
+		close(fd);
+	fflush(out);
+}
+
+
+static void
+stage_r1(FILE* out, uint32_t which, uint64_t x)
+{
+	stage_at(out, which == R5_GPU_R1_C ? "R1c" : "R1");
+	r5_gpu_stage_r1 in;
+	memset(&in, 0, sizeof(in));
+	in.size = (uint32_t)sizeof(in);
+	in.version = 1;
+	in.which = which;
+	in.x = x;
+	in.y = x + 0x1000ull;
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd < 0) {
+		fprintf(out, "not available, no supported GPU\n");
+		fflush(out);
+		return;
+	}
+	int ret = ioctl(fd, R5_GPU_STAGE_R1, &in, sizeof(in));
+	fprintf(out, "R5_GPU_STAGE_R1 %u x %016llx y %016llx %d errno %d\n",
+		which, (unsigned long long)in.x, (unsigned long long)in.y,
+		ret, errno);
+	if (which == R5_GPU_R1_AB) {
+		if (ret == 0 && r5_gpu_r1_ab_pass(in.old_word, in.new_word))
+			fprintf(out, "R1ab pass old %08x new %08x\n",
+				in.old_word, in.new_word);
+		else
+			fprintf(out, "R1ab fail old %08x new %08x\n",
+				in.old_word, in.new_word);
+	}
+	close(fd);
+	fflush(out);
+}
+
+
+static void
 stage_selftest(FILE* out)
 {
-	fprintf(out, "stage selftest\n");
+	stage_at(out, "selftest");
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
 		fprintf(out, "not available, no supported GPU\n");
@@ -429,9 +522,12 @@ main()
 
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
-		fprintf(out, "stage render node: not available, no supported GPU\n");
-		fprintf(out, "stage bo: not available, no supported GPU\n");
-		fprintf(out, "stage vulkaninfo: not available, no supported GPU\n");
+		fprintf(out, "stage render node t %lld: not available, no supported GPU\n",
+			(long long)system_time());
+		fprintf(out, "stage bo t %lld: not available, no supported GPU\n",
+			(long long)system_time());
+		fprintf(out, "stage vulkaninfo t %lld: not available, no supported GPU\n",
+			(long long)system_time());
 		write_command(out, "VulkanTeapot",
 			"/bin/VulkanTeapot --selftest 2>&1");
 	} else {
@@ -441,10 +537,12 @@ main()
 		info->size = (uint32_t)sizeof(bytes);
 		info->version = 1;
 		if (ioctl(fd, R5_GPU_GET_INFO, bytes, sizeof(bytes)) != 0) {
-			fprintf(out, "stage render node: GET_INFO failed\n");
+			fprintf(out, "stage render node t %lld: GET_INFO failed\n",
+				(long long)system_time());
 		} else {
 			r5_gpu_amd_info* amd = (r5_gpu_amd_info*)(bytes + sizeof(r5_gpu_info));
-			fprintf(out, "stage render node: api %u.%u device %04x cu %u\n",
+			fprintf(out, "stage render node t %lld: api %u.%u device %04x cu %u\n",
+				(long long)system_time(),
 				info->api_major, info->api_minor, info->device,
 				amd->device.cu_active_number);
 			fprintf(out, "firmware me %u feature %u pfp %u mec %u\n",
@@ -465,40 +563,100 @@ main()
 		stage_bo(out, lowVa, highVa, false);
 		stage_p(out);
 		if (device_lost()) {
+			skip_lost(out, "registers");
+			skip_lost(out, "R1");
 			skip_lost(out, "vulkaninfo");
+			skip_lost(out, "VulkanTeapot");
 			skip_lost(out, "VulkanTeapot (sam)");
 			skip_lost(out, "VulkanTeapot");
 			skip_lost(out, "selftest");
 			skip_lost(out, "ib");
 		} else {
-		run_stage(out, "vulkaninfo", "/bin/vulkaninfo --summary 2>&1", 120);
-		if (device_lost()) {
-			skip_lost(out, "VulkanTeapot (sam)");
-			skip_lost(out, "VulkanTeapot");
-			skip_lost(out, "selftest");
-			skip_lost(out, "ib");
-		} else {
-			run_stage(out, "VulkanTeapot (sam)",
-				"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1", 120);
+			stage_regs(out);
+			stage_r1(out, R5_GPU_R1_AB, 0xffff800000100000ull);
 			if (device_lost()) {
+				skip_lost(out, "vulkaninfo");
+				skip_lost(out, "VulkanTeapot");
+				skip_lost(out, "VulkanTeapot (sam)");
 				skip_lost(out, "VulkanTeapot");
 				skip_lost(out, "selftest");
 				skip_lost(out, "ib");
-			} else {
-				run_stage(out, "VulkanTeapot",
-					"/bin/VulkanTeapot --selftest 2>&1", 120);
-				if (device_lost()) {
+			} else if (run_stage(out, "vulkaninfo",
+						"/bin/vulkaninfo --summary 2>&1", 120) != 0
+					|| device_lost()) {
+					skip_lost(out, "VulkanTeapot");
+					skip_lost(out, "VulkanTeapot (sam)");
+					skip_lost(out, "VulkanTeapot");
 					skip_lost(out, "selftest");
 					skip_lost(out, "ib");
 				} else {
-					stage_selftest(out);
-					if (device_lost())
+					stage_regs(out);
+					int pass = run_stage(out, "VulkanTeapot",
+						"/bin/VulkanTeapot --selftest 2>&1", 120);
+					if (pass == 0 && !device_lost()) {
+						stage_regs(out);
+						pass = run_stage(out, "VulkanTeapot (sam)",
+							"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
+							120);
+					}
+					if (pass == 0 && !device_lost()) {
+						stage_regs(out);
+						pass = run_stage(out, "VulkanTeapot",
+							"/bin/VulkanTeapot --selftest 2>&1", 120);
+					}
+					if (pass != 0 && !device_lost()) {
+						stage_switch(out, "gfx9_flush_fence",
+							R5_GPU_SWITCH_FLUSH_FENCE);
+						stage_regs(out);
+						pass = run_stage(out, "VulkanTeapot",
+							"/bin/VulkanTeapot --selftest 2>&1", 120);
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
+							pass = run_stage(out, "VulkanTeapot (sam)",
+								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
+								120);
+						}
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
+							pass = run_stage(out, "VulkanTeapot",
+								"/bin/VulkanTeapot --selftest 2>&1", 120);
+						}
+					}
+					if (pass == 0 && !device_lost()) {
+						fprintf(out, "confirm teapots\n");
+						fflush(out);
+						stage_regs(out);
+						pass = run_stage(out, "VulkanTeapot",
+							"/bin/VulkanTeapot --selftest 2>&1", 120);
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
+							pass = run_stage(out, "VulkanTeapot (sam)",
+								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
+								120);
+						}
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
+							run_stage(out, "VulkanTeapot",
+								"/bin/VulkanTeapot --selftest 2>&1", 120);
+						}
+					}
+					if (device_lost()) {
+						skip_lost(out, "selftest");
 						skip_lost(out, "ib");
-					else
-						stage_bo(out, lowVa, highVa, true);
+					} else {
+						stage_regs(out); stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull);
+						if (device_lost()) {
+							skip_lost(out, "selftest");
+							skip_lost(out, "ib");
+						} else {
+							stage_selftest(out);
+							if (device_lost())
+								skip_lost(out, "ib");
+							else
+								stage_bo(out, lowVa, highVa, true);
+						}
+					}
 				}
-			}
-		}
 		}
 	}
 	fclose(out);

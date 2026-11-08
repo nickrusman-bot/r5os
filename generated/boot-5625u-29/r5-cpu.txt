@@ -1,0 +1,21 @@
+eg 4: host 000000fcf0304000, pci 000000fcf0304000, size 00001000, flags 0c 00
+KERN: PCI:   Capabilities: PCIe, MSI, PM
+KERN: PCI:   Extended capabilities: Vendor Unique, Latency Tolerance Reporting, L1 Power Management Substates, Advanced Error Reporting
+KERN: PCI: [dom 0, bus  0] bus   0, device  2, function  0: vendor 1022, device 1632, revision 00
+KERN: PCI:   class_base 06, class_function 00, class_api 00
+KERN: PCI:   vendor 1022: Advanced Micro Devices, Inc. [AMD]
+KERN: PCI:   device 1632: Renoir PCIe Dummy Host Bridge
+KERN: PCI:   info: Bridge (Host bridge)
+KERN: PCI:   line_size 00, latency 00, header_type 80, BIST 00
+KERN: PCI:   ROM base host 00000000, pci 00000000, size 00000000
+KERN: PCI:   cardbus_CIS 00000000, subsystem_id 0000, subsystem_vendor_id 0000
+KERN: PCI:   interrupt_line 00, interrupt_pin 00, min_grant 00, max_latency 00
+KERN: PCI:   base reg 0: host 00000000, pci 00000000, size 00000000, flags 00
+KERN: PCI:   base reg 1: host 00000000, pci 00000000, size 00000000, flags 00
+KERN: PCI:   base reg 2: host 00000000, pci 00000000, size 00000000, flags 00
+KERN: PCI:   base reg 3: host 00000000, pci 00000000, size 00000000, flags 00
+KERN: PCI:   base reg 4: host 00000000, pci 00000000, size 00000000, flags 00
+KERN: PCI:   base reg 5: host 00000000, pci 00000000, size 00000000, flags 00
+KERN: PCI:   Capabilities: (not supported)
+KERN: PCI: [dom 0, bus  0] bus   0, device  2, function  1: vendor 1022, device 1634, revision 00
+KERN: PCI:   class_base 06, class_function 04, cl

@@ -46,7 +46,13 @@ enum {
 	R5_GPU_SELFTEST = R5_GPU_OP_BASE + 23,
 	/* One packet type per step, before any other GPU client. Older
 	 * callers never send this opcode. */
-	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24
+	R5_GPU_STAGE_P = R5_GPU_OP_BASE + 24,
+	/* gpu_debug only. Switches the named GFX9 settings for the self-test. */
+	R5_GPU_DEBUG_SWITCH = R5_GPU_OP_BASE + 25,
+	/* R1 remap test. Older callers never send this opcode. */
+	R5_GPU_STAGE_R1 = R5_GPU_OP_BASE + 26,
+	/* Read-only register and setting print for the self-test. */
+	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -88,7 +94,16 @@ typedef struct {
 /* Linux AMDGPU_VM_PAGE_PRT. Handle 0 is valid only with this flag. */
 #define R5_GPU_VA_PRT 8u
 
-/* Linux v6.12 amdgpu_kms.c for a 48-bit GC 9.3 VM. See GRAPHICS.md. */
+/* v6.18 amdgpu_vm.h:175
+ *   #define AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12)
+ * amdgpu_kms.c:968 is high_va_max = AMDGPU_GMC_HOLE_END | vm_size,
+ * and vm_size subtracts AMDGPU_VA_RESERVED_TOP (trap 8 KiB + seq64
+ * 2 MiB + CSA 2 MiB = 0x402000). That is 0xffffffffffbfe000.
+ * v6.12.60 has the same trap define. Mainline
+ * 31b8de5e55666f26ea7ece5f412b83eab3f56dbb changes it to
+ * (1ULL << 16); stable 4487571ef17a30d274600b3bd6965f497a881299
+ * is that change in v6.18.60. This value stays the v6.18 one,
+ * which GET_INFO reported on stick 28. */
 #define R5_GPU_VA_OFFSET 0x10000ull
 #define R5_GPU_VA_MAX 0x800000000000ull
 #define R5_GPU_HIGH_VA_OFFSET 0xffff800000000000ull
@@ -362,12 +377,80 @@ typedef struct {
 	uint32_t	_pad;
 } r5_gpu_syncobj_transfer;
 
+/* which is a bit per setting. on is 0 or 1 for every bit that is set.
+ * Bit 7 (gfx9_vmid_per_file) is refused until each file has a root.
+ * Bit 8 (gfx9_ce_meta) is a boot setting: the CSA is mapped only then. */
+#define R5_GPU_SWITCH_INV_RANGE 1u
+#define R5_GPU_SWITCH_HUB_LINUX 2u
+#define R5_GPU_SWITCH_VMIDS 4u
+#define R5_GPU_SWITCH_FLUSH_FENCE 8u
+#define R5_GPU_SWITCH_COND_EXEC 16u
+#define R5_GPU_SWITCH_GDS 32u
+#define R5_GPU_SWITCH_DEFERRED 64u
+#define R5_GPU_SWITCH_VMID_PER_FILE 128u
+#define R5_GPU_SWITCH_CE_META 256u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	which;
+	uint32_t	on;
+} r5_gpu_debug_switch;
+
+/* which is R5_GPU_R1_AB (the writes and the fence) or R5_GPU_R1_C
+ * (the indirect-buffer fetch). R1c can stop the command processor, so
+ * the self-test runs it after the teapots. */
+#define R5_GPU_R1_AB 1u
+#define R5_GPU_R1_C 2u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	which;
+	uint32_t	_pad;
+	/* This round's pages. y is the next page. A later round uses
+	 * another pair, so a leftover translation cannot write a page
+	 * this round has freed. */
+	uint64_t	x;
+	uint64_t	y;
+	/* Filled by the kernel from the R1a readback. old_word is the
+	 * page that was mapped first. new_word is the page mapped after. */
+	uint32_t	old_word;
+	uint32_t	new_word;
+} r5_gpu_stage_r1;
+
+
+/* R1a passes when the first page still holds the first write and the
+ * page mapped afterwards holds the second write. */
+static inline int
+r5_gpu_r1_ab_pass(uint32_t old_word, uint32_t new_word)
+{
+	return old_word == 0x11111111u && new_word == 0x22222222u;
+}
+
+/* The kernel fills line and dprints it. The caller writes the file. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	length;
+	char		line[480];
+} r5_gpu_log_regs;
+
 /* The render node is published only when these three steps are on.
  * Without them the node does not exist, so RADV stays quiet. */
 static inline int
 r5_gpu_node_on(int kernel, int irq, int gart)
 {
 	return kernel && irq && gart;
+}
+
+/* MC_VM_FB_OFFSET is in 16 MiB units. On an APU that value, shifted,
+ * is the system physical address of the carveout. Linux gmc_v9_0_mc_init
+ * uses it as aper_base. The low 24 bits of the register are the field. */
+static inline uint64_t
+r5_gpu_carveout_base(uint32_t fbOffset)
+{
+	return (uint64_t)(fbOffset & 0x00ffffffu) << 24;
 }
 
 #endif

@@ -58,6 +58,8 @@ struct r5_gfx9_user_ib {
 	uint64		va;
 	uint32		dwords;
 	uint32		vmid;
+	/* AMDGPU_IB_FLAG_*. The ioctl rejects anything but 0. */
+	uint32		flags;
 };
 
 bool r5_gfx9_ring_ready();
@@ -68,8 +70,12 @@ uint32 r5_gfx9_user_commit_dwords(uint32 count);
 void r5_gfx9_ring_ptrs(uint64* wptr, uint64* rptrOffset);
 bool r5_gfx9_fence_offset(uint64* offset);
 uint64 r5_gfx9_user_fence_mc();
+/* fenceCtx is the value handed out at AMDGPU_CTX create. preambleSeen
+ * is that context's preamble_presented flag. The kernel jobs use 0.
+ * gpu_debug is the radeon_hd setting. */
+void r5_gfx9_set_debug(int on);
 bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
-	uint64* _sequence);
+	uint64 fenceCtx, int32* preambleSeen, uint64* _sequence);
 uint64 r5_gfx9_user_seen();
 uint64 r5_gfx9_k2_word_mc();
 bool r5_gfx9_stage_ib_store(uint8* cpu, uint64 destVa);
@@ -79,6 +85,14 @@ void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
+/* Page-table base for the ring flush: physical address with the valid bit. */
+void r5_gfx9_vmid1_set_root(uint64 pd);
+/* Every successful map, including a cleared PTE, raises this. */
+void r5_gfx9_vmid1_touch();
+/* True when a user job must prefix the ring VM flush. pd receives the
+ * page-table base, physical address with the valid bit. */
+bool r5_gfx9_vmid1_flush_due(uint64* pd);
+void r5_gfx9_vmid1_flushed();
 bool r5_gfx9_vmid1_lookup(uint64 va);
 /* Four entries of va, read through a fresh mapping of each table page. */
 void r5_gfx9_vmid1_levels(const char* name, uint64 va);
@@ -109,6 +123,53 @@ status_t r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset,
 	uint8** address);
 status_t r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset);
 void r5_gfx9_free_user_vram(uint64 offset);
+/* VMID 1 and later. The pointer is the carveout window, not the BAR. */
+uint8* r5_gfx9_vram_cpu(uint64 offset);
+/* The BAR window. The K sequence and the HDP probe write use it. */
+uint8* r5_gfx9_vram_bar(uint64 offset);
 void r5_gfx9_copy_firmware(uint32* version, uint32* feature, uint32 count);
+/* gfx9_flush_fence. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_flush_fence(int on);
+/* gfx9_cond_exec. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_cond_exec(int on);
+/* gfx9_pasid_map. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_pasid_map(int on);
+/* gfx9_ce_meta. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_ce_meta(int on);
+int r5_gfx9_ce_meta_on(void);
+/* gfx9_gds_switch. Off unless the radeon_hd setting says so. */
+void r5_gfx9_set_gds_switch(int on);
+/* The open file's PASID. 0 is a kernel job and writes no LUT entry. */
+void r5_gfx9_set_job_pasid(uint32 pasid, uint64 file);
+/* gfx9_deferred_free. The kernel registers the stamp. The accelerant
+ * leaves it unset. */
+void r5_gfx9_set_defer_stamp(void (*fn)(uint64 sequence));
+void r5_gfx9_set_inv_range(int on);
+void r5_gfx9_set_hub_linux(int on);
+/* gfx9_hub_linux writes, from prepare_hw, before the ring runs. */
+typedef void (*r5_gfx9_hub_fn)(uint64 fbStart, uint64 fbEnd,
+	uint32 lowNow, uint32 highNow);
+void r5_gfx9_set_hub_aperture(int on);
+/* 1 when the device table says the aperture high adds 1. */
+void r5_gfx9_set_aperture_plus(int plus);
+void r5_gfx9_set_hub_program(r5_gfx9_hub_fn fn);
+void r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow,
+	uint32 highNow);
+void r5_gfx9_set_vmids(int on);
+int r5_gfx9_inv_range_on(void);
+int r5_gfx9_hub_linux_on(void);
+int r5_gfx9_vmids_on(void);
+int r5_gfx9_flush_fence_on(void);
+int r5_gfx9_cond_exec_on(void);
+int r5_gfx9_gds_switch_on(void);
+int r5_gfx9_pasid_map_on(void);
+/* -1 leaves that setting. 0 restores the K2 values. 1 programs them. */
+void r5_gfx9_switch_registers(int inv, int hub, int vmids);
+/* Read-only print of the invalidation ranges, the L1 TLB, AGP, the
+ * system aperture, and the live settings. */
+void r5_gfx9_log_state(const char* when, char* line, size_t bytes);
+/* The file last written into the IH LUT for this VMID. */
+uint64 r5_gfx9_file_for_vmid(uint32 vmid);
+uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);
 
 #endif

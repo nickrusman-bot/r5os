@@ -15,14 +15,18 @@
 #include "r5_span.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
+#include "r5_stage_r1.h"
 #include "r5_log.h"
 #include "r5_vm.h"
+#include "r5_pasid.h"
+#include "r5_defer.h"
 
 #include <KernelExport.h>
 #include <condition_variable.h>
 #include <kernel.h>
 
 #include <driver_settings.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,6 +42,7 @@ extern "C" team_id team_get_current_team_id(void);
 extern "C" bool team_is_valid(team_id id);
 extern "C" status_t vm_set_area_memory_type(area_id id,
 	phys_addr_t physicalBase, uint32 type);
+area_id r5_gfx9_map_vram(uint64 offset, uint64 bytes, void** address);
 
 /* headers/private/system/vm_defs.h: REGION_NO_PRIVATE_MAP = 0. */
 static const uint32 kRegionNoPrivateMap = 0;
@@ -78,6 +83,9 @@ static const bigtime_t kWatchdogUs = 10000000;
 static int sErrorLines;
 static int sOnceBits;
 static int sDebugOn = -1;
+static int sDeferred = 0;
+static r5_defer sDefer[256];
+static void gpu_defer_stamp(uint64 sequence);
 static int sSelftestOn = -1;
 
 
@@ -92,8 +100,28 @@ gpu_cache_log_settings()
 			false, true);
 		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
 			false, true);
+		r5_gfx9_set_flush_fence(get_driver_boolean_parameter(settings,
+			"gfx9_flush_fence", false, true) ? 1 : 0);
+		r5_gfx9_set_pasid_map(get_driver_boolean_parameter(settings,
+			"gfx9_pasid_map", false, true) ? 1 : 0);
+		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
+			"gfx9_ce_meta", false, true) ? 1 : 0);
+		r5_gfx9_set_cond_exec(get_driver_boolean_parameter(settings,
+			"gfx9_cond_exec", false, true) ? 1 : 0);
+		r5_gfx9_set_gds_switch(get_driver_boolean_parameter(settings,
+			"gfx9_gds_switch", false, true) ? 1 : 0);
+		sDeferred = get_driver_boolean_parameter(settings,
+			"gfx9_deferred_free", false, true) ? 1 : 0;
 		unload_driver_settings(settings);
+	} else {
+		r5_gfx9_set_flush_fence(0);
+		r5_gfx9_set_pasid_map(0);
+		r5_gfx9_set_ce_meta(0);
+		r5_gfx9_set_cond_exec(0);
+		r5_gfx9_set_gds_switch(0);
+		sDeferred = 0;
 	}
+	r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
 	sDebugOn = debugOn ? 1 : 0;
 	sSelftestOn = selftestOn ? 1 : 0;
 }
@@ -187,7 +215,8 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 	if (_bitmap != NULL)
 		*_bitmap = bitmap;
 	if (gpu_debug_enabled())
-	dprintf("radeon_hd: gfx9 cu cc %08lx user %08lx active %lu bitmap %08lx\n",
+	dprintf("radeon_hd: t %lld gfx9 cu cc %08lx user %08lx active %lu bitmap %08lx\n",
+		(long long)system_time(),
 		(unsigned long)cc, (unsigned long)user, (unsigned long)count,
 		(unsigned long)bitmap);
 	return count;
@@ -289,6 +318,12 @@ struct gpu_client {
 	uint32			handleCount;
 	int32			contexts;
 	uint64			lastSequence;
+	/* Linux amdgpu_ctx.preamble_presented, for this client's one context. */
+	int32			preamblePresented;
+	/* Handed out at CTX create. 0 means there is no live context. */
+	uint64			fenceCtx;
+	uint32			pasid;
+	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };
 
@@ -303,6 +338,8 @@ static uint64 sLastIbVa;
 static uint64 sLastIbList[8];
 static uint32 sLastIbDw[8];
 static uint32 sLastIbN;
+/* Kernel jobs (mark, stage P, the copies) use fence context 0. */
+static int32 sKernelPreamble;
 static radeon_info* sInfo;
 static bool sReplacing;
 static lock sGpuLock;
@@ -310,6 +347,9 @@ static ConditionVariable sEop;
 static bool sReady = false;
 static bool sLost = false;
 static int32 sContexts = 0;
+static r5_ctx_counter sCtxCounter;
+static r5_pasid_ida sPasids;
+static gpu_client* sClientList;
 static sem_id sRetireSem = -1;
 static thread_id sRetireThread = -1;
 
@@ -392,6 +432,7 @@ static void gpu_sync_host(gpu_sync* sync);
 
 
 static void gpu_release_parked(uint64 seen);
+static void gpu_defer_stamp(uint64 sequence);
 static void gpu_watchdog();
 
 
@@ -689,8 +730,10 @@ gpu_bo_release(gpu_bo* bo)
 	if (!bo->live)
 		return;
 	gpu_bo_unmap(bo);
-	if (bo->domain == R5_GPU_DOMAIN_VRAM)
-		r5_gfx9_free_user_vram(bo->vramOffset);
+	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+		if (!sDeferred || !r5_defer_add(sDefer, 256, bo->vramOffset))
+			r5_gfx9_free_user_vram(bo->vramOffset);
+	}
 	/* The user clone belongs to mapTeam. A team that has already ended
 	 * took its areas with it. team_is_valid is the check; do not delete
 	 * an id in a team that is gone.
@@ -809,8 +852,28 @@ gpu_bo_get(gpu_client* client, uint32 handle)
 
 
 static void
+gpu_defer_stamp(uint64 sequence)
+{
+	r5_defer_stamp(sDefer, 256, sequence);
+}
+
+
+static void
+gpu_defer_reclaim(uint64 seen)
+{
+	uint64 page = 0;
+	while (r5_defer_take(sDefer, 256, seen, &page)) {
+		dprintf("radeon_hd: deferred page %llx reused\n",
+			(unsigned long long)page);
+		r5_gfx9_free_user_vram(page);
+	}
+}
+
+
+static void
 gpu_release_parked(uint64 seen)
 {
+	gpu_defer_reclaim(seen);
 	for (uint32 i = 0; i < kMaxBo; i++) {
 		gpu_bo* bo = &sBo[i];
 		if (!bo->live || !bo->parked)
@@ -906,14 +969,10 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 		return gpu_copy_out(buffer, length, &in, sizeof(in));
 	}
 	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
-		uint32 fb = gpu_mmio(client->info, kGcSegment, 0x096b) & 0x00ffffffu;
-		phys_addr_t phys = (phys_addr_t)(((uint64)fb << 24) + bo->vramOffset);
 		void* kernel = NULL;
-		area_id kernelArea = map_physical_memory("r5 gpu vram", phys,
-			(size_t)bo->bytes, B_ANY_KERNEL_ADDRESS,
-			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA,
+		area_id kernelArea = r5_gfx9_map_vram(bo->vramOffset, bo->bytes,
 			&kernel);
-		if (kernelArea < 0)
+		if (kernelArea < 0 || kernel == NULL)
 			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
 				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
 		bo->kernelArea = kernelArea;
@@ -1273,7 +1332,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 	bo->ranges[slot].offset = in.bo_offset;
 	bo->ranges[slot].bytes = in.map_bytes;
 	if (gpu_debug_enabled())
-		dprintf("radeon_hd: va map %016llx bytes %llu domain %lu\n",
+		dprintf("radeon_hd: t %lld va map %016llx bytes %llu domain %lu\n",
+			(long long)system_time(),
 			(unsigned long long)in.gpu_va,
 			(unsigned long long)in.map_bytes,
 			(unsigned long)bo->domain);
@@ -1520,6 +1580,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		ringIbs[i].va = ibs[i].gpu_va;
 		ringIbs[i].dwords = ibs[i].dwords;
 		ringIbs[i].vmid = 1;
+		ringIbs[i].flags = ibs[i].flags;
 	}
 	uint32 dwords = r5_gfx9_user_commit_dwords(in.ib_count);
 	status = gpu_wait_room(client->info, dwords);
@@ -1558,9 +1619,11 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	asm volatile("mfence" ::: "memory");
 	if (gpu_debug_enabled()) {
 		for (uint32 i = 0; i < in.ib_count; i++) {
-			dprintf("radeon_hd: submit ib va %016llx dw %lu\n",
+			dprintf("radeon_hd: t %lld submit ib va %016llx dw %lu flags %lu\n",
+				(long long)system_time(),
 				(unsigned long long)ibs[i].gpu_va,
-				(unsigned long)ibs[i].dwords);
+				(unsigned long)ibs[i].dwords,
+				(unsigned long)ibs[i].flags);
 		}
 	}
 	gpu_job* job = &sJobs[jobSlot];
@@ -1581,7 +1644,13 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	}
 	job->count = in.signal_count;
 	uint64 sequence = 0;
-	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, &sequence))
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(client->pasid, (uint64)(addr_t)client);
+	if (client->contexts <= 0 || client->fenceCtx == 0)
+		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,
+			in.ib_count, 0, 0, in.ring, 0);
+	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, client->fenceCtx,
+			&client->preamblePresented, &sequence))
 		return gpu_refuse("CS_SUBMIT", "ring", B_ERROR, in.context, 0,
 			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
 	job->sequence = sequence;
@@ -2269,6 +2338,33 @@ struct gpu_stage_page {
 
 
 static void
+gpu_stage_unbind(gpu_stage_page* page)
+{
+	if (page == NULL || page->va == 0)
+		return;
+	r5_gfx9_vmid1_map(page->va, 0);
+	r5_gfx9_vmid1_flush();
+	page->va = 0;
+}
+
+
+static bool
+gpu_stage_bind(gpu_stage_page* page, uint64 va)
+{
+	uint64 flags = gpu_pte_flags(R5_GPU_VA_READ | R5_GPU_VA_WRITE
+		| R5_GPU_VA_EXEC);
+	uint64 pte = r5_gfx9_user_pte(page->phys, flags, page->gtt ? 1 : 0, 0,
+		&kR5Gfx93Mtype);
+	page->va = va;
+	if (!r5_gfx9_vmid1_map(va, pte) || !r5_gfx9_vmid1_flush()) {
+		page->va = 0;
+		return false;
+	}
+	return true;
+}
+
+
+static void
 gpu_stage_release(gpu_stage_page* page)
 {
 	if (page == NULL || page->va == 0)
@@ -2296,17 +2392,14 @@ gpu_stage_map(radeon_info* info, gpu_stage_page* page, uint64 va, bool gtt,
 	if (!gtt) {
 		if (r5_gfx9_alloc_user_vram(4096, &page->vramOffset) != B_OK)
 			return false;
-		radeon_shared_info* shared = info->shared_info;
-		if (info->kernel_window == NULL || shared == NULL
-			|| page->vramOffset < shared->vram_pool_offset) {
+		page->cpu = r5_gfx9_vram_cpu(page->vramOffset);
+		if (page->cpu == NULL) {
 			r5_gfx9_free_user_vram(page->vramOffset);
 			return false;
 		}
-		page->cpu = info->kernel_window
-			+ (page->vramOffset - shared->vram_pool_offset);
 		page->vram = true;
-		uint32 fb = gpu_mmio(info, kGcSegment, 0x096b) & 0x00ffffffu;
-		phys = ((uint64)fb << 24) + page->vramOffset;
+		uint32 fb = gpu_mmio(info, kGcSegment, 0x096b);
+		phys = r5_gpu_carveout_base(fb) + page->vramOffset;
 	} else {
 		void* system = NULL;
 		page->area = create_area("r5 gfx9 stage", &system,
@@ -2517,7 +2610,9 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	sLastIbVa = ibPage->va;
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
-	if (!r5_gfx9_user_submit(&ib, 1, &sequence)) {
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
+	if (!r5_gfx9_user_submit(&ib, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
 		return !sLost;
@@ -2699,7 +2794,9 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	sLastIbVa = ib.va;
 	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
 	uint64 sequence = 0;
-	if (!r5_gfx9_user_submit(&submit, 1, &sequence)) {
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
+	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
 		gpu_stage_release(&dest);
@@ -2772,7 +2869,9 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 			gpu_lost(info, "p");
 		return R5_GPU_P_ROOM;
 	}
-	if (!r5_gfx9_user_submit(&submit, 1, &sequence)) {
+	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
+	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		if (step == 0)
 			dprintf("radeon_hd: mark selftest submit\n");
 		else {
@@ -2930,6 +3029,8 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 }
 
 
+/* Stick 25 does not call this. The CPU self-check stays for a later stick. */
+__attribute__((unused))
 static bool
 gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 {
@@ -2944,37 +3045,216 @@ gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 }
 
 
+/* CPU only. Eight words go out through the PCI BAR. The same offset
+ * is read back through the carveout at once, then again after sfence.
+ * No clflush: that would hide a write the HDP is still holding. */
+static void
+gpu_stage_hdp(radeon_info* info)
+{
+	(void)info;
+	uint64 offset = 0;
+	uint8* bar = NULL;
+	if (r5_gfx9_alloc_vram(4096, 4096, &offset, &bar) != B_OK || bar == NULL) {
+		dprintf("radeon_hd: hdp alloc fail\n");
+		return;
+	}
+	uint8* alias = r5_gfx9_vram_cpu(offset);
+	if (alias == NULL || alias == bar || r5_gfx9_vram_bar(offset) != bar) {
+		dprintf("radeon_hd: hdp alias fail off %016llx\n",
+			(unsigned long long)offset);
+		return;
+	}
+	volatile uint32* src = (volatile uint32*)(bar + 64);
+	volatile uint32* dst = (volatile uint32*)(alias + 64);
+	for (uint32 i = 0; i < 8; i++)
+		src[i] = 0xA1000000u + i;
+	uint32 now[8];
+	uint32 later[8];
+	for (uint32 i = 0; i < 8; i++)
+		now[i] = dst[i];
+	asm volatile("sfence" ::: "memory");
+	for (uint32 i = 0; i < 8; i++)
+		later[i] = dst[i];
+	dprintf("radeon_hd: hdp off %016llx now %08x %08x %08x %08x "
+		"%08x %08x %08x %08x\n",
+		(unsigned long long)offset,
+		now[0], now[1], now[2], now[3], now[4], now[5], now[6], now[7]);
+	dprintf("radeon_hd: hdp sfence %08x %08x %08x %08x %08x %08x %08x %08x\n",
+		later[0], later[1], later[2], later[3],
+		later[4], later[5], later[6], later[7]);
+}
+
+
+static uint32
+gpu_stage_r1_word(gpu_stage_page* page)
+{
+	uint32 word = 0;
+	if (page != NULL && page->cpu != NULL)
+		memcpy(&word, page->cpu, sizeof(word));
+	return word;
+}
+
+
+static uint32
+gpu_stage_r1_job(radeon_info* info, const char* name, gpu_stage_page* ib,
+	const uint32* words, uint32 n)
+{
+	memcpy(ib->cpu, words, n * 4);
+	r5_gfx9_stage_bytes(ib->cpu, n * 4);
+	return gpu_stage_submit(info, 1, name, ib->va, n, 0, 0);
+}
+
+
+static void
+gpu_stage_r1_line(const char* what, uint64 x, uint64 y)
+{
+	dprintf("radeon_hd: t %lld %s x %016llx y %016llx "
+		"inv %d hub %d vmids %d fence %d cond %d gds %d pasid %d ce %d\n",
+		(long long)system_time(), what == NULL ? "" : what,
+		(unsigned long long)x, (unsigned long long)y,
+		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(),
+		r5_gfx9_vmids_on(), r5_gfx9_flush_fence_on(),
+		r5_gfx9_cond_exec_on(), r5_gfx9_gds_switch_on(),
+		r5_gfx9_pasid_map_on(), r5_gfx9_ce_meta_on());
+}
+
+
+/* R1a WRITE_DATA and R1b RELEASE_MEM, or R1c the IB fetch.
+ * Page A stays allocated until this returns, so a stale write still
+ * has a page to land on. R1c is a separate call: a miss there can hang. */
+static void
+gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y,
+	uint32_t* oldWord, uint32_t* newWord)
+{
+	gpu_stage_page a;
+	gpu_stage_page b;
+	gpu_stage_page cmd;
+	gpu_stage_page dest;
+	uint32 words[8];
+	uint32 n;
+	char what[80];
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	memset(&cmd, 0, sizeof(cmd));
+	memset(&dest, 0, sizeof(dest));
+	if (oldWord != NULL)
+		*oldWord = 0;
+	if (newWord != NULL)
+		*newWord = 0;
+	if (!gpu_stage_map(info, &a, x, true)
+		|| !gpu_stage_map(info, &cmd, gpu_stage_fresh(), false)
+		|| !gpu_stage_map(info, &b, gpu_stage_fresh(), false)
+		|| !gpu_stage_map(info, &dest, y, false)) {
+		gpu_stage_r1_line("r1 map", x, y);
+		gpu_stage_release(&dest);
+		gpu_stage_release(&b);
+		gpu_stage_release(&cmd);
+		gpu_stage_release(&a);
+		return;
+	}
+	gpu_stage_unbind(&b);
+	memset(a.cpu, 0, 4096);
+	memset(b.cpu, 0, 4096);
+	memset(dest.cpu, 0, 4096);
+	if (which != R5_GPU_R1_AB)
+		goto r1c;
+	n = r5_r1_write(words, 8, x, 0x11111111u);
+	gpu_stage_r1_line("r1a gtt", x, y);
+	if (n == 0 || gpu_stage_r1_job(info, "r1a-gtt", &cmd, words, n)
+			!= R5_GPU_P_OK) {
+		gpu_stage_r1_line("r1a gtt job", x, y);
+		goto out;
+	}
+	gpu_stage_unbind(&a);
+	if (!gpu_stage_bind(&b, x))
+		goto out;
+	n = r5_r1_write(words, 8, x, 0x22222222u);
+	gpu_stage_r1_line("r1a vram", x, y);
+	if (n == 0 || gpu_stage_r1_job(info, "r1a-vram", &cmd, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	snprintf(what, sizeof(what), "r1a gtt %08lx vram %08lx",
+		(unsigned long)gpu_stage_r1_word(&a),
+		(unsigned long)gpu_stage_r1_word(&b));
+	gpu_stage_r1_line(what, x, y);
+	if (oldWord != NULL)
+		*oldWord = gpu_stage_r1_word(&a);
+	if (newWord != NULL)
+		*newWord = gpu_stage_r1_word(&b);
+
+	gpu_stage_unbind(&b);
+	if (!gpu_stage_bind(&a, x))
+		goto out;
+	memset(a.cpu, 0, 4);
+	memset(b.cpu, 0, 4);
+	n = r5_r1_release(words, 8, x, 0x11111111u);
+	gpu_stage_r1_line("r1b gtt", x, y);
+	if (n == 0 || gpu_stage_r1_job(info, "r1b-gtt", &cmd, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	gpu_stage_unbind(&a);
+	if (!gpu_stage_bind(&b, x))
+		goto out;
+	n = r5_r1_release(words, 8, x, 0x22222222u);
+	gpu_stage_r1_line("r1b vram", x, y);
+	if (n == 0 || gpu_stage_r1_job(info, "r1b-vram", &cmd, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	snprintf(what, sizeof(what), "r1b gtt %08lx vram %08lx",
+		(unsigned long)gpu_stage_r1_word(&a),
+		(unsigned long)gpu_stage_r1_word(&b));
+	gpu_stage_r1_line(what, x, y);
+	goto out;
+
+r1c:
+	if (which != R5_GPU_R1_C)
+		goto out;
+	gpu_stage_r1_line("r1c before", x, y);
+	gpu_stage_unbind(&b);
+	if (!gpu_stage_bind(&a, x))
+		goto out;
+	n = r5_r1_write(words, 8, y, 0x33333333u);
+	gpu_stage_r1_line("r1c gtt", x, y);
+	if (n == 0 || gpu_stage_r1_job(info, "r1c-gtt", &a, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	gpu_stage_unbind(&a);
+	if (!gpu_stage_bind(&b, x))
+		goto out;
+	n = r5_r1_write(words, 8, y, 0x44444444u);
+	memcpy(b.cpu, words, n * 4);
+	r5_gfx9_stage_bytes(b.cpu, n * 4);
+	gpu_stage_r1_line("r1c vram", x, y);
+	if (gpu_stage_r1_job(info, "r1c-vram", &b, words, n) != R5_GPU_P_OK)
+		goto out;
+	snprintf(what, sizeof(what), "r1c dest %08lx",
+		(unsigned long)gpu_stage_r1_word(&dest));
+	gpu_stage_r1_line(what, x, y);
+out:
+	gpu_stage_release(&dest);
+	gpu_stage_release(&b);
+	gpu_stage_release(&cmd);
+	gpu_stage_r1_line("r1 free a", x, y);
+	gpu_stage_release(&a);
+}
+
+
 static status_t
 gpu_stage_u(radeon_info* info)
 {
 	if (!gpu_render_enabled() || !gpu_selftest_enabled())
 		return B_NOT_ALLOWED;
+	sStageFresh = 0;
+	gpu_stage_mtrr("before");
+	gpu_stage_hdp(info);
 	if (!r5_gfx9_vmid1_setup()) {
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
-	sStageFresh = 0;
-	gpu_stage_mtrr("before");
 	bool stop = false;
-	if (!gpu_stage_self(info, "u-self", true)
-		|| !gpu_stage_self(info, "u-self", false))
-		stop = true;
-	/* U2a-n: VRAM indirect buffer, fresh cached GTT, no clflush on the
-	 * read. U2a-f is the same read with clflush. U2b-n writes a cached
-	 * GTT indirect buffer without clflush. No write-combined step. */
-	if (!stop && !gpu_stage_pair(info, "u2a-n", gpu_stage_fresh(), false,
-			false, gpu_stage_fresh(), true, false, true, false, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2a-f", gpu_stage_fresh(), false,
-			false, gpu_stage_fresh(), true, false, true, true, 0, 8, false))
-		stop = true;
-	if (!stop && !gpu_stage_pair(info, "u2b-n", gpu_stage_fresh(), true,
-			false, gpu_stage_fresh(), false, false, false, false, 0, 8, false))
-		stop = true;
-	/* Group B writes only. The indirect buffer stays at a fresh low
-	 * address. A miss continues. Group A fetches the indirect buffer
-	 * from the address under test, destination on the next page, both
-	 * VRAM. C1 is the address that hung on stick 23, and it is last. */
+	/* The HDP probe ran first and does not use the GPU. Group B then
+	 * writes only, with the indirect buffer at a fresh low address.
+	 * Group A fetches a VRAM indirect buffer. C1 is last. */
 	if (!stop && !gpu_stage_pair(info, "b1", gpu_stage_fresh(), false,
 			false, 0xffff800000041000ull, false, false, true, true, 0, 8, false))
 		stop = true;
@@ -2984,15 +3264,13 @@ gpu_stage_u(radeon_info* info)
 	if (!stop && !gpu_stage_pair(info, "b3", gpu_stage_fresh(), false,
 			false, 0xffff800000001000ull, false, false, true, true, 0, 8, false))
 		stop = true;
-	if (!stop && !gpu_stage_dma(info, "b4", 0xffff800000041000ull, true))
-		stop = true;
 	if (!stop && !gpu_stage_dma(info, "b5", 0xffff800000041000ull, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "a2", 0xffff800100000000ull, false,
 			false, 0xffff800100001000ull, false, false, true, true, 0, 8, false))
 		stop = true;
-	if (!stop && !gpu_stage_pair(info, "a1", 0xffffffffffbfc000ull, false,
-			false, 0xffffffffffbfd000ull, false, false, true, true, 0, 8, false))
+	if (!stop && !gpu_stage_pair(info, "a1", R5_GPU_HIGH_VA_MAX - 0x1000ull, false,
+			false, R5_GPU_HIGH_VA_MAX - 0x2000ull, false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "a3", 0xffff808000000000ull, false,
 			false, 0xffff808000001000ull, false, false, true, true, 0, 8, false))
@@ -3034,6 +3312,17 @@ gpu_open(const char* name, uint32 flags, void** cookie)
 		return B_NO_MEMORY;
 	memset(client, 0, sizeof(*client));
 	client->info = gDeviceInfo[0];
+	gpu_lock();
+	int pasid = r5_pasid_alloc(&sPasids, 16);
+	if (pasid < 0) {
+		gpu_unlock();
+		free(client);
+		return B_NO_MEMORY;
+	}
+	client->pasid = (uint32)pasid;
+	client->next = sClientList;
+	sClientList = client;
+	gpu_unlock();
 	*cookie = client;
 	return B_OK;
 }
@@ -3084,6 +3373,18 @@ gpu_free(void* cookie)
 		client->syncs[i].live = false;
 		client->syncs[i].owner = NULL;
 	}
+	if (client->pasid != 0)
+		r5_pasid_free(&sPasids, client->pasid);
+	if (sClientList == client)
+		sClientList = client->next;
+	else {
+		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+			if (scan->next == client) {
+				scan->next = client->next;
+				break;
+			}
+		}
+	}
 	if (client->contexts > 0) {
 		sContexts -= client->contexts;
 		if (sContexts < 0)
@@ -3114,6 +3415,55 @@ gpu_write(void* cookie, off_t position, const void* buffer, size_t* numBytes)
 	(void)buffer;
 	*numBytes = 0;
 	return B_ERROR;
+}
+
+
+static status_t
+gpu_debug_switch(void* buffer, size_t length)
+{
+	r5_gpu_debug_switch in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return status;
+	if (!gpu_debug_enabled())
+		return B_NOT_ALLOWED;
+	if ((in.which & R5_GPU_SWITCH_VMID_PER_FILE) != 0)
+		return B_NOT_ALLOWED;
+	if ((in.which & R5_GPU_SWITCH_CE_META) != 0) {
+		dprintf("radeon_hd: gfx9_ce_meta is a boot setting\n");
+		return B_NOT_ALLOWED;
+	}
+	/* Idle first. The flush is after the registers move. */
+	bigtime_t deadline = system_time() + 5000000;
+	while (r5_gfx9_user_seen() < sHighestSequence) {
+		if (system_time() > deadline)
+			return B_TIMED_OUT;
+		snooze(1000);
+	}
+	r5_gfx9_switch_registers(
+		(in.which & R5_GPU_SWITCH_INV_RANGE) != 0 ? (in.on ? 1 : 0) : -1,
+		(in.which & R5_GPU_SWITCH_HUB_LINUX) != 0 ? (in.on ? 1 : 0) : -1,
+		(in.which & R5_GPU_SWITCH_VMIDS) != 0 ? (in.on ? 1 : 0) : -1);
+	if ((in.which & R5_GPU_SWITCH_FLUSH_FENCE) != 0)
+		r5_gfx9_set_flush_fence(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_COND_EXEC) != 0)
+		r5_gfx9_set_cond_exec(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_GDS) != 0)
+		r5_gfx9_set_gds_switch(in.on ? 1 : 0);
+	if ((in.which & R5_GPU_SWITCH_DEFERRED) != 0) {
+		sDeferred = in.on ? 1 : 0;
+		r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
+	}
+	if (!r5_gfx9_vmid1_flush())
+		return B_ERROR;
+	dprintf("radeon_hd: t %lld switch which %lu on %lu "
+		"inv %d hub %d vmids %d fence %d cond %d gds %d defer %d pasid %d\n",
+		(long long)system_time(), (unsigned long)in.which,
+		(unsigned long)in.on, r5_gfx9_inv_range_on(),
+		r5_gfx9_hub_linux_on(), r5_gfx9_vmids_on(),
+		r5_gfx9_flush_fence_on(), r5_gfx9_cond_exec_on(),
+		r5_gfx9_gds_switch_on(), sDeferred, r5_gfx9_pasid_map_on());
+	return B_OK;
 }
 
 
@@ -3154,9 +3504,11 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		else {
 			if (sContexts > 0)
 				if (gpu_debug_enabled())
-				dprintf("radeon_hd: vmid1 reused, clients %ld\n",
-					(long)sContexts);
+				dprintf("radeon_hd: t %lld vmid1 reused, clients %ld\n",
+					(long long)system_time(), (long)sContexts);
 			sContexts++;
+			if (client->contexts == 0)
+				client->fenceCtx = r5_ctx_handout(&sCtxCounter);
 			client->contexts++;
 			in.context = 1;
 			status = gpu_copy_out(buffer, length, &in, sizeof(in));
@@ -3194,7 +3546,49 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			if (copied != B_OK)
 				status = copied;
 		}
-	} else if (op == R5_GPU_SELFTEST) {
+	} else if (op == R5_GPU_DEBUG_SWITCH)
+		status = gpu_debug_switch(buffer, length);
+	else if (op == R5_GPU_LOG_REGS) {
+		r5_gpu_log_regs in;
+		status = gpu_copy_in(buffer, length, &in, sizeof(in));
+		if (status != B_OK)
+			;
+		else if (in.version != 1)
+			status = B_BAD_VALUE;
+		else {
+			r5_gfx9_log_state("selftest", in.line, sizeof(in.line));
+			in.length = (uint32)strlen(in.line);
+			status = gpu_copy_out(buffer, length, &in, sizeof(in));
+		}
+	} else if (op == R5_GPU_STAGE_R1) {
+		r5_gpu_stage_r1 in;
+		status = gpu_copy_in(buffer, length, &in, sizeof(in));
+		if (status != B_OK)
+			;
+		else if (in.version != 1
+			|| (in.which != R5_GPU_R1_AB && in.which != R5_GPU_R1_C)
+			|| r5_vm_va_fits(in.x, 4096) == 0
+			|| in.y != in.x + 0x1000ull
+			|| r5_vm_va_fits(in.y, 4096) == 0)
+			status = B_BAD_VALUE;
+		else if (sLost) {
+			dprintf("radeon_hd: skipped, gpu lost\n");
+			status = ECANCELED;
+		} else if (!gpu_render_enabled() || !gpu_selftest_enabled())
+			status = B_NOT_ALLOWED;
+		else if (!r5_gfx9_vmid1_setup()) {
+			dprintf("radeon_hd: r1 skip vmid\n");
+			status = B_NO_INIT;
+		} else {
+			gpu_stage_r1(client->info, in.which, in.x, in.y,
+				&in.old_word, &in.new_word);
+			status = sLost ? ECANCELED : B_OK;
+			status_t copied = gpu_copy_out(buffer, length, &in, sizeof(in));
+			if (copied != B_OK)
+				status = copied;
+		}
+	}
+	else if (op == R5_GPU_SELFTEST) {
 		if (sLost) {
 			dprintf("radeon_hd: skipped, gpu lost\n");
 			status = ECANCELED;

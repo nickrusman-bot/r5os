@@ -12,10 +12,18 @@
 
 #include "r5_gpu.h"
 #include "r5_cs.h"
+#include "r5_pasid.h"
+#include "r5_vmid.h"
+#include "r5_defer.h"
+#include "r5_gc9_regs.h"
+#include "r5_agp.h"
+#include "r5_inv_range.h"
+#include "r5_vm_size.h"
 #include "r5_span.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
+#include "r5_stage_r1.h"
 #include "r5_log.h"
 
 #include <string.h>
@@ -146,7 +154,7 @@ linux_ring_frame()
 	}
 	uint32_t job[512];
 	uint32_t filled = r5_cs_user_body(job, 512, ibs, ibDw, ibVm, 2,
-		0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep);
+		0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
 	if (filled != body + 4u || job[0] != 0xc0008b00u || job[1] != 0
 		|| job[2] != 0xc0008b00u || job[3] != 0
 		|| job[5] != kR5CsCntxKeep) {
@@ -211,10 +219,10 @@ linux_ring_frame()
 	const uint32_t otherDw[] = { 4u, 8u };
 	uint32_t other[320];
 	uint32_t otherN = r5_cs_user_body(other, 320, otherIb, otherDw, ibVm, 2,
-		0xabc000ull, 9, 0xabd000ull, kR5CsCntxKeep);
+		0xabc000ull, 9, 0xabd000ull, kR5CsCntxKeep, 0);
 	uint32_t load[64];
 	uint32_t loadN = r5_cs_user_body(load, 64, otherIb, otherDw, ibVm, 1,
-		0xabc000ull, 9, 0xabd000ull, kR5CsCntxLoad);
+		0xabc000ull, 9, 0xabd000ull, kR5CsCntxLoad, 0);
 	if (loadN != r5_cs_user_words(1) || load[5] != kR5CsCntxLoad
 		|| load[6] != 0)
 		return fail("switch load");
@@ -585,7 +593,7 @@ main()
 	const uint64_t fenceMc = 0x812c18000ull + kR5UserFenceOffset;
 	const uint64_t irqMc = 0x812c18000ull + kR5UserIrqOffset;
 	uint32_t body = r5_cs_user_body(packet, 64, ibs, ibDw, ibVm, 1, fenceMc, 7,
-		irqMc, kR5CsCntxKeep);
+		irqMc, kR5CsCntxKeep, 0);
 	if (body != 33u || body != r5_cs_user_words(1))
 		return fail("frame size");
 	if (packet[0] != r5_cs_packet3(0x8b, 0) || packet[1] != 0
@@ -670,23 +678,25 @@ main()
 
 	const char* selftestOrder[] = {
 		"highVa, false",
+		"stage_regs(out)",
+		"stage_r1(out, R5_GPU_R1_AB, 0xffff800000100000ull)",
 		"\"vulkaninfo\"",
+		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
+		"R5_GPU_SWITCH_FLUSH_FENCE",
+		"confirm teapots",
+		"stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull)",
 		"stage_selftest(out)",
 		"highVa, true"
 	};
 	const char* stageOrder[] = {
 		"gpu_stage_p(",
 		"gpu_stage_u(",
-		"\"u-self\"",
-		"\"u2a-n\"",
-		"\"u2a-f\"",
-		"\"u2b-n\"",
+		"gpu_stage_hdp(info)",
 		"\"b1\"",
 		"\"b2\"",
 		"\"b3\"",
-		"\"b4\"",
 		"\"b5\"",
 		"\"a2\"",
 		"\"a1\"",
@@ -705,12 +715,65 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 6) != 0)
+			selftestOrder, 12) != 0)
 		return 1;
+	if (r5_gpu_r1_ab_pass(0x11111111u, 0x22222222u) == 0
+		|| r5_gpu_r1_ab_pass(0x22222222u, 0) != 0
+		|| r5_gpu_r1_ab_pass(0x11111111u, 0) != 0)
+		return fail("r1ab pass");
+	if (source_order(
+			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+			(const char*[]){ "R1ab pass old", "R1ab fail old" }, 2) != 0)
+		return 1;
+	{
+		const char* regsBefore[] = {
+			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
+			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
+			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
+			"stage_regs(out)", "stage_regs(out)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				regsBefore, 11) != 0)
+			return 1;
+		const char* r1cLog[] = {
+			"stage_regs(out); stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				r1cLog, 1) != 0)
+			return 1;
+		char logBody[2000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp",
+				"r5_gfx9_log_state(", "r5_gfx9_inv_range_restore(",
+				logBody, sizeof(logBody)) != 0)
+			return 1;
+		if (strstr(logBody, "open(") != NULL
+			|| strstr(logBody, "fsync(") != NULL)
+			return fail("kernel log file");
+		if (strstr(logBody, "dprintf") == NULL)
+			return fail("kernel log dprintf");
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				(const char*[]){ "fputs(in.line, out)", "fsync(fileno(out))" },
+				2) != 0)
+			return 1;
+	}
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			stageOrder, 14) != 0)
+			stageOrder, 16) != 0)
 		return 1;
+	{
+		char uBody[8000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+				"gpu_stage_u(", "return B_OK;", uBody, sizeof(uBody)) != 0)
+			return 1;
+		if (strstr(uBody, "gpu_stage_r1(") != NULL)
+			return fail("r1 still in u");
+	}
 	{
 		FILE* driver = fopen(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
@@ -990,6 +1053,679 @@ main()
 			return fail("node keys");
 	}
 
+	if (r5_gpu_carveout_base(0x810u) != 0x810000000ull)
+		return fail("carveout base");
+	if (r5_gpu_carveout_base(0x01000810u) != 0x810000000ull)
+		return fail("carveout mask");
+	{
+		char text[2500];
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "map_pool(", "return true;",
+			text, sizeof(text)) != 0)
+			return fail("bar pool");
+		if (strstr(text, "vram_window_phys") == NULL)
+			return fail("bar window");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "map_carveout(", "return true;",
+			text, sizeof(text)) != 0)
+			return fail("carveout map");
+		if (strstr(text, "r5_gpu_carveout_base") == NULL
+			|| strstr(text, "B_WRITE_COMBINING_MEMORY") == NULL)
+			return fail("carveout wc");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "vm_page_alloc(", "return 1;",
+			text, sizeof(text)) != 0)
+			return fail("vm page");
+		if (strstr(text, "r5_gfx9_vram_cpu") == NULL
+			|| strstr(text, "kernel_window") != NULL)
+			return fail("vm page window");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "gpu_stage_hdp(", "gpu_stage_r1_word(",
+			text, sizeof(text)) != 0)
+			return fail("hdp probe");
+		if (strstr(text, "r5_gfx9_vram_bar") == NULL
+			|| strstr(text, "r5_gfx9_vram_cpu") == NULL
+			|| strstr(text, "sfence") == NULL)
+			return fail("hdp paths");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/gfx9_k12.cpp", "r5_gfx9_vmid1_flush()",
+			"vmid1 fail tlb", text, sizeof(text)) != 0)
+			return fail("vmid1 flush");
+		if (strstr(text, "const uint32 eng = 17;") == NULL
+			|| strstr(text, "eng = 0") != NULL)
+			return fail("vmid1 engine");
+		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
+			"radeon_hd/r5_gpu.cpp", "r5_gfx9_map_vram(bo->vramOffset",
+			"bo->kernel = kernel", text, sizeof(text)) != 0)
+			return fail("bo map");
+	}
+	{
+		uint32_t words[40];
+		uint32_t n = r5_cs_vm_switch(words, 40, 1, 0x812c18001ull,
+			0x9000ull, 7);
+		if (n != 26 || n != r5_cs_vm_switch_words())
+			return fail("vm switch words");
+		if (words[0] != r5_cs_packet3(0x3c, 5) || words[1] != 0x113u
+			|| words[4] != 7u || words[6] != 4u)
+			return fail("vm switch pipe");
+		/* gmc_v9_0_emit_flush_gpu_tlb, written by gfx_v9_0_ring_emit_wreg.
+		 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000.
+		 * VMID 1 is context 1: 0x2000 + 0x08ed and the next register.
+		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5. */
+		if (words[7] != r5_cs_packet3(0x37, 3) || words[8] != 0x40100000u
+			|| words[9] != 0x28edu || words[11] != 0x12c18001u
+			|| words[12] != r5_cs_packet3(0x37, 3) || words[13] != 0x40100000u
+			|| words[14] != 0x28eeu || words[16] != 0x8u)
+			return fail("vm switch ptb");
+		/* gfx_v9_0_ring_emit_reg_write_reg_wait, me_fw_write_wait.
+		 * VMID 1 request is bit 1 plus the five invalidate bits. */
+		if (words[17] != r5_cs_packet3(0x3c, 5) || words[18] != 0x143u
+			|| words[19] != 0x28a3u || words[20] != 0x28b5u
+			|| words[21] != 0x007c0002u || words[22] != 0x2u
+			|| words[23] != 0x20u)
+			return fail("vm switch inv");
+		if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
+			return fail("vm switch pfp");
+		if (r5_cs_vm_switch(0, 0, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
+			return fail("vm switch vmid");
+		if (r5_cs_vm_switch(words, 40, 1, 0, 0x9000ull, 7) != 0)
+			return fail("vm switch pd");
+		const char* tlbOrder[] = {
+			"r5_gfx9_vmid1_map(uint64 va, uint64 pte)",
+			"r5_gfx9_vmid1_touch()"
+		};
+		const char* ringOrder[] = {
+			"r5_gfx9_user_submit(",
+			"r5_cs_vm_switch(",
+			"r5_gfx9_vmid1_flushed()"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", tlbOrder, 2) != 0)
+			return 1;
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", ringOrder, 3) != 0)
+			return 1;
+	}
+	r5_cs_ring_ctx ringCtx;
+	memset(&ringCtx, 0, sizeof(ringCtx));
+	r5_ctx_counter handed;
+	memset(&handed, 0, sizeof(handed));
+	uint64_t first = r5_ctx_handout(&handed);
+	uint64_t again = r5_ctx_handout(&handed);
+	if (first == 0 || again == 0 || again == first
+		|| r5_ctx_handout(0) != 0)
+		return fail("context counter");
+	if (r5_cs_ctx_switch(&ringCtx, first) == 0
+		|| r5_cs_cntx(1, 0) != kR5CsCntxLoad)
+		return fail("first context load");
+	r5_cs_ctx_note(&ringCtx, first);
+	if (r5_cs_ctx_switch(&ringCtx, first) != 0
+		|| r5_cs_cntx(0, 0) != kR5CsCntxKeep)
+		return fail("same context keep");
+	if (r5_cs_ctx_switch(&ringCtx, again) == 0
+		|| r5_cs_cntx(1, 0) != kR5CsCntxLoad)
+		return fail("recreated context load");
+	r5_cs_ctx_note(&ringCtx, again);
+	if (r5_cs_ctx_switch(&ringCtx, 0) == 0)
+		return fail("kernel context");
+	if (r5_cs_cntx(1, kR5PreamblePresent) != 0x91018003u)
+		return fail("preamble load ce");
+	if (r5_cs_cntx(0, kR5PreambleFirst) != 0x90000000u)
+		return fail("preamble first");
+	if (r5_cs_cntx(1, kR5PreamblePresent | kR5PreambleFirst) != 0x91018003u)
+		return fail("preamble switch wins");
+	if (r5_cs_skip_preamble_ib(kR5IbPreamble, 0, 0) == 0)
+		return fail("skip repeated preamble");
+	if (r5_cs_skip_preamble_ib(kR5IbPreamble, 1, 0) != 0)
+		return fail("keep preamble on switch");
+	if (r5_cs_skip_preamble_ib(kR5IbPreamble, 0, kR5PreambleFirst) != 0)
+		return fail("keep first preamble");
+	if (r5_cs_skip_preamble_ib(0, 0, 0) != 0)
+		return fail("keep plain ib");
+	if (r5_cs_ib_va(0x00001000u, 0x8001u) != 0xffff800100001000ull)
+		return fail("ib va sign");
+	if (r5_cs_ib_va(0x00001000u, 0x0001u) != 0x000100001000ull)
+		return fail("ib va low");
+	#define R5_GC9_WAS(name, was) \
+		if ((uint32_t)(name) != (uint32_t)(was)) return fail(#name);
+	#include "r5-gc9-regs-check.inc"
+	#undef R5_GC9_WAS
+	if (r5_cs_gc_reg(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32) != 0x28ebu)
+		return fail("ptb packet address");
+	{
+		uint32_t fence[16];
+		uint32_t n = r5_cs_flush_fence(fence, 16, 0, 0x401040ull, 5);
+		uint32_t skipped[64];
+		uint64_t oneIb = 0x1000;
+		uint32_t oneDw = 4;
+		uint32_t oneVm = 1;
+		uint32_t plain = r5_cs_user_body(skipped, 64, &oneIb, &oneDw, &oneVm,
+			1, 0x66d000ull, 6, 0x401040ull, kR5CsCntxKeep, 1);
+		if (n != 12u || fence[0] != r5_cs_packet3(0x49, 6)
+			|| fence[1] != kR5CsEvent || fence[2] != kR5CsRel32Int
+			|| fence[3] != 0x401040u || fence[5] != 5u
+			|| fence[8] != r5_cs_packet3(0x8b, 0)
+			|| fence[10] != r5_cs_packet3(0x8b, 0))
+			return fail("flush fence");
+		if (plain + 4u != r5_cs_user_words(1)
+			|| skipped[0] != r5_cs_packet3(0x28, 1))
+			return fail("flush fence opens the frame");
+	}
+	{
+		uint64_t page = 0x80000000ull;
+		uint64_t slot = r5_cs_cond_exec_mc(page);
+		uint32_t pkt[8];
+		uint32_t n = r5_cs_cond_exec(pkt, 8, 0, slot);
+		r5_cs_cond_exec_patch(pkt, 4, 33);
+		if (kR5CondExecOffset < kR5UserIrqOffset + 4u
+			|| (kR5CondExecOffset & 3u) != 0
+			|| slot != page + kR5CondExecOffset)
+			return fail("cond exec slot");
+		if (n != 5u || pkt[0] != r5_cs_packet3(0x22, 3)
+			|| pkt[1] != (uint32_t)slot || pkt[2] != (uint32_t)(slot >> 32)
+			|| pkt[4] != 33u)
+			return fail("cond exec");
+		const char* condOrder[] = {
+			"kR5CondExecOffset / 4u] = 1u",
+			"r5_gfx9_user_submit(",
+			"r5_cs_cond_exec_mc("
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", condOrder, 3) != 0)
+			return 1;
+		uint32_t cond[8];
+		if (r5_csa_vaddr(r5_gfx9_vm_size().max_pfn) != 0xffffffffffe00000ull
+			|| kR5CsaBytes != 128ull * 1024ull
+			|| kR5VaReservedCsa != (2ull << 20))
+			return fail("csa vaddr");
+		if (r5_vm_va_fits(r5_csa_vaddr(r5_gfx9_vm_size().max_pfn), 4096) != 0)
+			return fail("csa reserved");
+		if (r5_vm_va_fits(0xffffffffffbfd000ull, 4096) == 0)
+			return fail("high page");
+		if (r5_vm_va_fits(R5_GPU_VA_OFFSET, 4096) == 0
+			|| r5_vm_va_fits(R5_GPU_HIGH_VA_MAX - 4096ull, 4096) == 0)
+			return fail("low va");
+		uint32_t meta[16];
+		if (r5_cs_ce_meta(meta, 16, 0, r5_csa_vaddr(r5_gfx9_vm_size().max_pfn)) != 14u
+			|| meta[0] != 0xc00c3700u || meta[1] != 0x80100800u
+			|| meta[2] != 0xffe00000u || meta[3] != 0xffffffffu
+			|| meta[4] != 0u || meta[13] != 0u)
+			return fail("ce meta");
+		if (r5_cs_cond_exec(cond, 8, 0, 0x401080ull) != 5u
+			|| cond[0] != 0xc0032200u || cond[1] != 0x00401080u
+			|| cond[2] != 0u || cond[3] != 0u)
+			return fail("cond packet");
+		r5_cs_cond_exec_patch(cond, 4, 0x22u);
+		if (cond[4] != 0x22u)
+			return fail("cond flush skip");
+		r5_cs_cond_exec_patch(cond, 4, 0x2du);
+		if (cond[4] != 0x2du)
+			return fail("cond job skip");
+		uint32_t opened[64];
+		uint64_t oneIb = 0x1000;
+		uint32_t oneDw = 4;
+		uint32_t oneVm = 1;
+		uint32_t whole = r5_cs_user_body(opened, 64, &oneIb, &oneDw, &oneVm,
+			1, 0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0, 0);
+		uint32_t inner = r5_cs_user_body(opened, 64, &oneIb, &oneDw, &oneVm,
+			1, 0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 1, 1);
+		if (whole < 6u || inner != whole - 6u || opened[0] == 0xc0008b00u
+			|| opened[inner - 2u] == 0xc0008b00u)
+			return fail("cond outside switches");
+		const char* twoCond[] = {
+			"r5_cs_cond_exec(packets, cap, switched,",
+			"r5_cs_vm_switch(",
+			"r5_cs_cond_exec_patch(packets, slotA,",
+			"r5_cs_cond_exec(packets, cap, switched,",
+			"r5_cs_user_body(",
+			"r5_cs_cond_exec_patch(packets, slotB,"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", twoCond, 6) != 0)
+			return 1;
+	}
+	{
+		struct r5_gds empty;
+		struct r5_gds zero;
+		memset(&empty, 0, sizeof(empty));
+		memset(&zero, 0, sizeof(zero));
+		zero.valid = 1;
+		struct r5_gds sized = zero;
+		sized.gds_size = 1;
+		uint32_t pkt[24];
+		uint32_t n = r5_cs_gds_switch(pkt, 24, 0, 1, &zero);
+		if (r5_gds_switch_needed(&empty, &zero) == 0
+			|| r5_gds_switch_needed(&zero, &zero) != 0
+			|| r5_gds_switch_needed(&zero, &sized) == 0)
+			return fail("gds needed");
+		if (n != 20u || pkt[0] != r5_cs_packet3(0x37, 3) || pkt[1] != 0u
+			|| pkt[2] != r5_cs_gc_reg(mmGDS_VMID0_BASE) + 2u
+			|| pkt[4] != 0u
+			|| pkt[7] != r5_cs_gc_reg(mmGDS_VMID0_SIZE) + 2u
+			|| pkt[12] != r5_cs_gc_reg(mmGDS_GWS_VMID0) + 1u
+			|| pkt[17] != r5_cs_gc_reg(mmGDS_OA_VMID0) + 1u
+			|| pkt[19] != 0u)
+			return fail("gds switch");
+	}
+	{
+		struct r5_pasid_ida ida;
+		memset(&ida, 0, sizeof(ida));
+		int first = r5_pasid_alloc(&ida, 16);
+		int second = r5_pasid_alloc(&ida, 16);
+		r5_pasid_free(&ida, (uint32_t)first);
+		int again = r5_pasid_alloc(&ida, 16);
+		uint32_t pkt[8];
+		uint32_t n = r5_cs_pasid_map(pkt, 8, 0, 1, (uint32_t)first);
+		if (r5_pasid_alloc(0, 16) != -22 || r5_pasid_alloc(&ida, 0) != -22)
+			return fail("pasid bits");
+		if (first != 32768 || second != 32769 || again != first)
+			return fail("pasid alloc");
+		if (n != 5u || pkt[0] != r5_cs_packet3(0x37, 3)
+			|| pkt[1] != 0x40100000u
+			|| pkt[2] != r5_cs_oss_reg(mmIH_VMID_0_LUT) + 1u
+			|| pkt[4] != (uint32_t)first)
+			return fail("pasid map");
+		if (r5_pasid_map_due(0, 0, (uint32_t)first) != 0
+			|| r5_pasid_map_due(0, (uint32_t)first, (uint32_t)second) != 0)
+			return fail("pasid map off");
+		/* Settings off, no VM flush: r5_gfx9_user_submit writes this
+		 * body and nothing in front of it. That is the frame from
+		 * before the PASID LUT write. Two clients must match it
+		 * dword for dword, and neither frame contains the LUT. */
+		const uint32_t beforeN8[] = {
+			0x8bu, 0x8bu, 0x28u, 0x90u, 0x3fu, 0x90u, 0x49u, 0x49u, 0x8bu
+		};
+		uint32_t bodyA[64];
+		uint32_t bodyB[64];
+		uint64_t ib = 0x1000;
+		uint32_t dw = 4;
+		uint32_t vm = 1;
+		uint32_t na = r5_cs_user_body(bodyA, 64, &ib, &dw, &vm, 1,
+			0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
+		uint32_t nb = r5_cs_user_body(bodyB, 64, &ib, &dw, &vm, 1,
+			0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0);
+		if (na == 0 || na != nb || na != r5_cs_user_words(1))
+			return fail("two clients, settings off");
+		uint32_t lut = r5_cs_oss_reg(mmIH_VMID_0_LUT);
+		uint32_t seen = 0;
+		for (uint32_t i = 0; i < na; i++) {
+			if (bodyA[i] != bodyB[i])
+				return fail("two clients differ");
+			if (bodyA[i] == lut || bodyA[i] == lut + 1u)
+				return fail("lut in the off frame");
+			if ((bodyA[i] >> 30) == 3u) {
+				uint32_t op = (bodyA[i] >> 8) & 0xffu;
+				if (seen >= 9u || op != beforeN8[seen])
+					return fail("before N8");
+				seen++;
+			}
+		}
+		if (seen != 9u)
+			return fail("before N8 count");
+		const char* pasidOrder[] = {
+			"int inBlock = flush || gds;",
+			"int pasidMap = inBlock",
+			"r5_cs_pasid_map("
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", pasidOrder, 3) != 0)
+			return 1;
+	}
+	if (r5_gfx9_inv_engines() != 18u)
+		return fail("inv engines");
+	if (r5_gfx9_inv_range_lo(0) != 0x8c7u
+		|| r5_gfx9_inv_range_hi(0) != 0x8c8u)
+		return fail("inv eng0");
+	if (r5_gfx9_inv_range_lo(1)
+		!= r5_gfx9_inv_range_lo(0) + R5_GC9_ENG_ADDR_DISTANCE)
+		return fail("inv step");
+	if (r5_gfx9_inv_range_lo(17) != 0x8c7u + 17u * R5_GC9_ENG_ADDR_DISTANCE
+		|| r5_gfx9_inv_range_hi(17)
+			!= mmVM_INVALIDATE_ENG0_ADDR_RANGE_HI32
+				+ 17u * R5_GC9_ENG_ADDR_DISTANCE)
+		return fail("inv eng17");
+	if (r5_gfx9_inv_range_lo_value() != 0xffffffffu
+		|| r5_gfx9_inv_range_hi_value() != 0x1fu)
+		return fail("inv values");
+	{
+		uint32_t lo[18];
+		uint32_t hi[18];
+		uint32_t engine;
+		uint32_t wrote;
+		memset(lo, 0, sizeof(lo));
+		memset(hi, 0, sizeof(hi));
+		if (r5_gfx9_inv_range_chosen(0, 0) != 1
+			|| r5_gfx9_inv_range_chosen(0, 1) != 1)
+			return fail("inv default");
+		if (r5_gfx9_inv_range_chosen(1, 0) != 0)
+			return fail("inv off");
+		if (r5_gfx9_inv_range_chosen(1, 1) != 1)
+			return fail("inv on");
+		wrote = r5_gfx9_inv_range_write(lo, hi, r5_gfx9_inv_range_chosen(0, 0));
+		if (wrote != 18u)
+			return fail("inv engines written");
+		for (engine = 0; engine < wrote; engine++) {
+			if (lo[engine] != 0xffffffffu || hi[engine] != 0x1fu)
+				return fail("inv engine value");
+		}
+		if (r5_gfx9_inv_range_write(lo, hi, r5_gfx9_inv_range_chosen(1, 0)) != 0)
+			return fail("inv off write");
+		const char* invDefault[] = {
+			"static bool sInvRange = true;",
+			"get_driver_boolean_parameter(settings, \"gfx9_inv_range\",\n"
+				"\t\t\ttrue, true);"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", invDefault, 2) != 0)
+			return 1;
+		const char* invContract[] = {
+			"## GFXHUB invalidation range (fixed)",
+			"mmVM_INVALIDATE_ENG0_ADDR_RANGE_LO32",
+			"`0xffffffff` and `0x1f`",
+			"r5_gfx9_vmid1_setup",
+			"The boot position, before the first user job, has not been booted.",
+			"gfx9_deferred_free"
+		};
+		if (source_order("docs/GRAPHICS.md", invContract, 6) != 0)
+			return 1;
+		const char* m4Close[] = {
+			"done, experimental, opt-in",
+			"The GPU stays opt-in per machine until M10."
+		};
+		if (source_order("docs/GPU-ARCHITECTURE.md", m4Close, 2) != 0)
+			return 1;
+		const char* m5Next[] = {
+			"**M4 is done:**",
+			"**Next, M5:**"
+		};
+		if (source_order("docs/ROADMAP.md", m5Next, 2) != 0)
+			return 1;
+		const char* m4Record[] = {
+			"### M4: the second program failed because the invalidation range covered nothing",
+			"The boot position, before the first user job, has not been booted.",
+			"distro/BUILD` stays the same"
+		};
+		if (source_order("CHANGELOG.md", m4Record, 3) != 0)
+			return 1;
+		const char* hardcode[] = {
+			"r5_gfx9_inv_range_lo_value",
+			"`0xffffffff`",
+			"gfxhub_v1_0_program_invalidation",
+			"r5_gfx9_inv_range_hi_value",
+			"`0x1f`"
+		};
+		if (source_order("generated/gpu-m4/HARDCODE.md", hardcode, 5) != 0)
+			return 1;
+	}
+	{
+		struct r5_vm_size size = r5_vm_adjust(256u * 1024u, 3u, 48u, 16u);
+		uint32_t cntl = r5_gfx9_vmid_cntl(&size, 0);
+		uint32_t depthBits = VM_CONTEXT0_CNTL__PAGE_TABLE_BLOCK_SIZE__SHIFT
+			- VM_CONTEXT0_CNTL__PAGE_TABLE_DEPTH__SHIFT;
+		if (size.num_level != 3u || size.block_size != 9u)
+			return fail("vm levels");
+		if (size.max_pfn != (256ull * 1024ull) << 18)
+			return fail("vm pfn");
+		if (((cntl >> VM_CONTEXT0_CNTL__PAGE_TABLE_DEPTH__SHIFT)
+				& ((1u << depthBits) - 1u)) != 3u)
+			return fail("vmid depth");
+		if (((cntl >> VM_CONTEXT0_CNTL__PAGE_TABLE_BLOCK_SIZE__SHIFT)
+				& 0xfu) != 0u)
+			return fail("vmid block");
+		if ((cntl & (1u << VM_CONTEXT0_CNTL__RETRY_PERMISSION_OR_INVALID_PAGE_FAULT__SHIFT))
+				!= 0)
+			return fail("vmid retry");
+		if (r5_gfx9_sh_mem_config() != 0x1018u
+			|| r5_gfx9_sh_mem_bases() != 0x20001000u)
+			return fail("sh mem");
+		const char* vmidOrder[] = {
+			"if (!sVmids || sInfo == NULL)",
+			"for (i = 0; i <= 14u; i++)"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", vmidOrder, 2) != 0)
+			return 1;
+	}
+	{
+		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(0, 0x3fffffffull, 1);
+		if (agp.bot != 0xffffffu || agp.top != 0u || agp.low != 0u
+			|| agp.high != ((0x3fffffffull >> 18) + 1ull))
+			return fail("agp default");
+		struct r5_agp_aperture plain = r5_gfx9_agp_aperture(0, 0x3fffffffull, 0);
+		if (plain.high != (uint32_t)(0x3fffffffull >> 18))
+			return fail("agp no plus");
+		uint64_t fbA = 0;
+		uint64_t fbB = 0;
+		uint64_t fbC = 0;
+		uint64_t fbD = 0;
+		r5_gfx9_fb_range(0x00abcdefu, 256ull * 1024ull * 1024ull, &fbA, &fbB);
+		r5_gfx9_fb_range(0x00abcdefu, 256ull * 1024ull * 1024ull, &fbC, &fbD);
+		if (fbA != fbC || fbB != fbD || fbA != (0xabcdefull << 24)
+			|| fbB != fbA + 256ull * 1024ull * 1024ull - 1ull
+			|| MC_VM_FB_LOCATION_BASE__FB_BASE_MASK != 0x00ffffffu)
+			return fail("fb range");
+		{
+			const char* plusOrder[] = {
+				"gDeviceInfo[found]->aperturePlus = "
+					"kSupportedDevices[type].aperturePlus",
+				"info.shared_info->aperturePlus = info.aperturePlus",
+				"r5_gfx9_set_aperture_plus(info.aperturePlus)",
+				"sAperturePlus);",
+				"r5_gfx9_agp_aperture(fbStart, fbEnd, sInfo->aperturePlus)"
+			};
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/driver.cpp", plusOrder, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/radeon_hd.cpp", plusOrder + 1, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/gfx9_k12.cpp", plusOrder + 2, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+					"gfx9_start.cpp", plusOrder + 3, 1) != 0)
+				return 1;
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/gfx9_k12.cpp", plusOrder + 4, 1) != 0)
+				return 1;
+		}
+		struct r5_agp_aperture above = r5_gfx9_agp_aperture(
+			0x1000000000000ull, 0x1000000000000ull, 1);
+		if (above.low != (uint32_t)(0xffffffffffffull >> 18))
+			return fail("agp min");
+	}
+	if (mmMC_VM_AGP_BASE != 0x984u
+		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32 != 0x855u
+		|| mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32 != 0x856u
+		|| VM_L2_PROTECTION_FAULT_CNTL2__ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY__SHIFT
+			!= 0x12u)
+		return fail("hub linux regs");
+	{
+		const char* hubOrder[] = {
+			"if (!sHubLinux || sInfo == NULL)",
+			"gc_byte(mmMC_VM_AGP_BASE), 0",
+			"gc_byte(mmMC_VM_AGP_BOT), agp.bot",
+			"gc_byte(mmMC_VM_AGP_TOP), agp.top",
+			"mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0",
+			"mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", hubOrder, 6) != 0)
+			return 1;
+		const char* rangeOrder[] = {
+			"r5_gfx9_fb_range(location, sVramBytes, &frame, &fbEnd);",
+			"r5_gfx9_fb_range(location,"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", rangeOrder, 1) != 0)
+			return 1;
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", rangeOrder + 1, 1) != 0)
+			return 1;
+	}
+	{
+		const char* invOrder[] = {
+			"kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), cntl);",
+			"r5_gfx9_inv_range_program();"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", invOrder, 2) != 0)
+			return 1;
+	}
+	{
+		struct r5_vmid_mgr mgr;
+		int flush = 0;
+		uint32_t i;
+		uint32_t got[16];
+		r5_vmid_init(&mgr);
+		for (i = 1; i <= 15u; i++) {
+			got[i] = r5_vmid_reserve(&mgr, i, 0, 1, &flush);
+			if (got[i] == 0 || got[i] > 15u)
+				return fail("vmid grab");
+			r5_vmid_arm(&mgr, 10);
+		}
+		if (got[1] == got[2])
+			return fail("two vmids");
+		if (r5_vmid_reserve(&mgr, 16, 0, 1, &flush) != 0)
+			return fail("sixteenth vmid");
+		r5_vmid_release(&mgr, 1, 10);
+		flush = 0;
+		uint32_t again = r5_vmid_reserve(&mgr, 20, 10, 1, &flush);
+		if (again == 0 || flush == 0)
+			return fail("closed file");
+		r5_vmid_cancel(&mgr);
+	}
+	{
+		struct r5_defer held[2];
+		uint64_t page = 0;
+		memset(held, 0, sizeof(held));
+		if (r5_defer_add(held, 2, 0x1000) == 0)
+			return fail("defer add");
+		if (r5_defer_take(held, 2, 5, &page) != 0)
+			return fail("defer early");
+		r5_defer_stamp(held, 2, 8);
+		if (r5_defer_take(held, 2, 7, &page) != 0)
+			return fail("defer before fence");
+		if (r5_defer_take(held, 2, 8, &page) == 0 || page != 0x1000ull)
+			return fail("defer after fence");
+	}
+	if (R5_GPU_DEBUG_SWITCH != R5_GPU_OP_BASE + 25u)
+		return fail("debug switch opcode");
+	if (R5_GPU_STAGE_R1 != R5_GPU_OP_BASE + 26u)
+		return fail("stage r1 opcode");
+	if (R5_GPU_LOG_REGS != R5_GPU_OP_BASE + 27u)
+		return fail("log regs opcode");
+	if (R5_GPU_SWITCH_CE_META != 256u)
+		return fail("ce switch bit");
+	{
+		uint32_t words[8];
+		uint64_t x = 0xffff800000100000ull;
+		if (r5_r1_write(words, 8, x, 0x11111111u) != 6u
+			|| words[0] != r5_cs_packet3(0x37, 4) || words[4] != 0x11111111u)
+			return fail("r1 write");
+		if (r5_r1_release(words, 8, x, 0x22222222u) != 8u
+			|| words[0] != r5_cs_packet3(0x49, 6) || words[5] != 0x22222222u)
+			return fail("r1 release");
+		const char* r1Order[] = {
+			"gpu_stage_r1_line(\"r1a gtt\"",
+			"gpu_stage_r1_line(\"r1a vram\"",
+			"gpu_stage_r1_line(\"r1b gtt\"",
+			"gpu_stage_r1_line(\"r1b vram\"",
+			"r1c:",
+			"gpu_stage_r1_line(\"r1c gtt\"",
+			"gpu_stage_r1_line(\"r1c vram\"",
+			"gpu_stage_r1_line(\"r1 free a\""
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", r1Order, 8) != 0)
+			return 1;
+		if (R5_GPU_R1_AB != 1u || R5_GPU_R1_C != 2u)
+			return fail("r1 which");
+		if (r5_vm_va_fits(0xffff800000100000ull, 0x2000) == 0
+			|| r5_vm_va_fits(0xffff800000300000ull, 0x2000) == 0
+			|| r5_vm_va_fits(0xffff800000500000ull, 0x2000) == 0)
+			return fail("r1 round va");
+		char r1Body[8000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_stage_r1(radeon_info*", "gpu_stage_u(",
+				r1Body, sizeof(r1Body)) != 0)
+			return 1;
+		if (strstr(r1Body, "0xffff800000100000") != NULL)
+			return fail("r1 shared va");
+		char r1Line[1500];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_stage_r1_line(const char*", "gpu_stage_r1(radeon_info*",
+				r1Line, sizeof(r1Line)) != 0)
+			return 1;
+		if (strstr(r1Line, "t %lld") == NULL
+			|| strstr(r1Line, "inv %d") == NULL
+			|| strstr(r1Line, "ce %d") == NULL)
+			return fail("r1 line");
+	}
+	{
+		const char* ceBoot[] = {
+			"R5_GPU_SWITCH_CE_META",
+			"gfx9_ce_meta is a boot setting",
+			"r5_gfx9_switch_registers("
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", ceBoot, 3) != 0)
+			return 1;
+	}
+	{
+		const char* switchOrder[] = {
+			"Idle first. The flush is after the registers move.",
+			"r5_gfx9_switch_registers(",
+			"if (!r5_gfx9_vmid1_flush())",
+			"r5_gfx9_pasid_map_on()"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", switchOrder, 4) != 0)
+			return 1;
+		const char* apertureOrder[] = {
+			"mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));",
+			"sHubProgram(frame, fbEnd, aperLow, aperHigh);",
+			"mmMC_VM_MX_L1_TLB_CNTL"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", apertureOrder, 3) != 0)
+			return 1;
+		const char* storeOrder[] = {
+			"r5_gfx9_k2_store();",
+			"r5_gfx9_inv_range_read(\"k2\")",
+			"r5_gfx9_vmid_restore();",
+			"r5_gfx9_vmid_baseline();",
+			"r5_gfx9_inv_range_program();"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", storeOrder, 5) != 0)
+			return 1;
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

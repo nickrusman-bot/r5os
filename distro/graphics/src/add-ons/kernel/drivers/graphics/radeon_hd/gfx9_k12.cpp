@@ -8,6 +8,9 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_agp.h"
+#include "r5_inv_range.h"
+#include "r5_vm_size.h"
 #include "r5_vm.h"
 #include "r5_gpu.h"
 #include "r5_span.h"
@@ -53,14 +56,116 @@ static uint32 sLastRing = 0;
 static uint8 sFirstRaw[4][32];
 static area_id sSystemArea = -1;
 static bool sGfx9Started = false;
+static bool sGpuDebug = false;
+static bool sInvRange = true;
+static bool sHubLinux = false;
+static bool sVmids = false;
+
+void
+r5_gfx9_set_inv_range(int on)
+{
+	sInvRange = on ? true : false;
+}
+
+
+void
+r5_gfx9_set_hub_linux(int on)
+{
+	sHubLinux = on ? true : false;
+}
+
+
+void
+r5_gfx9_set_vmids(int on)
+{
+	sVmids = on ? true : false;
+}
+
+
+int
+r5_gfx9_inv_range_on(void)
+{
+	return sInvRange ? 1 : 0;
+}
+
+
+int
+r5_gfx9_hub_linux_on(void)
+{
+	return sHubLinux ? 1 : 0;
+}
+
+
+int
+r5_gfx9_vmids_on(void)
+{
+	return sVmids ? 1 : 0;
+}
+
+
+static bool sK2InvHave = false;
+static bool sK2HubHave = false;
+static bool sVmidBaseHave = false;
+static uint32 sK2InvLo[18];
+static uint32 sK2InvHi[18];
+static uint32 sK2AgpBase = 0;
+static uint32 sK2AgpBot = 0;
+static uint32 sK2AgpTop = 0;
+static uint32 sK2AperLow = 0;
+static uint32 sK2AperHigh = 0;
+static uint32 sK2IdentityLo = 0;
+static uint32 sK2IdentityHi = 0;
+static uint32 sK2Fault2 = 0;
+static uint32 sVmidCntl[15];
+static uint32 sVmidStartLo[15];
+static uint32 sVmidStartHi[15];
+static uint32 sVmidEndLo[15];
+static uint32 sVmidEndHi[15];
+
+
+/* The values before gfx9_inv_range and gfx9_hub_linux write. The first
+ * call wins, so a later program does not replace the restore copy. */
+static uint32 gc_byte(uint32 index);
+static uint32 kread(void* cookie, uint32 offset);
+
+static void
+r5_gfx9_k2_store(void)
+{
+	uint32 engine;
+	if (sInfo == NULL)
+		return;
+	if (!sK2InvHave) {
+		for (engine = 0; engine < r5_gfx9_inv_engines() && engine < 18u;
+			engine++) {
+			sK2InvLo[engine] = kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_lo(engine)));
+			sK2InvHi[engine] = kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_hi(engine)));
+		}
+		sK2InvHave = true;
+	}
+	if (!sK2HubHave) {
+		sK2AgpBase = kread(sInfo, gc_byte(mmMC_VM_AGP_BASE));
+		sK2AgpBot = kread(sInfo, gc_byte(mmMC_VM_AGP_BOT));
+		sK2AgpTop = kread(sInfo, gc_byte(mmMC_VM_AGP_TOP));
+		sK2AperLow = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));
+		sK2AperHigh = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
+		sK2IdentityLo = kread(sInfo, gc_byte(
+			mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32));
+		sK2IdentityHi = kread(sInfo, gc_byte(
+			mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32));
+		sK2Fault2 = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2));
+		sK2HubHave = true;
+	}
+}
 static bool sVmCntlSavedValid = false;
 static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
 
 static const uint32 kIhBytes = 64 * 1024;
-static const uint32 kOssBase = 0x10A0;
-static const uint32 kGcBase = 0x2000;
-static const uint32 kNbioBase = 0x0D20;
+static const uint32 kOssBase = OSSSYS_BASE__INST0_SEG0;
+static const uint32 kGcBase = GC_BASE__INST0_SEG0;
+static const uint32 kNbioBase = NBIO_BASE__INST0_SEG2;
 static const uint32 kClientCp = 0x14;
 static const uint32 kSourceEop = 181;
 static r5_gfx9_ib_now sPrivIb1;
@@ -305,7 +410,7 @@ ih_handler(void* data)
 		walked++;
 	}
 	sIhRptr = rptr;
-	*(volatile uint32*)(sInfo->registers + oss_byte(0x0083)) = rptr;
+	*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_RPTR)) = rptr;
 	return woke ? B_INVOKE_SCHEDULER : B_HANDLED_INTERRUPT;
 }
 
@@ -315,8 +420,8 @@ ih_off()
 {
 	if (sInfo == NULL)
 		return;
-	*(volatile uint32*)(sInfo->registers + oss_byte(0x0080)) = 0;
-	*(volatile uint32*)(sInfo->registers + gc_byte(0x106a)) = 0;
+	*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_CNTL)) = 0;
+	*(volatile uint32*)(sInfo->registers + gc_byte(mmCP_INT_CNTL_RING0)) = 0;
 	if (sIhInstalled) {
 		remove_io_interrupt_handler(sIrq, ih_handler, sInfo);
 		sIhInstalled = false;
@@ -359,26 +464,109 @@ map_pool(radeon_info& info)
 }
 
 
+/* Linux 6.12 amdgpu_ttm_init maps aper_base with ioremap_wc. On an APU
+ * aper_base is get_mc_fb_offset(), not the PCI BAR. */
+static bool
+map_carveout(radeon_info& info)
+{
+	uint32 fb = kread(&info, gc_byte(mmMC_VM_FB_OFFSET));
+	uint64 base = r5_gpu_carveout_base(fb);
+	uint64 bytes = info.shared_info->vram_window_bytes;
+	if (base == 0 || bytes == 0 || (bytes & 4095) != 0 || (base & 4095) != 0) {
+		dprintf("radeon_hd: carveout refused\n");
+		return false;
+	}
+	void* address = NULL;
+	area_id area = map_physical_memory("radeon hd carveout",
+		(phys_addr_t)base, (size_t)bytes, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, &address);
+	if (area < B_OK || address == NULL) {
+		dprintf("radeon_hd: carveout map failed\n");
+		return false;
+	}
+	if (vm_set_area_memory_type(area, (phys_addr_t)base,
+		B_WRITE_COMBINING_MEMORY) != B_OK) {
+		delete_area(area);
+		dprintf("radeon_hd: carveout type failed\n");
+		return false;
+	}
+	info.carveout_area = area;
+	info.carveout = (uint8*)address;
+	info.carveout_base = base;
+	info.carveout_bytes = bytes;
+	dprintf("radeon_hd: carveout 0x%" B_PRIx64 "+0x%" B_PRIx64 "\n",
+		base, bytes);
+	return true;
+}
+
+
+uint8*
+r5_gfx9_vram_bar(uint64 offset)
+{
+	if (sInfo == NULL || sInfo->kernel_window == NULL
+		|| sInfo->shared_info == NULL)
+		return NULL;
+	uint64 pool = sInfo->shared_info->vram_pool_offset;
+	uint64 bytes = sInfo->shared_info->vram_pool_bytes;
+	if (offset < pool || offset - pool >= bytes)
+		return NULL;
+	return sInfo->kernel_window + (offset - pool);
+}
+
+
+uint8*
+r5_gfx9_vram_cpu(uint64 offset)
+{
+	if (sInfo == NULL || sInfo->carveout == NULL || offset >= sInfo->carveout_bytes)
+		return NULL;
+	return sInfo->carveout + offset;
+}
+
+
+area_id
+r5_gfx9_map_vram(uint64 offset, uint64 bytes, void** address)
+{
+	if (address == NULL || sInfo == NULL || sInfo->carveout == NULL || bytes == 0)
+		return B_BAD_VALUE;
+	if (offset > sInfo->carveout_bytes
+		|| bytes > sInfo->carveout_bytes - offset)
+		return B_BAD_VALUE;
+	uint64 phys = sInfo->carveout_base + offset;
+	area_id area = map_physical_memory("r5 gpu vram", (phys_addr_t)phys,
+		(size_t)bytes, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, address);
+	if (area < B_OK || *address == NULL)
+		return area < B_OK ? area : B_ERROR;
+	if (vm_set_area_memory_type(area, (phys_addr_t)phys,
+		B_WRITE_COMBINING_MEMORY) != B_OK) {
+		delete_area(area);
+		*address = NULL;
+		return B_ERROR;
+	}
+	return area;
+}
+
+
 void
 r5_gfx9_kernel_stop()
 {
 	if (sInfo != NULL && sInfo->registers_area >= 0 && sInfo->registers != 0) {
-		uint32 me = gc_byte(0x01b6);
-		uint32 mec = gc_byte(0x008d);
+		uint32 me = gc_byte(mmCP_ME_CNTL);
+		uint32 mec = gc_byte(mmCP_MEC_CNTL);
 		kwrite(sInfo, me, kread(sInfo, me)
 			| (1u << 24) | (1u << 26) | (1u << 28));
 		kwrite(sInfo, mec, kread(sInfo, mec) | (1u << 30) | (1u << 28));
 		if (sVmCntlSavedValid)
-			kwrite(sInfo, gc_byte(0x0880), sVmCntlSaved);
+			kwrite(sInfo, gc_byte(mmVM_CONTEXT0_CNTL), sVmCntlSaved);
 		const uint32 eng = 17;
-		kwrite(sInfo, gc_byte(0x08a3 + eng), r5_gfx9_tlb_req(0, 0));
+		kwrite(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng), r5_gfx9_tlb_req(0, 0));
 		for (int i = 0; i < 1000; i++) {
-			if ((kread(sInfo, gc_byte(0x08b5 + eng)) & 1u) != 0)
+			if ((kread(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_ACK + eng)) & 1u) != 0)
 				break;
 			snooze(10);
 		}
-		*(volatile uint32*)(sInfo->registers + oss_byte(0x0080)) = 0;
-		*(volatile uint32*)(sInfo->registers + gc_byte(0x106a)) = 0;
+		*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_CNTL)) = 0;
+		*(volatile uint32*)(sInfo->registers + gc_byte(mmCP_INT_CNTL_RING0)) = 0;
 		if (sIhInstalled) {
 			remove_io_interrupt_handler(sIrq, ih_handler, sInfo);
 			sIhInstalled = false;
@@ -404,6 +592,13 @@ r5_gfx9_kernel_stop()
 		sInfo->kernel_window_area = -1;
 		sInfo->kernel_window = NULL;
 	}
+	if (sInfo != NULL && sInfo->carveout_area >= 0) {
+		delete_area(sInfo->carveout_area);
+		sInfo->carveout_area = -1;
+		sInfo->carveout = NULL;
+		sInfo->carveout_base = 0;
+		sInfo->carveout_bytes = 0;
+	}
 }
 
 
@@ -419,8 +614,8 @@ ih_on()
 	sIhRing = ring;
 	sIhWriteback = (volatile uint32*)(ring + kIhBytes);
 	sIhRptr = 0;
-	uint32 location = kread(sInfo, gc_byte(0x0980));
-	uint64 ringMc = ((uint64)(location & 0x00ffffffu) << 24) + ringOffset;
+	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
+	uint64 ringMc = r5_gfx9_fb_start(location) + ringOffset;
 	uint64 wbMc = ringMc + kIhBytes;
 
 	uint64 dummyOffset = 0;
@@ -428,27 +623,27 @@ ih_on()
 	if (sHost.vram_alloc(sInfo, 4096, 4096, &dummyOffset, &dummy) != B_OK)
 		return false;
 	memset(dummy, 0, 4096);
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
-	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+	uint64 dummyPa = r5_gfx9_fb_start(fb) + dummyOffset;
 
-	kwrite(sInfo, oss_byte(0x0080), 0);
-	kwrite(sInfo, oss_byte(0x0088), 0);
-	kwrite(sInfo, oss_byte(0x0090), 0);
-	kwrite(sInfo, nbio_byte(0x00f2), (uint32)(dummyPa >> 8));
-	uint32 interrupt = kread(sInfo, nbio_byte(0x00f1));
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL_RING1), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL_RING2), 0);
+	kwrite(sInfo, nbio_byte(mmINTERRUPT_CNTL2), (uint32)(dummyPa >> 8));
+	uint32 interrupt = kread(sInfo, nbio_byte(mmINTERRUPT_CNTL));
 	interrupt &= ~(1u << 0);
 	interrupt &= ~(1u << 3);
-	kwrite(sInfo, nbio_byte(0x00f1), interrupt);
+	kwrite(sInfo, nbio_byte(mmINTERRUPT_CNTL), interrupt);
 
-	kwrite(sInfo, oss_byte(0x0081), (uint32)(ringMc >> 8));
-	kwrite(sInfo, oss_byte(0x0082), (uint32)((ringMc >> 40) & 0xffu));
-	kwrite(sInfo, oss_byte(0x0086), (uint32)wbMc);
-	kwrite(sInfo, oss_byte(0x0085), (uint32)(wbMc >> 32) & 0xffffu);
-	kwrite(sInfo, oss_byte(0x0084), 0);
-	kwrite(sInfo, oss_byte(0x0083), 0);
-	kwrite(sInfo, oss_byte(0x0087), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_BASE), (uint32)(ringMc >> 8));
+	kwrite(sInfo, oss_byte(mmIH_RB_BASE_HI), (uint32)((ringMc >> 40) & 0xffu));
+	kwrite(sInfo, oss_byte(mmIH_RB_WPTR_ADDR_LO), (uint32)wbMc);
+	kwrite(sInfo, oss_byte(mmIH_RB_WPTR_ADDR_HI), (uint32)(wbMc >> 32) & 0xffffu);
+	kwrite(sInfo, oss_byte(mmIH_RB_WPTR), 0);
+	kwrite(sInfo, oss_byte(mmIH_RB_RPTR), 0);
+	kwrite(sInfo, oss_byte(mmIH_DOORBELL_RPTR), 0);
 
-	uint32 cntl = kread(sInfo, oss_byte(0x0080));
+	uint32 cntl = kread(sInfo, oss_byte(mmIH_RB_CNTL));
 	cntl &= ~0x3eu;
 	cntl |= 14u << 1;
 	cntl |= 1u << 7;
@@ -465,9 +660,9 @@ ih_on()
 		cntl &= ~(1u << 21);
 	cntl |= 1u << 0;
 	cntl |= 1u << 17;
-	kwrite(sInfo, oss_byte(0x0080), cntl);
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), cntl);
 
-	uint32 cp = kread(sInfo, gc_byte(0x106a));
+	uint32 cp = kread(sInfo, gc_byte(mmCP_INT_CNTL_RING0));
 	/* gc_9_0_sh_mask.h CP_INT_CNTL_RING0. TIME_STAMP is the EOP
 	 * (shift 0x1a). PRIV_INSTR 0x16, PRIV_REG 0x17 and OPCODE_ERROR
 	 * 0x18 match gfx_v9_0_set_priv_inst_fault_state and
@@ -477,7 +672,7 @@ ih_on()
 	cp |= 1u << 0x17;
 	cp |= 1u << 0x18;
 	cp |= 1u << 0x1a;
-	kwrite(sInfo, gc_byte(0x106a), cp);
+	kwrite(sInfo, gc_byte(mmCP_INT_CNTL_RING0), cp);
 	return true;
 }
 
@@ -526,8 +721,8 @@ run_k1()
 		knote("k1_wait_us %ld", (long)elapsed);
 		return;
 	}
-	uint32 rptr = kread(sInfo, oss_byte(0x0083));
-	uint32 wptr = kread(sInfo, oss_byte(0x0084));
+	uint32 rptr = kread(sInfo, oss_byte(mmIH_RB_RPTR));
+	uint32 wptr = kread(sInfo, oss_byte(mmIH_RB_WPTR));
 	uint32 wb = sIhWriteback != NULL ? *sIhWriteback : 0;
 	knote("k1 fail %s irq %lu eop %lu client %lu src %lu ring %lu",
 		sMsi ? "msi" : "legacy", (unsigned long)sIrq,
@@ -536,9 +731,9 @@ run_k1()
 	knote("k1_wait_us %ld", (long)elapsed);
 	knote("k1 rptr %08lx wptr %08lx wb %08lx intcntl %08lx cp %08lx status %08lx",
 		(unsigned long)rptr, (unsigned long)wptr, (unsigned long)wb,
-		(unsigned long)kread(sInfo, nbio_byte(0x00f1)),
-		(unsigned long)kread(sInfo, gc_byte(0x106a)),
-		(unsigned long)kread(sInfo, gc_byte(0x104a)));
+		(unsigned long)kread(sInfo, nbio_byte(mmINTERRUPT_CNTL)),
+		(unsigned long)kread(sInfo, gc_byte(mmCP_INT_CNTL_RING0)),
+		(unsigned long)kread(sInfo, gc_byte(mmCP_INT_STATUS)));
 	for (uint32 i = 0; i < 4; i++) {
 		const uint32* dwords = (const uint32*)sFirstRaw[i];
 		knote("k1 raw%lu %08lx %08lx %08lx %08lx", (unsigned long)i,
@@ -562,17 +757,164 @@ static const uint32 kFaultDefaultMask = 0x1ffcu;
 static const uint32 kFaultCrashMask = 0xc0000000u;
 
 
+/* Linux v6.12 gfxhub_v1_0.c:gfxhub_v1_0_program_invalidation.
+ * The read is not behind gfx9_inv_range. The print is behind gpu_debug. */
+static void
+r5_gfx9_inv_range_read(const char* when)
+{
+	uint32 engine;
+	if (!sGpuDebug || sInfo == NULL || when == NULL)
+		return;
+	for (engine = 0; engine < r5_gfx9_inv_engines(); engine += 17) {
+		knote("inv range %s eng %lu lo %08lx hi %08lx", when,
+			(unsigned long)engine,
+			(unsigned long)kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_lo(engine))),
+			(unsigned long)kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_hi(engine))));
+	}
+}
+
+
+static void
+r5_gfx9_inv_range_program(void)
+{
+	uint32 engine;
+	if (!sInvRange || sInfo == NULL)
+		return;
+	for (engine = 0; engine < r5_gfx9_inv_engines(); engine++) {
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_lo(engine)),
+			r5_gfx9_inv_range_lo_value());
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_hi(engine)),
+			r5_gfx9_inv_range_hi_value());
+	}
+	r5_gfx9_inv_range_read("wrote");
+}
+
+
+void
+r5_gfx9_log_state(const char* when, char* line, size_t bytes)
+{
+	if (line == NULL || bytes == 0)
+		return;
+	line[0] = 0;
+	if (sInfo == NULL || when == NULL)
+		return;
+	snprintf(line, bytes,
+		"radeon_hd: t %lld regs %s "
+		"inv0 %08lx %08lx inv17 %08lx %08lx "
+		"l1 %08lx agp %08lx %08lx aper %08lx %08lx "
+		"inv %d hub %d vmids %d fence %d cond %d gds %d pasid %d ce %d\n",
+		(long long)system_time(), when,
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_lo(0))),
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_hi(0))),
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_lo(17))),
+		(unsigned long)kread(sInfo, gc_byte(r5_gfx9_inv_range_hi(17))),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_MX_L1_TLB_CNTL)),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BOT)),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_TOP)),
+		(unsigned long)kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
+		(unsigned long)kread(sInfo,
+			gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)),
+		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(), r5_gfx9_vmids_on(),
+		r5_gfx9_flush_fence_on(), r5_gfx9_cond_exec_on(),
+		r5_gfx9_gds_switch_on(), r5_gfx9_pasid_map_on(),
+		r5_gfx9_ce_meta_on());
+	dprintf("%s", line);
+}
+
+
+static void
+r5_gfx9_inv_range_restore(void)
+{
+	uint32 engine;
+	if (!sK2InvHave || sInfo == NULL)
+		return;
+	for (engine = 0; engine < r5_gfx9_inv_engines() && engine < 18u;
+		engine++) {
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_lo(engine)),
+			sK2InvLo[engine]);
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_hi(engine)),
+			sK2InvHi[engine]);
+	}
+}
+
+
+/* Linux v6.12 gfxhub_v1_0.c gart_enable, the registers R5 does not
+ * already write. VMID 0 stays the K2 contract: this only prints it. */
+static void
+r5_gfx9_hub_linux(void)
+{
+	if (sInfo == NULL)
+		return;
+	r5_gfx9_k2_store();
+	if (sGpuDebug) {
+		knote("hub l1 %08lx l2 %08lx %08lx %08lx %08lx",
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_MX_L1_TLB_CNTL)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL2)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL3)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CNTL4)));
+		knote("hub aper %08lx %08lx agp %08lx %08lx %08lx",
+			(unsigned long)kread(sInfo,
+				gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
+			(unsigned long)kread(sInfo,
+				gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)),
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BASE)),
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_BOT)),
+			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_AGP_TOP)));
+		knote("hub identity %08lx %08lx fault2 %08lx vmid0 %08lx",
+			(unsigned long)kread(sInfo, gc_byte(
+				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32)),
+			(unsigned long)kread(sInfo, gc_byte(
+				mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32)),
+			(unsigned long)kread(sInfo,
+				gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2)),
+			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL)));
+	}
+}
+
+
+void
+r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow, uint32 highNow)
+{
+	struct r5_agp_aperture agp;
+	uint32 fault;
+	r5_gfx9_k2_store();
+	if (!sHubLinux || sInfo == NULL)
+		return;
+	agp = r5_gfx9_agp_aperture(fbStart, fbEnd, sInfo->aperturePlus);
+	knote("hub linux low now %08lx linux %08lx high now %08lx linux %08lx "
+		"bot %08lx top %08lx",
+		(unsigned long)lowNow, (unsigned long)agp.low,
+		(unsigned long)highNow, (unsigned long)agp.high,
+		(unsigned long)agp.bot, (unsigned long)agp.top);
+	/* v6.18 gfxhub_v1_0_init_system_aperture_regs. AGP_BASE is 0.
+	 * BOT and TOP are set_agp_default, not agp_location. */
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BASE), 0);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BOT), agp.bot);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_TOP), agp.top);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR), agp.low);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR), agp.high);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32), 0);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32), 0);
+	fault = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2));
+	fault |= 1u << VM_L2_PROTECTION_FAULT_CNTL2__ACTIVE_PAGE_MIGRATION_PTE_READ_RETRY__SHIFT;
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2), fault);
+}
+
+
 static void
 run_k2()
 {
-	uint32 location = kread(sInfo, gc_byte(0x0980));
-	uint64 fbStart = (uint64)(location & 0x00ffffffu) << 24;
-	uint32 aperLo = kread(sInfo, gc_byte(0x0985));
-	uint32 aperHi = kread(sInfo, gc_byte(0x0986));
+	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
+	uint64 fbStart = r5_gfx9_fb_start(location);
+	uint32 aperLo = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));
+	uint32 aperHi = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
 	uint64 aperStart = (uint64)aperLo << 18;
 	uint64 aperEnd = (uint64)aperHi << 18;
-	uint32 agpBot = kread(sInfo, gc_byte(0x0983));
-	uint32 agpTop = kread(sInfo, gc_byte(0x0982));
+	uint32 agpBot = kread(sInfo, gc_byte(mmMC_VM_AGP_BOT));
+	uint32 agpTop = kread(sInfo, gc_byte(mmMC_VM_AGP_TOP));
 	uint64 agpStart = 0;
 	uint64 agpEnd = 0;
 	int agpOn = r5_gfx9_agp_window(agpBot, agpTop, &agpStart, &agpEnd);
@@ -606,8 +948,8 @@ run_k2()
 		knote("k2 fail dummy");
 		return;
 	}
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
-	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+	uint64 dummyPa = r5_gfx9_fb_start(fb) + dummyOffset;
 	sK2DummyPa = dummyPa;
 	uint64 flags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM | R5_GFX9_PTE_SNOOPED
 		| R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
@@ -667,19 +1009,19 @@ run_k2()
 		return;
 	}
 
-	uint64 tablePa = ((uint64)(fb & 0x00ffffffu) << 24) + tableOffset;
+	uint64 tablePa = r5_gfx9_fb_start(fb) + tableOffset;
 	if (!r5_gfx9_pde_aligned(tablePa)) {
 		knote("k2 fail table align %016llx", (unsigned long long)tablePa);
 		return;
 	}
 	uint64 tableBase = r5_gfx9_page_table_base(fb, tableOffset);
-	uint32 savedCntl = kread(sInfo, gc_byte(0x0880));
+	uint32 savedCntl = kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL));
 	sVmCntlSaved = savedCntl;
 	sVmCntlSavedValid = true;
-	kwrite(sInfo, gc_byte(0x08eb), (uint32)tableBase);
-	kwrite(sInfo, gc_byte(0x08ec), (uint32)(tableBase >> 32));
-	uint32 baseLo = kread(sInfo, gc_byte(0x08eb));
-	uint32 baseHi = kread(sInfo, gc_byte(0x08ec));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32), (uint32)tableBase);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32), (uint32)(tableBase >> 32));
+	uint32 baseLo = kread(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32));
+	uint32 baseHi = kread(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32));
 	knote("k2 ptb %016llx got %08lx %08lx",
 		(unsigned long long)tableBase, (unsigned long)baseLo,
 		(unsigned long)baseHi);
@@ -687,22 +1029,22 @@ run_k2()
 		knote("k2 fail ptb readback");
 		return;
 	}
-	kwrite(sInfo, gc_byte(0x090b), (uint32)(gartStart >> 12));
-	kwrite(sInfo, gc_byte(0x090c), (uint32)(gartStart >> 44));
-	kwrite(sInfo, gc_byte(0x092b), (uint32)((gartEnd - 1) >> 12));
-	kwrite(sInfo, gc_byte(0x092c), (uint32)((gartEnd - 1) >> 44));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32), (uint32)(gartStart >> 12));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32), (uint32)(gartStart >> 44));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32), (uint32)((gartEnd - 1) >> 12));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32), (uint32)((gartEnd - 1) >> 44));
 	uint32 cntl = savedCntl;
 	cntl |= 1u << 0;
 	cntl &= ~0x6u;
 	cntl &= ~(0xfu << 3);
 	cntl &= ~(1u << 7);
-	kwrite(sInfo, gc_byte(0x0880), cntl);
-	kwrite(sInfo, gc_byte(0x084e), (uint32)(dummyPa >> 12));
-	kwrite(sInfo, gc_byte(0x084f), (uint32)(dummyPa >> 44));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT0_CNTL), cntl);
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32), (uint32)(dummyPa >> 12));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32), (uint32)(dummyPa >> 44));
 
 	const uint32 eng = 17;
-	uint32 req = gc_byte(0x08a3 + eng);
-	uint32 ack = gc_byte(0x08b5 + eng);
+	uint32 req = gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng);
+	uint32 ack = gc_byte(mmVM_INVALIDATE_ENG0_ACK + eng);
 	uint32 inv = r5_gfx9_tlb_req(0, 0);
 	knote("k2 inv %08lx", (unsigned long)inv);
 	kwrite(sInfo, req, inv);
@@ -777,28 +1119,35 @@ run_k2()
 		r5_gfx9_cp_dump("k2 baseline", 0);
 	}
 	if (!(dmaOk && ib)) {
-		uint32 faultStatus = kread(sInfo, gc_byte(0x084b));
-		uint32 faultLo = kread(sInfo, gc_byte(0x084c));
-		uint32 faultHi = kread(sInfo, gc_byte(0x084d));
+		uint32 faultStatus = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_STATUS));
+		uint32 faultLo = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_ADDR_LO32));
+		uint32 faultHi = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_ADDR_HI32));
 		r5_gfx9_fault fault = r5_gfx9_fault_decode(faultStatus);
 		knote("k2 fault %08lx MORE_FAULTS %lu WALKER_ERROR %lu "
 			"PERMISSION_FAULTS %lu MAPPING_ERROR %lu CID %lu RW %lu "
-			"addr %016llx cntl %08lx cp %08lx grbm %08lx",
+			"addr %016llx cntl %08lx cp %08lx grbm %08lx pasid %lu file %016llx",
 			(unsigned long)faultStatus, (unsigned long)fault.more,
 			(unsigned long)fault.walker, (unsigned long)fault.permission,
 			(unsigned long)fault.mapping, (unsigned long)fault.cid,
 			(unsigned long)fault.rw,
 			(unsigned long long)r5_gfx9_fault_address(faultLo, faultHi),
-			(unsigned long)kread(sInfo, gc_byte(0x0880)),
-			(unsigned long)kread(sInfo, gc_byte(0x01a0)),
-			(unsigned long)kread(sInfo, gc_byte(0x0004)));
-		uint32 me = gc_byte(0x01b6);
+			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT0_CNTL)),
+			(unsigned long)kread(sInfo, gc_byte(mmCP_STAT)),
+			(unsigned long)kread(sInfo, gc_byte(mmGRBM_STATUS)),
+			(unsigned long)r5_gfx9_pasid_for_vmid(fault.cid),
+			(unsigned long long)r5_gfx9_file_for_vmid(fault.cid));
+		uint32 me = gc_byte(mmCP_ME_CNTL);
 		uint32 saved = kread(sInfo, me);
 		kwrite(sInfo, me, saved | ((1u << 24) | (1u << 26) | (1u << 28)));
-		kwrite(sInfo, gc_byte(0x0880), savedCntl);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT0_CNTL), savedCntl);
 	}
 	(void)sequence;
 	(void)flushed;
+	/* The invalidation ranges are copied here, before
+	 * r5_gfx9_vmid1_setup calls r5_gfx9_inv_range_program. kernel_start
+	 * runs this first. A later copy does not replace it. */
+	r5_gfx9_k2_store();
+	r5_gfx9_inv_range_read("k2");
 }
 
 
@@ -826,12 +1175,18 @@ vm_page_alloc(void* cookie, uint64_t* physical, uint64_t** cpu)
 	uint8* address = NULL;
 	if (sHost.vram_alloc == NULL || sInfo == NULL)
 		return 0;
+	if (sInfo->carveout == NULL)
+		return 0;
 	if (sHost.vram_alloc(sInfo, 4096, 4096, &offset, &address) != B_OK
 		|| address == NULL)
 		return 0;
-	uint32 fb = kread(sInfo, gc_byte(0x096b));
-	*physical = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
-	*cpu = (uint64_t*)address;
+	(void)address;
+	uint8* cpuPage = r5_gfx9_vram_cpu(offset);
+	if (cpuPage == NULL)
+		return 0;
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+	*physical = r5_gpu_carveout_base(fb) + offset;
+	*cpu = (uint64_t*)cpuPage;
 	return 1;
 }
 
@@ -889,18 +1244,168 @@ r5_gfx9_vmid1_flush()
 		knote("vmid1 fail info");
 		return false;
 	}
-	const uint32 eng = 0;
+	/* Linux gmc_v9_0_flush_gpu_tlb uses engine 17 for an MMIO flush.
+	 * Engine 0 belongs to the GFX ring. The K sequence already uses 17. */
+	const uint32 eng = 17;
 	uint32 inv = r5_gfx9_tlb_req(1, 0);
-	kwrite(sInfo, gc_byte(0x08a3 + eng), inv);
-	(void)kread(sInfo, gc_byte(0x08a3 + eng));
+	kwrite(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng), inv);
+	(void)kread(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_REQ + eng));
 	const uint32 ackBit = r5_gfx9_tlb_ack_mask(1);
 	for (int i = 0; i < 10000; i++) {
-		if ((kread(sInfo, gc_byte(0x08b5 + eng)) & ackBit) != 0)
+		if ((kread(sInfo, gc_byte(mmVM_INVALIDATE_ENG0_ACK + eng)) & ackBit) != 0)
 			return true;
 		snooze(10);
 	}
 	knote("vmid1 fail tlb");
 	return false;
+}
+
+
+/* Linux v6.12 gfxhub_v1_0.c:gfxhub_v1_0_setup_vmid_config.
+ * i runs 0..14, which is context i + 1. The page-table base is not
+ * written here. */
+static void
+r5_gfx9_vmid_baseline(void)
+{
+	uint32 i;
+	if (sVmidBaseHave || sInfo == NULL)
+		return;
+	for (i = 0; i <= 14u; i++) {
+		sVmidCntl[i] = kread(sInfo, gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE));
+		sVmidStartLo[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+		sVmidStartHi[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+		sVmidEndLo[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+		sVmidEndHi[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+	}
+	sVmidBaseHave = true;
+}
+
+
+static void
+r5_gfx9_vmid_restore(void)
+{
+	uint32 i;
+	if (!sVmidBaseHave || sInfo == NULL)
+		return;
+	for (i = 0; i <= 14u; i++) {
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE), sVmidCntl[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidStartLo[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidStartHi[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidEndLo[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidEndHi[i]);
+	}
+}
+
+
+static void
+r5_gfx9_hub_restore(void)
+{
+	if (!sK2HubHave || sInfo == NULL)
+		return;
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BASE), sK2AgpBase);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BOT), sK2AgpBot);
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_TOP), sK2AgpTop);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR), sK2AperLow);
+	kwrite(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR), sK2AperHigh);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32),
+		sK2IdentityLo);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32),
+		sK2IdentityHi);
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2), sK2Fault2);
+}
+
+
+static void r5_gfx9_vmids_program(void);
+static void r5_gfx9_csa_map(void);
+
+/* inv, hub and vmids are -1 to leave the flag, 0 to restore the stored
+ * registers, or 1 to program them. The VMID copy is taken at the first
+ * program, after VMID 1's own setup write, so restoring it does not
+ * turn that context off. */
+void
+r5_gfx9_switch_registers(int inv, int hub, int vmids)
+{
+	if (inv == 1) {
+		r5_gfx9_k2_store();
+		sInvRange = true;
+		r5_gfx9_inv_range_program();
+	} else if (inv == 0) {
+		sInvRange = false;
+		r5_gfx9_inv_range_restore();
+	}
+	if (hub == 1) {
+		uint32 location = 0;
+		uint64 fbStart = 0;
+		uint64 fbEnd = 0;
+		sHubLinux = true;
+		r5_gfx9_set_hub_aperture(1);
+		if (sInfo != NULL && sInfo->shared_info != NULL) {
+			location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
+			r5_gfx9_fb_range(location,
+				(uint64)sInfo->shared_info->frame_buffer_size * 1024ull,
+				&fbStart, &fbEnd);
+			r5_gfx9_hub_program(fbStart, fbEnd,
+				kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
+				kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)));
+		}
+	} else if (hub == 0) {
+		sHubLinux = false;
+		r5_gfx9_set_hub_aperture(0);
+		r5_gfx9_hub_restore();
+	}
+	if (vmids == 1) {
+		sVmids = true;
+		if (sVmid1)
+			r5_gfx9_vmids_program();
+	} else if (vmids == 0) {
+		sVmids = false;
+		r5_gfx9_vmid_restore();
+	}
+}
+
+
+static void
+r5_gfx9_vmids_program(void)
+{
+	struct r5_vm_size size;
+	uint32 cntl;
+	uint32 i;
+	uint64 end;
+	r5_gfx9_vmid_baseline();
+	if (!sVmids || sInfo == NULL)
+		return;
+	size = r5_gfx9_vm_size();
+	cntl = r5_gfx9_vmid_cntl(&size, 0);
+	end = size.max_pfn - 1ull;
+	for (i = 0; i <= 14u; i++) {
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE), cntl);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), 0);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), 0);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), (uint32)end);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), (uint32)(end >> 32));
+	}
+	if (sGpuDebug)
+		knote("vmids 1-15 cntl %08lx end %016llx",
+			(unsigned long)cntl, (unsigned long long)end);
 }
 
 
@@ -925,8 +1430,8 @@ r5_gfx9_vmid1_setup()
 			return false;
 		}
 		memset(dummy, 0, 4096);
-		uint32 fb = kread(sInfo, gc_byte(0x096b));
-		sK2DummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
+		uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+		sK2DummyPa = r5_gfx9_fb_start(fb) + offset;
 	}
 	/* The root page is kept after a failed flush. The next attempt
 	 * rewrites the base from that same page. There is no free for
@@ -951,25 +1456,25 @@ r5_gfx9_vmid1_setup()
 	}
 	uint64 rootPa = sVm.pages[0].physical;
 	uint64 tableBase = rootPa | (uint64)R5_GFX9_PTE_VALID;
-	kwrite(sInfo, gc_byte(0x0851), 0xffffffffu);
-	kwrite(sInfo, gc_byte(0x0852), 0xfu);
-	kwrite(sInfo, gc_byte(0x0853), 0);
-	kwrite(sInfo, gc_byte(0x0854), 0);
-	kwrite(sInfo, gc_byte(0x08ed), (uint32)tableBase);
-	kwrite(sInfo, gc_byte(0x08ee), (uint32)(tableBase >> 32));
-	kwrite(sInfo, gc_byte(0x090d), 0);
-	kwrite(sInfo, gc_byte(0x090e), 0);
-	kwrite(sInfo, gc_byte(0x092d), 0xffffffffu);
-	kwrite(sInfo, gc_byte(0x092e), 0xfu);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32), 0xffffffffu);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32), 0xfu);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32), 0);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32), 0);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_LO32), (uint32)tableBase);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_BASE_ADDR_HI32), (uint32)(tableBase >> 32));
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32), 0);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32), 0);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32), 0xffffffffu);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32), 0xfu);
 	/* A faulting VMID 1 access lands on the K2 dummy page, not at
 	 * physical 0. The page number is the MC address >> 12.
 	 */
-	kwrite(sInfo, gc_byte(0x084e), (uint32)(sK2DummyPa >> 12));
-	kwrite(sInfo, gc_byte(0x084f), (uint32)(sK2DummyPa >> 44));
-	uint32 faultCntl = kread(sInfo, gc_byte(0x0847));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32), (uint32)(sK2DummyPa >> 12));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32), (uint32)(sK2DummyPa >> 44));
+	uint32 faultCntl = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL));
 	uint32 faultNext = (faultCntl | kFaultDefaultMask) & ~kFaultCrashMask;
 	if (faultNext != faultCntl)
-		kwrite(sInfo, gc_byte(0x0847), faultNext);
+		kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL), faultNext);
 	/* RETRY_PERMISSION_OR_INVALID_PAGE_FAULT is bit 7. Linux sets it
 	 * (0x007ffe87). R5 has no retry-fault handler, so the bit stays off
 	 * and the value stays 0x007ffe07. */
@@ -981,13 +1486,13 @@ r5_gfx9_vmid1_setup()
 	cntl |= (1u << 17) | (1u << 18);
 	cntl |= (1u << 19) | (1u << 20);
 	cntl |= (1u << 21) | (1u << 22);
-	kwrite(sInfo, gc_byte(0x0881), cntl);
+	kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), cntl);
 	if (!r5_gfx9_vmid1_flush()) {
 		/* CNTL is already enabled. Turn the context off so a later
 		 * attempt does not run on the half-written state. The pages
 		 * above stay for that attempt.
 		 */
-		kwrite(sInfo, gc_byte(0x0881), 0);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), 0);
 		return false;
 	}
 	/* gfx_v9_0_constants_init for VMID 1..15. ALIGNMENT_MODE unaligned
@@ -997,17 +1502,17 @@ r5_gfx9_vmid1_setup()
 	 * (bases 0) and is not written here. Callers hold gpu_lock, the same
 	 * lock as the other GRBM_GFX_CNTL users. These are registers only.
 	 */
-	const uint32 shConfig = (3u << 3) | (1u << 12);
-	const uint32 shBases = (0x2000u << 16) | 0x1000u;
+	const uint32 shConfig = r5_gfx9_sh_mem_config();
+	const uint32 shBases = r5_gfx9_sh_mem_bases();
 	for (uint32 vmid = 1; vmid <= 15; vmid++) {
-		kwrite(sInfo, gc_byte(0x0022), vmid << 4);
-		kwrite(sInfo, gc_byte(0x030d), shConfig);
-		kwrite(sInfo, gc_byte(0x030a), shBases);
+		kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), vmid << 4);
+		kwrite(sInfo, gc_byte(mmSH_MEM_CONFIG), shConfig);
+		kwrite(sInfo, gc_byte(mmSH_MEM_BASES), shBases);
 	}
-	kwrite(sInfo, gc_byte(0x0022), 1u << 4);
-	uint32 shRead = kread(sInfo, gc_byte(0x030d));
-	uint32 baseRead = kread(sInfo, gc_byte(0x030a));
-	kwrite(sInfo, gc_byte(0x0022), 0);
+	kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), 1u << 4);
+	uint32 shRead = kread(sInfo, gc_byte(mmSH_MEM_CONFIG));
+	uint32 baseRead = kread(sInfo, gc_byte(mmSH_MEM_BASES));
+	kwrite(sInfo, gc_byte(mmGRBM_GFX_CNTL), 0);
 	sVmid1 = true;
 	knote("vmid1 sh_mem config %08lx bases %08lx",
 		(unsigned long)shRead, (unsigned long)baseRead);
@@ -1017,11 +1522,55 @@ r5_gfx9_vmid1_setup()
 	knote("vmid1 default %016llx fault %08lx",
 		(unsigned long long)sK2DummyPa, (unsigned long)faultNext);
 	knote("vmid1 identity low %08lx %08lx high %08lx %08lx",
-		(unsigned long)kread(sInfo, gc_byte(0x0851)),
-		(unsigned long)kread(sInfo, gc_byte(0x0852)),
-		(unsigned long)kread(sInfo, gc_byte(0x0853)),
-		(unsigned long)kread(sInfo, gc_byte(0x0854)));
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_LO32)),
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32)),
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32)),
+		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32)));
+	r5_gfx9_vmid1_set_root(tableBase);
+	/* Linux programs the engine ranges after setup_vmid_config. */
+	r5_gfx9_vmids_program();
+	r5_gfx9_inv_range_program();
+	r5_gfx9_csa_map();
 	return true;
+}
+
+
+/* amdgpu_allocate_static_csa plus amdgpu_map_static_csa. One 128 KiB
+ * VRAM buffer, zeroed, mapped at r5_csa_vaddr in this VM. Off leaves
+ * the page tables alone. Per-file trees map the same buffer. */
+static bool sCsaMapped = false;
+
+
+static void
+r5_gfx9_csa_map(void)
+{
+	uint64 offset = 0;
+	uint8* cpu = NULL;
+	uint64 va;
+	uint64 flags;
+	uint32 fb;
+	uint32 page;
+	if (!r5_gfx9_ce_meta_on() || sCsaMapped || sInfo == NULL)
+		return;
+	if (r5_gfx9_alloc_vram(kR5CsaBytes, 4096, &offset, &cpu) != B_OK
+		|| cpu == NULL) {
+		knote("csa fail alloc");
+		return;
+	}
+	memset(cpu, 0, (size_t)kR5CsaBytes);
+	fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+	va = r5_csa_vaddr(r5_gfx9_vm_size().max_pfn);
+	flags = (uint64)R5_GFX9_PTE_VALID | (uint64)R5_GFX9_PTE_READABLE
+		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
+	for (page = 0; page < 32u; page++) {
+		uint64 pa = r5_gpu_carveout_base(fb) + offset + (uint64)page * 4096ull;
+		if (!r5_gfx9_vmid1_map(va + (uint64)page * 4096ull, pa | flags)) {
+			knote("csa fail map");
+			return;
+		}
+	}
+	sCsaMapped = true;
+	knote("csa %016llx", (unsigned long long)va);
 }
 
 
@@ -1033,6 +1582,8 @@ r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 	if (!r5_vm_map_page(&sVm, va, pte))
 		return false;
 	asm volatile("sfence" ::: "memory");
+	/* A cleared PTE is an unmap. The next user job flushes that. */
+	r5_gfx9_vmid1_touch();
 	return true;
 }
 
@@ -1055,25 +1606,19 @@ r5_gfx9_vmid1_levels(const char* name, uint64 va)
 	if (name == NULL || !sVmid1 || sVm.used == 0 || sInfo == NULL
 		|| sInfo->shared_info == NULL)
 		return;
-	uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
-	uint64 base = (uint64)fb << 24;
+	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+	uint64 base = r5_gpu_carveout_base(fb);
 	int index = 0;
 	for (int level = 3; level >= 0; level--) {
 		uint64 phys = sVm.pages[index].physical;
 		uint64 off = phys - base;
-		uint64 cpuPhys = sInfo->shared_info->vram_window_phys + off;
-		void* mapped = NULL;
-		area_id id = map_physical_memory("r5 vm level",
-			(phys_addr_t)cpuPhys, 4096, B_ANY_KERNEL_ADDRESS,
-			B_KERNEL_READ_AREA, &mapped);
+		uint64* table = sVm.pages[index].cpu;
 		uint64 word = 0;
-		bool ok = id >= B_OK && mapped != NULL;
+		bool ok = table != NULL;
 		if (ok) {
 			uint32 slot = r5_vm_index(va, (uint32)level);
-			word = ((volatile uint64*)mapped)[slot];
+			word = table[slot];
 		}
-		if (id >= B_OK)
-			delete_area(id);
 		dprintf("radeon_hd: %s L%d off %016llx word %016llx\n",
 			name, level, (unsigned long long)off,
 			(unsigned long long)word);
@@ -1121,16 +1666,12 @@ r5_gfx9_vmid1_read(uint64 va, uint32* words, uint32 count)
 		if (mapped < B_OK || address == NULL)
 			return false;
 		cpu = (uint8*)address;
-	} else if (sInfo != NULL && sInfo->kernel_window != NULL
-		&& sInfo->shared_info != NULL) {
-		uint32 fb = kread(sInfo, gc_byte(0x096b)) & 0x00ffffffu;
-		uint64 base = (uint64)fb << 24;
-		uint64 pool = sInfo->shared_info->vram_pool_offset;
-		uint64 bytes = sInfo->shared_info->vram_pool_bytes;
-		if (page < base || page - base < pool
-			|| page - base - pool >= bytes)
+	} else if (sInfo != NULL && sInfo->carveout != NULL) {
+		uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+		uint64 base = r5_gpu_carveout_base(fb);
+		if (page < base || r5_gfx9_vram_cpu(page - base) == NULL)
 			return false;
-		cpu = sInfo->kernel_window + (page - base - pool);
+		cpu = r5_gfx9_vram_cpu(page - base);
 	} else
 		return false;
 	memcpy(words, cpu + offset, count * 4);
@@ -1195,6 +1736,10 @@ r5_gfx9_kernel_start(radeon_info& info)
 	}
 	info.kernel_window_area = -1;
 	info.kernel_window = NULL;
+	info.carveout_area = -1;
+	info.carveout = NULL;
+	info.carveout_base = 0;
+	info.carveout_bytes = 0;
 	if (info.shared_info == NULL || info.pci == NULL)
 		return;
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_NONE;
@@ -1217,6 +1762,16 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		irq = get_driver_boolean_parameter(settings, "gfx9_irq", false, true);
 		gart = get_driver_boolean_parameter(settings, "gfx9_gart", false, true);
+		sGpuDebug = get_driver_boolean_parameter(settings, "gpu_debug",
+			false, true);
+		sInvRange = get_driver_boolean_parameter(settings, "gfx9_inv_range",
+			true, true);
+		sHubLinux = get_driver_boolean_parameter(settings, "gfx9_hub_linux",
+			false, true);
+		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",
+			false, true);
+		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
+			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);
 	}
 	uint32 pci = info.pciID;
@@ -1240,16 +1795,23 @@ r5_gfx9_kernel_start(radeon_info& info)
 	sHost.doorbell = info.doorbell;
 	sHost.doorbellBytes = info.shared_info->doorbell_bytes;
 	sHost.cookie = &info;
+	r5_gfx9_set_hub_aperture(sHubLinux ? 1 : 0);
+	r5_gfx9_set_aperture_plus(info.aperturePlus);
+	r5_gfx9_set_hub_program(r5_gfx9_hub_program);
 	uint64 vramBytes = (uint64)info.shared_info->frame_buffer_size * 1024;
 	memset(&sResults, 0, sizeof(sResults));
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;
 	r5_gfx9_prepare(&sHost, vramBytes);
 	bool ok = r5_gfx9_start(&sHost, pci, vramBytes, workload, compute, &sResults);
+	if (ok)
+		r5_gfx9_hub_linux();
 	r5_gfx9_copy_firmware(info.fw_version, info.fw_feature, 32);
 	knote("k0 %s fence", ok ? "ok" : "fail");
 	if (ok && irq)
 		run_k1();
 	if (ok && gart)
 		run_k2();
+	if (ok)
+		map_carveout(info);
 	publish();
 }

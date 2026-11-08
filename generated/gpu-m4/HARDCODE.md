@@ -51,3 +51,16 @@ Paper inventory from `generated/gpu-m4/HARDCODE-AUDIT.md` step 1. Line numbers a
 | 45 | `r5_gpu.cpp` `rb num` log | the line is printed on every `GET_INFO` | stick 18 logged it 116 times | the value itself comes from `CC_RB_BACKEND_DISABLE` (`gfx_v9_0_setup_rb`). The repeat is the logging policy | low | once per boot, task 1 point 8 |
 
 `num_rb_pipes` is not in this table as a bare constant. `gpu_rb` reads `CC_RB_BACKEND_DISABLE` and `GC_USER_RB_BACKEND_DISABLE`. Stick 19 logged `rb num 2 mask 3`.
+
+| # | File:line | What | Value | Linux source | Risk | Plan |
+|---|---|---|---|---|---|---|
+| 46 | `r5_pasid.h` | PASID bitmap width | 16 bits | `amdgpu_ids.c:amdgpu_pasid_alloc` accepts up to 31. This bitmap is 16 wide | medium | a wider map when a caller asks for more than 16 |
+| 47 | `r5_pasid.h` | first id at width 16 | 32768 | `ida_alloc_range` from `1 << (bits - 1)` | low | stays, it is that function |
+| 48 | `r5_cs.h` `r5_cs_cond_exec` | `PACKET3_COND_EXEC` | `0x22` | Linux v6.12 `sid.h`, `gfx_v9_0_ring_emit_init_cond_exec` | low | stays |
+| 49 | `gfx9_start.cpp` cond exec | fence-page dword | offset 32, value 1 | Linux keeps `*cond_exe_gpu_addr` at 1. The page is the ring fence page | low | stays while that dword is free |
+| 50 | `r5_cs.h` `r5_cs_pasid_map` | PFP `WRITE_DATA` control | `0x40100000` | `WRITE_DATA_ENGINE_SEL(1) \| WR_CONFIRM` in `sid.h`, `gfx_v9_0_ring_emit_wreg` | low | stays |
+| 51 | `gfx9_start.cpp` GDS job | GDS, GWS and OA sizes | 0 | the command-submit ioctl has no GDS chunk. A GFX9 RADV job that does not ask for GDS sends 0 | medium | the chunk, when the ioctl grows one |
+| 52 | `r5_gpu.cpp` `sDefer` | deferred-free slots | 256 | one per `kMaxBo` (row 22). A full list frees that offset immediately | low | stays with the buffer-object limit |
+| 53 | `r5_cs.h` `r5_cs_vm_switch_words` | VM-flush packet | 26 dwords | unchanged. The PASID write is five more dwords, separate | low | stays |
+| 54 | `r5_inv_range.h` `r5_gfx9_inv_range_lo_value` | invalidation range low | `0xffffffff` | Linux v6.12 `gfxhub_v1_0.c:gfxhub_v1_0_program_invalidation`, the `VM_INVALIDATE_ENGn_ADDR_RANGE_LO32` store | low | stays. It is that store, written for all 18 engines |
+| 55 | `r5_inv_range.h` `r5_gfx9_inv_range_hi_value` | invalidation range high | `0x1f` | Linux v6.12 `gfxhub_v1_0.c:gfxhub_v1_0_program_invalidation`, the `VM_INVALIDATE_ENGn_ADDR_RANGE_HI32` store | low | stays. It is that store |
