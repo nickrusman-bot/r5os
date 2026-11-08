@@ -6,7 +6,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 
 > R5 Operating System is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
 
-**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10047**. There is no public release yet.
+**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10048**. There is no public release yet.
 
 ---
 
@@ -35,11 +35,11 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
 - Virtual surround for headphones.
 - Finer MIDI velocity and controller values. Existing MIDI programs keep working.
-- Full Midi 2.0 support
+- MIDI 2.0 support
 
 ### Graphics
-- OpenGL through Mesa, and Vulkan through Lavapipe. Both run on the CPU, not on the GPU.
-- On AMD Renoir laptops (such as the Ryzen 5 5625U) the `radeon_hd` driver shows the firmware picture. It can also start the GPU command ring, as an opt-in. That is the first step toward acceleration; it is not acceleration yet. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
+- OpenGL through Mesa, and Vulkan through Lavapipe, on the CPU.
+- On AMD Renoir laptops (such as the Ryzen 5 5625U), Vulkan programs can run on the GPU through RADV, as an experimental opt-in. The desktop itself is still drawn by the CPU. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
