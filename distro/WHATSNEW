@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10049 - Visual Identity
+The Deskbar button is the R5 mark. The boot screen shows that mark beside R5 Operating System. About R5 opens with the same heading, the version and the build, then the processors, memory, kernel, and time running, then What's new, Credits, and Licenses. The boot disk icon carries the same mark.
+
 R5 2026.1-dev Build 10048 - Vulkan teapot
 Demos includes VulkanTeapot. It draws a teapot with Vulkan. On a machine without a supported graphics chip it uses the software driver. The window title shows the device.
 

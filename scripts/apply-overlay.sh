@@ -40,6 +40,16 @@ if [[ -f "$deskSrc" ]]; then
 	echo "Wrote $deskDst"
 fi
 
+# The image gets the Deskbar mark, the logo, the splash, and the About symbol.
+# Previews in distro/artwork/brand-kit/ stay out of the image. The disk badge
+# is compiled from r5_disk_badge.h.
+symbolSrc="$ROOT/distro/artwork/r5-symbol.png"
+symbolDst="$ROOT/haiku/data/artwork/r5-symbol.png"
+if [[ -f "$symbolSrc" ]]; then
+	cp "$symbolSrc" "$symbolDst"
+	echo "Wrote $symbolDst"
+fi
+
 paperSrc="$ROOT/distro/artwork/r5-wallpaper.jpg"
 paperDst="$ROOT/haiku/data/artwork/r5-wallpaper.jpg"
 if [[ -f "$paperSrc" ]]; then

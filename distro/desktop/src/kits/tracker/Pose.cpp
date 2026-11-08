@@ -50,6 +50,16 @@ All rights reserved.
 #include <NodeMonitor.h>
 #include <Volume.h>
 #include <fs_info.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <Bitmap.h>
+#include <DataIO.h>
+#include <TranslationUtils.h>
+#include <math.h>
+
+#include "r5_disk_badge.h"
+// SPDX-SnippetEnd
 
 #include "Attributes.h"
 #include "Commands.h"
@@ -805,11 +815,74 @@ BPose::WidgetFor(BColumn* column, BPoseView* poseView, ModelNodeLazyOpener& open
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static dev_t
+r5_boot_device()
+{
+	static dev_t device = -2;
+	if (device == -2)
+		device = dev_for_path("/boot");
+	return device;
+}
+
+
+static BBitmap*
+r5_disk_badge()
+{
+	static BBitmap* bitmap = NULL;
+	static bool tried = false;
+	if (tried)
+		return bitmap;
+	tried = true;
+	BMemoryIO stream(kR5DiskBadgePng, kR5DiskBadgePngSize);
+	bitmap = BTranslationUtils::GetBitmap(&stream);
+	return bitmap;
+}
+
+
+static void
+r5_draw_boot_badge(Model* model, BView* view, BPoint where, BSize size)
+{
+	if (model == NULL || !model->IsVolume() || model->NodeRef() == NULL)
+		return;
+	if (model->NodeRef()->device != r5_boot_device())
+		return;
+
+	BBitmap* badge = r5_disk_badge();
+	if (badge == NULL)
+		return;
+
+	float side = size.Width() + 1;
+	float badgeSide = floorf(side * 0.42f);
+	if (badgeSide < 8.0f && side >= 8.0f)
+		badgeSide = 8.0f;
+	if (badgeSide > side)
+		badgeSide = side;
+
+	BRect dest(where.x + side - badgeSide, where.y,
+		where.x + side - 1, where.y + badgeSide - 1);
+	view->PushState();
+	view->SetDrawingMode(B_OP_ALPHA);
+	view->DrawBitmap(badge, badge->Bounds(), dest, B_FILTER_BITMAP_BILINEAR);
+	view->PopState();
+}
+// SPDX-SnippetEnd
+
+
 void
 BPose::DrawIcon(BPoint where, BView* view, BSize size, bool drawUnselected)
 {
-	IconCache::sIconCache->Draw(ResolvedModel(), view, where,
+	Model* model = ResolvedModel();
+	IconCache::sIconCache->Draw(model, view, where,
 		fIsSelected && !drawUnselected ? kSelectedIcon : kNormalIcon, size, true);
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	r5_draw_boot_badge(model, view, where, size);
+// SPDX-SnippetEnd
 
 	if (fPercent != -1)
 		DrawBar(where, view, size);
