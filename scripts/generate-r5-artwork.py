@@ -408,7 +408,24 @@ def render_system_disk_icon(target_size: int = 128) -> Image.Image:
 
 # --- 5. About R5 Window Single-Column Mockup ---
 
-def render_about_r5_mockup() -> Image.Image:
+def read_release() -> tuple[str, str]:
+    """Version and build for example cards. Product artwork does not call this."""
+
+    def first_line(path: pathlib.Path) -> str:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return line
+        raise SystemExit(f"empty {path}")
+
+    return first_line(ROOT / "distro" / "VERSION"), first_line(ROOT / "distro" / "BUILD")
+
+
+def example_version_line(version: str, build: str) -> str:
+    return f"example  {version} Build {build}"
+
+
+def render_about_r5_mockup(version: str, build: str) -> Image.Image:
     """Render a pixel-crisp preview of the single-column About R5 window on the R5 wallpaper."""
     W, H = 960, 680
     if WALLPAPER_SRC.is_file():
@@ -486,7 +503,7 @@ def render_about_r5_mockup() -> Image.Image:
     draw.text((tx + r5_width + 8, ty), "Operating System", font=font_h_os, fill=(51, 65, 85, 255), anchor="ls")
     draw.text(
         (tx, card_top + 68),
-        "Version 2026.1-dev Build 10049  •  AMD64",
+        example_version_line(version, build),
         font=font_ver,
         fill=(100, 116, 139, 255),
         anchor="ls",
@@ -533,7 +550,7 @@ def render_about_r5_mockup() -> Image.Image:
     font_wn_h = ImageFont.truetype(str(BOLD_TTF), 13)
     draw.text(
         (cx0 + 12, pane_top + 24),
-        "R5 2026.1-dev Build 10049 - Visual Identity",
+        example_version_line(version, build),
         font=font_wn_h,
         fill=(42, 131, 36, 255),
         anchor="ls",
@@ -547,7 +564,7 @@ def render_about_r5_mockup() -> Image.Image:
     )
     draw.text(
         (cx0 + 12, pane_top + 74),
-        "R5 2026.1-dev Build 10048 - Vulkan teapot",
+        "example",
         font=font_wn_h,
         fill=(42, 131, 36, 255),
         anchor="ls",
@@ -598,6 +615,7 @@ def main() -> int:
     args = parser.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    version, build = read_release()
     write_svg_files()
 
     for sz in (1024, 512, 256, 128, 64, 32, 22, 16):
@@ -617,13 +635,13 @@ def main() -> int:
         height=160,
         theme="light",
         transparent=False,
-        subtitle="Version 2026.1-dev Build 10049  •  AMD64",
+        subtitle=example_version_line(version, build),
     ).save(OUT_DIR / "r5-lockup-light-card.png")
     render_horizontal_lockup(
         height=160,
         theme="dark",
         transparent=False,
-        subtitle="Version 2026.1-dev Build 10049  •  AMD64",
+        subtitle=example_version_line(version, build),
     ).save(OUT_DIR / "r5-lockup-dark-card.png")
 
     splash_png, splash_bgr = render_boot_splash()
@@ -633,7 +651,7 @@ def main() -> int:
     for sz in (128, 64, 32):
         render_system_disk_icon(sz).save(OUT_DIR / f"r5-system-disk-{sz}.png")
 
-    render_about_r5_mockup().save(OUT_DIR / "r5-about-window-preview.png")
+    render_about_r5_mockup(version, build).save(OUT_DIR / "r5-about-window-preview.png")
 
     if args.install:
         for name in ("r5-os-deskbar.png", "r5-os-logo.png", "r5-os-splash.png", "r5-os-splash.bgr"):
