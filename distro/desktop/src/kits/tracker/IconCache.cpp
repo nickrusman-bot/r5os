@@ -71,13 +71,24 @@ All rights reserved.
 
 
 #include <ControlLook.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <IconUtils.h>
+// SPDX-SnippetEnd
 #include <Debug.h>
 #include <Screen.h>
 #include <Volume.h>
 
 #include <fs_info.h>
+#include <string.h>
 
 #include "Bitmaps.h"
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "r5_drive_icon.h"
+// SPDX-SnippetEnd
 #include "FSUtils.h"
 #include "IconCache.h"
 #include "MimeTypes.h"
@@ -614,11 +625,27 @@ IconCache::GetVolumeIcon(AutoLock<SimpleIconCache>*nodeCacheLocker,
 	if (entry == NULL || !entry->HaveIconBitmap(NORMAL_ICON_ONLY, size)) {
 		BVolume volume(model->NodeRef()->device);
 
-		if (volume.IsShared()) {
+		fs_info volumeInfo;
+		bool optical = false;
+		if (fs_stat_dev(volume.Device(), &volumeInfo) == B_OK) {
+			optical = strcmp(volumeInfo.fsh_name, "iso9660") == 0
+				|| strcmp(volumeInfo.fsh_name, "cdda") == 0;
+		}
+
+		if (volume.IsShared() || !optical) {
 			// check if it's a network share and give it a special icon
 			BBitmap* bitmap = lazyBitmap->Get();
-			GetTrackerResources()->GetIconResource(R_ShareIcon,
-				icon_size_for(size), bitmap);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// The legacy volume and share icons are the beige cabinet.
+			if (BIconUtils::GetVectorIcon(kR5DriveIcon, kR5DriveIconSize, bitmap)
+					!= B_OK) {
+				GetTrackerResources()->GetIconResource(
+					volume.IsShared() ? R_ShareIcon : R_HardDiskIcon,
+					icon_size_for(size), bitmap);
+			}
+// SPDX-SnippetEnd
 			if (entry == NULL) {
 				PRINT_ADD_ITEM(
 					("File %s; Line %d # adding entry for model %s\n",
@@ -726,7 +753,9 @@ IconCache::GetWellKnownIcon(AutoLock<SimpleIconCache>*,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-				resourceId = R_HardDiskIcon;
+				// R_HardDiskIcon is the beige cabinet. The drive is this icon.
+				// Pose draws the R5 mark over the ladybug.
+				resourceId = R_BootVolumeIcon;
 // SPDX-SnippetEnd
 				break;
 

@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### About R5 opens at the mockup width
+
+The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. That width is the window. The content minimum is the same width minus the two big insets, so the insets are not added a second time. The heading stays together; the glue takes the extra width. `distro/BUILD` stays 10049.
+
+### Volumes use the drive, not the cabinet
+
+`R_HardDiskIcon` is the beige cabinet. The boot volume uses the drive icon again, and the R5 mark still covers the ladybug. Any other disk, including VBox Share, uses that drive with the ladybug removed, including the black body that was left after the first cut. A CD keeps its own icon. `distro/BUILD` stays 10049.
+
 ### About R5 uses two cards
 
 The header is a document card: the mark at four times the font size, then “R5” and “Operating System” at twice the font size, and the version line below in `B_DARKEN_2_TINT`. The system information is a panel card in a 2×2 grid: processors and kernel on the left, memory and time on the right. Labels are bold. Values use the same tint. `Build N` stays small and in `B_LIGHTEN_1_TINT` under that grid. The gap between the cards and the window edge is `B_USE_BIG_SPACING`. AboutSystem links `libr5ui.so`. The time line is drawn on the card fill. The replicant is still `SysInfoView` and is not rebuilt from a deep archive. VirtualBox on 8 Nov 2026 showed the window; the time line wraps in the right column. Dark mode, an 18-point font, and the replicant were not tried. `distro/BUILD` stays 10049.

@@ -459,6 +459,13 @@ AboutApp::MessageReceived(BMessage* message)
 //	#pragma mark - AboutWindow
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static float r5_about_width();
+// SPDX-SnippetEnd
+
+
 AboutWindow::AboutWindow()
 	:
 	BWindow(BRect(0, 0, kWindowWidth, kWindowHeight),
@@ -476,10 +483,17 @@ AboutWindow::AboutWindow()
 
 	UpdateSizeLimits();
 
-	// Resize according to golden rule
-	float width = Bounds().IntegerWidth();
-	if (width * 0.618 > Bounds().Height())
-		ResizeTo(width, width * 0.618);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// Open at the mockup width. The layout max stays unlimited, so the
+	// window can grow and shrink on both axes.
+	float mockupWidth = r5_about_width();
+	float height = Bounds().Height();
+	if (mockupWidth * 0.618f > height)
+		height = mockupWidth * 0.618f;
+	ResizeTo(mockupWidth, height);
+// SPDX-SnippetEnd
 
 	CenterOnScreen();
 }
@@ -528,6 +542,32 @@ r5_make_transparent(BView* view)
 		return;
 	view->SetViewColor(B_TRANSPARENT_COLOR);
 	view->SetFlags(view->Flags() | B_TRANSPARENT_BACKGROUND);
+}
+
+
+static void
+r5_allow_wide(BView* view)
+{
+	if (view == NULL)
+		return;
+	view->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+}
+
+
+// The mockup window is 540 wide at 12 pt. That is the window, not the
+// content inside the big insets.
+static float
+r5_about_width()
+{
+	return be_plain_font->Size() * 45.0f;
+}
+
+
+static float
+r5_about_content_width()
+{
+	float inset = be_control_look->ComposeSpacing(B_USE_BIG_SPACING);
+	return r5_about_width() - 2.0f * inset;
 }
 
 
@@ -645,12 +685,15 @@ R5Header::R5Header()
 	r5_make_transparent(fTitle);
 	r5_make_transparent(fOperating);
 	r5_make_transparent(fVersion);
+	r5_allow_wide(fTitle);
+	r5_allow_wide(fOperating);
+	r5_allow_wide(fVersion);
 
 	BGroupView* line = new BGroupView(B_HORIZONTAL, B_USE_SMALL_SPACING);
 	r5_make_transparent(line);
 	BLayoutBuilder::Group<>(line)
-		.Add(fTitle)
-		.Add(fOperating)
+		.Add(fTitle, 0.0f)
+		.Add(fOperating, 0.0f)
 		.AddGlue();
 
 	BGroupView* text = new BGroupView(B_VERTICAL, B_USE_SMALL_SPACING);
@@ -854,6 +897,7 @@ SysInfoView::SysInfoView()
 	fUptimeView = new BTextView("uptimetext");
 	fUptimeView->SetText(_GetUptime());
 	_UpdateText(fUptimeView);
+	r5_allow_wide(fUptimeView);
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
@@ -1183,6 +1227,7 @@ SysInfoView::_UpdateLabel(BStringView* label)
 		B_ALIGN_VERTICAL_UNSET));
 	label->SetFont(be_bold_font, B_FONT_FAMILY_AND_STYLE);
 	r5_make_transparent(label);
+	r5_allow_wide(label);
 }
 
 
@@ -1203,6 +1248,7 @@ SysInfoView::_UpdateSubtext(BStringView* subtext)
 		B_ALIGN_VERTICAL_UNSET));
 	subtext->SetFont(be_plain_font, B_FONT_FAMILY_AND_STYLE);
 	r5_make_transparent(subtext);
+	r5_allow_wide(subtext);
 }
 
 
@@ -1516,6 +1562,7 @@ AboutView::AboutView()
 	fCachedMinHeight(kSysInfoMinHeight)
 {
 	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 
 	// Assign the colors, sadly this does not respect live color updates
 	fTextColor = ui_color(B_DOCUMENT_TEXT_COLOR);
@@ -1565,6 +1612,11 @@ AboutView::AttachedToWindow()
 	float headerHeight = fLogoView->MinSize().height;
 	float infoWidth = fSysInfoView->MinWidth();
 	fCachedMinWidth = std::max(infoWidth, fLogoView->MinSize().width);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	fCachedMinWidth = std::max(fCachedMinWidth, r5_about_content_width());
+// SPDX-SnippetEnd
 	float tabHeight = 180.0f;
 	fCachedMinHeight = headerHeight + fSysInfoView->MinHeight() + tabHeight;
 	if (fTabView != NULL)
