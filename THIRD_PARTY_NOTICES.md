@@ -43,6 +43,8 @@ Location: `distro/smb/src/add-ons/kernel/file_systems/smbfs`.
 
 A userlandfs add-on from air/OS (`github.com/airos-works/haiku`). Copyright 2026 Haiku, Inc. License: MIT. It links `libsmb2.a`, so the add-on as shipped combines that MIT code with LGPL-2.1-or-later. The notices stay on each part.
 
+The mount server side is `distro/smb/src/servers/mount` and `distro/smb/headers/private/mount/MountServer.h`. Same origin, MIT. Passwords are stored with `BKeyStore` under `smb://server/share`. The server retries a share that failed because the network was not up, and posts a notification when the failure is not that kind.
+
 The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is `LICENSES/Unlicense.txt`. The Apache-2.0 text is not in `LICENSES/` yet.
 
 R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
