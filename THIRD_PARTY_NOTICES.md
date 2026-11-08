@@ -31,6 +31,12 @@ Location: `distro/airplay`.
 
 Copyright, URLs, and what was not copied (AirPlay 2 pairing, NQPTP, FairPlay) are in `distro/airplay/THIRD_PARTY.md`.
 
+### SMB client library
+
+Location: `distro/smb/src/libs/libsmb2`, public headers `distro/smb/headers/libs/libsmb2`.
+
+libsmb2 6.2 (tag `libsmb2-6.2`, `d67e213`), from https://github.com/sahlberg/libsmb2, as brought into air/OS (`github.com/airos-works/haiku`). Copyright 2016 Ronnie Sahlberg. Portions of the sources are copyright 2017 Primary Data Inc. License: LGPL-2.1-or-later. The license text is `LICENSES/LGPL-2.1.txt` and `distro/smb/src/libs/libsmb2/LICENCE-LGPL-2.1.txt`. The Haiku notes are `README.haiku`. The Kerberos wrapper is not included. The library is built as the static library `libsmb2.a`.
+
 The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is `LICENSES/Unlicense.txt`. The Apache-2.0 text is not in `LICENSES/` yet.
 
 R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
