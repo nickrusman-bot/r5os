@@ -218,7 +218,7 @@ static inline uint32_t
 r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	const uint32_t* dwords, const uint32_t* vmid, uint32_t count,
 	uint64_t userFence, uint64_t sequence, uint64_t irqFence,
-	uint32_t cntx, uint32_t skipOpen)
+	uint32_t cntx, uint32_t skipOpen, uint32_t skipTail = 0)
 {
 	uint32_t n = 0;
 	uint32_t i;
@@ -271,13 +271,22 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	n = r5_cs_put(out, n, cap, (uint32_t)sequence);
 	n = r5_cs_put(out, n, cap, 0);
 	n = r5_cs_put(out, n, cap, 0);
-	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
-	n = r5_cs_put(out, n, cap, 0);
+	/* gfx9_cond_exec leaves this SWITCH_BUFFER outside the second
+	 * COND_EXEC. amdgpu_ib_schedule patches that packet first. */
+	if (skipTail == 0) {
+		n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
+		n = r5_cs_put(out, n, cap, 0);
+	}
 	expect = r5_cs_user_words(count);
 	if (skipOpen != 0) {
 		if (expect < 4u)
 			return 0;
 		expect -= 4u;
+	}
+	if (skipTail != 0) {
+		if (expect < 2u)
+			return 0;
+		expect -= 2u;
 	}
 	if (n != expect || (out != 0 && n > cap))
 		return 0;

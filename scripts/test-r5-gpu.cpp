@@ -1177,6 +1177,40 @@ main()
 				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
 				"gfx9_start.cpp", condOrder, 3) != 0)
 			return 1;
+		uint32_t cond[8];
+		if (r5_cs_cond_exec(cond, 8, 0, 0x401080ull) != 5u
+			|| cond[0] != 0xc0032200u || cond[1] != 0x00401080u
+			|| cond[2] != 0u || cond[3] != 0u)
+			return fail("cond packet");
+		r5_cs_cond_exec_patch(cond, 4, 0x22u);
+		if (cond[4] != 0x22u)
+			return fail("cond flush skip");
+		r5_cs_cond_exec_patch(cond, 4, 0x2du);
+		if (cond[4] != 0x2du)
+			return fail("cond job skip");
+		uint32_t opened[64];
+		uint64_t oneIb = 0x1000;
+		uint32_t oneDw = 4;
+		uint32_t oneVm = 1;
+		uint32_t whole = r5_cs_user_body(opened, 64, &oneIb, &oneDw, &oneVm,
+			1, 0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 0, 0);
+		uint32_t inner = r5_cs_user_body(opened, 64, &oneIb, &oneDw, &oneVm,
+			1, 0x66d000ull, 3, 0x401040ull, kR5CsCntxKeep, 1, 1);
+		if (whole < 6u || inner != whole - 6u || opened[0] == 0xc0008b00u
+			|| opened[inner - 2u] == 0xc0008b00u)
+			return fail("cond outside switches");
+		const char* twoCond[] = {
+			"r5_cs_cond_exec(packets, cap, switched,",
+			"r5_cs_vm_switch(",
+			"r5_cs_cond_exec_patch(packets, slotA,",
+			"r5_cs_cond_exec(packets, cap, switched,",
+			"r5_cs_user_body(",
+			"r5_cs_cond_exec_patch(packets, slotB,"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", twoCond, 6) != 0)
+			return 1;
 	}
 	{
 		struct r5_gds empty;

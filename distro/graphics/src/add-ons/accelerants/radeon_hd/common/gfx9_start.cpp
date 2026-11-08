@@ -2667,28 +2667,41 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	 * either reason. The two SWITCH_BUFFER packets stay with the VM
 	 * flush only. */
 	int pasidFence = sFlushFence && pasidMap && !flush;
-	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
-	if (flushFence)
-		prefix += 12u;
-	if (pasidFence)
-		prefix += 8u;
-	if (sCondExec)
-		prefix += 5u;
 	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
 	 * zeros, and the packet runs once for this VMID. */
 	struct r5_gds jobGds;
 	memset(&jobGds, 0, sizeof(jobGds));
 	int gds = sGdsSwitch && r5_gds_switch_needed(&sGdsState, &jobGds);
+	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
+	if (flushFence)
+		prefix += sCondExec ? 8u : 12u;
+	if (pasidFence)
+		prefix += 8u;
+	/* v6.18 amdgpu_vm_flush emits one COND_EXEC before the pipe sync
+	 * and patches it before the double SWITCH_BUFFER. v6.12 does the
+	 * same. v6.18 also counts the cleaner shader in that early return.
+	 * amdgpu_ib_schedule emits the second COND_EXEC before
+	 * CONTEXT_CONTROL and patches it after the job fence, so the last
+	 * SWITCH_BUFFER stays outside. v6.18 emits that one when job is
+	 * set; v6.12 emitted it when vm was set. */
+	int condFlush = sCondExec && (flush || gds);
+	if (condFlush)
+		prefix += 5u;
+	if (sCondExec)
+		prefix += 4u + 5u;
 	if (gds)
 		prefix += 20u;
 	if (pasidMap)
 		prefix += 5u;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint32 body = r5_cs_user_words(count);
-	if (flushFence)
+	if (flushFence || sCondExec)
 		body -= 4u;
-	uint32 total = body == 0 ? 0 : prefix + body
-		+ r5_cs_pad_dwords(wptr + prefix + body);
+	if (sCondExec)
+		body -= 2u;
+	uint32 tail = sCondExec ? 2u : 0u;
+	uint32 total = body == 0 ? 0 : prefix + body + tail
+		+ r5_cs_pad_dwords(wptr + prefix + body + tail);
 	uint32 cap = flush ? 512u : 320u;
 	if (gds)
 		cap += 20u;
@@ -2696,6 +2709,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		cap += 5u;
 	if (pasidFence)
 		cap += 8u;
+	if (sCondExec)
+		cap += 10u + 4u;
 	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
 		return false;
 	if (flush && (pd == 0 || ibVm[0] == 0))
@@ -2709,6 +2724,13 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint32 cntx = r5_cs_cntx(haveSwitch, preamble);
 	uint32 packets[576];
 	uint32 switched = 0;
+	uint64 pageMc = fenceMc - kR5UserFenceOffset;
+	uint32 slotA = 0;
+	if (condFlush) {
+		slotA = switched + 4u;
+		switched = r5_cs_cond_exec(packets, cap, switched,
+			r5_cs_cond_exec_mc(pageMc));
+	}
 	if (flush) {
 		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
 			sUserSequence);
@@ -2727,13 +2749,22 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		sGdsState.valid = 1;
 	}
 	if (flush && flushFence) {
-		switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
-			flushSeq);
+		if (sCondExec)
+			switched = r5_cs_eop_fence(packets, cap, switched, irqMc,
+				flushSeq);
+		else
+			switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
+				flushSeq);
 	}
-	uint32 condSlot = 0;
+	if (condFlush)
+		r5_cs_cond_exec_patch(packets, slotA, switched - (slotA + 1u));
+	uint32 slotB = 0;
 	if (sCondExec) {
-		uint64 pageMc = fenceMc - kR5UserFenceOffset;
-		condSlot = switched + 4u;
+		switched = r5_cs_put(packets, switched, cap, r5_cs_packet3(0x8b, 0));
+		switched = r5_cs_put(packets, switched, cap, 0);
+		switched = r5_cs_put(packets, switched, cap, r5_cs_packet3(0x8b, 0));
+		switched = r5_cs_put(packets, switched, cap, 0);
+		slotB = switched + 4u;
 		switched = r5_cs_cond_exec(packets, cap, switched,
 			r5_cs_cond_exec_mc(pageMc));
 	}
@@ -2743,12 +2774,17 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		return false;
 	uint32 filled = r5_cs_user_body(packets + switched, cap - switched, ibVa,
 		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx,
-		flushFence ? 1u : 0u);
+		(flushFence || sCondExec) ? 1u : 0u, sCondExec ? 1u : 0u);
 	if (filled == 0)
 		return false;
-	if (sCondExec)
-		r5_cs_cond_exec_patch(packets, condSlot, filled);
-	filled += switched;
+	if (sCondExec) {
+		r5_cs_cond_exec_patch(packets, slotB, filled);
+		filled += switched;
+		packets[filled] = r5_cs_packet3(0x8b, 0);
+		packets[filled + 1u] = 0;
+		filled += 2u;
+	} else
+		filled += switched;
 	uint32 pad = r5_cs_pad_dwords(wptr + filled);
 	if (filled + pad != total)
 		return false;
