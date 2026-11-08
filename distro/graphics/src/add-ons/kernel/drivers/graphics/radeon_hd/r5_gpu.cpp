@@ -1751,8 +1751,12 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	uint32 dwords = r5_gfx9_user_commit_dwords(in.ib_count);
 	/* The file's page-table base is written after the room wait, so the
 	 * count includes one VM flush that touch() will make due. */
-	if (client->tree != NULL && dwords != 0)
-		dwords += r5_cs_vm_switch_words(client->pasid);
+	if (client->tree != NULL && dwords != 0) {
+		dwords += r5_cs_vm_switch_words();
+		if (client->pasid != 0
+			&& (r5_gfx9_pasid_map_on() || r5_gfx9_vmid_per_file()))
+			dwords += 5u;
+	}
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,

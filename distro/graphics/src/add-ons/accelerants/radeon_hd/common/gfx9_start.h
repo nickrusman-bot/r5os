@@ -147,6 +147,8 @@ void r5_gfx9_set_flush_fence(int on);
 void r5_gfx9_set_cond_exec(int on);
 /* gfx9_pasid_map. Off unless the radeon_hd setting says so. */
 void r5_gfx9_set_pasid_map(int on);
+/* gfx9_vmid_per_file. The LUT packet follows the VM flush. */
+void r5_gfx9_set_file_pasid(int on);
 /* gfx9_ce_meta. Off unless the radeon_hd setting says so. */
 void r5_gfx9_set_ce_meta(int on);
 int r5_gfx9_ce_meta_on(void);

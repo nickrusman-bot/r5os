@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The VM flush stays 26 dwords when the PASID settings are off
+
+`gfx9_vmid_per_file` stays off. `r5_cs_vm_switch` is the 26-dword flush again, with no PASID argument. `IH_VMID_n_LUT` is `r5_cs_pasid_map` after `PFP_SYNC_ME`, and only when `gfx9_pasid_map` or `gfx9_vmid_per_file` is on. With both off, a user job writes no LUT packet. The host test checks the 26 dwords and that the map follows them. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### The isolation test reads and writes a foreign address
 
 `gfx9_vmid_per_file` stays off. `r5-gpu-isolation` maps one page in the first process, fills it with `0x5a`, and sends only the GPU address to a second process. That process submits COPY_DATA and then WRITE_DATA to the address. The owner's page is unchanged, and the program prints `vm fault` with that address. The self-test runs this before the kill stage. The host test checks those steps in the source. It was not run on hardware. There is no What's new section and `distro/BUILD` stays the same.

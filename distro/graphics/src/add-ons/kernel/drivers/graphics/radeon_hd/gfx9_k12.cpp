@@ -1918,6 +1918,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 			knote("gfx9_vmid_per_file needs gfx9_vmids");
 			sVmidPerFile = false;
 		}
+		r5_gfx9_set_file_pasid(sVmidPerFile ? 1 : 0);
 		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
 			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);
