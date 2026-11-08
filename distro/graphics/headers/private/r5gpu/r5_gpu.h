@@ -406,6 +406,11 @@ typedef struct {
 	uint32_t	version;
 	uint32_t	which;
 	uint32_t	_pad;
+	/* This round's pages. y is the next page. A later round uses
+	 * another pair, so a leftover translation cannot write a page
+	 * this round has freed. */
+	uint64_t	x;
+	uint64_t	y;
 } r5_gpu_stage_r1;
 
 /* The render node is published only when these three steps are on.

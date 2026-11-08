@@ -453,7 +453,7 @@ stage_switch(FILE* out, const char* name, uint32_t which)
 
 
 static void
-stage_r1(FILE* out, uint32_t which)
+stage_r1(FILE* out, uint32_t which, uint64_t x)
 {
 	stage_at(out, which == R5_GPU_R1_C ? "R1c" : "R1");
 	r5_gpu_stage_r1 in;
@@ -461,6 +461,8 @@ stage_r1(FILE* out, uint32_t which)
 	in.size = (uint32_t)sizeof(in);
 	in.version = 1;
 	in.which = which;
+	in.x = x;
+	in.y = x + 0x1000ull;
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
 		fprintf(out, "not available, no supported GPU\n");
@@ -468,7 +470,9 @@ stage_r1(FILE* out, uint32_t which)
 		return;
 	}
 	int ret = ioctl(fd, R5_GPU_STAGE_R1, &in, sizeof(in));
-	fprintf(out, "R5_GPU_STAGE_R1 %u %d errno %d\n", which, ret, errno);
+	fprintf(out, "R5_GPU_STAGE_R1 %u x %016llx y %016llx %d errno %d\n",
+		which, (unsigned long long)in.x, (unsigned long long)in.y,
+		ret, errno);
 	close(fd);
 	fflush(out);
 }
@@ -553,7 +557,7 @@ main()
 			skip_lost(out, "ib");
 		} else {
 			stage_regs(out);
-			stage_r1(out, R5_GPU_R1_AB);
+			stage_r1(out, R5_GPU_R1_AB, 0xffff800000100000ull);
 			if (device_lost()) {
 				skip_lost(out, "vulkaninfo");
 				skip_lost(out, "VulkanTeapot");
@@ -563,7 +567,7 @@ main()
 				skip_lost(out, "ib");
 			} else {
 				stage_switch(out, "gfx9_inv_range", R5_GPU_SWITCH_INV_RANGE);
-				stage_r1(out, R5_GPU_R1_AB);
+				stage_r1(out, R5_GPU_R1_AB, 0xffff800000300000ull);
 				if (device_lost()) {
 					skip_lost(out, "vulkaninfo");
 					skip_lost(out, "VulkanTeapot");
@@ -634,7 +638,7 @@ main()
 						skip_lost(out, "selftest");
 						skip_lost(out, "ib");
 					} else {
-						stage_r1(out, R5_GPU_R1_C);
+						stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull);
 						if (device_lost()) {
 							skip_lost(out, "selftest");
 							skip_lost(out, "ib");

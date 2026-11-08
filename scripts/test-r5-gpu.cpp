@@ -679,16 +679,16 @@ main()
 	const char* selftestOrder[] = {
 		"highVa, false",
 		"stage_regs(out)",
-		"stage_r1(out, R5_GPU_R1_AB)",
+		"stage_r1(out, R5_GPU_R1_AB, 0xffff800000100000ull)",
 		"R5_GPU_SWITCH_INV_RANGE",
-		"stage_r1(out, R5_GPU_R1_AB)",
+		"stage_r1(out, R5_GPU_R1_AB, 0xffff800000300000ull)",
 		"\"vulkaninfo\"",
 		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
 		"R5_GPU_SWITCH_FLUSH_FENCE",
 		"confirm teapots",
-		"stage_r1(out, R5_GPU_R1_C)",
+		"stage_r1(out, R5_GPU_R1_C, 0xffff800000500000ull)",
 		"stage_selftest(out)",
 		"highVa, true"
 	};
@@ -1573,6 +1573,19 @@ main()
 			return 1;
 		if (R5_GPU_R1_AB != 1u || R5_GPU_R1_C != 2u)
 			return fail("r1 which");
+		if (r5_vm_va_fits(0xffff800000100000ull, 0x2000) == 0
+			|| r5_vm_va_fits(0xffff800000300000ull, 0x2000) == 0
+			|| r5_vm_va_fits(0xffff800000500000ull, 0x2000) == 0)
+			return fail("r1 round va");
+		char r1Body[8000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_stage_r1(radeon_info*", "gpu_stage_u(",
+				r1Body, sizeof(r1Body)) != 0)
+			return 1;
+		if (strstr(r1Body, "0xffff800000100000") != NULL)
+			return fail("r1 shared va");
 	}
 	{
 		const char* ceBoot[] = {
