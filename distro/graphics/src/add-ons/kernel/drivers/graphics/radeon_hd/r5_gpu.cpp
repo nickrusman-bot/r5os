@@ -3178,6 +3178,7 @@ gpu_stage_r1(radeon_info* info)
 		(unsigned long)gpu_stage_r1_word(&a),
 		(unsigned long)gpu_stage_r1_word(&b));
 
+	r5_gfx9_log_state("r1c");
 	dprintf("radeon_hd: r1c before inv %d hub %d vmids %d fence %d "
 		"cond %d gds %d pasid %d ce %d\n",
 		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(),

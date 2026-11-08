@@ -718,6 +718,34 @@ main()
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
 			selftestOrder, 13) != 0)
 		return 1;
+	{
+		const char* regsBefore[] = {
+			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
+			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
+			"stage_regs(out)", "stage_regs(out)", "stage_regs(out)",
+			"stage_regs(out)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+				regsBefore, 10) != 0)
+			return 1;
+		const char* r1cLog[] = {
+			"r5_gfx9_log_state(\"r1c\")",
+			"radeon_hd: r1c gtt"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", r1cLog, 2) != 0)
+			return 1;
+		const char* diskLog[] = {
+			"r5-gpu-regs.txt",
+			"fsync(fd)"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", diskLog, 2) != 0)
+			return 1;
+	}
 	if (source_order(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
 			stageOrder, 16) != 0)

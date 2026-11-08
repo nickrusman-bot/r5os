@@ -574,40 +574,55 @@ main()
 					skip_lost(out, "selftest");
 					skip_lost(out, "ib");
 				} else {
+					stage_regs(out);
 					int pass = run_stage(out, "VulkanTeapot",
 						"/bin/VulkanTeapot --selftest 2>&1", 120);
-					if (pass == 0 && !device_lost())
+					if (pass == 0 && !device_lost()) {
+						stage_regs(out);
 						pass = run_stage(out, "VulkanTeapot (sam)",
 							"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
 							120);
-					if (pass == 0 && !device_lost())
+					}
+					if (pass == 0 && !device_lost()) {
+						stage_regs(out);
 						pass = run_stage(out, "VulkanTeapot",
 							"/bin/VulkanTeapot --selftest 2>&1", 120);
+					}
 					if (pass != 0 && !device_lost()) {
 						stage_switch(out, "gfx9_flush_fence",
 							R5_GPU_SWITCH_FLUSH_FENCE);
+						stage_regs(out);
 						pass = run_stage(out, "VulkanTeapot",
 							"/bin/VulkanTeapot --selftest 2>&1", 120);
-						if (pass == 0 && !device_lost())
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
 							pass = run_stage(out, "VulkanTeapot (sam)",
 								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
 								120);
-						if (pass == 0 && !device_lost())
+						}
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
 							pass = run_stage(out, "VulkanTeapot",
 								"/bin/VulkanTeapot --selftest 2>&1", 120);
+						}
 					}
 					if (pass == 0 && !device_lost()) {
 						fprintf(out, "confirm teapots\n");
 						fflush(out);
+						stage_regs(out);
 						pass = run_stage(out, "VulkanTeapot",
 							"/bin/VulkanTeapot --selftest 2>&1", 120);
-						if (pass == 0 && !device_lost())
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
 							pass = run_stage(out, "VulkanTeapot (sam)",
 								"RADV_PERFTEST=sam /bin/VulkanTeapot --selftest 2>&1",
 								120);
-						if (pass == 0 && !device_lost())
+						}
+						if (pass == 0 && !device_lost()) {
+							stage_regs(out);
 							run_stage(out, "VulkanTeapot",
 								"/bin/VulkanTeapot --selftest 2>&1", 120);
+						}
 					}
 					if (device_lost()) {
 						skip_lost(out, "selftest");
