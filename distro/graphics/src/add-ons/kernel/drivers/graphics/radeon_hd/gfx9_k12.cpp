@@ -8,6 +8,7 @@
  */
 
 #include "gfx9_start.h"
+#include "r5_inv_range.h"
 #include "r5_vm.h"
 #include "r5_gpu.h"
 #include "r5_span.h"
@@ -53,6 +54,8 @@ static uint32 sLastRing = 0;
 static uint8 sFirstRaw[4][32];
 static area_id sSystemArea = -1;
 static bool sGfx9Started = false;
+static bool sGpuDebug = false;
+static bool sInvRange = false;
 static bool sVmCntlSavedValid = false;
 static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
@@ -652,6 +655,41 @@ static const uint32 kFaultDefaultMask = 0x1ffcu;
 static const uint32 kFaultCrashMask = 0xc0000000u;
 
 
+/* Linux v6.12 gfxhub_v1_0.c:gfxhub_v1_0_program_invalidation.
+ * The read is not behind gfx9_inv_range. The print is behind gpu_debug. */
+static void
+r5_gfx9_inv_range_read(const char* when)
+{
+	uint32 engine;
+	if (!sGpuDebug || sInfo == NULL || when == NULL)
+		return;
+	for (engine = 0; engine < r5_gfx9_inv_engines(); engine += 17) {
+		knote("inv range %s eng %lu lo %08lx hi %08lx", when,
+			(unsigned long)engine,
+			(unsigned long)kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_lo(engine))),
+			(unsigned long)kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_hi(engine))));
+	}
+}
+
+
+static void
+r5_gfx9_inv_range_program(void)
+{
+	uint32 engine;
+	if (!sInvRange || sInfo == NULL)
+		return;
+	for (engine = 0; engine < r5_gfx9_inv_engines(); engine++) {
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_lo(engine)),
+			r5_gfx9_inv_range_lo_value());
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_hi(engine)),
+			r5_gfx9_inv_range_hi_value());
+	}
+	r5_gfx9_inv_range_read("wrote");
+}
+
+
 static void
 run_k2()
 {
@@ -889,6 +927,7 @@ run_k2()
 	}
 	(void)sequence;
 	(void)flushed;
+	r5_gfx9_inv_range_read("k2");
 }
 
 
@@ -1120,6 +1159,8 @@ r5_gfx9_vmid1_setup()
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32)),
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32)));
 	r5_gfx9_vmid1_set_root(tableBase);
+	/* Linux programs the engine ranges after setup_vmid_config. */
+	r5_gfx9_inv_range_program();
 	return true;
 }
 
@@ -1312,6 +1353,10 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		irq = get_driver_boolean_parameter(settings, "gfx9_irq", false, true);
 		gart = get_driver_boolean_parameter(settings, "gfx9_gart", false, true);
+		sGpuDebug = get_driver_boolean_parameter(settings, "gpu_debug",
+			false, true);
+		sInvRange = get_driver_boolean_parameter(settings, "gfx9_inv_range",
+			false, true);
 		unload_driver_settings(settings);
 	}
 	uint32 pci = info.pciID;

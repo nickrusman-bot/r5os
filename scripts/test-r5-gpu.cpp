@@ -13,6 +13,7 @@
 #include "r5_gpu.h"
 #include "r5_cs.h"
 #include "r5_gc9_regs.h"
+#include "r5_inv_range.h"
 #include "r5_span.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
@@ -1122,6 +1123,32 @@ main()
 	#undef R5_GC9_WAS
 	if (r5_cs_gc_reg(mmVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32) != 0x28ebu)
 		return fail("ptb packet address");
+	if (r5_gfx9_inv_engines() != 18u)
+		return fail("inv engines");
+	if (r5_gfx9_inv_range_lo(0) != 0x8c7u
+		|| r5_gfx9_inv_range_hi(0) != 0x8c8u)
+		return fail("inv eng0");
+	if (r5_gfx9_inv_range_lo(1)
+		!= r5_gfx9_inv_range_lo(0) + R5_GC9_ENG_ADDR_DISTANCE)
+		return fail("inv step");
+	if (r5_gfx9_inv_range_lo(17) != 0x8c7u + 17u * R5_GC9_ENG_ADDR_DISTANCE
+		|| r5_gfx9_inv_range_hi(17)
+			!= mmVM_INVALIDATE_ENG0_ADDR_RANGE_HI32
+				+ 17u * R5_GC9_ENG_ADDR_DISTANCE)
+		return fail("inv eng17");
+	if (r5_gfx9_inv_range_lo_value() != 0xffffffffu
+		|| r5_gfx9_inv_range_hi_value() != 0x1fu)
+		return fail("inv values");
+	{
+		const char* invOrder[] = {
+			"kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL), cntl);",
+			"r5_gfx9_inv_range_program();"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", invOrder, 2) != 0)
+			return 1;
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }
