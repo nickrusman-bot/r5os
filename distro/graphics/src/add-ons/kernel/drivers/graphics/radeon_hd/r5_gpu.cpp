@@ -1018,6 +1018,10 @@ gpu_fault_retire()
 static void
 gpu_release_parked(uint64 seen)
 {
+	/* A lost device never retires the fence, so every parked buffer
+	 * and the file tree it holds are released. */
+	if (sLost)
+		seen = ~0ull;
 	gpu_defer_reclaim(seen);
 	for (uint32 i = 0; i < kMaxBo; i++) {
 		gpu_bo* bo = &sBo[i];

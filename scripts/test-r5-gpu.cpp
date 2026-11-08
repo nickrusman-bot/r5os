@@ -655,6 +655,25 @@ main()
 			return fail("still held");
 		if (count.trees != 0 || count.pages != 0 || count.refs != 0)
 			return fail("counters back");
+		r5_file_count lost;
+		memset(&lost, 0, sizeof(lost));
+		r5_file_count_open(&lost, 2);
+		r5_file_count_hold(&lost);
+		if (r5_file_count_drop(&lost, 2) != 0)
+			return fail("lost while parked");
+		if (r5_file_count_drop(&lost, 2) == 0)
+			return fail("lost retire");
+		if (lost.trees != 0 || lost.pages != 0 || lost.refs != 0)
+			return fail("lost counters");
+		const char* lostSeen[] = {
+			"A lost device never retires",
+			"seen = ~0ull;",
+			"gpu_bo_release(bo)"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", lostSeen, 3) != 0)
+			return 1;
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/r5_gpu.cpp",

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A lost GPU releases parked buffers and their file trees
+
+`gfx9_vmid_per_file` stays off. After `gpu lost`, the retire treats every fence as passed. Parked buffers are released, and the last reference drops the file tree, its pages and its VMID. The host test holds a tree for a parked buffer, drops it as lost, and the counters are back at zero. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Page-table pages count against the file's VRAM
 
 `gfx9_vmid_per_file` stays off. A file with its own tree refuses a VRAM buffer with `B_NO_MEMORY` when that file's buffers plus its page-table pages do not fit in the framebuffer. A map that cannot take a table page logs `page table pool full` and returns `B_NO_MEMORY`. The host test fills one file's budget and leaves the other file inside its budget. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
