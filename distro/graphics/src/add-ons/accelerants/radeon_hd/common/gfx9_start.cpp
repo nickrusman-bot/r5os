@@ -2713,11 +2713,11 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		for (uint32 i = 0; i < nShow; i++)
 			show[i] = packets[i];
 		sHost->log(sHost->cookie,
-			"radeon_hd: t %lld user job file %llx ctx %lu flush %lu "
+			"radeon_hd: t %lld user job fence %llx flush %lu "
 			"cntx %08lx seq %llu %08lx %08lx %08lx %08lx %08lx %08lx "
 			"%08lx %08lx\n",
-			(long long)system_time(), (unsigned long long)file,
-			(unsigned long)ctxId, (unsigned long)(flush ? 1u : 0u),
+			(long long)system_time(), (unsigned long long)fenceCtx,
+			(unsigned long)(flush ? 1u : 0u),
 			(unsigned long)cntx, (unsigned long long)sequence,
 			(unsigned long)show[0], (unsigned long)show[1],
 			(unsigned long)show[2], (unsigned long)show[3],
