@@ -58,6 +58,14 @@ enum {
 #define R5_GPU_CAP_RENDER 1u
 /* Set after the watchdog cancels the device. Older callers ignore it. */
 #define R5_GPU_CAP_LOST 2u
+/* This file's job caused the loss. Other files keep CAP_LOST only. */
+#define R5_GPU_CAP_GUILTY 4u
+
+static inline int
+r5_gpu_query_guilty(uint32_t caps)
+{
+	return (caps & R5_GPU_CAP_LOST) != 0 && (caps & R5_GPU_CAP_GUILTY) != 0;
+}
 
 /* Stage P. status is R5_GPU_P_OK, TIMEOUT, PRIV, SKIP or ROOM.
  * first_fail is the 1-based step, or 0 when every step landed.

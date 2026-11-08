@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Only the hung file is guilty
+
+`gfx9_vmid_per_file` stays off. After the watchdog, every open file sees the lost device. `R5_GPU_CAP_GUILTY` is set only on the file whose job was the oldest still in the ring, or whose PASID faulted. QUERY_STATE2 reports an innocent reset to the other files. The host test checks that lost without guilty is not a guilty query, and that both bits together are. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A page fault is queued for the file's PASID
 
 `gfx9_vmid_per_file` stays off. A VM flush with a non-zero PASID writes `IH_VMID_n_LUT` before the page-table base, so that packet is 31 dwords. A zero PASID stays the 26-dword flush. The interrupt handler, for a VMC or UTCL2 fault, only queues the PASID, the VMID and the address. The retire thread, which already holds the lock, marks that file and logs an unknown PASID without marking another file. The host test checks the 31-dword packet and that order. The ring order and the K2 fence are unchanged. There is no What's new section and `distro/BUILD` stays the same.

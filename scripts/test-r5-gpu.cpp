@@ -2040,6 +2040,10 @@ main()
 				"radeon_hd/gfx9_k12.cpp", storeOrder, 5) != 0)
 			return 1;
 	}
+	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
+		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
+		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
+		return fail("guilty");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

@@ -313,6 +313,8 @@ struct gpu_bo {
 };
 
 
+struct gpu_client;
+
 struct gpu_job {
 	bool			live;
 	uint64			sequence;
@@ -320,6 +322,7 @@ struct gpu_job {
 	uint32			count;
 	gpu_sync*		syncs[kMaxList];
 	uint64			points[kMaxList];
+	gpu_client*		owner;
 };
 
 
@@ -372,6 +375,7 @@ static lock sGpuLock;
 static ConditionVariable sEop;
 static bool sReady = false;
 static bool sLost = false;
+static gpu_client* sGuilty = NULL;
 static int32 sContexts = 0;
 static r5_ctx_counter sCtxCounter;
 static r5_pasid_ida sPasids;
@@ -599,8 +603,9 @@ gpu_wait_value(radeon_info* info, volatile uint64* value, uint64 target,
 
 
 static status_t
-gpu_get_info(radeon_info* info, void* buffer, size_t length)
+gpu_get_info(gpu_client* client, void* buffer, size_t length)
 {
+	radeon_info* info = client != NULL ? client->info : NULL;
 	if (info == NULL || info->pci == NULL || buffer == NULL || length < 8)
 		return B_BAD_VALUE;
 	if (!is_user_address_range(buffer, length))
@@ -624,6 +629,9 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 		out.capabilities = R5_GPU_CAP_RENDER;
 	if (sLost)
 		out.capabilities |= R5_GPU_CAP_LOST;
+	if (sLost && client != NULL
+		&& (client == sGuilty || client->faulted))
+		out.capabilities |= R5_GPU_CAP_GUILTY;
 	out.va_offset = R5_GPU_VA_OFFSET;
 	out.va_max = R5_GPU_VA_MAX;
 	/* amdgpu_kms.c for this VM: the hole ends at AMDGPU_GMC_HOLE_END
@@ -984,6 +992,8 @@ gpu_fault_retire()
 			continue;
 		}
 		found->faulted = true;
+		if (sGuilty == NULL)
+			sGuilty = found;
 		dprintf("radeon_hd: vm fault pasid %lu vmid %lu addr %016llx\n",
 			(unsigned long)pasid, (unsigned long)vmid,
 			(unsigned long long)addr);
@@ -1023,6 +1033,8 @@ gpu_watchdog()
 	}
 	if (oldest == NULL || now - oldest->submitted < kWatchdogUs)
 		return;
+	if (sGuilty == NULL)
+		sGuilty = oldest->owner;
 	gpu_lost(sInfo, "gpu lost watchdog");
 	gpu_release_parked(~0ull);
 }
@@ -1801,6 +1813,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		signalFlags[i] = signals[i].flags;
 	}
 	job->count = in.signal_count;
+	job->owner = client;
 	uint64 sequence = 0;
 	int fileHeld = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
@@ -3714,7 +3727,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	if (client == NULL || client->info == NULL)
 		return B_BAD_VALUE;
 	if (op == R5_GPU_GET_INFO)
-		return gpu_get_info(client->info, buffer, length);
+		return gpu_get_info(client, buffer, length);
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)
