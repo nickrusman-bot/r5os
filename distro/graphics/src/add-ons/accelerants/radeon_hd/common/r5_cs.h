@@ -212,13 +212,44 @@ r5_cs_put(uint32_t* out, uint32_t n, uint32_t cap, uint32_t word)
 }
 
 
+/* amdgpu_csa_vaddr for a vm_bits-wide space. 48-bit Renoir is
+ * 0xffffffffffe00000: max_pfn << 12 minus the 2 MiB CSA reserve, then
+ * amdgpu_gmc_sign_extend. The CE payload is at offset 0. */
+static inline uint64_t
+r5_csa_vaddr(uint32_t vmBits)
+{
+	uint64_t bytes = 1ull << vmBits;
+	uint64_t addr = bytes - (2ull << 20);
+	if (addr >= 0x0000800000000000ull)
+		addr |= 0xffff800000000000ull;
+	return addr;
+}
+
+
+/* v6.18 gfx_v9_0_ring_emit_ce_meta with resume false. Ten zero dwords.
+ * v6.12 took a MES address when ring->is_mes_queue; v6.18 does not.
+ * The GFX ring is not a MES queue, so the packet is the same. */
+static inline uint32_t
+r5_cs_ce_meta(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr)
+{
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x37, 12));
+	n = r5_cs_put(out, n, cap, 0x80100800u);
+	n = r5_cs_put(out, n, cap, (uint32_t)addr);
+	n = r5_cs_put(out, n, cap, (uint32_t)(addr >> 32));
+	for (uint32_t i = 0; i < 10u; i++)
+		n = r5_cs_put(out, n, cap, 0);
+	return n;
+}
+
+
 /* Unpadded frame. out may be NULL to count. Returns 0 when cap is short
  * or an IB is not dword aligned. */
 static inline uint32_t
 r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 	const uint32_t* dwords, const uint32_t* vmid, uint32_t count,
 	uint64_t userFence, uint64_t sequence, uint64_t irqFence,
-	uint32_t cntx, uint32_t skipOpen, uint32_t skipTail = 0)
+	uint32_t cntx, uint32_t skipOpen, uint32_t skipTail = 0,
+	uint32_t ceMeta = 0)
 {
 	uint32_t n = 0;
 	uint32_t i;
@@ -239,6 +270,8 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 		n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
 		n = r5_cs_put(out, n, cap, 0);
 	}
+	if (ceMeta != 0)
+		n = r5_cs_ce_meta(out, cap, n, r5_csa_vaddr(48));
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x28, 1));
 	n = r5_cs_put(out, n, cap, cntx);
 	n = r5_cs_put(out, n, cap, 0);
@@ -288,6 +321,8 @@ r5_cs_user_body(uint32_t* out, uint32_t cap, const uint64_t* ib,
 			return 0;
 		expect -= 2u;
 	}
+	if (ceMeta != 0)
+		expect += 14u;
 	if (n != expect || (out != 0 && n > cap))
 		return 0;
 	return n;

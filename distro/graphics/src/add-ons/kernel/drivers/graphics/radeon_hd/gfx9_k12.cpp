@@ -1292,6 +1292,7 @@ r5_gfx9_hub_restore(void)
 
 
 static void r5_gfx9_vmids_program(void);
+static void r5_gfx9_csa_map(void);
 
 /* inv, hub and vmids are -1 to leave the flag, 0 to restore the stored
  * registers, or 1 to program them. The VMID copy is taken at the first
@@ -1490,7 +1491,47 @@ r5_gfx9_vmid1_setup()
 	/* Linux programs the engine ranges after setup_vmid_config. */
 	r5_gfx9_vmids_program();
 	r5_gfx9_inv_range_program();
+	r5_gfx9_csa_map();
 	return true;
+}
+
+
+/* amdgpu_allocate_static_csa plus amdgpu_map_static_csa. One 128 KiB
+ * VRAM buffer, zeroed, mapped at r5_csa_vaddr in this VM. Off leaves
+ * the page tables alone. Per-file trees map the same buffer. */
+static bool sCsaMapped = false;
+
+
+static void
+r5_gfx9_csa_map(void)
+{
+	uint64 offset = 0;
+	uint8* cpu = NULL;
+	uint64 va;
+	uint64 flags;
+	uint32 fb;
+	uint32 page;
+	if (!r5_gfx9_ce_meta_on() || sCsaMapped || sInfo == NULL)
+		return;
+	if (r5_gfx9_alloc_vram(128ull * 1024ull, 4096, &offset, &cpu) != B_OK
+		|| cpu == NULL) {
+		knote("csa fail alloc");
+		return;
+	}
+	memset(cpu, 0, 128 * 1024);
+	fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
+	va = r5_csa_vaddr(48);
+	flags = (uint64)R5_GFX9_PTE_VALID | (uint64)R5_GFX9_PTE_READABLE
+		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
+	for (page = 0; page < 32u; page++) {
+		uint64 pa = r5_gpu_carveout_base(fb) + offset + (uint64)page * 4096ull;
+		if (!r5_gfx9_vmid1_map(va + (uint64)page * 4096ull, pa | flags)) {
+			knote("csa fail map");
+			return;
+		}
+	}
+	sCsaMapped = true;
+	knote("csa %016llx", (unsigned long long)va);
 }
 
 
@@ -1690,6 +1731,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",
 			false, true);
+		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
+			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);
 	}
 	uint32 pci = info.pciID;

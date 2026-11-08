@@ -102,6 +102,8 @@ gpu_cache_log_settings()
 			"gfx9_flush_fence", false, true) ? 1 : 0);
 		r5_gfx9_set_pasid_map(get_driver_boolean_parameter(settings,
 			"gfx9_pasid_map", false, true) ? 1 : 0);
+		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
+			"gfx9_ce_meta", false, true) ? 1 : 0);
 		r5_gfx9_set_cond_exec(get_driver_boolean_parameter(settings,
 			"gfx9_cond_exec", false, true) ? 1 : 0);
 		r5_gfx9_set_gds_switch(get_driver_boolean_parameter(settings,
@@ -112,6 +114,7 @@ gpu_cache_log_settings()
 	} else {
 		r5_gfx9_set_flush_fence(0);
 		r5_gfx9_set_pasid_map(0);
+		r5_gfx9_set_ce_meta(0);
 		r5_gfx9_set_cond_exec(0);
 		r5_gfx9_set_gds_switch(0);
 		sDeferred = 0;

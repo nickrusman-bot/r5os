@@ -2184,6 +2184,7 @@ static int sGpuDebug = 0;
 static int sFlushFence = 0;
 static int sCondExec = 0;
 static int sPasidMap = 0;
+static int sCeMeta = 0;
 static int sGdsSwitch = 0;
 static struct r5_gds sGdsState;
 static uint32 sJobPasid = 0;
@@ -2555,6 +2556,20 @@ r5_gfx9_set_pasid_map(int on)
 }
 
 
+void
+r5_gfx9_set_ce_meta(int on)
+{
+	sCeMeta = on ? 1 : 0;
+}
+
+
+int
+r5_gfx9_ce_meta_on(void)
+{
+	return sCeMeta;
+}
+
+
 int
 r5_gfx9_flush_fence_on(void)
 {
@@ -2699,6 +2714,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		body -= 4u;
 	if (sCondExec)
 		body -= 2u;
+	if (sCeMeta)
+		body += 14u;
 	uint32 tail = sCondExec ? 2u : 0u;
 	uint32 total = body == 0 ? 0 : prefix + body + tail
 		+ r5_cs_pad_dwords(wptr + prefix + body + tail);
@@ -2711,6 +2728,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		cap += 8u;
 	if (sCondExec)
 		cap += 10u + 4u;
+	if (sCeMeta)
+		cap += 14u;
 	if (total == 0 || total > cap || !r5_gfx9_user_room(total))
 		return false;
 	if (flush && (pd == 0 || ibVm[0] == 0))
@@ -2774,7 +2793,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 		return false;
 	uint32 filled = r5_cs_user_body(packets + switched, cap - switched, ibVa,
 		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx,
-		(flushFence || sCondExec) ? 1u : 0u, sCondExec ? 1u : 0u);
+		(flushFence || sCondExec) ? 1u : 0u, sCondExec ? 1u : 0u,
+		sCeMeta ? 1u : 0u);
 	if (filled == 0)
 		return false;
 	if (sCondExec) {
