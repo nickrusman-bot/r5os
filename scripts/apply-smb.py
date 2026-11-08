@@ -91,6 +91,12 @@ def main() -> int:
         "\t\tuserland_fs\n\t\tsmbfs\n",
         "haiku repository",
     )
+    insert(
+        HAIKU / "build" / "jam" / "HaikuPackages",
+        "\tUserlandFS\n",
+        "\tUserlandFS\n\tSMBFS\n",
+        "package rules",
+    )
     return 0
 
 
