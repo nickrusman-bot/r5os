@@ -652,6 +652,8 @@ main()
 							close(beforeFd);
 						}
 					}
+					run_stage(out, "isolation",
+						"/bin/r5-gpu-isolation 2>&1", 60);
 					run_stage(out, "kill",
 						"/bin/r5-gpu-isolation kill 2>&1", 2);
 					{

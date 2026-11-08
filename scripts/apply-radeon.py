@@ -63,6 +63,8 @@ FILES = (
     "src/bin/r5gpuinfo/r5gpuinfo.cpp",
     "src/bin/r5-gpu-selftest/Jamfile",
     "src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+    "src/bin/r5-gpu-isolation/Jamfile",
+    "src/bin/r5-gpu-isolation/r5-gpu-isolation.cpp",
 )
 
 
@@ -132,6 +134,24 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
             raise SystemExit("selftest anchor missing in regular image")
         regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
         print("patched regular image selftest")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin r5-gpu-isolation ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin r5-gpu-selftest ;\n"
+        if anchor not in text:
+            raise SystemExit("isolation anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile isolation")
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += r5-gpu-isolation ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += r5-gpu-selftest ;\n"
+        if anchor not in text:
+            raise SystemExit("isolation anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image isolation")
 
     launch = haiku / "data" / "launch" / "user"
     text = launch.read_text(encoding="utf-8")

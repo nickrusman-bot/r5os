@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The isolation test reads and writes a foreign address
+
+`gfx9_vmid_per_file` stays off. `r5-gpu-isolation` maps one page in the first process, fills it with `0x5a`, and sends only the GPU address to a second process. That process submits COPY_DATA and then WRITE_DATA to the address. The owner's page is unchanged, and the program prints `vm fault` with that address. The self-test runs this before the kill stage. The host test checks those steps in the source. It was not run on hardware. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Buffers, page tables and VMIDs are counted
 
 `gfx9_vmid_per_file` stays off. `R5_GPU_GET_COUNTERS` is a new call at the end of the opcode list. It reports buffer objects, page-table pages and VMIDs for the open file and for the whole device, and the file trees and the pages those trees hold. The kill stage prints `counters back` when the counts match the reading from before the kill, and the difference when they do not. The host test checks that match, including a tree-page change. There is no What's new section and `distro/BUILD` stays the same.

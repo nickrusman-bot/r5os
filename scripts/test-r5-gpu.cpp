@@ -2057,6 +2057,18 @@ main()
 				"radeon_hd/gfx9_k12.cpp", storeOrder, 5) != 0)
 			return 1;
 	}
+	{
+		const char* isolation[] = {
+			"COPY_DATA reads dest. WRITE_DATA then writes dest.",
+			"vm fault addr",
+			"memset(cpu, 0x5a, 4096)",
+			"owner unchanged"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-isolation/"
+				"r5-gpu-isolation.cpp", isolation, 4) != 0)
+			return 1;
+	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
