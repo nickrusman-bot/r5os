@@ -102,6 +102,11 @@ private:
 
 	const	uint8*			fTeamIconData;
 			size_t			fTeamIconSize;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			float			fSymbolWidth;
+// SPDX-SnippetEnd
 };
 
 
