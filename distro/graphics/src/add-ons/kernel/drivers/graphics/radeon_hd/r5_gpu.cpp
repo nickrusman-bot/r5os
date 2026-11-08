@@ -3104,11 +3104,11 @@ gpu_stage_r1_job(radeon_info* info, const char* name, gpu_stage_page* ib,
 }
 
 
-/* R1a WRITE_DATA, R1b RELEASE_MEM, R1c IB fetch. Page A stays allocated
- * until this returns, so a stale write still has a page to land on.
- * R1c is last: a miss there can hang. */
+/* R1a WRITE_DATA and R1b RELEASE_MEM, or R1c the IB fetch.
+ * Page A stays allocated until this returns, so a stale write still
+ * has a page to land on. R1c is a separate call: a miss there can hang. */
 static void
-gpu_stage_r1(radeon_info* info)
+gpu_stage_r1(radeon_info* info, uint32 which)
 {
 	const uint64 x = 0xffff800000100000ull;
 	const uint64 y = 0xffff800000101000ull;
@@ -3137,6 +3137,8 @@ gpu_stage_r1(radeon_info* info)
 	memset(a.cpu, 0, 4096);
 	memset(b.cpu, 0, 4096);
 	memset(dest.cpu, 0, 4096);
+	if (which != R5_GPU_R1_AB)
+		goto r1c;
 	n = r5_r1_write(words, 8, x, 0x11111111u);
 	dprintf("radeon_hd: r1a gtt\n");
 	if (n == 0 || gpu_stage_r1_job(info, "r1a-gtt", &cmd, words, n)
@@ -3177,7 +3179,11 @@ gpu_stage_r1(radeon_info* info)
 	dprintf("radeon_hd: r1b gtt %08lx vram %08lx\n",
 		(unsigned long)gpu_stage_r1_word(&a),
 		(unsigned long)gpu_stage_r1_word(&b));
+	goto out;
 
+r1c:
+	if (which != R5_GPU_R1_C)
+		goto out;
 	r5_gfx9_log_state("r1c");
 	dprintf("radeon_hd: r1c before inv %d hub %d vmids %d fence %d "
 		"cond %d gds %d pasid %d ce %d\n",
@@ -3526,7 +3532,14 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		r5_gfx9_log_state("selftest");
 		status = B_OK;
 	} else if (op == R5_GPU_STAGE_R1) {
-		if (sLost) {
+		r5_gpu_stage_r1 in;
+		status = gpu_copy_in(buffer, length, &in, sizeof(in));
+		if (status != B_OK)
+			;
+		else if (in.version != 1
+			|| (in.which != R5_GPU_R1_AB && in.which != R5_GPU_R1_C))
+			status = B_BAD_VALUE;
+		else if (sLost) {
 			dprintf("radeon_hd: skipped, gpu lost\n");
 			status = ECANCELED;
 		} else if (!gpu_render_enabled() || !gpu_selftest_enabled())
@@ -3535,7 +3548,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			dprintf("radeon_hd: r1 skip vmid\n");
 			status = B_NO_INIT;
 		} else {
-			gpu_stage_r1(client->info);
+			gpu_stage_r1(client->info, in.which);
 			status = sLost ? ECANCELED : B_OK;
 		}
 	}

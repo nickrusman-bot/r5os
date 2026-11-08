@@ -395,6 +395,19 @@ typedef struct {
 	uint32_t	on;
 } r5_gpu_debug_switch;
 
+/* which is R5_GPU_R1_AB (the writes and the fence) or R5_GPU_R1_C
+ * (the indirect-buffer fetch). R1c can stop the command processor, so
+ * the self-test runs it after the teapots. */
+#define R5_GPU_R1_AB 1u
+#define R5_GPU_R1_C 2u
+
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	which;
+	uint32_t	_pad;
+} r5_gpu_stage_r1;
+
 /* The render node is published only when these three steps are on.
  * Without them the node does not exist, so RADV stays quiet. */
 static inline int

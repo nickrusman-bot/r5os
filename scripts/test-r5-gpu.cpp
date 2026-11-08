@@ -679,15 +679,16 @@ main()
 	const char* selftestOrder[] = {
 		"highVa, false",
 		"stage_regs(out)",
-		"stage_r1(out)",
+		"stage_r1(out, R5_GPU_R1_AB)",
 		"R5_GPU_SWITCH_INV_RANGE",
-		"stage_r1(out)",
+		"stage_r1(out, R5_GPU_R1_AB)",
 		"\"vulkaninfo\"",
 		"\"VulkanTeapot\"",
 		"VulkanTeapot (sam)",
 		"\"VulkanTeapot\"",
 		"R5_GPU_SWITCH_FLUSH_FENCE",
 		"confirm teapots",
+		"stage_r1(out, R5_GPU_R1_C)",
 		"stage_selftest(out)",
 		"highVa, true"
 	};
@@ -716,7 +717,7 @@ main()
 	static_assert((0x007ffe87u ^ 0x007ffe07u) == 0x80u, "context retry");
 	if (source_order(
 			"distro/graphics/src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
-			selftestOrder, 13) != 0)
+			selftestOrder, 14) != 0)
 		return 1;
 	{
 		const char* regsBefore[] = {
@@ -1561,14 +1562,17 @@ main()
 			"radeon_hd: r1a vram",
 			"radeon_hd: r1b gtt",
 			"radeon_hd: r1b vram",
+			"r1c:",
 			"radeon_hd: r1c gtt",
 			"radeon_hd: r1c vram",
 			"radeon_hd: r1 free a"
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", r1Order, 7) != 0)
+				"radeon_hd/r5_gpu.cpp", r1Order, 8) != 0)
 			return 1;
+		if (R5_GPU_R1_AB != 1u || R5_GPU_R1_C != 2u)
+			return fail("r1 which");
 	}
 	{
 		const char* ceBoot[] = {
