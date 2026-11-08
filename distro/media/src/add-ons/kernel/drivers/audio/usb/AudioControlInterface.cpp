@@ -864,6 +864,17 @@ ClockSelector::ClockSelector(AudioControlInterface*	interface,
 	usb_audio_input_terminal_descriptor* descriptor
 		= (usb_audio_input_terminal_descriptor*) Header;
 	TRACE(UAC, "Clock Selector:%d >>>\n", descriptor->terminal_id);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// UAC 2.0 Table 4-11: bClockID, bNrInPins, baCSourceID[bNrInPins].
+	const uint8* bytes = (const uint8*)Header;
+	if (bytes[0] >= 5) {
+		uint8 pins = bytes[4];
+		for (uint8 i = 0; i < pins && 5u + i < bytes[0]; i++)
+			fSources.PushBack(bytes[5 + i]);
+	}
+// SPDX-SnippetEnd
 }
 
 
@@ -875,11 +886,20 @@ ClockSelector::~ClockSelector()
 ClockMultiplier::ClockMultiplier(AudioControlInterface*	interface,
 		usb_audiocontrol_header_descriptor* Header)
 	:
-	_AudioControl(interface, Header)
+	_AudioControl(interface, Header),
+	fSource(0)
 {
 	usb_audio_input_terminal_descriptor* descriptor
 		= (usb_audio_input_terminal_descriptor*) Header;
 	TRACE(UAC, "Clock Multiplier:%d >>>\n",	descriptor->terminal_id);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// UAC 2.0 Table 4-12: bClockID, bCSourceID.
+	const uint8* bytes = (const uint8*)Header;
+	if (bytes[0] >= 5)
+		fSource = bytes[4];
+// SPDX-SnippetEnd
 }
 
 
@@ -1855,6 +1875,56 @@ AudioControlInterface::_ListMixControlsPage(int32& index,
 		}
 	}
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// A terminal's bCSourceID may name a clock selector or a clock multiplier.
+// The sampling frequency control lives on the clock source behind them
+// (UAC 2.0 § 5.2.5.1). A selector follows its current pin (CX_SELECTOR
+// control, CUR request), or pin 1 when the device does not answer. Returns
+// 0 when no clock source is found.
+uint8
+AudioControlInterface::ResolveClockSource(uint8 clockId)
+{
+	for (int hop = 0; hop < 8 && clockId != 0; hop++) {
+		_AudioControl* control = Find(clockId);
+		if (control == NULL)
+			return 0;
+		switch (control->SubType()) {
+			case USB_AUDIO_AC_CLOCK_SOURCE_R2:
+				return clockId;
+			case USB_AUDIO_AC_CLOCK_SELECTOR_R2:
+			{
+				ClockSelector* selector = static_cast<ClockSelector*>(control);
+				if (selector->SourceCount() == 0)
+					return 0;
+				uint8 pin = 1;
+				size_t actualLength = 0;
+				// bmRequestType 0xA1, CUR (0x01), CX_CLOCK_SELECTOR_CONTROL.
+				status_t status = gUSBModule->send_request(
+					fDevice->USBDevice(),
+					USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_CLASS, 0x01,
+					0x01 << 8, (clockId << 8) | (fInterface & 0xff),
+					sizeof(pin), &pin, &actualLength);
+				if (status != B_OK || actualLength != sizeof(pin) || pin < 1
+					|| pin > selector->SourceCount()) {
+					pin = 1;
+				}
+				clockId = selector->Source(pin - 1);
+				break;
+			}
+			case USB_AUDIO_AC_CLOCK_MULTIPLIER_R2:
+				clockId = static_cast<ClockMultiplier*>(control)->Source();
+				break;
+			default:
+				return 0;
+		}
+	}
+	return 0;
+}
+// SPDX-SnippetEnd
 
 
 status_t

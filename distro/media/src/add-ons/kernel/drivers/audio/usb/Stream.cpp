@@ -18,6 +18,7 @@
 #include "Device.h"
 #include "Driver.h"
 #include "Settings.h"
+#include "UsbAudioFormat.h"
 
 
 // SPDX-SnippetBegin
@@ -54,7 +55,8 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fCarryFrames(0),
 	fActualBytes(NULL),
 	fPadded(0),
-	fDropped(0)
+	fDropped(0),
+	fClockId(0)
 {
 	memset(&fPlan, 0, sizeof(fPlan));
 }
@@ -207,8 +209,83 @@ status_t
 Stream::Init()
 {
 	fStatus = _ChooseAlternate();
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (fStatus == B_OK && fControlInterface != NULL
+		&& fControlInterface->SpecReleaseNumber() >= 0x0200) {
+		_QueryClockRates();
+	}
+// SPDX-SnippetEnd
 	return fStatus;
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// UAC 2.0 has no rate list in the format descriptor. The clock source that
+// drives this stream answers a RANGE request on its sampling frequency
+// control (UAC 2.0 § 5.2.5.1.1). Before this, every UAC 2.0 stream offered
+// 44.1-96 kHz whatever the device could do, and SET_CUR went to the
+// terminal's clock entity even when that was a selector.
+void
+Stream::_QueryClockRates()
+{
+	_AudioControl* terminal = fControlInterface->Find(TerminalLink());
+	uint8 clock = terminal != NULL
+		? fControlInterface->ResolveClockSource(terminal->ClockSourceId()) : 0;
+	fClockId = clock;
+	if (clock == 0) {
+		dprintf("usb_audio: %s stream has no clock source, keeping the "
+			"default rates\n", fIsInput ? "record" : "play");
+		return;
+	}
+
+	// wNumSubRanges first, then the whole answer (two steps, as Linux does,
+	// for devices that stall on a long wLength).
+	uint8 range[2 + 12 * 16];
+	size_t actualLength = 0;
+	uint16 value = USB_AUDIO_SAMPLING_FREQ_CONTROL << 8;
+	uint16 index = (clock << 8) | (fControlInterface->InterfaceNumber() & 0xff);
+	status_t status = gUSBModule->send_request(fDevice->fDevice,
+		USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_CLASS, 0x02, value, index, 2,
+		range, &actualLength);
+	if (status == B_OK && actualLength == 2) {
+		uint16 count = (uint16)range[0] | ((uint16)range[1] << 8);
+		if (count > 16)
+			count = 16;
+		size_t length = 2 + (size_t)count * 12;
+		status = gUSBModule->send_request(fDevice->fDevice,
+			USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_CLASS, 0x02, value, index,
+			length, range, &actualLength);
+	} else if (status == B_OK)
+		status = B_BAD_DATA;
+
+	usb_audio_parsed_format parsed;
+	if (status != B_OK
+		|| usb_audio_parse_rate_range(range, actualLength, &parsed) == 0) {
+		dprintf("usb_audio: clock %u gave no sample rates (%s), keeping the "
+			"default rates\n", clock, strerror(status));
+		return;
+	}
+
+	for (int i = 0; i < fAlternates.Count(); i++) {
+		_ASFormatDescriptor* base = fAlternates[i]->Format();
+		if (base == NULL || base->fFormatType != USB_AUDIO_FORMAT_TYPE_I)
+			continue;
+		TypeIFormatDescriptor* format
+			= static_cast<TypeIFormatDescriptor*>(base);
+		format->fSampleFrequencyType = parsed.rateCount;
+		format->fSampleFrequencies.MakeEmpty();
+		for (uint8 r = 0; r < parsed.rateCount; r++)
+			format->fSampleFrequencies.PushBack(parsed.rates[r]);
+	}
+	dprintf("usb_audio: clock %u offers %u sample rates, %" B_PRIu32 " to %"
+		B_PRIu32 " Hz\n", clock, parsed.rateCount, parsed.rates[0],
+		parsed.rates[parsed.rateCount - 1]);
+}
+// SPDX-SnippetEnd
 
 
 void
@@ -689,8 +766,23 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
 
 	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
-		_AudioControl* control = fControlInterface->Find(TerminalLink());
-		uint8 clock = control != NULL ? control->ClockSourceId() : 0;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// The rate is set on the clock source, not on a selector in front
+		// of it. Init() found it; refuse rather than send clock 0.
+		uint8 clock = fClockId;
+		if (clock == 0) {
+			_AudioControl* control = fControlInterface->Find(TerminalLink());
+			clock = control != NULL ? fControlInterface->ResolveClockSource(
+				control->ClockSourceId()) : 0;
+		}
+		if (clock == 0) {
+			dprintf("usb_audio: no clock source to set %" B_PRIu32 " Hz on\n",
+				samplingRate);
+			return B_ERROR;
+		}
+// SPDX-SnippetEnd
 		uint32 rate = samplingRate;
 		status = gUSBModule->send_request(fDevice->fDevice,
 			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,

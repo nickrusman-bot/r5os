@@ -75,6 +75,7 @@ protected:
 			uint32*			fActualBytes;	// recording: bytes per packet
 			uint32			fPadded;
 			uint32			fDropped;
+			uint8			fClockId;		// UAC 2.0 clock source, 0 if none
 // SPDX-SnippetEnd
 
 private:
@@ -88,6 +89,7 @@ private:
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 			void			_JoinRecorded(size_t buffer);
+			void			_QueryClockRates();
 // SPDX-SnippetEnd
 };
 
