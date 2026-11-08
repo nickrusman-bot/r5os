@@ -1108,6 +1108,9 @@ run_k2()
 	}
 	(void)sequence;
 	(void)flushed;
+	/* The invalidation ranges are copied here, before
+	 * r5_gfx9_vmid1_setup calls r5_gfx9_inv_range_program. kernel_start
+	 * runs this first. A later copy does not replace it. */
 	r5_gfx9_k2_store();
 	r5_gfx9_inv_range_read("k2");
 }

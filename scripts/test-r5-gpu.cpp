@@ -1457,11 +1457,12 @@ main()
 			"r5_gfx9_k2_store();",
 			"r5_gfx9_inv_range_read(\"k2\")",
 			"r5_gfx9_vmid_restore();",
-			"r5_gfx9_vmid_baseline();"
+			"r5_gfx9_vmid_baseline();",
+			"r5_gfx9_inv_range_program();"
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/gfx9_k12.cpp", storeOrder, 4) != 0)
+				"radeon_hd/gfx9_k12.cpp", storeOrder, 5) != 0)
 			return 1;
 	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
