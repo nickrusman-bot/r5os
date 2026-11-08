@@ -21,6 +21,8 @@ Use that header only for a file R5 can license as a whole. Do not put it on a Ha
 
 Existing Haiku code keeps its original license and copyright notices. Do not relicense the Haiku tree, and do not strip MIT, BSD, GPL, or other notices.
 
+The public MIDI kit (the headers plus `libmidi2.so`) is MIT. That is an exception to the GPL default, like the R5 GPU interface and the R5 DRM library, because every MIDI program links it. The R5 parts of the USB MIDI driver and of the MIDI server stay GPL-3.0-or-later.
+
 ## Kernel and drivers
 
 GPL-3.0-or-later is the default for new R5-owned code. It is not a rule that every kernel or driver file must use that license.
