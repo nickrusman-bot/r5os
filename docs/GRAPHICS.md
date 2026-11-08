@@ -261,6 +261,12 @@ The ring is padded with `kType2Nop`. Linux pads with `PACKET3(NOP, 0x3FFF)`, whi
 
 `gpu_debug` prints the L1, L2, aperture, AGP, identity, fault and VMID 0 registers whether or not `gfx9_hub_linux` is on.
 
+## COND_EXEC and the DE meta
+
+`amdgpu_ib_schedule` calls `init_cond_exec` when the ring has that function (`amdgpu_ib.c` around the call before the context control). The GFX ring does (`gfx_v9_0_ring_funcs_gfx`). `gfx_v9_0_ring_emit_init_cond_exec` writes `PACKET3_COND_EXEC` (`0x22`) and a dword count that `amdgpu_ring_patch_cond_exec` fills in. The CP skips those dwords only when the dword at `cond_exe_gpu_addr` is 0. Linux keeps that dword at 1, so the packet does not skip the frame. `gfx9_cond_exec` does the same and defaults off. The dword is fence-page offset 32.
+
+`gfx_v9_0_ring_emit_de_meta` runs only from `gfx_v9_0_ring_emit_ib_gfx` when the IB has `AMDGPU_IB_FLAG_PREEMPT` (`gfx_v9_0.c` at that `if`). R5 still rejects every IB flag, so the flag is 0 and the meta is not emitted. The packet writes `struct v9_de_ib_state` to the CSA (`amdgpu_csa_vaddr`). That struct and the CSA mapping are not copied while the flag cannot be set. This is the stop in night step N5.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

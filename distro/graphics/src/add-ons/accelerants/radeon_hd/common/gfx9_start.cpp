@@ -2151,6 +2151,7 @@ static uint64 sUserSequence = 0;
 static r5_cs_ring_ctx sRingCtx;
 static int sGpuDebug = 0;
 static int sFlushFence = 0;
+static int sCondExec = 0;
 
 
 bool
@@ -2501,6 +2502,13 @@ r5_gfx9_set_flush_fence(int on)
 }
 
 
+void
+r5_gfx9_set_cond_exec(int on)
+{
+	sCondExec = on ? 1 : 0;
+}
+
+
 bool
 r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 	uint32 ctxId, int32* preambleSeen, uint64* _sequence)
@@ -2542,6 +2550,8 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 	uint32 prefix = flush ? r5_cs_vm_switch_words() : 0;
 	if (flushFence)
 		prefix += 12u;
+	if (sCondExec)
+		prefix += 5u;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint32 body = r5_cs_user_words(count);
 	if (flushFence)
@@ -2569,14 +2579,27 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 			switched = r5_cs_flush_fence(packets, cap, switched, irqMc,
 				flushSeq);
 		}
-		if (switched != prefix)
-			return false;
 	}
+	uint32 condSlot = 0;
+	if (sCondExec) {
+		/* The fence page is mapped for the ring. Dword 8 is unused
+		 * by the K0 word and the user fences. */
+		if (sRadeonGfx9Ring.fenceAddress != NULL)
+			((volatile uint32*)sRadeonGfx9Ring.fenceAddress)[8] = 1u;
+		condSlot = switched + 4u;
+		switched = r5_cs_cond_exec(packets, cap, switched, fenceMc + 32u);
+	}
+	if (flush && switched != prefix)
+		return false;
+	if (!flush && switched != prefix)
+		return false;
 	uint32 filled = r5_cs_user_body(packets + switched, cap - switched, ibVa,
 		ibDw, ibVm, count, fenceMc, sequence, irqMc, cntx,
 		flushFence ? 1u : 0u);
 	if (filled == 0)
 		return false;
+	if (sCondExec)
+		r5_cs_cond_exec_patch(packets, condSlot, filled);
 	filled += switched;
 	uint32 pad = r5_cs_pad_dwords(wptr + filled);
 	if (filled + pad != total)

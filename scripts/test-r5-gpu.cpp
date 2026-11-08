@@ -1143,6 +1143,22 @@ main()
 			|| skipped[0] != r5_cs_packet3(0x28, 1))
 			return fail("flush fence opens the frame");
 	}
+	{
+		uint32_t pkt[8];
+		uint32_t n = r5_cs_cond_exec(pkt, 8, 0, 0x1000ull);
+		r5_cs_cond_exec_patch(pkt, 4, 33);
+		if (n != 5u || pkt[0] != r5_cs_packet3(0x22, 3) || pkt[1] != 0x1000u
+			|| pkt[2] != 0u || pkt[4] != 33u)
+			return fail("cond exec");
+		const char* condOrder[] = {
+			"if (sCondExec)",
+			"r5_cs_cond_exec("
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", condOrder, 2) != 0)
+			return 1;
+	}
 	if (r5_gfx9_inv_engines() != 18u)
 		return fail("inv engines");
 	if (r5_gfx9_inv_range_lo(0) != 0x8c7u

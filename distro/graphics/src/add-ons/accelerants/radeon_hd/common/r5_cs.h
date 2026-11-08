@@ -289,6 +289,30 @@ r5_cs_flush_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
 }
 
 
+/* Linux v6.12 gfx_v9_0.c:gfx_v9_0_ring_emit_init_cond_exec.
+ * PACKET3_COND_EXEC is 0x22 in sid.h. The last dword is patched with
+ * the number of following dwords. The GPU skips them only when the
+ * dword at addr is 0. The kernel stores 1 there. */
+static inline uint32_t
+r5_cs_cond_exec(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr)
+{
+	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x22, 3));
+	n = r5_cs_put(out, n, cap, (uint32_t)addr);
+	n = r5_cs_put(out, n, cap, (uint32_t)(addr >> 32));
+	n = r5_cs_put(out, n, cap, 0);
+	n = r5_cs_put(out, n, cap, 0);
+	return n;
+}
+
+
+static inline void
+r5_cs_cond_exec_patch(uint32_t* out, uint32_t slot, uint32_t follow)
+{
+	if (out != 0)
+		out[slot] = follow;
+}
+
+
 /* gfx_v9_ring_insert_nop. One dword is the single nop 0xFFFF1000.
  * A longer pad is PACKET3(NOP, min(count - 2, 0x3FFE)) and then
  * count - 1 times that nop. count - 1 in the header reads one dword
