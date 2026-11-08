@@ -848,7 +848,8 @@ r5_gfx9_hub_program(uint64 fbStart, uint64 fbEnd, uint32 lowNow, uint32 highNow)
 	r5_gfx9_k2_store();
 	if (!sHubLinux || sInfo == NULL)
 		return;
-	agp = r5_gfx9_agp_aperture(fbStart, fbEnd);
+	agp = r5_gfx9_agp_aperture(fbStart, fbEnd,
+		r5_gfx9_aperture_plus(sInfo->pciID));
 	knote("hub linux low now %08lx linux %08lx high now %08lx linux %08lx "
 		"bot %08lx top %08lx",
 		(unsigned long)lowNow, (unsigned long)agp.low,

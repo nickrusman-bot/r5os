@@ -1355,12 +1355,21 @@ main()
 			return 1;
 	}
 	{
-		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(0, 0x3fffffffull);
+		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(0, 0x3fffffffull, 1);
 		if (agp.bot != 0xffffffu || agp.top != 0u || agp.low != 0u
 			|| agp.high != ((0x3fffffffull >> 18) + 1ull))
 			return fail("agp default");
+		struct r5_agp_aperture plain = r5_gfx9_agp_aperture(0, 0x3fffffffull, 0);
+		if (plain.high != (uint32_t)(0x3fffffffull >> 18))
+			return fail("agp no plus");
+		if (r5_gfx9_aperture_plus(0x1636u) != 1
+			|| r5_gfx9_aperture_plus(0x164cu) != 1
+			|| r5_gfx9_aperture_plus(0x15e7u) != 1
+			|| r5_gfx9_aperture_plus(0x1638u) != 1
+			|| r5_gfx9_aperture_plus(0x15ddu) != 0)
+			return fail("aperture plus ids");
 		struct r5_agp_aperture above = r5_gfx9_agp_aperture(
-			0x1000000000000ull, 0x1000000000000ull);
+			0x1000000000000ull, 0x1000000000000ull, 1);
 		if (above.low != (uint32_t)(0xffffffffffffull >> 18))
 			return fail("agp min");
 	}

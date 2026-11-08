@@ -28,15 +28,30 @@ struct r5_agp_aperture {
 };
 
 
+/* amdgpu_device.c:2139 amdgpu_device_init_apu_flags. CHIP_RENOIR:
+ * 0x1636 and 0x164c are AMD_APU_IS_RENOIR, every other device of that
+ * chip is AMD_APU_IS_GREEN_SARDINE. gfxhub_v1_0.c adds 1 to the aperture
+ * high only for RAVEN2, RENOIR or GREEN_SARDINE. v6.12 uses the same
+ * three flags. Raven2 is not in this table. */
+static inline int
+r5_gfx9_aperture_plus(uint32_t pciId)
+{
+	return pciId == 0x15e7u || pciId == 0x1636u || pciId == 0x1638u
+		|| pciId == 0x164cu;
+}
+
+
 static inline struct r5_agp_aperture
-r5_gfx9_agp_aperture(uint64_t fbStart, uint64_t fbEnd)
+r5_gfx9_agp_aperture(uint64_t fbStart, uint64_t fbEnd, int plus)
 {
 	const uint64_t agpStart = 0xffffffffffffull;
 	const uint64_t agpEnd = 0;
 	struct r5_agp_aperture out;
 	uint64_t lowMc = fbStart < agpStart ? fbStart : agpStart;
-	uint64_t highFb = (fbEnd >> 18) + 1ull;
+	uint64_t highFb = fbEnd >> 18;
 	uint64_t highAgp = agpEnd >> 18;
+	if (plus)
+		highFb += 1ull;
 	out.bot = (uint32_t)(agpStart >> 24);
 	out.top = (uint32_t)(agpEnd >> 24);
 	out.low = (uint32_t)(lowMc >> 18);

@@ -1533,6 +1533,8 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 		return false;
 
 	uint32 lowNeed = (uint32)(frame >> 18);
+	/* K0 always adds 1. Linux adds it only for RAVEN2, RENOIR or
+	 * GREEN_SARDINE (amdgpu_device.c:2139, gfxhub_v1_0.c). */
 	uint32 highNeed = (uint32)(fbEnd >> 18) + 1u;
 	uint32 aperLow = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));
 	uint32 aperHigh = Read32(OUT, radeon_gfx9_byte(kGfx9Seg0, mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
@@ -1541,7 +1543,8 @@ radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 	/* Linux writes the AGP aperture in gfxhub_v1_0_gart_enable, before
 	 * any ring. Off leaves the widen below, which is the K0 path. */
 	if (sHubAperture && sHubProgram != NULL) {
-		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(frame, fbEnd);
+		struct r5_agp_aperture agp = r5_gfx9_agp_aperture(frame, fbEnd,
+			r5_gfx9_aperture_plus(sPciId));
 		sHubProgram(frame, fbEnd, aperLow, aperHigh);
 		lowNow = agp.low;
 		highNow = agp.high;
