@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+### Network shares install userland_fs from the local build
+
+`smbfs` requires `userland_fs`. The image had the add-on only as a loose file under `system/non-packaged/add-ons/userlandfs`, and the package name `userland_fs` was not in `system/packages`. Putting only `smbfs.hpkg` there made the image solver download `userland_fs` from the public repository, which returned 404. `AddHaikuImageSystemPackages` only installs names from a remote catalog, so both packages are copied with `AddPackageFilesToHaikuImage` from the local `userland_fs.hpkg` and `smbfs.hpkg`. The loose add-on copy is gone.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`. The image `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image` was written at 19:27 Europe/Amsterdam on 8 Nov 2026 and is 2147483648 bytes. `system/packages` contains `userland_fs.hpkg` (325301 bytes, sha256 `134bf374065083b6d1ab205005da479f321fa79cdb868962adb61e41bf3f9584`) and `smbfs.hpkg` (114955 bytes, sha256 `bad0294cd78e80d92fdf05cf13a1b28cb4a1aeabcdc2784ddbc6d185d2dcfe69`). Those bytes are the packages this tree built, version `r1~beta6_r5_2026.1_dev-1`. The solver did not download `userland_fs`. `system/non-packaged/add-ons/userlandfs` is not on the image. A Windows share was not mounted. VirtualBox bridged was not run. There is no new What's new section, and `distro/BUILD` stays 10050.
+
 ### Network shares mount from Tracker
 
 Imported from air/OS (`github.com/airos-works/haiku`) into `distro/smb` and the Tracker files under `distro/desktop`. libsmb2 6.2 is LGPL-2.1-or-later (Ronnie Sahlberg; portions Primary Data Inc.). smbfs is the MIT userlandfs add-on and links `libsmb2.a`. The mount server stores the password with `BKeyStore` as `smb://server/share`, retries while the network is down, and posts a notification when the error is not that kind. Tracker preferences has the Network shares page, and the Mount menu lists shares that are not mounted.

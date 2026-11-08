@@ -38,6 +38,13 @@ switch $(HAIKU_BUILD_PROFILE) {
 			vulkanteapot
 			;
 
+		# Built in this tree. AddHaikuImageSystemPackages only fetches
+		# names from a remote catalog, so these two are copied from the
+		# local package directory. The solver then sees userland_fs as
+		# already installed and does not download it.
+		AddPackageFilesToHaikuImage system packages
+			: userland_fs.hpkg smbfs.hpkg ;
+
 		# The downloaded HaikuPorts catalog still lists Mesa 22. The image
 		# solver uses these files instead, written by scripts/pin-mesa-packages.sh.
 		local r5Download = [ FDirName $(HAIKU_OUTPUT_DIR) download ] ;
@@ -50,15 +57,3 @@ switch $(HAIKU_BUILD_PROFILE) {
 	}
 }
 
-rule UserBuildConfigRulePreImage
-{
-	switch $(HAIKU_BUILD_PROFILE) {
-		case "r5-*" : {
-			# The separate package is built, and the add-on is also copied
-			# here. The image solver would otherwise try to download
-			# userland_fs from the public repository.
-			AddFilesToHaikuImage system non-packaged add-ons userlandfs
-				: smbfs ;
-		}
-	}
-}
