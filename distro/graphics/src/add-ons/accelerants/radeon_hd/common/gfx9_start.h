@@ -136,6 +136,9 @@ void r5_gfx9_set_cond_exec(int on);
 void r5_gfx9_set_gds_switch(int on);
 /* The open file's PASID. 0 is a kernel job and writes no LUT entry. */
 void r5_gfx9_set_job_pasid(uint32 pasid, uint64 file);
+/* gfx9_deferred_free. The kernel registers the stamp. The accelerant
+ * leaves it unset. */
+void r5_gfx9_set_defer_stamp(void (*fn)(uint64 sequence));
 /* The file last written into the IH LUT for this VMID. */
 uint64 r5_gfx9_file_for_vmid(uint32 vmid);
 uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);

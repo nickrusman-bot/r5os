@@ -283,6 +283,10 @@ The R5 command-submit ioctl has no GDS chunk, so the six values are 0. That is t
 
 The grab is not called from the submit path. `amdgpu_vm_init` gives each open file its own root page table, and the ring flush then writes that root into the VMID it grabbed. R5 still has one root, built for VMID 1 in `r5_gfx9_vmid1_setup`. Pointing two VMIDs at that one root would be a different machine from Linux. What it takes is one root, and the page-table pages under it, per open file, from the same allocator that builds the VMID 1 root. `gfx9_vmid_per_file` is not read until that exists. This is the stop in night step N9.
 
+## Deferred free
+
+`gfx9_deferred_free` defaults off. When it is on, a freed VRAM offset stays out of the allocator until the next user-job VM flush has been submitted and that fence has been seen. The retire thread prints the offset when it comes back. An unmap still clears the page-table entry at once. The list holds 256 offsets, one per buffer object. A full list frees that offset immediately.
+
 ## Fallback
 
 No supported GPU: VESA, `framebuffer`, or `vboxvideo`, software `app_server`, optional Lavapipe. A GPU reset or a failed accelerant must not take down Login. The standard image boots with the experimental GPU driver absent.

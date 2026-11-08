@@ -18,6 +18,7 @@
 #include "r5_log.h"
 #include "r5_vm.h"
 #include "r5_pasid.h"
+#include "r5_defer.h"
 
 #include <KernelExport.h>
 #include <condition_variable.h>
@@ -80,6 +81,9 @@ static const bigtime_t kWatchdogUs = 10000000;
 static int sErrorLines;
 static int sOnceBits;
 static int sDebugOn = -1;
+static int sDeferred = 0;
+static r5_defer sDefer[256];
+static void gpu_defer_stamp(uint64 sequence);
 static int sSelftestOn = -1;
 
 
@@ -100,12 +104,16 @@ gpu_cache_log_settings()
 			"gfx9_cond_exec", false, true) ? 1 : 0);
 		r5_gfx9_set_gds_switch(get_driver_boolean_parameter(settings,
 			"gfx9_gds_switch", false, true) ? 1 : 0);
+		sDeferred = get_driver_boolean_parameter(settings,
+			"gfx9_deferred_free", false, true) ? 1 : 0;
 		unload_driver_settings(settings);
 	} else {
 		r5_gfx9_set_flush_fence(0);
 		r5_gfx9_set_cond_exec(0);
 		r5_gfx9_set_gds_switch(0);
+		sDeferred = 0;
 	}
+	r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
 	sDebugOn = debugOn ? 1 : 0;
 	sSelftestOn = selftestOn ? 1 : 0;
 }
@@ -416,6 +424,7 @@ static void gpu_sync_host(gpu_sync* sync);
 
 
 static void gpu_release_parked(uint64 seen);
+static void gpu_defer_stamp(uint64 sequence);
 static void gpu_watchdog();
 
 
@@ -713,8 +722,10 @@ gpu_bo_release(gpu_bo* bo)
 	if (!bo->live)
 		return;
 	gpu_bo_unmap(bo);
-	if (bo->domain == R5_GPU_DOMAIN_VRAM)
-		r5_gfx9_free_user_vram(bo->vramOffset);
+	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+		if (!sDeferred || !r5_defer_add(sDefer, 256, bo->vramOffset))
+			r5_gfx9_free_user_vram(bo->vramOffset);
+	}
 	/* The user clone belongs to mapTeam. A team that has already ended
 	 * took its areas with it. team_is_valid is the check; do not delete
 	 * an id in a team that is gone.
@@ -833,8 +844,28 @@ gpu_bo_get(gpu_client* client, uint32 handle)
 
 
 static void
+gpu_defer_stamp(uint64 sequence)
+{
+	r5_defer_stamp(sDefer, 256, sequence);
+}
+
+
+static void
+gpu_defer_reclaim(uint64 seen)
+{
+	uint64 page = 0;
+	while (r5_defer_take(sDefer, 256, seen, &page)) {
+		dprintf("radeon_hd: deferred page %llx reused\n",
+			(unsigned long long)page);
+		r5_gfx9_free_user_vram(page);
+	}
+}
+
+
+static void
 gpu_release_parked(uint64 seen)
 {
+	gpu_defer_reclaim(seen);
 	for (uint32 i = 0; i < kMaxBo; i++) {
 		gpu_bo* bo = &sBo[i];
 		if (!bo->live || !bo->parked)

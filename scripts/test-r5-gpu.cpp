@@ -14,6 +14,7 @@
 #include "r5_cs.h"
 #include "r5_pasid.h"
 #include "r5_vmid.h"
+#include "r5_defer.h"
 #include "r5_gc9_regs.h"
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
@@ -1306,6 +1307,20 @@ main()
 		if (again == 0 || flush == 0)
 			return fail("closed file");
 		r5_vmid_cancel(&mgr);
+	}
+	{
+		struct r5_defer held[2];
+		uint64_t page = 0;
+		memset(held, 0, sizeof(held));
+		if (r5_defer_add(held, 2, 0x1000) == 0)
+			return fail("defer add");
+		if (r5_defer_take(held, 2, 5, &page) != 0)
+			return fail("defer early");
+		r5_defer_stamp(held, 2, 8);
+		if (r5_defer_take(held, 2, 7, &page) != 0)
+			return fail("defer before fence");
+		if (r5_defer_take(held, 2, 8, &page) == 0 || page != 0x1000ull)
+			return fail("defer after fence");
 	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;

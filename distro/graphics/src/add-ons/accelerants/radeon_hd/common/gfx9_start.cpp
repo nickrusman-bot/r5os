@@ -2158,6 +2158,7 @@ static uint32 sJobPasid = 0;
 static uint64 sJobFile = 0;
 static uint32 sPasidOfVmid[16];
 static uint64 sFileOfVmid[16];
+static void (*sDeferStamp)(uint64 sequence) = 0;
 
 
 bool
@@ -2530,6 +2531,13 @@ r5_gfx9_set_job_pasid(uint32 pasid, uint64 file)
 }
 
 
+void
+r5_gfx9_set_defer_stamp(void (*fn)(uint64 sequence))
+{
+	sDeferStamp = fn;
+}
+
+
 uint64
 r5_gfx9_file_for_vmid(uint32 vmid)
 {
@@ -2693,8 +2701,11 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	r5_cs_ctx_note(&sRingCtx, fenceCtx);
 	if ((preamble & kR5PreamblePresent) != 0 && preambleSeen != NULL)
 		*preambleSeen = 1;
-	if (flush)
+	if (flush) {
 		r5_gfx9_vmid1_flushed();
+		if (sDeferStamp != NULL)
+			sDeferStamp(flushFence ? flushSeq : sequence);
+	}
 	if (sGpuDebug && sHost != NULL && sHost->log != NULL) {
 		uint32 show[8];
 		memset(show, 0, sizeof(show));
