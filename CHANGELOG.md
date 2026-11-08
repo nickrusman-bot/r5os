@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The boot splash is white
+
+The splash is 372×96 on `#FFFFFF`, with the dark wordmark and no border. The bootloader clears a 24-bit framebuffer to `#FFFFFF` (`fillByte` `0xff`, `fillWord` `0x00ffffff`). An 8-bit screen stays black. `distro/boot/platform/generic/video_splash.cpp` is the Haiku file with that fill in an SPDX snippet. `scripts/apply-branding.py` copies it. The progress strip stays Haiku's 308×80 layout. `haiku-splash-icons.png` is the unmodified MIT original. The generator lifts the rim off black onto white and draws the R5 mark on icon 4, where the leaf was. `apply-overlay.sh` installs `splash_icons.png`. `--check` covers the splash and the strip. This has not been booted. `distro/BUILD` stays 10049.
+
 ### The boot splash is black, and the Deskbar mark is centered
 
 `scripts/generate-r5-artwork.py` draws the Wave Pebble from `distro/artwork/r5-symbol.svg`. The splash and its BGR are `#000000`, with no gray card and no version. The 16 and 22 pixel marks use the thicker wave in that SVG. The Deskbar button uses the 16 pixel mark, and the picture is centered in the button instead of sitting on the lower edge. Example cards read `distro/VERSION` and `distro/BUILD` and say example. `--check` compares the product files. `apply-overlay.sh` runs that check and copies the Deskbar mark, the logo, the splash, and the About symbol. It does not copy the brand-kit previews. About R5 is one column with that symbol, and Tracker draws the mark on the boot volume. `distro/BUILD` is 10049. The black splash and the centered small mark have not been booted. A 5625U boot was not part of this change.
