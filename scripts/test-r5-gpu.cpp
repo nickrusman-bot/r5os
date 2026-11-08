@@ -647,6 +647,10 @@ main()
 		if (strstr(body, "gpu_va_map_copied") == NULL
 			|| strstr(body, "gpu_va_map(client, buffer") != NULL)
 			return fail("va replace copy");
+		if (r5_vram_fits(8ull * 4096ull, 4ull * 4096ull, 5, 0))
+			return fail("file a enomem");
+		if (!r5_vram_fits(16ull * 4096ull, 4ull * 4096ull, 1, 4096ull))
+			return fail("file b fits");
 		if (r5_file_count_drop(&count, 1) == 0)
 			return fail("still held");
 		if (count.trees != 0 || count.pages != 0 || count.refs != 0)

@@ -895,6 +895,20 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	bo->bytes = bytes;
 	if (in.domain == R5_GPU_DOMAIN_VRAM) {
 		uint64 offset = 0;
+		if (client->tree != NULL && client->info != NULL
+			&& client->info->shared_info != NULL) {
+			uint64 limit = (uint64)client->info->shared_info->frame_buffer_size
+				* 1024ull;
+			uint64 held = 0;
+			for (uint32 i = 0; i < kMaxBo; i++) {
+				if (sBo[i].live && sBo[i].owner == client
+					&& sBo[i].domain == R5_GPU_DOMAIN_VRAM)
+					held += sBo[i].bytes;
+			}
+			if (!r5_vram_fits(limit, held, client->tree->vm.used, bytes))
+				return gpu_refuse("BO_CREATE", "vram", B_NO_MEMORY, 0,
+					in.domain, bytes, 0, 0, 0, in.flags);
+		}
 		if (r5_gfx9_alloc_user_vram(bytes, &offset) != B_OK)
 			return gpu_refuse("BO_CREATE", "vram", B_NO_MEMORY, 0, in.domain,
 				bytes, 0, 0, 0, in.flags);
@@ -1411,6 +1425,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 					in.map_bytes, in.flags);
 			}
 			if (!r5_gfx9_vm_map(gpu_vm(client), in.gpu_va + page, pte)) {
+				dprintf("radeon_hd: page table pool full\n");
 				gpu_va_clear(gpu_vm(client), in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
 					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
@@ -1458,6 +1473,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 					uint64 pte = r5_gfx9_user_pte(address,
 						gpu_pte_flags(flags), 1, 0, &kR5Gfx93Mtype);
 					if (!r5_gfx9_vm_map(gpu_vm(client), in.gpu_va + filled, pte)) {
+						dprintf("radeon_hd: page table pool full\n");
 						gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
 							in.handle, bo->domain, bo->bytes,

@@ -282,6 +282,25 @@ r5_csa_map_pages(r5_vm* vm, uint64_t va, const uint64_t* page,
 }
 
 
+/* A file's VRAM limit covers its buffers and its page-table pages.
+ * 0 means the sum does not fit. The caller returns B_NO_MEMORY. */
+static inline int
+r5_vram_fits(uint64_t limit, uint64_t buffers, uint32_t pages, uint64_t add)
+{
+	uint64_t tables;
+	if (pages > (uint32_t)(~0ull / 4096ull))
+		return 0;
+	tables = (uint64_t)pages * 4096ull;
+	if (buffers > ~0ull - tables)
+		return 0;
+	if (buffers + tables > limit)
+		return 0;
+	if (add > limit - (buffers + tables))
+		return 0;
+	return 1;
+}
+
+
 /* A file tree stays until the client and every parked buffer in it
  * have dropped their reference. The counters return on the last drop. */
 struct r5_file_count {

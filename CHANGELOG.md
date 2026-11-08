@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Page-table pages count against the file's VRAM
+
+`gfx9_vmid_per_file` stays off. A file with its own tree refuses a VRAM buffer with `B_NO_MEMORY` when that file's buffers plus its page-table pages do not fit in the framebuffer. A map that cannot take a table page logs `page table pool full` and returns `B_NO_MEMORY`. The host test fills one file's budget and leaves the other file inside its budget. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A VA replace maps the request it already copied
 
 `gfx9_vmid_per_file` stays off. `gpu_va_replace` copies the user request once. The follow-up map reads that kernel copy, so a second user read cannot change the range while `sReplacing` skips the PRT check. The host test checks that the replace function calls `gpu_va_map_copied` and does not call `gpu_va_map` with the user buffer. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
