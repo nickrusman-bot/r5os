@@ -36,6 +36,7 @@ switch $(HAIKU_BUILD_PROFILE) {
 			vulkan_loader
 			vulkan_tools
 			vulkanteapot
+			smbfs
 			;
 
 		# The downloaded HaikuPorts catalog still lists Mesa 22. The image

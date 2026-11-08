@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+### Network shares mount from Tracker
+
+Imported from air/OS (`github.com/airos-works/haiku`) into `distro/smb` and the Tracker files under `distro/desktop`. libsmb2 6.2 is LGPL-2.1-or-later (Ronnie Sahlberg; portions Primary Data Inc.). smbfs is the MIT userlandfs add-on and links `libsmb2.a`. The mount server stores the password with `BKeyStore` as `smb://server/share`, retries while the network is down, and posts a notification when the error is not that kind. Tracker preferences has the Network shares page, and the Mount menu lists shares that are not mounted.
+
+The mount parameter string does not contain `password=`. `userlandfs_server` is started with three arguments: the server path, the file system name, and the port. The add-on's `main()` receives the mount parameters. `password=` is refused there and the value is not written to the log. smbfs reads the same keystore entry. The syslog lines name the share, the server, and the error.
+
+`distro/BUILD` is 10050. Not jammed yet. A Windows share was not mounted. VirtualBox bridged was not run. QEMU usernet cannot see a Windows share.
+
 ### The boot splash is black, and the Deskbar mark is centered
 
 `scripts/generate-r5-artwork.py` draws the Wave Pebble from `distro/artwork/r5-symbol.svg`. The splash and its BGR are `#000000`, with no gray card and no version. The 16 and 22 pixel marks use the thicker wave in that SVG. The Deskbar button uses the 16 pixel mark, and the picture is centered in the button instead of sitting on the lower edge. Example cards read `distro/VERSION` and `distro/BUILD` and say example. `--check` compares the product files. `apply-overlay.sh` runs that check and copies the Deskbar mark, the logo, the splash, and the About symbol. It does not copy the brand-kit previews. About R5 is one column with that symbol, and Tracker draws the mark on the boot volume. `distro/BUILD` is 10049. The black splash and the centered small mark have not been booted. A 5625U boot was not part of this change.
