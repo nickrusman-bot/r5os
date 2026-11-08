@@ -1165,9 +1165,8 @@ r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu)
 static r5_vm sVm;
 static r5_vm_page sVmPages[1024];
 static bool sVmid1 = false;
-/* gfx9_vmid_per_file. The shared tree stays sVm. An open file selects its own. */
+/* gfx9_vmid_per_file. The shared tree stays sVm. A file keeps its own. */
 static bool sVmidPerFile = false;
-static r5_vm* sActiveVm = &sVm;
 static uint64 sSharedRoot = 0;
 
 
@@ -1579,13 +1578,7 @@ r5_gfx9_csa_map(void)
 }
 
 
-static r5_vm*
-current_vm(void)
-{
-	if (sActiveVm != NULL && sActiveVm->pages != NULL && sActiveVm->used > 0)
-		return sActiveVm;
-	return &sVm;
-}
+bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 
 
 bool
@@ -1595,10 +1588,36 @@ r5_gfx9_vmid_per_file(void)
 }
 
 
-void
-r5_gfx9_vm_select(r5_vm* vm)
+r5_vm*
+r5_gfx9_shared_vm(void)
 {
-	sActiveVm = vm != NULL ? vm : &sVm;
+	return &sVm;
+}
+
+
+bool
+r5_gfx9_vm_map(r5_vm* vm, uint64 va, uint64 pte)
+{
+	if (!sVmid1 || vm == NULL || vm->pages == NULL || vm->used == 0)
+		return false;
+	if (!r5_vm_map_page(vm, va, pte))
+		return false;
+	asm volatile("sfence" ::: "memory");
+	/* A cleared PTE is an unmap. The next user job flushes that. */
+	r5_gfx9_vmid1_touch();
+	return true;
+}
+
+
+bool
+r5_gfx9_vm_lookup(r5_vm* vm, uint64 va)
+{
+	uint64 pte = 0;
+	if (!sVmid1 || vm == NULL || vm->pages == NULL || vm->used == 0)
+		return false;
+	if (r5_vm_lookup(vm, va & ~0xfffull, &pte) == 0)
+		return false;
+	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
 }
 
 
@@ -1630,33 +1649,21 @@ r5_gfx9_file_vm_init(r5_vm* vm, r5_vm_page* pages, uint32 capacity)
 bool
 r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 {
-	if (!sVmid1)
-		return false;
-	if (!r5_vm_map_page(current_vm(), va, pte))
-		return false;
-	asm volatile("sfence" ::: "memory");
-	/* A cleared PTE is an unmap. The next user job flushes that. */
-	r5_gfx9_vmid1_touch();
-	return true;
+	return r5_gfx9_vm_map(&sVm, va, pte);
 }
 
 
 bool
 r5_gfx9_vmid1_lookup(uint64 va)
 {
-	uint64 pte = 0;
-	if (!sVmid1)
-		return false;
-	if (r5_vm_lookup(current_vm(), va & ~0xfffull, &pte) == 0)
-		return false;
-	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
+	return r5_gfx9_vm_lookup(&sVm, va);
 }
 
 
 void
 r5_gfx9_vmid1_levels(const char* name, uint64 va)
 {
-	r5_vm* vm = current_vm();
+	r5_vm* vm = &sVm;
 	if (name == NULL || !sVmid1 || vm->used == 0 || sInfo == NULL
 		|| sInfo->shared_info == NULL)
 		return;
@@ -1690,7 +1697,7 @@ r5_gfx9_vmid1_pte(uint64 va, uint64* pte)
 {
 	if (pte == NULL || !sVmid1)
 		return false;
-	return r5_vm_lookup(current_vm(), va & ~0xfffull, pte) != 0;
+	return r5_vm_lookup(&sVm, va & ~0xfffull, pte) != 0;
 }
 
 

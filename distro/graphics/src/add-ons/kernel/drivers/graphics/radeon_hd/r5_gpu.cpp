@@ -277,6 +277,8 @@ struct gpu_range {
 	uint64		va;
 	uint64		offset;
 	uint64		bytes;
+	/* The tree this range was mapped in. Unmap uses this, not a global. */
+	r5_vm*		vm;
 };
 
 
@@ -378,7 +380,6 @@ gpu_lock()
 static void
 gpu_unlock()
 {
-	r5_gfx9_vm_select(NULL);
 	release_lock(&sGpuLock);
 }
 
@@ -717,6 +718,15 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 }
 
 
+static r5_vm*
+gpu_vm(gpu_client* client)
+{
+	if (client != NULL && client->fileRoot)
+		return &client->fileVm;
+	return r5_gfx9_shared_vm();
+}
+
+
 static void
 gpu_bo_unmap(gpu_bo* bo)
 {
@@ -725,9 +735,11 @@ gpu_bo_unmap(gpu_bo* bo)
 		gpu_range* range = &bo->ranges[i];
 		if (!range->live)
 			continue;
+		r5_vm* vm = range->vm != NULL ? range->vm : r5_gfx9_shared_vm();
 		for (uint64 page = 0; page < range->bytes; page += 4096)
-			r5_gfx9_vmid1_map(range->va + page, 0);
+			r5_gfx9_vm_map(vm, range->va + page, 0);
 		range->live = false;
+		range->vm = NULL;
 		any = true;
 	}
 	if (any)
@@ -1027,10 +1039,12 @@ gpu_va_fits(uint64 va, uint64 bytes)
 
 
 static void
-gpu_va_clear(uint64 va, uint64 bytes)
+gpu_va_clear(r5_vm* vm, uint64 va, uint64 bytes)
 {
+	if (vm == NULL)
+		vm = r5_gfx9_shared_vm();
 	for (uint64 page = 0; page < bytes; page += 4096)
-		r5_gfx9_vmid1_map(va + page, 0);
+		r5_gfx9_vm_map(vm, va + page, 0);
 	if (bytes != 0)
 		r5_gfx9_vmid1_flush();
 }
@@ -1151,20 +1165,20 @@ gpu_prt_add(uint64 va, uint64 bytes)
 
 
 static status_t
-gpu_va_write_prt(uint64 va, uint64 bytes)
+gpu_va_write_prt(r5_vm* vm, uint64 va, uint64 bytes)
 {
 	/* The PTE is a value built here: bit 51, VALID clear, no address.
 	 * r5_gfx9_vmid1_map writes that page-table entry. This path does
 	 * not read or write a user address (SMAP).
 	 */
 	for (uint64 page = 0; page < bytes; page += 4096) {
-		if (!r5_gfx9_vmid1_map(va + page, kR5Gfx9PtePrt)) {
-			gpu_va_clear(va, page);
+		if (!r5_gfx9_vm_map(vm, va + page, kR5Gfx9PtePrt)) {
+			gpu_va_clear(vm, va, page);
 			return B_NO_MEMORY;
 		}
 	}
 	if (!r5_gfx9_vmid1_flush()) {
-		gpu_va_clear(va, bytes);
+		gpu_va_clear(vm, va, bytes);
 		return B_ERROR;
 	}
 	return B_OK;
@@ -1193,19 +1207,19 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			return gpu_refuse("VA_MAP", "vmid", B_NO_INIT, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
-			if (r5_gfx9_vmid1_lookup(in.gpu_va + page)) {
-				gpu_va_clear(in.gpu_va, page);
+			if (r5_gfx9_vm_lookup(gpu_vm(client), in.gpu_va + page)) {
+				gpu_va_clear(gpu_vm(client), in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle, 0,
 					0, in.gpu_va + page, in.bo_offset, in.map_bytes, in.flags);
 			}
 		}
-		status = gpu_va_write_prt(in.gpu_va, in.map_bytes);
+		status = gpu_va_write_prt(gpu_vm(client), in.gpu_va, in.map_bytes);
 		if (status != B_OK)
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		status = gpu_prt_add(in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
-			gpu_va_clear(in.gpu_va, in.map_bytes);
+			gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
 			return gpu_refuse("VA_MAP", "prt", status, in.handle, 0, 0,
 				in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		}
@@ -1256,14 +1270,14 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 		uint64 pte = r5_gfx9_user_pte(phys, gpu_pte_flags(flags), 0, 0,
 			&kR5Gfx93Mtype);
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
-			if (r5_gfx9_vmid1_lookup(in.gpu_va + page)) {
-				gpu_va_clear(in.gpu_va, page);
+			if (r5_gfx9_vm_lookup(gpu_vm(client), in.gpu_va + page)) {
+				gpu_va_clear(gpu_vm(client), in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle,
 					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 			}
-			if (!r5_gfx9_vmid1_map(in.gpu_va + page, pte)) {
-				gpu_va_clear(in.gpu_va, page);
+			if (!r5_gfx9_vm_map(gpu_vm(client), in.gpu_va + page, pte)) {
+				gpu_va_clear(gpu_vm(client), in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
 					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
@@ -1289,7 +1303,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			status_t mapped = get_memory_map_etc(B_CURRENT_TEAM, cursor,
 				(size_t)(in.map_bytes - filled), entries, &count);
 			if (mapped != B_OK && mapped != B_BUFFER_OVERFLOW) {
-				gpu_va_clear(in.gpu_va, filled);
+				gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 				return gpu_refuse("VA_MAP", "phys", mapped, in.handle,
 					bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
 					in.flags);
@@ -1300,8 +1314,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 				uint64 address = entries[entry].address;
 				uint64 bytes = entries[entry].size;
 				while (bytes >= 4096 && filled < in.map_bytes) {
-					if (r5_gfx9_vmid1_lookup(in.gpu_va + filled)) {
-						gpu_va_clear(in.gpu_va, filled);
+					if (r5_gfx9_vm_lookup(gpu_vm(client), in.gpu_va + filled)) {
+						gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE,
 							in.handle, bo->domain, bo->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
@@ -1309,8 +1323,8 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 					}
 					uint64 pte = r5_gfx9_user_pte(address,
 						gpu_pte_flags(flags), 1, 0, &kR5Gfx93Mtype);
-					if (!r5_gfx9_vmid1_map(in.gpu_va + filled, pte)) {
-						gpu_va_clear(in.gpu_va, filled);
+					if (!r5_gfx9_vm_map(gpu_vm(client), in.gpu_va + filled, pte)) {
+						gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
 							in.handle, bo->domain, bo->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
@@ -1327,14 +1341,14 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 			cursor += step;
 		}
 		if (filled != in.map_bytes) {
-			gpu_va_clear(in.gpu_va, filled);
+			gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 			return gpu_refuse("VA_MAP", "short", B_BAD_DATA, in.handle,
 				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
 				in.flags);
 		}
 	}
 	if (!r5_gfx9_vmid1_flush()) {
-		gpu_va_clear(in.gpu_va, in.map_bytes);
+		gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
 		return gpu_refuse("VA_MAP", "flush", B_ERROR, in.handle, bo->domain,
 			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	}
@@ -1342,6 +1356,7 @@ gpu_va_map(gpu_client* client, void* buffer, size_t length)
 	bo->ranges[slot].va = in.gpu_va;
 	bo->ranges[slot].offset = in.bo_offset;
 	bo->ranges[slot].bytes = in.map_bytes;
+	bo->ranges[slot].vm = gpu_vm(client);
 	if (gpu_debug_enabled())
 		dprintf("radeon_hd: t %lld va map %016llx bytes %llu domain %lu\n",
 			(long long)system_time(),
@@ -1375,20 +1390,20 @@ gpu_va_replace(gpu_client* client, void* buffer, size_t length, bool clearOnly)
 	if (!r5_gfx9_vmid1_setup())
 		return gpu_refuse(op, "vmid", B_NO_INIT, in.handle, 0, 0, in.gpu_va,
 			in.bo_offset, in.map_bytes, in.flags);
-	gpu_va_clear(in.gpu_va, in.map_bytes);
+	gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
 	gpu_ranges_drop_contained(in.gpu_va, in.map_bytes);
 	if (clearOnly) {
 		gpu_prt_drop_contained(in.gpu_va, in.map_bytes);
 		return B_OK;
 	}
 	if (in.handle == 0) {
-		status = gpu_va_write_prt(in.gpu_va, in.map_bytes);
+		status = gpu_va_write_prt(gpu_vm(client), in.gpu_va, in.map_bytes);
 		if (status != B_OK)
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
 				in.bo_offset, in.map_bytes, in.flags);
 		status = gpu_prt_add(in.gpu_va, in.map_bytes);
 		if (status != B_OK) {
-			gpu_va_clear(in.gpu_va, in.map_bytes);
+			gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
 			return gpu_refuse(op, "prt", status, in.handle, 0, 0, in.gpu_va,
 				in.bo_offset, in.map_bytes, in.flags);
 		}
@@ -1417,8 +1432,9 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 		if (!range->live || range->va != in.gpu_va
 			|| range->offset != in.bo_offset || range->bytes != in.map_bytes)
 			continue;
+		r5_vm* vm = range->vm != NULL ? range->vm : r5_gfx9_shared_vm();
 		for (uint64 page = 0; page < range->bytes; page += 4096) {
-			if (!r5_gfx9_vmid1_map(range->va + page, 0))
+			if (!r5_gfx9_vm_map(vm, range->va + page, 0))
 				return gpu_refuse("VA_UNMAP", "pte", B_BAD_ADDRESS, in.handle,
 					bo->domain, bo->bytes, range->va + page, in.bo_offset,
 					in.map_bytes, in.flags);
@@ -1427,6 +1443,7 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 			return gpu_refuse("VA_UNMAP", "flush", B_ERROR, in.handle, bo->domain,
 				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		range->live = false;
+		range->vm = NULL;
 		return B_OK;
 	}
 	return gpu_refuse("VA_UNMAP", "range", B_BAD_VALUE, in.handle,
@@ -1436,15 +1453,16 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 
 
 static bool
-gpu_ib_mapped(uint64 va, uint32 dwords)
+gpu_ib_mapped(gpu_client* client, uint64 va, uint32 dwords)
 {
+	r5_vm* vm = gpu_vm(client);
 	if (dwords == 0 || (va & 3ull) != 0)
 		return false;
 	uint64 bytes = (uint64)dwords * 4ull;
 	uint64 first = va & ~0xfffull;
 	uint64 last = (va + bytes - 1ull) & ~0xfffull;
 	for (uint64 page = first; page <= last; page += 4096) {
-		if (!r5_gfx9_vmid1_lookup(page))
+		if (!r5_gfx9_vm_lookup(vm, page))
 			return false;
 	}
 	return true;
@@ -1536,7 +1554,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		if (ibs[i].flags != 0)
 			return gpu_refuse("CS_SUBMIT", "flags", B_BAD_VALUE, in.context, 0,
 				in.ib_count, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
-		if (!gpu_ib_mapped(ibs[i].gpu_va, ibs[i].dwords))
+		if (!gpu_ib_mapped(client, ibs[i].gpu_va, ibs[i].dwords))
 			return gpu_refuse("CS_SUBMIT", "mapped", B_BAD_ADDRESS, in.context, 0,
 				ibs[i].dwords, ibs[i].gpu_va, 0, in.ring, ibs[i].flags);
 	}
@@ -3566,7 +3584,6 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			gpu_unlock();
 			return root;
 		}
-		r5_gfx9_vm_select(&client->fileVm);
 	}
 	status_t status = B_BAD_VALUE;
 	if (op == R5_GPU_READ_REG) {
@@ -3718,7 +3735,6 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		}
 	} 	else
 		status = B_UNSUPPORTED;
-	r5_gfx9_vm_select(NULL);
 	gpu_unlock();
 	return status;
 }

@@ -568,6 +568,16 @@ main()
 		if (fileA.pages[0].physical == 0
 			|| fileA.pages[0].physical == fileB.pages[0].physical)
 			return fail("files share a root");
+		/* Close file A. The unmap is A's tree, the one the range stored. */
+		r5_vm* closed = &fileA;
+		if (!r5_vm_map_page(closed, va, 0))
+			return fail("close file");
+		gotA = 0;
+		gotB = 0;
+		if (r5_vm_lookup(&fileA, va, &gotA) != 0 || gotA != kR5VmPteEmpty)
+			return fail("closed entry");
+		if (!r5_vm_lookup(&fileB, va, &gotB) || gotB != pageB)
+			return fail("other file page");
 	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
