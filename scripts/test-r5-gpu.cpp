@@ -1362,6 +1362,16 @@ main()
 		struct r5_agp_aperture plain = r5_gfx9_agp_aperture(0, 0x3fffffffull, 0);
 		if (plain.high != (uint32_t)(0x3fffffffull >> 18))
 			return fail("agp no plus");
+		uint64_t fbA = 0;
+		uint64_t fbB = 0;
+		uint64_t fbC = 0;
+		uint64_t fbD = 0;
+		r5_gfx9_fb_range(0x00abcdefu, 256ull * 1024ull * 1024ull, &fbA, &fbB);
+		r5_gfx9_fb_range(0x00abcdefu, 256ull * 1024ull * 1024ull, &fbC, &fbD);
+		if (fbA != fbC || fbB != fbD || fbA != (0xabcdefull << 24)
+			|| fbB != fbA + 256ull * 1024ull * 1024ull - 1ull
+			|| MC_VM_FB_LOCATION_BASE__FB_BASE_MASK != 0x00ffffffu)
+			return fail("fb range");
 		if (r5_gfx9_aperture_plus(0x1636u) != 1
 			|| r5_gfx9_aperture_plus(0x164cu) != 1
 			|| r5_gfx9_aperture_plus(0x15e7u) != 1
@@ -1391,6 +1401,18 @@ main()
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/gfx9_k12.cpp", hubOrder, 6) != 0)
+			return 1;
+		const char* rangeOrder[] = {
+			"r5_gfx9_fb_range(location, sVramBytes, &frame, &fbEnd);",
+			"r5_gfx9_fb_range(location,"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
+				"gfx9_start.cpp", rangeOrder, 1) != 0)
+			return 1;
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", rangeOrder + 1, 1) != 0)
 			return 1;
 	}
 	{

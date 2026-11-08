@@ -39,6 +39,7 @@
 #define GC_BASE__INST0_SEG1 0xa000u
 /* Linux v6.12 gc_9_0_sh_mask.h */
 #define GDS_GWS_VMID0__SIZE__SHIFT 0x10u
+#define MC_VM_FB_LOCATION_BASE__FB_BASE_MASK 0x00ffffffu
 /* Linux v6.12 vega10_ip_offset.h */
 #define NBIO_BASE__INST0_SEG2 0xd20u
 #define OSSSYS_BASE__INST0_SEG0 0x10a0u

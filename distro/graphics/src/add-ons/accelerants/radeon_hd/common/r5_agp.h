@@ -19,6 +19,8 @@
 
 #include <stdint.h>
 
+#include "r5_gc9_regs.h"
+
 
 struct r5_agp_aperture {
 	uint32_t bot;
@@ -38,6 +40,25 @@ r5_gfx9_aperture_plus(uint32_t pciId)
 {
 	return pciId == 0x15e7u || pciId == 0x1636u || pciId == 0x1638u
 		|| pciId == 0x164cu;
+}
+
+
+/* MC_VM_FB_LOCATION_BASE__FB_BASE_MASK is the 24-bit field. The byte
+ * address is that field shifted by 24, through the last byte of the
+ * framebuffer. prepare_hw and the runtime switch both use this. */
+static inline uint64_t
+r5_gfx9_fb_start(uint32_t location)
+{
+	return (uint64_t)(location & MC_VM_FB_LOCATION_BASE__FB_BASE_MASK) << 24;
+}
+
+
+static inline void
+r5_gfx9_fb_range(uint32_t location, uint64_t bytes, uint64_t* start,
+	uint64_t* end)
+{
+	*start = r5_gfx9_fb_start(location);
+	*end = *start + bytes - 1ull;
 }
 
 

@@ -744,14 +744,14 @@ radeon_gfx9_fw_stem()
 static uint64
 radeon_gfx9_mc_addr(uint32 location, uint64 offset)
 {
-	return ((uint64)(location & 0x00ffffffu) << 24) + offset;
+	return r5_gfx9_fb_start(location) + offset;
 }
 
 
 static uint64
 radeon_gfx9_pa_addr(uint32 fbOffset, uint64 offset)
 {
-	return ((uint64)(fbOffset & 0x00ffffffu) << 24) + offset;
+	return r5_gfx9_fb_start(fbOffset) + offset;
 }
 
 
@@ -1514,8 +1514,9 @@ static bool
 radeon_gfx9_prepare_hw(uint32 location, uint32 fbOffset)
 {
 	const uint32 highest = radeon_gfx9_byte(kGfx9Seg1, mmRLC_CGCG_CGLS_CTRL_3D);
-	uint64 frame = radeon_gfx9_mc_addr(location, 0);
-	uint64 fbEnd = frame + sVramBytes - 1;
+	uint64 frame = 0;
+	uint64 fbEnd = 0;
+	r5_gfx9_fb_range(location, sVramBytes, &frame, &fbEnd);
 	if (!radeon_mmio_fits(highest) || sVramBytes < 0x1000
 		|| fbEnd < frame || (fbEnd >> 18) >= 0xffffffffull)
 		return false;
@@ -3620,8 +3621,8 @@ radeon_gfx9_cp_start()
 		"-0x%" B_PRIx32 " FB_OFFSET 0x%" B_PRIx32
 		" ring mc 0x%" B_PRIx64 " pa 0x%" B_PRIx64 "\n",
 		__func__, location, top, fb, ringGpu, ringPa);
-	uint32 loc = location & 0x00ffffffu;
-	uint32 tp = top & 0x00ffffffu;
+	uint32 loc = location & MC_VM_FB_LOCATION_BASE__FB_BASE_MASK;
+	uint32 tp = top & MC_VM_FB_LOCATION_BASE__FB_BASE_MASK;
 	bool window = location != 0xffffffff && top != 0xffffffff
 		&& fb != 0xffffffff && fb != 0 && loc <= tp
 		&& sVramBytes

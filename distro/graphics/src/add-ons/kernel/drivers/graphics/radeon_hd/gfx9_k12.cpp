@@ -612,7 +612,7 @@ ih_on()
 	sIhWriteback = (volatile uint32*)(ring + kIhBytes);
 	sIhRptr = 0;
 	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
-	uint64 ringMc = ((uint64)(location & 0x00ffffffu) << 24) + ringOffset;
+	uint64 ringMc = r5_gfx9_fb_start(location) + ringOffset;
 	uint64 wbMc = ringMc + kIhBytes;
 
 	uint64 dummyOffset = 0;
@@ -621,7 +621,7 @@ ih_on()
 		return false;
 	memset(dummy, 0, 4096);
 	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
-	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
+	uint64 dummyPa = r5_gfx9_fb_start(fb) + dummyOffset;
 
 	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
 	kwrite(sInfo, oss_byte(mmIH_RB_CNTL_RING1), 0);
@@ -874,7 +874,7 @@ static void
 run_k2()
 {
 	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
-	uint64 fbStart = (uint64)(location & 0x00ffffffu) << 24;
+	uint64 fbStart = r5_gfx9_fb_start(location);
 	uint32 aperLo = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR));
 	uint32 aperHi = kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR));
 	uint64 aperStart = (uint64)aperLo << 18;
@@ -915,7 +915,7 @@ run_k2()
 		return;
 	}
 	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
-	uint64 dummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + dummyOffset;
+	uint64 dummyPa = r5_gfx9_fb_start(fb) + dummyOffset;
 	sK2DummyPa = dummyPa;
 	uint64 flags = R5_GFX9_PTE_VALID | R5_GFX9_PTE_SYSTEM | R5_GFX9_PTE_SNOOPED
 		| R5_GFX9_PTE_EXECUTABLE | R5_GFX9_PTE_READABLE | R5_GFX9_PTE_WRITEABLE;
@@ -975,7 +975,7 @@ run_k2()
 		return;
 	}
 
-	uint64 tablePa = ((uint64)(fb & 0x00ffffffu) << 24) + tableOffset;
+	uint64 tablePa = r5_gfx9_fb_start(fb) + tableOffset;
 	if (!r5_gfx9_pde_aligned(tablePa)) {
 		knote("k2 fail table align %016llx", (unsigned long long)tablePa);
 		return;
@@ -1316,14 +1316,15 @@ r5_gfx9_switch_registers(int inv, int hub, int vmids)
 	if (hub == 1) {
 		uint32 location = 0;
 		uint64 fbStart = 0;
-		uint64 bytes = 0;
+		uint64 fbEnd = 0;
 		sHubLinux = true;
 		r5_gfx9_set_hub_aperture(1);
 		if (sInfo != NULL && sInfo->shared_info != NULL) {
 			location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
-			fbStart = (uint64)(location & 0x00ffffffu) << 24;
-			bytes = (uint64)sInfo->shared_info->frame_buffer_size * 1024ull;
-			r5_gfx9_hub_program(fbStart, fbStart + bytes - 1ull,
+			r5_gfx9_fb_range(location,
+				(uint64)sInfo->shared_info->frame_buffer_size * 1024ull,
+				&fbStart, &fbEnd);
+			r5_gfx9_hub_program(fbStart, fbEnd,
 				kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_LOW_ADDR)),
 				kread(sInfo, gc_byte(mmMC_VM_SYSTEM_APERTURE_HIGH_ADDR)));
 		}
@@ -1396,7 +1397,7 @@ r5_gfx9_vmid1_setup()
 		}
 		memset(dummy, 0, 4096);
 		uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
-		sK2DummyPa = ((uint64)(fb & 0x00ffffffu) << 24) + offset;
+		sK2DummyPa = r5_gfx9_fb_start(fb) + offset;
 	}
 	/* The root page is kept after a failed flush. The next attempt
 	 * rewrites the base from that same page. There is no free for
