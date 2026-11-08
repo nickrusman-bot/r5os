@@ -380,6 +380,9 @@ radeon_gfx9_prepare_ring()
 	sRadeonGfx9Ring.submitted = submitted;
 	sRadeonGfx9Ring.fenceOffset = fenceOffset;
 	sRadeonGfx9Ring.fenceAddress = fenceAddress;
+	/* amdgpu_ring_init sets *cond_exe_cpu_addr = 1 once. The packet
+	 * reads kR5CondExecOffset on this same page. */
+	((volatile uint32*)fenceAddress)[kR5CondExecOffset / 4u] = 1u;
 	sRadeonGfx9Ring.ready = true;
 
 	ERROR("%s: R5 radeon_hd: GFX9 ring 0x%" B_PRIx64 "+0x%" B_PRIx32
@@ -2653,12 +2656,10 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	}
 	uint32 condSlot = 0;
 	if (sCondExec) {
-		/* The fence page is mapped for the ring. Dword 8 is unused
-		 * by the K0 word and the user fences. */
-		if (sRadeonGfx9Ring.fenceAddress != NULL)
-			((volatile uint32*)sRadeonGfx9Ring.fenceAddress)[8] = 1u;
+		uint64 pageMc = fenceMc - kR5UserFenceOffset;
 		condSlot = switched + 4u;
-		switched = r5_cs_cond_exec(packets, cap, switched, fenceMc + 32u);
+		switched = r5_cs_cond_exec(packets, cap, switched,
+			r5_cs_cond_exec_mc(pageMc));
 	}
 	if (flush && switched != prefix)
 		return false;

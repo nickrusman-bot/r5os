@@ -1154,19 +1154,27 @@ main()
 			return fail("flush fence opens the frame");
 	}
 	{
+		uint64_t page = 0x80000000ull;
+		uint64_t slot = r5_cs_cond_exec_mc(page);
 		uint32_t pkt[8];
-		uint32_t n = r5_cs_cond_exec(pkt, 8, 0, 0x1000ull);
+		uint32_t n = r5_cs_cond_exec(pkt, 8, 0, slot);
 		r5_cs_cond_exec_patch(pkt, 4, 33);
-		if (n != 5u || pkt[0] != r5_cs_packet3(0x22, 3) || pkt[1] != 0x1000u
-			|| pkt[2] != 0u || pkt[4] != 33u)
+		if (kR5CondExecOffset < kR5UserIrqOffset + 4u
+			|| (kR5CondExecOffset & 3u) != 0
+			|| slot != page + kR5CondExecOffset)
+			return fail("cond exec slot");
+		if (n != 5u || pkt[0] != r5_cs_packet3(0x22, 3)
+			|| pkt[1] != (uint32_t)slot || pkt[2] != (uint32_t)(slot >> 32)
+			|| pkt[4] != 33u)
 			return fail("cond exec");
 		const char* condOrder[] = {
-			"if (sCondExec)",
-			"r5_cs_cond_exec("
+			"kR5CondExecOffset / 4u] = 1u",
+			"r5_gfx9_user_submit(",
+			"r5_cs_cond_exec_mc("
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
-				"gfx9_start.cpp", condOrder, 2) != 0)
+				"gfx9_start.cpp", condOrder, 3) != 0)
 			return 1;
 	}
 	{

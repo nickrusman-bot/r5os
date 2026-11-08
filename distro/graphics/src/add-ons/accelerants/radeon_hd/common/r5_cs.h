@@ -22,6 +22,9 @@
  * The 32-bit interrupt fence sits 16 bytes later and does not overlap it. */
 static const uint32_t kR5UserFenceOffset = 2048u;
 static const uint32_t kR5UserIrqOffset = 2064u;
+/* amdgpu_ring_init writes 1 at cond_exe_cpu_addr. The packet reads
+ * the same dword. Past the interrupt fence, not dword 8 of the page. */
+static const uint32_t kR5CondExecOffset = 2080u;
 
 /* CACHE_FLUSH_AND_INV_TS_EVENT, EVENT_INDEX 5, the EOP action bits
  * from the 6 Nov 2026 Linux capture (0x00238514). */
@@ -303,6 +306,15 @@ r5_cs_flush_fence(uint32_t* out, uint32_t cap, uint32_t n, uint64_t addr,
 	n = r5_cs_put(out, n, cap, r5_cs_packet3(0x8b, 0));
 	n = r5_cs_put(out, n, cap, 0);
 	return n;
+}
+
+
+/* The MC address of the COND_EXEC dword. fencePageMc is the fence
+ * page, and the CPU writes that same offset. */
+static inline uint64_t
+r5_cs_cond_exec_mc(uint64_t fencePageMc)
+{
+	return fencePageMc + kR5CondExecOffset;
 }
 
 
