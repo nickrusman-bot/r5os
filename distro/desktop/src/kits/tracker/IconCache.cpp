@@ -71,6 +71,11 @@ All rights reserved.
 
 
 #include <ControlLook.h>
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <IconUtils.h>
+// SPDX-SnippetEnd
 #include <Debug.h>
 #include <Screen.h>
 #include <Volume.h>
@@ -78,6 +83,11 @@ All rights reserved.
 #include <fs_info.h>
 
 #include "Bitmaps.h"
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "r5_drive_icon.h"
+// SPDX-SnippetEnd
 #include "FSUtils.h"
 #include "IconCache.h"
 #include "MimeTypes.h"
@@ -617,8 +627,16 @@ IconCache::GetVolumeIcon(AutoLock<SimpleIconCache>*nodeCacheLocker,
 		if (volume.IsShared()) {
 			// check if it's a network share and give it a special icon
 			BBitmap* bitmap = lazyBitmap->Get();
-			GetTrackerResources()->GetIconResource(R_ShareIcon,
-				icon_size_for(size), bitmap);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// The legacy share icon is the beige cabinet. A share is a drive.
+			if (BIconUtils::GetVectorIcon(kR5DriveIcon, kR5DriveIconSize, bitmap)
+					!= B_OK) {
+				GetTrackerResources()->GetIconResource(R_ShareIcon,
+					icon_size_for(size), bitmap);
+			}
+// SPDX-SnippetEnd
 			if (entry == NULL) {
 				PRINT_ADD_ITEM(
 					("File %s; Line %d # adding entry for model %s\n",
@@ -726,7 +744,9 @@ IconCache::GetWellKnownIcon(AutoLock<SimpleIconCache>*,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-				resourceId = R_HardDiskIcon;
+				// R_HardDiskIcon is the beige cabinet. The drive is this icon.
+				// Pose draws the R5 mark over the ladybug.
+				resourceId = R_BootVolumeIcon;
 // SPDX-SnippetEnd
 				break;
 
