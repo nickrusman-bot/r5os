@@ -9,7 +9,7 @@
 
 /*
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
- * 6f810ed2d7, copyright 2026 Witold Bołt. The Haiku copyright and the
+ * 6f810ed2d7 and 6e517bb52c, copyright 2026 Witold Bołt. The Haiku copyright and the
  * licenses above still cover the original work. The snippet is
  * GPL-3.0-or-later.
  */
@@ -3824,7 +3824,11 @@ vm_page_fault(addr_t address, addr_t faultAddress, bool isWrite, bool isExecute,
 						? SEGV_ACCERR : SEGV_MAPERR,
 					EFAULT, thread->team->id);
 				signal.SetAddress((void*)address);
-				send_signal_to_thread(thread, signal, 0);
+				// SPDX-SnippetBegin
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-SnippetCopyrightText: 2026 Witold Bołt
+				send_fault_signal(thread, signal);
+// SPDX-SnippetEnd
 			}
 		}
 	}

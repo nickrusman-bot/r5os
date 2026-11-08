@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A blocked fault signal ends the team
+
+`send_fault_signal()` unblocks a fault signal that is blocked or ignored and resets it to the default before sending it. The page fault uses that call. The ARM64 exception handler is not in this change. This sits on the wired-range copy of `vm.cpp`. It is haiku-pi `6e517bb52c`, copyright 2026 Witold Bołt, as GPL-3.0-or-later snippets. `scripts/apply-kernel-bugs.py` copies the files. The host test checks the handler and the page-fault call. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A wired range shrinks to the pages that were wired
 
 `lock_memory_etc()` left the range at its full size when a later page could not be wired. The revert looked for the shorter size and panicked. The range now shrinks to `nextAddress - areaStart` before the revert. Upstream's protection-mask fix in the same file stays. This is haiku-pi `6f810ed2d7`, copyright 2026 Witold Bołt, as a GPL-3.0-or-later snippet on the MIT and NewOS file. `scripts/apply-kernel-bugs.py` copies it. The host test checks the assignment. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
