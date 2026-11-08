@@ -36,7 +36,6 @@ switch $(HAIKU_BUILD_PROFILE) {
 			vulkan_loader
 			vulkan_tools
 			vulkanteapot
-			smbfs
 			;
 
 		# The downloaded HaikuPorts catalog still lists Mesa 22. The image
@@ -48,5 +47,14 @@ switch $(HAIKU_BUILD_PROFILE) {
 		HAIKU_REPOSITORIES += $(r5OpenGL:G=repository) ;
 		HAIKU_REPOSITORY_CACHE_FILE on $(r5OpenGL:G=repository)
 			= [ FDirName $(r5Download) r5-opengl.repo ] ;
+	}
+}
+
+rule UserBuildConfigRulePreImage
+{
+	switch $(HAIKU_BUILD_PROFILE) {
+		case "r5-*" : {
+			AddPackageFilesToHaikuImage system packages : smbfs.hpkg ;
+		}
 	}
 }
