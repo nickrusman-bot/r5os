@@ -726,9 +726,9 @@ def render_about_r5_mockup(version: str, build: str) -> Image.Image:
     draw.text((tx + r5_width + 8, ty), "Operating System", font=font_h_os, fill=(51, 65, 85, 255), anchor="ls")
     draw.text(
         (tx, card_top + 68),
-        example_version_line(version, build),
+        f"Version {version} • AMD64",
         font=font_ver,
-        fill=(100, 116, 139, 255),
+        fill=(15, 23, 42, 255),
         anchor="ls",
     )
 
@@ -755,6 +755,15 @@ def render_about_r5_mockup(version: str, build: str) -> Image.Image:
 
     draw.text((col2_x, row2_y), "Time running:", font=font_lbl, fill=(25, 25, 25, 255), anchor="ls")
     draw.text((col2_x, row2_y + 18), "24 minutes, 15 seconds", font=font_val, fill=(65, 65, 65, 255), anchor="ls")
+
+    font_build = ImageFont.truetype(str(REGULAR_TTF), 10)
+    draw.text(
+        (col1_x, info_bot - 8),
+        f"Build {build}",
+        font=font_build,
+        fill=(160, 160, 160, 255),
+        anchor="ls",
+    )
 
     tabs_top = info_bot + 14
     tab_bar_h = 24

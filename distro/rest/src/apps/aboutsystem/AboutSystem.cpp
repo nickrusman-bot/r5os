@@ -316,6 +316,11 @@ private:
 			BStringView*	fMemUsageView;
 			BStringView*	fKernelDateTimeView;
 			BTextView*		fUptimeView;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			BStringView*	fBuildView;
+// SPDX-SnippetEnd
 
 			BDragger*		fDragger;
 
@@ -330,7 +335,7 @@ private:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	static const uint8		kSubtextCount = 6;
+	static const uint8		kSubtextCount = 7;
 // SPDX-SnippetEnd
 };
 
@@ -546,8 +551,7 @@ LogoView::_DisplaySize() const
 	float titleWidth = title.StringWidth("R5") + 8.0f
 		+ operating.StringWidth("Operating System");
 	BString version;
-	version.SetToFormat("Version %s Build %" B_PRId32 " • %s",
-		R5_OS_VERSION, (int32)R5_OS_BUILD, r5_arch_name());
+	version.SetToFormat("Version %s • %s", R5_OS_VERSION, r5_arch_name());
 	float textWidth = std::max(titleWidth, plain.StringWidth(version.String()));
 	font_height titleHeight;
 	title.GetHeight(&titleHeight);
@@ -632,8 +636,7 @@ LogoView::Draw(BRect updateRect)
 	DrawString("Operating System", BPoint(textLeft + r5Width + 8.0f, baseline));
 
 	BString version;
-	version.SetToFormat("Version %s Build %" B_PRId32 " • %s",
-		R5_OS_VERSION, (int32)R5_OS_BUILD, r5_arch_name());
+	version.SetToFormat("Version %s • %s", R5_OS_VERSION, r5_arch_name());
 	float versionBaseline = baseline + titleHeight.descent + 6.0f
 		+ plainHeight.ascent;
 	SetHighColor(text);
@@ -750,6 +753,7 @@ SysInfoView::SysInfoView()
 	fMemUsageView(NULL),
 	fKernelDateTimeView(NULL),
 	fUptimeView(NULL),
+	fBuildView(NULL),
 	fDragger(NULL),
 	fCachedBaseWidth(kSysInfoMinWidth),
 	fCachedMinWidth(kSysInfoMinWidth),
@@ -790,6 +794,20 @@ SysInfoView::SysInfoView()
 	fUptimeView->SetText(_GetUptime());
 	_UpdateText(fUptimeView);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	BString buildLine;
+	buildLine.SetToFormat(B_TRANSLATE_COMMENT("Build %" B_PRId32,
+		"Build line under the system information, e.g. Build 10001"),
+		(int32)R5_OS_BUILD);
+	fBuildView = new BStringView("buildtext", buildLine);
+	_UpdateSubtext(fBuildView);
+	BFont buildFont(be_plain_font);
+	buildFont.SetSize(be_plain_font->Size() * 0.85f);
+	fBuildView->SetFont(&buildFont, B_FONT_FAMILY_AND_STYLE | B_FONT_SIZE);
+// SPDX-SnippetEnd
+
 	// Now comes the layout
 
 	const float offset = be_control_look->DefaultLabelSpacing();
@@ -821,6 +839,11 @@ SysInfoView::SysInfoView()
 		// Time running:
 		.Add(uptimeLabel)
 		.Add(fUptimeView)
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		.Add(fBuildView)
+// SPDX-SnippetEnd
 		.AddGlue()
 		.SetInsets(inset)
 		.End();
@@ -1026,11 +1049,30 @@ SysInfoView::_UpdateColors()
 		fUptimeView->SetViewColor(B_TRANSPARENT_COLOR);
 		fUptimeView->SetLowColor(blend_color(B_TRANSPARENT_COLOR, textColor, 192));
 		fUptimeView->SetFontAndColor(NULL, 0, &textColor);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (fBuildView != NULL) {
+			rgb_color buildColor = tint_color(textColor, B_LIGHTEN_1_TINT);
+			fBuildView->SetDrawingMode(B_OP_ALPHA);
+			fBuildView->SetFlags(fBuildView->Flags() | B_TRANSPARENT_BACKGROUND);
+			fBuildView->SetViewColor(B_TRANSPARENT_COLOR);
+			fBuildView->SetLowColor(blend_color(B_TRANSPARENT_COLOR,
+				buildColor, 192));
+			fBuildView->SetHighColor(buildColor);
+		}
+// SPDX-SnippetEnd
 	} else {
 		fUptimeView->SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
 		fUptimeView->SetLowUIColor(B_PANEL_BACKGROUND_COLOR);
 		rgb_color textColor = ui_color(B_PANEL_TEXT_COLOR);
 		fUptimeView->SetFontAndColor(NULL, 0, &textColor);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (fBuildView != NULL)
+			fBuildView->SetHighColor(tint_color(textColor, B_LIGHTEN_1_TINT));
+// SPDX-SnippetEnd
 	}
 }
 
@@ -1173,9 +1215,9 @@ SysInfoView::_GetOSVersion()
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	revision.SetToFormat(
-		B_TRANSLATE_COMMENT("Version %s Build %" B_PRId32,
-			"Version line, e.g. Version 2026.1-dev Build 10001"),
-		R5_OS_VERSION, (int32)R5_OS_BUILD);
+		B_TRANSLATE_COMMENT("Version %s • %s",
+			"Version line, e.g. Version 2026.1-dev • AMD64"),
+		R5_OS_VERSION, r5_arch_name());
 	return revision;
 #else
 // SPDX-SnippetEnd

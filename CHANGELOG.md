@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### About splits the version and the build
+
+The header reads `Version <R5_OS_VERSION> • <arch>`. `Build <R5_OS_BUILD>` is smaller text in `B_LIGHTEN_1_TINT` at the bottom of the system information. Both come from `r5_os_version.h`. The header stays above the tabs. The build line stays in `SysInfoView`, including when that view is a replicant, and the replicant shows the same version line. This has not been booted. `distro/BUILD` stays 10049.
+
 ### The boot disk uses the ordinary hard-disk icon
 
 The well-known boot volume asks for `R_HardDiskIcon` instead of the nightly disk. Tracker still draws the R5 mark on that volume. The mark sits where the ladybug sat, from (10, 40) to (24, 56) in the 64-unit icon. This has not been booted. `distro/BUILD` stays 10049.
