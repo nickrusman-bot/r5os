@@ -144,6 +144,15 @@ void r5_gfx9_set_defer_stamp(void (*fn)(uint64 sequence));
 void r5_gfx9_set_inv_range(int on);
 void r5_gfx9_set_hub_linux(int on);
 void r5_gfx9_set_vmids(int on);
+int r5_gfx9_inv_range_on(void);
+int r5_gfx9_hub_linux_on(void);
+int r5_gfx9_vmids_on(void);
+int r5_gfx9_flush_fence_on(void);
+int r5_gfx9_cond_exec_on(void);
+int r5_gfx9_gds_switch_on(void);
+int r5_gfx9_pasid_map_on(void);
+/* -1 leaves that setting. 0 restores the K2 values. 1 programs them. */
+void r5_gfx9_switch_registers(int inv, int hub, int vmids);
 /* The file last written into the IH LUT for this VMID. */
 uint64 r5_gfx9_file_for_vmid(uint32 vmid);
 uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);

@@ -1359,6 +1359,28 @@ main()
 	}
 	if (R5_GPU_DEBUG_SWITCH != R5_GPU_OP_BASE + 25u)
 		return fail("debug switch opcode");
+	{
+		const char* switchOrder[] = {
+			"Idle first. The flush is after the registers move.",
+			"r5_gfx9_switch_registers(",
+			"if (!r5_gfx9_vmid1_flush())",
+			"r5_gfx9_pasid_map_on()"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", switchOrder, 4) != 0)
+			return 1;
+		const char* storeOrder[] = {
+			"r5_gfx9_k2_store();",
+			"r5_gfx9_inv_range_read(\"k2\")",
+			"r5_gfx9_vmid_restore();",
+			"r5_gfx9_vmid_baseline();"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", storeOrder, 4) != 0)
+			return 1;
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

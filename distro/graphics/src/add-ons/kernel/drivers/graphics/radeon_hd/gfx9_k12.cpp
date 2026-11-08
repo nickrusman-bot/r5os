@@ -79,6 +79,73 @@ r5_gfx9_set_vmids(int on)
 {
 	sVmids = on ? true : false;
 }
+
+
+int
+r5_gfx9_inv_range_on(void)
+{
+	return sInvRange ? 1 : 0;
+}
+
+
+int
+r5_gfx9_hub_linux_on(void)
+{
+	return sHubLinux ? 1 : 0;
+}
+
+
+int
+r5_gfx9_vmids_on(void)
+{
+	return sVmids ? 1 : 0;
+}
+
+
+static bool sK2InvHave = false;
+static bool sK2HubHave = false;
+static bool sVmidBaseHave = false;
+static uint32 sK2InvLo[18];
+static uint32 sK2InvHi[18];
+static uint32 sK2AgpBase = 0;
+static uint32 sK2IdentityLo = 0;
+static uint32 sK2IdentityHi = 0;
+static uint32 sK2Fault2 = 0;
+static uint32 sVmidCntl[15];
+static uint32 sVmidStartLo[15];
+static uint32 sVmidStartHi[15];
+static uint32 sVmidEndLo[15];
+static uint32 sVmidEndHi[15];
+
+
+/* The values before gfx9_inv_range and gfx9_hub_linux write. The first
+ * call wins, so a later program does not replace the restore copy. */
+static void
+r5_gfx9_k2_store(void)
+{
+	uint32 engine;
+	if (sInfo == NULL)
+		return;
+	if (!sK2InvHave) {
+		for (engine = 0; engine < r5_gfx9_inv_engines() && engine < 18u;
+			engine++) {
+			sK2InvLo[engine] = kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_lo(engine)));
+			sK2InvHi[engine] = kread(sInfo,
+				gc_byte(r5_gfx9_inv_range_hi(engine)));
+		}
+		sK2InvHave = true;
+	}
+	if (!sK2HubHave) {
+		sK2AgpBase = kread(sInfo, gc_byte(mmMC_VM_AGP_BASE));
+		sK2IdentityLo = kread(sInfo, gc_byte(
+			mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32));
+		sK2IdentityHi = kread(sInfo, gc_byte(
+			mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32));
+		sK2Fault2 = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2));
+		sK2HubHave = true;
+	}
+}
 static bool sVmCntlSavedValid = false;
 static uint32 sVmCntlSaved = 0;
 extern pci_module_info* gPCI;
@@ -713,6 +780,22 @@ r5_gfx9_inv_range_program(void)
 }
 
 
+static void
+r5_gfx9_inv_range_restore(void)
+{
+	uint32 engine;
+	if (!sK2InvHave || sInfo == NULL)
+		return;
+	for (engine = 0; engine < r5_gfx9_inv_engines() && engine < 18u;
+		engine++) {
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_lo(engine)),
+			sK2InvLo[engine]);
+		kwrite(sInfo, gc_byte(r5_gfx9_inv_range_hi(engine)),
+			sK2InvHi[engine]);
+	}
+}
+
+
 /* Linux v6.12 gfxhub_v1_0.c gart_enable, the registers R5 does not
  * already write. VMID 0 stays the K2 contract: this only prints it. */
 static void
@@ -721,6 +804,7 @@ r5_gfx9_hub_linux(void)
 	uint32 fault;
 	if (sInfo == NULL)
 		return;
+	r5_gfx9_k2_store();
 	if (sGpuDebug) {
 		knote("hub l1 %08lx l2 %08lx %08lx %08lx %08lx",
 			(unsigned long)kread(sInfo, gc_byte(mmMC_VM_MX_L1_TLB_CNTL)),
@@ -1008,6 +1092,7 @@ run_k2()
 	}
 	(void)sequence;
 	(void)flushed;
+	r5_gfx9_k2_store();
 	r5_gfx9_inv_range_read("k2");
 }
 
@@ -1126,12 +1211,110 @@ r5_gfx9_vmid1_flush()
  * i runs 0..14, which is context i + 1. The page-table base is not
  * written here. */
 static void
+r5_gfx9_vmid_baseline(void)
+{
+	uint32 i;
+	if (sVmidBaseHave || sInfo == NULL)
+		return;
+	for (i = 0; i <= 14u; i++) {
+		sVmidCntl[i] = kread(sInfo, gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE));
+		sVmidStartLo[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+		sVmidStartHi[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+		sVmidEndLo[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+		sVmidEndHi[i] = kread(sInfo, gc_byte(
+			mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE));
+	}
+	sVmidBaseHave = true;
+}
+
+
+static void
+r5_gfx9_vmid_restore(void)
+{
+	uint32 i;
+	if (!sVmidBaseHave || sInfo == NULL)
+		return;
+	for (i = 0; i <= 14u; i++) {
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE), sVmidCntl[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidStartLo[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_START_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidStartHi[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_LO32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidEndLo[i]);
+		kwrite(sInfo, gc_byte(mmVM_CONTEXT1_PAGE_TABLE_END_ADDR_HI32
+			+ i * R5_GC9_CTX_ADDR_DISTANCE), sVmidEndHi[i]);
+	}
+}
+
+
+static void
+r5_gfx9_hub_restore(void)
+{
+	if (!sK2HubHave || sInfo == NULL)
+		return;
+	kwrite(sInfo, gc_byte(mmMC_VM_AGP_BASE), sK2AgpBase);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_LO32),
+		sK2IdentityLo);
+	kwrite(sInfo, gc_byte(mmVM_L2_CONTEXT_IDENTITY_PHYSICAL_OFFSET_HI32),
+		sK2IdentityHi);
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL2), sK2Fault2);
+}
+
+
+static void r5_gfx9_vmids_program(void);
+
+/* inv, hub and vmids are -1 to leave the flag, 0 to restore the stored
+ * registers, or 1 to program them. The VMID copy is taken at the first
+ * program, after VMID 1's own setup write, so restoring it does not
+ * turn that context off. */
+void
+r5_gfx9_switch_registers(int inv, int hub, int vmids)
+{
+	if (inv == 1) {
+		r5_gfx9_k2_store();
+		sInvRange = true;
+		r5_gfx9_inv_range_program();
+	} else if (inv == 0) {
+		sInvRange = false;
+		r5_gfx9_inv_range_restore();
+	}
+	if (hub == 1) {
+		r5_gfx9_k2_store();
+		sHubLinux = true;
+		r5_gfx9_hub_linux();
+	} else if (hub == 0) {
+		sHubLinux = false;
+		r5_gfx9_hub_restore();
+	}
+	if (vmids == 1) {
+		sVmids = true;
+		if (sVmid1)
+			r5_gfx9_vmids_program();
+	} else if (vmids == 0) {
+		sVmids = false;
+		r5_gfx9_vmid_restore();
+	}
+}
+
+
+static void
 r5_gfx9_vmids_program(void)
 {
 	struct r5_vm_size size;
 	uint32 cntl;
 	uint32 i;
 	uint64 end;
+	r5_gfx9_vmid_baseline();
 	if (!sVmids || sInfo == NULL)
 		return;
 	size = r5_vm_adjust(256u * 1024u, 3u, 48u, 0);

@@ -3243,20 +3243,17 @@ gpu_debug_switch(void* buffer, size_t length)
 		return B_NOT_ALLOWED;
 	if ((in.which & R5_GPU_SWITCH_VMID_PER_FILE) != 0)
 		return B_NOT_ALLOWED;
-	if (!r5_gfx9_vmid1_flush())
-		return B_ERROR;
+	/* Idle first. The flush is after the registers move. */
 	bigtime_t deadline = system_time() + 5000000;
 	while (r5_gfx9_user_seen() < sHighestSequence) {
 		if (system_time() > deadline)
 			return B_TIMED_OUT;
 		snooze(1000);
 	}
-	if ((in.which & R5_GPU_SWITCH_INV_RANGE) != 0)
-		r5_gfx9_set_inv_range(in.on ? 1 : 0);
-	if ((in.which & R5_GPU_SWITCH_HUB_LINUX) != 0)
-		r5_gfx9_set_hub_linux(in.on ? 1 : 0);
-	if ((in.which & R5_GPU_SWITCH_VMIDS) != 0)
-		r5_gfx9_set_vmids(in.on ? 1 : 0);
+	r5_gfx9_switch_registers(
+		(in.which & R5_GPU_SWITCH_INV_RANGE) != 0 ? (in.on ? 1 : 0) : -1,
+		(in.which & R5_GPU_SWITCH_HUB_LINUX) != 0 ? (in.on ? 1 : 0) : -1,
+		(in.which & R5_GPU_SWITCH_VMIDS) != 0 ? (in.on ? 1 : 0) : -1);
 	if ((in.which & R5_GPU_SWITCH_FLUSH_FENCE) != 0)
 		r5_gfx9_set_flush_fence(in.on ? 1 : 0);
 	if ((in.which & R5_GPU_SWITCH_COND_EXEC) != 0)
@@ -3267,16 +3264,15 @@ gpu_debug_switch(void* buffer, size_t length)
 		sDeferred = in.on ? 1 : 0;
 		r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
 	}
+	if (!r5_gfx9_vmid1_flush())
+		return B_ERROR;
 	dprintf("radeon_hd: t %lld switch which %lu on %lu "
-		"inv %d hub %d vmids %d fence %d cond %d gds %d defer %d\n",
+		"inv %d hub %d vmids %d fence %d cond %d gds %d defer %d pasid %d\n",
 		(long long)system_time(), (unsigned long)in.which,
-		(unsigned long)in.on, in.on && (in.which & R5_GPU_SWITCH_INV_RANGE),
-		in.on && (in.which & R5_GPU_SWITCH_HUB_LINUX),
-		in.on && (in.which & R5_GPU_SWITCH_VMIDS),
-		in.on && (in.which & R5_GPU_SWITCH_FLUSH_FENCE),
-		in.on && (in.which & R5_GPU_SWITCH_COND_EXEC),
-		in.on && (in.which & R5_GPU_SWITCH_GDS),
-		in.on && (in.which & R5_GPU_SWITCH_DEFERRED));
+		(unsigned long)in.on, r5_gfx9_inv_range_on(),
+		r5_gfx9_hub_linux_on(), r5_gfx9_vmids_on(),
+		r5_gfx9_flush_fence_on(), r5_gfx9_cond_exec_on(),
+		r5_gfx9_gds_switch_on(), sDeferred, r5_gfx9_pasid_map_on());
 	return B_OK;
 }
 

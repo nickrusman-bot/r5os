@@ -2527,6 +2527,34 @@ r5_gfx9_set_pasid_map(int on)
 }
 
 
+int
+r5_gfx9_flush_fence_on(void)
+{
+	return sFlushFence;
+}
+
+
+int
+r5_gfx9_cond_exec_on(void)
+{
+	return sCondExec;
+}
+
+
+int
+r5_gfx9_gds_switch_on(void)
+{
+	return sGdsSwitch;
+}
+
+
+int
+r5_gfx9_pasid_map_on(void)
+{
+	return sPasidMap;
+}
+
+
 void
 r5_gfx9_set_gds_switch(int on)
 {
