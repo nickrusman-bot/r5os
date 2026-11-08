@@ -282,6 +282,18 @@ struct gpu_range {
 };
 
 
+/* The page table outlives the client while a parked buffer still
+ * points at it. refs is the client plus each parked buffer. */
+struct r5_file_tree {
+	r5_vm			vm;
+	r5_vm_page*		pages;
+	uint32			pagesN;
+	uint32			owner;
+	uint64			seen;
+	r5_file_count	count;
+};
+
+
 struct gpu_bo {
 	bool			live;
 	uint32			domain;
@@ -295,6 +307,8 @@ struct gpu_bo {
 	gpu_client*		owner;
 	bool			parked;
 	uint64			parkSequence;
+	/* One hold on the file tree, taken when this buffer is parked. */
+	r5_file_tree*	hold;
 	gpu_range		ranges[kMaxRange];
 };
 
@@ -327,11 +341,8 @@ struct gpu_client {
 	/* Handed out at CTX create. 0 means there is no live context. */
 	uint64			fenceCtx;
 	uint32			pasid;
-	/* Own page table when gfx9_vmid_per_file is on. Off leaves these empty. */
-	r5_vm			fileVm;
-	r5_vm_page*		filePages;
-	uint32			fileOwner;
-	bool			fileRoot;
+	/* Own page table when gfx9_vmid_per_file is on. Off leaves this empty. */
+	r5_file_tree*	tree;
 	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };
@@ -721,9 +732,56 @@ gpu_get_info(radeon_info* info, void* buffer, size_t length)
 static r5_vm*
 gpu_vm(gpu_client* client)
 {
-	if (client != NULL && client->fileRoot)
-		return &client->fileVm;
+	if (client != NULL && client->tree != NULL)
+		return &client->tree->vm;
 	return r5_gfx9_shared_vm();
+}
+
+
+static r5_file_tree*
+gpu_tree_of(r5_vm* vm)
+{
+	if (vm == NULL || vm == r5_gfx9_shared_vm())
+		return NULL;
+	return (r5_file_tree*)vm;
+}
+
+
+static void
+r5_file_tree_free(r5_file_tree* tree)
+{
+	if (tree->owner != 0)
+		r5_vmid_release(&sFileVmids, tree->owner, tree->seen);
+	free(tree->pages);
+	free(tree);
+}
+
+
+static void
+r5_file_tree_drop(r5_file_tree* tree)
+{
+	if (tree == NULL)
+		return;
+	if (r5_file_count_drop(&tree->count, (int32)tree->pagesN))
+		r5_file_tree_free(tree);
+}
+
+
+static void
+gpu_bo_hold_tree(gpu_bo* bo)
+{
+	if (bo->hold != NULL)
+		return;
+	for (uint32 i = 0; i < kMaxRange; i++) {
+		if (!bo->ranges[i].live)
+			continue;
+		r5_file_tree* tree = gpu_tree_of(bo->ranges[i].vm);
+		if (tree == NULL)
+			continue;
+		r5_file_count_hold(&tree->count);
+		bo->hold = tree;
+		return;
+	}
 }
 
 
@@ -769,6 +827,11 @@ gpu_bo_release(gpu_bo* bo)
 	bo->owner = NULL;
 	bo->parked = false;
 	bo->parkSequence = 0;
+	if (bo->hold != NULL) {
+		r5_file_tree* tree = bo->hold;
+		bo->hold = NULL;
+		r5_file_tree_drop(tree);
+	}
 	bo->area = -1;
 	bo->mapTeam = -1;
 	bo->kernelArea = -1;
@@ -941,10 +1004,12 @@ gpu_bo_detach(gpu_client* client, gpu_bo* bo, uint32 handle)
 		break;
 	}
 	uint64 sequence = client->lastSequence;
-	if (!sLost && sequence != 0 && r5_gfx9_user_seen() < sequence) {
+	uint64 seen = r5_gfx9_user_seen();
+	if (!sLost && sequence != 0 && seen < sequence) {
 		bo->owner = NULL;
 		bo->parked = true;
 		bo->parkSequence = sequence;
+		gpu_bo_hold_tree(bo);
 		return;
 	}
 	gpu_bo_release(bo);
@@ -1614,7 +1679,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	uint32 dwords = r5_gfx9_user_commit_dwords(in.ib_count);
 	/* The file's page-table base is written after the room wait, so the
 	 * count includes one VM flush that touch() will make due. */
-	if (client->fileRoot && dwords != 0)
+	if (client->tree != NULL && dwords != 0)
 		dwords += r5_cs_vm_switch_words();
 	status = gpu_wait_room(client->info, dwords);
 	if (status != B_OK)
@@ -1683,10 +1748,10 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (client->contexts <= 0 || client->fenceCtx == 0)
 		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,
 			in.ib_count, 0, 0, in.ring, 0);
-	if (client->fileRoot) {
+	if (client->tree != NULL) {
 		int flush = 0;
-		uint32 fileVmid = r5_vmid_reserve(&sFileVmids, client->fileOwner,
-			r5_gfx9_user_seen(), client->fileVm.used, &flush);
+		uint32 fileVmid = r5_vmid_reserve(&sFileVmids, client->tree->owner,
+			r5_gfx9_user_seen(), client->tree->vm.used, &flush);
 		if (fileVmid == 0)
 			return gpu_refuse("CS_SUBMIT", "vmid", B_BUSY, in.context, 0,
 				in.ib_count, 0, 0, in.ring, 0);
@@ -1694,7 +1759,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		(void)flush;
 		for (uint32 i = 0; i < in.ib_count; i++)
 			ringIbs[i].vmid = fileVmid;
-		r5_gfx9_vmid1_set_root(client->fileVm.pages[0].physical
+		r5_gfx9_vmid1_set_root(client->tree->vm.pages[0].physical
 			| (uint64)R5_GFX9_PTE_VALID);
 		r5_gfx9_vmid1_touch();
 	}
@@ -3404,6 +3469,7 @@ gpu_free(void* cookie)
 		return B_OK;
 	gpu_lock();
 	status_t status = B_OK;
+	uint64 seen = r5_gfx9_user_seen();
 	r5_gpu_eop();
 	for (uint32 i = 0; i < kMaxJob; i++) {
 		if (!sJobs[i].live)
@@ -3422,10 +3488,11 @@ gpu_free(void* cookie)
 		if (!bo->live || bo->owner != client)
 			continue;
 		uint64 sequence = client->lastSequence;
-		if (!sLost && sequence != 0 && r5_gfx9_user_seen() < sequence) {
+		if (!sLost && sequence != 0 && seen < sequence) {
 			bo->owner = NULL;
 			bo->parked = true;
 			bo->parkSequence = sequence;
+			gpu_bo_hold_tree(bo);
 		} else
 			gpu_bo_release(bo);
 	}
@@ -3435,11 +3502,11 @@ gpu_free(void* cookie)
 	}
 	if (client->pasid != 0)
 		r5_pasid_free(&sPasids, client->pasid);
-	if (client->fileRoot) {
-		r5_vmid_release(&sFileVmids, client->fileOwner, r5_gfx9_user_seen());
-		free(client->filePages);
-		client->filePages = NULL;
-		client->fileRoot = false;
+	if (client->tree != NULL) {
+		r5_file_tree* tree = client->tree;
+		client->tree = NULL;
+		tree->seen = seen;
+		r5_file_tree_drop(tree);
 	}
 	if (sClientList == client)
 		sClientList = client->next;
@@ -3538,27 +3605,35 @@ gpu_file_root(gpu_client* client)
 {
 	if (!r5_gfx9_vmid_per_file() || client == NULL)
 		return B_OK;
-	if (client->fileRoot)
+	if (client->tree != NULL)
 		return B_OK;
 	if (!r5_gfx9_vmid1_setup())
 		return B_NO_INIT;
-	client->filePages = (r5_vm_page*)malloc(sizeof(r5_vm_page) * 256);
-	if (client->filePages == NULL)
+	r5_file_tree* tree = (r5_file_tree*)malloc(sizeof(r5_file_tree));
+	if (tree == NULL)
 		return B_NO_MEMORY;
-	if (!r5_gfx9_file_vm_init(&client->fileVm, client->filePages, 256)) {
-		free(client->filePages);
-		client->filePages = NULL;
+	memset(tree, 0, sizeof(*tree));
+	tree->pagesN = 256;
+	tree->pages = (r5_vm_page*)malloc(sizeof(r5_vm_page) * tree->pagesN);
+	if (tree->pages == NULL) {
+		free(tree);
+		return B_NO_MEMORY;
+	}
+	if (!r5_gfx9_file_vm_init(&tree->vm, tree->pages, tree->pagesN)) {
+		free(tree->pages);
+		free(tree);
 		return B_NO_MEMORY;
 	}
 	if (!sFileVmidsReady) {
 		r5_vmid_init_files(&sFileVmids);
 		sFileVmidsReady = true;
 	}
-	client->fileOwner = sNextFileOwner;
+	tree->owner = sNextFileOwner;
 	sNextFileOwner++;
 	if (sNextFileOwner == 0)
 		sNextFileOwner = 1;
-	client->fileRoot = true;
+	r5_file_count_open(&tree->count, (int32)tree->pagesN);
+	client->tree = tree;
 	return B_OK;
 }
 

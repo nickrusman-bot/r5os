@@ -579,6 +579,71 @@ main()
 		if (!r5_vm_lookup(&fileB, va, &gotB) || gotB != pageB)
 			return fail("other file page");
 	}
+	{
+		/* Close with a job still in the ring. The unmap runs after the
+		 * client is gone, in the tree the parked buffer still holds. */
+		static host_page parkPages[8];
+		int parkNext = 0;
+		alloc_state parkState = { parkPages, &parkNext };
+		auto parkAlloc = [](void* cookie, uint64_t* physical,
+			uint64_t** cpu) -> int {
+			alloc_state* st = (alloc_state*)cookie;
+			if (*st->next >= 8)
+				return 0;
+			host_page* page = &st->pages[*st->next];
+			page->physical = 0xa00000000ull
+				+ (uint64_t)(*st->next) * 4096ull;
+			*st->next += 1;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			return 1;
+		};
+		r5_vm_page parkSlots[8];
+		r5_vm parked;
+		memset(&parked, 0, sizeof(parked));
+		parked.pages = parkSlots;
+		parked.capacity = 8;
+		parked.alloc = parkAlloc;
+		parked.cookie = &parkState;
+		const uint64_t page = 0x333000000ull
+			| (uint64_t)R5_GFX9_PTE_VALID | (uint64_t)R5_GFX9_PTE_READABLE;
+		if (!r5_vm_map_page(&parked, va, page))
+			return fail("park map");
+		r5_file_count count;
+		memset(&count, 0, sizeof(count));
+		r5_file_count_open(&count, 1);
+		r5_file_count_hold(&count);
+		if (r5_file_count_drop(&count, 1) != 0)
+			return fail("freed while parked");
+		if (count.refs != 1 || count.trees != 1 || count.pages != 1)
+			return fail("parked counters");
+		uint64_t live = 0;
+		if (!r5_vm_lookup(&parked, va, &live) || live != page)
+			return fail("parked tree");
+		if (!r5_vm_map_page(&parked, va, 0))
+			return fail("parked unmap");
+		live = 0;
+		if (r5_vm_lookup(&parked, va, &live) != 0 || live != kR5VmPteEmpty)
+			return fail("parked unmap pte");
+		if (r5_file_count_drop(&count, 1) == 0)
+			return fail("still held");
+		if (count.trees != 0 || count.pages != 0 || count.refs != 0)
+			return fail("counters back");
+		char body[12000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_free(void* cookie)", "gpu_read(void* cookie",
+				body, sizeof(body)) != 0)
+			return 1;
+		const char* once = strstr(body, "r5_gfx9_user_seen()");
+		if (once == NULL || strstr(once + 1, "r5_gfx9_user_seen()") != NULL)
+			return fail("fence once");
+		if (strstr(body, "gpu_bo_hold_tree(bo)") == NULL
+			|| strstr(body, "tree->seen = seen") == NULL
+			|| strstr(body, "r5_file_tree_drop(tree)") == NULL)
+			return fail("parked drop");
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)

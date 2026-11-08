@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A parked buffer unmaps in a tree that is still live
+
+`gfx9_vmid_per_file` stays off. The file page table, its pages and its VMID owner are one object with a reference count. The open file holds one. A buffer parked because its job is still in the ring holds one more. The object is freed when the last reference goes, so the retire unmap does not use the freed client. `gpu_free` reads the fence once and stores that value on the tree. The host test closes with a job in flight, unmaps in the still-live tree, and checks the counters are back at zero. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A file does not get VMID 1
 
 `gfx9_vmid_per_file` stays off. The file pool is VMID 2-15. VMID 1 stays the shared table. If the setting is on and `gfx9_vmids` is off, startup logs `gfx9_vmid_per_file needs gfx9_vmids` and leaves every job on VMID 1. The host test reserves fourteen file ids and none of them is 1. There is no What's new section and `distro/BUILD` stays the same.

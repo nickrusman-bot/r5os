@@ -237,4 +237,48 @@ r5_csa_map_pages(r5_vm* vm, uint64_t va, const uint64_t* page,
 	return 1;
 }
 
+
+/* A file tree stays until the client and every parked buffer in it
+ * have dropped their reference. The counters return on the last drop. */
+struct r5_file_count {
+	int32_t		trees;
+	int32_t		pages;
+	int32_t		refs;
+};
+
+
+static inline void
+r5_file_count_open(struct r5_file_count* count, int32_t pages)
+{
+	if (count == NULL)
+		return;
+	count->trees++;
+	count->pages += pages;
+	count->refs++;
+}
+
+
+static inline void
+r5_file_count_hold(struct r5_file_count* count)
+{
+	if (count == NULL || count->refs <= 0)
+		return;
+	count->refs++;
+}
+
+
+/* 1 when this drop frees the tree. */
+static inline int
+r5_file_count_drop(struct r5_file_count* count, int32_t pages)
+{
+	if (count == NULL || count->refs <= 0)
+		return 0;
+	count->refs--;
+	if (count->refs > 0)
+		return 0;
+	count->trees--;
+	count->pages -= pages;
+	return 1;
+}
+
 #endif
