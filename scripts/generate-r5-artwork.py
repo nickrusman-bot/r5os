@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import pathlib
+import re
 import shutil
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -67,22 +68,48 @@ def sample_curve_ring(
     return poly
 
 
-# Concept 1 ("The Wave Pebble") outer contour (viewBox 0..100)
-OUTER_SEGMENTS = [
-    ((50.0, 8.0), (74.0, 8.0), (92.0, 25.0), (92.0, 49.0)),
-    ((92.0, 49.0), (92.0, 74.0), (73.0, 92.0), (49.0, 92.0)),
-    ((49.0, 92.0), (25.0, 92.0), (8.0, 75.0), (8.0, 50.0)),
-    ((8.0, 50.0), (8.0, 24.0), (27.0, 8.0), (50.0, 8.0)),
-]
+def parse_evenodd(d: str) -> list[list[tuple[tuple[float, float], ...]]]:
+    """Two or more closed subpaths of cubic segments, from the SVG."""
+    tokens = re.findall(r"[MCZ]|-?\d+(?:\.\d+)?", d)
+    rings: list[list[tuple[tuple[float, float], ...]]] = []
+    current: list[tuple[tuple[float, float], ...]] = []
+    cursor: tuple[float, float] | None = None
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "M":
+            if current:
+                rings.append(current)
+                current = []
+            cursor = (float(tokens[index + 1]), float(tokens[index + 2]))
+            index += 3
+        elif token == "C":
+            if cursor is None:
+                raise SystemExit("SVG cubic before a move")
+            numbers = [float(tokens[index + offset]) for offset in range(1, 7)]
+            end = (numbers[4], numbers[5])
+            current.append((cursor, (numbers[0], numbers[1]), (numbers[2], numbers[3]), end))
+            cursor = end
+            index += 7
+        elif token == "Z":
+            index += 1
+        else:
+            raise SystemExit(f"unexpected SVG token {token}")
+    if current:
+        rings.append(current)
+    if len(rings) < 2:
+        raise SystemExit("the Wave Pebble path needs an outer ring and an inner wave")
+    return rings
 
-# Concept 1 inner S-wave cutout ("5" negative space)
-INNER_SEGMENTS = [
-    ((54.0, 24.0), (42.0, 24.0), (37.0, 32.0), (43.0, 42.0)),
-    ((43.0, 42.0), (49.0, 51.0), (46.0, 62.0), (35.0, 66.0)),
-    ((35.0, 66.0), (26.0, 69.0), (27.0, 77.0), (41.0, 77.0)),
-    ((41.0, 77.0), (64.0, 77.0), (77.0, 64.0), (77.0, 48.0)),
-    ((77.0, 48.0), (77.0, 33.0), (66.0, 24.0), (54.0, 24.0)),
-]
+
+def load_pebble_paths() -> dict[str, list[list[tuple[tuple[float, float], ...]]]]:
+    text = (ARTWORK_DIR / "r5-symbol.svg").read_text(encoding="utf-8")
+    paths: dict[str, list[list[tuple[tuple[float, float], ...]]]] = {}
+    for name, body in re.findall(r'id="(r5-[a-z]+)" d="([^"]+)"', text):
+        paths[name] = parse_evenodd(body)
+    if "r5-full" not in paths or "r5-small" not in paths:
+        raise SystemExit("r5-symbol.svg is missing r5-full or r5-small")
+    return paths
 
 
 def lerp_color(
@@ -140,38 +167,42 @@ def make_diagonal_gradient(
     return img
 
 
+PEBBLE_PATHS: dict[str, list[list[tuple[tuple[float, float], ...]]]] = {}
+
+
 def render_wave_pebble(
     target_size: int,
     mode: str = "color",
     with_shadow: bool = False,
+    simplified: bool = False,
 ) -> Image.Image:
-    """Render Concept 1 ('The Wave Pebble') with 4x supersampling."""
+    """Render the Wave Pebble. simplified uses the thick wave from the same SVG."""
     ss = 4 if target_size <= 512 else 2
     canvas = target_size * ss
     scale = canvas / 100.0
+    rings = PEBBLE_PATHS["r5-small" if simplified else "r5-full"]
 
     mask = Image.new("L", (canvas, canvas), 0)
     mdraw = ImageDraw.Draw(mask)
-    outer_pts = sample_curve_ring(OUTER_SEGMENTS, scale)
-    inner_pts = sample_curve_ring(INNER_SEGMENTS, scale)
-    mdraw.polygon(outer_pts, fill=255)
-    mdraw.polygon(inner_pts, fill=0)
+    mdraw.polygon(sample_curve_ring(rings[0], scale), fill=255)
+    mdraw.polygon(sample_curve_ring(rings[1], scale), fill=0)
 
     if mode == "color":
         fill_rgb = make_diagonal_gradient(canvas, BRAND_STOPS).convert("RGBA")
-        hl_layer = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
-        hdraw = ImageDraw.Draw(hl_layer)
-        hl_pts = cubic_bezier(
-            (20.0 * scale, 31.0 * scale),
-            (29.0 * scale, 16.0 * scale),
-            (45.0 * scale, 11.0 * scale),
-            (60.0 * scale, 14.0 * scale),
-            steps=64,
-        )
-        stroke_w = max(2, int(round(4.5 * scale)))
-        hdraw.line(hl_pts, fill=(255, 255, 255, 58), width=stroke_w, joint="curve")
-        hl_layer = hl_layer.filter(ImageFilter.GaussianBlur(radius=4.5 * scale))
-        fill_rgb = Image.alpha_composite(fill_rgb, hl_layer)
+        if not simplified:
+            hl_layer = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+            hdraw = ImageDraw.Draw(hl_layer)
+            hl_pts = cubic_bezier(
+                (20.0 * scale, 31.0 * scale),
+                (29.0 * scale, 16.0 * scale),
+                (45.0 * scale, 11.0 * scale),
+                (60.0 * scale, 14.0 * scale),
+                steps=64,
+            )
+            stroke_w = max(2, int(round(4.5 * scale)))
+            hdraw.line(hl_pts, fill=(255, 255, 255, 58), width=stroke_w, joint="curve")
+            hl_layer = hl_layer.filter(ImageFilter.GaussianBlur(radius=4.5 * scale))
+            fill_rgb = Image.alpha_composite(fill_rgb, hl_layer)
     elif mode == "white":
         fill_rgb = Image.new("RGBA", (canvas, canvas), (255, 255, 255, 255))
     elif mode == "dark":
@@ -594,9 +625,8 @@ def write_svg_files() -> None:
       <stop offset="100%" stop-color="#ffb800"/>
     </linearGradient>
   </defs>
-  <path d="M50,8 C74,8 92,25 92,49 C92,74 73,92 49,92 C25,92 8,75 8,50 C8,24 27,8 50,8 Z
-           M54,24 C42,24 37,32 43,42 C49,51 46,62 35,66 C26,69 27,77 41,77 C64,77 77,64 77,48 C77,33 66,24 54,24 Z"
-        fill="url(#r5-wave)" fill-rule="evenodd"/>
+  <path id="r5-full" d="M50,8 C74,8 92,25 92,49 C92,74 73,92 49,92 C25,92 8,75 8,50 C8,24 27,8 50,8 Z M54,24 C42,24 37,32 43,42 C49,51 46,62 35,66 C26,69 27,77 41,77 C64,77 77,64 77,48 C77,33 66,24 54,24 Z" fill="url(#r5-wave)" fill-rule="evenodd"/>
+  <path id="r5-small" d="M50,8 C74,8 92,25 92,49 C92,74 73,92 49,92 C25,92 8,75 8,50 C8,24 27,8 50,8 Z M60,30 C46,28 36,40 44,50 C50,58 42,68 32,72 C26,75 32,82 48,80 C66,78 78,64 76,48 C74,34 70,30 60,30 Z" fill="url(#r5-wave)" fill-rule="evenodd"/>
   <path d="M22,29 C30,17 44,12 58,14"
         fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.38"/>
 </svg>
@@ -617,13 +647,18 @@ def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     version, build = read_release()
     write_svg_files()
+    global PEBBLE_PATHS
+    PEBBLE_PATHS = load_pebble_paths()
 
     for sz in (1024, 512, 256, 128, 64, 32, 22, 16):
-        img = render_wave_pebble(sz, mode="color", with_shadow=(sz >= 64))
+        img = render_wave_pebble(
+            sz, mode="color", with_shadow=(sz >= 64), simplified=(sz <= 22)
+        )
         img.save(OUT_DIR / f"r5-symbol-{sz}.png")
 
+    mark = render_wave_pebble(16, mode="color", with_shadow=False, simplified=True)
     deskbar = Image.new("RGBA", (28, 22), (0, 0, 0, 0))
-    deskbar.alpha_composite(render_wave_pebble(20, mode="color", with_shadow=False), (4, 1))
+    deskbar.alpha_composite(mark, ((28 - 16) // 2, (22 - 16) // 2))
     deskbar.save(OUT_DIR / "r5-os-deskbar.png")
 
     render_wave_pebble(512, mode="white", with_shadow=False).save(OUT_DIR / "r5-symbol-mono-white.png")
