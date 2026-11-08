@@ -27,14 +27,19 @@ r5_vm_index(uint64_t va, uint32_t level)
 }
 
 /* v6.18 amdgpu_gem.c:848 amdgpu_gem_va_ioctl. The bottom 64 KiB, the
- * hole, and AMDGPU_VA_RESERVED_TOP (64 KiB trap + 2 MiB seq64 + 2 MiB
- * CSA) are refused. v6.12 compared the raw address and did not check
- * the add for overflow, so a sign-extended high address looked past
- * vm_size. v6.18 clears the hole bits first. */
+ * hole, and AMDGPU_VA_RESERVED_TOP are refused. v6.18 amdgpu_vm.h:175
+ * is AMDGPU_VA_RESERVED_TRAP_SIZE (2ULL << 12); SEQ64 and CSA are
+ * each (2ULL << 20) at lines 172 and 168. v6.12.60 has those same
+ * three defines. v6.18.60 changes only the trap, to (1ULL << 16).
+ * v6.12 compared the raw address and did not check the add for
+ * overflow. v6.18 clears the hole bits first. */
 static inline int
 r5_vm_va_reserved(uint64_t va, uint64_t bytes)
 {
-	const uint64_t top = (1ull << 16) + (2ull << 20) + (2ull << 20);
+	const uint64_t kTrap = 2ull << 12;
+	const uint64_t kSeq64 = 2ull << 20;
+	const uint64_t kCsa = 2ull << 20;
+	const uint64_t top = kTrap + kSeq64 + kCsa;
 	uint64_t masked = va & 0x0000ffffffffffffull;
 	uint64_t vmSize = (r5_gfx9_vm_size().max_pfn << 12) - top;
 	if (va < (1ull << 16))

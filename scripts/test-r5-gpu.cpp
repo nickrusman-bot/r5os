@@ -417,7 +417,7 @@ main()
 	static_assert(R5_GPU_VA_OFFSET == 0x10000ull, "va bottom");
 	static_assert(R5_GPU_VA_MAX == 0x800000000000ull, "va max");
 	static_assert(R5_GPU_HIGH_VA_OFFSET == 0xffff800000000000ull, "high");
-	static_assert(R5_GPU_HIGH_VA_MAX == 0xffffffffffbf0000ull, "high max");
+	static_assert(R5_GPU_HIGH_VA_MAX == 0xffffffffffbfe000ull, "high max");
 	{
 		const char* reported[] = {
 			"out.high_va_offset = R5_GPU_HIGH_VA_OFFSET",
@@ -432,7 +432,7 @@ main()
 	}
 
 	const uint64_t pages = 262144ull << 18;
-	const uint64_t bytes = pages * 4096ull - 0x410000ull;
+	const uint64_t bytes = pages * 4096ull - 0x402000ull;
 	const uint64_t hole = 0x800000000000ull;
 	const uint64_t holeEnd = 0xffff800000000000ull;
 	if ((bytes < hole ? bytes : hole) != R5_GPU_VA_MAX)
@@ -1195,6 +1195,8 @@ main()
 			return fail("csa vaddr");
 		if (r5_vm_va_fits(r5_csa_vaddr(r5_gfx9_vm_size().max_pfn), 4096) != 0)
 			return fail("csa reserved");
+		if (r5_vm_va_fits(0xffffffffffbfd000ull, 4096) == 0)
+			return fail("high page");
 		if (r5_vm_va_fits(R5_GPU_VA_OFFSET, 4096) == 0
 			|| r5_vm_va_fits(R5_GPU_HIGH_VA_MAX - 4096ull, 4096) == 0)
 			return fail("low va");
