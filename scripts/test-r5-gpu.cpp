@@ -23,6 +23,7 @@
 #include "r5_vm.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
+#include "r5_stage_r1.h"
 #include "r5_log.h"
 
 #include <string.h>
@@ -1021,7 +1022,7 @@ main()
 			|| strstr(text, "kernel_window") != NULL)
 			return fail("vm page window");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "gpu_stage_hdp(", "gpu_stage_u(",
+			"radeon_hd/r5_gpu.cpp", "gpu_stage_hdp(", "gpu_stage_r1_word(",
 			text, sizeof(text)) != 0)
 			return fail("hdp probe");
 		if (strstr(text, "r5_gfx9_vram_bar") == NULL
@@ -1473,6 +1474,29 @@ main()
 		return fail("debug switch opcode");
 	if (R5_GPU_SWITCH_CE_META != 256u)
 		return fail("ce switch bit");
+	{
+		uint32_t words[8];
+		uint64_t x = 0xffff800000100000ull;
+		if (r5_r1_write(words, 8, x, 0x11111111u) != 6u
+			|| words[0] != r5_cs_packet3(0x37, 4) || words[4] != 0x11111111u)
+			return fail("r1 write");
+		if (r5_r1_release(words, 8, x, 0x22222222u) != 8u
+			|| words[0] != r5_cs_packet3(0x49, 6) || words[5] != 0x22222222u)
+			return fail("r1 release");
+		const char* r1Order[] = {
+			"radeon_hd: r1a gtt",
+			"radeon_hd: r1a vram",
+			"radeon_hd: r1b gtt",
+			"radeon_hd: r1b vram",
+			"radeon_hd: r1c gtt",
+			"radeon_hd: r1c vram",
+			"radeon_hd: r1 free a"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", r1Order, 7) != 0)
+			return 1;
+	}
 	{
 		const char* ceBoot[] = {
 			"R5_GPU_SWITCH_CE_META",

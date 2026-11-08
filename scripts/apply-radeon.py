@@ -35,6 +35,7 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/common/r5_cs.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_log.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h",
+    "src/add-ons/accelerants/radeon_hd/common/r5_stage_r1.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_gc9_regs.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_inv_range.h",
     "src/add-ons/accelerants/radeon_hd/common/r5_vm_size.h",

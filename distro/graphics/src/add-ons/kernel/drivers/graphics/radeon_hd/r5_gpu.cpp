@@ -15,6 +15,7 @@
 #include "r5_span.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
+#include "r5_stage_r1.h"
 #include "r5_log.h"
 #include "r5_vm.h"
 #include "r5_pasid.h"
@@ -2336,6 +2337,33 @@ struct gpu_stage_page {
 
 
 static void
+gpu_stage_unbind(gpu_stage_page* page)
+{
+	if (page == NULL || page->va == 0)
+		return;
+	r5_gfx9_vmid1_map(page->va, 0);
+	r5_gfx9_vmid1_flush();
+	page->va = 0;
+}
+
+
+static bool
+gpu_stage_bind(gpu_stage_page* page, uint64 va)
+{
+	uint64 flags = gpu_pte_flags(R5_GPU_VA_READ | R5_GPU_VA_WRITE
+		| R5_GPU_VA_EXEC);
+	uint64 pte = r5_gfx9_user_pte(page->phys, flags, page->gtt ? 1 : 0, 0,
+		&kR5Gfx93Mtype);
+	page->va = va;
+	if (!r5_gfx9_vmid1_map(va, pte) || !r5_gfx9_vmid1_flush()) {
+		page->va = 0;
+		return false;
+	}
+	return true;
+}
+
+
+static void
 gpu_stage_release(gpu_stage_page* page)
 {
 	if (page == NULL || page->va == 0)
@@ -3056,6 +3084,134 @@ gpu_stage_hdp(radeon_info* info)
 }
 
 
+static uint32
+gpu_stage_r1_word(gpu_stage_page* page)
+{
+	uint32 word = 0;
+	if (page != NULL && page->cpu != NULL)
+		memcpy(&word, page->cpu, sizeof(word));
+	return word;
+}
+
+
+static uint32
+gpu_stage_r1_job(radeon_info* info, const char* name, gpu_stage_page* ib,
+	const uint32* words, uint32 n)
+{
+	memcpy(ib->cpu, words, n * 4);
+	r5_gfx9_stage_bytes(ib->cpu, n * 4);
+	return gpu_stage_submit(info, 1, name, ib->va, n, 0, 0);
+}
+
+
+/* R1a WRITE_DATA, R1b RELEASE_MEM, R1c IB fetch. Page A stays allocated
+ * until this returns, so a stale write still has a page to land on.
+ * R1c is last: a miss there can hang. */
+static void
+gpu_stage_r1(radeon_info* info)
+{
+	const uint64 x = 0xffff800000100000ull;
+	const uint64 y = 0xffff800000101000ull;
+	gpu_stage_page a;
+	gpu_stage_page b;
+	gpu_stage_page cmd;
+	gpu_stage_page dest;
+	uint32 words[8];
+	uint32 n;
+	memset(&a, 0, sizeof(a));
+	memset(&b, 0, sizeof(b));
+	memset(&cmd, 0, sizeof(cmd));
+	memset(&dest, 0, sizeof(dest));
+	if (!gpu_stage_map(info, &a, x, true)
+		|| !gpu_stage_map(info, &cmd, gpu_stage_fresh(), false)
+		|| !gpu_stage_map(info, &b, gpu_stage_fresh(), false)
+		|| !gpu_stage_map(info, &dest, y, false)) {
+		dprintf("radeon_hd: r1 map\n");
+		gpu_stage_release(&dest);
+		gpu_stage_release(&b);
+		gpu_stage_release(&cmd);
+		gpu_stage_release(&a);
+		return;
+	}
+	gpu_stage_unbind(&b);
+	memset(a.cpu, 0, 4096);
+	memset(b.cpu, 0, 4096);
+	memset(dest.cpu, 0, 4096);
+	n = r5_r1_write(words, 8, x, 0x11111111u);
+	dprintf("radeon_hd: r1a gtt\n");
+	if (n == 0 || gpu_stage_r1_job(info, "r1a-gtt", &cmd, words, n)
+			!= R5_GPU_P_OK) {
+		dprintf("radeon_hd: r1a gtt job\n");
+		goto out;
+	}
+	gpu_stage_unbind(&a);
+	if (!gpu_stage_bind(&b, x))
+		goto out;
+	n = r5_r1_write(words, 8, x, 0x22222222u);
+	dprintf("radeon_hd: r1a vram\n");
+	if (n == 0 || gpu_stage_r1_job(info, "r1a-vram", &cmd, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	dprintf("radeon_hd: r1a gtt %08lx vram %08lx\n",
+		(unsigned long)gpu_stage_r1_word(&a),
+		(unsigned long)gpu_stage_r1_word(&b));
+
+	gpu_stage_unbind(&b);
+	if (!gpu_stage_bind(&a, x))
+		goto out;
+	memset(a.cpu, 0, 4);
+	memset(b.cpu, 0, 4);
+	n = r5_r1_release(words, 8, x, 0x11111111u);
+	dprintf("radeon_hd: r1b gtt\n");
+	if (n == 0 || gpu_stage_r1_job(info, "r1b-gtt", &cmd, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	gpu_stage_unbind(&a);
+	if (!gpu_stage_bind(&b, x))
+		goto out;
+	n = r5_r1_release(words, 8, x, 0x22222222u);
+	dprintf("radeon_hd: r1b vram\n");
+	if (n == 0 || gpu_stage_r1_job(info, "r1b-vram", &cmd, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	dprintf("radeon_hd: r1b gtt %08lx vram %08lx\n",
+		(unsigned long)gpu_stage_r1_word(&a),
+		(unsigned long)gpu_stage_r1_word(&b));
+
+	dprintf("radeon_hd: r1c before inv %d hub %d vmids %d fence %d "
+		"cond %d gds %d pasid %d ce %d\n",
+		r5_gfx9_inv_range_on(), r5_gfx9_hub_linux_on(),
+		r5_gfx9_vmids_on(), r5_gfx9_flush_fence_on(),
+		r5_gfx9_cond_exec_on(), r5_gfx9_gds_switch_on(),
+		r5_gfx9_pasid_map_on(), r5_gfx9_ce_meta_on());
+	gpu_stage_unbind(&b);
+	if (!gpu_stage_bind(&a, x))
+		goto out;
+	n = r5_r1_write(words, 8, y, 0x33333333u);
+	dprintf("radeon_hd: r1c gtt\n");
+	if (n == 0 || gpu_stage_r1_job(info, "r1c-gtt", &a, words, n)
+			!= R5_GPU_P_OK)
+		goto out;
+	gpu_stage_unbind(&a);
+	if (!gpu_stage_bind(&b, x))
+		goto out;
+	n = r5_r1_write(words, 8, y, 0x44444444u);
+	memcpy(b.cpu, words, n * 4);
+	r5_gfx9_stage_bytes(b.cpu, n * 4);
+	dprintf("radeon_hd: r1c vram\n");
+	if (gpu_stage_r1_job(info, "r1c-vram", &b, words, n) != R5_GPU_P_OK)
+		goto out;
+	dprintf("radeon_hd: r1c dest %08lx\n",
+		(unsigned long)gpu_stage_r1_word(&dest));
+out:
+	gpu_stage_release(&dest);
+	gpu_stage_release(&b);
+	gpu_stage_release(&cmd);
+	dprintf("radeon_hd: r1 free a\n");
+	gpu_stage_release(&a);
+}
+
+
 static status_t
 gpu_stage_u(radeon_info* info)
 {
@@ -3068,6 +3224,9 @@ gpu_stage_u(radeon_info* info)
 		dprintf("radeon_hd: u1 skip vmid\n");
 		return B_NO_INIT;
 	}
+	gpu_stage_r1(info);
+	if (sLost)
+		return ECANCELED;
 	bool stop = false;
 	/* The HDP probe ran first and does not use the GPU. Group B then
 	 * writes only, with the indirect buffer at a fresh low address.
@@ -3087,7 +3246,7 @@ gpu_stage_u(radeon_info* info)
 			false, 0xffff800100001000ull, false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "a1", R5_GPU_HIGH_VA_MAX - 0x1000ull, false,
-			false, 0xffffffffffbfd000ull, false, false, true, true, 0, 8, false))
+			false, R5_GPU_HIGH_VA_MAX - 0x2000ull, false, false, true, true, 0, 8, false))
 		stop = true;
 	if (!stop && !gpu_stage_pair(info, "a3", 0xffff808000000000ull, false,
 			false, 0xffff808000001000ull, false, false, true, true, 0, 8, false))
