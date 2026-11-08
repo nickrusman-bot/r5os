@@ -1424,6 +1424,16 @@ main()
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
 				"radeon_hd/gfx9_k12.cpp", invDefault, 2) != 0)
 			return 1;
+		const char* invContract[] = {
+			"## GFXHUB invalidation range (fixed)",
+			"mmVM_INVALIDATE_ENG0_ADDR_RANGE_LO32",
+			"`0xffffffff` and `0x1f`",
+			"r5_gfx9_vmid1_setup",
+			"The boot position, before the first user job, has not been booted.",
+			"gfx9_deferred_free"
+		};
+		if (source_order("docs/GRAPHICS.md", invContract, 6) != 0)
+			return 1;
 	}
 	{
 		struct r5_vm_size size = r5_vm_adjust(256u * 1024u, 3u, 48u, 16u);

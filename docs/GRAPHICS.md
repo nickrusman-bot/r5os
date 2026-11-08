@@ -291,7 +291,7 @@ The grab is not called from the submit path. `amdgpu_vm_init` gives each open fi
 
 | # | Linux | R5 | Setting | Commit |
 |---|---|---|---|---|
-| H1 | `gfxhub_v1_0_program_invalidation` | read of engines 0 and 17 always; write behind the setting | `gfx9_inv_range` off | `b5c0df3d66` |
+| H1 | `gfxhub_v1_0_program_invalidation` | read of engines 0 and 17 always; write of all 18 engines after VMID setup | `gfx9_inv_range` on unless the line says false | `b5c0df3d66` |
 | H2 | `init_tlb_regs` | the value already matches the field set | none | `2a619add46` names |
 | H3 | `init_cache_regs` | already written | none | `2a619add46` names |
 | H4 | `init_system_aperture_regs` | AGP base 0, identity offsets 0, migration retry. AGP bot and top are not written | `gfx9_hub_linux` off | `6226ff8f85` |
@@ -313,11 +313,28 @@ The grab is not called from the submit path. `amdgpu_vm_init` gives each open fi
 | P2 | root and PASID per file | PASID is J11. The root is still one | not read | `040026c7c9`, `52a1f44b64` |
 | P3 | `amdgpu_vm_clear_freed` | VRAM offset waits for the next flush fence | `gfx9_deferred_free` off | `64f47ab138` |
 
+## GFXHUB invalidation range (fixed)
+
+`gfxhub_v1_0_program_invalidation` writes 18 engines. The addresses are `mmVM_INVALIDATE_ENG0_ADDR_RANGE_LO32` (`0x8c7`) and `mmVM_INVALIDATE_ENG0_ADDR_RANGE_HI32` (`0x8c8`) in `r5_gc9_regs.h`, plus `engine * R5_GC9_ENG_ADDR_DISTANCE`. The stored values are `0xffffffff` and `0x1f`. The write is `r5_gfx9_inv_range_program`, called from `r5_gfx9_vmid1_setup` after the VMID setup. `gfx9_inv_range` defaults on. `gfx9_inv_range false` leaves the registers as they were.
+
+Stick 29, `generated/boot-5625u-29/syslog`, is the evidence:
+
+- At K2 the range covered no addresses: line 2321 `inv range k2 eng 0 lo 00000000 hi 00000000`, line 2322 the same for engine 17.
+- With the setting off, R1a and R1b wrote the second value onto the old GTT page: line 3268 `r1a gtt 22222222 vram 00000000`, line 3275 `r1b gtt 22222222 vram 00000000`.
+- The run-time switch then wrote the range: line 3277 `inv range wrote eng 0 lo ffffffff hi 0000001f`, line 3278 the same for engine 17.
+- With that range on, the old page kept `11111111` and the new page received `22222222`: line 3286 for R1a, line 3293 for R1b. R1c's destination was `44444444` (line 3731).
+- Each new process took the next fence context, 2 through 8, with the load bits `81018003`: lines 3396, 3465, 3527, 3590, 3660, 3722 and 3951.
+- The log has no `vm fault` and no `gpu lost`.
+
+**Limit.** Stick 29 wrote the range at run time, after stage P. The boot position, before the first user job, has not been booted. The next GPU stick confirms it.
+
+Built, and not needed for M4, still default off: `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_pasid_map`, `gfx9_gds_switch`, `gfx9_ce_meta`, `gfx9_deferred_free`.
+
 ## Self-test switch
 
 `R5_GPU_DEBUG_SWITCH` is accepted only while `gpu_debug` is on. It flushes VMID 1 and waits until the newest user fence has been seen, then sets the bits for `gfx9_inv_range`, `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_gds_switch` and `gfx9_deferred_free`. `gfx9_vmid_per_file` is refused. The line carries the time and the bits.
 
-R1a, R1b and R1c are not submitted. Each one needs a virtual address mapped at a GTT page, then the same address mapped at a VRAM page, and a job on the user ring (`WRITE_DATA`, then `RELEASE_MEM`, then an indirect buffer). That remap is not built. The existing stage P write stays as it was.
+R1a and R1b run once after stage P. R1c runs after the teapots. The result file prints pass when the old page is `11111111` and the new page is `22222222`.
 
 ## vulkaninfo
 
