@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The boot disk uses the ordinary hard-disk icon
+
+The well-known boot volume asks for `R_HardDiskIcon` instead of the nightly disk. Tracker still draws the R5 mark on that volume. The mark sits where the ladybug sat, from (10, 40) to (24, 56) in the 64-unit icon. This has not been booted. `distro/BUILD` stays 10049.
+
 ### The boot splash is white
 
 The splash is 372×96 on `#FFFFFF`, with the dark wordmark and no border. The bootloader clears a 24-bit framebuffer to `#FFFFFF` (`fillByte` `0xff`, `fillWord` `0x00ffffff`). An 8-bit screen stays black. `distro/boot/platform/generic/video_splash.cpp` is the Haiku file with that fill in an SPDX snippet. `scripts/apply-branding.py` copies it. The progress strip stays Haiku's 308×80 layout. `haiku-splash-icons.png` is the unmodified MIT original. The generator lifts the rim off black onto white and draws the R5 mark on icon 4, where the leaf was. `apply-overlay.sh` installs `splash_icons.png`. `--check` covers the splash and the strip. This has not been booted. `distro/BUILD` stays 10049.
