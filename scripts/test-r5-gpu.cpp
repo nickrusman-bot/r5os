@@ -1087,19 +1087,26 @@ main()
 	}
 	r5_cs_ring_ctx ringCtx;
 	memset(&ringCtx, 0, sizeof(ringCtx));
-	if (r5_cs_ctx_switch(&ringCtx, 1, 1) == 0
+	r5_ctx_counter handed;
+	memset(&handed, 0, sizeof(handed));
+	uint64_t first = r5_ctx_handout(&handed);
+	uint64_t again = r5_ctx_handout(&handed);
+	if (first == 0 || again == 0 || again == first
+		|| r5_ctx_handout(0) != 0)
+		return fail("context counter");
+	if (r5_cs_ctx_switch(&ringCtx, first) == 0
 		|| r5_cs_cntx(1, 0) != kR5CsCntxLoad)
 		return fail("first context load");
-	r5_cs_ctx_note(&ringCtx, 1, 1);
-	if (r5_cs_ctx_switch(&ringCtx, 1, 1) != 0
+	r5_cs_ctx_note(&ringCtx, first);
+	if (r5_cs_ctx_switch(&ringCtx, first) != 0
 		|| r5_cs_cntx(0, 0) != kR5CsCntxKeep)
 		return fail("same context keep");
-	if (r5_cs_ctx_switch(&ringCtx, 2, 1) == 0
+	if (r5_cs_ctx_switch(&ringCtx, again) == 0
 		|| r5_cs_cntx(1, 0) != kR5CsCntxLoad)
-		return fail("other file load");
-	r5_cs_ctx_note(&ringCtx, 2, 1);
-	if (r5_cs_ctx_switch(&ringCtx, 2, 2) == 0)
-		return fail("other ctx id");
+		return fail("recreated context load");
+	r5_cs_ctx_note(&ringCtx, again);
+	if (r5_cs_ctx_switch(&ringCtx, 0) == 0)
+		return fail("kernel context");
 	if (r5_cs_cntx(1, kR5PreamblePresent) != 0x91018003u)
 		return fail("preamble load ce");
 	if (r5_cs_cntx(0, kR5PreambleFirst) != 0x90000000u)

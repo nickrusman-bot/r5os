@@ -300,6 +300,8 @@ struct gpu_client {
 	uint64			lastSequence;
 	/* Linux amdgpu_ctx.preamble_presented, for this client's one context. */
 	int32			preamblePresented;
+	/* Handed out at CTX create. 0 means there is no live context. */
+	uint64			fenceCtx;
 	gpu_sync		syncs[kMaxSync];
 };
 
@@ -314,7 +316,7 @@ static uint64 sLastIbVa;
 static uint64 sLastIbList[8];
 static uint32 sLastIbDw[8];
 static uint32 sLastIbN;
-/* Kernel jobs (mark, stage P, the copies) are one context: file 0, id 0. */
+/* Kernel jobs (mark, stage P, the copies) use fence context 0. */
 static int32 sKernelPreamble;
 static radeon_info* sInfo;
 static bool sReplacing;
@@ -323,6 +325,7 @@ static ConditionVariable sEop;
 static bool sReady = false;
 static bool sLost = false;
 static int32 sContexts = 0;
+static r5_ctx_counter sCtxCounter;
 static sem_id sRetireSem = -1;
 static thread_id sRetireThread = -1;
 
@@ -1595,8 +1598,11 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	job->count = in.signal_count;
 	uint64 sequence = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
-	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, (uint64)(addr_t)client,
-			in.context, &client->preamblePresented, &sequence))
+	if (client->contexts <= 0 || client->fenceCtx == 0)
+		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,
+			in.ib_count, 0, 0, in.ring, 0);
+	if (!r5_gfx9_user_submit(ringIbs, in.ib_count, client->fenceCtx,
+			&client->preamblePresented, &sequence))
 		return gpu_refuse("CS_SUBMIT", "ring", B_ERROR, in.context, 0,
 			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
 	job->sequence = sequence;
@@ -2530,7 +2536,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
-	if (!r5_gfx9_user_submit(&ib, 1, 0, 0, &sKernelPreamble, &sequence)) {
+	if (!r5_gfx9_user_submit(&ib, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
 		return !sLost;
@@ -2713,7 +2719,7 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
 	uint64 sequence = 0;
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
-	if (!r5_gfx9_user_submit(&submit, 1, 0, 0, &sKernelPreamble, &sequence)) {
+	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
 		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
 		gpu_stage_release(&dest);
@@ -2787,7 +2793,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 		return R5_GPU_P_ROOM;
 	}
 	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
-	if (!r5_gfx9_user_submit(&submit, 1, 0, 0, &sKernelPreamble, &sequence)) {
+	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		if (step == 0)
 			dprintf("radeon_hd: mark selftest submit\n");
 		else {
@@ -3197,6 +3203,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 				dprintf("radeon_hd: t %lld vmid1 reused, clients %ld\n",
 					(long long)system_time(), (long)sContexts);
 			sContexts++;
+			if (client->contexts == 0)
+				client->fenceCtx = r5_ctx_handout(&sCtxCounter);
 			client->contexts++;
 			in.context = 1;
 			status = gpu_copy_out(buffer, length, &in, sizeof(in));

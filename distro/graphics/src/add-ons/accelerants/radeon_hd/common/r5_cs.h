@@ -48,32 +48,49 @@ static const uint32_t kR5IbPreamble = 1u << 1;
 
 
 /* The last context on the ring. Linux stores this as ring->current_ctx,
- * the scheduler fence context of the job. That context is one per
- * open file and AMDGPU_CTX. file 0 with id 0 is the kernel's own jobs. */
+ * the scheduler fence context of the job (dma_fence_context_alloc).
+ * 0 is the kernel's own jobs and is never handed out. */
 struct r5_cs_ring_ctx {
-	uint64_t	file;
-	uint32_t	id;
+	uint64_t	ctx;
 	int		valid;
 };
 
 
+struct r5_ctx_counter {
+	uint64_t	next;
+};
+
+
+/* dma_fence_context_alloc. The first handed-out value is 1. */
+static inline uint64_t
+r5_ctx_handout(r5_ctx_counter* counter)
+{
+	if (counter == 0)
+		return 0;
+	if (counter->next == 0)
+		counter->next = 1;
+	uint64_t value = counter->next;
+	counter->next++;
+	return value;
+}
+
+
 /* amdgpu_ib_schedule: need_ctx_switch = ring->current_ctx != fence_ctx. */
 static inline int
-r5_cs_ctx_switch(const r5_cs_ring_ctx* last, uint64_t file, uint32_t id)
+r5_cs_ctx_switch(const r5_cs_ring_ctx* last, uint64_t ctx)
 {
 	if (last == 0 || last->valid == 0)
 		return 1;
-	return last->file != file || last->id != id;
+	return last->ctx != ctx;
 }
 
 
 static inline void
-r5_cs_ctx_note(r5_cs_ring_ctx* last, uint64_t file, uint32_t id)
+r5_cs_ctx_note(r5_cs_ring_ctx* last, uint64_t ctx)
 {
 	if (last == 0)
 		return;
-	last->file = file;
-	last->id = id;
+	last->ctx = ctx;
 	last->valid = 1;
 }
 

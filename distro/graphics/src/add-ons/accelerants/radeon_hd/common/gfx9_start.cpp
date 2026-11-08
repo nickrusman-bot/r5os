@@ -2510,12 +2510,12 @@ r5_gfx9_set_cond_exec(int on)
 
 
 bool
-r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
-	uint32 ctxId, int32* preambleSeen, uint64* _sequence)
+r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
+	uint64 fenceCtx, int32* preambleSeen, uint64* _sequence)
 {
 	if (ibs == NULL || count == 0 || count > 8)
 		return false;
-	int haveSwitch = r5_cs_ctx_switch(&sRingCtx, file, ctxId);
+	int haveSwitch = r5_cs_ctx_switch(&sRingCtx, fenceCtx);
 	uint32 preamble = 0;
 	for (uint32 i = 0; i < count; i++) {
 		if ((ibs[i].flags & kR5IbPreamble) != 0)
@@ -2627,7 +2627,7 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count, uint64 file,
 	}
 	sRadeonGfx9Ring.submitted = newWptr;
 	sUserSequence = sequence;
-	r5_cs_ctx_note(&sRingCtx, file, ctxId);
+	r5_cs_ctx_note(&sRingCtx, fenceCtx);
 	if ((preamble & kR5PreamblePresent) != 0 && preambleSeen != NULL)
 		*preambleSeen = 1;
 	if (flush)
