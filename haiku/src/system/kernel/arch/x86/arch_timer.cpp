@@ -16,9 +16,10 @@
 
 #include <arch/x86/smp_priv.h>
 #include <arch/x86/timer.h>
+#include <arch/x86/arch_hpet.h>
 
 #include <x86gprintrin.h>
-#include <debug.h>
+#include <cpuid.h>
 
 
 //#define TRACE_TIMER
@@ -273,14 +274,15 @@ rdtsc_fenced()
 	// RDTSC is not serializing, nor does it drain the instruction stream.
 	// RDTSCP does, but is not available everywhere. Other OSes seem to use
 	// "CPUID" rather than MFENCE/LFENCE for serializing here during boot.
-	asm volatile ("cpuid" : : : "eax", "ebx", "ecx", "edx");
+	uint32 eax = 0, ebx = 0, ecx = 0, edx = 0;
+	__cpuid(0, eax, ebx, ecx, edx);
 
 	return __rdtsc();
 }
 
 
 static inline void
-calibration_loop(uint8 desiredHighByte, uint8 channel, uint64& tscDelta,
+calibration_loop_pit(uint8 desiredHighByte, uint8 channel, uint64& tscDelta,
 	double& conversionFactor, uint16& expired)
 {
 	uint8 select = channel << PIT_SELECT_CHANNEL_SHIFT;
@@ -329,11 +331,61 @@ calibration_loop(uint8 desiredHighByte, uint8 channel, uint64& tscDelta,
 }
 
 
-static void
-calculate_cpu_conversion_factor(uint8 channel, uint32* conversionFactor)
+static inline void
+calibration_loop_hpet(uint8 ticks, hpet_regs* hpet, uint64& tscDelta,
+	double& conversionFactor, uint16& expired)
 {
-	// When using channel 2, enable the input and disable the speaker.
-	if (channel == 2) {
+	// Enable the HPET.
+	const uint64 originalConfig = hpet->config;
+	hpet->u0.counter64 = 0;
+	hpet->config |= HPET_CONF_MASK_ENABLED;
+
+	const uint64 period = HPET_GET_PERIOD(hpet);
+	const uint64 frequency = 1000000000000000ULL / period;
+	const uint64 delay = frequency / 1000000;
+
+	uint64 increment = ((ticks << 8) * frequency) / TIMER_CLKNUM_HZ;
+
+	uint64 start = hpet->u0.counter64 + delay;
+	uint64 end = start + increment + delay;
+
+	// Wait for the HPET to reach the start position
+	while (hpet->u0.counter64 < start)
+		;
+
+	// Read in the first TSC value
+	uint64 startTSC = rdtsc_fenced();
+
+	// Wait for the HPET to reach the end position
+	while (hpet->u0.counter64 < end)
+		;
+
+	// And read the second TSC value
+	uint64 endTSC = rdtsc_fenced();
+
+	// Disable/reset the HPET.
+	hpet->config = originalConfig;
+
+	tscDelta = endTSC - startTSC;
+	expired = ((end - start) * TIMER_CLKNUM_HZ) / frequency;
+	conversionFactor = (double)tscDelta / (double)expired;
+}
+
+
+static void
+calculate_cpu_conversion_factor(kernel_args* args, uint8 pitChannel, uint32* conversionFactor)
+{
+	hpet_regs* hpet = NULL;
+	bool useHPET = false;
+	if (args != NULL)
+		hpet = (hpet_regs*)args->arch_args.hpet.Pointer();
+	if (hpet != NULL) {
+		// Prefer the HPET for timer calibration when available.
+		useHPET = true;
+	}
+
+	// When using PIT channel 2, enable the input and disable the speaker.
+	if (!useHPET && pitChannel == 2) {
 		uint8 control = in8(PIT_CHANNEL_2_CONTROL);
 		control &= PIT_CHANNEL_2_SPEAKER_OFF_MASK;
 		control |= PIT_CHANNEL_2_GATE_HIGH;
@@ -348,12 +400,16 @@ calculate_cpu_conversion_factor(uint8 channel, uint32* conversionFactor)
 	uint32 slowSampleCount = 1;
 
 quick_sample:
-	calibration_loop(224, channel, tscDeltaQuick, conversionFactorQuick,
-		expired);
+	if (useHPET)
+		calibration_loop_hpet(31, hpet, tscDeltaQuick, conversionFactorQuick, expired);
+	else
+		calibration_loop_pit(224, pitChannel, tscDeltaQuick, conversionFactorQuick, expired);
 
 slower_sample:
-	calibration_loop(192, channel, tscDeltaSlower, conversionFactorSlower,
-		expired);
+	if (useHPET)
+		calibration_loop_hpet(63, hpet, tscDeltaSlower, conversionFactorSlower, expired);
+	else
+		calibration_loop_pit(192, pitChannel, tscDeltaSlower, conversionFactorSlower, expired);
 
 	double deviation = conversionFactorQuick / conversionFactorSlower;
 	if (deviation < 0.99 || deviation > 1.01) {
@@ -363,8 +419,10 @@ slower_sample:
 	}
 
 	// Slow sample
-	calibration_loop(128, channel, tscDeltaSlow, conversionFactorSlow,
-		expired);
+	if (useHPET)
+		calibration_loop_hpet(127, hpet, tscDeltaSlow, conversionFactorSlow, expired);
+	else
+		calibration_loop_pit(128, pitChannel, tscDeltaSlow, conversionFactorSlow, expired);
 
 	deviation = conversionFactorSlower / conversionFactorSlow;
 	if (deviation < 0.99 || deviation > 1.01) {
@@ -375,12 +433,6 @@ slower_sample:
 
 	// Scale the TSC delta to timer units
 	tscDeltaSlow *= TIMER_CLKNUM_HZ;
-
-	if (expired == 0 || tscDeltaSlow == 0) {
-		dprintf("CPU: PIT TSC calibration failed (expired %" B_PRIu16
-			", delta %" B_PRIu64 ")\n", expired, tscDeltaSlow);
-		return;
-	}
 
 	uint64 clockSpeed = tscDeltaSlow / expired;
 	*conversionFactor = ((uint128(expired) * uint32(1000000)) << 32)
@@ -411,13 +463,14 @@ slower_sample:
 	}
 #endif
 
-	if (channel == 2) {
+	if (!useHPET && pitChannel == 2) {
 		// Set the gate low again
 		out8(in8(PIT_CHANNEL_2_CONTROL) & ~PIT_CHANNEL_2_GATE_HIGH,
 			PIT_CHANNEL_2_CONTROL);
 	}
 
-	dprintf("CPU: TSC frequency calibrated via PIT: %" B_PRIu32 "\n", *conversionFactor);
+	dprintf("CPU: TSC frequency calibrated via %s: %" B_PRIu32 "\n",
+		useHPET ? "HPET" : "PIT", *conversionFactor);
 }
 
 
@@ -460,14 +513,11 @@ init_tsc_with_cpuid(kernel_args* args, uint32* conversionFactor)
 	if (khz == 0)
 		return;
 
-	const uint64 tscKhz = uint64(khz) * numerator / denominator;
-	if (tscKhz == 0)
-		return;
-
-	dprintf("CPU: using TSC frequency from CPUID\n");
 	// compute for microseconds as follows (1000000 << 32) / (tsc freq in Hz),
 	// or (1000 << 32) / (tsc freq in kHz)
-	*conversionFactor = (1000ULL << 32) / tscKhz;
+	*conversionFactor = (1000ULL << 32) / (khz * numerator / denominator);
+
+	dprintf("CPU: using TSC frequency from CPUID: %" B_PRIu32 "\n", *conversionFactor);
 }
 
 
@@ -501,14 +551,10 @@ init_tsc_with_msr(kernel_args* args, uint32* conversionFactor)
 	if (numerator < 0x10)
 		return;
 
-	const uint64 tscKhz = khz * numerator / denominator;
-	if (tscKhz == 0)
-		return;
-
-	dprintf("CPU: using TSC frequency from MSR %" B_PRIu64 "\n", tscKhz);
+	dprintf("CPU: using TSC frequency from MSR %" B_PRIu64 "\n", khz * numerator / denominator);
 	// compute for microseconds as follows (1000000 << 32) / (tsc freq in Hz),
 	// or (1000 << 32) / (tsc freq in kHz)
-	*conversionFactor = (1000ULL << 32) / tscKhz;
+	*conversionFactor = (1000ULL << 32) / (khz * numerator / denominator);
 }
 
 
@@ -526,16 +572,13 @@ init_tsc_on_hypervisor(kernel_args* args, uint32* conversionFactor)
 	if (maxVMM >= 0x40000010) {
 		get_current_cpuid(&info, 0x40000010, 0);
 
-		// Leaf present with EAX=0 still must not divide (Haiku #20400).
-		if (info.regs.eax != 0) {
-			uint64 clockSpeed = uint64(info.regs.eax) * 1000;
-			*conversionFactor = (uint64(1000) << 32) / info.regs.eax;
+		uint64 clockSpeed = uint64(info.regs.eax) * 1000;
+		*conversionFactor = (uint64(1000) << 32) / info.regs.eax;
 
-			gCPUClockSpeed = clockSpeed;
+		gCPUClockSpeed = clockSpeed;
 
-			dprintf("CPU: TSC frequency read from hypervisor CPUID leaf\n");
-			return;
-		}
+		dprintf("CPU: TSC frequency read from hypervisor CPUID leaf\n");
+		return;
 	}
 
 	if (maxVMM >= 0x40000003) {
@@ -573,10 +616,7 @@ x86_init_tsc(kernel_args* args)
 	init_tsc_with_msr(args, &conversionFactor);
 	init_tsc_on_hypervisor(args, &conversionFactor);
 	if (conversionFactor == 0)
-		calculate_cpu_conversion_factor(2, &conversionFactor);
-
-	if (conversionFactor == 0)
-		panic("failed to calibrate TSC");
+		calculate_cpu_conversion_factor(args, 2, &conversionFactor);
 
 	gSystemTimeConversionFactor = conversionFactor;
 

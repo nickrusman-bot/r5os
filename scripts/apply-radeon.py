@@ -14,9 +14,9 @@ import sys
 
 CLEARSTATE_SHA256 = {
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h":
-        "70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285",
+        "59b4b9ad8370461554f6fedd12e63037c9087be7537fa17e8ae9a9d752076c57",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h":
-        "e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5",
+        "c0813551a629a5748cc1967232835c33bb3401a3ea2665a3b89dfe584e94e2f9",
 }
 
 FILES = (
