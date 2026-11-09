@@ -14,6 +14,10 @@ The R5 interface classes: what exists, and when to use it. The exact calls, colo
 | Class | Header | Use it for | Do not use it for | First user |
 |---|---|---|---|---|
 | `BCard` | `<Card.h>` | A heading or a summary in its own area: the About heading (`B_CARD_DOCUMENT`), the system information (`B_CARD_PANEL`), an account summary | A form you fill in: that stays on the panel (`docs/STYLE.md`). A stack of pages: that is Haiku's `BCardView` / `BCardLayout`, a different thing | About R5 |
+| `BSidebarItem` | `<SidebarItem.h>` | One row in a sidebar: a name, an optional icon, a count or a lock | A control the user edits. The icon is handed in; the row does not load one, except the small lock | Settings, in the list |
+| `BSidebar` | `<Sidebar.h>` | A list of categories that fold, with one category open, and a filter that hides the rest | The contents of a settings page | Settings, beside the page |
+| `BActionCard` | `<ActionCard.h>` | A card the user clicks, with a title, a short summary, and small labels | A form. The card does not contain other views | Settings home. The R5 Hub and Store start page is the second user |
+| `BPageHeader` | `<PageHeader.h>` | The heading of a page: a small category line, a title, a description, and an icon | The controls under that heading | Settings. Users & Accounts is the second user, for the account card heading |
 
 ## Adding a class
 

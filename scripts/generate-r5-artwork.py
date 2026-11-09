@@ -806,9 +806,19 @@ def _hvif_ring(segments: list, scale: float, reverse: bool) -> bytes:
     return blob
 
 
+def _ring_area(segments: list) -> float:
+    """Twice the signed area of a ring's anchor polygon (the turn direction)."""
+    anchors = [segment[0] for segment in segments]
+    total = 0.0
+    for index, (x1, y1) in enumerate(anchors):
+        x2, y2 = anchors[(index + 1) % len(anchors)]
+        total += x1 * y2 - x2 * y1
+    return total
+
+
 def render_symbol_hvif() -> bytes:
-    """The Wave Pebble as an HVIF. The inner ring is reversed so the
-    non-zero fill leaves the wave open. Coordinates are the SVG's 0–100
+    """The Wave Pebble as an HVIF. The inner ring turns the other way from
+    the outer ring, so the non-zero fill leaves the wave open. Coordinates are the SVG's 0–100
     space scaled into the 0–64 icon grid."""
     rings = PEBBLE_PATHS["r5-full"]
     if len(rings) != 2:
@@ -837,8 +847,12 @@ def render_symbol_hvif() -> bytes:
     for offset, color in stops:
         blob += bytes([offset, *color])
     blob += bytes([2])
+    # Haiku fills a shape with the non-zero rule, so the wave is only a
+    # hole when it turns the other way from the outer ring. The SVG's wave
+    # already does; reverse it only when the two turn the same way.
+    same = (_ring_area(rings[0]) > 0) == (_ring_area(rings[1]) > 0)
     blob += _hvif_ring(rings[0], scale, reverse=False)
-    blob += _hvif_ring(rings[1], scale, reverse=True)
+    blob += _hvif_ring(rings[1], scale, reverse=same)
     blob += bytes([1, 10, 0, 2, 0, 1, 0])
     return blob
 

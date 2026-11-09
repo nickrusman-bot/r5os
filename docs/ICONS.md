@@ -79,7 +79,7 @@ r5_button_set_icon(home, R5_ICON_HOME, height);
 r5_button_set_lock(lock, true, height);
 ```
 
-`r5_button_set_lock(button, locked, height)` draws `R5_ICON_LOCKED` when `locked` is true and `R5_ICON_UNLOCKED` when it is false. It does not change the label and it does not open a password window. The caller decides what a click does. Settings uses it for the lock between Home and Revert.
+`r5_button_set_lock(button, locked, height)` draws `R5_ICON_LOCKED` when `locked` is true and `R5_ICON_UNLOCKED` when it is false. It does not change the label and it does not open a password window. The caller decides what a click does. Settings uses it for the lock on the bottom row, before Revert.
 
 The same height is accepted by:
 
@@ -89,4 +89,6 @@ The same height is accepted by:
 
 Each returns `B_OK` when the icon was set. The button is still resized to the square when the pointer is valid, including when the picture itself could not be loaded, so the row does not jump. A `NULL` button or a height below 1 returns `B_BAD_VALUE` and does not resize.
 
-Settings links `libr5icons.so` and calls `r5_button_set_icon()` for Back and Home, and `r5_button_set_lock()` for the lock, after the plain font is applied, so the height matches Revert and Defaults. The order on that row is Back, Home, the lock, Revert, Defaults. Those icons do not get the preferences wrench.
+Settings links `libr5icons.so` and calls `r5_button_set_lock()` for the lock, after the plain font is applied, so the height matches Revert and Defaults. The lock, Revert, and Defaults do not get the preferences wrench.
+
+The Settings application icon is the R5 wave pebble from About R5, with the preferences wrench (the last two shapes of Tracker's preferences-folder icon) drawn on it. `scripts/join-settings-icon.py` builds that HVIF into `Settings.rdef`. The Home row in the list uses the pebble alone. The wrench on a page icon is still drawn by Settings when the page is shown.

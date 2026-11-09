@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10051 - A cleaner Settings window
+Settings opens with a shorter list. Home is at the top. A category folds open to show its pages, and the one you are on stays marked. The pages themselves are cards. The last three pages you changed are listed on the home screen. Search still finds a page by its name.
+
 R5 2026.1-dev Build 10050 - Network shares
 Tracker preferences has a Network shares page. A share can be mounted from that page or from the Mount menu. The password stays in the keystore. A share that is set to mount at startup is tried again while the network comes up.
 

@@ -10,26 +10,21 @@
 #include <String.h>
 #include <Window.h>
 
+#include <Sidebar.h>
 
+
+class BBitmap;
 class BButton;
 class BCardLayout;
-class BListView;
 class BMessageRunner;
-class BStringView;
-class PageIcon;
 class BTextControl;
 class BView;
 class HomeView;
+namespace BAppearanceKit { class BPageHeader; }
 class SettingsContext;
 class SettingsManager;
 class SettingsModule;
 class SettingsStorage;
-
-
-struct SettingsPlace {
-	BString id;
-	bool category;
-};
 
 
 class SettingsWindow : public BWindow {
@@ -50,10 +45,13 @@ private:
 			void				_ShowCategory(const char* categoryId);
 			void				_ShowModule(const char* moduleId);
 			void				_ApplyCurrent();
-			void				_Remember(const char* id, bool category);
-			void				_SetHeader(const char* title,
+			void				_SetHeader(const char* eyebrow,
+									const char* title,
 									const char* description,
-									const char* iconSignature);
+									const BBitmap* icon);
+			void				_UpdateTip();
+			void				_NoteRecent(const char* moduleId);
+			void				_ShowRecent();
 			void				_UpdateActions();
 			void				_ReloadLock(bool pageChanged);
 			void				_ApplyPageLock();
@@ -73,18 +71,15 @@ private:
 			SettingsStorage*	fStorage;
 			SettingsContext*	fContext;
 			BTextControl*		fSearch;
-			BListView*			fList;
-			BStringView*		fTitle;
-			BStringView*		fDescription;
-			PageIcon*			fIcon;
+			BAppearanceKit::BSidebar* fList;
+			BAppearanceKit::BPageHeader* fHeader;
+			HomeView*			fHomeView;
+			BView*				fTip;
 			BCardLayout*		fCards;
 			BView*				fDeck;
-			BButton*			fHome;
-			BButton*			fBack;
 			BButton*			fRevert;
 			BButton*			fDefaults;
 			SettingsModule*		fCurrent;
-			BList				fHistory;
 			bool				fAdjusting;
 			BString				fQuery;
 			status_t			fLastApplyError;

@@ -7,249 +7,177 @@
 #include "HomeView.h"
 
 #include "SettingsFont.h"
-#include "SettingsIcon.h"
+#include "SettingsMessages.h"
 
-#include <Bitmap.h>
-#include <Control.h>
 #include <ControlLook.h>
-#include <Font.h>
-#include <GroupLayout.h>
-#include <LayoutBuilder.h>
-#include <Message.h>
-#include <Mime.h>
+#include <InterfaceDefs.h>
+#include <GridLayout.h>
 #include <String.h>
-#include <StringView.h>
 #include <Window.h>
 
 #include <string.h>
 
 
-class CategoryCard : public BControl {
+static void
+stroke_dashed(BView* view, BRect rect)
+{
+	float dash = 4.0f;
+	float gap = 3.0f;
+	for (float x = rect.left; x < rect.right; x += dash + gap) {
+		float end = x + dash;
+		if (end > rect.right)
+			end = rect.right;
+		view->StrokeLine(BPoint(x, rect.top), BPoint(end, rect.top));
+		view->StrokeLine(BPoint(x, rect.bottom), BPoint(end, rect.bottom));
+	}
+	for (float y = rect.top; y < rect.bottom; y += dash + gap) {
+		float end = y + dash;
+		if (end > rect.bottom)
+			end = rect.bottom;
+		view->StrokeLine(BPoint(rect.left, y), BPoint(rect.left, end));
+		view->StrokeLine(BPoint(rect.right, y), BPoint(rect.right, end));
+	}
+}
+
+
+class RecentPanel : public BView {
 public:
-								CategoryCard(const char* name,
-									const char* summary,
-									const char* iconSignature,
-									BMessage* message);
-	virtual						~CategoryCard();
+								RecentPanel(const char* line);
 	virtual	void				Draw(BRect update);
-	virtual	void				MouseDown(BPoint where);
-	virtual	void				MouseUp(BPoint where);
-	virtual	void				MouseMoved(BPoint where, uint32 transit,
-									const BMessage* message);
-	virtual	void				KeyDown(const char* bytes, int32 numBytes);
-	virtual	void				GetPreferredSize(float* width, float* height);
+	virtual	BSize				MinSize();
+	virtual	BSize				MaxSize();
+	virtual	BSize				PreferredSize();
 
 private:
-			BString				fName;
-			BString				fSummary;
-			BBitmap*			fIcon;
-			bool				fHover;
-			bool				fPressed;
+			BString				fLine;
 };
 
 
-CategoryCard::CategoryCard(const char* name, const char* summary,
-	const char* iconSignature, BMessage* message)
+RecentPanel::RecentPanel(const char* line)
 	:
-	BControl(name, NULL, message, B_WILL_DRAW),
-	fName(name),
-	fSummary(summary),
-	fIcon(NULL),
-	fHover(false),
-	fPressed(false)
+	BView("recent", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	fLine(line)
 {
-	SetExplicitMinSize(BSize(280, 88));
-	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 88));
-	if (iconSignature != NULL && iconSignature[0] != '\0') {
-		BRect bounds(BPoint(0, 0),
-			be_control_look->ComposeIconSize(B_LARGE_ICON));
-		fIcon = new BBitmap(bounds, B_RGBA32);
-		if (BMimeType(iconSignature).GetIcon(fIcon, B_LARGE_ICON) != B_OK) {
-			delete fIcon;
-			fIcon = NULL;
-		} else
-			r5_settings_apply_prefs_overlay(fIcon);
-	}
-}
-
-
-CategoryCard::~CategoryCard()
-{
-	delete fIcon;
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
 }
 
 
 void
-CategoryCard::Draw(BRect update)
+RecentPanel::Draw(BRect update)
 {
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color background = base;
-	uint32 flags = 0;
-	if (!IsEnabled())
-		flags |= BControlLook::B_DISABLED;
-	if (Value() == B_CONTROL_ON)
-		flags |= BControlLook::B_ACTIVATED;
-	else if (fHover)
-		flags |= BControlLook::B_HOVER;
-	if (IsFocus())
-		flags |= BControlLook::B_FOCUSED;
+	(void)update;
+	SetLowColor(ViewColor());
+	FillRect(Bounds(), B_SOLID_LOW);
+	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT));
+	stroke_dashed(this, Bounds());
 
-	BRect rect = Bounds();
-	be_control_look->DrawButtonFrame(this, rect, update, base, background,
-		flags);
-	be_control_look->DrawButtonBackground(this, rect, update, base, flags);
-
-	float textLeft = rect.left + 12;
-	if (fIcon != NULL) {
-		BPoint where(rect.left + 10,
-			rect.top + (rect.Height() - fIcon->Bounds().Height()) / 2);
-		SetDrawingMode(B_OP_ALPHA);
-		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		DrawBitmap(fIcon, where);
-		SetDrawingMode(B_OP_COPY);
-		textLeft = where.x + fIcon->Bounds().Width() + 12;
-	}
-	float textWidth = rect.right - textLeft - 8;
-	if (textWidth < 20)
-		textWidth = 20;
-
-	const BFont* bold = r5_settings_bold_font();
-	const BFont* plain = r5_settings_plain_font();
-	font_height height;
-	bold->GetHeight(&height);
-	float top = rect.top + 16 + height.ascent;
-	SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
-	SetFont(bold);
-	BString name(fName);
-	bold->TruncateString(&name, B_TRUNCATE_END, textWidth);
-	DrawString(name.String(), BPoint(textLeft, top));
-
-	SetFont(plain);
-	plain->GetHeight(&height);
-	SetHighColor(tint_color(ui_color(B_PANEL_TEXT_COLOR), 0.7f));
-	BString summary(fSummary);
-	plain->TruncateString(&summary, B_TRUNCATE_END, textWidth);
-	DrawString(summary.String(),
-		BPoint(textLeft, top + height.ascent + height.descent + 6));
+	float u = be_plain_font->Size() / 13.0f;
+	BFont title(be_bold_font);
+	title.SetSize(u * 13.0f);
+	BFont body(be_plain_font);
+	body.SetSize(u * 12.0f);
+	font_height titleHeight;
+	font_height bodyHeight;
+	title.GetHeight(&titleHeight);
+	body.GetHeight(&bodyHeight);
+	// Top aligned, with the same top padding as the cards (u * 10), so
+	// the title lines up with the card title next to it.
+	float y = u * 10.0f + titleHeight.ascent;
+	float x = u * 14.0f;
+	SetFont(&title);
+	SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+	DrawString("Recently changed", BPoint(x, y));
+	y += titleHeight.descent + u * 4.0f + bodyHeight.ascent;
+	SetFont(&body);
+	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_TEXT_COLOR), 160));
+	DrawString(fLine.String(), BPoint(x, y));
+	SetFont(be_plain_font);
 }
 
 
-void
-CategoryCard::MouseDown(BPoint where)
+BSize
+RecentPanel::MinSize()
 {
-	if (!IsEnabled() || !Bounds().Contains(where))
-		return;
-
-	fPressed = true;
-	SetValue(B_CONTROL_ON);
-	SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+	float u = be_plain_font->Size() / 13.0f;
+	return BSize(280, u * 14.0f * 2 + u * 13.0f + u * 12.0f);
 }
 
 
-void
-CategoryCard::MouseUp(BPoint where)
+BSize
+RecentPanel::MaxSize()
 {
-	bool inside = Bounds().Contains(where);
-	fPressed = false;
-	fHover = inside;
-	SetValue(B_CONTROL_OFF);
-	Invalidate();
-	if (inside)
-		Invoke();
+	return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
 }
 
 
-void
-CategoryCard::MouseMoved(BPoint where, uint32 transit, const BMessage* message)
+BSize
+RecentPanel::PreferredSize()
 {
-	bool inside = transit != B_EXITED_VIEW && Bounds().Contains(where);
-	if (fPressed) {
-		SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
-		return;
-	}
-	if (fHover == inside)
-		return;
-	fHover = inside;
-	Invalidate();
+	return MinSize();
 }
 
 
-void
-CategoryCard::KeyDown(const char* bytes, int32 numBytes)
-{
-	if (bytes != NULL && numBytes > 0
-		&& (*bytes == B_ENTER || *bytes == B_SPACE)) {
-		if (IsEnabled())
-			Invoke();
-		return;
-	}
-	BControl::KeyDown(bytes, numBytes);
-}
-
-
-void
-CategoryCard::GetPreferredSize(float* width, float* height)
-{
-	if (width != NULL)
-		*width = 360;
-	if (height != NULL)
-		*height = 88;
-}
-
-
-HomeView::HomeView(const SettingsHomeItem* items, int32 count,
-	const char* introText)
+HomeView::HomeView(bool recent)
 	:
-	BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING),
-	fCount(0)
+	BView("home", B_WILL_DRAW),
+	fGrid(NULL),
+	fRecent(NULL),
+	fCount(0),
+	fWantsRecent(recent)
 {
-	memset(fCards, 0, sizeof(fCards));
-	BStringView* intro = NULL;
-	if (introText != NULL && introText[0] != '\0') {
-		intro = new BStringView("intro", introText);
-		intro->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-		intro->SetFont(r5_settings_plain_font());
-	}
-
-	BGroupView* grid = new BGroupView(B_HORIZONTAL, B_USE_DEFAULT_SPACING);
-	BGroupLayout* row = grid->GroupLayout();
-	row->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-
-	BGroupView* left = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-	BGroupView* right = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-	if (count > 16)
-		count = 16;
-	for (int32 i = 0; i < count; i++) {
-		BMessage* message = new BMessage(items[i].command);
-		if (items[i].field != NULL)
-			message->AddString(items[i].field, items[i].id);
-		CategoryCard* card = new CategoryCard(items[i].name, items[i].summary,
-			items[i].iconSignature, message);
-		fCards[fCount++] = card;
-		if ((i % 2) == 0)
-			left->AddChild(card);
-		else
-			right->AddChild(card);
-	}
-	left->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
-	right->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
-	grid->AddChild(left);
-	grid->AddChild(right);
-
-	if (intro != NULL) {
-		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
-			.Add(intro)
-			.Add(grid)
-			.AddGlue();
-	} else {
-		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
-			.Add(grid)
-			.AddGlue();
-	}
-	r5_settings_apply_plain(this);
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	float u = be_plain_font->Size() / 13.0f;
+	fGrid = new BGridLayout(u * 10.0f, u * 10.0f);
+	SetLayout(fGrid);
 }
 
 
 HomeView::~HomeView()
 {
+}
+
+
+void
+HomeView::AddCard(BView* card)
+{
+	if (card == NULL || fGrid == NULL)
+		return;
+	int32 column = fCount % 2;
+	int32 row = fCount / 2;
+	fGrid->AddView(card, column, row);
+	fGrid->SetRowWeight(row, 1);
+	fCount++;
+}
+
+
+void
+HomeView::SetRecent(const BString* names, const BString* ids, int32 count)
+{
+	if (!fWantsRecent)
+		return;
+	if (fRecent != NULL) {
+		fRecent->RemoveSelf();
+		delete fRecent;
+		fRecent = NULL;
+	}
+	BString line("Nothing changed yet");
+	if (count > 0 && names != NULL) {
+		line = "";
+		for (int32 i = 0; i < count; i++) {
+			if (i > 0)
+				line << " · ";
+			line << names[i];
+		}
+	}
+	(void)ids;
+	fRecent = new RecentPanel(line.String());
+	if (fGrid != NULL) {
+		int32 row = fCount / 2;
+		fGrid->AddView(fRecent, fCount % 2, row);
+		fGrid->SetRowWeight(row, 1);
+	}
 }

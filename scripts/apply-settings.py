@@ -41,6 +41,7 @@ SOURCES = (
     "SettingsIcon.cpp",
     "SettingsIcon.h",
     "overlay-prefs.hvif",
+    "r5_pebble.inc",
     "SettingsHost.cpp",
     "SettingsHost.h",
     "SettingsManager.cpp",
