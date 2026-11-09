@@ -44,6 +44,11 @@ public:
 			uint16			fMaxPacketSize;
 			uint8			fEndpointAddress;
 			uint8			fEndpointAttributes;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			uint8			fInterval;	// bInterval: 2^(n-1) (micro)frames
+// SPDX-SnippetEnd
 };
 
 

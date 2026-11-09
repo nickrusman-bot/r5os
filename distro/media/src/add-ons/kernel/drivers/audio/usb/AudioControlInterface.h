@@ -236,7 +236,15 @@ public:
 								usb_audiocontrol_header_descriptor* Header);
 	virtual					~ClockSelector();
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			int32			SourceCount() { return fSources.Count(); }
+			uint8			Source(int32 index) { return fSources[index]; }
+
 protected:
+			Vector<uint8>	fSources;	// baCSourceID, pin 1 first
+// SPDX-SnippetEnd
 };
 
 
@@ -246,7 +254,14 @@ public:
 								usb_audiocontrol_header_descriptor* Header);
 	virtual					~ClockMultiplier();
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			uint8			Source() { return fSource; }
+
 protected:
+			uint8			fSource;	// bCSourceID
+// SPDX-SnippetEnd
 };
 
 
@@ -295,6 +310,11 @@ public:
 			status_t		GetMix(multi_mix_value_info* Info);
 			status_t		SetMix(multi_mix_value_info* Info);
 			status_t		ListMixControls(multi_mix_control_info* Info);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			uint8			ResolveClockSource(uint8 clockId);
+// SPDX-SnippetEnd
 
 protected:
 			status_t		InitACHeader(size_t interface,

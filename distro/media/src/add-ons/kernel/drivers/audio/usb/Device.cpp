@@ -15,6 +15,15 @@
 #include "Settings.h"
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Upper bounds for counts that come from a caller of the ioctls.
+static const int32 kMaxMixItems = 1024;
+static const int32 kMaxBufferDescs = 32;
+// SPDX-SnippetEnd
+
+
 Device::Device(usb_device device)
 	:
 	fStatus(B_ERROR),
@@ -142,6 +151,18 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			description.channels = channels;
 			if (description.request_channel_count > 16)
 				description.request_channel_count = 16;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// A negative count would become a huge copy below, and the
+			// channel list goes back to user memory only.
+			if (description.request_channel_count < 0)
+				description.request_channel_count = 0;
+			if (description.request_channel_count > 0
+				&& !IS_USER_ADDRESS(originalChannels)) {
+				return B_BAD_ADDRESS;
+			}
+// SPDX-SnippetEnd
 
 			status_t status = _MultiGetDescription(&description);
 			if (status != B_OK)
@@ -258,11 +279,28 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			if (user_memcpy(&info, buffer, sizeof(multi_mix_value_info)) != B_OK)
 				return B_BAD_ADDRESS;
 
-			multi_mix_value* originalValues = info.values;
-			size_t mixValueSize = info.item_count * sizeof(multi_mix_value);
-			multi_mix_value* values = (multi_mix_value*)alloca(mixValueSize);
-			if (user_memcpy(values, info.values, mixValueSize) != B_OK)
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// The count comes from the caller. It used to size an alloca on
+			// the kernel stack, and the pointer was not checked.
+			if (info.item_count < 0 || info.item_count > kMaxMixItems)
+				return B_BAD_VALUE;
+			if (info.item_count == 0)
+				return B_OK;
+			if (!IS_USER_ADDRESS(info.values))
 				return B_BAD_ADDRESS;
+
+			multi_mix_value* originalValues = info.values;
+			size_t mixValueSize
+				= (size_t)info.item_count * sizeof(multi_mix_value);
+			multi_mix_value* values = (multi_mix_value*)malloc(mixValueSize);
+			if (values == NULL)
+				return B_NO_MEMORY;
+			if (user_memcpy(values, originalValues, mixValueSize) != B_OK) {
+				free(values);
+				return B_BAD_ADDRESS;
+			}
 			info.values = values;
 
 			status_t status;
@@ -270,10 +308,14 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				status = _MultiGetMix(&info);
 			else
 				status = _MultiSetMix(&info);
-			if (status != B_OK)
-				return status;
 			// the multi_mix_value_info is not modified
-			return user_memcpy(originalValues, values, mixValueSize);
+			if (status == B_OK
+				&& user_memcpy(originalValues, values, mixValueSize) != B_OK) {
+				status = B_BAD_ADDRESS;
+			}
+			free(values);
+			return status;
+// SPDX-SnippetEnd
 		}
 
 		case B_MULTI_LIST_MIX_CHANNELS:
@@ -292,6 +334,13 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 			}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// Cap the caller's count before it sizes the allocation.
+			if (info.control_count <= 0 || info.control_count > kMaxMixItems)
+				return B_BAD_VALUE;
+// SPDX-SnippetEnd
 			original_controls = info.controls;
 			allocSize = sizeof(multi_mix_control) * info.control_count;
 			controls = (multi_mix_control *)malloc(allocSize);
@@ -335,8 +384,21 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			buffer_desc **original_playback_descs = list.playback_buffers;
 			buffer_desc **original_record_descs = list.record_buffers;
 
-			buffer_desc *playback_descs[list.request_playback_buffers];
-			buffer_desc *record_descs[list.request_record_buffers];
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// These counts sized arrays on the kernel stack. Each stream
+			// writes kSamplesBufferCount entries, so a smaller request is
+			// refused in Stream::GetBuffers.
+			if (list.request_playback_buffers < 0
+				|| list.request_playback_buffers > kMaxBufferDescs
+				|| list.request_record_buffers < 0
+				|| list.request_record_buffers > kMaxBufferDescs) {
+				return B_BAD_VALUE;
+			}
+			buffer_desc *playback_descs[kMaxBufferDescs];
+			buffer_desc *record_descs[kMaxBufferDescs];
+// SPDX-SnippetEnd
 
 			if (!IS_USER_ADDRESS(list.playback_buffers)
 				|| user_memcpy(playback_descs, list.playback_buffers,
@@ -764,7 +826,13 @@ Device::TraceListMixControls(multi_mix_control_info* Info)
 	TRACE(MIX, "control_count:%d\n.", Info->control_count);
 
 	int32 i = 0;
-	while (Info->controls[i].id > 0) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// This loop runs even with tracing off. Stop at the filled count
+	// instead of reading past the allocation when no entry has id 0.
+	while (i < Info->control_count && Info->controls[i].id > 0) {
+// SPDX-SnippetEnd
 		multi_mix_control &c = Info->controls[i];
 		TRACE(MIX, "id:%#08x\n",		c.id);
 		TRACE(MIX, "flags:%#08x\n",	c.flags);

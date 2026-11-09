@@ -26,6 +26,23 @@ usb_midi_load_le32(const uint8_t* in)
 }
 
 
+/* The next USB-MIDI 1.0 event packet of a SysEx message, from the bytes of
+ * that message still to send (USB-MIDI 1.0 § 4, Table 4-1). More than three
+ * bytes left: CIN 0x4 with three bytes. Three, two or one left: the end
+ * packets CIN 0x7, 0x6 or 0x5 with that many bytes. Nothing left: count 0. */
+inline void
+usb_midi_sysex_packet(size_t left, uint8_t* cin, uint8_t* count)
+{
+	if (left > 3) {
+		*cin = 0x4;
+		*count = 3;
+		return;
+	}
+	*cin = (uint8_t)(0x4 + left);
+	*count = (uint8_t)left;
+}
+
+
 inline uint32_t
 usb_midi_ump_word_count(uint32_t first)
 {

@@ -110,6 +110,65 @@ usb_audio_rates_between(uint32_t minRate, uint32_t maxRate,
 }
 
 
+inline void
+usb_audio_add_rate(usb_audio_parsed_format* format, uint32_t rate)
+{
+	if (rate == 0 || format->rateCount >= 16)
+		return;
+	for (uint8_t i = 0; i < format->rateCount; i++) {
+		if (format->rates[i] == rate)
+			return;
+	}
+	format->rates[format->rateCount++] = rate;
+}
+
+
+// The answer to a UAC 2.0 RANGE request on the sampling frequency control of
+// a clock source (UAC 2.0 § 5.2.1 and § 5.2.3.3, layout 3): wNumSubRanges,
+// then dMIN, dMAX and dRES of four bytes each per subrange. A single rate
+// (dMIN == dMAX) is taken as it is. A span offers the common rates inside it
+// that sit on its dRES grid. Returns the number of rates found.
+inline int
+usb_audio_parse_rate_range(const uint8_t* bytes, size_t length,
+	usb_audio_parsed_format* format)
+{
+	if (bytes == NULL || format == NULL || length < 2)
+		return 0;
+	format->rateCount = 0;
+	uint16_t count = (uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8);
+	for (uint16_t r = 0; r < count; r++) {
+		size_t at = 2 + (size_t)r * 12;
+		if (at + 12 > length)
+			break;
+		uint32_t minRate = usb_audio_read24(bytes + at)
+			| ((uint32_t)bytes[at + 3] << 24);
+		uint32_t maxRate = usb_audio_read24(bytes + at + 4)
+			| ((uint32_t)bytes[at + 7] << 24);
+		uint32_t resolution = usb_audio_read24(bytes + at + 8)
+			| ((uint32_t)bytes[at + 11] << 24);
+		if (minRate > maxRate) {
+			uint32_t swap = minRate;
+			minRate = maxRate;
+			maxRate = swap;
+		}
+		if (minRate == maxRate) {
+			usb_audio_add_rate(format, minRate);
+			continue;
+		}
+		for (size_t i = 0;
+				i < sizeof(kUsbAudioRates) / sizeof(kUsbAudioRates[0]); i++) {
+			uint32_t rate = kUsbAudioRates[i];
+			if (rate < minRate || rate > maxRate)
+				continue;
+			if (resolution != 0 && (rate - minRate) % resolution != 0)
+				continue;
+			usb_audio_add_rate(format, rate);
+		}
+	}
+	return format->rateCount;
+}
+
+
 inline int
 usb_audio_parse_format_i(const uint8_t* bytes, size_t length, uint16_t version,
 	uint8_t channelsFromGeneral, usb_audio_parsed_format* format)
