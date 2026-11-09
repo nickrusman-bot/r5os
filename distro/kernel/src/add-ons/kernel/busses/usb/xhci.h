@@ -30,6 +30,9 @@ class XHCIRootHub;
 /* The endpoint ring needs space for 2 TRBs per transfer
  * (one for the link TRB, and one for the Event Data TRB). */
 #define XHCI_ENDPOINT_RING_SIZE	(XHCI_MAX_TRANSFERS * 2)
+// Controllers such as the VIA VL805 fetch past the doorbell TRB.
+#define XHCI_TRB_OVERFETCH		4
+#define XHCI_ENDPOINT_RING_STRIDE	(XHCI_ENDPOINT_RING_SIZE + XHCI_TRB_OVERFETCH)
 
 
 struct xhci_td : public DoublyLinkedListLinkImpl<xhci_td> {
@@ -37,6 +40,8 @@ struct xhci_td : public DoublyLinkedListLinkImpl<xhci_td> {
 	phys_addr_t	trb_addr;
 	uint32		trb_count;
 	uint32		trb_used;
+	uint8		ring_link;
+	uint8		ring_event_data;
 
 	void**		buffers;
 	phys_addr_t* buffer_addrs;
@@ -62,8 +67,11 @@ struct xhci_endpoint {
 	DoublyLinkedList<xhci_td> td_list;
 	uint8			used;
 	uint8			next;
+	bool			recovering;
+		// A halted endpoint is being reset. A transfer linked meanwhile
+		// is rung once that reset has finished.
 
-	xhci_trb*		trbs; // [XHCI_ENDPOINT_RING_SIZE]
+	xhci_trb*		trbs; // [XHCI_ENDPOINT_RING_STRIDE]
 	phys_addr_t 	trb_addr;
 };
 
@@ -73,7 +81,7 @@ struct xhci_device {
 	uint8 address;
 	area_id trb_area;
 	phys_addr_t trb_addr;
-	struct xhci_trb *trbs; // [XHCI_MAX_ENDPOINTS - 1][XHCI_ENDPOINT_RING_SIZE]
+	struct xhci_trb *trbs; // [XHCI_MAX_ENDPOINTS - 1][XHCI_ENDPOINT_RING_STRIDE]
 
 	area_id input_ctx_area;
 	phys_addr_t input_ctx_addr;
@@ -109,6 +117,7 @@ public:
 
 	virtual	status_t			NotifyPipeChange(Pipe *pipe,
 									usb_change change);
+	virtual	status_t			PlatformResetPort(uint8 index);
 
 	virtual	Device *			AllocateDevice(Hub *parent,
 									int8 hubAddress, uint8 hubPort,
@@ -145,6 +154,8 @@ private:
 			uint8				_GetEndpointState(xhci_endpoint* ep);
 
 			status_t			_InsertEndpointForPipe(Pipe *pipe);
+			void				_ClearRingEntries(xhci_endpoint* endpoint,
+									uint8 start, uint8 count);
 			status_t			_RemoveEndpointForPipe(Pipe *pipe);
 
 			// Event management
@@ -194,6 +205,8 @@ private:
 			status_t			ResetEndpoint(bool preserve, xhci_endpoint* endpoint);
 			status_t			StopEndpoint(bool suspend, xhci_endpoint* endpoint);
 			void				RecoverHaltedEndpoint(xhci_endpoint* endpoint);
+			void				_RecoverHaltedEndpoint(xhci_endpoint* endpoint,
+									xhci_td* td);
 			status_t			SetTRDequeue(uint64 dequeue, uint16 stream,
 									uint8 endpoint, uint8 slot);
 			status_t			ResetDevice(uint8 slot);
@@ -262,6 +275,9 @@ private:
 			uint8				fPortCount;
 			uint8				fSlotCount;
 			usb_speed			fPortSpeeds[XHCI_MAX_PORTS];
+			// A warm reset change that does not clear, for example a USB-C
+			// port whose lanes all carry DisplayPort.
+			bool				fStuckWarmResetChange[XHCI_MAX_PORTS];
 
 			// Scratchpad
 			uint32				fScratchpadCount;
@@ -286,6 +302,12 @@ private:
 			uint16				fCmdIdx;
 			uint8				fEventCcs;
 			uint8				fCmdCcs;
+
+			// Transfer error log rate limiting. ProcessEvents() holds
+			// fEventLock around HandleTransferComplete().
+			bigtime_t			fLastTransferErrorLog;
+			uint32				fSuppressedTransferErrors;
+			uint8				fLastTransferErrorCode;
 
 			uint32				fExitLatMax;
 };

@@ -1487,6 +1487,9 @@ EHCI::ResetPort(uint8 index)
 		// we give the ownership to a companion controller.
 		WriteOpReg(portRegister, portStatus | EHCI_PORTSC_PORTOWNER);
 		fPortResetChange |= (1 << index);
+		// The device is now on a companion this pass may already have
+		// walked, so look again instead of waiting a full second.
+		fStack->TriggerExplore();
 		return B_OK;
 	}
 
@@ -1511,6 +1514,9 @@ EHCI::ResetPort(uint8 index)
 		// the port was not enabled, this means that no high speed device is
 		// attached to this port. we give up ownership to a companion controler
 		WriteOpReg(portRegister, portStatus | EHCI_PORTSC_PORTOWNER);
+		// Same as the low-speed path: the device has moved to a companion
+		// this pass has probably already visited.
+		fStack->TriggerExplore();
 	}
 
 	fPortResetChange |= (1 << index);

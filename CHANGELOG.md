@@ -1,5 +1,81 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - the USB image reached the desktop in VirtualBox
+
+The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 17:04 Europe/Amsterdam. The desktop, with the Deskbar and the Tracker icon, was on the screen at 17:07. The machine was left running. A USB stick was not passed through, so the earlier "third try" transaction errors were not measured again. The descriptor-length checks that were already in the tree do not explain a SuperSpeed endpoint whose packet size is 0.
+
+## 2026-11-09 - the firmware reset of a built-in USB device stays on the first PCI segment
+
+That reset looks the device up by its bus number in the firmware tables. A controller on another segment has a different bus number than the firmware uses, so the lookup could hit the wrong device. The reset now runs only for a controller on segment 0, and a firmware root bridge that says it is on another segment is skipped.
+
+## 2026-11-09 - a USB controller that starts after the boot volume is mounted no longer hangs the boot
+
+A controller that starts after the boot volume is mounted was explored while the device manager lock was held. Taking a port back from a companion can unpublish a disk that is already there, and that unpublish waits for a lock the disk thread holds while it waits for the device manager. The boot stops. After the volume is mounted, that first look is left to the explore thread. Before the mount, it still happens immediately, so a boot device on USB is still found. From RenkuOS cdd493103a956a90295deb22ace647ab9df1f019 by David Beckman.
+
+## 2026-11-09 - a slow USB device handed to a companion is seen at once
+
+When a high-speed controller finds a low-speed or full-speed device, it gives the port to the companion controller. That companion had often already been looked at in the same pass, so the device waited a full second. Some devices disconnect again inside that second. The companion is looked at again straight away. From RenkuOS 42ea6ba8c967dd79c4c3196fbf02f7304d9aba2d by David Beckman.
+
+## 2026-11-09 - a USB port that keeps failing setup is left alone on 64-bit too
+
+The retry cap, the power cycle and the cooldown were compiled in only on 32-bit x86. This image is 64-bit, so a device that stayed connected and failed to set up was still reset on every pass. The same cap now applies here. From RenkuOS 9abfa5e06e0c9f381f1c1e532e6d82003c3a1858 by David Beckman.
+
+## 2026-11-09 - unplugging a given-up USB port lets the next device in
+
+A port that had been ignored for the rest of the boot was skipped before its status was read, so unplugging it and plugging in another device did nothing until a restart. The status is read anyway. With nothing connected, the ignore and the counters are cleared. A port that is still occupied stays ignored. The address-0 descriptor read from the previous change is gone: it was an extra control transfer on every device, and nothing here needed it. From RenkuOS 14576fdf3c5bc1e59739126b7e5539ab5bba8a45 by rainygirl.
+
+## 2026-11-09 - a USB port that keeps failing setup is left alone
+
+A port that failed to set up was reset on every look, for the whole boot. After two failed setups it is powered off and on, at most twice, and only when that hub switches power per port. After that it is ignored until a new connection arrives, and after three of those it stays ignored for the rest of the boot. Unplugging it starts the count over. On 32-bit x86 the device is also asked for its descriptor before it is given an address; that answer is only written to the log. From RenkuOS 64d38d0286e6ae25d125bc6124bde04ba6e71e3f by rainygirl. The hub descriptor is not stored; the power-switching bits are kept beside the port count. This image is 64-bit, so the new behaviour is not compiled in yet.
+
+## 2026-11-09 - the USB image started in VirtualBox
+
+The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 16:30 Europe/Amsterdam. The guest was not watched through to the desktop. A USB stick was not plugged in, so whether the mouse and keyboard keep working after that was not seen.
+
+## 2026-11-09 - a built-in USB device that will not take an address is reset
+
+After a warm restart a built-in device can stop answering. If a device on the root hub fails to set up, the controller now asks the firmware to reset that port, at most three times. On x86 that reset is the ACPI reset line of the port. From air/OS fa1ebc8a74050bba0c373d95f6307b8b46784e67.
+
+## 2026-11-09 - unplugging a USB audio device no longer floods the log
+
+Every failed packet was written to the log. Unplugging a device that sends many packets stalled the machine on the serial port. The same error is now written at most once every tenth of a second, with a count of the lines that were skipped. The message itself is unchanged. From air/OS c707b89ff80be4fdfa780637da5cf1d38167a46f by David Beckman.
+
+## 2026-11-09 - unplugging a USB audio device no longer panics on a wait that finished
+
+The wait for a USB object to go idle gave up after two milliseconds, and it also panicked when the object became idle on the last try, because the counter was not decremented on that try. It now waits half a second, and it panics only when the object is still busy. From air/OS df92a69cdb633ebf70dcdd08d68ca8bed9f6a37c by David Beckman. The two-second budget in the original note was not taken.
+
+## 2026-11-09 - unplugging a USB network adapter no longer stops the system
+
+Removing a device waited for each pipe to go idle, but a driver could still be inside a control request that lasts several seconds. The default pipe is now closed and its requests cancelled first. A USB Ethernet adapter only clears a halt after a stall, and not after the adapter has already been removed. From air/OS e04ebcb285d3c54d8d7db73a34423c8bcb7173bd.
+
+## 2026-11-09 - a bad USB event no longer walks off the device list
+
+A transfer event with a slot number past the end of the list was logged and then used as an index. The driver now returns after that log. From air/OS 11775b1e9079ac101886941651d4ef1cb458efc4, taken from RenkuOS a9bba0ca79 by Mas Ahmad Muhammad. The Bay Trail part of that RenkuOS commit was not taken.
+
+## 2026-11-09 - a device behind a full-speed hub is found
+
+The path stored for a device behind a full-speed hub used the port of the transaction translator, which is the hub's own upstream port. The controller then rejected the address, and nothing behind that hub appeared. The path now uses the port the hub is setting up, and each hub's port on the hub above it. From air/OS 39515d87e198923306f404d02b7f05a2586aeb64. The guest test in that commit was not taken.
+
+## 2026-11-09 - a warm reset actually resets the SuperSpeed port
+
+The warm-reset bit was the wrong one, so the reset never happened. It is now bit 31 of the port register. After the reset the device has lost its address, and the hub enumerates it again. A warm-reset change that the controller will not clear is reported once, not on every pass. From air/OS 2ae6e2c26b60f6840fb7f9bbf5368f8cdccc1f8a.
+
+## 2026-11-09 - a stuck SuperSpeed port is reset
+
+A SuperSpeed link that has gone inactive, or into compliance mode, does not come back by itself. The hub now requests a warm reset, up to three times and two seconds apart, until the link has left that state. From air/OS 01e2036af28ef692585487434a6b247d9d332922.
+
+## 2026-11-09 - a stalled keyboard or mouse keeps working
+
+A stall halts the pipe in the controller. The driver of a keyboard, mouse, or network adapter clears the halt in the device and sends the next transfer, but the controller still had the pipe halted, so that transfer never ran. The driver now resets a stalled bulk or interrupt pipe before it reports the error. An unplug, which fails many transfers at once, is left to the transfer's own timeout so the controller is not flooded with commands. Isochronous audio still uses its own reset. From air/OS bdad03ac62bdf47da071448828b463fc887ebff8. The idea is from RenkuOS 5b6210a165 by David Beckman.
+
+## 2026-11-09 - a stalled control request no longer blocks the next one
+
+A device that refuses a request stalls its control pipe, and the controller leaves that pipe halted. The next request then waited until it timed out. The driver now resets that pipe before it reports the failure, and continues with anything already queued. From air/OS 846abe02798c06eac1cba01c7a43b5eb293d9400.
+
+## 2026-11-09 - xHCI clears a finished transfer on the VIA VL805
+
+A VIA VL805 reads a few slots past the transfer it was told to run. A finished transfer left its old entry in the ring, and the controller could run it again. Each endpoint ring now has four empty slots after it, a transfer buffer has the same empty slots, and the driver clears the ring entry when the transfer finishes. The firmware version is written to the log. From haiku-pi c65ac5a2e6a6383be3e6630ded05b1a29d506166.
+
 ### Deleting a folder does not stall a disk sync
 
 BFS kept a reference to a file until its I/O finished, then dropped that reference on the I/O notifier thread. If the file had been removed, that drop deleted the inode there and could wait for the journal while the thread that held the journal waited for the notifier. The last reference is now handed to the vnode undertaker, which deletes the inode on its own thread. The shell build of BFS still uses its own put. This is haiku-pi star row 57, commit 44cc183c0c. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
@@ -213,7 +289,7 @@ The Haiku tree is a subtree merge of `upstream/master` `4aae8640c9` (one commit 
 
 ### M4: the second program failed because the invalidation range covered nothing
 
-From stick 19 through stick 28 the second GPU program drew the wrong picture or hung. K2 on stick 29 read `inv range eng 0/17 lo 0 hi 0`, so every invalidate covered no addresses. With the setting off, R1a and R1b wrote `22222222` onto the old GTT page and left the new VRAM page at `00000000`. `gfx9_inv_range` now defaults on. `r5_gfx9_vmid1_setup` writes `0xffffffff` and `0x1f` to all 18 engines after the VMID setup, the two stores in Linux v6.12 `gfxhub_v1_0_program_invalidation`. `gfx9_inv_range false` still turns that write off. On stick 29, with the range on, the old page stayed `11111111`, the new page received `22222222`, R1c's destination was `44444444`, and the teapot runs including SAM exited 0 with `pixels ok`. The limit is that stick 29 wrote the range at run time, after stage P. The boot position, before the first user job, has not been booted. The next GPU stick confirms it. Built and still off: `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_pasid_map`, `gfx9_gds_switch`, `gfx9_ce_meta`, `gfx9_deferred_free`. There is no What's new section. The GPU stays opt-in, so an ordinary user sees nothing new, and `distro/BUILD` stays the same. There is no M4 or VulkanTeapot row in the tracker.
+From stick 19 through stick 28 the second GPU program drew the wrong picture or hung. K2 on stick 29 read `inv range eng 0/17 lo 0 hi 0`, so every invalidate covered no addresses. With the setting off, R1a and R1b wrote `22222222` onto the old GTT page and left the new VRAM page at `00000000`. `gfx9_inv_range` now defaults on. `r5_gfx9_vmid1_setup` writes `0xffffffff` and `0x1f` to all 18 engines after the VMID setup, the two stores in Linux v6.12 `gfxhub_v1_0_program_invalidation`. `gfx9_inv_range false` still turns that write off. On stick 29, with the range on, the old page stayed `11111111`, the new page received `22222222`, R1c's destination was `44444444`, and the teapot runs including SAM exited 0 with `pixels ok`. The limit is that stick 29 wrote the range at run time, after stage P. The boot position, before the first user job, has not been booted. The next GPU stick confirms it. That stick also tries a USB 3 stick on an HP machine, plugged in and out, to see whether the mouse and keyboard keep working. Built and still off: `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_pasid_map`, `gfx9_gds_switch`, `gfx9_ce_meta`, `gfx9_deferred_free`. There is no What's new section. The GPU stays opt-in, so an ordinary user sees nothing new, and `distro/BUILD` stays the same. There is no M4 or VulkanTeapot row in the tracker.
 
 ### Stick 29 boot 1: the ordinary teapot and SAM both draw, and R1c does not hang
 

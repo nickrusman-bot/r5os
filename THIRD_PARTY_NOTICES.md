@@ -35,6 +35,39 @@ The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file.
 Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/kernel_interface.cpp`.
 
 The file is Haiku's BFS interface. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `44cc183c0c` (star row 57): the last reference from a finished I/O is released through `vfs_put_vnode()`. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+### USB controller
+
+Location: `distro/kernel/src/add-ons/kernel/busses/usb/xhci.cpp`, `xhci.h`, `xhci_hardware.h`, `ehci.cpp`, `distro/kernel/src/add-ons/kernel/bus_managers/usb/Device.cpp`, `Hub.cpp`, `usb_private.h`, `Object.cpp`, `BusManager.cpp`, `Stack.cpp`, and `distro/kernel/src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp`.
+
+The files are Haiku's. Copyright the Haiku authors named in each file. License: MIT. The headers stay. The added blocks stay MIT. They are not relicensed.
+
+haiku-pi `c65ac5a2e6a6383be3e6630ded05b1a29d506166` clears a finished transfer on a VIA VL805 and leaves four empty slots after it. Copyright 2026 Witold Bołt.
+
+air/OS (airos-works/haiku), copyright jmgasper, unless another author is named:
+
+- `846abe02798c06eac1cba01c7a43b5eb293d9400` resets a control pipe as soon as it halts.
+- `bdad03ac62bdf47da071448828b463fc887ebff8` resets a stalled bulk or interrupt pipe. The idea is RenkuOS `5b6210a165` by David Beckman.
+- `01e2036af28ef692585487434a6b247d9d332922` and `2ae6e2c26b60f6840fb7f9bbf5368f8cdccc1f8a` warm-reset a SuperSpeed link that is inactive. The warm-reset bit is bit 31.
+- `39515d87e198923306f404d02b7f05a2586aeb64` builds the route from the hubs' own ports. The guest test in that commit was not taken.
+- `11775b1e9079ac101886941651d4ef1cb458efc4` returns when a transfer event names a slot past the device list. Taken from RenkuOS `a9bba0ca79` by Mas Ahmad Muhammad. The Bay Trail part of that commit was not taken.
+- `e04ebcb285d3c54d8d7db73a34423c8bcb7173bd` fails control requests of a device that is going away, and a USB Ethernet adapter only clears a halt after a stall.
+- `fa1ebc8a74050bba0c373d95f6307b8b46784e67` resets a built-in device that takes no address, through ACPI, on x86.
+
+`df92a69cdb633ebf70dcdd08d68ca8bed9f6a37c` and `c707b89ff80be4fdfa780637da5cf1d38167a46f` are copyright David Beckman. The first waits half a second for a USB object to go idle and panics only when it is still busy. The second writes a repeated transfer error at most once every tenth of a second. The two-second wait in the original note was not taken.
+
+RenkuOS (RenkuOS/Source), copyright rainygirl:
+
+- `64d38d0286e6ae25d125bc6124bde04ba6e71e3f` stops retrying a port that keeps failing to set up, and power-cycles it only when the hub switches power per port.
+- `14576fdf3c5bc1e59739126b7e5539ab5bba8a45` lets an unplug clear that ignore, and drops the address-0 descriptor read.
+
+RenkuOS, copyright David Beckman:
+
+- `9abfa5e06e0c9f381f1c1e532e6d82003c3a1858` enables that port cap on 64-bit x86.
+- `42ea6ba8c967dd79c4c3196fbf02f7304d9aba2d` looks again as soon as a high-speed controller hands a port to its companion.
+- `cdd493103a956a90295deb22ace647ab9df1f019` explores a controller that starts after the boot volume is mounted from the explore thread.
+
+`scripts/apply-kernel-bugs.py` copies these files.
+
 ### USB disk unplug
 
 Location: `distro/kernel/src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp`.
