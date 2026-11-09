@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a slow USB device handed to a companion is seen at once
+
+When a high-speed controller finds a low-speed or full-speed device, it gives the port to the companion controller. That companion had often already been looked at in the same pass, so the device waited a full second. Some devices disconnect again inside that second. The companion is looked at again straight away. From RenkuOS 42ea6ba8c967dd79c4c3196fbf02f7304d9aba2d by David Beckman.
+
 ## 2026-11-09 - a USB port that keeps failing setup is left alone on 64-bit too
 
 The retry cap, the power cycle and the cooldown were compiled in only on 32-bit x86. This image is 64-bit, so a device that stayed connected and failed to set up was still reset on every pass. The same cap now applies here. From RenkuOS 9abfa5e06e0c9f381f1c1e532e6d82003c3a1858 by David Beckman.

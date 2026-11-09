@@ -183,6 +183,14 @@ public:
 
 		void							Explore();
 
+		// Wake the explore thread now instead of waiting out
+		// USB_DELAY_HUB_EXPLORE. A host controller calls this when a device
+		// has moved onto a bus the current pass already walked. Safe from
+		// inside Explore(): the semaphore is drained before the root-hub
+		// loop, so a release during that loop schedules one more pass.
+		void							TriggerExplore()
+											{ release_sem(fExploreSem); }
+
 private:
 static	int32							ExploreThread(void *data);
 
