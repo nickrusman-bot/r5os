@@ -276,7 +276,7 @@ void
 BPageHeader::_Fonts(BFont& eyebrow, BFont& title, BFont& subtitle) const
 {
 	eyebrow = *be_plain_font;
-	eyebrow.SetSize(be_plain_font->Size() * 0.9f);
+	eyebrow.SetSize(be_plain_font->Size() / 13.0f * 12.0f);
 	font_family family;
 	font_style style;
 	be_plain_font->GetFamilyAndStyle(&family, &style);

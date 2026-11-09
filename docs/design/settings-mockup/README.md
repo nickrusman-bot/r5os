@@ -5,6 +5,7 @@ The design the user chose for the R5 Settings window. Settings is rebuilt to loo
 | File | What it shows |
 |---|---|
 | `home.png`, `home.html` | Home with the card view. All categories are folded in the list. |
+| `information.png` | The Information page: a device card, six tiles, and a footer. |
 | `notifications.png`, `notifications.html` | An open page (Notifications). Its category, System, is open in the list. |
 | `icons/` | The icons the pages use (see "Icons" below) |
 
