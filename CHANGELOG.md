@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - Command lists are checked before a test boot
+
+`scripts/check-pm4.py` reads Mesa 25.3.6 `src/amd/common/sid.h` and checks the hand-written command lists: the kernel clear-state ring (914 dwords), the isolation copy, the self-test indirect buffer, stage P, the user frame, the VM switch, and the compute indirect buffer. A `COPY_DATA` that says "register" and then carries a GPU address is rejected. That is the failure from stick 31. The isolation command list must still be mapped executable. That is the failure from stick 30. Three opcodes that this Mesa header no longer names (`PREAMBLE_CNTL`, `SWITCH_BUFFER`, `FRAME_CONTROL`) are accepted from Mesa 22.3 and from Linux `gfx_v9_0.c`, and the script says so.
+
+The leftovers from stick 32 are written in `docs/GPU-M6.md` and are not code yet. The fault status `00900c10` was the register dump (`fault %08lx`), not a `vm fault` line. Linux v6.12 `gmc_v9_0_process_interrupt` (line 545) reads `VM_L2_PROTECTION_FAULT_STATUS` and clears bit 0 of the fault control (lines 661–676). R5's handler does neither, and it queues a fault only for client `0x12` or `0x1b` with source 0. `print_fault()` then prints `vm fault addr` even when that line is absent. A guilty job still marks the GPU lost and does not reset it. A mode-2 reset through the PSP, then the same ring start, is described there and is not part of M6. The ring contract is unchanged.
+
+Host test, 10 Nov 2026: `python3 scripts/check-pm4.py` printed `ok pm4 48 streams, 89 opcodes`.
+
+`jam -q @r5-raw` finished at 00:35 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 8417 targets, `mesa_exit=0`. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because three artwork files are CRLF; the rest of the apply was run and the script was put back.
+
+VirtualBox, same image, new VDI, bridged. The welcome window came up, Try R5 reached Sign in, and Sign in reached the desktop: Tracker, Deskbar, and the home icons. No panic was on screen. Not a GPU test. Lavapipe was not started. The 5625U was not used.
+
 ## 2026-11-09 - The boot disk no longer shows the ladybug under the R5 mark
 
 The boot volume still asked for `R_BootVolumeIcon`, the nightly drive with the ladybug, and the R5 mark only covered part of it; the ladybug showed around the mark. The well-known boot disk in `IconCache.cpp` now uses `kR5DriveIcon`, the same drive without the ladybug that other disks already use, and falls back to the resource only when the vector fails. The mark in `Pose.cpp` is a square from (4, 36) to (26, 58) in the 64-unit icon, on the front of the drive, in place of the stretched 14×16 rectangle at (10, 40). The Get Info header has the drive without a mark, as before only the pose draws it. `distro/BUILD` stays 10052.
