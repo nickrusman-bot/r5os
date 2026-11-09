@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Unplugging a USB disk does not stall its transfer
+
+Tearing a USB disk down deleted each LUN's I/O scheduler while holding the device lock. The scheduler thread runs the disk transfer, which takes that same lock, so the two threads could wait for each other. The schedulers are now deleted after the device is marked removed and before the lock is taken. A transfer that is still queued for a removed disk finishes at once with "device not ready" instead of waiting out each command. This is haiku-pi star row 54, commit d3cc8e3fd1. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.

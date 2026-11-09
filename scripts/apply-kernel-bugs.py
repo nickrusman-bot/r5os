@@ -19,6 +19,7 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/thread.cpp",
         "src/system/kernel/vm/vm.cpp",
+        "src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp",
     )
     for relative in files:
         install_file(
