@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - the USB image started in VirtualBox
+
+The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 16:30 Europe/Amsterdam. The guest was not watched through to the desktop. A USB stick was not plugged in, so whether the mouse and keyboard keep working after that was not seen.
+
 ## 2026-11-09 - a built-in USB device that will not take an address is reset
 
 After a warm restart a built-in device can stop answering. If a device on the root hub fails to set up, the controller now asks the firmware to reset that port, at most three times. On x86 that reset is the ACPI reset line of the port. From air/OS fa1ebc8a74050bba0c373d95f6307b8b46784e67.
