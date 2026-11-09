@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A large fragmented file no longer overflows the kernel stack
+
+An I/O request walked the rest of a fragmented file by calling its iteration callback again from the completion of the previous piece. Synchronous I/O finishes before that callback returns, so each round of file vectors added another kernel stack frame. A large fragmented file could run off the end of the stack. A completion that arrives while the callback is still running is now only recorded. The caller's loop continues with the next round. Asynchronous completions are unchanged. This is haiku-pi star row 19, commit 90fa3bc401. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.

@@ -19,6 +19,8 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/thread.cpp",
         "src/system/kernel/vm/vm.cpp",
+        "src/system/kernel/device_manager/IORequest.cpp",
+        "src/system/kernel/device_manager/IORequest.h",
     )
     for relative in files:
         install_file(
