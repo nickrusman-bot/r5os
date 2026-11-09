@@ -9,7 +9,7 @@
 - **Search** shows a magnifier and the word Search inside the field, with the text centred. The magnifier was drawn under the text view before, so it never showed.
 - **Revert and Defaults** take the width of their label instead of stretching.
 
-Tested: jam `jam_exit=0` (the 16 translator header errors are not from this change). One QEMU boot (TCG), Home opened: the wave shows in the heading, the Home row and the Deskbar; no strip at the right of the list; Search, Recently changed and the buttons as described. The hover was not checked on a still picture. Not tested on hardware.
+Tested: jam `jam_exit=0` (the 16 translator header errors are not from this change). One QEMU boot (TCG), Home opened: the wave shows in the heading, the Home row and the Deskbar; no strip at the right of the list; Search, Recently changed and the buttons as described. The user checked the hover on rows and cards in the same QEMU run. Not tested on hardware.
 
 ## 2026-11-09 - Settings uses a folding list and cards
 
