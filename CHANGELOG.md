@@ -1,5 +1,8 @@
 # R5OS changelog (lokaal)
 
+### Unplugging a USB disk does not stall its transfer
+
+Tearing a USB disk down deleted each LUN's I/O scheduler while holding the device lock. The scheduler thread runs the disk transfer, which takes that same lock, so the two threads could wait for each other. The schedulers are now deleted after the device is marked removed and before the lock is taken. A transfer that is still queued for a removed disk finishes at once with "device not ready" instead of waiting out each command. This is haiku-pi star row 54, commit d3cc8e3fd1. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
 ### A volume that cannot be mounted does not stop the system
 
 When a BFS mount failed after the journal had been created, the journal was left in place. If the block allocator had opened a transaction to repair the bitmap, deleting the block cache then panicked. A failed mount now waits for the block allocator, then deletes the root node and the journal, and returns the error. This is haiku-pi star row 50, commit 9799738757. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.

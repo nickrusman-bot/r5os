@@ -30,6 +30,11 @@ Location: `distro/kernel/src/system/kernel/thread.cpp`.
 
 The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 
+### USB disk unplug
+
+Location: `distro/kernel/src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp`.
+
+The file is Haiku's USB disk driver. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `d3cc8e3fd1` (star row 54): the I/O schedulers are deleted before the device lock is taken, and a removed disk's queued transfer returns at once. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 ### BFS mount cleanup
 
 Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/Volume.cpp`.
