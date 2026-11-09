@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Files on a shared folder get a type from the name
+
+A missing attribute came back as out of memory, so the file type was lost. This is air/OS `6b3fed7c57ba230d356ada64e394ca02e3d4310b`. The smbfs add-on already answers the type from the name. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A shared file that was deleted while open is let go
 
 Closing it failed once it had no name, so the server kept the deleted file. This is air/OS `5b3aae72a780e69adb4ae4e010a986e696711fb7`. The smbfs add-on already uses the open handle for that. There is no What's new section and `distro/BUILD` stays the same.

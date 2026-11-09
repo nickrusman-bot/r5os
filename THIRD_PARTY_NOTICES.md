@@ -69,7 +69,7 @@ Location: `distro/smb/src/add-ons/kernel/file_systems/smbfs`.
 
 A userlandfs add-on from air/OS (`github.com/airos-works/haiku`). Copyright 2026 Haiku, Inc. License: MIT. It links `libsmb2.a`, so the add-on as shipped combines that MIT code with LGPL-2.1-or-later. The notices stay on each part.
 
-The userlandfs files that add-on runs in are copied from Haiku into `distro/smb/src/add-ons/kernel/file_systems/userlandfs/`. They keep the Haiku MIT header. The changes are from air/OS, by jmgasper <jmgasper@gmail.com>: `00e1291e8095e94362e211d2b8dfaed38127a2cd`, `08a75db478698cd9c1e35649b30bf57f08e6d4d8`, and `5b3aae72a780e69adb4ae4e010a986e696711fb7`. `scripts/apply-smb.py` copies them with the rest of `distro/smb`.
+The userlandfs files that add-on runs in are copied from Haiku into `distro/smb/src/add-ons/kernel/file_systems/userlandfs/`. They keep the Haiku MIT header. The changes are from air/OS, by jmgasper <jmgasper@gmail.com>: `00e1291e8095e94362e211d2b8dfaed38127a2cd`, `08a75db478698cd9c1e35649b30bf57f08e6d4d8`, `5b3aae72a780e69adb4ae4e010a986e696711fb7`, and `6b3fed7c57ba230d356ada64e394ca02e3d4310b`. `scripts/apply-smb.py` copies them with the rest of `distro/smb`.
 
 The mount server side is `distro/smb/src/servers/mount` and `distro/smb/headers/private/mount/MountServer.h`. Same origin, MIT. Passwords are stored with `BKeyStore` under `smb://server/share`. The server retries a share that failed because the network was not up, and posts a notification when the failure is not that kind.
 
