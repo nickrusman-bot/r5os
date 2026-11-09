@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a warm reset actually resets the SuperSpeed port
+
+The warm-reset bit was the wrong one, so the reset never happened. It is now bit 31 of the port register. After the reset the device has lost its address, and the hub enumerates it again. A warm-reset change that the controller will not clear is reported once, not on every pass. From air/OS 2ae6e2c26b60f6840fb7f9bbf5368f8cdccc1f8a.
+
 ## 2026-11-09 - a stuck SuperSpeed port is reset
 
 A SuperSpeed link that has gone inactive, or into compliance mode, does not come back by itself. The hub now requests a warm reset, up to three times and two seconds apart, until the link has left that state. From air/OS 01e2036af28ef692585487434a6b247d9d332922.

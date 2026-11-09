@@ -261,6 +261,17 @@ Hub::Explore(change_item **changeList)
 		}
 #endif
 
+		// A warm reset leaves the device without its address, so it is
+		// enumerated again.
+		if ((fPortStatus[i].change & PORT_CHANGE_BH_PORT_RESET) != 0
+			&& (fPortStatus[i].status & PORT_STATUS_CONNECTION) != 0
+			&& fChildren[i] != NULL) {
+			TRACE_ALWAYS("port %" B_PRId32 ": enumerating the device again "
+				"after its warm reset\n", i);
+			fChildren[i]->Changed(changeList, false);
+			fChildren[i] = NULL;
+		}
+
 		if ((fPortStatus[i].change & PORT_STATUS_CONNECTION)
 				|| ((fPortStatus[i].status & PORT_STATUS_CONNECTION)
 					&& fChildren[i] == NULL)) {
