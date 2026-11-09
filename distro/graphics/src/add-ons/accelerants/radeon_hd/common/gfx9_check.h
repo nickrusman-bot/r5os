@@ -8,6 +8,7 @@
 #ifndef GFX9_CHECK_H
 #define GFX9_CHECK_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 enum {
@@ -287,6 +288,19 @@ r5_gfx9_ih_parse(const uint8_t raw[32])
 	entry.source = (dwords[0] >> 8) & 0xffu;
 	entry.ring = (dwords[0] >> 16) & 0xffu;
 	return entry;
+}
+
+/* The four ids in the radeon_hd device table (driver.cpp). 1636 and
+ * 164c load renoir. 15e7 Barcelo and 1638 Cezanne load green_sardine.
+ * Anything else is not a stem. */
+static inline const char*
+r5_gfx9_fw_stem_for(uint16_t pciId)
+{
+	if (pciId == 0x1636 || pciId == 0x164c)
+		return "renoir";
+	if (pciId == 0x15e7 || pciId == 0x1638)
+		return "green_sardine";
+	return NULL;
 }
 
 #endif

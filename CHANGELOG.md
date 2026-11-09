@@ -12,6 +12,10 @@ A signal that ends a team is handled by one thread, which exits at once. The use
 
 `lock_memory_etc()` left the range at its full size when a later page could not be wired. The revert looked for the shorter size and panicked. The range now shrinks to `nextAddress - areaStart` before the revert. Upstream's protection-mask fix in the same file stays. This is haiku-pi `6f810ed2d7`, copyright 2026 Witold Bołt, as a GPL-3.0-or-later snippet on the MIT and NewOS file. `scripts/apply-kernel-bugs.py` copies it. The host test checks the assignment. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
 
+### An unknown PCI id does not load Green Sardine firmware
+
+`radeon_gfx9_fw_stem()` follows the four ids in the radeon_hd device table. 1636 and 164c stay `renoir`. 15e7 and 1638 stay `green_sardine`. Any other id returns NULL. The PSP load and the direct engine load stop, and the stem logs one line. The firmware blobs and the ring are unchanged. The host test checks the four ids and an unknown id. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
 
 Review points A1–A7 and M1 of the usb_audio and usb_midi review (8 Nov 2026). Branch `claude/usb-audio-midi-fixes`.
