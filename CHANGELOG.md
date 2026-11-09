@@ -1,5 +1,8 @@
 # R5OS changelog (lokaal)
 
+### The page writer saves the last modified pages when its wait ends
+
+The per-device page writer waited up to three seconds for a full batch. A timeout went straight back to waiting, so the last modified pages of a device, fewer than 256 pages, stayed in memory until a sync. A power cut lost them. The wait still happens, and the under-quota condition is unchanged. After the wait, including a timeout, the writer continues and writes whatever modified pages there are. An empty queue is still skipped just below that. This is haiku-pi star row 18, commit 1539d29eee. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
 ### PCI devices on another firmware segment can be seen
 
 The PCI bus manager on x86_64 treated every bus number as segment 0 and skipped every other segment in the firmware's memory-mapped configuration table. Segment 0 is unchanged: its bus numbers and its configuration window stay as they were. Each other segment is a further host controller. It does not claim the legacy configuration port, and it does not fall back to that port. A bus number segment 0 already uses stays on segment 0. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. Another firmware segment was not exercised. There is no What's new section and `distro/BUILD` stays the same.
