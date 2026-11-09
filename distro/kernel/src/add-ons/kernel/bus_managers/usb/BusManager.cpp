@@ -136,6 +136,39 @@ BusManager::AllocateDevice(Hub *parent, int8 hubAddress, uint8 hubPort,
 
 	defaultPipe->SetHubInfo(hubAddress, hubPort);
 
+#ifdef __i386__
+	// Ask the device at address 0 for its descriptor before giving it an
+	// address. The result is only logged. It does not skip the address
+	// attempts below: the specification does not require a device to
+	// answer this request.
+	{
+		usb_device_descriptor probeDescriptor;
+		size_t probeLength = 0;
+		status_t probeStatus = defaultPipe->SendRequest(
+			USB_REQTYPE_DEVICE_IN | USB_REQTYPE_STANDARD,
+			USB_REQUEST_GET_DESCRIPTOR,
+			USB_DESCRIPTOR_DEVICE << 8,
+			0,
+			8,
+			(void*)&probeDescriptor,
+			8,
+			&probeLength);
+
+		if (probeStatus >= B_OK && probeLength == 8) {
+			TRACE_ALWAYS("device at address 0: class 0x%02x subclass 0x%02x "
+				"protocol 0x%02x max_packet_size_0 %d\n",
+				probeDescriptor.device_class,
+				probeDescriptor.device_subclass,
+				probeDescriptor.device_protocol,
+				probeDescriptor.max_packet_size_0);
+		} else {
+			TRACE_ALWAYS("device at address 0: did not respond to "
+				"GET_DESCRIPTOR (status 0x%08" B_PRIx32 ")\n",
+				(uint32)probeStatus);
+		}
+	}
+#endif
+
 	status_t result = B_ERROR;
 	for (int32 i = 0; i < 3; i++) {
 		// Set the address of the device USB 1.1 spec p202

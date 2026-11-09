@@ -663,6 +663,7 @@ virtual	status_t						GetDescriptor(uint8 descriptorType,
 		status_t						UpdatePortStatus(uint8 index);
 		status_t						ResetPort(uint8 index);
 		status_t						DisablePort(uint8 index);
+		status_t						PowerCyclePort(uint8 index);
 
 		void							Explore(change_item **changeList);
 static	void							InterruptCallback(void *cookie,
@@ -686,6 +687,7 @@ private:
 		InterruptPipe *					fInterruptPipe;
 		uint8							fPortCount;
 		uint8							fPowerOnToPowerGood;
+		uint16							fHubCharacteristics;
 
 		usb_port_status					fInterruptStatus[USB_MAX_PORT_COUNT];
 		usb_port_status					fPortStatus[USB_MAX_PORT_COUNT];
@@ -695,6 +697,10 @@ private:
 		// the port (1-based) whose device AllocateDevice() is setting up
 		uint8							fEnumeratingPort;
 		uint8							fPlatformResets[USB_MAX_PORT_COUNT];
+		uint8							fFailedAttempts[USB_MAX_PORT_COUNT];
+		uint8							fPowerCycleAttempts[USB_MAX_PORT_COUNT];
+		bigtime_t						fIgnoredUntil[USB_MAX_PORT_COUNT];
+		uint8							fRearmCount[USB_MAX_PORT_COUNT];
 };
 
 

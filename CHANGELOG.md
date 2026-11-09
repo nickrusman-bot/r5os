@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a USB port that keeps failing setup is left alone
+
+A port that failed to set up was reset on every look, for the whole boot. After two failed setups it is powered off and on, at most twice, and only when that hub switches power per port. After that it is ignored until a new connection arrives, and after three of those it stays ignored for the rest of the boot. Unplugging it starts the count over. On 32-bit x86 the device is also asked for its descriptor before it is given an address; that answer is only written to the log. From RenkuOS 64d38d0286e6ae25d125bc6124bde04ba6e71e3f by rainygirl. The hub descriptor is not stored; the power-switching bits are kept beside the port count. This image is 64-bit, so the new behaviour is not compiled in yet.
+
 ## 2026-11-09 - the USB image started in VirtualBox
 
 The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 16:30 Europe/Amsterdam. The guest was not watched through to the desktop. A USB stick was not plugged in, so whether the mouse and keyboard keep working after that was not seen.

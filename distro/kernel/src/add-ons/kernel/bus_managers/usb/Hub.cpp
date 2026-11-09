@@ -19,6 +19,35 @@
 static const uint8 kMaxPlatformResets = 3;
 
 
+// The bounded per-port retry and power-cycle backoff is enabled only on
+// x86 32-bit. It exists for the early-boot behaviour of old 32-bit-only
+// machines, and that is the only place it has been exercised. Every other
+// architecture keeps servicing a failing port on every poll.
+#ifdef __i386__
+static const bool kBoundedPortRetries = true;
+#else
+static const bool kBoundedPortRetries = false;
+#endif
+
+
+// Consecutive failed setups, with no real disconnect in between, before a
+// port is no longer retried on every poll. Each attempt is a debounce, a
+// port reset and up to three address attempts.
+static const uint8 kMaxPortFailedAttempts = 2;
+
+// Power-off and power-on cycles after those failures, before the port is
+// left alone. Only a hub that switches power per port gets this.
+static const uint8 kMaxPortPowerCycleAttempts = 2;
+
+// After the retries and the power cycles, a fresh connection that arrives
+// after this wait earns another round, up to kMaxPortRearms times. An
+// internal device can be present but unpowered for the first seconds of
+// boot. After the last re-arm the port stays ignored for the rest of the
+// boot.
+static const bigtime_t kPortIgnoreCooldown = 5000000;
+static const uint8 kMaxPortRearms = 3;
+
+
 Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 	usb_device_descriptor &desc, int8 deviceAddress, usb_speed speed,
 	uint8 depth, void *controllerCookie)
@@ -34,8 +63,14 @@ Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 	memset(fNextWarmReset, 0, sizeof(fNextWarmReset));
 	memset(fWarmResets, 0, sizeof(fWarmResets));
 	memset(fPlatformResets, 0, sizeof(fPlatformResets));
-	for (int32 i = 0; i < USB_MAX_PORT_COUNT; i++)
+	fHubCharacteristics = 0;
+	for (int32 i = 0; i < USB_MAX_PORT_COUNT; i++) {
 		fChildren[i] = NULL;
+		fFailedAttempts[i] = 0;
+		fPowerCycleAttempts[i] = 0;
+		fIgnoredUntil[i] = 0;
+		fRearmCount[i] = 0;
+	}
 
 	if (!fInitOK) {
 		TRACE_ERROR("device failed to initialize\n");
@@ -85,6 +120,7 @@ Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 		}
 		fPortCount = hubSsDescriptor.num_ports;
 		fPowerOnToPowerGood = hubSsDescriptor.power_on_to_power_good;
+		fHubCharacteristics = hubSsDescriptor.characteristics;
 	} else {
 		memset(&hubDescriptor, 0, sizeof(hubDescriptor));
 		status_t status = GetDescriptor(USB_DESCRIPTOR_HUB, 0, 0,
@@ -103,6 +139,7 @@ Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 		}
 		fPortCount = hubDescriptor.num_ports;
 		fPowerOnToPowerGood = hubDescriptor.power_on_to_power_good;
+		fHubCharacteristics = hubDescriptor.characteristics;
 	}
 
 	TRACE("hub descriptor (%ld bytes):\n", actualLength);
@@ -259,11 +296,68 @@ Hub::DisablePort(uint8 index)
 }
 
 
+status_t
+Hub::PowerCyclePort(uint8 index)
+{
+	// A power-off and power-on is the closest a driver can get to
+	// unplugging the device. Only where the hub switches power per port.
+	// Bits 0-1 of the characteristics are the switching mode, and any
+	// value other than 01b means the ports are ganged or not switchable.
+	// Clearing PORT_POWER on a ganged hub takes down every port in the
+	// gang, which on a root hub is the whole controller.
+	if ((fHubCharacteristics & 0x3) != 0x1) {
+		TRACE_ALWAYS("hub does not switch port power individually "
+			"(characteristics 0x%04x); not power cycling port %u\n",
+			fHubCharacteristics, index);
+		return B_NOT_SUPPORTED;
+	}
+
+	status_t status = DefaultPipe()->SendRequest(USB_REQTYPE_CLASS
+		| USB_REQTYPE_OTHER_OUT, USB_REQUEST_CLEAR_FEATURE, PORT_POWER,
+		index + 1, 0, NULL, 0, NULL);
+	if (status != B_OK)
+		return status;
+
+	snooze(100000);
+
+	status = DefaultPipe()->SendRequest(USB_REQTYPE_CLASS
+		| USB_REQTYPE_OTHER_OUT, USB_REQUEST_SET_FEATURE, PORT_POWER,
+		index + 1, 0, NULL, 0, NULL);
+	if (status != B_OK)
+		return status;
+
+	snooze(USB_DELAY_HUB_POWER_UP);
+	return B_OK;
+}
+
+
 
 void
 Hub::Explore(change_item **changeList)
 {
 	for (int32 i = 0; i < fPortCount; i++) {
+		if (kBoundedPortRetries && fIgnoredUntil[i] != 0) {
+			if (fIgnoredUntil[i] == B_INFINITE_TIMEOUT
+					|| system_time() < fIgnoredUntil[i]) {
+				continue;
+			}
+
+			// The wait is over. Only a fresh connection earns another
+			// chance. Reading the status does not clear the change bits.
+			if (UpdatePortStatus(i) < B_OK
+					|| (fPortStatus[i].change & PORT_STATUS_CONNECTION) == 0) {
+				continue;
+			}
+
+			fRearmCount[i]++;
+			fIgnoredUntil[i] = 0;
+			fFailedAttempts[i] = 0;
+			fPowerCycleAttempts[i] = 0;
+			TRACE_ALWAYS("port %" B_PRId32 ": new connection event after "
+				"cooldown, giving the port another chance (%u of %u)\n", i,
+				fRearmCount[i], kMaxPortRearms);
+		}
+
 		status_t result = UpdatePortStatus(i);
 		if (result < B_OK)
 			continue;
@@ -289,7 +383,10 @@ Hub::Explore(change_item **changeList)
 			fChildren[i] = NULL;
 		}
 
-		if ((fPortStatus[i].change & PORT_STATUS_CONNECTION)
+		bool freshConnection = (fPortStatus[i].change & PORT_STATUS_CONNECTION)
+			!= 0;
+
+		if (freshConnection
 				|| ((fPortStatus[i].status & PORT_STATUS_CONNECTION)
 					&& fChildren[i] == NULL)) {
 			// clear status change
@@ -297,7 +394,13 @@ Hub::Explore(change_item **changeList)
 				USB_REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION, i + 1,
 				0, NULL, 0, NULL);
 
-			if (fPortStatus[i].status & PORT_STATUS_CONNECTION) {
+			if (kBoundedPortRetries
+					&& (fPortStatus[i].status & PORT_STATUS_CONNECTION) != 0
+					&& fFailedAttempts[i] >= kMaxPortFailedAttempts) {
+				// A device that bounces raises a fresh connection on every
+				// pass. Do not clear the failure count for that, or the
+				// port never stops being reset.
+			} else if (fPortStatus[i].status & PORT_STATUS_CONNECTION) {
 				// new device attached!
 				TRACE_ALWAYS("port %" B_PRId32 ": new device connected\n", i);
 
@@ -378,6 +481,8 @@ Hub::Explore(change_item **changeList)
 						newDevice->Changed(changeList, true);
 						fChildren[i] = newDevice;
 						fPlatformResets[i] = 0;
+						fFailedAttempts[i] = 0;
+						fPowerCycleAttempts[i] = 0;
 						setupFailed = false;
 						break;
 					} else {
@@ -397,6 +502,34 @@ Hub::Explore(change_item **changeList)
 					fPlatformResets[i]++;
 					GetBusManager()->PlatformResetPort(i);
 				}
+
+				if (kBoundedPortRetries && fChildren[i] == NULL
+						&& fFailedAttempts[i] < kMaxPortFailedAttempts) {
+					fFailedAttempts[i]++;
+					if (fFailedAttempts[i] >= kMaxPortFailedAttempts) {
+						if (fPowerCycleAttempts[i] < kMaxPortPowerCycleAttempts
+								&& PowerCyclePort(i) == B_OK) {
+							fPowerCycleAttempts[i]++;
+							fFailedAttempts[i] = 0;
+							TRACE_ALWAYS("port %" B_PRId32 ": repeated setup "
+								"failures, power-cycled the port (attempt "
+								"%u), retrying\n", i,
+								fPowerCycleAttempts[i]);
+						} else if (fRearmCount[i] < kMaxPortRearms) {
+							fIgnoredUntil[i] = system_time()
+								+ kPortIgnoreCooldown;
+							TRACE_ALWAYS("port %" B_PRId32 ": giving up "
+								"after repeated setup failures, ignoring "
+								"until a new connection event after "
+								"cooldown\n", i);
+						} else {
+							fIgnoredUntil[i] = B_INFINITE_TIMEOUT;
+							TRACE_ALWAYS("port %" B_PRId32 ": giving up after "
+								"repeated setup failures, ignoring for the "
+								"rest of this boot\n", i);
+						}
+					}
+				}
 			} else {
 				// Device removed...
 				TRACE_ALWAYS("port %" B_PRId32 ": device removed\n", i);
@@ -405,6 +538,13 @@ Hub::Explore(change_item **changeList)
 					fChildren[i]->Changed(changeList, false);
 					fChildren[i] = NULL;
 				}
+
+				// A clean disconnect, with nothing left connected, starts
+				// the counters over. A bounce that reconnects in the same
+				// pass does not.
+				fFailedAttempts[i] = 0;
+				fPowerCycleAttempts[i] = 0;
+				fRearmCount[i] = 0;
 			}
 		}
 
