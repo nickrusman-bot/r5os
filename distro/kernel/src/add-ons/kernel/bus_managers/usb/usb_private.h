@@ -238,6 +238,7 @@ virtual	status_t						CancelQueuedTransfers(Pipe *pipe,
 
 virtual	status_t						NotifyPipeChange(Pipe *pipe,
 											usb_change change);
+virtual	status_t						PlatformResetPort(uint8 index);
 
 		Object *						RootObject() const
 											{ return fRootObject; }
@@ -693,6 +694,7 @@ private:
 		uint8							fWarmResets[USB_MAX_PORT_COUNT];
 		// the port (1-based) whose device AllocateDevice() is setting up
 		uint8							fEnumeratingPort;
+		uint8							fPlatformResets[USB_MAX_PORT_COUNT];
 };
 
 

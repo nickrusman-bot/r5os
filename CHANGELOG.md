@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a built-in USB device that will not take an address is reset
+
+After a warm restart a built-in device can stop answering. If a device on the root hub fails to set up, the controller now asks the firmware to reset that port, at most three times. On x86 that reset is the ACPI reset line of the port. From air/OS fa1ebc8a74050bba0c373d95f6307b8b46784e67.
+
 ## 2026-11-09 - unplugging a USB audio device no longer floods the log
 
 Every failed packet was written to the log. Unplugging a device that sends many packets stalled the machine on the serial port. The same error is now written at most once every tenth of a second, with a count of the lines that were skipped. The message itself is unchanged. From air/OS c707b89ff80be4fdfa780637da5cf1d38167a46f by David Beckman.

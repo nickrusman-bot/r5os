@@ -15,6 +15,10 @@
 #include <algorithm>
 
 
+// Resets of a port in a row. A device that still fails after that is broken.
+static const uint8 kMaxPlatformResets = 3;
+
+
 Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 	usb_device_descriptor &desc, int8 deviceAddress, usb_speed speed,
 	uint8 depth, void *controllerCookie)
@@ -29,6 +33,7 @@ Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 
 	memset(fNextWarmReset, 0, sizeof(fNextWarmReset));
 	memset(fWarmResets, 0, sizeof(fWarmResets));
+	memset(fPlatformResets, 0, sizeof(fPlatformResets));
 	for (int32 i = 0; i < USB_MAX_PORT_COUNT; i++)
 		fChildren[i] = NULL;
 
@@ -296,6 +301,7 @@ Hub::Explore(change_item **changeList)
 				// new device attached!
 				TRACE_ALWAYS("port %" B_PRId32 ": new device connected\n", i);
 
+				bool setupFailed = false;
 				int32 retry = 2;
 				while (retry--) {
 					// wait for stable device power
@@ -371,13 +377,25 @@ Hub::Explore(change_item **changeList)
 					if (newDevice) {
 						newDevice->Changed(changeList, true);
 						fChildren[i] = newDevice;
+						fPlatformResets[i] = 0;
+						setupFailed = false;
 						break;
 					} else {
 						// the device failed to setup correctly, disable the
 						// port so that the device doesn't get in the way of
 						// future addressing.
 						DisablePort(i);
+						setupFailed = true;
 					}
+				}
+
+				// An internal device that does not even take an address may
+				// have a reset line the platform can pulse. Out of reset, it
+				// connects again and is enumerated then.
+				if (setupFailed && GetBusManager()->GetRootHub() == this
+					&& fPlatformResets[i] < kMaxPlatformResets) {
+					fPlatformResets[i]++;
+					GetBusManager()->PlatformResetPort(i);
 				}
 			} else {
 				// Device removed...
