@@ -530,6 +530,312 @@ main()
 	uint64_t got = 0;
 	if (!r5_vm_lookup(&vm, va, &got) || got != leaf)
 		return fail("lookup");
+	{
+		/* Two open files, one virtual address, two page tables. */
+		static host_page filePages[16];
+		int fileNext = 0;
+		alloc_state fileState = { filePages, &fileNext };
+		r5_vm_page slotsA[8];
+		r5_vm_page slotsB[8];
+		r5_vm fileA;
+		r5_vm fileB;
+		memset(&fileA, 0, sizeof(fileA));
+		memset(&fileB, 0, sizeof(fileB));
+		fileA.pages = slotsA;
+		fileB.pages = slotsB;
+		fileA.capacity = 8;
+		fileB.capacity = 8;
+		fileA.alloc = alloc;
+		fileB.alloc = alloc;
+		fileA.cookie = &fileState;
+		fileB.cookie = &fileState;
+		const uint64_t pageA = 0x111000000ull
+			| (uint64_t)R5_GFX9_PTE_VALID | (uint64_t)R5_GFX9_PTE_READABLE;
+		const uint64_t pageB = 0x222000000ull
+			| (uint64_t)R5_GFX9_PTE_VALID | (uint64_t)R5_GFX9_PTE_READABLE;
+		if (!r5_vm_map_page(&fileA, va, pageA))
+			return fail("file a map");
+		if (!r5_vm_map_page(&fileB, va, pageB))
+			return fail("file b map");
+		uint64_t gotA = 0;
+		uint64_t gotB = 0;
+		if (!r5_vm_lookup(&fileA, va, &gotA) || gotA != pageA)
+			return fail("file a page");
+		if (!r5_vm_lookup(&fileB, va, &gotB) || gotB != pageB)
+			return fail("file b page");
+		if (gotA == gotB)
+			return fail("files share a page");
+		if (fileA.pages[0].physical == 0
+			|| fileA.pages[0].physical == fileB.pages[0].physical)
+			return fail("files share a root");
+		/* Close file A. The unmap is A's tree, the one the range stored. */
+		r5_vm* closed = &fileA;
+		if (!r5_vm_map_page(closed, va, 0))
+			return fail("close file");
+		gotA = 0;
+		gotB = 0;
+		if (r5_vm_lookup(&fileA, va, &gotA) != 0 || gotA != kR5VmPteEmpty)
+			return fail("closed entry");
+		if (!r5_vm_lookup(&fileB, va, &gotB) || gotB != pageB)
+			return fail("other file page");
+	}
+	{
+		/* Close with a job still in the ring. The unmap runs after the
+		 * client is gone, in the tree the parked buffer still holds. */
+		static host_page parkPages[8];
+		int parkNext = 0;
+		alloc_state parkState = { parkPages, &parkNext };
+		auto parkAlloc = [](void* cookie, uint64_t* physical,
+			uint64_t** cpu) -> int {
+			alloc_state* st = (alloc_state*)cookie;
+			if (*st->next >= 8)
+				return 0;
+			host_page* page = &st->pages[*st->next];
+			page->physical = 0xa00000000ull
+				+ (uint64_t)(*st->next) * 4096ull;
+			*st->next += 1;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			return 1;
+		};
+		r5_vm_page parkSlots[8];
+		r5_vm parked;
+		memset(&parked, 0, sizeof(parked));
+		parked.pages = parkSlots;
+		parked.capacity = 8;
+		parked.alloc = parkAlloc;
+		parked.cookie = &parkState;
+		const uint64_t page = 0x333000000ull
+			| (uint64_t)R5_GFX9_PTE_VALID | (uint64_t)R5_GFX9_PTE_READABLE;
+		if (!r5_vm_map_page(&parked, va, page))
+			return fail("park map");
+		r5_file_count count;
+		memset(&count, 0, sizeof(count));
+		r5_file_count_open(&count, 1);
+		r5_file_count_hold(&count);
+		if (r5_file_count_drop(&count, 1) != 0)
+			return fail("freed while parked");
+		if (count.refs != 1 || count.trees != 1 || count.pages != 1)
+			return fail("parked counters");
+		uint64_t live = 0;
+		if (!r5_vm_lookup(&parked, va, &live) || live != page)
+			return fail("parked tree");
+		if (!r5_ib_still_mapped(&parked, va, 8))
+			return fail("ib mapped");
+		if (!r5_vm_map_page(&parked, va, 0))
+			return fail("parked unmap");
+		live = 0;
+		if (r5_vm_lookup(&parked, va, &live) != 0 || live != kR5VmPteEmpty)
+			return fail("parked unmap pte");
+		if (r5_ib_still_mapped(&parked, va, 8))
+			return fail("ib unmapped during wait");
+		const char* ibAgain[] = {
+			"gpu_wait_room(client->info, dwords)",
+			"gpu_ibs_mapped(client, ibs, in.ib_count, in.ring)",
+			"clflush"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", ibAgain, 3) != 0)
+			return 1;
+		char body[12000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_va_replace(", "gpu_va_unmap(", body, sizeof(body)) != 0)
+			return 1;
+		if (strstr(body, "gpu_va_map_copied") == NULL
+			|| strstr(body, "gpu_va_map(client, buffer") != NULL)
+			return fail("va replace copy");
+		if (r5_vram_fits(8ull * 4096ull, 4ull * 4096ull, 5, 0))
+			return fail("file a enomem");
+		if (!r5_vram_fits(16ull * 4096ull, 4ull * 4096ull, 1, 4096ull))
+			return fail("file b fits");
+		if (r5_file_count_drop(&count, 1) == 0)
+			return fail("still held");
+		if (count.trees != 0 || count.pages != 0 || count.refs != 0)
+			return fail("counters back");
+		r5_file_count lost;
+		memset(&lost, 0, sizeof(lost));
+		r5_file_count_open(&lost, 2);
+		r5_file_count_hold(&lost);
+		if (r5_file_count_drop(&lost, 2) != 0)
+			return fail("lost while parked");
+		if (r5_file_count_drop(&lost, 2) == 0)
+			return fail("lost retire");
+		if (lost.trees != 0 || lost.pages != 0 || lost.refs != 0)
+			return fail("lost counters");
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_get_info(", "user_memcpy(buffer, &out", body,
+				sizeof(body)) != 0)
+			return 1;
+		{
+			const char* locked = strstr(body, "gpu_lock()");
+			const char* bos = locked != NULL
+				? strstr(locked, "sBo[i].live") : NULL;
+			const char* unlocked = bos != NULL
+				? strstr(bos, "gpu_unlock()") : NULL;
+			if (locked == NULL || bos == NULL || unlocked == NULL)
+				return fail("info lock");
+		}
+		const char* lostSeen[] = {
+			"A lost device never retires",
+			"seen = ~0ull;",
+			"gpu_bo_release(bo)"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", lostSeen, 3) != 0)
+			return 1;
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_free(void* cookie)", "gpu_read(void* cookie",
+				body, sizeof(body)) != 0)
+			return 1;
+		const char* once = strstr(body, "r5_gfx9_user_seen()");
+		if (once == NULL || strstr(once + 1, "r5_gfx9_user_seen()") != NULL)
+			return fail("fence once");
+		if (strstr(body, "gpu_bo_hold_tree(bo)") == NULL
+			|| strstr(body, "tree->seen = seen") == NULL
+			|| strstr(body, "r5_file_tree_drop(tree)") == NULL)
+			return fail("parked drop");
+	}
+	{
+		/* Two trees, one virtual address. Clearing one leaves the other. */
+		static host_page bookA[8];
+		static host_page bookB[8];
+		int nextA = 0;
+		int nextB = 0;
+		auto allocA = [](void* cookie, uint64_t* physical,
+			uint64_t** cpu) -> int {
+			int* next = (int*)cookie;
+			if (*next >= 8)
+				return 0;
+			host_page* page = &bookA[*next];
+			page->physical = 0x910000000ull + (uint64_t)(*next) * 4096ull;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			*next += 1;
+			return 1;
+		};
+		auto allocB = [](void* cookie, uint64_t* physical,
+			uint64_t** cpu) -> int {
+			int* next = (int*)cookie;
+			if (*next >= 8)
+				return 0;
+			host_page* page = &bookB[*next];
+			page->physical = 0x920000000ull + (uint64_t)(*next) * 4096ull;
+			*physical = page->physical;
+			*cpu = page->cpu;
+			*next += 1;
+			return 1;
+		};
+		r5_vm_page slotsA[8];
+		r5_vm_page slotsB[8];
+		r5_vm spaceA;
+		r5_vm spaceB;
+		memset(&spaceA, 0, sizeof(spaceA));
+		memset(&spaceB, 0, sizeof(spaceB));
+		spaceA.pages = slotsA;
+		spaceB.pages = slotsB;
+		spaceA.capacity = 8;
+		spaceB.capacity = 8;
+		spaceA.alloc = allocA;
+		spaceB.alloc = allocB;
+		spaceA.cookie = &nextA;
+		spaceB.cookie = &nextB;
+		const uint64_t leaf = 0x0600000123450071ull;
+		uint64_t gotBook = 0;
+		if (!r5_vm_map_page(&spaceA, va, leaf)
+			|| !r5_vm_map_page(&spaceB, va, leaf))
+			return fail("space map");
+		if (!r5_vm_map_page(&spaceA, va, 0))
+			return fail("space clear");
+		if (r5_vm_lookup(&spaceA, va, &gotBook) != 0
+			|| gotBook != kR5VmPteEmpty)
+			return fail("space cleared");
+		if (!r5_vm_lookup(&spaceB, va, &gotBook) || gotBook != leaf)
+			return fail("space other");
+		const char* book[] = {
+			"gpu_prt_release_tree(&tree->vm)",
+			"gpu_same_vm(range->vm, vm)",
+			"gpu_same_vm(sPrt[i].vm, vm)",
+			"sPrt[i].vm = vm"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", book, 4) != 0)
+			return 1;
+	}
+	{
+		char openBody[2500];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_open(const char* name", "gpu_close(void* cookie)",
+				openBody, sizeof(openBody)) != 0)
+			return 1;
+		const char* locked = strstr(openBody, "gpu_lock()");
+		const char* opened = locked != NULL
+			? strstr(locked, "gpu_file_root(client)") : NULL;
+		const char* unlocked = opened != NULL
+			? strstr(opened, "gpu_unlock()") : NULL;
+		const char* cookie = unlocked != NULL
+			? strstr(unlocked, "*cookie = client") : NULL;
+		if (locked == NULL || opened == NULL || unlocked == NULL
+			|| cookie == NULL)
+			return fail("open lock");
+		char controlBody[12000];
+		if (snippet(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp",
+				"gpu_control(void* cookie", "device_hooks gR5GpuHooks",
+				controlBody, sizeof(controlBody)) != 0)
+			return 1;
+		locked = strstr(controlBody, "gpu_lock()");
+		opened = locked != NULL
+			? strstr(locked, "gpu_file_root(client)") : NULL;
+		unlocked = opened != NULL ? strstr(opened, "gpu_unlock()") : NULL;
+		if (locked == NULL || opened == NULL || unlocked == NULL)
+			return fail("control lock");
+	}
+	{
+		uint64_t first = 0;
+		uint64_t last = 1;
+		if (r5_ib_span(~0ull - 7ull, 4, &first, &last))
+			return fail("ib wrap");
+		if (r5_ib_span(0xffff800000001004ull, 0x100000u, &first, &last))
+			return fail("ib cap");
+		if (!r5_ib_span(0xffff800000001004ull, 8, &first, &last)
+			|| first != 0xffff800000001000ull || last != first)
+			return fail("ib last");
+	}
+	{
+		const char* faultQ[] = {
+			"sFaultQ[sFaultW].pasid = raw[3] & 0xffffu",
+			"sFaultQ[sFaultW].vmid = (raw[0] >> 24) & 0xfu",
+			"sFaultQ[sFaultW].addr = r5_gfx9_fault_address(raw[4], raw[5])",
+			"asm volatile(\"sfence\" ::: \"memory\")",
+			"sFaultW = next"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", faultQ, 5) != 0)
+			return 1;
+		const char* faultRetire[] = {
+			"r5_gfx9_fault_take(&pasid, &vmid, &addr)",
+			"scan->pasid == pasid",
+			"vm fault pasid %lu unknown addr",
+			"found->faulted = true"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/r5_gpu.cpp", faultRetire, 4) != 0)
+			return 1;
+	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
 		return fail("empty pd");
 	if (tablePages[3].cpu[r5_vm_index(va, 0) == 0 ? 1 : 0] != kR5VmPteEmpty)
@@ -660,6 +966,23 @@ main()
 	if (!r5_span_take(spans, 4, 0x1000, &taken) || taken != 0x1000)
 		return fail("span take");
 	r5_span_free(spans, 4, taken);
+	if (R5_GPU_BO_VRAM_CLEARED != 8u)
+		return fail("vram cleared flag");
+	{
+		uint8_t mem[0x2000];
+		memset(mem, 0xab, sizeof(mem));
+		memset(spans, 0, sizeof(spans));
+		spans[0].live = 1;
+		spans[0].used = 0;
+		spans[0].offset = 0x2000;
+		spans[0].bytes = 0x2000;
+		spans[0].cpu = mem;
+		taken = 0;
+		if (!r5_span_take(spans, 4, 0x1000, &taken) || taken != 0x2000)
+			return fail("vram take");
+		if (mem[0] != 0 || mem[0xfff] != 0 || mem[0x1000] != 0xab)
+			return fail("vram zero");
+	}
 	if (r5_wait_step(5, 5, 10, 0) != R5_WAIT_DONE)
 		return fail("wait done");
 	if (r5_wait_step(1, 5, 0, 0) != R5_WAIT_POLL)
@@ -1111,7 +1434,8 @@ main()
 		/* gmc_v9_0_emit_flush_gpu_tlb, written by gfx_v9_0_ring_emit_wreg.
 		 * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM is 0x40100000.
 		 * VMID 1 is context 1: 0x2000 + 0x08ed and the next register.
-		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5. */
+		 * Engine 0 is 0x2000 + 0x08a3 and 0x2000 + 0x08b5.
+		 * The LUT write is not in these 26 dwords. */
 		if (words[7] != r5_cs_packet3(0x37, 3) || words[8] != 0x40100000u
 			|| words[9] != 0x28edu || words[11] != 0x12c18001u
 			|| words[12] != r5_cs_packet3(0x37, 3) || words[13] != 0x40100000u
@@ -1126,6 +1450,16 @@ main()
 			return fail("vm switch inv");
 		if (words[24] != r5_cs_packet3(0x42, 0) || words[25] != 0)
 			return fail("vm switch pfp");
+		uint32_t lut = r5_cs_oss_reg(mmIH_VMID_0_LUT);
+		for (uint32_t i = 0; i < n; i++) {
+			if (words[i] == lut || words[i] == lut + 1u)
+				return fail("lut in the switch");
+		}
+		uint32_t mapped = r5_cs_pasid_map(words, 40, n, 1, 0x42u);
+		if (mapped != 31 || words[26] != r5_cs_packet3(0x37, 3)
+			|| words[27] != 0x40100000u || words[28] != lut + 1u
+			|| words[30] != 0x42u)
+			return fail("pasid after pfp");
 		if (r5_cs_vm_switch(0, 0, 0, 0x812c18001ull, 0x9000ull, 7) != 0)
 			return fail("vm switch vmid");
 		if (r5_cs_vm_switch(words, 40, 1, 0, 0x9000ull, 7) != 0)
@@ -1243,6 +1577,36 @@ main()
 			return fail("csa vaddr");
 		if (r5_vm_va_fits(r5_csa_vaddr(r5_gfx9_vm_size().max_pfn), 4096) != 0)
 			return fail("csa reserved");
+		{
+			static host_page csaPages[8];
+			int csaNext = 0;
+			alloc_state csaState = { csaPages, &csaNext };
+			r5_vm_page csaSlots[8];
+			r5_vm csaVm;
+			uint64_t pa = 0xabc000ull;
+			uint64_t csaVa = r5_csa_vaddr(r5_gfx9_vm_size().max_pfn);
+			uint64_t flags = (uint64_t)R5_GFX9_PTE_VALID
+				| (uint64_t)R5_GFX9_PTE_READABLE
+				| (uint64_t)R5_GFX9_PTE_WRITEABLE;
+			uint64_t got = 0;
+			memset(&csaVm, 0, sizeof(csaVm));
+			csaVm.pages = csaSlots;
+			csaVm.capacity = 8;
+			csaVm.alloc = alloc;
+			csaVm.cookie = &csaState;
+			if (!r5_csa_map_pages(&csaVm, csaVa, &pa, 1u, flags))
+				return fail("csa map");
+			if (!r5_vm_lookup(&csaVm, csaVa, &got) || got != (pa | flags))
+				return fail("csa page");
+			const char* csaOrder[] = {
+				"r5_gfx9_csa_into(vm)",
+				"return true;"
+			};
+			if (source_order(
+					"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+					"radeon_hd/gfx9_k12.cpp", csaOrder, 2) != 0)
+				return 1;
+		}
 		if (r5_vm_va_fits(0xffffffffffbfd000ull, 4096) == 0)
 			return fail("high page");
 		if (r5_vm_va_fits(R5_GPU_VA_OFFSET, 4096) == 0
@@ -1368,12 +1732,21 @@ main()
 			return fail("before N8 count");
 		const char* pasidOrder[] = {
 			"int inBlock = flush || gds;",
-			"int pasidMap = inBlock",
+			"sPasidMap || sFilePasid",
+			"r5_cs_vm_switch(",
 			"r5_cs_pasid_map("
+		};
+		const char* filePasid[] = {
+			"sVmidPerFile = false;",
+			"r5_gfx9_set_file_pasid(sVmidPerFile ? 1 : 0);"
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/accelerants/radeon_hd/common/"
-				"gfx9_start.cpp", pasidOrder, 3) != 0)
+				"gfx9_start.cpp", pasidOrder, 4) != 0)
+			return 1;
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", filePasid, 2) != 0)
 			return 1;
 	}
 	if (r5_gfx9_inv_engines() != 18u)
@@ -1484,6 +1857,28 @@ main()
 		if (r5_gfx9_sh_mem_config() != 0x1018u
 			|| r5_gfx9_sh_mem_bases() != 0x20001000u)
 			return fail("sh mem");
+		{
+			struct r5_vm_size gfx9 = r5_gfx9_vm_size();
+			uint32_t list[15];
+			uint32_t index;
+			r5_gfx9_vmid_cntl_list(&gfx9, 0, list);
+			if (list[0] != 0x00555407u)
+				return fail("vmid default cntl");
+			r5_gfx9_vmid_cntl_list(&gfx9, 1, list);
+			for (index = 0; index < 15u; index++) {
+				if (list[index] != 0x007ffe07u)
+					return fail("vmid irq cntl");
+			}
+		}
+		const char* faultIrq[] = {
+			"r5_gfx9_vmids_program();",
+			"r5_gfx9_vmid_fault_irqs();",
+			"sFaultIrq = irq;"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", faultIrq, 3) != 0)
+			return 1;
 		const char* vmidOrder[] = {
 			"if (!sVmids || sInfo == NULL)",
 			"for (i = 0; i <= 14u; i++)"
@@ -1610,6 +2005,18 @@ main()
 		if (again == 0 || flush == 0)
 			return fail("closed file");
 		r5_vmid_cancel(&mgr);
+		r5_vmid_init_files(&mgr);
+		for (i = 0; i < 14u; i++) {
+			uint32_t file = r5_vmid_reserve(&mgr, 100u + i, 0, 1, &flush);
+			if (file < 2u || file > 15u)
+				return fail("file vmid");
+			r5_vmid_arm(&mgr, 1);
+		}
+		if (r5_vmid_reserve(&mgr, 200, 0, 1, &flush) != 0)
+			return fail("file pool");
+		if (r5_vmid_file_ok(1, 0) != 0 || r5_vmid_file_ok(1, 1) == 0
+			|| r5_vmid_file_ok(0, 1) != 0)
+			return fail("file needs vmids");
 	}
 	{
 		struct r5_defer held[2];
@@ -1631,6 +2038,23 @@ main()
 		return fail("stage r1 opcode");
 	if (R5_GPU_LOG_REGS != R5_GPU_OP_BASE + 27u)
 		return fail("log regs opcode");
+	if (R5_GPU_GET_COUNTERS != R5_GPU_OP_BASE + 28u)
+		return fail("counters opcode");
+	{
+		r5_gpu_counters same;
+		memset(&same, 0, sizeof(same));
+		same.bo_count = 3;
+		same.pt_pages = 9;
+		same.vmids = 1;
+		same.trees = 2;
+		same.tree_pages = 256;
+		r5_gpu_counters other = same;
+		other.tree_pages = 0;
+		if (r5_gpu_counters_match(&same, &same) != 1
+			|| r5_gpu_counters_match(&same, &other) != 0
+			|| r5_gpu_counters_match(0, &same) != 0)
+			return fail("counters");
+	}
 	if (R5_GPU_SWITCH_CE_META != 256u)
 		return fail("ce switch bit");
 	{
@@ -1726,6 +2150,43 @@ main()
 				"radeon_hd/gfx9_k12.cpp", storeOrder, 5) != 0)
 			return 1;
 	}
+	{
+		const char* isolation[] = {
+			"COPY_DATA reads dest. WRITE_DATA then writes dest.",
+			"words[1] = 1u | (5u << 8) | (1u << 16) | (1u << 20);",
+			"words[6] = 0xc0033700u;",
+			"vm fault addr",
+			"memset(cpu, 0x5a, 4096)",
+			"owner unchanged"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-isolation/"
+				"r5-gpu-isolation.cpp", isolation, 6) != 0)
+			return 1;
+		const char* commandFlags[] = {
+			"kCommandFlags",
+			"va_map(mine, ibHandle, ibVa, kCommandFlags)",
+			"va_map(fd, ownHandle, ownIb, kCommandFlags)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-isolation/"
+				"r5-gpu-isolation.cpp", commandFlags, 3) != 0)
+			return 1;
+		const char* killCount[] = {
+			"run_stage(out, \"isolation\"",
+			"r5_gpu_counters beforeKill",
+			"run_stage(out, \"kill\"",
+			"snooze(100000)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/"
+				"r5-gpu-selftest.cpp", killCount, 4) != 0)
+			return 1;
+	}
+	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
+		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
+		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
+		return fail("guilty");
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

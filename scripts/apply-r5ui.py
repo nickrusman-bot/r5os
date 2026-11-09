@@ -13,6 +13,8 @@ FILES = (
     "Jamfile",
     "R5UI.cpp",
     "R5UI.h",
+    "Card.cpp",
+    "Card.h",
 )
 
 
@@ -38,9 +40,10 @@ def apply_r5ui(haiku: pathlib.Path | None = None) -> None:
         shutil.copy2(SRC / name, dest / name)
         print(f"copied {name}")
 
-    header = tree / "headers" / "os" / "interface" / "R5UI.h"
-    shutil.copy2(SRC / "R5UI.h", header)
-    print("copied R5UI.h into the public headers")
+    headers = tree / "headers" / "os" / "interface"
+    for name in ("R5UI.h", "Card.h"):
+        shutil.copy2(SRC / name, headers / name)
+        print(f"copied {name} into the public headers")
 
     jamfile = tree / "src" / "preferences" / "Jamfile"
     r5ui_line = "SubInclude HAIKU_TOP src preferences r5ui ;\n"

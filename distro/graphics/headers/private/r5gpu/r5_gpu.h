@@ -52,12 +52,22 @@ enum {
 	/* R1 remap test. Older callers never send this opcode. */
 	R5_GPU_STAGE_R1 = R5_GPU_OP_BASE + 26,
 	/* Read-only register and setting print for the self-test. */
-	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27
+	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27,
+	/* Counts only. Older callers never send this opcode. */
+	R5_GPU_GET_COUNTERS = R5_GPU_OP_BASE + 28
 };
 
 #define R5_GPU_CAP_RENDER 1u
 /* Set after the watchdog cancels the device. Older callers ignore it. */
 #define R5_GPU_CAP_LOST 2u
+/* This file's job caused the loss. Other files keep CAP_LOST only. */
+#define R5_GPU_CAP_GUILTY 4u
+
+static inline int
+r5_gpu_query_guilty(uint32_t caps)
+{
+	return (caps & R5_GPU_CAP_LOST) != 0 && (caps & R5_GPU_CAP_GUILTY) != 0;
+}
 
 /* Stage P. status is R5_GPU_P_OK, TIMEOUT, PRIV, SKIP or ROOM.
  * first_fail is the 1-based step, or 0 when every step landed.
@@ -87,6 +97,9 @@ typedef struct {
  * No RAM area is given a write-combined memory type. A GTT page stays
  * cached and snooped, the same as amdgpu_bo_support_uswc() false. */
 #define R5_GPU_BO_WC 4u
+/* AMDGPU_GEM_CREATE_VRAM_CLEARED, bit 3. User VRAM is cleared on every
+ * allocation, including a span a previous owner freed. */
+#define R5_GPU_BO_VRAM_CLEARED 8u
 
 #define R5_GPU_VA_READ 1u
 #define R5_GPU_VA_WRITE 2u
@@ -378,7 +391,8 @@ typedef struct {
 } r5_gpu_syncobj_transfer;
 
 /* which is a bit per setting. on is 0 or 1 for every bit that is set.
- * Bit 7 (gfx9_vmid_per_file) is refused until each file has a root.
+ * Bit 7 (gfx9_vmid_per_file) stays refused here. The boot setting of
+ * that name builds a root per open file. It defaults off.
  * Bit 8 (gfx9_ce_meta) is a boot setting: the CSA is mapped only then. */
 #define R5_GPU_SWITCH_INV_RANGE 1u
 #define R5_GPU_SWITCH_HUB_LINUX 2u
@@ -451,6 +465,41 @@ static inline uint64_t
 r5_gpu_carveout_base(uint32_t fbOffset)
 {
 	return (uint64_t)(fbOffset & 0x00ffffffu) << 24;
+}
+
+/* Live objects. The *_space fields are this open file. The others are
+ * the whole device. trees and tree_pages are the per-file page tables. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	bo_count;
+	uint32_t	bo_count_space;
+	uint32_t	pt_pages;
+	uint32_t	pt_pages_space;
+	uint32_t	vmids;
+	uint32_t	vmids_space;
+	uint32_t	trees;
+	uint32_t	trees_space;
+	uint32_t	tree_pages;
+	uint32_t	tree_pages_space;
+} r5_gpu_counters;
+
+static inline int
+r5_gpu_counters_match(const r5_gpu_counters* before,
+	const r5_gpu_counters* after)
+{
+	if (before == 0 || after == 0)
+		return 0;
+	return before->bo_count == after->bo_count
+		&& before->bo_count_space == after->bo_count_space
+		&& before->pt_pages == after->pt_pages
+		&& before->pt_pages_space == after->pt_pages_space
+		&& before->vmids == after->vmids
+		&& before->vmids_space == after->vmids_space
+		&& before->trees == after->trees
+		&& before->trees_space == after->trees_space
+		&& before->tree_pages == after->tree_pages
+		&& before->tree_pages_space == after->tree_pages_space;
 }
 
 #endif

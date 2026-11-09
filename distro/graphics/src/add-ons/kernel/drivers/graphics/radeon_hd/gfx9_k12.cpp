@@ -12,6 +12,7 @@
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
 #include "r5_vm.h"
+#include "r5_vmid.h"
 #include "r5_gpu.h"
 #include "r5_span.h"
 #include "radeon_hd_private.h"
@@ -60,6 +61,7 @@ static bool sGpuDebug = false;
 static bool sInvRange = true;
 static bool sHubLinux = false;
 static bool sVmids = false;
+static bool sFaultIrq = false;
 
 void
 r5_gfx9_set_inv_range(int on)
@@ -345,6 +347,34 @@ publish()
 }
 
 
+struct r5_fault_note {
+	uint32		pasid;
+	uint32		vmid;
+	uint64		addr;
+};
+
+
+static r5_fault_note sFaultQ[32];
+static volatile uint32 sFaultW;
+static uint32 sFaultR;
+
+
+int
+r5_gfx9_fault_take(uint32* pasid, uint32* vmid, uint64* addr)
+{
+	if (pasid == NULL || vmid == NULL || addr == NULL)
+		return 0;
+	if (sFaultR == sFaultW)
+		return 0;
+	asm volatile("lfence" ::: "memory");
+	*pasid = sFaultQ[sFaultR].pasid;
+	*vmid = sFaultQ[sFaultR].vmid;
+	*addr = sFaultQ[sFaultR].addr;
+	sFaultR = (sFaultR + 1u) & 31u;
+	return 1;
+}
+
+
 static int32
 ih_handler(void* data)
 {
@@ -359,6 +389,22 @@ ih_handler(void* data)
 	uint32 walked = 0;
 	while (rptr != wptr && walked < (kIhBytes / 32)) {
 		r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(sIhRing + rptr);
+		/* Linux soc15_ih_clientid.h: VMC is 0x12, UTCL2 is 0x1b.
+		 * Source 0 is the fault. Queue only. The retire thread logs. */
+		if ((entry.client == 0x12u || entry.client == 0x1bu)
+			&& entry.source == 0) {
+			const uint32* raw = (const uint32*)(sIhRing + rptr);
+			uint32 next = (sFaultW + 1u) & 31u;
+			if (next != sFaultR) {
+				sFaultQ[sFaultW].pasid = raw[3] & 0xffffu;
+				sFaultQ[sFaultW].vmid = (raw[0] >> 24) & 0xfu;
+				sFaultQ[sFaultW].addr = r5_gfx9_fault_address(raw[4], raw[5]);
+				asm volatile("sfence" ::: "memory");
+				sFaultW = next;
+			}
+			r5_gpu_retire_wake();
+			woke = true;
+		} else {
 		if (sIhEntries < 4)
 			memcpy(sFirstRaw[sIhEntries], sIhRing + rptr, 32);
 		sIhEntries++;
@@ -405,6 +451,7 @@ ih_handler(void* data)
 					r5_gpu_retire_wake();
 				}
 			}
+		}
 		}
 		rptr = (rptr + 32) & (kIhBytes - 1);
 		walked++;
@@ -1165,6 +1212,9 @@ r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu)
 static r5_vm sVm;
 static r5_vm_page sVmPages[1024];
 static bool sVmid1 = false;
+/* gfx9_vmid_per_file. The shared tree stays sVm. A file keeps its own. */
+static bool sVmidPerFile = false;
+static uint64 sSharedRoot = 0;
 
 
 static int
@@ -1223,8 +1273,14 @@ r5_gfx9_alloc_user_vram(uint64 bytes, uint64* offset)
 	status_t status = r5_gfx9_alloc_vram(bytes, 4096, &bumped, &address);
 	if (status != B_OK)
 		return status;
+	if (address != NULL)
+		memset(address, 0, (size_t)bytes);
 	if (!r5_span_add(sUserSpans, 64, bumped, bytes))
 		return B_NO_MEMORY;
+	for (int i = 0; i < 64; i++) {
+		if (sUserSpans[i].live && sUserSpans[i].offset == bumped)
+			sUserSpans[i].cpu = address;
+	}
 	*offset = bumped;
 	return B_OK;
 }
@@ -1330,6 +1386,7 @@ r5_gfx9_hub_restore(void)
 
 
 static void r5_gfx9_vmids_program(void);
+static void r5_gfx9_vmid_fault_irqs(void);
 static void r5_gfx9_csa_map(void);
 
 /* inv, hub and vmids are -1 to leave the flag, 0 to restore the stored
@@ -1369,8 +1426,10 @@ r5_gfx9_switch_registers(int inv, int hub, int vmids)
 	}
 	if (vmids == 1) {
 		sVmids = true;
-		if (sVmid1)
+		if (sVmid1) {
 			r5_gfx9_vmids_program();
+			r5_gfx9_vmid_fault_irqs();
+		}
 	} else if (vmids == 0) {
 		sVmids = false;
 		r5_gfx9_vmid_restore();
@@ -1406,6 +1465,38 @@ r5_gfx9_vmids_program(void)
 	if (sGpuDebug)
 		knote("vmids 1-15 cntl %08lx end %016llx",
 			(unsigned long)cntl, (unsigned long long)end);
+}
+
+
+/* Linux v6.12 drivers/gpu/drm/amd/amdgpu/gmc_v9_0.c
+ * gmc_v9_0_vm_fault_interrupt_state(), lines 473-479 and 513-529.
+ * setup_vmid_config writes only the ENABLE_DEFAULT bits. Linux then
+ * ORs the ENABLE_INTERRUPT bits onto every context:
+ *
+ *	bits = VM_CONTEXT1_CNTL__RANGE_PROTECTION_FAULT_ENABLE_INTERRUPT_MASK
+ *		| ... | EXECUTE_PROTECTION_FAULT_ENABLE_INTERRUPT_MASK;
+ *	for (i = 0; i < 16; i++)
+ *		tmp |= bits;
+ *
+ * R5 does that for contexts 1-15, and only when gfx9_irq is on.
+ * Context 0 stays the ring contract. The result matches the VMID 1
+ * setup value, 0x007ffe07. */
+static void
+r5_gfx9_vmid_fault_irqs(void)
+{
+	uint32 i;
+	uint32 bits;
+	if (!sFaultIrq || !sVmids || sInfo == NULL)
+		return;
+	bits = r5_gfx9_vmid_fault_irq_bits();
+	for (i = 0; i <= 14u; i++) {
+		uint32 reg = gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE);
+		kwrite(sInfo, reg, kread(sInfo, reg) | bits);
+	}
+	if (sGpuDebug)
+		knote("vmid fault irq cntl %08lx",
+			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT1_CNTL)));
 }
 
 
@@ -1526,9 +1617,11 @@ r5_gfx9_vmid1_setup()
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_LOW_ADDR_HI32)),
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_LO32)),
 		(unsigned long)kread(sInfo, gc_byte(mmVM_L2_CONTEXT1_IDENTITY_APERTURE_HIGH_ADDR_HI32)));
+	sSharedRoot = tableBase;
 	r5_gfx9_vmid1_set_root(tableBase);
 	/* Linux programs the engine ranges after setup_vmid_config. */
 	r5_gfx9_vmids_program();
+	r5_gfx9_vmid_fault_irqs();
 	r5_gfx9_inv_range_program();
 	r5_gfx9_csa_map();
 	return true;
@@ -1536,9 +1629,11 @@ r5_gfx9_vmid1_setup()
 
 
 /* amdgpu_allocate_static_csa plus amdgpu_map_static_csa. One 128 KiB
- * VRAM buffer, zeroed, mapped at r5_csa_vaddr in this VM. Off leaves
- * the page tables alone. Per-file trees map the same buffer. */
+ * VRAM buffer, zeroed, mapped at r5_csa_vaddr. Off leaves the page
+ * tables alone. Each file tree maps these same physical pages. */
 static bool sCsaMapped = false;
+static uint64 sCsaVa = 0;
+static uint64 sCsaPa[32];
 
 
 static void
@@ -1564,22 +1659,64 @@ r5_gfx9_csa_map(void)
 		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
 	for (page = 0; page < 32u; page++) {
 		uint64 pa = r5_gpu_carveout_base(fb) + offset + (uint64)page * 4096ull;
+		sCsaPa[page] = pa;
 		if (!r5_gfx9_vmid1_map(va + (uint64)page * 4096ull, pa | flags)) {
 			knote("csa fail map");
 			return;
 		}
 	}
+	sCsaVa = va;
 	sCsaMapped = true;
 	knote("csa %016llx", (unsigned long long)va);
 }
 
 
-bool
-r5_gfx9_vmid1_map(uint64 va, uint64 pte)
+/* The shared tree is mapped in r5_gfx9_csa_map. A file tree gets the
+ * same pages. ce meta off has no buffer, so the tree is left alone. */
+static bool
+r5_gfx9_csa_into(r5_vm* vm)
 {
-	if (!sVmid1)
+	uint64 flags;
+	if (!r5_gfx9_ce_meta_on())
+		return true;
+	if (!sCsaMapped)
+		r5_gfx9_csa_map();
+	if (!sCsaMapped || vm == NULL)
 		return false;
-	if (!r5_vm_map_page(&sVm, va, pte))
+	if (vm == &sVm)
+		return true;
+	flags = (uint64)R5_GFX9_PTE_VALID | (uint64)R5_GFX9_PTE_READABLE
+		| (uint64)R5_GFX9_PTE_WRITEABLE | (uint64)R5_GFX9_PTE_EXECUTABLE;
+	if (!r5_csa_map_pages(vm, sCsaVa, sCsaPa, 32u, flags))
+		return false;
+	r5_gfx9_vmid1_touch();
+	return true;
+}
+
+
+bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
+
+
+bool
+r5_gfx9_vmid_per_file(void)
+{
+	return sVmidPerFile;
+}
+
+
+r5_vm*
+r5_gfx9_shared_vm(void)
+{
+	return &sVm;
+}
+
+
+bool
+r5_gfx9_vm_map(r5_vm* vm, uint64 va, uint64 pte)
+{
+	if (!sVmid1 || vm == NULL || vm->pages == NULL || vm->used == 0)
+		return false;
+	if (!r5_vm_map_page(vm, va, pte))
 		return false;
 	asm volatile("sfence" ::: "memory");
 	/* A cleared PTE is an unmap. The next user job flushes that. */
@@ -1589,30 +1726,72 @@ r5_gfx9_vmid1_map(uint64 va, uint64 pte)
 
 
 bool
-r5_gfx9_vmid1_lookup(uint64 va)
+r5_gfx9_vm_lookup(r5_vm* vm, uint64 va)
 {
 	uint64 pte = 0;
-	if (!sVmid1)
+	if (!sVmid1 || vm == NULL || vm->pages == NULL || vm->used == 0)
 		return false;
-	if (r5_vm_lookup(&sVm, va & ~0xfffull, &pte) == 0)
+	if (r5_vm_lookup(vm, va & ~0xfffull, &pte) == 0)
 		return false;
 	return (pte & (uint64)R5_GFX9_PTE_VALID) != 0;
+}
+
+
+uint64
+r5_gfx9_vmid1_shared_root(void)
+{
+	return sSharedRoot;
+}
+
+
+bool
+r5_gfx9_file_vm_init(r5_vm* vm, r5_vm_page* pages, uint32 capacity)
+{
+	if (vm == NULL || pages == NULL || capacity < 2 || !sVmid1)
+		return false;
+	memset(vm, 0, sizeof(*vm));
+	memset(pages, 0, sizeof(r5_vm_page) * capacity);
+	vm->pages = pages;
+	vm->capacity = capacity;
+	vm->alloc = vm_page_alloc;
+	if (!r5_vm_new_page(vm, 0))
+		return false;
+	if (!r5_gfx9_pde_aligned(vm->pages[0].physical))
+		return false;
+	if (!r5_gfx9_csa_into(vm))
+		return false;
+	return true;
+}
+
+
+bool
+r5_gfx9_vmid1_map(uint64 va, uint64 pte)
+{
+	return r5_gfx9_vm_map(&sVm, va, pte);
+}
+
+
+bool
+r5_gfx9_vmid1_lookup(uint64 va)
+{
+	return r5_gfx9_vm_lookup(&sVm, va);
 }
 
 
 void
 r5_gfx9_vmid1_levels(const char* name, uint64 va)
 {
-	if (name == NULL || !sVmid1 || sVm.used == 0 || sInfo == NULL
+	r5_vm* vm = &sVm;
+	if (name == NULL || !sVmid1 || vm->used == 0 || sInfo == NULL
 		|| sInfo->shared_info == NULL)
 		return;
 	uint32 fb = kread(sInfo, gc_byte(mmMC_VM_FB_OFFSET));
 	uint64 base = r5_gpu_carveout_base(fb);
 	int index = 0;
 	for (int level = 3; level >= 0; level--) {
-		uint64 phys = sVm.pages[index].physical;
+		uint64 phys = vm->pages[index].physical;
 		uint64 off = phys - base;
-		uint64* table = sVm.pages[index].cpu;
+		uint64* table = vm->pages[index].cpu;
 		uint64 word = 0;
 		bool ok = table != NULL;
 		if (ok) {
@@ -1624,7 +1803,7 @@ r5_gfx9_vmid1_levels(const char* name, uint64 va)
 			(unsigned long long)word);
 		if (level == 0 || !ok || !r5_vm_is_table(word))
 			break;
-		index = r5_vm_find(&sVm, word);
+		index = r5_vm_find(vm, word);
 		if (index < 0)
 			break;
 	}
@@ -1761,6 +1940,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 		kernel = get_driver_boolean_parameter(settings, "gfx9_kernel",
 			false, true);
 		irq = get_driver_boolean_parameter(settings, "gfx9_irq", false, true);
+		sFaultIrq = irq;
 		gart = get_driver_boolean_parameter(settings, "gfx9_gart", false, true);
 		sGpuDebug = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);
@@ -1770,6 +1950,13 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",
 			false, true);
+		sVmidPerFile = get_driver_boolean_parameter(settings,
+			"gfx9_vmid_per_file", false, true);
+		if (sVmidPerFile && r5_vmid_file_ok(1, sVmids ? 1 : 0) == 0) {
+			knote("gfx9_vmid_per_file needs gfx9_vmids");
+			sVmidPerFile = false;
+		}
+		r5_gfx9_set_file_pasid(sVmidPerFile ? 1 : 0);
 		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
 			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);

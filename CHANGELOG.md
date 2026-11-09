@@ -1,5 +1,176 @@
 # R5OS changelog (lokaal)
 
+### Each program has its own GPU memory
+
+`gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
+
+Stick 30 reached the desktop. Six teapot self-tests were fine. Isolation failed. Fault status `0x00800880` is VMID 8 and an execute permission fault at `0x80002000`, the owner's own command list, which was not executable. Contexts 1–15 had been rewritten to `0x00555407`, so none of them raised a fault interrupt.
+
+Stick 31 reached the desktop. The command lists are executable, and the log has `vmid fault irq cntl 007ffe07`. There is no fault at `0x80002000`. The owner then stayed inside the copy. The control word was register to register. The counters did not return: the reading was taken before isolation, and only once, while the kill loop still held its buffers. The GPU was then lost.
+
+Stick 32 reached the desktop. The copy is memory to memory. The owner's page stayed unchanged. Fault status `00900c10` is VMID 9 at byte address `0x80000000`, the other program's page. The read/write bit in that word is 0. After the kill, the log says `counters back`. Still open: the driver does not write a `vm fault` line. The test program always prints `vm fault addr`, and that line is not the driver's. The GPU is lost after the guilty job. A reset was not run. The hang policy leaves the GPU off until the next boot. Not run on this stick: two teapots at the same time, and a standard account with the render switch off.
+
+### The kill's buffers are counted after they are released
+
+`gfx9_vmid_per_file` stays off. Stick 31 read the counters before the isolation stage, and once more the moment the kill stage returned. The kill loop still held its buffers then, so the difference included that stage. The reading is now taken just before the kill. For two seconds after the kill returns, the same reading is repeated every 100 ms until the counts match. `counters back` is that match. `counters difference` is the last reading when they still differ. The host test checks that order in the source. Stick 32 printed `counters back`. There is no What's new section and `distro/BUILD` stays the same.
+
+### The isolation copy reads and writes memory
+
+`gfx9_vmid_per_file` stays off. Stick 31 reached the desktop. The permission fault at `0x80002000` was gone, and the log has `vmid fault irq cntl 007ffe07`. The owner's submit then stayed inside `COPY_DATA` (`me hdr c0044000`). The control word was `(1 << 16) | (1 << 20)`: `SRC_SEL` 0 and `DST_SEL` 0, register to register. It is now memory to memory, Mesa 25.3.6 `src/amd/common/sid.h` lines 129-144: `COPY_DATA_SRC_SEL(1) | COPY_DATA_DST_SEL(5) | COPY_DATA_COUNT_SEL | COPY_DATA_WR_CONFIRM`. `WRITE_DATA` is unchanged. The host test checks that control word in the source. Stick 32 ran this copy. The owner's page stayed unchanged, and the client's access faulted at `0x80000000`. There is no What's new section and `distro/BUILD` stays the same.
+
+### Every graphics context can report a bad memory access
+
+`gfx9_vmid_per_file` stays off. Programming contexts 1–15 wrote only the default fault bits, `0x00555407`, including over VMID 1, which setup had given `0x007ffe07`. No context raised a fault after that. When `gfx9_irq` is on, the interrupt bits are ORed afterwards, the same step as Linux v6.12 `gmc_v9_0_vm_fault_interrupt_state()` (lines 473–479 and 513–529). All fifteen contexts are then `0x007ffe07`. Context 0 is unchanged. The host test checks that list of fifteen. Sticks 31 and 32 logged `vmid fault irq cntl 007ffe07`. There is no What's new section and `distro/BUILD` stays the same.
+
+### The isolation command list can be executed
+
+`gfx9_vmid_per_file` stays off. Stick 30 stopped in the owner's own command list at `0x80002000`. Fault status `0x00800880` is VMID 8 and a permission fault; the address register `0x80002` is that page. The list was mapped readable and writable, and the command processor fetches it. Both command lists (`0x80002000` and `0x80001000`) are now readable, writable and executable. The data page stays readable and writable. The host test checks the two maps in the source. Stick 31 no longer faulted at `0x80002000`. There is no What's new section and `distro/BUILD` stays the same.
+
+### GET_INFO reads the live counters under the GPU lock
+
+`gfx9_vmid_per_file` stays off. The lost bit, the guilty file and the buffer bytes are sampled while the lock is held. The copy back to the caller stays outside the lock. The host test checks that order. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A lost GPU releases parked buffers and their file trees
+
+`gfx9_vmid_per_file` stays off. After `gpu lost`, the retire treats every fence as passed. Parked buffers are released, and the last reference drops the file tree, its pages and its VMID. The host test holds a tree for a parked buffer, drops it as lost, and the counters are back at zero. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### Page-table pages count against the file's VRAM
+
+`gfx9_vmid_per_file` stays off. A file with its own tree refuses a VRAM buffer with `B_NO_MEMORY` when that file's buffers plus its page-table pages do not fit in the framebuffer. A map that cannot take a table page logs `page table pool full` and returns `B_NO_MEMORY`. The host test fills one file's budget and leaves the other file inside its budget. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A VA replace maps the request it already copied
+
+`gfx9_vmid_per_file` stays off. `gpu_va_replace` copies the user request once. The follow-up map reads that kernel copy, so a second user read cannot change the range while `sReplacing` skips the PRT check. The host test checks that the replace function calls `gpu_va_map_copied` and does not call `gpu_va_map` with the user buffer. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A submit checks the indirect buffer again after the lock returns
+
+`gfx9_vmid_per_file` stays off. The sync wait and the ring-room wait drop the GPU lock. `gpu_submit` checks `gpu_ibs_mapped` again after each of those waits, before the cache flush. An unmap in that window refuses the submit. The host test maps a page, unmaps it, and the check returns false. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### The VM flush stays 26 dwords when the PASID settings are off
+
+`gfx9_vmid_per_file` stays off. `r5_cs_vm_switch` is the 26-dword flush again, with no PASID argument. `IH_VMID_n_LUT` is `r5_cs_pasid_map` after `PFP_SYNC_ME`, and only when `gfx9_pasid_map` or `gfx9_vmid_per_file` is on. With both off, a user job writes no LUT packet. The host test checks the 26 dwords and that the map follows them. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### The isolation test reads and writes a foreign address
+
+`gfx9_vmid_per_file` stays off. `r5-gpu-isolation` maps one page in the first process, fills it with `0x5a`, and sends only the GPU address to a second process. That process submits COPY_DATA and then WRITE_DATA to the address. The owner's page is unchanged, and the program prints `vm fault` with that address. The self-test runs this before the kill stage. The host test checks those steps in the source. It was not run on hardware. There is no What's new section and `distro/BUILD` stays the same.
+
+### Buffers, page tables and VMIDs are counted
+
+`gfx9_vmid_per_file` stays off. `R5_GPU_GET_COUNTERS` is a new call at the end of the opcode list. It reports buffer objects, page-table pages and VMIDs for the open file and for the whole device, and the file trees and the pages those trees hold. The kill stage prints `counters back` when the counts match the reading from before the kill, and the difference when they do not. The host test checks that match, including a tree-page change. There is no What's new section and `distro/BUILD` stays the same.
+
+### Only the hung file is guilty
+
+`gfx9_vmid_per_file` stays off. After the watchdog, every open file sees the lost device. `R5_GPU_CAP_GUILTY` is set only on the file whose job was the oldest still in the ring, or whose PASID faulted. QUERY_STATE2 reports an innocent reset to the other files. The host test checks that lost without guilty is not a guilty query, and that both bits together are. There is no What's new section and `distro/BUILD` stays the same.
+
+### A page fault is queued for the file's PASID
+
+`gfx9_vmid_per_file` stays off. A VM flush with a non-zero PASID writes `IH_VMID_n_LUT` before the page-table base, so that packet is 31 dwords. A zero PASID stays the 26-dword flush. The interrupt handler, for a VMC or UTCL2 fault, only queues the PASID, the VMID and the address. The retire thread, which already holds the lock, marks that file and logs an unknown PASID without marking another file. The host test checks the 31-dword packet and that order. The ring order and the K2 fence are unchanged. There is no What's new section and `distro/BUILD` stays the same.
+
+### User VRAM is cleared before the next owner sees it
+
+`gfx9_vmid_per_file` stays off. A fresh VRAM bump is zeroed before it is published. A span that a previous owner freed is zeroed through the kernel address stored with it, whether or not the caller set `R5_GPU_BO_VRAM_CLEARED` (bit 3, the Linux `AMDGPU_GEM_CREATE_VRAM_CLEARED` flag). The host test frees a span, takes it again, and reads zeros for the taken bytes. There is no What's new section and `distro/BUILD` stays the same.
+
+### An indirect buffer cannot wrap the address space
+
+`gfx9_vmid_per_file` stays off. `gpu_ib_mapped` refuses a dword count of 0 or above `0xfffff`, an unaligned address, and a range whose byte sum does not fit in 64 bits. The pages have to fit the virtual-address layout. The walk stops on the last page, so the page counter does not wrap. The host test rejects an address near the top of 64 bits and a count of `0x100000`, and accepts eight dwords on the last page of that span. There is no What's new section and `distro/BUILD` stays the same.
+
+### The file tree is published under the GPU lock
+
+`gfx9_vmid_per_file` stays off. `gpu_open` builds the file tree, when the setting is on, while the lock is held, and returns the cookie after the lock is dropped. A failed tree takes the client back off the list. `gpu_control` still calls the same function under the lock. The host test checks that order in both functions. There is no What's new section and `distro/BUILD` stays the same.
+
+### Virtual-address checks stay inside one file tree
+
+`gfx9_vmid_per_file` stays off. Overlap, a partial range and a dropped range compare the caller's page table with the range that was stored. A PRT entry records that table and is dropped when the table is freed. Clearing one table leaves the same virtual address mapped in the other. The host test maps `0xffff800000001000` in two trees, clears the first, and the second page-table entry stays. There is no What's new section and `distro/BUILD` stays the same.
+
+### A parked buffer unmaps in a tree that is still live
+
+`gfx9_vmid_per_file` stays off. The file page table, its pages and its VMID owner are one object with a reference count. The open file holds one. A buffer parked because its job is still in the ring holds one more. The object is freed when the last reference goes, so the retire unmap does not use the freed client. `gpu_free` reads the fence once and stores that value on the tree. The host test closes with a job in flight, unmaps in the still-live tree, and checks the counters are back at zero. There is no What's new section and `distro/BUILD` stays the same.
+
+### A blocked fault signal ends the team
+
+`send_fault_signal()` unblocks a fault signal that is blocked or ignored and resets it to the default before sending it. The page fault uses that call. The ARM64 exception handler is not in this change. This sits on the wired-range copy of `vm.cpp`. It is haiku-pi `6e517bb52c`, copyright 2026 Witold Bołt, as GPL-3.0-or-later snippets. `scripts/apply-kernel-bugs.py` copies the files. The host test checks the handler and the page-fault call. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### An exited thread's stack stays while its team goes down
+
+A signal that ends a team is handled by one thread, which exits at once. The user stack stays until the address space goes, so the other threads can still use an object on it. A team that is not shutting down still deletes the stack. This is haiku-pi `e09cfa1d9e`, copyright 2026 Witold Bołt, as a GPL-3.0-or-later snippet. `scripts/apply-kernel-bugs.py` copies the file. The host test checks the `goingDown` guard. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A wired range shrinks to the pages that were wired
+
+`lock_memory_etc()` left the range at its full size when a later page could not be wired. The revert looked for the shorter size and panicked. The range now shrinks to `nextAddress - areaStart` before the revert. Upstream's protection-mask fix in the same file stays. This is haiku-pi `6f810ed2d7`, copyright 2026 Witold Bołt, as a GPL-3.0-or-later snippet on the MIT and NewOS file. `scripts/apply-kernel-bugs.py` copies it. The host test checks the assignment. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A new thread's TLS vector starts at the current generation
+
+A new vector no longer starts at generation 0, so unloading a library with thread-local storage does not zero the blocks the thread just created. The file is Haiku's `elf_tls.cpp` (copyright 2014 Paweł Dziepak, MIT). The added lines are haiku-pi `5db923abc6`, copyright 2026 Witold Bołt, marked as a GPL-3.0-or-later snippet. `scripts/apply-rest-native.py` copies the file. The host test checks that the counter is set before the vector size. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+### An unknown PCI id does not load Green Sardine firmware
+
+`radeon_gfx9_fw_stem()` follows the four ids in the radeon_hd device table. 1636 and 164c stay `renoir`. 15e7 and 1638 stay `green_sardine`. Any other id returns NULL. The PSP load and the direct engine load stop, and the stem logs one line. The firmware blobs and the ring are unchanged. The host test checks the four ids and an unknown id. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
+
+Review points A1–A7 and M1 of the usb_audio and usb_midi review (8 Nov 2026). Branch `claude/usb-audio-midi-fixes`.
+
+- **Kernel safety (A1–A3).** `B_MULTI_GET_MIX` / `B_MULTI_SET_MIX` sized an `alloca` from the caller's `item_count` and copied from an unchecked pointer. `B_MULTI_GET_BUFFERS` sized two kernel stack arrays from the caller, and each stream wrote two entries even for a smaller request. `B_MULTI_GET_DESCRIPTION` wrote back to an unchecked pointer, a negative channel count became a huge copy, and the mix-control trace loop read past its allocation. Counts are capped (1024 mix items, 32 buffer descriptors), user pointers are checked, and the mix values use `malloc`.
+- **USB MIDI SysEx (M1).** A SysEx write of one or two bytes subtracted three from the counters, wrapped them, and filled packets past `out_buffer`. A three-byte SysEx went out as CIN 4 instead of CIN 7. Each packet's CIN and length now come from the bytes left in the message (`usb_midi_sysex_packet()`).
+- **No sleep in the USB callback (A6).** The stream callback slept 1 ms after every failed transfer, in the USB stack's finisher thread, forever. It now stops the stream after 32 failures in a row. The next buffer exchange starts it again.
+- **Packet timing (A4, A5).** A packet is one service interval (1 ms full speed, 125 µs high speed, times 2^(bInterval-1)), not always 1 ms. A high-speed 48 kHz device got 56000 frames a second, and 44.1 kHz was sent as 44 kHz (0.23 % slow, a click every few seconds). Buffers are now a whole number of packets with an exact frame count, with 44/45-frame packets at 44.1 kHz. Recording packets ask for a full `wMaxPacketSize`, and what arrives is joined into exactly one buffer of frames; a short buffer repeats its last frame. An alternate that needs more than bits 0–10 of `wMaxPacketSize` is refused, because Haiku's XHCI driver refuses those packets.
+- **UAC 2.0 rates (A7).** The rate list was a fixed 44.1–96 kHz. The driver now follows the terminal's clock entity through selectors and multipliers to the clock source, asks it for RANGE, and offers those rates. `SET_CUR` goes to that clock source. With no clock source it refuses instead of sending clock 0.
+
+Limits: the bus speed is guessed (UAC 2.0 counts as high speed; a UAC 1.0 alternate is high speed when 1 ms of audio does not fit its packet). Haiku's EHCI driver spreads a transfer evenly over its packets, so 44.1 kHz on a high-speed device behind EHCI is still not exact. Recording drift is handled by repeating or dropping frames, not by resampling. Not done: A8 (buffer exchange can hang on unplug), A9 (second stream in one direction), M2 (empty serial number).
+
+Tested: three host tests (`scripts/test-usb-audio-packets.cpp`, `scripts/test-usb-audio-range.cpp`, `scripts/test-usb-midi-sysex.cpp`) pass with AddressSanitizer and UBSan, and two deliberate faults in the packet helper made the first one fail. The changed usb_audio and usb_midi sources compile with the x86_64 Haiku cross compiler. Not tested: no jam image, no boot, no USB audio or MIDI device.
+
+### Boot icons are in the boot header
+
+The boot loader reads `kSplashIcons24BitCompressedImage` from `images-sans-tm.h`. That header is checked in, and jam does not rebuild it. Copying `splash_icons.png` into `data/artwork/boot_splash/` never reached the screen. The seven Haiku stage icons now live as SVG in `distro/artwork/boot_splash/icons-src/`, rendered once to 160 px PNGs. The generator builds the 308×80 white strip and `splash_icons.bgr` from those PNGs. Apply compresses that BGR into the header, next to the logo. Width and height stay 308 and 80. The 8-bit image is unchanged. `haiku-splash-icons.png` is gone. `distro/BUILD` stays 10049.
+
+### About R5 opens at the mockup width
+
+The window opens 45 times the plain font size wide (540 at 12 pt) and can grow and shrink on both axes. That width is the window. The content minimum is the same width minus the two big insets, so the insets are not added a second time. The heading stays together; the glue takes the extra width. `distro/BUILD` stays 10049.
+
+### Volumes use the drive, not the cabinet
+
+`R_HardDiskIcon` is the beige cabinet. The boot volume uses the drive icon again, and the R5 mark still covers the ladybug. Any other disk, including VBox Share, uses that drive with the ladybug removed, including the black body that was left after the first cut. A CD keeps its own icon. `distro/BUILD` stays 10049.
+
+### About R5 uses two cards
+
+The header is a document card: the mark at four times the font size, then “R5” and “Operating System” at twice the font size, and the version line below in `B_DARKEN_2_TINT`. The system information is a panel card in a 2×2 grid: processors and kernel on the left, memory and time on the right. Labels are bold. Values use the same tint. `Build N` stays small and in `B_LIGHTEN_1_TINT` under that grid. The gap between the cards and the window edge is `B_USE_BIG_SPACING`. AboutSystem links `libr5ui.so`. The time line is drawn on the card fill. The replicant is still `SysInfoView` and is not rebuilt from a deep archive. VirtualBox on 8 Nov 2026 showed the window; the time line wraps in the right column. Dark mode, an 18-point font, and the replicant were not tried. `distro/BUILD` stays 10049.
+
+### BCard is a rounded group in libr5ui
+
+`BAppearanceKit::BCard` is a view with a group layout, a one-pixel border, and a corner that follows the font size. Document and panel are the two fills. Colors come from `ui_color()`. `<Card.h>` sits next to `<R5UI.h>`. About R5 is the first caller. `distro/BUILD` stays 10049.
+
+### libr5ui and libr5icons are MIT
+
+The C++ in `distro/ui` and `distro/icons` is MIT, copyright 2026 R5OS Contributors. Any application can link the libraries. The Tracker and Haiku icon bytes keep their own notices. No call changed. `distro/BUILD` stays 10049.
+
+### About R5 uses the Wave Pebble as its icon
+
+`AboutSystem.rdef` no longer carries the Haiku leaf. The vector icon is an HVIF of `r5-symbol.svg`: the pebble and the wave, with the same four-stop diagonal. `scripts/generate-r5-artwork.py` writes `r5-symbol.hvif` and the resource. `--check` compares both. This has not been booted. `distro/BUILD` stays 10049.
+
+### About splits the version and the build
+
+The header reads `Version <R5_OS_VERSION> • <arch>`. `Build <R5_OS_BUILD>` is smaller text in `B_LIGHTEN_1_TINT` at the bottom of the system information. Both come from `r5_os_version.h`. The header stays above the tabs. The build line stays in `SysInfoView`, including when that view is a replicant, and the replicant shows the same version line. This has not been booted. `distro/BUILD` stays 10049.
+
+### The boot disk uses the ordinary hard-disk icon
+
+The well-known boot volume asks for `R_HardDiskIcon` instead of the nightly disk. Tracker still draws the R5 mark on that volume. The mark sits where the ladybug sat, from (10, 40) to (24, 56) in the 64-unit icon. This has not been booted. `distro/BUILD` stays 10049.
+
+### The boot splash is white
+
+The splash is 372×96 on `#FFFFFF`, with the dark wordmark and no border. The bootloader clears a 24-bit framebuffer to `#FFFFFF` (`fillByte` `0xff`, `fillWord` `0x00ffffff`). An 8-bit screen stays black. `distro/boot/platform/generic/video_splash.cpp` is the Haiku file with that fill in an SPDX snippet. `scripts/apply-branding.py` copies it. The progress strip stays Haiku's 308×80 layout. `haiku-splash-icons.png` is the unmodified MIT original. The generator lifts the rim off black onto white and draws the R5 mark on icon 4, where the leaf was. `apply-overlay.sh` installs `splash_icons.png`. `--check` covers the splash and the strip. This has not been booted. `distro/BUILD` stays 10049.
+
+### A file does not get VMID 1
+
+`gfx9_vmid_per_file` stays off. The file pool is VMID 2-15. VMID 1 stays the shared table. If the setting is on and `gfx9_vmids` is off, startup logs `gfx9_vmid_per_file needs gfx9_vmids` and leaves every job on VMID 1. The host test reserves fourteen file ids and none of them is 1. There is no What's new section and `distro/BUILD` stays the same.
+
+### A file table maps the CSA
+
+`gfx9_vmid_per_file` stays off. When `gfx9_ce_meta` is on, each new file tree maps the same 128 KiB CSA at the same virtual address as the shared tree. The setting off leaves the tables alone. The host test maps that address in a new tree and reads the page back. There is no What's new section and `distro/BUILD` stays the same.
+
+### An unmap stays in the tree that was mapped
+
+`gfx9_vmid_per_file` stays off. A mapped range stores its `r5_vm`. Map, unmap and lookup take that tree. There is no current tree, so closing one file does not clear the same virtual address in another file. The empty PTE stays `0x10` (not valid). The host test maps `0xffff800000001000` in two trees, clears the first, and the second page is unchanged. The ring order is unchanged. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Network shares install userland_fs from the local build
 
 `smbfs` requires `userland_fs`. The image had the add-on only as a loose file under `system/non-packaged/add-ons/userlandfs`, and the package name `userland_fs` was not in `system/packages`. Putting only `smbfs.hpkg` there made the image solver download `userland_fs` from the public repository, which returned 404. `AddHaikuImageSystemPackages` only installs names from a remote catalog, so both packages are copied with `AddPackageFilesToHaikuImage` from the local `userland_fs.hpkg` and `smbfs.hpkg`. The loose add-on copy is gone.
@@ -14,6 +185,9 @@ The mount parameter string does not contain `password=`. `userlandfs_server` is 
 
 `distro/BUILD` is 10050. `jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0` at 16:30 Europe/Amsterdam on 8 Nov 2026. The image is `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image`, 2147483648 bytes. `smbfs.o`, `Tracker.o`, and `NetworkShares.o` were produced, and the add-on is copied to `system/non-packaged/add-ons/userlandfs`. Putting `smbfs.hpkg` in `system/packages` made the image solver try to download `userland_fs` from the public repository, which returned 404, so the add-on is installed beside the package instead. A Windows share was not mounted. VirtualBox bridged was not run. QEMU usernet cannot see a Windows share.
 
+### Each open GPU file can have its own page table
+
+`gfx9_vmid_per_file` stays off. When the radeon_hd setting is on, the first call for an open render node builds a root with the same allocator as VMID 1, and a submit grabs a VMID from `r5_vmid_reserve` (the portable form of Linux v6.18 `amdgpu_vmid_grab`). The VM flush that already exists writes that root, then writes the shared root back. Off, the submit stays on VMID 1 and the shared tree. The debug switch still refuses the bit. The unmodified `amdgpu_ids.c` and `amdgpu_vm.c` from Linux v6.18 are stored under `distro/graphics/third_party/linux-v6.18/` and are not compiled: they include Linux kernel headers. The host test `scripts/test-r5-gpu.cpp` maps `0xffff800000001000` in two trees and reads two different pages and two roots. Page-table pages stay allocated until the next boot. A VMID above 1 still needs `gfx9_vmids` for its context bounds. The ring order, the K2 invalidate word, and VMID 0 are unchanged. The GPU-core split and the kernel copies on `cursor/gpu-m5` are not in this step: they remove the page-table files main now uses. `jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`. The image is `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image`, 2147483648 bytes, at 18:52 Europe/Amsterdam on 8 Nov 2026. VirtualBox `R5OS` was started from that image at 18:53 and was running. The desktop was not read. `gfx9_vmid_per_file` was not turned on, so this boot does not use the new page tables. There is no What's new section and `distro/BUILD` stays the same.
 ### The boot splash is black, and the Deskbar mark is centered
 
 `scripts/generate-r5-artwork.py` draws the Wave Pebble from `distro/artwork/r5-symbol.svg`. The splash and its BGR are `#000000`, with no gray card and no version. The 16 and 22 pixel marks use the thicker wave in that SVG. The Deskbar button uses the 16 pixel mark, and the picture is centered in the button instead of sitting on the lower edge. Example cards read `distro/VERSION` and `distro/BUILD` and say example. `--check` compares the product files. `apply-overlay.sh` runs that check and copies the Deskbar mark, the logo, the splash, and the About symbol. It does not copy the brand-kit previews. About R5 is one column with that symbol, and Tracker draws the mark on the boot volume. `distro/BUILD` is 10049. The black splash and the centered small mark have not been booted. A 5625U boot was not part of this change.
@@ -666,6 +840,50 @@ Jam of `@r5-raw` started at 23:44 CET on 5 Nov 2026 and finished at 23:46 CET, `
 ### Why chown of /boot/home/config returns EROFS
 
 `r5-session.log` from the 5625U stick repeats `settings chown /boot/home/config: Read-only file system` and the same for `chmod`. `package_daemon` registers a volume at `/boot/home/config`. That directory is the packagefs root. packagefs does not implement `write_stat`, so `chown` and `chmod` of the mount return `B_READ_ONLY_DEVICE`. `r5-desktop` runs that call before every session program, which is why the line repeats. `config/settings` and `config/cache` are the writable directories packagefs stitches in. On the stick those two are uid 1001 mode 0700, and Mesa created `mesa_shader_cache` there as uid 1001. `config` itself stayed uid 0 mode 0755. A session user can write settings and cache. Creating a file directly in `config` fails. The same packagefs mount is how every boot, including VirtualBox, exposes `~/config`. A VirtualBox session log was not read. No code change.
+
+### One protocol per UMP endpoint
+
+`libmidi2.so` and the public MIDI headers are MIT. That is the same kind of exception as the GPU header and the R5 DRM library: every MIDI program loads them. The USB MIDI driver and the R5 parts of the MIDI server stay GPL-3.0-or-later. `Midi2Library.cpp` carries the MIT header. The R5 functions in `MidiLocalConsumer.cpp` and `MidiLocalProducer.cpp` are marked with MIT snippet tags. The R5 parts of `usb_midi.cpp` and `PortDrivers.cpp` are marked GPL-3.0-or-later. The Haiku functions around them keep the MIT header.
+
+Until a Stream Configuration message arrives, an endpoint uses MIDI 1.0 protocol. `midi2_endpoint_init` stores protocol 1. `midi2_stream_configure` stores 1 or 2 and rejects any other protocol byte. A USB device starts at protocol 1 and updates that byte when a stream configuration of status `0x005` arrives.
+
+With protocol 1, a MIDI 1.0 channel write stays type 0x2, including a note-on of velocity 0. System bytes stay type 0x1. With protocol 2, every channel voice message becomes type 0x4 (M2-104-UM D.3). A note-on of velocity 0 becomes a note-off at `0x8000`. Poly pressure and channel pressure use the 7-to-32 scale. Pitch bend uses the 14-to-32 scale, so center `8192` is `0x80000000`. Control changes 0 and 32 are held as the bank. A program change then sends the bank-valid bit with those bytes. Controllers 101 and 100, or 99 and 98, select an RPN or NRPN. The first data byte is held. Controller 38, or a later controller 6, sends status `0x2` or `0x3`. Address `0x7F`/`0x7F` is not sent. One group does not mix type 0x2 and type 0x4 channel voice.
+
+`midi2test` checks both protocols, the scaled controller, the bank, and the RPN. That program was not run. The driver copy of the little-endian load was unused; the parser header already has `usb_midi_load_le32`, so the copy is gone. The image build treats that unused function as an error. The translator compares pointers with `0`, because a kernel file that includes the header does not have `NULL` yet. A host compile of the translator printed `ok midi protocol`. The host fuzzer, linked with `Midi2Library.cpp`, ran kernel, payload, Property Exchange, profiles, stream, and USB for 60 seconds each under AddressSanitizer and printed `ok`. No USB MIDI device was attached. `midi2test` was not run in VirtualBox.
+
+### MIDI parsers live in libmidi2.so
+
+Property Exchange, profiles, stream messages, and the USB descriptor parser were inline in the public headers. Those functions are now defined in `Midi2Library.cpp` and linked into `libmidi2.so`. The headers keep the names and the arguments. `midi2_pe_put14`, `midi2_pe_get14`, `midi2_stream_pack`, `midi2_stream_status`, and `midi2_profile_same` stay inline. `scripts/apply-media.py` copies the library source, `Midi2Translate.h`, and the two driver parser headers. A Haiku cross compile of `Midi2Library.cpp` succeeded. The host fuzzer, linked with that file, ran each target for one second under AddressSanitizer and printed `ok`. `midi2test` was not run. No device was attached. The library was not jammed into an image.
+
+### MIDI parsers have a host fuzz run
+
+`interpret_ump_buffer`, `expand_ump_to_midi1`, and `sysex7_bytes` call `usb_midi_parse.h`. The host harness includes that file, so it runs the driver code. `scripts/fuzz-midi2.sh` builds it with AddressSanitizer and UndefinedBehaviorSanitizer (`g++` 15.2.0 on WSL). The kernel target ran first for 600 seconds, then payload, Property Exchange, profiles, stream messages, and the USB descriptor parser, 600 seconds each. Each log printed `ok`. There was no sanitizer report. `midi2test` was not run. No device was attached.
+
+### MIDI 2.0 channel voice reaches MIDI 1.0 hooks
+
+Type 0x4 was translated only for note-off, note-on, and control change. Appendix D, Translation (D.2), also covers poly pressure, channel pressure (D.2.2), pitch bend with the least significant byte first (D.2.5), program change with the bank bit (D.2.4), and registered and assignable controllers as four control changes (D.2.3). `BMidiLocalConsumer`, `read()`, and a send to a MIDI 1.0 device use `midi2_channel_voice_to_midi1`. The pending `read()` buffer is 16 bytes, which holds the 12-byte controller sequence. Appendix D, Messages That Cannot Be Translated to MIDI 1.0 (D.2.8), stays UMP: relative controllers, per-note controllers, per-note management, and per-note pitch bend. `midi2test` checks those bytes. That program was not run. A host compile of the helper with `static_assert` passed. No device was attached.
+
+### A MIDI 2.0 note-on of velocity 0 stays a note-on
+
+`midi2_note_on_midi1_velocity(0)` returned 0, and MIDI 1.0 treats a note-on of velocity 0 as a note-off. Appendix D, MIDI 2.0 Note On Velocity (D.2.1), replaces a translated 0 with 1. The helper now returns at least 1 for every note-on, including 0. The same formula is `usb_midi_note_on_midi1_velocity` in the driver, because the driver does not include `Midi2Defs.h`. `midi2test` compares the two.
+
+The other way, Appendix D, Note On/Off (D.3.1): a MIDI 1.0 note-on of velocity 0 written to a UMP endpoint becomes a type 0x4 note-off with velocity `0x8000`. Velocity 1 becomes `0x0200`. Attribute type and attribute value stay 0. Other channel bytes on that write stay type 0x2, so one group can still carry both types. `midi2test` checks both velocities and that the driver copy matches. That program was not run. A host compile of the same checks with `static_assert` passed. No device was attached.
+
+### The wide spray overloads were not in a release
+
+`SprayNoteOn(uchar, uchar, uint16)` and `SprayControlChange(uchar, uchar, uint32)` were exported from `libmidi2.so` in development builds from `f0c74f2520`. Renaming them to `SprayNoteOn2` and `SprayControlChange2` drops those symbols. No file in `distro/` except `midi2test` called the wide forms, and that program now uses the new names. `PortDrivers.cpp` calls the MIDI 1.0 forms. There is no HaikuPorts recipe in this tree and no package that references the symbols. `distro/VERSION` is `2026.1-dev`. The symbols are removed, not kept as aliases.
+
+### SysEx7 is assembled per group
+
+`BMidiLocalConsumer` kept one SysEx buffer per consumer. Two groups that start a message at the same time overwrote that buffer. The buffer is now keyed by the consumer and the group in bits 27..24 of the first word. Closing the consumer frees every group. `midi2test` does not send two groups. This is not run on a device.
+
+### A quiet MIDI 2.0 note-on stays a note-on
+
+`value >> 9` turned a MIDI 2.0 velocity below 512 into MIDI 1.0 velocity 0, which is a note-off. `midi2_note_on_midi1_velocity` returns at least 1 when the 16-bit velocity is not 0. Velocity 0 stays 0. Note-off is unchanged. The same rule is in `expand_ump_to_midi1`, `send_ump_as_midi1`, and the `NoteOn` hook. `midi2test` checks 1, 511 and 512. That program was not run. A cross compile of the helper with `static_assert` is the host check.
+
+### MIDI 2.0 spray calls have their own names
+
+`SprayNoteOn(uchar, uchar, uchar)` and `SprayControlChange(uchar, uchar, uchar)` are again the only candidates for a bare integer. `SprayNoteOn(0, 60, 100)` compiles and is a MIDI 1.0 note. The 16-bit velocity call is `SprayNoteOn2`. The 32-bit controller call is `SprayControlChange2`. The methods stay non-virtual. A cross compile of those four calls with the Haiku g++ succeeded (`n1_compile_ok`). `midi2test` was not run: it needs the MIDI server.
 
 ### Teapot patches follow freeglut
 

@@ -736,13 +736,18 @@ radeon_psp_stage(const uint8* bytes, uint32 size, radeon_psp_item* item)
 static const char*
 radeon_gfx9_fw_stem()
 {
-	uint16 pciID = sPciId;
-	// amdgpu_device_init_apu_flags: 1636 and 164c are AMD_APU_IS_RENOIR.
-	// 15e7 Barcelo and 1638 Cezanne are AMD_APU_IS_GREEN_SARDINE.
 	// The PFP, ME, and CE blobs differ. RLC and MEC are the same bytes.
-	if (pciID == 0x1636 || pciID == 0x164c)
-		return "renoir";
-	return "green_sardine";
+	// An id that is not in the device table is not green_sardine.
+	const char* stem = r5_gfx9_fw_stem_for(sPciId);
+	if (stem == NULL) {
+		static int logged = 0;
+		if (logged == 0) {
+			logged = 1;
+			ERROR("%s: R5 radeon_hd: unknown PCI id 0x%x, "
+				"firmware refused\n", __func__, sPciId);
+		}
+	}
+	return stem;
 }
 
 
@@ -814,6 +819,8 @@ static status_t
 radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 {
 	const char* stem = radeon_gfx9_fw_stem();
+	if (stem == NULL)
+		return B_ERROR;
 	char rlc[32];
 	char pfp[32];
 	char ce[32];
@@ -1231,7 +1238,13 @@ radeon_gfx9_rlc_start(uint32 location, bool loadUcode, uint32* _before,
 	}
 	if (loadUcode) {
 		char rlc[32];
-		snprintf(rlc, sizeof(rlc), "%s_rlc.bin", radeon_gfx9_fw_stem());
+		const char* stem = radeon_gfx9_fw_stem();
+		if (stem == NULL) {
+			Write32(OUT, cntl, saved);
+			Write32(OUT, clock, savedClock);
+			return false;
+		}
+		snprintf(rlc, sizeof(rlc), "%s_rlc.bin", stem);
 		// mmRLC_GPM_UCODE_ADDR / DATA. Start address is 0x2000.
 		status_t loaded = radeon_gfx9_load_engine(rlc, 0x583c, 0x583d,
 			0x2000);
@@ -2196,6 +2209,8 @@ static int sGpuDebug = 0;
 static int sFlushFence = 0;
 static int sCondExec = 0;
 static int sPasidMap = 0;
+/* gfx9_vmid_per_file. The LUT write follows the flush for that file. */
+static int sFilePasid = 0;
 static int sCeMeta = 0;
 static int sGdsSwitch = 0;
 static struct r5_gds sGdsState;
@@ -2534,7 +2549,10 @@ r5_gfx9_user_commit_dwords(uint32 count)
 	body = r5_cs_user_words(count);
 	if (body == 0)
 		return 0;
-	extra = r5_gfx9_vmid1_flush_due(&pd) ? r5_cs_vm_switch_words() : 0;
+	extra = r5_gfx9_vmid1_flush_due(&pd)
+		? r5_cs_vm_switch_words() : 0;
+	if (extra != 0 && sJobPasid != 0 && (sPasidMap || sFilePasid))
+		extra += 5u;
 	return extra + body + r5_cs_pad_dwords(
 		sRadeonGfx9Ring.submitted + extra + body);
 }
@@ -2565,6 +2583,13 @@ void
 r5_gfx9_set_pasid_map(int on)
 {
 	sPasidMap = on ? 1 : 0;
+}
+
+
+void
+r5_gfx9_set_file_pasid(int on)
+{
+	sFilePasid = on ? 1 : 0;
 }
 
 
@@ -2698,8 +2723,12 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	memset(&jobGds, 0, sizeof(jobGds));
 	int gds = sGdsSwitch && r5_gds_switch_needed(&sGdsState, &jobGds);
 	int inBlock = flush || gds;
+	uint32 mapVmid = 1;
+	if (flush && count > 0 && ibVm[0] >= 1u && ibVm[0] <= 15u)
+		mapVmid = ibVm[0];
 	int pasidMap = inBlock
-		&& r5_pasid_map_due(sPasidMap, sPasidOfVmid[1], sJobPasid);
+		&& r5_pasid_map_due(sPasidMap || sFilePasid,
+			sPasidOfVmid[mapVmid], sJobPasid);
 	int endFence = sFlushFence && (flush || pasidMap);
 	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
 	 * zeros, and the packet runs once for this VMID. */
@@ -2767,13 +2796,18 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 			r5_cs_cond_exec_mc(pageMc));
 	}
 	if (flush) {
-		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
-			sUserSequence);
+		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd,
+			fenceMc, sUserSequence);
+		if (sJobPasid != 0 && ibVm[0] < 16u) {
+			sPasidOfVmid[ibVm[0]] = sJobPasid;
+			sFileOfVmid[ibVm[0]] = sJobFile;
+		}
 	}
 	if (pasidMap) {
-		switched = r5_cs_pasid_map(packets, cap, switched, 1, sJobPasid);
-		sPasidOfVmid[1] = sJobPasid;
-		sFileOfVmid[1] = sJobFile;
+		switched = r5_cs_pasid_map(packets, cap, switched, mapVmid,
+			sJobPasid);
+		sPasidOfVmid[mapVmid] = sJobPasid;
+		sFileOfVmid[mapVmid] = sJobFile;
 	}
 	if (gds) {
 		switched = r5_cs_gds_switch(packets, cap, switched, 1, &jobGds);
@@ -3675,14 +3709,18 @@ radeon_gfx9_cp_start()
 		char ce[32];
 		char me[32];
 		const char* stem = radeon_gfx9_fw_stem();
-		snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
-		snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
-		snprintf(me, sizeof(me), "%s_me.bin", stem);
-		loaded = radeon_gfx9_load_engine(pfp, 0x5814, 0x5815, 0);
-		if (loaded == B_OK)
-			loaded = radeon_gfx9_load_engine(ce, 0x5818, 0x5819, 0);
-		if (loaded == B_OK)
-			loaded = radeon_gfx9_load_engine(me, 0x5816, 0x5817, 0);
+		if (stem == NULL)
+			loaded = B_ERROR;
+		else {
+			snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
+			snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
+			snprintf(me, sizeof(me), "%s_me.bin", stem);
+			loaded = radeon_gfx9_load_engine(pfp, 0x5814, 0x5815, 0);
+			if (loaded == B_OK)
+				loaded = radeon_gfx9_load_engine(ce, 0x5818, 0x5819, 0);
+			if (loaded == B_OK)
+				loaded = radeon_gfx9_load_engine(me, 0x5816, 0x5817, 0);
+		}
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);

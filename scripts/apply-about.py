@@ -68,6 +68,16 @@ def patch_jam() -> None:
         jam.write_text(text, encoding="utf-8")
     else:
         print("already Jamfile (about text)")
+    link = ": [ TargetLibstdc++ ] be translation localestub\n"
+    linked = ": [ TargetLibstdc++ ] be translation localestub libr5ui.so\n"
+    if "libr5ui.so" in text:
+        print("already Jamfile (libr5ui)")
+        return
+    if link not in text:
+        raise SystemExit("AboutSystem link line not found")
+    text = text.replace(link, linked, 1)
+    jam.write_text(text, encoding="utf-8", newline="\n")
+    print("patched Jamfile (libr5ui)")
 
 
 def main() -> int:

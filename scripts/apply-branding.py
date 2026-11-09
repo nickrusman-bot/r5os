@@ -137,6 +137,22 @@ def rewrite_product_name(path: pathlib.Path) -> None:
     print(f"patched {path} (R5OS name)")
 
 
+def install_video_splash(haiku: pathlib.Path) -> None:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source = root / "distro" / "boot" / "platform" / "generic" / "video_splash.cpp"
+    dest = haiku / "src" / "system" / "boot" / "platform" / "generic" / "video_splash.cpp"
+    if not source.is_file():
+        raise SystemExit(f"missing {source}")
+    if not dest.parent.is_dir():
+        raise SystemExit(f"missing {dest.parent}")
+    data = source.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    if dest.is_file() and dest.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n") == data:
+        print(f"already {dest.name} (white boot fill)")
+        return
+    dest.write_bytes(data)
+    print(f"copied {dest} (white boot fill)")
+
+
 def install_wallpaper(haiku: pathlib.Path) -> None:
     root = pathlib.Path(__file__).resolve().parents[1]
     source = root / "distro" / "artwork" / "r5-wallpaper.jpg"
@@ -219,6 +235,7 @@ def main() -> int:
         rewrite_product_name(HAIKU / rel)
     patch_boot_prompt(HAIKU / "src/apps/firstbootprompt/BootPromptWindow.cpp")
     install_wallpaper(HAIKU)
+    install_video_splash(HAIKU)
     return 0
 
 

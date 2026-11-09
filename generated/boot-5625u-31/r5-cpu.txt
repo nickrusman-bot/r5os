@@ -1,0 +1,31 @@
+R5 CPU log
+sample: after a short wait
+R5 CPU: cpu 1 vendor amd family 0x19 model 0x50 name AMD Ryzen 5 5625U with Radeon Graphics         
+R5 CPU: tsc_hz 2295697015
+R5 CPU: amd_hw_pstate 1 cppc 1
+R5 CPU: pstate_limit 0x20 pstate_status 0x0 current 0
+R5 CPU: pstate 0 fid 92 did 8 mhz 2300 raw 0x8000000045cd485c current
+R5 CPU: pstate 1 fid 90 did 10 mhz 1800 raw 0x8000000044980a5a
+R5 CPU: pstate 2 fid 96 did 12 mhz 1600 raw 0x8000000044198c60
+R5 CPU: pstate 3 disabled raw 0x0
+R5 CPU: cppc_cap 0xb0572a10 lowest 16 low_nonlinear 42 nominal 87 highest 176
+R5 CPU: cppc_enable 0x1 request 0x2ab0 status 0x0
+R5 CPU: cppc_request max 176 min 42 desired 0 epp 0
+R5 CPU: mperf 0x293773207 aperf 0x35d6babd3
+R5 CPU: no msr write
+sample: after one second busy on this thread
+R5 CPU: cpu 1 vendor amd family 0x19 model 0x50 name AMD Ryzen 5 5625U with Radeon Graphics         
+R5 CPU: tsc_hz 2295697015
+R5 CPU: amd_hw_pstate 1 cppc 1
+R5 CPU: pstate_limit 0x20 pstate_status 0x0 current 0
+R5 CPU: pstate 0 fid 92 did 8 mhz 2300 raw 0x8000000045cd485c current
+R5 CPU: pstate 1 fid 90 did 10 mhz 1800 raw 0x8000000044980a5a
+R5 CPU: pstate 2 fid 96 did 12 mhz 1600 raw 0x8000000044198c60
+R5 CPU: pstate 3 disabled raw 0x0
+R5 CPU: cppc_cap 0xb0572a10 lowest 16 low_nonlinear 42 nominal 87 highest 176
+R5 CPU: cppc_enable 0x1 request 0x2ab0 status 0x0
+R5 CPU: cppc_request max 176 min 42 desired 0 epp 0
+R5 CPU: mperf 0x31c4d7491 aperf 0x4600ed2e3
+R5 CPU: no msr write
+
+logs: /boot/home pass 3, no FAT mount

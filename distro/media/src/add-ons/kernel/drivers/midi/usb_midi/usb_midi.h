@@ -19,6 +19,8 @@
 #define _USB_MIDI_H
 
 
+#include "usb_midi_velocity.h"
+
 #include <Drivers.h>
 #include <USB.h>
 #include <midi_driver.h>
@@ -94,8 +96,12 @@ typedef struct usbmidi_device_info
 
 	bool active;
 
-	/* USB MIDI 2.0 endpoints carry Universal MIDI Packets, not CIN packets. */
+	/* USB MIDI 2.0 endpoints carry Universal MIDI Packets, not CIN packets.
+	 * ump_protocol is 1 until a Stream Configuration selects 2.
+	 */
 	bool ump_endpoint;
+	uint8 ump_protocol;
+	struct usb_midi_translate_state translate;
 
 	/* work area for transfer */
 	int bus_status;
@@ -135,7 +141,7 @@ typedef struct usbmidi_port_info
 	int32 ump_head;
 	int32 ump_tail;
 	int32 ump_count;
-	uint8 ump_pending[8];
+	uint8 ump_pending[16];
 	uint8 ump_pending_len;
 	uint8 ump_pending_pos;
 	uint8 sysex_hold[2];

@@ -14,6 +14,8 @@
 #include <MidiProducer.h>
 #include <OS.h>
 
+#include "../../add-ons/kernel/drivers/midi/usb_midi/usb_midi_velocity.h"
+
 
 static int sFailures = 0;
 
@@ -76,6 +78,132 @@ test_helpers()
 
 	expect(midi2_note_velocity(note, 2) == 0x8000,
 		"helper keeps the 16-bit velocity");
+	expect(midi2_note_on_midi1_velocity(0) == 1, "velocity 0 is MIDI 1.0 velocity 1");
+	expect(midi2_note_on_midi1_velocity(1) == 1, "velocity 1 stays a note-on");
+	expect(midi2_note_on_midi1_velocity(511) == 1, "velocity 511 stays a note-on");
+	expect(midi2_note_on_midi1_velocity(512) == 1, "velocity 512 is MIDI 1.0 velocity 1");
+	expect(midi2_note_on_midi1_velocity(0x8000) == 0x40,
+		"velocity 0x8000 is MIDI 1.0 velocity 0x40");
+	uint16 samples[] = { 0, 1, 511, 512, 0x8000, 0xffff };
+	bool velocityCopiesMatch = true;
+	for (size_t i = 0; i < sizeof(samples) / sizeof(samples[0]); i++) {
+		if (midi2_note_on_midi1_velocity(samples[i])
+			!= usb_midi_note_on_midi1_velocity(samples[i]))
+			velocityCopiesMatch = false;
+	}
+	expect(velocityCopiesMatch, "note-on velocity copies match");
+
+	uint32 fromMidi1[2];
+	midi2_translate_midi1_note(0, 60, 0, true, fromMidi1);
+	expect(((fromMidi1[0] >> 20) & 0x0f) == 0x8
+		&& midi2_note_velocity(fromMidi1, 2) == 0x8000
+		&& (fromMidi1[0] & 0xff) == 0 && (fromMidi1[1] & 0xffff) == 0,
+		"MIDI 1.0 note-on velocity 0 is a MIDI 2.0 note-off at 0x8000");
+	midi2_translate_midi1_note(0, 60, 1, true, fromMidi1);
+	expect(((fromMidi1[0] >> 20) & 0x0f) == 0x9
+		&& midi2_note_velocity(fromMidi1, 2) == 0x0200,
+		"MIDI 1.0 note-on velocity 1 is MIDI 2.0 velocity 0x0200");
+	expect(midi2_scale_up_7_to_16(10) == 0x1400
+		&& midi2_scale_up_7_to_16(64) == 0x8000
+		&& midi2_scale_up_7_to_16(87) == 0xaeba
+		&& midi2_scale_up_7_to_16(127) == 0xffff,
+		"7-bit velocities scale to 16 bits");
+	uint32 kernelNote[2];
+	usb_midi_translate_midi1_note(0, 60, 0, 1, kernelNote);
+	midi2_translate_midi1_note(0, 60, 0, true, fromMidi1);
+	expect(kernelNote[0] == fromMidi1[0] && kernelNote[1] == fromMidi1[1],
+		"velocity 0 translation copies match");
+	usb_midi_translate_midi1_note(3, 61, 1, 1, kernelNote);
+	midi2_translate_midi1_note(3, 61, 1, true, fromMidi1);
+	expect(kernelNote[0] == fromMidi1[0] && kernelNote[1] == fromMidi1[1],
+		"velocity 1 translation copies match");
+	{
+		usb_midi_translate_state state;
+		uint32 words[2];
+		memset(&state, 0, sizeof(state));
+		expect(usb_midi_translate_channel(1, 0x90, 60, 0, &state, words) == 0,
+			"MIDI 1.0 protocol keeps a velocity 0 note-on as type 0x2");
+		expect(usb_midi_translate_channel(2, 0x90, 60, 0, &state, words) == 2
+			&& ((words[0] >> 28) == 0x4) && ((words[0] >> 20) & 0x0f) == 0x8,
+			"MIDI 2.0 protocol turns velocity 0 into a type 0x4 note-off");
+		expect(usb_midi_translate_channel(2, 0xb0, 7, 127, &state, words) == 2
+			&& ((words[0] >> 20) & 0x0f) == 0x0b && words[1] == 0xffffffffu,
+			"MIDI 2.0 protocol scales a control change to 32 bits");
+		expect(usb_midi_translate_channel(2, 0xb0, 0, 3, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 32, 4, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xc0, 12, 0, &state, words) == 2
+			&& (words[0] & 0xff) == 1 && ((words[1] >> 24) & 0x7f) == 12
+			&& ((words[1] >> 8) & 0x7f) == 3 && (words[1] & 0x7f) == 4,
+			"bank select is held until the program change");
+		memset(&state, 0, sizeof(state));
+		expect(usb_midi_translate_channel(2, 0xb0, 101, 1, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 100, 2, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 6, 0x40, &state, words) == -1
+			&& usb_midi_translate_channel(2, 0xb0, 38, 0, &state, words) == 2
+			&& ((words[0] >> 20) & 0x0f) == 0x2
+			&& ((words[0] >> 8) & 0x7f) == 1 && (words[0] & 0x7f) == 2,
+			"an RPN is one type 0x4 message after the data LSB");
+		expect(usb_midi_translate_channel(1, 0xb0, 7, 10, &state, words) == 0,
+			"MIDI 1.0 protocol does not mix in a type 0x4 control");
+	}
+
+	uint32 voice[2];
+	uint8 midiBytes[12];
+	voice[0] = (0x4u << 28) | (0x9u << 20) | (60u << 8);
+	voice[1] = 0;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 3
+		&& midiBytes[0] == 0x90 && midiBytes[1] == 60 && midiBytes[2] == 1,
+		"translated note-on velocity 0 is 1");
+	voice[0] = (0x4u << 28) | (0xau << 20) | (61u << 8);
+	voice[1] = 0x80000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 3
+		&& midiBytes[0] == 0xa0 && midiBytes[1] == 61 && midiBytes[2] == 0x40,
+		"poly pressure keeps the top 7 bits");
+	voice[0] = (0x4u << 28) | (0xdu << 20);
+	voice[1] = 0xff000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 2
+		&& midiBytes[0] == 0xd0 && midiBytes[1] == 0x7f,
+		"channel pressure keeps the top 7 bits");
+	voice[0] = (0x4u << 28) | (0xeu << 20) | (2u << 16);
+	voice[1] = 0x80000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 3
+		&& midiBytes[0] == 0xe2 && midiBytes[1] == 0x00 && midiBytes[2] == 0x40,
+		"pitch bend center is LSB then MSB");
+	voice[0] = (0x4u << 28) | (0xcu << 20) | 0;
+	voice[1] = (12u << 24);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 2
+		&& midiBytes[0] == 0xc0 && midiBytes[1] == 12,
+		"program change without a bank is one message");
+	voice[0] = (0x4u << 28) | (0xcu << 20) | 1;
+	voice[1] = (12u << 24) | (3u << 8) | 4u;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 8
+		&& midiBytes[0] == 0xb0 && midiBytes[1] == 0 && midiBytes[2] == 3
+		&& midiBytes[3] == 0xb0 && midiBytes[4] == 32 && midiBytes[5] == 4
+		&& midiBytes[6] == 0xc0 && midiBytes[7] == 12,
+		"program change with a bank is MSB, LSB, then program");
+	voice[0] = (0x4u << 28) | (0x2u << 20) | (1u << 8) | 2u;
+	voice[1] = 0x80000000;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 12
+		&& midiBytes[1] == 101 && midiBytes[2] == 1
+		&& midiBytes[4] == 100 && midiBytes[5] == 2
+		&& midiBytes[7] == 6 && midiBytes[8] == 0x40
+		&& midiBytes[10] == 38 && midiBytes[11] == 0,
+		"registered controller is four control changes");
+	voice[0] = (0x4u << 28) | (0x3u << 20) | (5u << 8) | 6u;
+	voice[1] = 0;
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 12
+		&& midiBytes[1] == 99 && midiBytes[2] == 5
+		&& midiBytes[4] == 98 && midiBytes[5] == 6,
+		"assignable controller is four control changes");
+	voice[0] = (0x4u << 28) | (0x4u << 20);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 0,
+		"a relative controller stays UMP");
+	voice[0] = (0x4u << 28) | (0x6u << 20) | (60u << 8);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 0,
+		"per-note pitch bend stays UMP");
+	voice[0] = (0x4u << 28) | (0xfu << 20) | (60u << 8);
+	expect(midi2_channel_voice_to_midi1(voice, 2, midiBytes) == 0,
+		"per-note management stays UMP");
 	expect(midi2_control_value(control, 2) == 0x80000000,
 		"helper keeps the 32-bit controller");
 	expect(midi2_note_velocity(control, 2) == 0,
@@ -602,8 +730,14 @@ test_spray()
 		"MIDI 1.0 NoteOn keeps channel, note, and velocity");
 
 	probe->Reset();
+	producer->SprayNoteOn(0, 60, 100);
+	expect(probe->Wait() == B_OK, "bare integer note arrives");
+	uchar bare[3] = { (uchar)(B_NOTE_ON + 0), 60, 100 };
+	expect(probe->HasMidi(bare, 3), "bare integer note is MIDI 1.0");
+
+	probe->Reset();
 	uint16 wide = 0x8000;
-	producer->SprayNoteOn(2, 64, wide);
+	producer->SprayNoteOn2(2, 64, wide);
 	expect(probe->Wait() == B_OK, "16-bit note arrives");
 	uint32 note[2];
 	midi2_encode_note_on(2, 64, wide, note);
@@ -635,8 +769,14 @@ test_spray()
 		"ControlChange keeps controller 7 and value 90");
 
 	probe->Reset();
+	producer->SprayControlChange(0, 7, 100);
+	expect(probe->Wait() == B_OK, "bare integer control arrives");
+	uchar bareControl[3] = { (uchar)(B_CONTROL_CHANGE + 0), 7, 100 };
+	expect(probe->HasMidi(bareControl, 3), "bare integer control is MIDI 1.0");
+
+	probe->Reset();
 	uint32 wideControl = 0x80000000;
-	producer->SprayControlChange(4, B_MAIN_VOLUME, wideControl);
+	producer->SprayControlChange2(4, B_MAIN_VOLUME, wideControl);
 	expect(probe->Wait() == B_OK, "32-bit control arrives");
 	uint32 control[2];
 	midi2_encode_control_change(4, B_MAIN_VOLUME, wideControl, control);
@@ -870,8 +1010,19 @@ test_more()
 			== B_OK && replyCount == 2
 		&& midi2_stream_status(replies[0]) == B_MIDI2_STREAM_ENDPOINT_INFO
 		&& midi2_stream_status(replies[4]) == B_MIDI2_STREAM_CONFIG_NOTIFY
-		&& ((replies[4] >> 8) & 0xff) == B_MIDI2_STREAM_PROTOCOL_MIDI2,
-		"endpoint discovery replies with info and the protocol");
+		&& ((replies[4] >> 8) & 0xff) == B_MIDI2_STREAM_PROTOCOL_MIDI1,
+		"endpoint discovery replies with info and MIDI 1.0 protocol");
+	uint32 configRequest[4];
+	memset(configRequest, 0, sizeof(configRequest));
+	configRequest[0] = midi2_stream_pack(0xf0, 0x05,
+		B_MIDI2_STREAM_PROTOCOL_MIDI2, 0);
+	expect(midi2_stream_configure(&endpoint, configRequest) == B_OK
+		&& endpoint.protocol == B_MIDI2_STREAM_PROTOCOL_MIDI2,
+		"stream configuration selects MIDI 2.0 protocol");
+	configRequest[0] = midi2_stream_pack(0xf0, 0x05, 0x7f, 0);
+	expect(midi2_stream_configure(&endpoint, configRequest) == B_BAD_VALUE
+		&& endpoint.protocol == B_MIDI2_STREAM_PROTOCOL_MIDI2,
+		"an unknown protocol is rejected");
 
 	uint32 blockRequest[4];
 	expect(midi2_stream_block_discovery(0,
