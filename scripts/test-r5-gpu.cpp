@@ -2153,13 +2153,15 @@ main()
 	{
 		const char* isolation[] = {
 			"COPY_DATA reads dest. WRITE_DATA then writes dest.",
+			"words[1] = 1u | (5u << 8) | (1u << 16) | (1u << 20);",
+			"words[6] = 0xc0033700u;",
 			"vm fault addr",
 			"memset(cpu, 0x5a, 4096)",
 			"owner unchanged"
 		};
 		if (source_order(
 				"distro/graphics/src/bin/r5-gpu-isolation/"
-				"r5-gpu-isolation.cpp", isolation, 4) != 0)
+				"r5-gpu-isolation.cpp", isolation, 6) != 0)
 			return 1;
 		const char* commandFlags[] = {
 			"kCommandFlags",

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The isolation copy reads and writes memory
+
+`gfx9_vmid_per_file` stays off. Stick 31 reached the desktop. The permission fault at `0x80002000` was gone, and the log has `vmid fault irq cntl 007ffe07`. The owner's submit then stayed inside `COPY_DATA` (`me hdr c0044000`). The control word was `(1 << 16) | (1 << 20)`: `SRC_SEL` 0 and `DST_SEL` 0, register to register. It is now memory to memory, Mesa 25.3.6 `src/amd/common/sid.h` lines 129-144: `COPY_DATA_SRC_SEL(1) | COPY_DATA_DST_SEL(5) | COPY_DATA_COUNT_SEL | COPY_DATA_WR_CONFIRM`. `WRITE_DATA` is unchanged. The host test checks that control word in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Every graphics context can report a bad memory access
 
 `gfx9_vmid_per_file` stays off. Programming contexts 1–15 wrote only the default fault bits, `0x00555407`, including over VMID 1, which setup had given `0x007ffe07`. No context raised a fault after that. When `gfx9_irq` is on, the interrupt bits are ORed afterwards, the same step as Linux v6.12 `gmc_v9_0_vm_fault_interrupt_state()` (lines 473–479 and 513–529). All fifteen contexts are then `0x007ffe07`. Context 0 is unchanged. The host test checks that list of fifteen. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
