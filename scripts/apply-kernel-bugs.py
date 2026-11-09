@@ -19,6 +19,12 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/thread.cpp",
         "src/system/kernel/vm/vm.cpp",
+        "src/system/runtime_loader/arch/x86_64/arch_relocate.cpp",
+        "src/system/runtime_loader/export.cpp",
+        "headers/private/runtime_loader/runtime_loader.h",
+        "src/system/libroot/os/thread.c",
+        "src/system/libroot/posix/pthread/pthread.cpp",
+        "src/system/libroot/posix/time/timer_support.cpp",
     )
     for relative in files:
         install_file(

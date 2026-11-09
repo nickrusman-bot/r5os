@@ -36,7 +36,7 @@ The file is Haiku's `vm.cpp`. Copyright the Haiku authors named in the file. Lic
 
 Location: `distro/rest/src/system/runtime_loader/elf_tls.cpp`.
 
-The file is Haiku's `elf_tls.cpp`. Copyright 2014 Paweł Dziepak. License: MIT. One block is the haiku-pi change `5db923abc6`: a new thread's TLS vector starts at the current generation. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's `elf_tls.cpp`. Copyright 2014 Paweł Dziepak. License: MIT. One block is the haiku-pi change `5db923abc6`: a new thread's TLS vector starts at the current generation. Copyright 2026 Witold Bołt. The startup images' TLS template bytes are also placed at a fixed offset from the thread pointer. That placement is copyright 2026 R5OS Contributors. The snippets are distributed as GPL-3.0-or-later. The Haiku header stays.
 
 ### Teapot control points
 
