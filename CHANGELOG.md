@@ -1,5 +1,8 @@
 # R5OS changelog (lokaal)
 
+### A profiler timer is stopped when the program stops
+
+Profiling left a timer armed on a CPU after the profiled thread was gone. The next use of that timer could hang the CPU, or the timer could fire for an idle thread and crash. A thread is now passed through the debugger code on the way out while it still has a profiling timer, the timer is cancelled before it is armed again, and it is cancelled when a profiled thread exits. A timer that is not the running thread's is ignored. This is haiku-pi star row 23, commit 5180e96119. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
 ### A shared file stays shared after its protection changes
 
 Changing the protection of a mapped file inserted a copy-on-write cache whenever that cache had consumers, including a file cache. A shared mapping then stopped sharing with the file, and with mappings made later. A file cache is no longer made copy-on-write on that path. The creation flags already kept by `vm_set_area_protection` are unchanged. This is haiku-pi star row 21, commit 894c4abe7f. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
