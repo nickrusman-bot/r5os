@@ -20,6 +20,7 @@ Application Settings :
 	VirtualMemoryModule.cpp
 	InformationModule.cpp
 	DisplayModule.cpp
+	DisplayScreens.cpp
 	AdminLock.cpp
 	: be tracker translation shared libr5icons.so libr5ui.so [ TargetLibstdc++ ]
 	: Settings.rdef
