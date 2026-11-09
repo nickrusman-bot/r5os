@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a stuck SuperSpeed port is reset
+
+A SuperSpeed link that has gone inactive, or into compliance mode, does not come back by itself. The hub now requests a warm reset, up to three times and two seconds apart, until the link has left that state. From air/OS 01e2036af28ef692585487434a6b247d9d332922.
+
 ## 2026-11-09 - a stalled keyboard or mouse keeps working
 
 A stall halts the pipe in the controller. The driver of a keyboard, mouse, or network adapter clears the halt in the device and sends the next transfer, but the controller still had the pipe halted, so that transfer never ran. The driver now resets a stalled bulk or interrupt pipe before it reports the error. An unplug, which fails many transfers at once, is left to the transfer's own timeout so the controller is not flooded with commands. Isochronous audio still uses its own reset. From air/OS bdad03ac62bdf47da071448828b463fc887ebff8. The idea is from RenkuOS 5b6210a165 by David Beckman.

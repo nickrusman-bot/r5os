@@ -160,6 +160,8 @@ def install_usb_stability() -> None:
         "src/add-ons/kernel/busses/usb/xhci.h",
         "src/add-ons/kernel/busses/usb/xhci_hardware.h",
         "src/add-ons/kernel/bus_managers/usb/Device.cpp",
+        "src/add-ons/kernel/bus_managers/usb/Hub.cpp",
+        "src/add-ons/kernel/bus_managers/usb/usb_private.h",
     )
     for relative in files:
         source = source_root / relative
