@@ -736,13 +736,18 @@ radeon_psp_stage(const uint8* bytes, uint32 size, radeon_psp_item* item)
 static const char*
 radeon_gfx9_fw_stem()
 {
-	uint16 pciID = sPciId;
-	// amdgpu_device_init_apu_flags: 1636 and 164c are AMD_APU_IS_RENOIR.
-	// 15e7 Barcelo and 1638 Cezanne are AMD_APU_IS_GREEN_SARDINE.
 	// The PFP, ME, and CE blobs differ. RLC and MEC are the same bytes.
-	if (pciID == 0x1636 || pciID == 0x164c)
-		return "renoir";
-	return "green_sardine";
+	// An id that is not in the device table is not green_sardine.
+	const char* stem = r5_gfx9_fw_stem_for(sPciId);
+	if (stem == NULL) {
+		static int logged = 0;
+		if (logged == 0) {
+			logged = 1;
+			ERROR("%s: R5 radeon_hd: unknown PCI id 0x%x, "
+				"firmware refused\n", __func__, sPciId);
+		}
+	}
+	return stem;
 }
 
 
@@ -814,6 +819,8 @@ static status_t
 radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 {
 	const char* stem = radeon_gfx9_fw_stem();
+	if (stem == NULL)
+		return B_ERROR;
 	char rlc[32];
 	char pfp[32];
 	char ce[32];
@@ -1231,7 +1238,13 @@ radeon_gfx9_rlc_start(uint32 location, bool loadUcode, uint32* _before,
 	}
 	if (loadUcode) {
 		char rlc[32];
-		snprintf(rlc, sizeof(rlc), "%s_rlc.bin", radeon_gfx9_fw_stem());
+		const char* stem = radeon_gfx9_fw_stem();
+		if (stem == NULL) {
+			Write32(OUT, cntl, saved);
+			Write32(OUT, clock, savedClock);
+			return false;
+		}
+		snprintf(rlc, sizeof(rlc), "%s_rlc.bin", stem);
 		// mmRLC_GPM_UCODE_ADDR / DATA. Start address is 0x2000.
 		status_t loaded = radeon_gfx9_load_engine(rlc, 0x583c, 0x583d,
 			0x2000);
@@ -3675,14 +3688,18 @@ radeon_gfx9_cp_start()
 		char ce[32];
 		char me[32];
 		const char* stem = radeon_gfx9_fw_stem();
-		snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
-		snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
-		snprintf(me, sizeof(me), "%s_me.bin", stem);
-		loaded = radeon_gfx9_load_engine(pfp, 0x5814, 0x5815, 0);
-		if (loaded == B_OK)
-			loaded = radeon_gfx9_load_engine(ce, 0x5818, 0x5819, 0);
-		if (loaded == B_OK)
-			loaded = radeon_gfx9_load_engine(me, 0x5816, 0x5817, 0);
+		if (stem == NULL)
+			loaded = B_ERROR;
+		else {
+			snprintf(pfp, sizeof(pfp), "%s_pfp.bin", stem);
+			snprintf(ce, sizeof(ce), "%s_ce.bin", stem);
+			snprintf(me, sizeof(me), "%s_me.bin", stem);
+			loaded = radeon_gfx9_load_engine(pfp, 0x5814, 0x5815, 0);
+			if (loaded == B_OK)
+				loaded = radeon_gfx9_load_engine(ce, 0x5818, 0x5819, 0);
+			if (loaded == B_OK)
+				loaded = radeon_gfx9_load_engine(me, 0x5816, 0x5817, 0);
+		}
 	}
 	if (loaded != B_OK) {
 		Write32(OUT, meCntl, savedMe);

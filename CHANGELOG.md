@@ -15,6 +15,9 @@ A signal that ends a team is handled by one thread, which exits at once. The use
 ### A new thread's TLS vector starts at the current generation
 
 A new vector no longer starts at generation 0, so unloading a library with thread-local storage does not zero the blocks the thread just created. The file is Haiku's `elf_tls.cpp` (copyright 2014 Paweł Dziepak, MIT). The added lines are haiku-pi `5db923abc6`, copyright 2026 Witold Bołt, marked as a GPL-3.0-or-later snippet. `scripts/apply-rest-native.py` copies the file. The host test checks that the counter is set before the vector size. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+### An unknown PCI id does not load Green Sardine firmware
+
+`radeon_gfx9_fw_stem()` follows the four ids in the radeon_hd device table. 1636 and 164c stay `renoir`. 15e7 and 1638 stay `green_sardine`. Any other id returns NULL. The PSP load and the direct engine load stop, and the stem logs one line. The firmware blobs and the ring are unchanged. The host test checks the four ids and an unknown id. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
 
 ### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
 
