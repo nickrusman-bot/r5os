@@ -14,6 +14,7 @@
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
 #include "SettingsModule.h"
+#include "SettingsStorage.h"
 
 #include <ActionCard.h>
 #include <Alert.h>

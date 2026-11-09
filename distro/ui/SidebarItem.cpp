@@ -27,6 +27,7 @@
 #include <Bitmap.h>
 #include <ControlLook.h>
 #include <InterfaceDefs.h>
+#include <Mime.h>
 #include <Message.h>
 #include <R5Icons.h>
 #include <View.h>
