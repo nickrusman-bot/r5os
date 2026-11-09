@@ -26,6 +26,12 @@ Location: `distro/kernel/src/system/kernel/thread.cpp`.
 
 The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 
+### Page writer flush after a timeout
+
+Location: `distro/kernel/src/system/kernel/vm/vm_page_writer.cpp`.
+
+The file is Haiku's page writer. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `1539d29eee` (star row 18): when the flush wait times out, the modified pages already queued are still written. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+
 ### Wired range shrink
 
 Location: `distro/kernel/src/system/kernel/vm/vm.cpp`.

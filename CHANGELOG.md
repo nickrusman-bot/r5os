@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The page writer saves the last modified pages when its wait ends
+
+The per-device page writer waited up to three seconds for a full batch. A timeout went straight back to waiting, so the last modified pages of a device, fewer than 256 pages, stayed in memory until a sync. A power cut lost them. The wait still happens, and the under-quota condition is unchanged. After the wait, including a timeout, the writer continues and writes whatever modified pages there are. An empty queue is still skipped just below that. This is haiku-pi star row 18, commit 1539d29eee. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
