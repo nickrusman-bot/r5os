@@ -1,5 +1,8 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - the About R5 icon shows the blue of the wave pebble again
+
+The vector icon of About R5 (and the `r5-symbol.hvif` files) showed the wave pebble almost entirely in gold, with no blue. `generate-r5-artwork.py` wrote the gradient matrix the wrong way round. It mapped the icon onto the gradient, while HVIF stores the gradient-to-icon matrix and `IconRenderer` inverts it when it draws. Most of the gradient therefore fell outside the icon. The matrix now maps the gradient's -64..64 axis onto the SVG diagonal, from (12%, 12%) to (88%, 88%). Only the six matrix values in the HVIF changed. The shapes and stops are the same. Tested: the new HVIF from `AboutSystem.rdef` was converted to SVG and rendered on the desk, and it shows blue at the top left through to gold at the bottom right, like `r5-symbol.svg`. Not tested: Not jammed, and not seen in Deskbar or Tracker. `--check` of the generator already differs on main for the PNGs (font and Pillow output), so only the HVIF and the About resource were regenerated, not the other artwork.
 ### A Windows share mounts by address
 
 Tested on 9 Nov 2026 in VirtualBox with a bridged adapter. A Windows share was mounted by IP address, with a user name and a password. A Windows name does not work yet; only an IP address does. Without a user name, Windows 11 refuses the anonymous login and R5 reports "Invalid Argument". That case comes later. There is no What's new section and `distro/BUILD` stays the same.
