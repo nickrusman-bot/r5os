@@ -25,6 +25,11 @@ def install_kernel_sources() -> None:
         "src/system/libroot/os/thread.c",
         "src/system/libroot/posix/pthread/pthread.cpp",
         "src/system/libroot/posix/time/timer_support.cpp",
+        "src/add-ons/kernel/bus_managers/pci/pci.cpp",
+        "src/add-ons/kernel/busses/pci/ecam/ECAMPCIControllerACPI.cpp",
+        "src/add-ons/kernel/busses/pci/x86/X86PCIController.cpp",
+        "src/add-ons/kernel/busses/pci/x86/X86PCIController.h",
+        "src/add-ons/kernel/busses/pci/x86/kernel_interface.cpp",
     )
     for relative in files:
         install_file(

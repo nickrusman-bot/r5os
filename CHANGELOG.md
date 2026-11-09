@@ -1,5 +1,8 @@
 # R5OS changelog (lokaal)
 
+### PCI devices on another firmware segment can be seen
+
+The PCI bus manager on x86_64 treated every bus number as segment 0 and skipped every other segment in the firmware's memory-mapped configuration table. Segment 0 is unchanged: its bus numbers and its configuration window stay as they were. Each other segment is a further host controller. It does not claim the legacy configuration port, and it does not fall back to that port. A bus number segment 0 already uses stays on segment 0. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. Another firmware segment was not exercised. There is no What's new section and `distro/BUILD` stays the same.
 ### A per-thread value in a startup library can be loaded
 
 The runtime loader rejected the x86_64 initial-exec TLS relocations, so a library built that way did not load. Those relocations are now accepted. The value stored is not the symbol's offset in the ELF TLS block by itself: the thread pointer is the start of the slot array, and the ELF block is not there. The startup images' TLS template bytes are placed at one fixed offset from the thread pointer on every thread, and the relocation stores that offset plus the symbol offset and the addend. A 32-bit relocation is written as 32 bits. The host check is `scripts/test-tpoff-offset.cpp`. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. The library load was not run in the guest. There is no What's new section and `distro/BUILD` stays the same.
