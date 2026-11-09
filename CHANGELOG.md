@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a USB controller that starts after the boot volume is mounted no longer hangs the boot
+
+A controller that starts after the boot volume is mounted was explored while the device manager lock was held. Taking a port back from a companion can unpublish a disk that is already there, and that unpublish waits for a lock the disk thread holds while it waits for the device manager. The boot stops. After the volume is mounted, that first look is left to the explore thread. Before the mount, it still happens immediately, so a boot device on USB is still found. From RenkuOS cdd493103a956a90295deb22ace647ab9df1f019 by David Beckman.
+
 ## 2026-11-09 - a slow USB device handed to a companion is seen at once
 
 When a high-speed controller finds a low-speed or full-speed device, it gives the port to the companion controller. That companion had often already been looked at in the same pass, so the device waited a full second. Some devices disconnect again inside that second. The companion is looked at again straight away. From RenkuOS 42ea6ba8c967dd79c4c3196fbf02f7304d9aba2d by David Beckman.
