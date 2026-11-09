@@ -9,7 +9,7 @@
 
 /*
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
- * 6f810ed2d7 and 6e517bb52c, copyright 2026 Witold Bołt. The Haiku copyright and the
+ * 6f810ed2d7, 6e517bb52c, and 894c4abe7f (star row 21), copyright 2026 Witold Bołt. The Haiku copyright and the
  * licenses above still cover the original work. The snippet is
  * GPL-3.0-or-later.
  */
@@ -3129,6 +3129,23 @@ vm_copy_area(team_id team, const char* name, void** _address,
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-SnippetCopyrightText: 2026 Witold Bołt
+/*!	Whether making an area of \a cache writable, or changing the protection of
+	one, has to insert a copy-on-write cache above \a cache.
+	A file cache is never made copy-on-write here: its areas are shared
+	mappings of the file, and vm_copy_on_write_area() would move all of them
+	onto an anonymous cache.
+*/
+static bool
+protection_change_needs_copy_on_write(VMCache* cache)
+{
+	return !cache->consumers.IsEmpty() && cache->type != CACHE_TYPE_VNODE;
+}
+// SPDX-SnippetEnd
+
+
 status_t
 vm_set_area_protection(area_id areaID, uint32 newProtection,
 	bool kernel)
@@ -3205,7 +3222,8 @@ vm_set_area_protection(area_id areaID, uint32 newProtection,
 		// Make sure the area (respectively, if we're going to call
 		// vm_copy_on_write_area(), all areas of the cache) doesn't have any
 		// wired ranges.
-		if (!isWritable && becomesWritable && !cache->consumers.IsEmpty()) {
+		if (!isWritable && becomesWritable
+			&& protection_change_needs_copy_on_write(cache)) {
 			for (VMArea* otherArea = cache->areas.First(); otherArea != NULL;
 					otherArea = cache->areas.GetNext(otherArea)) {
 				if (wait_if_area_is_wired(otherArea, &locker, &cacheLocker)) {
@@ -3263,13 +3281,13 @@ vm_set_area_protection(area_id areaID, uint32 newProtection,
 	} else if (!isWritable && becomesWritable) {
 		// !writable -> writable
 
-		if (!cache->consumers.IsEmpty()) {
+		if (protection_change_needs_copy_on_write(cache)) {
 			// There are consumers -- we have to insert a new cache. Fortunately
 			// vm_copy_on_write_area() does everything that's needed.
 			changePageProtection = false;
 			status = vm_copy_on_write_area(cache, NULL);
 		} else {
-			// No consumers, so we don't need to insert a new one.
+			// No consumers (or a file's cache), so we don't need to insert a new one.
 			if (cache->temporary) {
 				// the cache's commitment must contain all possible pages
 				status = cache->Commit(cache->virtual_end - cache->virtual_base,
@@ -6087,7 +6105,7 @@ _user_set_memory_protection(void* _address, size_t size, uint32 protection)
 			AreaCacheLocker cacheLocker(area);
 			VMCache* cache = cacheLocker.Get();
 
-			if (!cache->consumers.IsEmpty()) {
+			if (protection_change_needs_copy_on_write(cache)) {
 				// We need to make the area copy-on-write.
 				// Unlock, then reacquire locks using MultiLocker.
 				area_id areaId = area->id;
