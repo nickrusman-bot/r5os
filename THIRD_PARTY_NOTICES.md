@@ -30,6 +30,11 @@ Location: `distro/kernel/src/system/kernel/thread.cpp`.
 
 The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 
+### BFS I/O vnode release
+
+Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/kernel_interface.cpp`.
+
+The file is Haiku's BFS interface. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `44cc183c0c` (star row 57): the last reference from a finished I/O is released through `vfs_put_vnode()`. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 ### USB disk unplug
 
 Location: `distro/kernel/src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp`.
