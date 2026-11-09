@@ -1448,6 +1448,15 @@ acpi_find_pci_function(acpi_module_info* acpi, const pci_info& target)
 			if (acpi->get_handle(NULL, path, &rootBridge) != B_OK)
 				continue;
 
+			// A root bridge on another firmware segment numbers its buses
+			// in that segment. Those buses are not the bus numbers the
+			// driver sees, so a match there would reset the wrong port.
+			uint64 segment = 0;
+			if (acpi_integer(acpi, rootBridge, "_SEG", segment) == B_OK
+					&& segment != 0) {
+				continue;
+			}
+
 			uint64 bus = 0;
 			acpi_integer(acpi, rootBridge, "_BBN", bus);
 			found = acpi_find_pci_function(acpi, pci, rootBridge, bus, target,
@@ -1510,6 +1519,22 @@ XHCI::PlatformResetPort(uint8 index)
 {
 #if defined(__i386__) || defined(__x86_64__)
 	if (fPCIInfo == NULL || index >= fPortCount)
+		return B_NOT_SUPPORTED;
+
+	// Only a controller on firmware segment 0. Another segment is given
+	// its own bus numbers, which are not the numbers ACPI uses.
+	uint8 domain = 0;
+	device_node* sim = gDeviceManager->get_parent_node(Node());
+	if (sim != NULL) {
+		device_node* pciDevice = gDeviceManager->get_parent_node(sim);
+		gDeviceManager->put_node(sim);
+		if (pciDevice != NULL) {
+			gDeviceManager->get_attr_uint8(pciDevice, B_PCI_DEVICE_DOMAIN,
+				&domain, false);
+			gDeviceManager->put_node(pciDevice);
+		}
+	}
+	if (domain != 0)
 		return B_NOT_SUPPORTED;
 
 	acpi_module_info* acpi;

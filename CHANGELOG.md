@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - the firmware reset of a built-in USB device stays on the first PCI segment
+
+That reset looks the device up by its bus number in the firmware tables. A controller on another segment has a different bus number than the firmware uses, so the lookup could hit the wrong device. The reset now runs only for a controller on segment 0, and a firmware root bridge that says it is on another segment is skipped.
+
 ## 2026-11-09 - a USB controller that starts after the boot volume is mounted no longer hangs the boot
 
 A controller that starts after the boot volume is mounted was explored while the device manager lock was held. Taking a port back from a companion can unpublish a disk that is already there, and that unpublish waits for a lock the disk thread holds while it waits for the device manager. The boot stops. After the volume is mounted, that first look is left to the explore thread. Before the mount, it still happens immediately, so a boot device on USB is still found. From RenkuOS cdd493103a956a90295deb22ace647ab9df1f019 by David Beckman.
