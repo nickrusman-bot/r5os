@@ -26,6 +26,7 @@
 
 #include <Bitmap.h>
 #include <ControlLook.h>
+#include <Font.h>
 #include <InterfaceDefs.h>
 #include <Mime.h>
 #include <Message.h>
@@ -37,6 +38,25 @@
 
 
 namespace BAppearanceKit {
+
+
+static void
+_SemiBold(BFont* font)
+{
+	font_family family;
+	font_style style;
+	font->GetFamilyAndStyle(&family, &style);
+	int32 styles = count_font_styles(family);
+	for (int32 index = 0; index < styles; index++) {
+		font_style name;
+		if (get_font_style(family, index, &name) == B_OK
+			&& strstr(name, "Semi") != NULL) {
+			font->SetFamilyAndStyle(family, name);
+			return;
+		}
+	}
+	font->SetFace(B_BOLD_FACE);
+}
 
 
 struct BSidebarItem::Data {
@@ -170,16 +190,14 @@ void
 BSidebarItem::Update(BView* owner, const BFont* font)
 {
 	(void)owner;
-	font_height height;
-	font->GetHeight(&height);
-	float line = height.ascent + height.descent + height.leading;
-	float spacing = be_control_look->DefaultItemSpacing();
-	float row = line + spacing;
-	if (OutlineLevel() == 0 && !_IsSeparator()) {
-		float icon = be_control_look->ComposeIconSize(24).height;
-		if (icon > line)
-			row = icon + spacing;
-	}
+	(void)font;
+	// Sizes are u * n, with u the plain font size divided by 13.
+	float u = be_plain_font->Size() / 13.0f;
+	float row = u * 36.0f + u * 2.0f;
+	if (_IsSeparator())
+		row = u * 6.0f + 1.0f + u * 6.0f;
+	else if (fEmphasized)
+		row = u * 8.0f + u * 34.0f;
 	SetHeight(row);
 	if (fBadge == B_SIDEBAR_BADGE_LOCKED && fLock == NULL) {
 		int32 side = (int32)be_control_look->ComposeIconSize(
@@ -206,87 +224,115 @@ BSidebarItem::DrawItem(BView* owner, BRect frame, bool complete)
 		owner->SetLowColor(background);
 		owner->FillRect(frame, B_SOLID_LOW);
 	}
-	float spacing = be_control_look->DefaultItemSpacing();
-	float radius = be_plain_font->Size() * 0.25f;
+	float u = be_plain_font->Size() / 13.0f;
+	float padX = u * 6.0f;
+	BRect row = frame;
+	if (fEmphasized)
+		row.top = frame.bottom - u * 34.0f;
+	else if (!_IsSeparator())
+		row.bottom = frame.top + u * 36.0f;
 	if (selected) {
-		BRect mark = frame.InsetByCopy(spacing * 0.5f, spacing * 0.5f);
-		owner->SetHighColor(ui_color(B_LIST_SELECTED_BACKGROUND_COLOR));
-		owner->FillRoundRect(mark, radius, radius);
-		text = ui_color(B_LIST_SELECTED_ITEM_TEXT_COLOR);
+		// B_LIST_SELECTED_BACKGROUND_COLOR is gray. The row is the
+		// status-bar blue, with light text, and a small corner.
+		BRect mark = row.InsetByCopy(padX, 0);
+		owner->SetHighColor(ui_color(B_STATUS_BAR_COLOR));
+		owner->FillRoundRect(mark, u * 4.0f, u * 4.0f);
+		text = ui_color(B_LIST_BACKGROUND_COLOR);
 	}
 
 	if (_IsSeparator()) {
-		owner->SetHighColor(tint_color(background, B_DARKEN_2_TINT));
+		owner->SetHighColor(tint_color(background, B_DARKEN_1_TINT));
 		float y = (frame.top + frame.bottom) / 2;
-		owner->StrokeLine(BPoint(frame.left + spacing, y),
-			BPoint(frame.right - spacing, y));
+		owner->StrokeLine(BPoint(frame.left + u * 4.0f, y),
+			BPoint(frame.right - u * 4.0f, y));
 		return;
 	}
 
-	BSize iconSize = be_control_look->ComposeIconSize(24);
-	float textLeft = iconSize.width + spacing;
+	float circle = u * 24.0f;
+	float glyph = fEmphasized ? u * 20.0f : circle;
+	float iconLeft = row.left + padX + u * 8.0f;
+	float textLeft = padX + u * 8.0f + circle + u * 9.0f;
 	if (OutlineLevel() == 0 && fIcon != NULL) {
-		owner->SetDrawingMode(B_OP_ALPHA);
-		owner->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		BPoint where(frame.left,
-			frame.top + (frame.Height() - fIcon->Bounds().Height()) / 2);
-		owner->DrawBitmap(fIcon, where);
+		BRect dest(iconLeft, row.top + (row.Height() - circle) / 2, 0, 0);
+		dest.right = dest.left + circle;
+		dest.bottom = dest.top + circle;
+		BRect picture = dest;
+		picture.InsetBy((circle - glyph) / 2, (circle - glyph) / 2);
+		if (fEmphasized) {
+			// The pebble's wave is a hole. Fill the circle first, then
+			// draw the bitmap with alpha so the hole stays white.
+			owner->SetDrawingMode(B_OP_COPY);
+			owner->SetHighColor(ui_color(B_LIST_BACKGROUND_COLOR));
+			owner->FillEllipse(dest);
+			owner->SetDrawingMode(B_OP_ALPHA);
+			owner->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+			owner->DrawBitmap(fIcon, fIcon->Bounds(), picture);
+		} else {
+			owner->SetDrawingMode(B_OP_ALPHA);
+			owner->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+			owner->DrawBitmap(fIcon, fIcon->Bounds(), picture);
+		}
 		owner->SetDrawingMode(B_OP_COPY);
-	} else if (OutlineLevel() > 0)
-		textLeft = iconSize.width + spacing;
+	}
 
 	BFont font(be_plain_font);
-	if (fEmphasized || selected || (OutlineLevel() == 0 && !selected)) {
-		if (fEmphasized || selected || OutlineLevel() == 0)
-			font.SetFace(B_BOLD_FACE);
-	}
-	if (OutlineLevel() == 0)
+	if (selected || fEmphasized)
 		font.SetFace(B_BOLD_FACE);
+	else if (OutlineLevel() == 0)
+		_SemiBold(&font);
 	if (!selected && OutlineLevel() > 0)
 		text = fade(text, background, 204);
 	owner->SetFont(&font);
 	font_height height;
 	font.GetHeight(&height);
+	float textY = row.top + (row.Height()
+		- (height.ascent + height.descent)) / 2 + height.ascent;
 
-	float right = frame.right - spacing;
+	float right = row.right - padX - u * 8.0f;
 	if (OutlineLevel() == 0 && fCount >= 0) {
 		if (IsExpanded()) {
-			BRect arrow(right - spacing, frame.top,
-				right, frame.top + spacing);
-			arrow.OffsetBy(0, (frame.Height() - arrow.Height()) / 2);
-			be_control_look->DrawArrowShape(owner, arrow, frame,
-				background, BControlLook::B_DOWN_ARROW, 0, B_DARKEN_2_TINT);
-			right = arrow.left - spacing;
+			float side = u * 11.0f;
+			BRect arrow(right - side, row.top, right, row.top + side);
+			arrow.OffsetBy(0, (row.Height() - arrow.Height()) / 2);
+			be_control_look->DrawArrowShape(owner, arrow, row,
+				selected ? ui_color(B_STATUS_BAR_COLOR) : background,
+				BControlLook::B_DOWN_ARROW, 0, B_DARKEN_2_TINT);
+			right = arrow.left - u * 6.0f;
 		} else {
+			BFont countFont(be_plain_font);
+			countFont.SetSize(u * 11.0f);
+			_SemiBold(&countFont);
+			owner->SetFont(&countFont);
 			BString count;
 			count << fCount;
-			float width = font.StringWidth(count.String());
-			owner->SetHighColor(fade(text, background, 153));
+			float width = countFont.StringWidth(count.String());
+			owner->SetHighColor(selected ? text
+				: mix_color(background, text, 140));
+			font_height countHeight;
+			countFont.GetHeight(&countHeight);
 			owner->DrawString(count.String(), BPoint(right - width,
-				frame.bottom - height.descent - (frame.Height()
-					- (height.ascent + height.descent)) / 2));
-			right -= width + spacing;
+				row.top + (row.Height() - (countHeight.ascent
+					+ countHeight.descent)) / 2 + countHeight.ascent));
+			right -= width + u * 6.0f;
+			owner->SetFont(&font);
 		}
 	} else if (fBadge == B_SIDEBAR_BADGE_LOCKED && fLock != NULL) {
 		owner->SetDrawingMode(B_OP_ALPHA);
 		owner->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
 		BPoint where(right - fLock->Bounds().Width(),
-			frame.top + (frame.Height() - fLock->Bounds().Height()) / 2);
+			row.top + (row.Height() - fLock->Bounds().Height()) / 2);
 		owner->DrawBitmap(fLock, where);
 		owner->SetDrawingMode(B_OP_COPY);
-		right = where.x - spacing;
+		right = where.x - u * 6.0f;
 	}
 
 	BString label(fLabel);
-	float room = right - (frame.left + textLeft);
-	if (room < spacing)
-		room = spacing;
+	float room = right - (row.left + textLeft);
+	if (room < u * 8.0f)
+		room = u * 8.0f;
 	font.TruncateString(&label, B_TRUNCATE_END, room);
 	owner->SetHighColor(text);
-	owner->DrawString(label.String(),
-		BPoint(frame.left + textLeft,
-			frame.bottom - height.descent
-				- (frame.Height() - (height.ascent + height.descent)) / 2));
+	owner->DrawString(label.String(), BPoint(row.left + textLeft, textY));
 	owner->SetFont(be_plain_font);
 }
 

@@ -45,6 +45,9 @@ public:
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				DrawItem(BListItem* item, BRect frame,
 									bool complete = false);
+	virtual	void				DrawLatch(BRect itemRect, int32 level,
+									bool collapsed, bool highlighted,
+									bool misTracked);
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 
@@ -55,6 +58,7 @@ public:
 			bool				SelectId(const char* id);
 			void				SetFilter(const char* text);
 			const char*			Filter() const;
+			void				SetFooter(const char* text);
 
 protected:
 	virtual	void				ExpandOrCollapse(BListItem* item, bool expand);

@@ -37,6 +37,13 @@
 namespace BAppearanceKit {
 
 
+static float
+unit()
+{
+	return be_plain_font->Size() / 13.0f;
+}
+
+
 struct BActionCard::Data {
 };
 
@@ -218,31 +225,37 @@ BActionCard::Draw(BRect updateRect)
 	SetHighColor(border);
 	StrokeRoundRect(Bounds(), radius, radius);
 
-	float margin = be_control_look->DefaultItemSpacing();
+	// Padding is u*10 by u*14. The icon is u*44, then a gap of u*12.
+	float u = unit();
+	float padX = u * 14.0f;
+	float padY = u * 10.0f;
+	float iconSide = u * 44.0f;
+	float textLeft = padX + iconSide + u * 12.0f;
 	if (fIcon != NULL) {
 		SetDrawingMode(B_OP_ALPHA);
 		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		DrawBitmap(fIcon, BPoint(margin, margin));
+		BRect dest(padX, padY, padX + iconSide, padY + iconSide);
+		DrawBitmap(fIcon, fIcon->Bounds(), dest);
 		SetDrawingMode(B_OP_COPY);
 	}
 	BFont titleFont(be_bold_font);
+	titleFont.SetSize(u * 15.0f);
 	SetFont(&titleFont);
 	font_height titleHeight;
 	titleFont.GetHeight(&titleHeight);
 	SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
-	float textLeft = margin + be_control_look->ComposeIconSize(40).width
-		+ margin;
-	float y = margin + titleHeight.ascent;
+	float y = padY + titleHeight.ascent;
 	DrawString(fTitle.String(), BPoint(textLeft, y));
 
 	BFont body(be_plain_font);
+	body.SetSize(u * 12.0f);
 	SetFont(&body);
 	font_height bodyHeight;
 	body.GetHeight(&bodyHeight);
 	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-		ui_color(B_DOCUMENT_TEXT_COLOR), 178));
-	y = margin + titleHeight.ascent + titleHeight.descent + bodyHeight.ascent
-		+ be_plain_font->Size() * 0.2f;
+		ui_color(B_DOCUMENT_TEXT_COLOR), 160));
+	y = padY + titleHeight.ascent + titleHeight.descent + u * 3.0f
+		+ bodyHeight.ascent;
 	if (fLineOne.Length() > 0)
 		DrawString(fLineOne.String(), BPoint(textLeft, y));
 	if (fLineTwo.Length() > 0) {
@@ -251,7 +264,7 @@ BActionCard::Draw(BRect updateRect)
 	}
 
 	BFont tagFont(be_plain_font);
-	tagFont.SetSize(be_plain_font->Size() * 0.85f);
+	tagFont.SetSize(u * 11.0f);
 	tagFont.SetFace(B_BOLD_FACE);
 	SetFont(&tagFont);
 	for (int32 i = 0; i < fTagFrames.CountItems(); i++) {
@@ -263,7 +276,7 @@ BActionCard::Draw(BRect updateRect)
 		SetHighColor(tint_color(fTagColor, B_DARKEN_3_TINT));
 		font_height tagHeight;
 		tagFont.GetHeight(&tagHeight);
-		DrawString(label->String(), BPoint(frame->left + margin * 0.6f,
+		DrawString(label->String(), BPoint(frame->left + u * 8.0f,
 			frame->top + tagHeight.ascent + (frame->Height()
 				- (tagHeight.ascent + tagHeight.descent)) / 2));
 	}
@@ -367,46 +380,51 @@ void
 BActionCard::GetPreferredSize(float* width, float* height)
 {
 	float wide = _Width();
-	if (wide < 1)
+	if (wide < 280)
 		wide = 280;
-	_Layout(wide);
 	if (width != NULL)
 		*width = wide;
-	if (height != NULL) {
-		float margin = be_control_look->DefaultItemSpacing();
-		font_height titleHeight;
-		be_bold_font->GetHeight(&titleHeight);
-		font_height bodyHeight;
-		be_plain_font->GetHeight(&bodyHeight);
-		float text = titleHeight.ascent + titleHeight.descent
-			+ be_plain_font->Size() * 0.2f;
-		if (fLineOne.Length() > 0)
-			text += bodyHeight.ascent + bodyHeight.descent;
-		if (fLineTwo.Length() > 0)
-			text += bodyHeight.ascent + bodyHeight.descent + bodyHeight.leading;
-		float bottom = 0;
-		if (fTagFrames.CountItems() > 0) {
-			BRect* last = (BRect*)fTagFrames.ItemAt(fTagFrames.CountItems() - 1);
-			bottom = last->bottom + margin;
-		} else
-			bottom = margin + text + margin;
-		float icon = be_control_look->ComposeIconSize(40).height + margin * 2;
-		*height = bottom > icon ? bottom : icon;
-	}
+	if (height != NULL)
+		*height = _HeightFor(wide);
 }
 
 
 BSize
 BActionCard::MinSize()
 {
-	float width = 280;
-	float height = 0;
-	float saved = Bounds().Width();
-	(void)saved;
-	GetPreferredSize(&width, &height);
-	_Layout(280);
-	GetPreferredSize(NULL, &height);
-	return BSize(280, height);
+	float u = unit();
+	float icon = u * 44.0f;
+	return BSize(280, icon + u * 10.0f * 2);
+}
+
+
+BSize
+BActionCard::MaxSize()
+{
+	// The content height is the minimum. The grid stretches the card
+	// so the three rows can share the free height.
+	return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
+}
+
+
+bool
+BActionCard::HasHeightForWidth()
+{
+	return true;
+}
+
+
+void
+BActionCard::GetHeightForWidth(float width, float* min, float* max,
+	float* preferred)
+{
+	float height = _HeightFor(width);
+	if (min != NULL)
+		*min = height;
+	if (max != NULL)
+		*max = B_SIZE_UNLIMITED;
+	if (preferred != NULL)
+		*preferred = height;
 }
 
 
@@ -493,6 +511,8 @@ BActionCard::_Init()
 {
 	SetLayout(NULL);
 	SetFlags(Flags() | B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE);
+	SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
 	fData = new(std::nothrow) Data;
 	for (int32 index = 0; index < 4; index++)
 		_reserved[index] = 0;
@@ -505,41 +525,43 @@ BActionCard::_Layout(float width)
 	for (int32 i = 0; i < fTagFrames.CountItems(); i++)
 		delete (BRect*)fTagFrames.ItemAt(i);
 	fTagFrames.MakeEmpty();
-	float margin = be_control_look->DefaultItemSpacing();
-	float textLeft = margin + be_control_look->ComposeIconSize(40).width
-		+ margin;
-	float room = width - textLeft - margin;
-	if (room < margin)
-		room = margin;
+	float u = unit();
+	float padX = u * 14.0f;
+	float padY = u * 10.0f;
+	float textLeft = padX + u * 44.0f + u * 12.0f;
+	float room = width - textLeft - padX;
+	if (room < padX)
+		room = padX;
 	BFont body(be_plain_font);
+	body.SetSize(u * 12.0f);
 	wrap_two(body, fSummary.String(), room, fLineOne, fLineTwo);
 	BFont titleFont(be_bold_font);
+	titleFont.SetSize(u * 15.0f);
 	font_height titleHeight;
 	titleFont.GetHeight(&titleHeight);
 	font_height bodyHeight;
 	body.GetHeight(&bodyHeight);
-	float y = margin + titleHeight.ascent + titleHeight.descent
-		+ be_plain_font->Size() * 0.2f;
+	float y = padY + titleHeight.ascent + titleHeight.descent + u * 3.0f;
 	if (fLineOne.Length() > 0)
 		y += bodyHeight.ascent + bodyHeight.descent;
 	if (fLineTwo.Length() > 0)
 		y += bodyHeight.ascent + bodyHeight.descent + bodyHeight.leading;
-	y += margin * 0.5f;
+	y += u * 2.0f;
 	BFont tagFont(be_plain_font);
-	tagFont.SetSize(be_plain_font->Size() * 0.85f);
+	tagFont.SetSize(u * 11.0f);
 	font_height tagHeight;
 	tagFont.GetHeight(&tagHeight);
-	float tagH = tagHeight.ascent + tagHeight.descent + margin * 0.4f;
+	float tagH = tagHeight.ascent + tagHeight.descent + u * 4.0f;
 	float x = textLeft;
 	for (int32 i = 0; i < fTags.CountItems(); i++) {
 		BString* label = (BString*)fTags.ItemAt(i);
-		float tagW = tagFont.StringWidth(label->String()) + margin * 1.2f;
-		if (x > textLeft && x + tagW > width - margin) {
+		float tagW = tagFont.StringWidth(label->String()) + u * 16.0f;
+		if (x > textLeft && x + tagW > width - padX) {
 			x = textLeft;
-			y += tagH + margin * 0.3f;
+			y += tagH + u * 4.0f;
 		}
 		fTagFrames.AddItem(new BRect(x, y, x + tagW, y + tagH));
-		x += tagW + margin * 0.4f;
+		x += tagW + u * 4.0f;
 	}
 }
 
@@ -569,6 +591,39 @@ BActionCard::_Copy(const BBitmap* icon) const
 	}
 	memcpy(copy->Bits(), icon->Bits(), icon->BitsLength());
 	return copy;
+}
+
+
+float
+BActionCard::_HeightFor(float width)
+{
+	if (width < 1)
+		width = 280;
+	_Layout(width);
+	float u = unit();
+	float padY = u * 10.0f;
+	BFont titleFont(be_bold_font);
+	titleFont.SetSize(u * 15.0f);
+	font_height titleHeight;
+	titleFont.GetHeight(&titleHeight);
+	BFont body(be_plain_font);
+	body.SetSize(u * 12.0f);
+	font_height bodyHeight;
+	body.GetHeight(&bodyHeight);
+	float text = titleHeight.ascent + titleHeight.descent + u * 3.0f;
+	if (fLineOne.Length() > 0)
+		text += bodyHeight.ascent + bodyHeight.descent;
+	if (fLineTwo.Length() > 0)
+		text += bodyHeight.ascent + bodyHeight.descent + bodyHeight.leading;
+	float bottom = 0;
+	if (fTagFrames.CountItems() > 0) {
+		BRect* last = (BRect*)fTagFrames.ItemAt(
+			fTagFrames.CountItems() - 1);
+		bottom = last->bottom + padY;
+	} else
+		bottom = padY + text + padY;
+	float icon = u * 44.0f + padY * 2;
+	return bottom > icon ? bottom : icon;
 }
 
 

@@ -123,17 +123,21 @@ BPageHeader::Draw(BRect updateRect)
 	BFont title;
 	BFont subtitle;
 	_Fonts(eyebrow, title, subtitle);
-	float margin = be_control_look->DefaultItemSpacing();
-	BSize iconSize = be_control_look->ComposeIconSize(40);
+	float u = be_plain_font->Size() / 13.0f;
+	float margin = u * 16.0f;
+	float padY = u * 12.0f;
+	float iconSide = u * 48.0f;
 	float right = Bounds().right - margin;
 	if (fIcon != NULL) {
 		SetDrawingMode(B_OP_ALPHA);
 		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		BPoint where(right - iconSize.width,
-			(Bounds().Height() - fIcon->Bounds().Height()) / 2);
-		DrawBitmap(fIcon, where);
+		BRect dest(right - iconSide,
+			(Bounds().Height() - iconSide) / 2, 0, 0);
+		dest.right = dest.left + iconSide;
+		dest.bottom = dest.top + iconSide;
+		DrawBitmap(fIcon, fIcon->Bounds(), dest);
 		SetDrawingMode(B_OP_COPY);
-		right = where.x - margin;
+		right = dest.left - margin;
 	}
 	float room = right - margin;
 	if (room < margin)
@@ -150,7 +154,7 @@ BPageHeader::Draw(BRect updateRect)
 	block += titleHeight.ascent + titleHeight.descent;
 	if (fSubtitle.Length() > 0)
 		block += subtitleHeight.ascent + subtitleHeight.descent;
-	float y = (Bounds().Height() - block) / 2;
+	float y = padY;
 	if (fEyebrow.Length() > 0) {
 		BString line(fEyebrow);
 		eyebrow.TruncateString(&line, B_TRUNCATE_END, room);
@@ -173,8 +177,8 @@ BPageHeader::Draw(BRect updateRect)
 		subtitle.TruncateString(&line, B_TRUNCATE_END, room);
 		SetFont(&subtitle);
 		SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-			ui_color(B_DOCUMENT_TEXT_COLOR), 178));
-		y += subtitleHeight.ascent;
+			ui_color(B_DOCUMENT_TEXT_COLOR), 160));
+		y += u * 2.0f + subtitleHeight.ascent;
 		DrawString(line.String(), BPoint(margin, y));
 	}
 	SetFont(be_plain_font);
@@ -218,6 +222,9 @@ void
 BPageHeader::SetEyebrow(const char* text)
 {
 	fEyebrow = text;
+	float height = _Height();
+	SetExplicitMinSize(BSize(0, height));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, height));
 	Invalidate();
 }
 
@@ -234,6 +241,9 @@ void
 BPageHeader::SetSubtitle(const char* text)
 {
 	fSubtitle = text;
+	float height = _Height();
+	SetExplicitMinSize(BSize(0, height));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, height));
 	Invalidate();
 }
 
@@ -252,6 +262,10 @@ BPageHeader::_Init()
 {
 	SetLayout(NULL);
 	SetFlags(Flags() | B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE);
+	float height = _Height();
+	SetExplicitMinSize(BSize(0, height));
+	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, height));
+	SetExplicitPreferredSize(BSize(280, height));
 	fData = new(std::nothrow) Data;
 	for (int32 index = 0; index < 4; index++)
 		_reserved[index] = 0;
@@ -276,8 +290,20 @@ BPageHeader::_Fonts(BFont& eyebrow, BFont& title, BFont& subtitle) const
 		}
 	}
 	title = *be_bold_font;
-	title.SetSize(be_bold_font->Size() + 8);
+	title.SetSize(be_plain_font->Size() / 13.0f * 22.0f);
+	int32 titleStyles = count_font_styles(family);
+	for (int32 i = 0; i < titleStyles; i++) {
+		font_style candidate;
+		if (get_font_style(family, i, &candidate) == B_OK
+			&& (strcasecmp(candidate, "ExtraBold") == 0
+				|| strcasecmp(candidate, "Black") == 0)) {
+			title.SetFamilyAndStyle(family, candidate);
+			title.SetSize(be_plain_font->Size() / 13.0f * 22.0f);
+			break;
+		}
+	}
 	subtitle = *be_plain_font;
+	subtitle.SetSize(be_plain_font->Size() / 13.0f * 12.5f);
 	(void)style;
 }
 
@@ -295,15 +321,15 @@ BPageHeader::_Height() const
 	eyebrow.GetHeight(&eyebrowHeight);
 	title.GetHeight(&titleHeight);
 	subtitle.GetHeight(&subtitleHeight);
-	float margin = be_control_look->DefaultItemSpacing();
+	float u = be_plain_font->Size() / 13.0f;
 	float text = titleHeight.ascent + titleHeight.descent;
 	if (fEyebrow.Length() > 0)
 		text += eyebrowHeight.ascent + eyebrowHeight.descent;
 	if (fSubtitle.Length() > 0)
-		text += subtitleHeight.ascent + subtitleHeight.descent;
-	float icon = be_control_look->ComposeIconSize(40).height;
+		text += u * 2.0f + subtitleHeight.ascent + subtitleHeight.descent;
+	float icon = u * 48.0f;
 	float body = text > icon ? text : icon;
-	return body + margin * 2;
+	return body + u * 12.0f * 2;
 }
 
 

@@ -60,6 +60,10 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				GetPreferredSize(float* width, float* height);
 	virtual	BSize				MinSize();
+	virtual	BSize				MaxSize();
+	virtual	bool				HasHeightForWidth();
+	virtual	void				GetHeightForWidth(float width, float* min,
+									float* max, float* preferred);
 
 			void				SetIcon(const BBitmap* icon);
 			void				SetTitle(const char* title);
@@ -74,6 +78,7 @@ public:
 private:
 			void				_Init();
 			void				_Layout(float width);
+			float				_HeightFor(float width);
 			int32				_TagAt(BPoint where) const;
 			BBitmap*			_Copy(const BBitmap* icon) const;
 			float				_Width() const;

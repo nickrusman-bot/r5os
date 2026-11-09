@@ -9,91 +9,115 @@
 #include "SettingsFont.h"
 #include "SettingsMessages.h"
 
-#include <Card.h>
-#include <Control.h>
 #include <ControlLook.h>
+#include <InterfaceDefs.h>
 #include <GridLayout.h>
-#include <GroupLayout.h>
-#include <LayoutBuilder.h>
-#include <Message.h>
-#include <StringView.h>
+#include <String.h>
 #include <Window.h>
 
 #include <string.h>
 
 
-class PageLink : public BControl {
+static void
+stroke_dashed(BView* view, BRect rect)
+{
+	float dash = 4.0f;
+	float gap = 3.0f;
+	for (float x = rect.left; x < rect.right; x += dash + gap) {
+		float end = x + dash;
+		if (end > rect.right)
+			end = rect.right;
+		view->StrokeLine(BPoint(x, rect.top), BPoint(end, rect.top));
+		view->StrokeLine(BPoint(x, rect.bottom), BPoint(end, rect.bottom));
+	}
+	for (float y = rect.top; y < rect.bottom; y += dash + gap) {
+		float end = y + dash;
+		if (end > rect.bottom)
+			end = rect.bottom;
+		view->StrokeLine(BPoint(rect.left, y), BPoint(rect.left, end));
+		view->StrokeLine(BPoint(rect.right, y), BPoint(rect.right, end));
+	}
+}
+
+
+class RecentPanel : public BView {
 public:
-								PageLink(const char* label, BMessage* message);
+								RecentPanel(const char* line);
 	virtual	void				Draw(BRect update);
-	virtual	void				MouseDown(BPoint where);
-	virtual	void				MouseUp(BPoint where);
-	virtual	void				GetPreferredSize(float* width, float* height);
 	virtual	BSize				MinSize();
+	virtual	BSize				MaxSize();
+	virtual	BSize				PreferredSize();
 
 private:
-			bool				fPressed;
+			BString				fLine;
 };
 
 
-PageLink::PageLink(const char* label, BMessage* message)
+RecentPanel::RecentPanel(const char* line)
 	:
-	BControl("link", label, message, B_WILL_DRAW | B_TRANSPARENT_BACKGROUND),
-	fPressed(false)
+	BView("recent", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	fLine(line)
 {
-	SetFont(r5_settings_plain_font());
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	SetExplicitAlignment(BAlignment(B_ALIGN_USE_FULL_WIDTH,
+		B_ALIGN_USE_FULL_HEIGHT));
 }
 
 
 void
-PageLink::Draw(BRect update)
+RecentPanel::Draw(BRect update)
 {
 	(void)update;
-	SetHighColor(ui_color(B_LINK_TEXT_COLOR));
-	font_height height;
-	GetFontHeight(&height);
-	DrawString(Label(), BPoint(0, height.ascent));
-}
+	SetLowColor(ViewColor());
+	FillRect(Bounds(), B_SOLID_LOW);
+	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT));
+	stroke_dashed(this, Bounds());
 
-
-void
-PageLink::MouseDown(BPoint where)
-{
-	(void)where;
-	fPressed = true;
-	SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
-}
-
-
-void
-PageLink::MouseUp(BPoint where)
-{
-	bool pressed = fPressed;
-	fPressed = false;
-	if (pressed && Bounds().Contains(where))
-		Invoke();
-}
-
-
-void
-PageLink::GetPreferredSize(float* width, float* height)
-{
-	font_height line;
-	GetFontHeight(&line);
-	if (width != NULL)
-		*width = StringWidth(Label());
-	if (height != NULL)
-		*height = line.ascent + line.descent + line.leading;
+	float u = be_plain_font->Size() / 13.0f;
+	BFont title(be_bold_font);
+	title.SetSize(u * 13.0f);
+	BFont body(be_plain_font);
+	body.SetSize(u * 12.0f);
+	font_height titleHeight;
+	font_height bodyHeight;
+	title.GetHeight(&titleHeight);
+	body.GetHeight(&bodyHeight);
+	float block = titleHeight.ascent + titleHeight.descent + u * 4.0f
+		+ bodyHeight.ascent + bodyHeight.descent;
+	float y = (Bounds().Height() - block) / 2 + titleHeight.ascent;
+	float x = u * 16.0f;
+	SetFont(&title);
+	SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+	DrawString("Recently changed", BPoint(x, y));
+	y += titleHeight.descent + u * 4.0f + bodyHeight.ascent;
+	SetFont(&body);
+	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_TEXT_COLOR), 160));
+	DrawString(fLine.String(), BPoint(x, y));
+	SetFont(be_plain_font);
 }
 
 
 BSize
-PageLink::MinSize()
+RecentPanel::MinSize()
 {
-	float width = 0;
-	float height = 0;
-	GetPreferredSize(&width, &height);
-	return BSize(width, height);
+	float u = be_plain_font->Size() / 13.0f;
+	return BSize(280, u * 14.0f * 2 + u * 13.0f + u * 12.0f);
+}
+
+
+BSize
+RecentPanel::MaxSize()
+{
+	return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
+}
+
+
+BSize
+RecentPanel::PreferredSize()
+{
+	return MinSize();
 }
 
 
@@ -106,7 +130,8 @@ HomeView::HomeView(bool recent)
 	fWantsRecent(recent)
 {
 	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	fGrid = new BGridLayout(B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING);
+	float u = be_plain_font->Size() / 13.0f;
+	fGrid = new BGridLayout(u * 10.0f, u * 10.0f);
 	SetLayout(fGrid);
 }
 
@@ -124,6 +149,7 @@ HomeView::AddCard(BView* card)
 	int32 column = fCount % 2;
 	int32 row = fCount / 2;
 	fGrid->AddView(card, column, row);
+	fGrid->SetRowWeight(row, 1);
 	fCount++;
 }
 
@@ -138,25 +164,20 @@ HomeView::SetRecent(const BString* names, const BString* ids, int32 count)
 		delete fRecent;
 		fRecent = NULL;
 	}
-	BAppearanceKit::BCard* card = new BAppearanceKit::BCard("recent",
-		BAppearanceKit::B_CARD_PANEL);
-	BStringView* title = new BStringView("recent-title", "Recently changed");
-	title->SetFont(r5_settings_bold_font());
-	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(card->GetLayout());
-	if (layout != NULL) {
-		layout->AddView(title);
-		if (count <= 0 || names == NULL || ids == NULL) {
-			layout->AddView(new BStringView("recent-empty",
-				"Nothing changed yet"));
-		} else {
-			for (int32 i = 0; i < count; i++) {
-				BMessage* message = new BMessage(kMsgOpenPage);
-				message->AddString("module", ids[i].String());
-				layout->AddView(new PageLink(names[i].String(), message));
-			}
+	BString line("Nothing changed yet");
+	if (count > 0 && names != NULL) {
+		line = "";
+		for (int32 i = 0; i < count; i++) {
+			if (i > 0)
+				line << " · ";
+			line << names[i];
 		}
 	}
-	fRecent = card;
-	if (fGrid != NULL)
-		fGrid->AddView(fRecent, fCount % 2, fCount / 2);
+	(void)ids;
+	fRecent = new RecentPanel(line.String());
+	if (fGrid != NULL) {
+		int32 row = fCount / 2;
+		fGrid->AddView(fRecent, fCount % 2, row);
+		fGrid->SetRowWeight(row, 1);
+	}
 }

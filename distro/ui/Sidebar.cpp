@@ -50,6 +50,7 @@ struct BSidebar::Data {
 	bool				inList;
 	BString				filter;
 	BString				expandedBefore;
+	BString				footer;
 	std::vector<Section> sections;
 };
 
@@ -160,7 +161,7 @@ BSidebar::Draw(BRect updateRect)
 		if (haveGroup && item != NULL && item->fLast) {
 			float radius = be_plain_font->Size() * 0.25f;
 			SetHighColor(mix_color(ui_color(B_LIST_BACKGROUND_COLOR),
-				ui_color(B_CONTROL_HIGHLIGHT_COLOR), 20));
+				ui_color(B_CONTROL_HIGHLIGHT_COLOR), 40));
 			FillRoundRect(paint, radius, radius);
 			haveGroup = false;
 		}
@@ -168,6 +169,68 @@ BSidebar::Draw(BRect updateRect)
 	}
 
 	BListView::Draw(updateRect);
+	if (fData->footer.Length() == 0)
+		return;
+	float itemsBottom = -1;
+	BRect row(0, 0, Bounds().right, -1);
+	for (int32 i = 0; i < count; i++) {
+		row.bottom = row.top + ceilf(ItemAt(i)->Height()) - 1;
+		itemsBottom = row.bottom;
+		row.top = row.bottom + 1;
+	}
+	float u = be_plain_font->Size() / 13.0f;
+	float inset = u * 4.0f;
+	float pad = u * 10.0f;
+	BFont font(be_plain_font);
+	font.SetSize(u * 11.0f);
+	BFont strong(font);
+	strong.SetFace(B_BOLD_FACE);
+	SetFont(&font);
+	font_height line;
+	font.GetHeight(&line);
+	float text = line.ascent + line.descent;
+	float boxHeight = text * 2 + pad * 2;
+	float top = Bounds().bottom - boxHeight - inset;
+	if (top < itemsBottom + inset)
+		return;
+	BRect box(inset, top, Bounds().right - inset, top + boxHeight);
+	// #f3f6fb and #dbe3ef have no system colour. A light mix of the
+	// list background and the control highlight stands in for both.
+	SetHighColor(mix_color(ui_color(B_LIST_BACKGROUND_COLOR),
+		ui_color(B_CONTROL_HIGHLIGHT_COLOR), 18));
+	FillRect(box);
+	SetHighColor(mix_color(ui_color(B_LIST_BACKGROUND_COLOR),
+		ui_color(B_CONTROL_HIGHLIGHT_COLOR), 48));
+	StrokeRect(box);
+	SetFont(&strong);
+	SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+	float y = box.top + pad + line.ascent;
+	const char* tip = "Tip:";
+	DrawString(tip, BPoint(box.left + pad, y));
+	float used = strong.StringWidth(tip) + u * 4.0f;
+	SetFont(&font);
+	SetHighColor(mix_color(ui_color(B_LIST_BACKGROUND_COLOR),
+		ui_color(B_LIST_ITEM_TEXT_COLOR), 150));
+	BString rest(fData->footer);
+	float room = box.Width() - pad * 2 - used;
+	int32 fit = rest.Length();
+	while (fit > 0 && font.StringWidth(rest.String(), fit) > room)
+		fit--;
+	while (fit > 0 && fit < rest.Length() && rest.ByteAt(fit) != ' ')
+		fit--;
+	if (fit <= 0)
+		fit = rest.Length();
+	BString first(rest);
+	first.Truncate(fit);
+	DrawString(first.String(), BPoint(box.left + pad + used, y));
+	if (fit < rest.Length()) {
+		const char* next = rest.String() + fit;
+		while (*next == ' ')
+			next++;
+		y += text * 1.45f;
+		DrawString(next, BPoint(box.left + pad, y));
+	}
+	SetFont(be_plain_font);
 }
 
 
@@ -176,6 +239,19 @@ BSidebar::DrawItem(BListItem* item, BRect frame, bool complete)
 {
 	if (item != NULL)
 		item->DrawItem(this, frame, complete);
+}
+
+
+void
+BSidebar::DrawLatch(BRect itemRect, int32 level, bool collapsed,
+	bool highlighted, bool misTracked)
+{
+	// The count or the down arrow is the only mark on the right.
+	(void)itemRect;
+	(void)level;
+	(void)collapsed;
+	(void)highlighted;
+	(void)misTracked;
 }
 
 
@@ -372,6 +448,17 @@ const char*
 BSidebar::Filter() const
 {
 	return fData->filter.String();
+}
+
+
+void
+BSidebar::SetFooter(const char* text)
+{
+	BString next(text);
+	if (next == fData->footer)
+		return;
+	fData->footer = next;
+	Invalidate();
 }
 
 

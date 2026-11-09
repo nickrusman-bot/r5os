@@ -31,6 +31,7 @@
 #include <IconUtils.h>
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
+#include <MessageFilter.h>
 #include <MessageRunner.h>
 #include <Mime.h>
 #include <PageHeader.h>
@@ -74,13 +75,13 @@ static const SettingsCategory kCategories[] = {
 		"application/x-vnd.Haiku-Screen", B_PANEL_TEXT_COLOR },
 	{ "devices", "Devices",
 		"Keyboard, mouse, touchpad, printers, and Bluetooth.",
-		"application/x-vnd.Haiku-Input", B_SUCCESS_COLOR },
+		"application/x-vnd.Haiku-Devices", B_SUCCESS_COLOR },
 	{ "network", "Network",
 		"Wired and Wi-Fi connections, and network shares.",
 		"application/x-vnd.Haiku-Network", B_LINK_TEXT_COLOR },
 	{ "accounts", "Accounts",
 		"The people who use this computer, and how they sign in.",
-		"application/x-vnd.R5OS-Users", B_WINDOW_TAB_COLOR }
+		"application/x-vnd.Be-PEPL", B_WINDOW_TAB_COLOR }
 };
 
 
@@ -101,7 +102,16 @@ private:
 class SearchField : public BTextControl {
 public:
 								SearchField();
+	virtual	void				AttachedToWindow();
+	virtual	void				Draw(BRect update);
+	virtual	void				FrameResized(float width, float height);
+	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
+
+private:
+			void				_SyncHint();
+			BStringView*		fHint;
+			BMessageFilter*		fWatch;
 };
 
 
@@ -238,10 +248,116 @@ SettingsList::UpdateScrollBar()
 }
 
 
+class SearchWatch : public BMessageFilter {
+public:
+								SearchWatch(BHandler* target)
+									:
+									BMessageFilter(B_ANY_DELIVERY, B_ANY_SOURCE),
+									fTarget(target)
+								{
+								}
+	virtual	filter_result		Filter(BMessage* message, BHandler** target)
+								{
+									(void)target;
+									if (message->what == B_KEY_DOWN
+										|| message->what == B_PASTE
+										|| message->what == B_MOUSE_DOWN) {
+										if (fTarget != NULL && fTarget->Looper()
+											!= NULL) {
+											fTarget->Looper()->PostMessage(
+												'shnt', fTarget);
+										}
+									}
+									return B_DISPATCH_MESSAGE;
+								}
+
+private:
+			BHandler*			fTarget;
+};
+
+
 SearchField::SearchField()
 	:
-	BTextControl("search", "Search:", "", NULL)
+	BTextControl("search", "", "", NULL),
+	fHint(NULL),
+	fWatch(NULL)
 {
+	float u = be_plain_font->Size() / 13.0f;
+	SetDivider(u * 30.0f);
+	fHint = new BStringView("hint", "Search");
+	fHint->SetFont(r5_settings_plain_font());
+	fHint->SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
+	fHint->SetFlags(fHint->Flags() | B_TRANSPARENT_BACKGROUND);
+	AddChild(fHint);
+}
+
+
+void
+SearchField::AttachedToWindow()
+{
+	BTextControl::AttachedToWindow();
+	if (TextView() != NULL && fWatch == NULL) {
+		fWatch = new SearchWatch(this);
+		TextView()->AddFilter(fWatch);
+	}
+	_SyncHint();
+}
+
+
+void
+SearchField::Draw(BRect update)
+{
+	BTextControl::Draw(update);
+	float u = be_plain_font->Size() / 13.0f;
+	float size = u * 14.0f;
+	float cx = u * 8.0f + size * 0.42f;
+	float cy = Bounds().Height() / 2.0f;
+	float radius = size * 0.32f;
+	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
+	SetPenSize(1.5f);
+	StrokeEllipse(BRect(cx - radius, cy - radius * 1.15f,
+		cx + radius, cy + radius * 0.85f));
+	StrokeLine(BPoint(cx + radius * 0.65f, cy + radius * 0.55f),
+		BPoint(cx + radius * 1.7f, cy + radius * 1.6f));
+	SetPenSize(1.0f);
+	_SyncHint();
+}
+
+
+void
+SearchField::FrameResized(float width, float height)
+{
+	BTextControl::FrameResized(width, height);
+	_SyncHint();
+}
+
+
+void
+SearchField::MessageReceived(BMessage* message)
+{
+	if (message->what == 'shnt') {
+		_SyncHint();
+		return;
+	}
+	BTextControl::MessageReceived(message);
+}
+
+
+void
+SearchField::_SyncHint()
+{
+	if (fHint == NULL || TextView() == NULL)
+		return;
+	bool empty = Text() == NULL || Text()[0] == '\0';
+	BRect text = TextView()->Frame();
+	fHint->MoveTo(text.left, text.top);
+	fHint->ResizeTo(text.Width(), text.Height());
+	if (empty && fHint->IsHidden())
+		fHint->Show();
+	else if (!empty && !fHint->IsHidden())
+		fHint->Hide();
 }
 
 
@@ -276,9 +392,13 @@ public:
 								PageScroller(BView* content);
 	virtual						~PageScroller();
 	virtual	void				DoLayout();
+	virtual	void				GetPreferredSize(float* width, float* height);
+	virtual	BSize				MinSize();
+	virtual	BSize				MaxSize();
 			void				ScrollToValue(float value);
 
 private:
+			float				_ContentHeight(float width);
 			BView*				fContent;
 			PageBar*			fBar;
 			bool				fScrolling;
@@ -335,11 +455,57 @@ PageScroller::~PageScroller()
 
 
 void
+PageScroller::GetPreferredSize(float* width, float* height)
+{
+	if (width != NULL)
+		*width = 360;
+	if (height != NULL)
+		*height = 240;
+}
+
+
+BSize
+PageScroller::MinSize()
+{
+	// The cards must not set the window's minimum size.
+	return BSize(280, 80);
+}
+
+
+BSize
+PageScroller::MaxSize()
+{
+	return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
+}
+
+
+void
 PageScroller::ScrollToValue(float value)
 {
 	if (fContent == NULL || fScrolling)
 		return;
 	fContent->MoveTo(0, -value);
+}
+
+
+float
+PageScroller::_ContentHeight(float width)
+{
+	if (fContent != NULL && fContent->HasHeightForWidth()) {
+		float minHeight = 0;
+		float maxHeight = 0;
+		float preferred = 0;
+		fContent->GetHeightForWidth(width, &minHeight, &maxHeight, &preferred);
+	// An unlimited maximum must not become the page height.
+	if (preferred > 1 && preferred < 100000)
+		return preferred;
+	if (minHeight > 1 && minHeight < 100000)
+		return minHeight;
+}
+	float preferred = fContent != NULL ? fContent->PreferredSize().height : 0;
+	if (preferred < 1)
+		preferred = Bounds().Height();
+	return preferred;
 }
 
 
@@ -351,23 +517,28 @@ PageScroller::DoLayout()
 
 	fScrolling = true;
 	// Size the page before laying it out. A layout at the old height
-	// leaves a tab body at zero.
+	// leaves a tab body at zero. Height follows the real width, so a
+	// card is not measured as if it were only 280 wide.
 	float width = Bounds().Width();
 	float height = Bounds().Height();
-	BSize preferred = fContent->PreferredSize();
 	float barWidth = fBar->PreferredSize().width;
-	bool overflow = preferred.height > height + 1.0f;
-	float contentWidth = overflow ? width - barWidth - 1.0f : width;
-	float contentHeight = overflow ? preferred.height : height;
-	if (contentWidth < 0)
-		contentWidth = 0;
-	if (contentHeight < 0)
-		contentHeight = 0;
+	float contentWidth = width;
+	float contentHeight = _ContentHeight(contentWidth);
+	bool overflow = contentHeight > height + 1.0f;
+	if (overflow) {
+		contentWidth = width - barWidth - 1.0f;
+		if (contentWidth < 0)
+			contentWidth = 0;
+		contentHeight = _ContentHeight(contentWidth);
+		overflow = contentHeight > height + 1.0f;
+	}
+	if (contentHeight < 1 || !overflow)
+		contentHeight = height;
 
 	float value = fBar->Value();
 	float maxValue = 0;
 	if (overflow)
-		maxValue = preferred.height - height;
+		maxValue = contentHeight - height;
 	if (value > maxValue)
 		value = maxValue;
 	if (value < 0)
@@ -384,8 +555,8 @@ PageScroller::DoLayout()
 		fBar->ResizeTo(barWidth, height);
 		fBar->SetRange(0, maxValue);
 		fBar->SetSteps(20, height);
-		if (preferred.height > 0)
-			fBar->SetProportion(height / preferred.height);
+		if (contentHeight > 0)
+			fBar->SetProportion(height / contentHeight);
 		if (fBar->Value() != value)
 			fBar->SetValue(value);
 	} else {
@@ -400,8 +571,8 @@ PageScroller::DoLayout()
 SettingsWindow::SettingsWindow(SettingsManager* manager,
 	SettingsStorage* storage)
 	:
-	BWindow(BRect(80, 60, 900, 640), "Settings", B_TITLED_WINDOW,
-		B_AUTO_UPDATE_SIZE_LIMITS | B_QUIT_ON_WINDOW_CLOSE),
+	BWindow(BRect(80, 60, 1109, 669), "Settings", B_TITLED_WINDOW,
+		B_QUIT_ON_WINDOW_CLOSE),
 	fManager(manager),
 	fStorage(storage),
 	fContext(NULL),
@@ -429,62 +600,64 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fSearch->SetModificationMessage(new BMessage(kMsgSearch));
 
 	fList = new SettingsList();
-	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true);
+	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true,
+		B_PLAIN_BORDER);
 
 	fLock = new BButton("lock", NULL, new BMessage(kMsgLockButton));
 	fHeader = new BAppearanceKit::BPageHeader("heading");
-	fTip = new BAppearanceKit::BCard("tip", BAppearanceKit::B_CARD_PANEL);
-	BStringView* tip = new BStringView("tip-text",
-		"Tip: type in Search to jump straight to any page.");
-	if (fTip->GetLayout() != NULL)
-		((BGroupLayout*)fTip->GetLayout())->AddView(tip);
 
 	fDeck = new BView("deck", 0);
 	fCards = new BCardLayout();
 	fDeck->SetLayout(fCards);
-	fDeck->SetExplicitMinSize(BSize(360, 240));
+	fDeck->SetExplicitMinSize(BSize(560, 160));
 
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
 	fDefaults = new BButton("defaults", "Defaults", new BMessage(kMsgDefaults));
 
-	// The list starts under the tab and runs down to the tip. Search
-	// stays 200 wide on the bottom row, then the lock, Revert, and
-	// Defaults. The heading is one card beside the list. See AGENTS.md.
+	// The list is 200 wide. Search sits under it. The lock, Revert,
+	// and Defaults sit on the bottom row of the right column.
+	float u = be_plain_font->Size() / 13.0f;
 	const float sidebarWidth = 200;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
-	fSearch->SetExplicitMinSize(BSize(sidebarWidth, B_SIZE_UNSET));
-	fSearch->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNSET));
-	fTip->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNSET));
+	fSearch->SetExplicitMinSize(BSize(sidebarWidth, u * 34.0f));
+	fSearch->SetExplicitMaxSize(BSize(sidebarWidth, u * 34.0f));
+	fSearch->SetExplicitPreferredSize(BSize(sidebarWidth, u * 34.0f));
 
-	fDeck->SetExplicitMinSize(BSize(740, 280));
-	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
-		.SetInsets(B_USE_WINDOW_SPACING)
-		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 1)
-			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 0)
+	fDeck->SetExplicitMinSize(BSize(560, 160));
+	BLayoutBuilder::Group<>(this, B_VERTICAL, u * 12.0f)
+		.SetInsets(u * 12.0f)
+		.AddGroup(B_HORIZONTAL, u * 14.0f, 1)
+			.AddGroup(B_VERTICAL, u * 10.0f, 1)
 				.Add(scroll, 1)
-				.Add(fTip)
+				.Add(fSearch)
 				.End()
-			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1)
+			.AddGroup(B_VERTICAL, u * 12.0f, 1)
 				.Add(fHeader)
 				.Add(fDeck, 1)
+				.AddGroup(B_HORIZONTAL, u * 6.0f, 0)
+					.Add(fLock)
+					.AddGlue()
+					.Add(fRevert)
+					.Add(fDefaults)
+					.End()
 				.End()
-			.End()
-		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
-			.Add(fSearch)
-			.Add(fLock)
-			.AddGlue()
-			.Add(fRevert)
-			.Add(fDefaults)
 			.End();
 	for (int32 i = 0; i < CountChildren(); i++)
 		r5_settings_apply_plain(ChildAt(i));
 	if (fSearch->TextView() != NULL)
 		fSearch->TextView()->SetFontAndColor(r5_settings_plain_font());
 
-	float buttonHeight = fRevert->PreferredSize().height;
+	float buttonHeight = u * 34.0f;
 	fLockButtonHeight = buttonHeight;
 	r5_button_set_lock(fLock, true, buttonHeight);
+	fLock->SetExplicitMinSize(BSize(u * 38.0f, buttonHeight));
+	fLock->SetExplicitMaxSize(BSize(u * 38.0f, buttonHeight));
+	fLock->SetExplicitPreferredSize(BSize(u * 38.0f, buttonHeight));
+	fRevert->SetExplicitMinSize(BSize(B_SIZE_UNSET, buttonHeight));
+	fRevert->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, buttonHeight));
+	fDefaults->SetExplicitMinSize(BSize(B_SIZE_UNSET, buttonHeight));
+	fDefaults->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, buttonHeight));
 	fLock->SetToolTip("Unlock");
 	_ReloadLock(false);
 	fLockRunner = new BMessageRunner(BMessenger(this),
@@ -520,7 +693,7 @@ void
 SettingsWindow::ModulesLoaded()
 {
 	fHomeView = new HomeView(true);
-	float side = be_control_look->ComposeIconSize(40).width;
+	float side = be_plain_font->Size() / 13.0f * 44.0f;
 	for (uint32 i = 0; i < sizeof(kCategories) / sizeof(kCategories[0]); i++) {
 		SettingsModule* modules[16];
 		int32 count = modules_in_category(fManager, kCategories[i].id,
@@ -544,14 +717,15 @@ SettingsWindow::ModulesLoaded()
 		card->SetTagMessage(tags);
 		for (int32 page = 0; page < count; page++)
 			card->AddTag(modules[page]->Name());
-		card->SetExplicitMinSize(BSize(280, B_SIZE_UNSET));
 		card->SetTarget(this);
 		fHomeView->AddCard(card);
 	}
-	fCards->AddView(fHomeView);
+	fCards->AddView(new PageScroller(fHomeView));
 	_ShowRecent();
 	_BuildSidebar();
 	_ShowHome();
+	SetSizeLimits(910, 4096, 560, 4096);
+	ResizeTo(1030, 610);
 }
 
 
@@ -708,7 +882,7 @@ void
 SettingsWindow::_BuildSidebar()
 {
 	fAdjusting = true;
-	float side = be_control_look->ComposeIconSize(24).width;
+	float side = be_plain_font->Size() / 13.0f * 24.0f;
 	BBitmap* pebble = r5_vector_icon_bitmap(kR5Pebble, sizeof(kR5Pebble),
 		side);
 	BAppearanceKit::BSidebarItem* home
@@ -730,7 +904,7 @@ SettingsWindow::_BuildSidebar()
 		delete icon;
 		section->SetCount(count);
 		fList->AddItem(section);
-		for (int32 i = 0; i < count; i++) {
+		for (int32 i = count - 1; i >= 0; i--) {
 			BString keywords(modules[i]->Description() != NULL
 				? modules[i]->Description() : "");
 			keywords << " "
@@ -743,6 +917,8 @@ SettingsWindow::_BuildSidebar()
 			page->SetKeywords(keywords.String());
 			if (modules[i]->RequiresAdmin())
 				page->SetBadge(BAppearanceKit::B_SIDEBAR_BADGE_LOCKED);
+			// AddUnder inserts each page directly under the category,
+			// so adding from the last page leaves Information first.
 			fList->AddUnder(page, section);
 		}
 		fList->Collapse(section);
@@ -759,7 +935,7 @@ SettingsWindow::_ShowHome()
 {
 	fCurrent = NULL;
 	fCards->SetVisibleItem((int32)0);
-	float side = be_control_look->ComposeIconSize(40).width;
+	float side = be_plain_font->Size() / 13.0f * 48.0f;
 	BBitmap* icon = NULL;
 	size_t bytes = 0;
 	const void* data = be_app->AppResources() != NULL
@@ -807,7 +983,7 @@ SettingsWindow::_ShowCategory(const char* categoryId)
 		if (strcmp(kCategories[i].id, categoryId) == 0)
 			signature = kCategories[i].iconSignature;
 	}
-	float side = be_control_look->ComposeIconSize(40).width;
+	float side = be_plain_font->Size() / 13.0f * 48.0f;
 	BBitmap* icon = r5_mime_icon_bitmap(signature, side);
 	if (icon != NULL)
 		r5_settings_apply_prefs_overlay(icon);
@@ -834,7 +1010,7 @@ SettingsWindow::_ShowModule(const char* moduleId)
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
 	fCurrent = module;
-	float side = be_control_look->ComposeIconSize(40).width;
+	float side = be_plain_font->Size() / 13.0f * 48.0f;
 	BBitmap* icon = r5_mime_icon_bitmap(module_icon(module->Identifier()),
 		side);
 	if (icon != NULL)
@@ -889,7 +1065,7 @@ SettingsWindow::_SetHeader(const char* eyebrow, const char* title,
 void
 SettingsWindow::_UpdateTip()
 {
-	if (fTip == NULL || fList == NULL)
+	if (fList == NULL)
 		return;
 	bool folded = fQuery.Length() == 0;
 	for (int32 i = 0; folded && i < fList->CountItems(); i++) {
@@ -899,10 +1075,8 @@ SettingsWindow::_UpdateTip()
 			&& fList->CountItemsUnder(item, true) > 0)
 			folded = false;
 	}
-	if (folded && fTip->IsHidden())
-		fTip->Show();
-	else if (!folded && !fTip->IsHidden())
-		fTip->Hide();
+	fList->SetFooter(folded
+		? "type in Search to jump straight to any page." : "");
 }
 
 
@@ -1119,7 +1293,7 @@ SettingsWindow::_CategoryView(const char* categoryId, const char* name)
 	HomeView* home = new HomeView(false);
 	SettingsModule* modules[16];
 	int32 count = modules_in_category(fManager, categoryId, modules, 16);
-	float side = be_control_look->ComposeIconSize(40).width;
+	float side = be_plain_font->Size() / 13.0f * 44.0f;
 	for (int32 i = 0; i < count; i++) {
 		BMessage* message = new BMessage(kMsgOpenPage);
 		message->AddString("module", modules[i]->Identifier());
@@ -1134,11 +1308,10 @@ SettingsWindow::_CategoryView(const char* categoryId, const char* name)
 			r5_settings_apply_prefs_overlay(icon);
 		card->SetIcon(icon);
 		delete icon;
-		card->SetExplicitMinSize(BSize(280, B_SIZE_UNSET));
 		card->SetTarget(this);
 		home->AddCard(card);
 	}
-	return home;
+	return new PageScroller(home);
 }
 
 

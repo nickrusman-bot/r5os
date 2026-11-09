@@ -4,7 +4,7 @@
 
 The Settings window keeps every page, the lock, Revert, Defaults, and search. The list now starts with Home, then the five categories. Only the category of the open page is unfolded. Home and a category are cards. A page is still that page's own view. Recently changed keeps the last three pages that saved, newest first, in `~/config/settings/r5-settings/settings-window`. The application icon is the R5 wave pebble plus the preferences wrench, built by `scripts/join-settings-icon.py`. What's new is build 10051.
 
-Tested: not yet. The jam and the QEMU comparison against `docs/design/settings-mockup/` come after this note and will be recorded here when they finish.
+Tested: jam of this tree finished with `jam_exit=0`. One QEMU boot (TCG, GTK window, guest `screendump`) on 9 Nov 2026, Europe/Amsterdam. Home at the opened size, about 1030 wide, shows the five category cards and Recently changed in three rows, no scrollbar, a white circle behind the Home pebble, and the tip while every category is folded. System, opened from the list, hides the tip, lists Information first, and shows that category's cards. The heading icon on Home is still a smooth disc: the white wave is not visible. Search has no magnifier. No line shows under Home. The side-by-side picture is `side-by-side.png` next to `docs/design/settings-mockup/home.png`. Not a LAN test.
 
 ## 2026-11-09 - the About R5 icon shows the blue of the wave pebble again
 
