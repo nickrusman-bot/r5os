@@ -4,6 +4,10 @@
 
 A signal that ends a team is handled by one thread, which exits at once. The user stack stays until the address space goes, so the other threads can still use an object on it. A team that is not shutting down still deletes the stack. This is haiku-pi `e09cfa1d9e`, copyright 2026 Witold Bołt, as a GPL-3.0-or-later snippet. `scripts/apply-kernel-bugs.py` copies the file. The host test checks the `goingDown` guard. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
 
+### A wired range shrinks to the pages that were wired
+
+`lock_memory_etc()` left the range at its full size when a later page could not be wired. The revert looked for the shorter size and panicked. The range now shrinks to `nextAddress - areaStart` before the revert. Upstream's protection-mask fix in the same file stays. This is haiku-pi `6f810ed2d7`, copyright 2026 Witold Bołt, as a GPL-3.0-or-later snippet on the MIT and NewOS file. `scripts/apply-kernel-bugs.py` copies it. The host test checks the assignment. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### USB audio and USB MIDI: kernel safety, packet timing, UAC 2.0 rates
 
 Review points A1–A7 and M1 of the usb_audio and usb_midi review (8 Nov 2026). Branch `claude/usb-audio-midi-fixes`.
