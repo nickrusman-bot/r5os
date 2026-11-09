@@ -19,11 +19,12 @@
 static const uint8 kMaxPlatformResets = 3;
 
 
-// The bounded per-port retry and power-cycle backoff is enabled only on
-// x86 32-bit. It exists for the early-boot behaviour of old 32-bit-only
-// machines, and that is the only place it has been exercised. Every other
-// architecture keeps servicing a failing port on every poll.
-#ifdef __i386__
+// The bounded per-port retry and power-cycle backoff is enabled on x86,
+// 32-bit and 64-bit. It was written for old 32-bit machines. On 64-bit it
+// stops a device that keeps failing setup from being reset several times
+// a second for as long as it stays plugged in. Every other architecture
+// keeps servicing a failing port on every poll.
+#if defined(__i386__) || defined(__x86_64__)
 static const bool kBoundedPortRetries = true;
 #else
 static const bool kBoundedPortRetries = false;

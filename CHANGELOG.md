@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a USB port that keeps failing setup is left alone on 64-bit too
+
+The retry cap, the power cycle and the cooldown were compiled in only on 32-bit x86. This image is 64-bit, so a device that stayed connected and failed to set up was still reset on every pass. The same cap now applies here. From RenkuOS 9abfa5e06e0c9f381f1c1e532e6d82003c3a1858 by David Beckman.
+
 ## 2026-11-09 - unplugging a given-up USB port lets the next device in
 
 A port that had been ignored for the rest of the boot was skipped before its status was read, so unplugging it and plugging in another device did nothing until a restart. The status is read anyway. With nothing connected, the ignore and the counters are cleared. A port that is still occupied stays ignored. The address-0 descriptor read from the previous change is gone: it was an extra control transfer on every device, and nothing here needed it. From RenkuOS 14576fdf3c5bc1e59739126b7e5539ab5bba8a45 by rainygirl.
