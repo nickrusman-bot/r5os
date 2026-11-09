@@ -6,6 +6,13 @@ The Information page is a device card, six tiles, and a footer, in place of the 
 
 Tested: jam `jam_exit=0`. One QEMU boot (TCG, GTK, guest `screendump`) on 9 Nov 2026, Europe/Amsterdam. Information was open at the window's opened size. The guest picture next to `generated/settings-info/information.png` shows the device card, six tiles in two rows, the usage bars, and the footer, with no scrollbar. The name is the hostname (`r5os`). There is no model line. Graphics says the desktop is drawn by the processor. The values are what this QEMU reports (2 GB memory, a 2 GB boot volume, VESA, 1280 × 800). Not yet: Copy details pasted into StyledEdit, Rename with the lock open and closed, the bars moving, and a dark theme at font size 18. Not a hardware test.
 
+Review after that boot:
+- **The tiles were too dark.** `BCard`'s panel fill darkens the panel grey with `B_DARKEN_1_TINT`, which on Haiku's grey came out near `#b8b8b8` instead of the mockup's `#e4e4e4`. The tile now draws its own fill, a mix of the panel and the document background (amount 100), with the same border and radius as `BCard`. `BCard` itself is unchanged, because About R5 uses it too. The usage track is the tile fill with a little document text mixed in, so it stays visible in dark mode.
+- **Copy details did nothing.** The button had no target, so its message went to the window, which does not know it. The page now targets the button at itself. The clipboard text no longer carries a trailing NUL.
+- **Rename… and What's new in this build** are underlined, as in the mockup.
+
+Tested: the Settings target compiles (`jam -q Settings`), and the image was rebuilt with the Mesa packages. Not yet booted: the tile colour, Copy details into StyledEdit, and dark mode are still to be checked in QEMU.
+
 ## 2026-11-09 - Settings: the wave shows in the pebble, and rows and cards light up under the pointer
 
 - **The pebble showed as a plain disc** in the Settings heading, the Home row and the Deskbar. Its wave is a second ring in the same shape. Haiku fills a shape with the non-zero rule, so the wave is only open when that ring turns the other way. The SVG's wave already turned the other way, and `generate-r5-artwork.py` reversed it once more. That mistake came with the gradient fix earlier the same day. The generator now reverses the wave only when both rings turn the same way. The two `r5-symbol.hvif` files, the About R5 icon, `Settings.rdef` and `r5_pebble.inc` were rewritten from it, the last two with `join-settings-icon.py`.

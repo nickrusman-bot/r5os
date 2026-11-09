@@ -73,6 +73,34 @@ quiet_color(uint8 amount)
 }
 
 
+// The mockup's tile (#e4e4e4) sits between the window grey and the white
+// card. A darkened panel tint is far darker than that on the Haiku panel
+// grey, so the tile mixes the panel toward the document background.
+static rgb_color
+tile_fill()
+{
+	return mix_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 100);
+}
+
+
+// The usage track (#c9cfd6) is the tile fill with a little document text
+// mixed in, so it stays visible on light and dark panels.
+static rgb_color
+track_color()
+{
+	return mix_color(tile_fill(), ui_color(B_DOCUMENT_TEXT_COLOR), 40);
+}
+
+
+static void
+underline(BView* view, float left, float right, float baseline, float u)
+{
+	float y = baseline + u * 2.0f;
+	view->StrokeLine(BPoint(left, y), BPoint(right, y));
+}
+
+
 static void
 semi_bold(BFont* font)
 {
@@ -541,7 +569,16 @@ InfoTile::PreferredSize()
 void
 InfoTile::Draw(BRect update)
 {
-	BCard::Draw(update);
+	(void)update;
+	// Same shape and border as BCard::Draw(), with the lighter tile fill.
+	BRect bounds = Bounds();
+	float radius = be_plain_font->Size() * 0.25f;
+	SetHighColor(tile_fill());
+	FillRoundRect(bounds, radius, radius);
+	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT));
+	StrokeRoundRect(bounds, radius, radius);
+
 	float u = unit();
 	float padX = u * 12.0f;
 	float padY = u * 10.0f;
@@ -596,8 +633,7 @@ InfoTile::Draw(BRect update)
 		if (span > 1.0f)
 			span = 1.0f;
 		BRect bar(left, y, right, y + u * 6.0f);
-		SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-			B_DARKEN_2_TINT));
+		SetHighColor(track_color());
 		FillRoundRect(bar, u * 3.0f, u * 3.0f);
 		if (span > 0.0f) {
 			BRect fill = bar;
@@ -813,6 +849,7 @@ DeviceCard::Draw(BRect update)
 	else
 		SetHighColor(quiet_color(80));
 	DrawString(link.String(), BPoint(linkX, linkY));
+	underline(this, linkX, linkX + linkWidth, linkY, u);
 	fRename.Set(linkX, linkY - linkHeight.ascent, linkX + linkWidth,
 		linkY + linkHeight.descent);
 
@@ -891,6 +928,7 @@ FooterLine::Draw(BRect update)
 	SetFont(&link);
 	SetHighColor(ui_color(B_LINK_TEXT_COLOR));
 	DrawString(linkText, BPoint(x, y));
+	underline(this, x, x + linkWidth, y, u);
 	fLink.Set(x, 0, Bounds().right, height.ascent + height.descent);
 	SetFont(be_plain_font);
 }
@@ -1160,6 +1198,11 @@ void
 InformationView::AttachedToWindow()
 {
 	BView::AttachedToWindow();
+	// Without a target the button messages the window, which does not
+	// know kMsgCopy, and nothing reaches the clipboard.
+	BButton* copy = dynamic_cast<BButton*>(FindView("copy"));
+	if (copy != NULL)
+		copy->SetTarget(this);
 	if (!IsHidden())
 		_Start();
 }
@@ -1201,7 +1244,7 @@ InformationView::MessageReceived(BMessage* message)
 				BMessage* clip = clipboard.Data();
 				if (clip != NULL) {
 					clip->AddData("text/plain", B_MIME_TYPE, text.String(),
-						text.Length() + 1);
+						text.Length());
 				}
 				clipboard.Commit();
 				clipboard.Unlock();
