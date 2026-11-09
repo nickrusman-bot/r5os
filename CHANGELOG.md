@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - The boot disk no longer shows the ladybug under the R5 mark
+
+The boot volume still asked for `R_BootVolumeIcon`, the nightly drive with the ladybug, and the R5 mark only covered part of it; the ladybug showed around the mark. The well-known boot disk in `IconCache.cpp` now uses `kR5DriveIcon`, the same drive without the ladybug that other disks already use, and falls back to the resource only when the vector fails. The mark in `Pose.cpp` is a square from (4, 36) to (26, 58) in the 64-unit icon, on the front of the drive, in place of the stretched 14×16 rectangle at (10, 40). The Get Info header has the drive without a mark, as before only the pose draws it. `distro/BUILD` stays 10052.
+
+Tested: `libtracker.so` builds with jam in WSL (IconCache.o and Pose.o). The placement was checked on a flat-colour PC render of the HVIF, not on R5. Not tested: no image, no QEMU or VirtualBox boot.
+
 ## 2026-11-09 - Display page review: layout, Revert, and the 12-second return
 
 Review of the Display page against `generated/settings-display/BRIEF.md` and the mockup.

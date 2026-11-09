@@ -753,8 +753,9 @@ IconCache::GetWellKnownIcon(AutoLock<SimpleIconCache>*,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-				// R_HardDiskIcon is the beige cabinet. The drive is this icon.
-				// Pose draws the R5 mark over the ladybug.
+				// R_HardDiskIcon is the beige cabinet, and R_BootVolumeIcon
+				// carries the ladybug of the nightly builds. The boot disk is
+				// the drive without the ladybug; Pose draws the R5 mark on it.
 				resourceId = R_BootVolumeIcon;
 // SPDX-SnippetEnd
 				break;
@@ -819,8 +820,16 @@ IconCache::GetWellKnownIcon(AutoLock<SimpleIconCache>*,
 		entry = fSharedCache.AddItem(type.String());
 
 		BBitmap* bitmap = lazyBitmap->Get();
-		GetTrackerResources()->GetIconResource(resourceId,
-			icon_size_for(size), bitmap);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (resourceId != R_BootVolumeIcon
+			|| BIconUtils::GetVectorIcon(kR5DriveIcon, kR5DriveIconSize, bitmap)
+				!= B_OK) {
+			GetTrackerResources()->GetIconResource(resourceId,
+				icon_size_for(size), bitmap);
+		}
+// SPDX-SnippetEnd
 		entry->SetIcon(lazyBitmap->Adopt(), kNormalIcon, size);
 	}
 
