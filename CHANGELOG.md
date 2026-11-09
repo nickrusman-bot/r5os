@@ -11,7 +11,7 @@ Review after that boot:
 - **Copy details did nothing.** The button had no target, so its message went to the window, which does not know it. The page now targets the button at itself. The clipboard text no longer carries a trailing NUL.
 - **Rename… and What's new in this build** are underlined, as in the mockup.
 
-Tested: the Settings target compiles (`jam -q Settings`), and the image was rebuilt with the Mesa packages. Not yet booted: the tile colour, Copy details into StyledEdit, and dark mode are still to be checked in QEMU.
+Tested: the Settings target compiles (`jam -q Settings`), and the image was rebuilt with the Mesa packages. One QEMU boot (TCG, GTK) on 9 Nov 2026: the user's screenshot shows the lighter tiles, the underlined links, and a renamed computer (Envilicious). Not shown in that boot: Copy details pasted into StyledEdit, and dark mode.
 
 ## 2026-11-09 - Settings: the wave shows in the pebble, and rows and cards light up under the pointer
 
