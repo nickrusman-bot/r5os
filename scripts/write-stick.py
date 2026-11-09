@@ -280,6 +280,22 @@ def write_block(handle, block):
 	return ok and got.value == len(block), ctypes.get_last_error()
 
 
+def check_bootable(image_path):
+	"""A stick must boot by EFI: an MBR with an EFI partition (type 0xef), or
+	a protective MBR (0xee) for GPT. The raw VM image (@r5-raw) has neither:
+	it starts with a BFS boot sector, and the 5625U does not boot from it."""
+	with open(image_path, "rb") as image:
+		sector = image.read(512)
+	if len(sector) < 512 or sector[510:512] != b"\x55\xaa":
+		die("the image has no boot signature; build it with jam -q @r5-anyboot")
+	types = [sector[446 + 16 * i + 4] for i in range(4)]
+	print("partition types", " ".join(f"0x{t:02x}" for t in types))
+	if 0xef not in types and 0xee not in types:
+		die("the image has no EFI partition: this looks like the raw VM image "
+			"(@r5-raw). Build the stick image with jam -q @r5-anyboot, "
+			"or pass --no-efi-check if this is really meant")
+
+
 def hash_image(image_path, expects):
 	digest = hashlib.sha256()
 	wanted = [e.encode() for e in expects]
@@ -382,6 +398,8 @@ def main():
 	parser.add_argument("image")
 	parser.add_argument("--expect", action="append", default=[],
 		help="text that must be in the image (repeatable), e.g. a settings line")
+	parser.add_argument("--no-efi-check", action="store_true",
+		help="write an image without an EFI partition anyway")
 	parser.add_argument("--name", default="General UDisk",
 		help="FriendlyName of the stick (default: General UDisk)")
 	args = parser.parse_args()
@@ -389,6 +407,8 @@ def main():
 	if not os.path.isfile(image_path):
 		die(f"no image at {image_path}")
 	log_path = image_path + ".write.log"
+	if not args.no_efi_check:
+		check_bootable(image_path)
 	if not is_admin():
 		relaunch_elevated(log_path)
 
