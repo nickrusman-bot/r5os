@@ -2172,6 +2172,16 @@ main()
 				"distro/graphics/src/bin/r5-gpu-isolation/"
 				"r5-gpu-isolation.cpp", commandFlags, 3) != 0)
 			return 1;
+		const char* killCount[] = {
+			"run_stage(out, \"isolation\"",
+			"r5_gpu_counters beforeKill",
+			"run_stage(out, \"kill\"",
+			"snooze(100000)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-selftest/"
+				"r5-gpu-selftest.cpp", killCount, 4) != 0)
+			return 1;
 	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0

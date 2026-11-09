@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The kill's buffers are counted after they are released
+
+`gfx9_vmid_per_file` stays off. Stick 31 read the counters before the isolation stage, and once more the moment the kill stage returned. The kill loop still held its buffers then, so the difference included that stage. The reading is now taken just before the kill. For two seconds after the kill returns, the same reading is repeated every 100 ms until the counts match. `counters back` is that match. `counters difference` is the last reading when they still differ. The host test checks that order in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### The isolation copy reads and writes memory
 
 `gfx9_vmid_per_file` stays off. Stick 31 reached the desktop. The permission fault at `0x80002000` was gone, and the log has `vmid fault irq cntl 007ffe07`. The owner's submit then stayed inside `COPY_DATA` (`me hdr c0044000`). The control word was `(1 << 16) | (1 << 20)`: `SRC_SEL` 0 and `DST_SEL` 0, register to register. It is now memory to memory, Mesa 25.3.6 `src/amd/common/sid.h` lines 129-144: `COPY_DATA_SRC_SEL(1) | COPY_DATA_DST_SEL(5) | COPY_DATA_COUNT_SEL | COPY_DATA_WR_CONFIRM`. `WRITE_DATA` is unchanged. The host test checks that control word in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
