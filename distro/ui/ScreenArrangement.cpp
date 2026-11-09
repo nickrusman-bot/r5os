@@ -428,7 +428,7 @@ deskbar_strip(BView* view, BRect content)
 	BDeskbar deskbar;
 	if (deskbar.IsRunning())
 		location = deskbar.Location();
-	bool expanded = true;
+	bool expanded = deskbar.IsExpanded();
 	switch (location) {
 		case B_DESKBAR_TOP:
 			bar.bottom = bar.top + thickness;

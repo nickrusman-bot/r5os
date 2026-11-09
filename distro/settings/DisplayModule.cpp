@@ -677,7 +677,7 @@ DisplayView::DisplayView(DisplayModule* module)
 	fArrangement = new ArrangementCard();
 	fArrangeTitle = new BStringView("arrange title", "Arrangement");
 	fArrangeHint = new BStringView("arrange hint",
-		"Drag a screen to the next one. They snap together.");
+		"Drag the screens to match your desk. Click one to change it.");
 	fScreens = new BScreenArrangement("screens", new BMessage(kMsgScreen));
 	fScreens->SetDraggable(false);
 
@@ -760,7 +760,7 @@ DisplayView::DisplayView(DisplayModule* module)
 		.AddGlue();
 
 	BLayoutBuilder::Group<>(fArrangement)
-		.AddGroup(B_HORIZONTAL, 0)
+		.AddGroup(B_HORIZONTAL, u * 10.0f)
 			.Add(fArrangeTitle)
 			.Add(fArrangeHint)
 			.AddGlue()
