@@ -7,249 +7,156 @@
 #include "HomeView.h"
 
 #include "SettingsFont.h"
-#include "SettingsIcon.h"
+#include "SettingsMessages.h"
 
-#include <Bitmap.h>
+#include <Card.h>
 #include <Control.h>
 #include <ControlLook.h>
-#include <Font.h>
+#include <GridLayout.h>
 #include <GroupLayout.h>
 #include <LayoutBuilder.h>
 #include <Message.h>
-#include <Mime.h>
-#include <String.h>
 #include <StringView.h>
 #include <Window.h>
 
 #include <string.h>
 
 
-class CategoryCard : public BControl {
+class PageLink : public BControl {
 public:
-								CategoryCard(const char* name,
-									const char* summary,
-									const char* iconSignature,
-									BMessage* message);
-	virtual						~CategoryCard();
+								PageLink(const char* label, BMessage* message);
 	virtual	void				Draw(BRect update);
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				MouseUp(BPoint where);
-	virtual	void				MouseMoved(BPoint where, uint32 transit,
-									const BMessage* message);
-	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 	virtual	void				GetPreferredSize(float* width, float* height);
+	virtual	BSize				MinSize();
 
 private:
-			BString				fName;
-			BString				fSummary;
-			BBitmap*			fIcon;
-			bool				fHover;
 			bool				fPressed;
 };
 
 
-CategoryCard::CategoryCard(const char* name, const char* summary,
-	const char* iconSignature, BMessage* message)
+PageLink::PageLink(const char* label, BMessage* message)
 	:
-	BControl(name, NULL, message, B_WILL_DRAW),
-	fName(name),
-	fSummary(summary),
-	fIcon(NULL),
-	fHover(false),
+	BControl("link", label, message, B_WILL_DRAW | B_TRANSPARENT_BACKGROUND),
 	fPressed(false)
 {
-	SetExplicitMinSize(BSize(280, 88));
-	SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, 88));
-	if (iconSignature != NULL && iconSignature[0] != '\0') {
-		BRect bounds(BPoint(0, 0),
-			be_control_look->ComposeIconSize(B_LARGE_ICON));
-		fIcon = new BBitmap(bounds, B_RGBA32);
-		if (BMimeType(iconSignature).GetIcon(fIcon, B_LARGE_ICON) != B_OK) {
-			delete fIcon;
-			fIcon = NULL;
-		} else
-			r5_settings_apply_prefs_overlay(fIcon);
-	}
-}
-
-
-CategoryCard::~CategoryCard()
-{
-	delete fIcon;
+	SetFont(r5_settings_plain_font());
 }
 
 
 void
-CategoryCard::Draw(BRect update)
+PageLink::Draw(BRect update)
 {
-	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
-	rgb_color background = base;
-	uint32 flags = 0;
-	if (!IsEnabled())
-		flags |= BControlLook::B_DISABLED;
-	if (Value() == B_CONTROL_ON)
-		flags |= BControlLook::B_ACTIVATED;
-	else if (fHover)
-		flags |= BControlLook::B_HOVER;
-	if (IsFocus())
-		flags |= BControlLook::B_FOCUSED;
-
-	BRect rect = Bounds();
-	be_control_look->DrawButtonFrame(this, rect, update, base, background,
-		flags);
-	be_control_look->DrawButtonBackground(this, rect, update, base, flags);
-
-	float textLeft = rect.left + 12;
-	if (fIcon != NULL) {
-		BPoint where(rect.left + 10,
-			rect.top + (rect.Height() - fIcon->Bounds().Height()) / 2);
-		SetDrawingMode(B_OP_ALPHA);
-		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		DrawBitmap(fIcon, where);
-		SetDrawingMode(B_OP_COPY);
-		textLeft = where.x + fIcon->Bounds().Width() + 12;
-	}
-	float textWidth = rect.right - textLeft - 8;
-	if (textWidth < 20)
-		textWidth = 20;
-
-	const BFont* bold = r5_settings_bold_font();
-	const BFont* plain = r5_settings_plain_font();
+	(void)update;
+	SetHighColor(ui_color(B_LINK_TEXT_COLOR));
 	font_height height;
-	bold->GetHeight(&height);
-	float top = rect.top + 16 + height.ascent;
-	SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
-	SetFont(bold);
-	BString name(fName);
-	bold->TruncateString(&name, B_TRUNCATE_END, textWidth);
-	DrawString(name.String(), BPoint(textLeft, top));
-
-	SetFont(plain);
-	plain->GetHeight(&height);
-	SetHighColor(tint_color(ui_color(B_PANEL_TEXT_COLOR), 0.7f));
-	BString summary(fSummary);
-	plain->TruncateString(&summary, B_TRUNCATE_END, textWidth);
-	DrawString(summary.String(),
-		BPoint(textLeft, top + height.ascent + height.descent + 6));
+	GetFontHeight(&height);
+	DrawString(Label(), BPoint(0, height.ascent));
 }
 
 
 void
-CategoryCard::MouseDown(BPoint where)
+PageLink::MouseDown(BPoint where)
 {
-	if (!IsEnabled() || !Bounds().Contains(where))
-		return;
-
+	(void)where;
 	fPressed = true;
-	SetValue(B_CONTROL_ON);
 	SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
 }
 
 
 void
-CategoryCard::MouseUp(BPoint where)
+PageLink::MouseUp(BPoint where)
 {
-	bool inside = Bounds().Contains(where);
+	bool pressed = fPressed;
 	fPressed = false;
-	fHover = inside;
-	SetValue(B_CONTROL_OFF);
-	Invalidate();
-	if (inside)
+	if (pressed && Bounds().Contains(where))
 		Invoke();
 }
 
 
 void
-CategoryCard::MouseMoved(BPoint where, uint32 transit, const BMessage* message)
+PageLink::GetPreferredSize(float* width, float* height)
 {
-	bool inside = transit != B_EXITED_VIEW && Bounds().Contains(where);
-	if (fPressed) {
-		SetValue(inside ? B_CONTROL_ON : B_CONTROL_OFF);
-		return;
-	}
-	if (fHover == inside)
-		return;
-	fHover = inside;
-	Invalidate();
-}
-
-
-void
-CategoryCard::KeyDown(const char* bytes, int32 numBytes)
-{
-	if (bytes != NULL && numBytes > 0
-		&& (*bytes == B_ENTER || *bytes == B_SPACE)) {
-		if (IsEnabled())
-			Invoke();
-		return;
-	}
-	BControl::KeyDown(bytes, numBytes);
-}
-
-
-void
-CategoryCard::GetPreferredSize(float* width, float* height)
-{
+	font_height line;
+	GetFontHeight(&line);
 	if (width != NULL)
-		*width = 360;
+		*width = StringWidth(Label());
 	if (height != NULL)
-		*height = 88;
+		*height = line.ascent + line.descent + line.leading;
 }
 
 
-HomeView::HomeView(const SettingsHomeItem* items, int32 count,
-	const char* introText)
-	:
-	BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING),
-	fCount(0)
+BSize
+PageLink::MinSize()
 {
-	memset(fCards, 0, sizeof(fCards));
-	BStringView* intro = NULL;
-	if (introText != NULL && introText[0] != '\0') {
-		intro = new BStringView("intro", introText);
-		intro->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-		intro->SetFont(r5_settings_plain_font());
-	}
+	float width = 0;
+	float height = 0;
+	GetPreferredSize(&width, &height);
+	return BSize(width, height);
+}
 
-	BGroupView* grid = new BGroupView(B_HORIZONTAL, B_USE_DEFAULT_SPACING);
-	BGroupLayout* row = grid->GroupLayout();
-	row->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
-	BGroupView* left = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-	BGroupView* right = new BGroupView(B_VERTICAL, B_USE_DEFAULT_SPACING);
-	if (count > 16)
-		count = 16;
-	for (int32 i = 0; i < count; i++) {
-		BMessage* message = new BMessage(items[i].command);
-		if (items[i].field != NULL)
-			message->AddString(items[i].field, items[i].id);
-		CategoryCard* card = new CategoryCard(items[i].name, items[i].summary,
-			items[i].iconSignature, message);
-		fCards[fCount++] = card;
-		if ((i % 2) == 0)
-			left->AddChild(card);
-		else
-			right->AddChild(card);
-	}
-	left->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
-	right->GroupLayout()->AddItem(BSpaceLayoutItem::CreateGlue());
-	grid->AddChild(left);
-	grid->AddChild(right);
-
-	if (intro != NULL) {
-		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
-			.Add(intro)
-			.Add(grid)
-			.AddGlue();
-	} else {
-		BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_DEFAULT_SPACING)
-			.Add(grid)
-			.AddGlue();
-	}
-	r5_settings_apply_plain(this);
+HomeView::HomeView(bool recent)
+	:
+	BView("home", B_WILL_DRAW),
+	fGrid(NULL),
+	fRecent(NULL),
+	fCount(0),
+	fWantsRecent(recent)
+{
+	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	fGrid = new BGridLayout(B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING);
+	SetLayout(fGrid);
 }
 
 
 HomeView::~HomeView()
 {
+}
+
+
+void
+HomeView::AddCard(BView* card)
+{
+	if (card == NULL || fGrid == NULL)
+		return;
+	int32 column = fCount % 2;
+	int32 row = fCount / 2;
+	fGrid->AddView(card, column, row);
+	fCount++;
+}
+
+
+void
+HomeView::SetRecent(const BString* names, const BString* ids, int32 count)
+{
+	if (!fWantsRecent)
+		return;
+	if (fRecent != NULL) {
+		fRecent->RemoveSelf();
+		delete fRecent;
+		fRecent = NULL;
+	}
+	BAppearanceKit::BCard* card = new BAppearanceKit::BCard("recent",
+		BAppearanceKit::B_CARD_PANEL);
+	BStringView* title = new BStringView("recent-title", "Recently changed");
+	title->SetFont(r5_settings_bold_font());
+	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(card->GetLayout());
+	if (layout != NULL) {
+		layout->AddView(title);
+		if (count <= 0 || names == NULL || ids == NULL) {
+			layout->AddView(new BStringView("recent-empty",
+				"Nothing changed yet"));
+		} else {
+			for (int32 i = 0; i < count; i++) {
+				BMessage* message = new BMessage(kMsgOpenPage);
+				message->AddString("module", ids[i].String());
+				layout->AddView(new PageLink(names[i].String(), message));
+			}
+		}
+	}
+	fRecent = card;
+	if (fGrid != NULL)
+		fGrid->AddView(fRecent, fCount % 2, fCount / 2);
 }

@@ -15,30 +15,36 @@
 #include "SettingsMessages.h"
 #include "SettingsModule.h"
 
+#include <ActionCard.h>
 #include <Alert.h>
 #include <Application.h>
 #include <Bitmap.h>
 #include <Button.h>
+#include <Card.h>
 #include <CardLayout.h>
 #include <Control.h>
 #include <ControlLook.h>
 #include <FindDirectory.h>
-#include <Mime.h>
-#include <NodeInfo.h>
-#include <Path.h>
-#include <R5Icons.h>
+#include <GroupLayout.h>
 #include <GroupView.h>
+#include <IconUtils.h>
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
-#include <ListView.h>
 #include <MessageRunner.h>
+#include <Mime.h>
+#include <PageHeader.h>
+#include <Path.h>
+#include <R5Icons.h>
+#include <Resources.h>
+#include <Roster.h>
 #include <ScrollBar.h>
 #include <ScrollView.h>
 #include <String.h>
-#include <StringItem.h>
 #include <StringView.h>
 #include <TextControl.h>
 #include <TextView.h>
+
+#include "r5_pebble.inc"
 
 #include <stdio.h>
 #include <string.h>
@@ -49,78 +55,40 @@ struct SettingsCategory {
 	const char* name;
 	const char* summary;
 	const char* iconSignature;
+	color_which tint;
 };
 
 
 static const char* module_icon(const char* moduleId);
+static int32 modules_in_category(SettingsManager* manager,
+	const char* categoryId, SettingsModule** out, int32 maxOut);
 
 
 static const SettingsCategory kCategories[] = {
 	{ "personalization", "Personalization",
 		"Fonts, look and feel, wallpaper, and the Deskbar.",
-		"application/x-vnd.Haiku-Appearance" },
+		"application/x-vnd.Haiku-Appearance", B_CONTROL_HIGHLIGHT_COLOR },
 	{ "system", "System",
 		"Display, sound, notifications, virtual memory, and this computer.",
-		"application/x-vnd.Haiku-Screen" },
-	{ "devices", "Devices", "Keyboard, mouse, Bluetooth, and printers.",
-		"application/x-vnd.Haiku-Input" },
-	{ "network", "Network", "How this computer joins the network.",
-		"application/x-vnd.Haiku-Network" },
-	{ "accounts", "Accounts", "People who can sign in.",
-		"application/x-vnd.R5OS-Users" }
+		"application/x-vnd.Haiku-Screen", B_PANEL_TEXT_COLOR },
+	{ "devices", "Devices",
+		"Keyboard, mouse, touchpad, printers, and Bluetooth.",
+		"application/x-vnd.Haiku-Input", B_SUCCESS_COLOR },
+	{ "network", "Network",
+		"Wired and Wi-Fi connections, and network shares.",
+		"application/x-vnd.Haiku-Network", B_LINK_TEXT_COLOR },
+	{ "accounts", "Accounts",
+		"The people who use this computer, and how they sign in.",
+		"application/x-vnd.R5OS-Users", B_WINDOW_TAB_COLOR }
 };
 
 
-class NavItem : public BStringItem {
+class SettingsList : public BAppearanceKit::BSidebar {
 public:
-								NavItem(const char* label, const char* id,
-									bool header);
-	virtual	void				DrawItem(BView* owner, BRect frame,
-									bool complete);
-
-			const char*			Id() const { return fId.String(); }
-			bool				IsHeader() const { return fHeader; }
-
-private:
-			BString				fId;
-			bool				fHeader;
-};
-
-
-NavItem::NavItem(const char* label, const char* id, bool header)
-	:
-	BStringItem(label),
-	fId(id),
-	fHeader(header)
-{
-}
-
-
-void
-NavItem::DrawItem(BView* owner, BRect frame, bool complete)
-{
-	if (!fHeader) {
-		BStringItem::DrawItem(owner, frame, complete);
-		return;
-	}
-	rgb_color background = ui_color(B_LIST_BACKGROUND_COLOR);
-	owner->SetLowColor(background);
-	if (complete)
-		owner->FillRect(frame, B_SOLID_LOW);
-	owner->SetHighColor(ui_color(B_LIST_ITEM_TEXT_COLOR));
-	owner->SetFont(r5_settings_bold_font());
-	font_height height;
-	r5_settings_bold_font()->GetHeight(&height);
-	owner->DrawString(Text(),
-		BPoint(frame.left + 8, frame.bottom - height.descent - 2));
-	owner->SetFont(r5_settings_plain_font());
-}
-
-
-class NavList : public BListView {
-public:
-								NavList();
+								SettingsList();
 	virtual	void				FrameResized(float width, float height);
+	virtual	void				MouseDown(BPoint where);
+	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 			void				UpdateScrollBar();
 
 private:
@@ -129,10 +97,32 @@ private:
 };
 
 
-NavList::NavList()
+class SearchField : public BTextControl {
+public:
+								SearchField();
+	virtual	void				KeyDown(const char* bytes, int32 numBytes);
+};
+
+
+static BView*
+first_navigable(BView* view)
+{
+	if (view == NULL)
+		return NULL;
+	if ((view->Flags() & B_NAVIGABLE) != 0 && !view->IsHidden())
+		return view;
+	for (int32 i = 0; i < view->CountChildren(); i++) {
+		BView* found = first_navigable(view->ChildAt(i));
+		if (found != NULL)
+			return found;
+	}
+	return NULL;
+}
+
+
+SettingsList::SettingsList()
 	:
-	BListView("nav", B_SINGLE_SELECTION_LIST,
-		B_WILL_DRAW | B_NAVIGABLE | B_FRAME_EVENTS),
+	BAppearanceKit::BSidebar("nav"),
 	fBarShown(true),
 	fUpdatingBar(false)
 {
@@ -140,15 +130,77 @@ NavList::NavList()
 
 
 void
-NavList::FrameResized(float width, float height)
+SettingsList::FrameResized(float width, float height)
 {
-	BListView::FrameResized(width, height);
+	BAppearanceKit::BSidebar::FrameResized(width, height);
 	UpdateScrollBar();
 }
 
 
 void
-NavList::UpdateScrollBar()
+SettingsList::MouseDown(BPoint where)
+{
+	int32 index = IndexOf(where);
+	BAppearanceKit::BSidebarItem* item = index >= 0
+		? dynamic_cast<BAppearanceKit::BSidebarItem*>(ItemAt(index)) : NULL;
+	if (item == NULL || !item->IsEnabled() || Window() == NULL)
+		return;
+	if (item->OutlineLevel() == 0 && CountItemsUnder(item, true) > 0) {
+		Select(index);
+		ExpandOnly(item);
+		BMessage message(kMsgOpenCategory);
+		message.AddString("category", item->Id());
+		Window()->PostMessage(&message);
+		return;
+	}
+	if (strcmp(item->Id(), "home") == 0) {
+		Select(index);
+		ExpandOnly(NULL);
+		Window()->PostMessage(kMsgOpenHome);
+		return;
+	}
+	BAppearanceKit::BSidebar::MouseDown(where);
+	BMessage message(kMsgOpenPage);
+	message.AddString("module", item->Id());
+	Window()->PostMessage(&message);
+}
+
+
+void
+SettingsList::KeyDown(const char* bytes, int32 numBytes)
+{
+	if (bytes != NULL && numBytes > 0 && bytes[0] == B_TAB) {
+		BTextControl* search = Window() != NULL
+			? dynamic_cast<BTextControl*>(Window()->FindView("search")) : NULL;
+		if (search != NULL && search->TextView() != NULL)
+			search->TextView()->MakeFocus(true);
+		return;
+	}
+	if (bytes != NULL && numBytes > 0 && bytes[0] == B_ENTER) {
+		int32 index = CurrentSelection();
+		BAppearanceKit::BSidebarItem* item = index >= 0
+			? dynamic_cast<BAppearanceKit::BSidebarItem*>(ItemAt(index)) : NULL;
+		if (item == NULL || Window() == NULL)
+			return;
+		if (strcmp(item->Id(), "home") == 0)
+			Window()->PostMessage(kMsgOpenHome);
+		else if (item->OutlineLevel() == 0 && CountItemsUnder(item, true) > 0) {
+			BMessage message(kMsgOpenCategory);
+			message.AddString("category", item->Id());
+			Window()->PostMessage(&message);
+		} else {
+			BMessage message(kMsgOpenPage);
+			message.AddString("module", item->Id());
+			Window()->PostMessage(&message);
+		}
+		return;
+	}
+	BAppearanceKit::BSidebar::KeyDown(bytes, numBytes);
+}
+
+
+void
+SettingsList::UpdateScrollBar()
 {
 	if (fUpdatingBar)
 		return;
@@ -185,113 +237,30 @@ NavList::UpdateScrollBar()
 }
 
 
-class PageIcon : public BView {
-public:
-								PageIcon();
-	virtual						~PageIcon();
-	virtual	void				Draw(BRect update);
-			void				SetSignature(const char* signature);
-			void				UsePreferencesFolder();
-
-private:
-			void				_Clear();
-			bool				_Load(BNode& node);
-
-			BBitmap*			fBitmap;
-};
-
-
-PageIcon::PageIcon()
+SearchField::SearchField()
 	:
-	BView("page-icon", B_WILL_DRAW),
-	fBitmap(NULL)
+	BTextControl("search", "Search:", "", NULL)
 {
-	BSize size = be_control_look->ComposeIconSize(B_LARGE_ICON);
-	SetExplicitMinSize(size);
-	SetExplicitMaxSize(size);
-	SetExplicitPreferredSize(size);
-	SetExplicitAlignment(BAlignment(B_ALIGN_RIGHT, B_ALIGN_VERTICAL_CENTER));
-	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-}
-
-
-PageIcon::~PageIcon()
-{
-	delete fBitmap;
 }
 
 
 void
-PageIcon::Draw(BRect update)
+SearchField::KeyDown(const char* bytes, int32 numBytes)
 {
-	(void)update;
-	SetLowColor(ViewColor());
-	FillRect(Bounds(), B_SOLID_LOW);
-	if (fBitmap == NULL)
-		return;
-
-	SetDrawingMode(B_OP_ALPHA);
-	SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-	BPoint where(
-		(Bounds().Width() - fBitmap->Bounds().Width()) / 2,
-		(Bounds().Height() - fBitmap->Bounds().Height()) / 2);
-	DrawBitmap(fBitmap, where);
-	SetDrawingMode(B_OP_COPY);
-}
-
-
-void
-PageIcon::_Clear()
-{
-	delete fBitmap;
-	fBitmap = NULL;
-}
-
-
-bool
-PageIcon::_Load(BNode& node)
-{
-	BRect bounds(BPoint(0, 0), be_control_look->ComposeIconSize(B_LARGE_ICON));
-	BBitmap* bitmap = new BBitmap(bounds, B_RGBA32);
-	BNodeInfo info(&node);
-	if (info.GetIcon(bitmap, B_LARGE_ICON) != B_OK) {
-		delete bitmap;
-		return false;
+	if (bytes != NULL && numBytes > 0 && bytes[0] == B_TAB && Window() != NULL) {
+		BView* deck = Window()->FindView("deck");
+		BView* page = deck != NULL ? deck->ChildAt(0) : NULL;
+		for (int32 i = 0; deck != NULL && i < deck->CountChildren(); i++) {
+			if (!deck->ChildAt(i)->IsHidden())
+				page = deck->ChildAt(i);
+		}
+		BView* next = first_navigable(page);
+		if (next != NULL) {
+			next->MakeFocus(true);
+			return;
+		}
 	}
-	r5_settings_apply_prefs_overlay(bitmap);
-	fBitmap = bitmap;
-	return true;
-}
-
-
-void
-PageIcon::SetSignature(const char* signature)
-{
-	_Clear();
-	if (signature != NULL && signature[0] != '\0') {
-		BRect bounds(BPoint(0, 0),
-			be_control_look->ComposeIconSize(B_LARGE_ICON));
-		BBitmap* bitmap = new BBitmap(bounds, B_RGBA32);
-		if (BMimeType(signature).GetIcon(bitmap, B_LARGE_ICON) == B_OK) {
-			r5_settings_apply_prefs_overlay(bitmap);
-			fBitmap = bitmap;
-		} else
-			delete bitmap;
-	}
-	Invalidate();
-}
-
-
-void
-PageIcon::UsePreferencesFolder()
-{
-	_Clear();
-	BPath path;
-	BNode node;
-	if (find_directory(B_SYSTEM_PREFERENCES_DIRECTORY, &path) == B_OK
-		&& node.SetTo(path.Path()) == B_OK)
-		_Load(node);
-	Invalidate();
+	BTextControl::KeyDown(bytes, numBytes);
 }
 
 
@@ -427,16 +396,6 @@ PageScroller::DoLayout()
 }
 
 
-static SettingsPlace*
-make_place(const char* id, bool category)
-{
-	SettingsPlace* place = new SettingsPlace();
-	place->id = id;
-	place->category = category;
-	return place;
-}
-
-
 SettingsWindow::SettingsWindow(SettingsManager* manager,
 	SettingsStorage* storage)
 	:
@@ -447,13 +406,11 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fContext(NULL),
 	fSearch(NULL),
 	fList(NULL),
-	fTitle(NULL),
-	fDescription(NULL),
-	fIcon(NULL),
+	fHeader(NULL),
+	fHomeView(NULL),
+	fTip(NULL),
 	fCards(NULL),
 	fDeck(NULL),
-	fHome(NULL),
-	fBack(NULL),
 	fRevert(NULL),
 	fDefaults(NULL),
 	fCurrent(NULL),
@@ -467,23 +424,19 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 {
 	fContext = new SettingsHost(fStorage, BMessenger(this));
 
-	fSearch = new BTextControl("search", "Search:", "", NULL);
+	fSearch = new SearchField();
 	fSearch->SetModificationMessage(new BMessage(kMsgSearch));
 
-	fList = new NavList();
-	fList->SetSelectionMessage(new BMessage(kMsgOpenPage));
+	fList = new SettingsList();
 	BScrollView* scroll = new BScrollView("nav-scroll", fList, 0, false, true);
 
-	fBack = new BButton("back", NULL, new BMessage(kMsgGoBack));
-	fHome = new BButton("home", NULL, new BMessage(kMsgOpenHome));
 	fLock = new BButton("lock", NULL, new BMessage(kMsgLockButton));
-	fBack->SetToolTip("Back");
-	fHome->SetToolTip("Home");
-	fTitle = new BStringView("title", "Settings");
-	fDescription = new BStringView("description",
-		"One place for the computer's settings.");
-	fTitle->SetFont(r5_settings_title_font());
-	fIcon = new PageIcon();
+	fHeader = new BAppearanceKit::BPageHeader("heading");
+	fTip = new BAppearanceKit::BCard("tip", BAppearanceKit::B_CARD_PANEL);
+	BStringView* tip = new BStringView("tip-text",
+		"Tip: type in Search to jump straight to any page.");
+	if (fTip->GetLayout() != NULL)
+		((BGroupLayout*)fTip->GetLayout())->AddView(tip);
 
 	fDeck = new BView("deck", 0);
 	fCards = new BCardLayout();
@@ -493,60 +446,49 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fRevert = new BButton("revert", "Revert", new BMessage(kMsgRevert));
 	fDefaults = new BButton("defaults", "Defaults", new BMessage(kMsgDefaults));
 
-	// The list starts under the tab and runs down to Search. The title
-	// and the subtitle sit beside the list, with this page's icon at the
-	// right of that block. The page is under the subtitle. A page that is
-	// taller than that area scrolls there. Back, Home, the lock, Revert,
-	// and Defaults stay on the bottom row. Back, Home, and the lock use
-	// r5_button_set_icon() / r5_button_set_lock(). See AGENTS.md.
+	// The list starts under the tab and runs down to the tip. Search
+	// stays 200 wide on the bottom row, then the lock, Revert, and
+	// Defaults. The heading is one card beside the list. See AGENTS.md.
 	const float sidebarWidth = 200;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
 	scroll->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNLIMITED));
 	fSearch->SetExplicitMinSize(BSize(sidebarWidth, B_SIZE_UNSET));
 	fSearch->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNSET));
+	fTip->SetExplicitMaxSize(BSize(sidebarWidth, B_SIZE_UNSET));
 
 	fDeck->SetExplicitMinSize(BSize(740, 280));
 	BLayoutBuilder::Group<>(this, B_VERTICAL, B_USE_SMALL_SPACING)
 		.SetInsets(B_USE_WINDOW_SPACING)
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 1)
-			.Add(scroll, 0)
+			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 0)
+				.Add(scroll, 1)
+				.Add(fTip)
+				.End()
 			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING, 1)
-				.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
-					.AddGroup(B_VERTICAL, 0, 1)
-						.Add(fTitle)
-						.Add(fDescription)
-						.End()
-					.Add(fIcon)
-					.End()
+				.Add(fHeader)
 				.Add(fDeck, 1)
 				.End()
 			.End()
 		.AddGroup(B_HORIZONTAL, B_USE_DEFAULT_SPACING, 0)
 			.Add(fSearch)
-			.AddGlue()
-			.Add(fBack)
-			.Add(fHome)
 			.Add(fLock)
+			.AddGlue()
 			.Add(fRevert)
 			.Add(fDefaults)
 			.End();
 	for (int32 i = 0; i < CountChildren(); i++)
 		r5_settings_apply_plain(ChildAt(i));
-	fTitle->SetFont(r5_settings_title_font());
 	if (fSearch->TextView() != NULL)
 		fSearch->TextView()->SetFontAndColor(r5_settings_plain_font());
 
 	float buttonHeight = fRevert->PreferredSize().height;
 	fLockButtonHeight = buttonHeight;
-	r5_button_set_icon(fBack, R5_ICON_BACK, buttonHeight);
-	r5_button_set_icon(fHome, R5_ICON_HOME, buttonHeight);
 	r5_button_set_lock(fLock, true, buttonHeight);
 	fLock->SetToolTip("Unlock");
 	_ReloadLock(false);
 	fLockRunner = new BMessageRunner(BMessenger(this),
 		new BMessage(kMsgLockTick), 2000000);
 
-	fBack->SetEnabled(false);
 	fRevert->SetEnabled(false);
 	fDefaults->SetEnabled(false);
 	// Opens at 1030 by 610. The list is 200. A home card is at
@@ -561,12 +503,6 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 SettingsWindow::~SettingsWindow()
 {
 	delete fLockRunner;
-	for (int32 i = 0; i < fHistory.CountItems(); i++)
-		delete static_cast<SettingsPlace*>(fHistory.ItemAt(i));
-	if (fList != NULL) {
-		for (int32 i = fList->CountItems() - 1; i >= 0; i--)
-			delete fList->RemoveItem(i);
-	}
 	delete fContext;
 }
 
@@ -582,39 +518,37 @@ SettingsWindow::QuitRequested()
 void
 SettingsWindow::ModulesLoaded()
 {
-	SettingsHomeItem items[8];
-	int32 count = 0;
+	fHomeView = new HomeView(true);
+	float side = be_control_look->ComposeIconSize(40).width;
 	for (uint32 i = 0; i < sizeof(kCategories) / sizeof(kCategories[0]); i++) {
-		bool any = false;
-		for (int32 m = 0; m < fManager->Count(); m++) {
-			SettingsModule* module = fManager->ModuleAt(m);
-			if (module != NULL
-				&& strcmp(module->Category(), kCategories[i].id) == 0) {
-				any = true;
-				break;
-			}
-		}
-		if (!any || count >= 8)
+		SettingsModule* modules[16];
+		int32 count = modules_in_category(fManager, kCategories[i].id,
+			modules, 16);
+		if (count == 0)
 			continue;
-		items[count].id = kCategories[i].id;
-		items[count].name = kCategories[i].name;
-		items[count].summary = kCategories[i].summary;
-		items[count].iconSignature = kCategories[i].iconSignature;
-		items[count].command = kMsgOpenCategory;
-		items[count].field = "category";
-		count++;
+		BMessage* message = new BMessage(kMsgOpenCategory);
+		message->AddString("category", kCategories[i].id);
+		BAppearanceKit::BActionCard* card
+			= new BAppearanceKit::BActionCard(kCategories[i].id, message);
+		card->SetTitle(kCategories[i].name);
+		card->SetSummary(kCategories[i].summary);
+		card->SetTagColor(ui_color(kCategories[i].tint));
+		BBitmap* icon = r5_mime_icon_bitmap(kCategories[i].iconSignature, side);
+		if (icon != NULL)
+			r5_settings_apply_prefs_overlay(icon);
+		card->SetIcon(icon);
+		delete icon;
+		BMessage* tags = new BMessage(kMsgOpenPage);
+		tags->AddString("category", kCategories[i].id);
+		card->SetTagMessage(tags);
+		for (int32 page = 0; page < count; page++)
+			card->AddTag(modules[page]->Name());
+		card->SetExplicitMinSize(BSize(280, B_SIZE_UNSET));
+		card->SetTarget(this);
+		fHomeView->AddCard(card);
 	}
-	if (count == 0) {
-		items[0].id = "";
-		items[0].name = "No pages";
-		items[0].summary = "No settings modules were found.";
-		items[0].iconSignature = NULL;
-		items[0].command = kMsgOpenCategory;
-		items[0].field = "category";
-		count = 1;
-	}
-	fCards->AddView(new HomeView(items, count,
-		"Choose a category. Existing preference programs open in their own window."));
+	fCards->AddView(fHomeView);
+	_ShowRecent();
 	_BuildSidebar();
 	_ShowHome();
 }
@@ -627,7 +561,11 @@ SettingsWindow::MessageReceived(BMessage* message)
 		case kMsgSearch:
 		{
 			fQuery = fSearch->Text();
-			_BuildSidebar();
+			fList->SetFilter(fQuery.String());
+			_UpdateTip();
+			SettingsList* list = dynamic_cast<SettingsList*>(fList);
+			if (list != NULL)
+				list->UpdateScrollBar();
 			break;
 		}
 		case kMsgOpenHome:
@@ -644,48 +582,20 @@ SettingsWindow::MessageReceived(BMessage* message)
 		case kMsgOpenPage:
 		{
 			const char* moduleId = NULL;
-			if (message->FindString("module", &moduleId) != B_OK) {
-				int32 index = fList->CurrentSelection();
-				if (index < 0)
-					break;
-				NavItem* item = dynamic_cast<NavItem*>(fList->ItemAt(index));
-				if (item == NULL || item->IsHeader()) {
-					_SelectSidebar(fCurrent != NULL
-						? fCurrent->Identifier() : NULL);
-					break;
-				}
-				moduleId = item->Id();
-			}
-			if (moduleId != NULL)
+			if (message->FindString("module", &moduleId) == B_OK) {
 				_ShowModule(moduleId);
-			break;
-		}
-		case kMsgGoBack:
-		{
-			if (fHistory.CountItems() < 2) {
-				_ShowHome();
 				break;
 			}
-			delete static_cast<SettingsPlace*>(
-				fHistory.RemoveItem(fHistory.CountItems() - 1));
-			SettingsPlace* place = static_cast<SettingsPlace*>(
-				fHistory.RemoveItem(fHistory.CountItems() - 1));
-			if (place == NULL) {
-				_ShowHome();
-				break;
+			int32 tag = -1;
+			const char* category = NULL;
+			if (message->FindInt32("be:tag", &tag) == B_OK
+				&& message->FindString("category", &category) == B_OK) {
+				SettingsModule* modules[16];
+				int32 count = modules_in_category(fManager, category,
+					modules, 16);
+				if (tag >= 0 && tag < count)
+					_ShowModule(modules[tag]->Identifier());
 			}
-			// Copy first. _ShowHome() stores a new place, and the old
-			// one is freed once here. Freeing LastItem() and then
-			// `place` was the double free on Back.
-			bool category = place->category;
-			BString id(place->id);
-			delete place;
-			if (category)
-				_ShowCategory(id.String());
-			else if (id == "home")
-				_ShowHome();
-			else
-				_ShowModule(id.String());
 			break;
 		}
 		case kMsgRevert:
@@ -797,29 +707,47 @@ void
 SettingsWindow::_BuildSidebar()
 {
 	fAdjusting = true;
-	for (int32 i = fList->CountItems() - 1; i >= 0; i--)
-		delete fList->RemoveItem(i);
-	fList->MakeEmpty();
+	float side = be_control_look->ComposeIconSize(24).width;
+	BBitmap* pebble = r5_vector_icon_bitmap(kR5Pebble, sizeof(kR5Pebble),
+		side);
+	BAppearanceKit::BSidebarItem* home
+		= new BAppearanceKit::BSidebarItem("Home", "home", pebble);
+	home->SetEmphasized(true);
+	delete pebble;
+	fList->AddItem(home);
+	fList->AddItem(new BAppearanceKit::BSidebarItem("", ""));
 	for (uint32 c = 0; c < sizeof(kCategories) / sizeof(kCategories[0]); c++) {
 		SettingsModule* modules[64];
 		int32 count = modules_in_category(fManager, kCategories[c].id,
 			modules, 64);
-		bool header = false;
+		if (count == 0)
+			continue;
+		BBitmap* icon = r5_mime_icon_bitmap(kCategories[c].iconSignature, side);
+		BAppearanceKit::BSidebarItem* section
+			= new BAppearanceKit::BSidebarItem(kCategories[c].name,
+				kCategories[c].id, icon);
+		delete icon;
+		section->SetCount(count);
+		fList->AddItem(section);
 		for (int32 i = 0; i < count; i++) {
-			if (!_Matches(modules[i], fQuery.String()))
-				continue;
-			if (!header) {
-				fList->AddItem(new NavItem(kCategories[c].name,
-					kCategories[c].id, true));
-				header = true;
-			}
-			fList->AddItem(new NavItem(modules[i]->Name(),
-				modules[i]->Identifier(), false));
+			BString keywords(modules[i]->Description() != NULL
+				? modules[i]->Description() : "");
+			keywords << " "
+				<< (modules[i]->Keywords() != NULL
+					? modules[i]->Keywords() : "")
+				<< " " << kCategories[c].name;
+			BAppearanceKit::BSidebarItem* page
+				= new BAppearanceKit::BSidebarItem(modules[i]->Name(),
+					modules[i]->Identifier());
+			page->SetKeywords(keywords.String());
+			if (modules[i]->RequiresAdmin())
+				page->SetBadge(BAppearanceKit::B_SIDEBAR_BADGE_LOCKED);
+			fList->AddUnder(page, section);
 		}
+		fList->Collapse(section);
 	}
 	fAdjusting = false;
-	_SelectSidebar(fCurrent != NULL ? fCurrent->Identifier() : NULL);
-	NavList* list = dynamic_cast<NavList*>(fList);
+	SettingsList* list = dynamic_cast<SettingsList*>(fList);
 	if (list != NULL)
 		list->UpdateScrollBar();
 }
@@ -830,13 +758,29 @@ SettingsWindow::_ShowHome()
 {
 	fCurrent = NULL;
 	fCards->SetVisibleItem((int32)0);
-	_SetHeader("Settings", "One place for the computer's settings.", NULL);
-	if (fIcon != NULL)
-		fIcon->UsePreferencesFolder();
-	_Remember("home", false);
-	_SelectSidebar(NULL);
+	float side = be_control_look->ComposeIconSize(40).width;
+	BBitmap* icon = NULL;
+	size_t bytes = 0;
+	const void* data = be_app->AppResources() != NULL
+		? be_app->AppResources()->LoadResource(B_VECTOR_ICON_TYPE,
+			"BEOS:ICON", &bytes) : NULL;
+	if (data != NULL)
+		icon = r5_vector_icon_bitmap(static_cast<const uint8*>(data), bytes,
+			side);
+	if (icon == NULL) {
+		icon = r5_vector_icon_bitmap(kR5Pebble, sizeof(kR5Pebble), side);
+		if (icon != NULL)
+			r5_settings_apply_prefs_overlay(icon);
+	}
+	_SetHeader(NULL, "Settings",
+		"Choose a category, or search for a setting.", icon);
+	delete icon;
+	fList->ExpandOnly(NULL);
+	fList->SelectId("home");
+	_ShowRecent();
 	_UpdateActions();
 	_ApplyPageLock();
+	_UpdateTip();
 }
 
 
@@ -857,16 +801,22 @@ SettingsWindow::_ShowCategory(const char* categoryId)
 	int32 index = fCards->IndexOfView(existing);
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
-	const char* icon = NULL;
+	const char* signature = NULL;
 	for (uint32 i = 0; i < sizeof(kCategories) / sizeof(kCategories[0]); i++) {
 		if (strcmp(kCategories[i].id, categoryId) == 0)
-			icon = kCategories[i].iconSignature;
+			signature = kCategories[i].iconSignature;
 	}
-	_SetHeader(_CategoryName(categoryId), _CategorySummary(categoryId), icon);
-	_Remember(categoryId, true);
-	_SelectSidebar(NULL);
+	float side = be_control_look->ComposeIconSize(40).width;
+	BBitmap* icon = r5_mime_icon_bitmap(signature, side);
+	if (icon != NULL)
+		r5_settings_apply_prefs_overlay(icon);
+	_SetHeader(NULL, _CategoryName(categoryId),
+		_CategorySummary(categoryId), icon);
+	delete icon;
+	fList->SelectId(categoryId);
 	_UpdateActions();
 	_ApplyPageLock();
+	_UpdateTip();
 }
 
 
@@ -883,12 +833,18 @@ SettingsWindow::_ShowModule(const char* moduleId)
 	if (index >= 0)
 		fCards->SetVisibleItem(index);
 	fCurrent = module;
-	_SetHeader(module->Name(), module->Description(),
-		module_icon(module->Identifier()));
-	_Remember(module->Identifier(), false);
-	_SelectSidebar(module->Identifier());
+	float side = be_control_look->ComposeIconSize(40).width;
+	BBitmap* icon = r5_mime_icon_bitmap(module_icon(module->Identifier()),
+		side);
+	if (icon != NULL)
+		r5_settings_apply_prefs_overlay(icon);
+	_SetHeader(_CategoryName(module->Category()), module->Name(),
+		module->Description(), icon);
+	delete icon;
+	fList->SelectId(module->Identifier());
 	_UpdateActions();
 	_ApplyPageLock();
+	_UpdateTip();
 }
 
 
@@ -902,6 +858,7 @@ SettingsWindow::_ApplyCurrent()
 	status_t status = fCurrent->SaveSettings(fContext);
 	if (status == B_OK) {
 		fLastApplyError = B_OK;
+		_NoteRecent(fCurrent->Identifier());
 		return;
 	}
 	if (status == fLastApplyError)
@@ -916,24 +873,84 @@ SettingsWindow::_ApplyCurrent()
 
 
 void
-SettingsWindow::_Remember(const char* id, bool category)
+SettingsWindow::_SetHeader(const char* eyebrow, const char* title,
+	const char* description, const BBitmap* icon)
 {
-	SettingsPlace* last = static_cast<SettingsPlace*>(fHistory.LastItem());
-	if (last != NULL && last->category == category && last->id == id)
+	if (fHeader == NULL)
 		return;
-	fHistory.AddItem(make_place(id, category));
-	fBack->SetEnabled(fHistory.CountItems() > 1);
+	fHeader->SetEyebrow(eyebrow);
+	fHeader->SetTitle(title);
+	fHeader->SetSubtitle(description);
+	fHeader->SetIcon(icon);
 }
 
 
 void
-SettingsWindow::_SetHeader(const char* title, const char* description,
-	const char* iconSignature)
+SettingsWindow::_UpdateTip()
 {
-	fTitle->SetText(title != NULL ? title : "");
-	fDescription->SetText(description != NULL ? description : "");
-	if (fIcon != NULL)
-		fIcon->SetSignature(iconSignature);
+	if (fTip == NULL || fList == NULL)
+		return;
+	bool folded = fQuery.Length() == 0;
+	for (int32 i = 0; folded && i < fList->CountItems(); i++) {
+		BAppearanceKit::BSidebarItem* item
+			= dynamic_cast<BAppearanceKit::BSidebarItem*>(fList->ItemAt(i));
+		if (item != NULL && item->OutlineLevel() == 0 && item->IsExpanded()
+			&& fList->CountItemsUnder(item, true) > 0)
+			folded = false;
+	}
+	if (folded && fTip->IsHidden())
+		fTip->Show();
+	else if (!folded && !fTip->IsHidden())
+		fTip->Hide();
+}
+
+
+void
+SettingsWindow::_NoteRecent(const char* moduleId)
+{
+	if (fStorage == NULL || moduleId == NULL || moduleId[0] == '\0')
+		return;
+	BMessage store;
+	fStorage->Read("settings-window", store);
+	BMessage next;
+	next.AddString("recent", moduleId);
+	const char* older = NULL;
+	int32 kept = 1;
+	for (int32 i = 0; store.FindString("recent", i, &older) == B_OK; i++) {
+		if (older == NULL || strcmp(older, moduleId) == 0)
+			continue;
+		if (kept >= 3)
+			break;
+		next.AddString("recent", older);
+		kept++;
+	}
+	fStorage->Write("settings-window", next);
+	_ShowRecent();
+}
+
+
+void
+SettingsWindow::_ShowRecent()
+{
+	if (fHomeView == NULL || fStorage == NULL)
+		return;
+	BMessage store;
+	fStorage->Read("settings-window", store);
+	BString names[3];
+	BString ids[3];
+	int32 count = 0;
+	const char* id = NULL;
+	for (int32 i = 0; store.FindString("recent", i, &id) == B_OK; i++) {
+		SettingsModule* module = fManager->Find(id);
+		if (module == NULL)
+			continue;
+		if (count >= 3)
+			break;
+		ids[count] = id;
+		names[count] = module->Name();
+		count++;
+	}
+	fHomeView->SetRecent(names, ids, count);
 }
 
 
@@ -1098,18 +1115,29 @@ BView*
 SettingsWindow::_CategoryView(const char* categoryId, const char* name)
 {
 	(void)name;
-	SettingsHomeItem items[16];
+	HomeView* home = new HomeView(false);
 	SettingsModule* modules[16];
 	int32 count = modules_in_category(fManager, categoryId, modules, 16);
+	float side = be_control_look->ComposeIconSize(40).width;
 	for (int32 i = 0; i < count; i++) {
-		items[i].id = modules[i]->Identifier();
-		items[i].name = modules[i]->Name();
-		items[i].summary = modules[i]->Description();
-		items[i].iconSignature = module_icon(modules[i]->Identifier());
-		items[i].command = kMsgOpenPage;
-		items[i].field = "module";
+		BMessage* message = new BMessage(kMsgOpenPage);
+		message->AddString("module", modules[i]->Identifier());
+		BAppearanceKit::BActionCard* card
+			= new BAppearanceKit::BActionCard(modules[i]->Identifier(),
+				message);
+		card->SetTitle(modules[i]->Name());
+		card->SetSummary(modules[i]->Description());
+		BBitmap* icon = r5_mime_icon_bitmap(
+			module_icon(modules[i]->Identifier()), side);
+		if (icon != NULL)
+			r5_settings_apply_prefs_overlay(icon);
+		card->SetIcon(icon);
+		delete icon;
+		card->SetExplicitMinSize(BSize(280, B_SIZE_UNSET));
+		card->SetTarget(this);
+		home->AddCard(card);
 	}
-	return new HomeView(items, count, NULL);
+	return home;
 }
 
 
@@ -1157,20 +1185,9 @@ void
 SettingsWindow::_SelectSidebar(const char* moduleId)
 {
 	fAdjusting = true;
-	if (moduleId == NULL) {
-		fList->DeselectAll();
-		fAdjusting = false;
-		return;
-	}
-	for (int32 i = 0; i < fList->CountItems(); i++) {
-		NavItem* item = dynamic_cast<NavItem*>(fList->ItemAt(i));
-		if (item != NULL && !item->IsHeader()
-			&& strcmp(item->Id(), moduleId) == 0) {
-			fList->Select(i);
-			fAdjusting = false;
-			return;
-		}
-	}
-	fList->DeselectAll();
+	if (moduleId == NULL)
+		fList->SelectId("home");
+	else
+		fList->SelectId(moduleId);
 	fAdjusting = false;
 }

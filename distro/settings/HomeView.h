@@ -6,31 +6,28 @@
 #define R5_SETTINGS_HOME_VIEW_H
 
 
-#include <GroupView.h>
+#include <String.h>
+#include <View.h>
 
 
-class CategoryCard;
+class BGridLayout;
+class BView;
 
 
-struct SettingsHomeItem {
-	const char* id;
-	const char* name;
-	const char* summary;
-	const char* iconSignature;
-	uint32		command;
-	const char* field;
-};
-
-
-class HomeView : public BGroupView {
+class HomeView : public BView {
 public:
-								HomeView(const SettingsHomeItem* items,
-									int32 count, const char* intro);
+								HomeView(bool recent);
 	virtual						~HomeView();
 
+			void				AddCard(BView* card);
+			void				SetRecent(const BString* names,
+									const BString* ids, int32 count);
+
 private:
-			CategoryCard*		fCards[16];
+			BGridLayout*		fGrid;
+			BView*				fRecent;
 			int32				fCount;
+			bool				fWantsRecent;
 };
 
 
