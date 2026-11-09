@@ -497,6 +497,13 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 		}
 	}
 
+	if (fPCIInfo->vendor_id == PCI_VENDOR_VIA
+		&& fPCIInfo->device_id == PCI_DEVICE_VIA_VL805) {
+		uint32 firmware = fPci->read_pci_config(fDevice,
+			XHCI_VL805_FIRMWARE_VERSION, 4);
+		TRACE_ALWAYS("VL805 firmware version 0x%08" B_PRIx32 "\n", firmware);
+	}
+
 	// halt the host controller
 	if (ControllerHalt() < B_OK) {
 		return;
@@ -1374,14 +1381,19 @@ XHCI::CreateDescriptor(uint32 trbCount, uint32 bufferCount, size_t bufferSize)
 	// We always allocate 1 more TRB than requested, so that
 	// _LinkDescriptorForPipe() has room to insert a link TRB.
 	trbCount++;
+	// Leave empty slots after the link. A VL805 reads past the doorbell.
+	uint32 padded = trbCount + XHCI_TRB_OVERFETCH;
 	if (fStack->AllocateChunk((void**)&result->trbs, &result->trb_addr,
-			(trbCount * sizeof(xhci_trb))) < B_OK) {
+			(padded * sizeof(xhci_trb))) < B_OK) {
 		TRACE_ERROR("failed to allocate TRBs\n");
 		FreeDescriptor(result);
 		return NULL;
 	}
 	result->trb_count = trbCount;
 	result->trb_used = 0;
+	result->ring_link = 0;
+	result->ring_event_data = 0;
+	memset(result->trbs, 0, padded * sizeof(xhci_trb));
 
 	if (bufferSize > 0) {
 		// Due to how the USB stack allocates physical memory, we can't just
@@ -1464,7 +1476,7 @@ XHCI::FreeDescriptor(xhci_td* descriptor)
 
 	if (descriptor->trbs != NULL) {
 		fStack->FreeChunk(descriptor->trbs, descriptor->trb_addr,
-			(descriptor->trb_count * sizeof(xhci_trb)));
+			((descriptor->trb_count + XHCI_TRB_OVERFETCH) * sizeof(xhci_trb)));
 	}
 	if (descriptor->buffers != NULL) {
 		size_t totalSize = descriptor->buffer_size * descriptor->buffer_count;
@@ -1713,12 +1725,14 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 
 	device->trb_area = fStack->AllocateArea((void**)&device->trbs,
 		&device->trb_addr, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
-			* XHCI_ENDPOINT_RING_SIZE, "XHCI endpoint trbs");
+			* XHCI_ENDPOINT_RING_STRIDE, "XHCI endpoint trbs");
 	if (device->trb_area < B_OK) {
 		TRACE_ERROR("unable to create a device trbs area\n");
 		CleanupDevice(device);
 		return NULL;
 	}
+	memset(device->trbs, 0, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
+		* XHCI_ENDPOINT_RING_STRIDE);
 
 	// set up slot pointer to device context
 	fDcba->baseAddress[slot] = device->device_ctx_addr;
@@ -1935,6 +1949,21 @@ XHCI::_GetEndpointState(xhci_endpoint* endpoint)
 }
 
 
+void
+XHCI::_ClearRingEntries(xhci_endpoint* endpoint, uint8 start, uint8 count)
+{
+	if (endpoint->trbs == NULL || count == 0)
+		return;
+
+	for (uint8 i = 0; i < count; i++) {
+		uint8 index = (start + i) & (XHCI_ENDPOINT_RING_SIZE - 1);
+		endpoint->trbs[index].address = 0;
+		endpoint->trbs[index].status = 0;
+		endpoint->trbs[index].flags = 0;
+	}
+}
+
+
 status_t
 XHCI::_InsertEndpointForPipe(Pipe* pipe)
 {
@@ -1983,11 +2012,11 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 		endpoint->used = 0;
 		endpoint->next = 0;
 
-		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_SIZE;
+		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_STRIDE;
 		endpoint->trb_addr = device->trb_addr
-			+ id * XHCI_ENDPOINT_RING_SIZE * sizeof(xhci_trb);
+			+ id * XHCI_ENDPOINT_RING_STRIDE * sizeof(xhci_trb);
 		memset(endpoint->trbs, 0,
-			sizeof(xhci_trb) * XHCI_ENDPOINT_RING_SIZE);
+			sizeof(xhci_trb) * XHCI_ENDPOINT_RING_STRIDE);
 
 		TRACE("insert endpoint for pipe: trbs, device %p endpoint %p\n",
 			device->trbs, endpoint->trbs);
@@ -2165,6 +2194,8 @@ XHCI::_LinkDescriptorForPipe(xhci_td* descriptor, xhci_endpoint* endpoint)
 
 	// Everything is ready, so write the cycle bit.
 	endpoint->trbs[link].flags |= B_HOST_TO_LENDIAN_INT32(TRB_3_CYCLE_BIT);
+	descriptor->ring_link = (uint8)link;
+	descriptor->ring_event_data = (uint8)eventdata;
 
 	TRACE("_LinkDescriptorForPipe pLink %p phys 0x%" B_PRIxPHYSADDR
 		" 0x%" B_PRIxPHYSADDR " 0x%08" B_PRIx32 "\n", &endpoint->trbs[link],
@@ -2802,6 +2833,8 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 		// likely failed midway; so just accept it anyway.
 		if (offset == (td->trb_used - 1) || completionCode != COMP_SUCCESS) {
 			_UnlinkDescriptorForPipe(td, endpoint);
+			_ClearRingEntries(endpoint, td->ring_link, 1);
+			_ClearRingEntries(endpoint, td->ring_event_data, 1);
 			endpointLocker.Unlock();
 
 			td->trb_completion_code = completionCode;

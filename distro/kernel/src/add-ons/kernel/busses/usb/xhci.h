@@ -30,6 +30,9 @@ class XHCIRootHub;
 /* The endpoint ring needs space for 2 TRBs per transfer
  * (one for the link TRB, and one for the Event Data TRB). */
 #define XHCI_ENDPOINT_RING_SIZE	(XHCI_MAX_TRANSFERS * 2)
+// Controllers such as the VIA VL805 fetch past the doorbell TRB.
+#define XHCI_TRB_OVERFETCH		4
+#define XHCI_ENDPOINT_RING_STRIDE	(XHCI_ENDPOINT_RING_SIZE + XHCI_TRB_OVERFETCH)
 
 
 struct xhci_td : public DoublyLinkedListLinkImpl<xhci_td> {
@@ -37,6 +40,8 @@ struct xhci_td : public DoublyLinkedListLinkImpl<xhci_td> {
 	phys_addr_t	trb_addr;
 	uint32		trb_count;
 	uint32		trb_used;
+	uint8		ring_link;
+	uint8		ring_event_data;
 
 	void**		buffers;
 	phys_addr_t* buffer_addrs;
@@ -63,7 +68,7 @@ struct xhci_endpoint {
 	uint8			used;
 	uint8			next;
 
-	xhci_trb*		trbs; // [XHCI_ENDPOINT_RING_SIZE]
+	xhci_trb*		trbs; // [XHCI_ENDPOINT_RING_STRIDE]
 	phys_addr_t 	trb_addr;
 };
 
@@ -73,7 +78,7 @@ struct xhci_device {
 	uint8 address;
 	area_id trb_area;
 	phys_addr_t trb_addr;
-	struct xhci_trb *trbs; // [XHCI_MAX_ENDPOINTS - 1][XHCI_ENDPOINT_RING_SIZE]
+	struct xhci_trb *trbs; // [XHCI_MAX_ENDPOINTS - 1][XHCI_ENDPOINT_RING_STRIDE]
 
 	area_id input_ctx_area;
 	phys_addr_t input_ctx_addr;
@@ -145,6 +150,8 @@ private:
 			uint8				_GetEndpointState(xhci_endpoint* ep);
 
 			status_t			_InsertEndpointForPipe(Pipe *pipe);
+			void				_ClearRingEntries(xhci_endpoint* endpoint,
+									uint8 start, uint8 count);
 			status_t			_RemoveEndpointForPipe(Pipe *pipe);
 
 			// Event management

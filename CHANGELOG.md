@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - xHCI clears a finished transfer on the VIA VL805
+
+A VIA VL805 reads a few slots past the transfer it was told to run. A finished transfer left its old entry in the ring, and the controller could run it again. Each endpoint ring now has four empty slots after it, a transfer buffer has the same empty slots, and the driver clears the ring entry when the transfer finishes. The firmware version is written to the log. From haiku-pi c65ac5a2e6a6383be3e6630ded05b1a29d506166.
+
 ### Deleting a folder does not stall a disk sync
 
 BFS kept a reference to a file until its I/O finished, then dropped that reference on the I/O notifier thread. If the file had been removed, that drop deleted the inode there and could wait for the journal while the thread that held the journal waited for the notifier. The last reference is now handed to the vnode undertaker, which deletes the inode on its own thread. The shell build of BFS still uses its own put. This is haiku-pi star row 57, commit 44cc183c0c. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
