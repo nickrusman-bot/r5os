@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - The boot disk no longer shows the ladybug under the R5 mark
+
+The boot volume still asked for `R_BootVolumeIcon`, the nightly drive with the ladybug, and the R5 mark only covered part of it; the ladybug showed around the mark. The well-known boot disk in `IconCache.cpp` now uses `kR5DriveIcon`, the same drive without the ladybug that other disks already use, and falls back to the resource only when the vector fails. The mark in `Pose.cpp` is a square from (4, 36) to (26, 58) in the 64-unit icon, on the front of the drive, in place of the stretched 14×16 rectangle at (10, 40). The Get Info header has the drive without a mark, as before only the pose draws it. `distro/BUILD` stays 10052.
+
+Tested: jam `jam_exit=0` on 10 Nov 2026, from an LF export of this branch. One QEMU boot (TCG, GTK); the user looked at the desktop after Sign in and confirmed the boot disk shows the drive without the ladybug and the larger mark. No screenshot was taken in this session. Not tested: VirtualBox, hardware, Get Info.
+
+Found while applying, not fixed here: on a Windows checkout with CRLF, `generate-r5-artwork.py --check` fails on `r5-symbol.svg` and `r5_disk_badge.h`; the script asks for `Manrope-Bold.ttf` while the repository has `manrope-bold.ttf`, which Linux does not find; `apply-radeon.py` expects the CRLF hash of the clear-state headers while git gives LF.
+
 ## 2026-11-09 - Display page review: layout, Revert, and the 12-second return
 
 Review of the Display page against `generated/settings-display/BRIEF.md` and the mockup.
