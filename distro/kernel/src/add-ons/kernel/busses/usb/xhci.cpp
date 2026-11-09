@@ -3358,11 +3358,18 @@ XHCI::FinishTransfers()
 			// A control endpoint that halted is reset before the callback.
 			// A device refuses a request it does not support with a stall,
 			// and the next request needs the endpoint running.
+			// A bulk or interrupt endpoint that stalled is reset too. The
+			// driver clears the halt in the device, and nothing else would
+			// reset the endpoint in the controller, so the next transfer
+			// would never run. Only a stall: an unplug raises transaction
+			// errors in bursts, and each command to a slot that is gone
+			// costs a timeout on this thread.
 			xhci_endpoint* endpoint
 				= (xhci_endpoint*)transfer->TransferPipe()->ControllerCookie();
-			if (completionCode != COMP_SUCCESS
+			if (endpoint != NULL && completionCode != COMP_SUCCESS
 				&& completionCode != COMP_SHORT_PACKET
-				&& endpoint != NULL && endpoint->id == 0) {
+				&& (endpoint->id == 0 || (completionCode == COMP_STALL
+					&& transfer->IsochronousData() == NULL))) {
 				_RecoverHaltedEndpoint(endpoint, td);
 			}
 
@@ -3383,9 +3390,13 @@ XHCI::FinishTransfers()
 				// Leave it halted and every later transfer on this controller
 				// stops (Haiku #20149). Reset the ring before the callback
 				// queues the next packet.
-				if (completionCode == COMP_BABBLE || completionCode == COMP_STALL
-					|| completionCode == COMP_USB_TRANSACTION
-					|| completionCode == COMP_SPLIT_TRANSACTION) {
+				// Isochronous audio keeps the earlier reset. A stall on any
+				// other pipe was already handled above. Transaction errors on
+				// those pipes are left for the transfer's own timeout.
+				if (transfer->IsochronousData() != NULL
+					&& (completionCode == COMP_BABBLE || completionCode == COMP_STALL
+						|| completionCode == COMP_USB_TRANSACTION
+						|| completionCode == COMP_SPLIT_TRANSACTION)) {
 					Pipe* pipe = transfer->TransferPipe();
 					xhci_endpoint* endpoint = (pipe != NULL)
 						? (xhci_endpoint*)pipe->ControllerCookie() : NULL;

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a stalled keyboard or mouse keeps working
+
+A stall halts the pipe in the controller. The driver of a keyboard, mouse, or network adapter clears the halt in the device and sends the next transfer, but the controller still had the pipe halted, so that transfer never ran. The driver now resets a stalled bulk or interrupt pipe before it reports the error. An unplug, which fails many transfers at once, is left to the transfer's own timeout so the controller is not flooded with commands. Isochronous audio still uses its own reset. From air/OS bdad03ac62bdf47da071448828b463fc887ebff8. The idea is from RenkuOS 5b6210a165 by David Beckman.
+
 ## 2026-11-09 - a stalled control request no longer blocks the next one
 
 A device that refuses a request stalls its control pipe, and the controller leaves that pipe halted. The next request then waited until it timed out. The driver now resets that pipe before it reports the failure, and continues with anything already queued. From air/OS 846abe02798c06eac1cba01c7a43b5eb293d9400.
