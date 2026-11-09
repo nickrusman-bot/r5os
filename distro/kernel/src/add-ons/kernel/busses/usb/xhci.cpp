@@ -1759,6 +1759,7 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 	ASSERT(endpoint0->td_list.IsEmpty());
 	endpoint0->used = 0;
 	endpoint0->next = 0;
+	endpoint0->recovering = false;
 	endpoint0->trbs = device->trbs;
 	endpoint0->trb_addr = device->trb_addr;
 
@@ -2011,6 +2012,7 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 		ASSERT(endpoint->td_list.IsEmpty());
 		endpoint->used = 0;
 		endpoint->next = 0;
+		endpoint->recovering = false;
 
 		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_STRIDE;
 		endpoint->trb_addr = device->trb_addr
@@ -2204,6 +2206,7 @@ XHCI::_LinkDescriptorForPipe(xhci_td* descriptor, xhci_endpoint* endpoint)
 		B_LENDIAN_TO_HOST_INT32(endpoint->trbs[link].flags));
 
 	endpoint->next = next;
+	const bool ring = !endpoint->recovering;
 	endpointLocker.Unlock();
 
 	TRACE("Endpoint status 0x%08" B_PRIx32 " 0x%08" B_PRIx32 " 0x%016" B_PRIx64 "\n",
@@ -2211,7 +2214,8 @@ XHCI::_LinkDescriptorForPipe(xhci_td* descriptor, xhci_endpoint* endpoint)
 		_ReadContext(&endpoint->device->device_ctx->endpoints[endpoint->id].dwendpoint1),
 		_ReadContext(&endpoint->device->device_ctx->endpoints[endpoint->id].qwendpoint2));
 
-	Ring(endpoint->device->slot, endpoint->id + 1);
+	if (ring)
+		Ring(endpoint->device->slot, endpoint->id + 1);
 
 	TRACE("Endpoint status 0x%08" B_PRIx32 " 0x%08" B_PRIx32 " 0x%016" B_PRIx64 "\n",
 		_ReadContext(&endpoint->device->device_ctx->endpoints[endpoint->id].dwendpoint0),
@@ -3195,6 +3199,58 @@ XHCI::FinishThread(void* data)
 
 
 void
+XHCI::_RecoverHaltedEndpoint(xhci_endpoint* endpoint, xhci_td* td)
+{
+	if (endpoint == NULL || endpoint->trbs == NULL || endpoint->device == NULL
+		|| td == NULL || td->trbs == NULL
+		|| td->trb_used >= td->trb_count
+		|| _GetEndpointState(endpoint) != ENDPOINT_STATE_HALTED) {
+		return;
+	}
+
+	// The link at the end of the descriptor returns to its Event Data TRB
+	// on the endpoint ring. The ring continues at the TRB after that one.
+	// On this CPU the descriptor buffer is host endian, which is little
+	// endian, so the swap is a no-op.
+	const phys_addr_t resume = B_LENDIAN_TO_HOST_INT64(
+		td->trbs[td->trb_used].address) + sizeof(xhci_trb);
+
+	MutexLocker endpointLocker(endpoint->lock);
+	if (endpoint->recovering)
+		return;
+	endpoint->recovering = true;
+	endpointLocker.Unlock();
+
+	TRACE("recovering halted endpoint %" B_PRIu8 " of slot %" B_PRIu8 "\n",
+		endpoint->id, endpoint->device->slot);
+	status_t status = ResetEndpoint(false, endpoint);
+
+	endpointLocker.Lock();
+	if (status == B_OK && endpoint->td_list.IsEmpty()) {
+		memset(endpoint->trbs, 0, sizeof(xhci_trb) * XHCI_ENDPOINT_RING_SIZE);
+		endpoint->used = 0;
+		endpoint->next = 0;
+		status = SetTRDequeue(endpoint->trb_addr, 0, endpoint->id + 1,
+			endpoint->device->slot);
+	} else if (status == B_OK) {
+		status = SetTRDequeue(resume, 0, endpoint->id + 1,
+			endpoint->device->slot);
+	}
+	if (status != B_OK) {
+		TRACE_ERROR("recovering halted endpoint %" B_PRIu8 " of slot %" B_PRIu8
+			" failed: %s\n", endpoint->id, endpoint->device->slot,
+			strerror(status));
+	}
+	endpoint->recovering = false;
+	const bool ring = !endpoint->td_list.IsEmpty();
+	endpointLocker.Unlock();
+
+	if (ring)
+		Ring(endpoint->device->slot, endpoint->id + 1);
+}
+
+
+void
 XHCI::RecoverHaltedEndpoint(xhci_endpoint* endpoint)
 {
 	if (endpoint == NULL || endpoint->trbs == NULL || endpoint->device == NULL)
@@ -3297,6 +3353,17 @@ XHCI::FinishTransfers()
 				} else {
 					callbackStatus = status;
 				}
+			}
+
+			// A control endpoint that halted is reset before the callback.
+			// A device refuses a request it does not support with a stall,
+			// and the next request needs the endpoint running.
+			xhci_endpoint* endpoint
+				= (xhci_endpoint*)transfer->TransferPipe()->ControllerCookie();
+			if (completionCode != COMP_SUCCESS
+				&& completionCode != COMP_SHORT_PACKET
+				&& endpoint != NULL && endpoint->id == 0) {
+				_RecoverHaltedEndpoint(endpoint, td);
 			}
 
 			FreeDescriptor(td);

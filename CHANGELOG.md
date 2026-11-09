@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a stalled control request no longer blocks the next one
+
+A device that refuses a request stalls its control pipe, and the controller leaves that pipe halted. The next request then waited until it timed out. The driver now resets that pipe before it reports the failure, and continues with anything already queued. From air/OS 846abe02798c06eac1cba01c7a43b5eb293d9400.
+
 ## 2026-11-09 - xHCI clears a finished transfer on the VIA VL805
 
 A VIA VL805 reads a few slots past the transfer it was told to run. A finished transfer left its old entry in the ring, and the controller could run it again. Each endpoint ring now has four empty slots after it, a transfer buffer has the same empty slots, and the driver clears the ring entry when the transfer finishes. The firmware version is written to the log. From haiku-pi c65ac5a2e6a6383be3e6630ded05b1a29d506166.

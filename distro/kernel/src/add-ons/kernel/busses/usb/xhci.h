@@ -67,6 +67,9 @@ struct xhci_endpoint {
 	DoublyLinkedList<xhci_td> td_list;
 	uint8			used;
 	uint8			next;
+	bool			recovering;
+		// A halted endpoint is being reset. A transfer linked meanwhile
+		// is rung once that reset has finished.
 
 	xhci_trb*		trbs; // [XHCI_ENDPOINT_RING_STRIDE]
 	phys_addr_t 	trb_addr;
@@ -201,6 +204,8 @@ private:
 			status_t			ResetEndpoint(bool preserve, xhci_endpoint* endpoint);
 			status_t			StopEndpoint(bool suspend, xhci_endpoint* endpoint);
 			void				RecoverHaltedEndpoint(xhci_endpoint* endpoint);
+			void				_RecoverHaltedEndpoint(xhci_endpoint* endpoint,
+									xhci_td* td);
 			status_t			SetTRDequeue(uint64 dequeue, uint16 stream,
 									uint8 endpoint, uint8 slot);
 			status_t			ResetDevice(uint8 slot);
