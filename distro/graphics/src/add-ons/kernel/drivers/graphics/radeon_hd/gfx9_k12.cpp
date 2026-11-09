@@ -61,6 +61,7 @@ static bool sGpuDebug = false;
 static bool sInvRange = true;
 static bool sHubLinux = false;
 static bool sVmids = false;
+static bool sFaultIrq = false;
 
 void
 r5_gfx9_set_inv_range(int on)
@@ -1385,6 +1386,7 @@ r5_gfx9_hub_restore(void)
 
 
 static void r5_gfx9_vmids_program(void);
+static void r5_gfx9_vmid_fault_irqs(void);
 static void r5_gfx9_csa_map(void);
 
 /* inv, hub and vmids are -1 to leave the flag, 0 to restore the stored
@@ -1424,8 +1426,10 @@ r5_gfx9_switch_registers(int inv, int hub, int vmids)
 	}
 	if (vmids == 1) {
 		sVmids = true;
-		if (sVmid1)
+		if (sVmid1) {
 			r5_gfx9_vmids_program();
+			r5_gfx9_vmid_fault_irqs();
+		}
 	} else if (vmids == 0) {
 		sVmids = false;
 		r5_gfx9_vmid_restore();
@@ -1461,6 +1465,38 @@ r5_gfx9_vmids_program(void)
 	if (sGpuDebug)
 		knote("vmids 1-15 cntl %08lx end %016llx",
 			(unsigned long)cntl, (unsigned long long)end);
+}
+
+
+/* Linux v6.12 drivers/gpu/drm/amd/amdgpu/gmc_v9_0.c
+ * gmc_v9_0_vm_fault_interrupt_state(), lines 473-479 and 513-529.
+ * setup_vmid_config writes only the ENABLE_DEFAULT bits. Linux then
+ * ORs the ENABLE_INTERRUPT bits onto every context:
+ *
+ *	bits = VM_CONTEXT1_CNTL__RANGE_PROTECTION_FAULT_ENABLE_INTERRUPT_MASK
+ *		| ... | EXECUTE_PROTECTION_FAULT_ENABLE_INTERRUPT_MASK;
+ *	for (i = 0; i < 16; i++)
+ *		tmp |= bits;
+ *
+ * R5 does that for contexts 1-15, and only when gfx9_irq is on.
+ * Context 0 stays the ring contract. The result matches the VMID 1
+ * setup value, 0x007ffe07. */
+static void
+r5_gfx9_vmid_fault_irqs(void)
+{
+	uint32 i;
+	uint32 bits;
+	if (!sFaultIrq || !sVmids || sInfo == NULL)
+		return;
+	bits = r5_gfx9_vmid_fault_irq_bits();
+	for (i = 0; i <= 14u; i++) {
+		uint32 reg = gc_byte(mmVM_CONTEXT1_CNTL
+			+ i * R5_GC9_CTX_DISTANCE);
+		kwrite(sInfo, reg, kread(sInfo, reg) | bits);
+	}
+	if (sGpuDebug)
+		knote("vmid fault irq cntl %08lx",
+			(unsigned long)kread(sInfo, gc_byte(mmVM_CONTEXT1_CNTL)));
 }
 
 
@@ -1585,6 +1621,7 @@ r5_gfx9_vmid1_setup()
 	r5_gfx9_vmid1_set_root(tableBase);
 	/* Linux programs the engine ranges after setup_vmid_config. */
 	r5_gfx9_vmids_program();
+	r5_gfx9_vmid_fault_irqs();
 	r5_gfx9_inv_range_program();
 	r5_gfx9_csa_map();
 	return true;
@@ -1903,6 +1940,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 		kernel = get_driver_boolean_parameter(settings, "gfx9_kernel",
 			false, true);
 		irq = get_driver_boolean_parameter(settings, "gfx9_irq", false, true);
+		sFaultIrq = irq;
 		gart = get_driver_boolean_parameter(settings, "gfx9_gart", false, true);
 		sGpuDebug = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);

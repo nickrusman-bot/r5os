@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Every graphics context can report a bad memory access
+
+`gfx9_vmid_per_file` stays off. Programming contexts 1–15 wrote only the default fault bits, `0x00555407`, including over VMID 1, which setup had given `0x007ffe07`. No context raised a fault after that. When `gfx9_irq` is on, the interrupt bits are ORed afterwards, the same step as Linux v6.12 `gmc_v9_0_vm_fault_interrupt_state()` (lines 473–479 and 513–529). All fifteen contexts are then `0x007ffe07`. Context 0 is unchanged. The host test checks that list of fifteen. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### The isolation command list can be executed
 
 `gfx9_vmid_per_file` stays off. Stick 30 stopped in the owner's own command list at `0x80002000`. Fault status `0x00800880` is VMID 8 and a permission fault; the address register `0x80002` is that page. The list was mapped readable and writable, and the command processor fetches it. Both command lists (`0x80002000` and `0x80001000`) are now readable, writable and executable. The data page stays readable and writable. The host test checks the two maps in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.

@@ -1857,6 +1857,28 @@ main()
 		if (r5_gfx9_sh_mem_config() != 0x1018u
 			|| r5_gfx9_sh_mem_bases() != 0x20001000u)
 			return fail("sh mem");
+		{
+			struct r5_vm_size gfx9 = r5_gfx9_vm_size();
+			uint32_t list[15];
+			uint32_t index;
+			r5_gfx9_vmid_cntl_list(&gfx9, 0, list);
+			if (list[0] != 0x00555407u)
+				return fail("vmid default cntl");
+			r5_gfx9_vmid_cntl_list(&gfx9, 1, list);
+			for (index = 0; index < 15u; index++) {
+				if (list[index] != 0x007ffe07u)
+					return fail("vmid irq cntl");
+			}
+		}
+		const char* faultIrq[] = {
+			"r5_gfx9_vmids_program();",
+			"r5_gfx9_vmid_fault_irqs();",
+			"sFaultIrq = irq;"
+		};
+		if (source_order(
+				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
+				"radeon_hd/gfx9_k12.cpp", faultIrq, 3) != 0)
+			return 1;
 		const char* vmidOrder[] = {
 			"if (!sVmids || sInfo == NULL)",
 			"for (i = 0; i <= 14u; i++)"
