@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - unplugging a USB audio device no longer panics on a wait that finished
+
+The wait for a USB object to go idle gave up after two milliseconds, and it also panicked when the object became idle on the last try, because the counter was not decremented on that try. It now waits half a second, and it panics only when the object is still busy. From air/OS df92a69cdb633ebf70dcdd08d68ca8bed9f6a37c by David Beckman. The two-second budget in the original note was not taken.
+
 ## 2026-11-09 - unplugging a USB network adapter no longer stops the system
 
 Removing a device waited for each pipe to go idle, but a driver could still be inside a control request that lasts several seconds. The default pipe is now closed and its requests cancelled first. A USB Ethernet adapter only clears a halt after a stall, and not after the adapter has already been removed. From air/OS e04ebcb285d3c54d8d7db73a34423c8bcb7173bd.
