@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A shared file stays shared after its protection changes
+
+Changing the protection of a mapped file inserted a copy-on-write cache whenever that cache had consumers, including a file cache. A shared mapping then stopped sharing with the file, and with mappings made later. A file cache is no longer made copy-on-write on that path. The creation flags already kept by `vm_set_area_protection` are unchanged. This is haiku-pi star row 21, commit 894c4abe7f. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.

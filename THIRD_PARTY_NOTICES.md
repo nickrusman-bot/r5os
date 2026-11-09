@@ -30,7 +30,7 @@ The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file.
 
 Location: `distro/kernel/src/system/kernel/vm/vm.cpp`.
 
-The file is Haiku's `vm.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `6f810ed2d7`: a partial wire shrinks to the pages that were wired. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's `vm.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `6f810ed2d7`: a partial wire shrinks to the pages that were wired. Another block is haiku-pi `894c4abe7f` (star row 21): a protection change does not insert a copy-on-write cache above a file. Copyright 2026 Witold Bołt. The snippets are distributed as GPL-3.0-or-later. The Haiku header stays.
 
 ### Runtime-loader TLS generation
 
