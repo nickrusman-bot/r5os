@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A second shared folder of the same kind can be mounted
+
+A FUSE file system had one server, so the next share of that kind could not be mounted. The name can now carry the share, as in "smbfs:music", and a mount that gives up early reports the reason. This is air/OS `00e1291e8095e94362e211d2b8dfaed38127a2cd`. The smbfs add-on already asked for that name. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Network shares are on the VirtualBox image
 
 smbfs.hpkg and userland_fs.hpkg were both in the first-boot package list. Tracker and Deskbar started on that image and again after a restart. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/.

@@ -69,6 +69,8 @@ Location: `distro/smb/src/add-ons/kernel/file_systems/smbfs`.
 
 A userlandfs add-on from air/OS (`github.com/airos-works/haiku`). Copyright 2026 Haiku, Inc. License: MIT. It links `libsmb2.a`, so the add-on as shipped combines that MIT code with LGPL-2.1-or-later. The notices stay on each part.
 
+The userlandfs files that add-on runs in are copied from Haiku into `distro/smb/src/add-ons/kernel/file_systems/userlandfs/`. They keep the Haiku MIT header. The changes are from air/OS, by jmgasper <jmgasper@gmail.com>: `00e1291e8095e94362e211d2b8dfaed38127a2cd`. `scripts/apply-smb.py` copies them with the rest of `distro/smb`.
+
 The mount server side is `distro/smb/src/servers/mount` and `distro/smb/headers/private/mount/MountServer.h`. Same origin, MIT. Passwords are stored with `BKeyStore` under `smb://server/share`. The server retries a share that failed because the network was not up, and posts a notification when the failure is not that kind.
 
 Tracker preferences gain the Network shares page, and the Mount menu lists shares that are not mounted. Those files are `distro/desktop/src/kits/tracker/NetworkSharesSettings.cpp`, `NetworkSharesSettings.h`, `MountMenu.cpp`, `TrackerSettingsWindow.cpp`, and `TrackerSettingsWindow.h`. MIT, from the same air/OS import. The message handling added to `Tracker.cpp` is an R5 snippet.
