@@ -1914,7 +1914,7 @@ id	r5_status	branch	commit	notes
 15423	open			
 15424	open			
 15427	open			
-15432	open			
+15432	fixed	cursor/tls-initial-exec-477a	23fe85fe56	The runtime loader accepts the x86_64 initial-exec TLS relocations (R_X86_64_TPOFF64 and the 32-bit form). Host check test-tpoff-offset passed. The combined x86-64 VirtualBox image reached the desktop on 9 Nov 2026 with no crash; a library that uses initial-exec TLS was not loaded in the guest. Limit: a library opened after other threads exist does not get its TLS in those threads.
 15435	open			
 15437	open			
 15439	open			
@@ -3433,7 +3433,7 @@ id	r5_status	branch	commit	notes
 19433	fixed			Get Info can be resized
 19434	open			
 19437	open			
-19440	open			
+19440	fixed	cursor/pci-segments-477a	563a89e2c9	The x86_64 PCI bus manager reads every segment of the MCFG table; segment 0 is unchanged. The combined x86-64 VirtualBox image reached the desktop on 9 Nov 2026 with no PCI error. VirtualBox has one segment, so a second segment was not exercised. Limit: no free virtual bus number when segment 0 uses all of them.
 19442	open			
 19444	open			
 19447	open			
