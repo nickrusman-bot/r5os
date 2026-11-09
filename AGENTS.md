@@ -110,6 +110,8 @@ Support levels (do not skip): **buildable → bootable → functional → deskto
 7. Update `CHANGELOG.md` (newest first) for user-visible behavior, chosen paths, mistakes, and limits.
 8. Ask before `git push` / PR to `main`.
 
+A USB stick is written only with `scripts/write-stick.py <image>`, from Windows Python (`py`). The script asks for elevation itself, writes only to the General UDisk, and checks the read-back hash. If it needs a change (a larger image, another stick, a new Windows error), change that script. Do not use PowerShell, `dd` or another tool to write a stick, and do not write a new writer script.
+
 Never imply hardware, Wi-Fi, or LAN tests that did not run. **QEMU usernet is not a LAN** (no mDNS multicast, no Wi-Fi device, no AirPlay speakers). For LAN on Windows use VirtualBox bridged (`scripts/run-vbox-r5.ps1`). The image has the 7.2.22 Guest Additions (`docs/VBOX-GUEST.md`): `vboxsf` is present but the script adds no share, the display follows the window for the administrator only ([#4055](https://github.com/nickrusman-bot/r5os/issues/4055)), and there is no VirtualBox drag-and-drop. VirtualBox clipboard mode stays off. Text clipboard is COM1 (`docs/vbox.md`), not VBox Shared Clipboard.
 
 If a test cannot run, say which one and why.
