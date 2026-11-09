@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a bad USB event no longer walks off the device list
+
+A transfer event with a slot number past the end of the list was logged and then used as an index. The driver now returns after that log. From air/OS 11775b1e9079ac101886941651d4ef1cb458efc4, taken from RenkuOS a9bba0ca79 by Mas Ahmad Muhammad. The Bay Trail part of that RenkuOS commit was not taken.
+
 ## 2026-11-09 - a device behind a full-speed hub is found
 
 The path stored for a device behind a full-speed hub used the port of the transaction translator, which is the hub's own upstream port. The controller then rejected the address, and nothing behind that hub appeared. The path now uses the port the hub is setting up, and each hub's port on the hub above it. From air/OS 39515d87e198923306f404d02b7f05a2586aeb64. The guest test in that commit was not taken.
