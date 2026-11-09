@@ -31,3 +31,7 @@ How R5 gets there:
 
    The current Haiku decorator and control look stay available.
 2. **After GPU milestone M8** (app_server on the GPU, `docs/GPU-ARCHITECTURE.md`): translucency, blur and soft shadows, which need a compositing app_server. Without a supported GPU the window keeps the same shape and layout with an opaque surface.
+
+## `settings-mockup/`
+
+The design for the Settings window, chosen by the user on 9 Nov 2026. It uses the look of the About R5 window, not the round Sign in reference above. It has the real Haiku icons, and a list where each category folds open. Home and Back are not in the bottom row. `settings-mockup/README.md` says what it decides. Settings is rebuilt to match it.
