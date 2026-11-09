@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A Windows share mounts by address
+
+Tested on 9 Nov 2026 in VirtualBox with a bridged adapter. A Windows share was mounted by IP address, with a user name and a password. A Windows name does not work yet; only an IP address does. Without a user name, Windows 11 refuses the anonymous login and R5 reports "Invalid Argument". That case comes later. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Files on a shared folder get a type from the name
 
 A missing attribute came back as out of memory, so the file type was lost. This is air/OS `6b3fed7c57ba230d356ada64e394ca02e3d4310b`. The smbfs add-on already answers the type from the name. There is no What's new section and `distro/BUILD` stays the same.
