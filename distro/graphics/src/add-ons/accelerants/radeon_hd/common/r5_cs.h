@@ -534,8 +534,10 @@ r5_cs_gds_switch(uint32_t* out, uint32_t cap, uint32_t n, uint32_t vmid,
 /* Linux v6.12 amdgpu_vm_flush emits the pipeline sync first, then the
  * VM flush. gfx_v9_0_ring_emit_vm_flush then writes PACKET3(PFP_SYNC_ME, 0).
  * gmc_v9_0_use_invalidate_semaphore is true only for MMHUB, so this GFXHUB
- * sequence does not write VM_INVALIDATE_ENG0_SEM. PASID is not part of
- * this packet: 26 dwords. gfx_v9_0_check_fw_write_wait leaves
+ * sequence does not write VM_INVALIDATE_ENG0_SEM. The packet is 26 dwords.
+ * v6.18 writes IH_VMID_n_LUT after this flush, in r5_cs_pasid_map, and only
+ * when gfx9_pasid_map or gfx9_vmid_per_file is on.
+ * gfx_v9_0_check_fw_write_wait leaves
  * me_fw_write_wait true in the default case, which is GC 9.3.
  * gfx_v9_0_ring_emit_wreg then writes a register with
  * WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM (0x40100000). The invalidate

@@ -27,7 +27,7 @@ The order is impact, not ticket number.
 1. **GPU on the reference machine.** Following `docs/GPU-ARCHITECTURE.md`:
    - **M3 is done:** the kernel driver owns the GPU, with interrupts and GART. The keys stay opt-in.
    - **M4 is done:** the R5 GPU interface, the R5 DRM library, and RADV on the 5625U. Experimental and opt-in. The M4 row in `docs/GPU-ARCHITECTURE.md` has the evidence.
-   - **Next, M5:** an address space per open of the render node.
+   - **M5 is done on the 5625U**, with two gaps: the driver's fault line, and the GPU staying up after a guilty job. The M5 row in `docs/GPU-ARCHITECTURE.md` has the evidence.
    - **The goal:** when a supported GPU passes its checks, R5 renders on the GPU by default; otherwise in software. Haiku applications stay unchanged.
    - Display (DCN modesetting, more than one screen, vsync) is a separate track. Today the picture is still the firmware one.
 2. **Finish multi-user** ([#63](https://github.com/nickrusman-bot/r5os/issues/63)).

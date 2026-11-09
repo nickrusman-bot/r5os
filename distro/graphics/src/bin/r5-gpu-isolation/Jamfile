@@ -1,0 +1,8 @@
+SubDir HAIKU_TOP src bin r5-gpu-isolation ;
+
+UsePrivateHeaders r5gpu ;
+
+Application r5-gpu-isolation :
+	r5-gpu-isolation.cpp
+	: be [ TargetLibsupc++ ]
+	;

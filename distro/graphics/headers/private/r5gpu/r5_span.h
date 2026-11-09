@@ -15,6 +15,9 @@ typedef struct {
 	uint64_t	bytes;
 	int		used;
 	int		live;
+	/* Kernel address of offset, when the caller has one. A take of a
+	 * free span writes zeros through it. Host tests leave it null. */
+	uint8_t*	cpu;
 } r5_span;
 
 static inline void
@@ -32,6 +35,9 @@ r5_span_coalesce(r5_span* spans, int count)
 				if (spans[i].offset + spans[i].bytes
 					!= spans[j].offset)
 					continue;
+				if (spans[i].cpu != NULL && spans[j].cpu
+					!= spans[i].cpu + spans[i].bytes)
+					spans[i].cpu = NULL;
 				spans[i].bytes += spans[j].bytes;
 				spans[j].live = 0;
 				merged = 1;
@@ -49,6 +55,10 @@ r5_span_take(r5_span* spans, int count, uint64_t bytes, uint64_t* offset)
 		*offset = spans[i].offset;
 		if (spans[i].bytes == bytes) {
 			spans[i].used = 1;
+			if (spans[i].cpu != NULL) {
+				for (uint64_t n = 0; n < bytes; n++)
+					spans[i].cpu[n] = 0;
+			}
 			return 1;
 		}
 		int slot = -1;
@@ -64,8 +74,14 @@ r5_span_take(r5_span* spans, int count, uint64_t bytes, uint64_t* offset)
 		spans[slot].used = 0;
 		spans[slot].offset = spans[i].offset + bytes;
 		spans[slot].bytes = spans[i].bytes - bytes;
+		spans[slot].cpu = spans[i].cpu != NULL
+			? spans[i].cpu + bytes : NULL;
 		spans[i].bytes = bytes;
 		spans[i].used = 1;
+		if (spans[i].cpu != NULL) {
+			for (uint64_t n = 0; n < bytes; n++)
+				spans[i].cpu[n] = 0;
+		}
 		return 1;
 	}
 	return 0;
@@ -81,6 +97,7 @@ r5_span_add(r5_span* spans, int count, uint64_t offset, uint64_t bytes)
 		spans[i].used = 1;
 		spans[i].offset = offset;
 		spans[i].bytes = bytes;
+		spans[i].cpu = NULL;
 		return 1;
 	}
 	return 0;

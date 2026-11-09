@@ -1,5 +1,91 @@
 # R5OS changelog (lokaal)
 
+### Each program has its own GPU memory
+
+`gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
+
+Stick 30 reached the desktop. Six teapot self-tests were fine. Isolation failed. Fault status `0x00800880` is VMID 8 and an execute permission fault at `0x80002000`, the owner's own command list, which was not executable. Contexts 1–15 had been rewritten to `0x00555407`, so none of them raised a fault interrupt.
+
+Stick 31 reached the desktop. The command lists are executable, and the log has `vmid fault irq cntl 007ffe07`. There is no fault at `0x80002000`. The owner then stayed inside the copy. The control word was register to register. The counters did not return: the reading was taken before isolation, and only once, while the kill loop still held its buffers. The GPU was then lost.
+
+Stick 32 reached the desktop. The copy is memory to memory. The owner's page stayed unchanged. Fault status `00900c10` is VMID 9 at byte address `0x80000000`, the other program's page. The read/write bit in that word is 0. After the kill, the log says `counters back`. Still open: the driver does not write a `vm fault` line. The test program always prints `vm fault addr`, and that line is not the driver's. The GPU is lost after the guilty job. A reset was not run. The hang policy leaves the GPU off until the next boot. Not run on this stick: two teapots at the same time, and a standard account with the render switch off.
+
+### The kill's buffers are counted after they are released
+
+`gfx9_vmid_per_file` stays off. Stick 31 read the counters before the isolation stage, and once more the moment the kill stage returned. The kill loop still held its buffers then, so the difference included that stage. The reading is now taken just before the kill. For two seconds after the kill returns, the same reading is repeated every 100 ms until the counts match. `counters back` is that match. `counters difference` is the last reading when they still differ. The host test checks that order in the source. Stick 32 printed `counters back`. There is no What's new section and `distro/BUILD` stays the same.
+
+### The isolation copy reads and writes memory
+
+`gfx9_vmid_per_file` stays off. Stick 31 reached the desktop. The permission fault at `0x80002000` was gone, and the log has `vmid fault irq cntl 007ffe07`. The owner's submit then stayed inside `COPY_DATA` (`me hdr c0044000`). The control word was `(1 << 16) | (1 << 20)`: `SRC_SEL` 0 and `DST_SEL` 0, register to register. It is now memory to memory, Mesa 25.3.6 `src/amd/common/sid.h` lines 129-144: `COPY_DATA_SRC_SEL(1) | COPY_DATA_DST_SEL(5) | COPY_DATA_COUNT_SEL | COPY_DATA_WR_CONFIRM`. `WRITE_DATA` is unchanged. The host test checks that control word in the source. Stick 32 ran this copy. The owner's page stayed unchanged, and the client's access faulted at `0x80000000`. There is no What's new section and `distro/BUILD` stays the same.
+
+### Every graphics context can report a bad memory access
+
+`gfx9_vmid_per_file` stays off. Programming contexts 1–15 wrote only the default fault bits, `0x00555407`, including over VMID 1, which setup had given `0x007ffe07`. No context raised a fault after that. When `gfx9_irq` is on, the interrupt bits are ORed afterwards, the same step as Linux v6.12 `gmc_v9_0_vm_fault_interrupt_state()` (lines 473–479 and 513–529). All fifteen contexts are then `0x007ffe07`. Context 0 is unchanged. The host test checks that list of fifteen. Sticks 31 and 32 logged `vmid fault irq cntl 007ffe07`. There is no What's new section and `distro/BUILD` stays the same.
+
+### The isolation command list can be executed
+
+`gfx9_vmid_per_file` stays off. Stick 30 stopped in the owner's own command list at `0x80002000`. Fault status `0x00800880` is VMID 8 and a permission fault; the address register `0x80002` is that page. The list was mapped readable and writable, and the command processor fetches it. Both command lists (`0x80002000` and `0x80001000`) are now readable, writable and executable. The data page stays readable and writable. The host test checks the two maps in the source. Stick 31 no longer faulted at `0x80002000`. There is no What's new section and `distro/BUILD` stays the same.
+
+### GET_INFO reads the live counters under the GPU lock
+
+`gfx9_vmid_per_file` stays off. The lost bit, the guilty file and the buffer bytes are sampled while the lock is held. The copy back to the caller stays outside the lock. The host test checks that order. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A lost GPU releases parked buffers and their file trees
+
+`gfx9_vmid_per_file` stays off. After `gpu lost`, the retire treats every fence as passed. Parked buffers are released, and the last reference drops the file tree, its pages and its VMID. The host test holds a tree for a parked buffer, drops it as lost, and the counters are back at zero. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### Page-table pages count against the file's VRAM
+
+`gfx9_vmid_per_file` stays off. A file with its own tree refuses a VRAM buffer with `B_NO_MEMORY` when that file's buffers plus its page-table pages do not fit in the framebuffer. A map that cannot take a table page logs `page table pool full` and returns `B_NO_MEMORY`. The host test fills one file's budget and leaves the other file inside its budget. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A VA replace maps the request it already copied
+
+`gfx9_vmid_per_file` stays off. `gpu_va_replace` copies the user request once. The follow-up map reads that kernel copy, so a second user read cannot change the range while `sReplacing` skips the PRT check. The host test checks that the replace function calls `gpu_va_map_copied` and does not call `gpu_va_map` with the user buffer. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### A submit checks the indirect buffer again after the lock returns
+
+`gfx9_vmid_per_file` stays off. The sync wait and the ring-room wait drop the GPU lock. `gpu_submit` checks `gpu_ibs_mapped` again after each of those waits, before the cache flush. An unmap in that window refuses the submit. The host test maps a page, unmaps it, and the check returns false. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### The VM flush stays 26 dwords when the PASID settings are off
+
+`gfx9_vmid_per_file` stays off. `r5_cs_vm_switch` is the 26-dword flush again, with no PASID argument. `IH_VMID_n_LUT` is `r5_cs_pasid_map` after `PFP_SYNC_ME`, and only when `gfx9_pasid_map` or `gfx9_vmid_per_file` is on. With both off, a user job writes no LUT packet. The host test checks the 26 dwords and that the map follows them. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+### The isolation test reads and writes a foreign address
+
+`gfx9_vmid_per_file` stays off. `r5-gpu-isolation` maps one page in the first process, fills it with `0x5a`, and sends only the GPU address to a second process. That process submits COPY_DATA and then WRITE_DATA to the address. The owner's page is unchanged, and the program prints `vm fault` with that address. The self-test runs this before the kill stage. The host test checks those steps in the source. It was not run on hardware. There is no What's new section and `distro/BUILD` stays the same.
+
+### Buffers, page tables and VMIDs are counted
+
+`gfx9_vmid_per_file` stays off. `R5_GPU_GET_COUNTERS` is a new call at the end of the opcode list. It reports buffer objects, page-table pages and VMIDs for the open file and for the whole device, and the file trees and the pages those trees hold. The kill stage prints `counters back` when the counts match the reading from before the kill, and the difference when they do not. The host test checks that match, including a tree-page change. There is no What's new section and `distro/BUILD` stays the same.
+
+### Only the hung file is guilty
+
+`gfx9_vmid_per_file` stays off. After the watchdog, every open file sees the lost device. `R5_GPU_CAP_GUILTY` is set only on the file whose job was the oldest still in the ring, or whose PASID faulted. QUERY_STATE2 reports an innocent reset to the other files. The host test checks that lost without guilty is not a guilty query, and that both bits together are. There is no What's new section and `distro/BUILD` stays the same.
+
+### A page fault is queued for the file's PASID
+
+`gfx9_vmid_per_file` stays off. A VM flush with a non-zero PASID writes `IH_VMID_n_LUT` before the page-table base, so that packet is 31 dwords. A zero PASID stays the 26-dword flush. The interrupt handler, for a VMC or UTCL2 fault, only queues the PASID, the VMID and the address. The retire thread, which already holds the lock, marks that file and logs an unknown PASID without marking another file. The host test checks the 31-dword packet and that order. The ring order and the K2 fence are unchanged. There is no What's new section and `distro/BUILD` stays the same.
+
+### User VRAM is cleared before the next owner sees it
+
+`gfx9_vmid_per_file` stays off. A fresh VRAM bump is zeroed before it is published. A span that a previous owner freed is zeroed through the kernel address stored with it, whether or not the caller set `R5_GPU_BO_VRAM_CLEARED` (bit 3, the Linux `AMDGPU_GEM_CREATE_VRAM_CLEARED` flag). The host test frees a span, takes it again, and reads zeros for the taken bytes. There is no What's new section and `distro/BUILD` stays the same.
+
+### An indirect buffer cannot wrap the address space
+
+`gfx9_vmid_per_file` stays off. `gpu_ib_mapped` refuses a dword count of 0 or above `0xfffff`, an unaligned address, and a range whose byte sum does not fit in 64 bits. The pages have to fit the virtual-address layout. The walk stops on the last page, so the page counter does not wrap. The host test rejects an address near the top of 64 bits and a count of `0x100000`, and accepts eight dwords on the last page of that span. There is no What's new section and `distro/BUILD` stays the same.
+
+### The file tree is published under the GPU lock
+
+`gfx9_vmid_per_file` stays off. `gpu_open` builds the file tree, when the setting is on, while the lock is held, and returns the cookie after the lock is dropped. A failed tree takes the client back off the list. `gpu_control` still calls the same function under the lock. The host test checks that order in both functions. There is no What's new section and `distro/BUILD` stays the same.
+
+### Virtual-address checks stay inside one file tree
+
+`gfx9_vmid_per_file` stays off. Overlap, a partial range and a dropped range compare the caller's page table with the range that was stored. A PRT entry records that table and is dropped when the table is freed. Clearing one table leaves the same virtual address mapped in the other. The host test maps `0xffff800000001000` in two trees, clears the first, and the second page-table entry stays. There is no What's new section and `distro/BUILD` stays the same.
+
+### A parked buffer unmaps in a tree that is still live
+
+`gfx9_vmid_per_file` stays off. The file page table, its pages and its VMID owner are one object with a reference count. The open file holds one. A buffer parked because its job is still in the ring holds one more. The object is freed when the last reference goes, so the retire unmap does not use the freed client. `gpu_free` reads the fence once and stores that value on the tree. The host test closes with a job in flight, unmaps in the still-live tree, and checks the counters are back at zero. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A blocked fault signal ends the team
 
 `send_fault_signal()` unblocks a fault signal that is blocked or ignored and resets it to the default before sending it. The page fault uses that call. The ARM64 exception handler is not in this change. This sits on the wired-range copy of `vm.cpp`. It is haiku-pi `6e517bb52c`, copyright 2026 Witold Bołt, as GPL-3.0-or-later snippets. `scripts/apply-kernel-bugs.py` copies the files. The host test checks the handler and the page-fault call. `docs/HAIKU-RPI4-CHANGES.md` is not in this tree, so the QEMU proof named there did not run. It was not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
@@ -72,6 +158,22 @@ The well-known boot volume asks for `R_HardDiskIcon` instead of the nightly disk
 ### The boot splash is white
 
 The splash is 372×96 on `#FFFFFF`, with the dark wordmark and no border. The bootloader clears a 24-bit framebuffer to `#FFFFFF` (`fillByte` `0xff`, `fillWord` `0x00ffffff`). An 8-bit screen stays black. `distro/boot/platform/generic/video_splash.cpp` is the Haiku file with that fill in an SPDX snippet. `scripts/apply-branding.py` copies it. The progress strip stays Haiku's 308×80 layout. `haiku-splash-icons.png` is the unmodified MIT original. The generator lifts the rim off black onto white and draws the R5 mark on icon 4, where the leaf was. `apply-overlay.sh` installs `splash_icons.png`. `--check` covers the splash and the strip. This has not been booted. `distro/BUILD` stays 10049.
+
+### A file does not get VMID 1
+
+`gfx9_vmid_per_file` stays off. The file pool is VMID 2-15. VMID 1 stays the shared table. If the setting is on and `gfx9_vmids` is off, startup logs `gfx9_vmid_per_file needs gfx9_vmids` and leaves every job on VMID 1. The host test reserves fourteen file ids and none of them is 1. There is no What's new section and `distro/BUILD` stays the same.
+
+### A file table maps the CSA
+
+`gfx9_vmid_per_file` stays off. When `gfx9_ce_meta` is on, each new file tree maps the same 128 KiB CSA at the same virtual address as the shared tree. The setting off leaves the tables alone. The host test maps that address in a new tree and reads the page back. There is no What's new section and `distro/BUILD` stays the same.
+
+### An unmap stays in the tree that was mapped
+
+`gfx9_vmid_per_file` stays off. A mapped range stores its `r5_vm`. Map, unmap and lookup take that tree. There is no current tree, so closing one file does not clear the same virtual address in another file. The empty PTE stays `0x10` (not valid). The host test maps `0xffff800000001000` in two trees, clears the first, and the second page is unchanged. The ring order is unchanged. There is no What's new section and `distro/BUILD` stays the same.
+
+### Each open GPU file can have its own page table
+
+`gfx9_vmid_per_file` stays off. When the radeon_hd setting is on, the first call for an open render node builds a root with the same allocator as VMID 1, and a submit grabs a VMID from `r5_vmid_reserve` (the portable form of Linux v6.18 `amdgpu_vmid_grab`). The VM flush that already exists writes that root, then writes the shared root back. Off, the submit stays on VMID 1 and the shared tree. The debug switch still refuses the bit. The unmodified `amdgpu_ids.c` and `amdgpu_vm.c` from Linux v6.18 are stored under `distro/graphics/third_party/linux-v6.18/` and are not compiled: they include Linux kernel headers. The host test `scripts/test-r5-gpu.cpp` maps `0xffff800000001000` in two trees and reads two different pages and two roots. Page-table pages stay allocated until the next boot. A VMID above 1 still needs `gfx9_vmids` for its context bounds. The ring order, the K2 invalidate word, and VMID 0 are unchanged. The GPU-core split and the kernel copies on `cursor/gpu-m5` are not in this step: they remove the page-table files main now uses. `jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`. The image is `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image`, 2147483648 bytes, at 18:52 Europe/Amsterdam on 8 Nov 2026. VirtualBox `R5OS` was started from that image at 18:53 and was running. The desktop was not read. `gfx9_vmid_per_file` was not turned on, so this boot does not use the new page tables. There is no What's new section and `distro/BUILD` stays the same.
 
 ### The boot splash is black, and the Deskbar mark is centered
 

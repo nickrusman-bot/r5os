@@ -640,6 +640,76 @@ main()
 								"/bin/VulkanTeapot --selftest 2>&1", 120);
 						}
 					}
+					run_stage(out, "isolation",
+						"/bin/r5-gpu-isolation 2>&1", 60);
+					/* The kill loop still holds its buffers when the
+					 * stage returns. Read just before that stage, then
+					 * again every 100 ms for up to 2 s. */
+					r5_gpu_counters beforeKill;
+					memset(&beforeKill, 0, sizeof(beforeKill));
+					beforeKill.size = (uint32_t)sizeof(beforeKill);
+					beforeKill.version = 1;
+					{
+						int beforeFd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+						if (beforeFd >= 0) {
+							ioctl(beforeFd, R5_GPU_GET_COUNTERS, &beforeKill,
+								sizeof(beforeKill));
+							close(beforeFd);
+						}
+					}
+					run_stage(out, "kill",
+						"/bin/r5-gpu-isolation kill 2>&1", 2);
+					{
+						int again = open("/dev/gpu/radeon_hd/0", O_RDWR);
+						r5_gpu_counters afterCount;
+						memset(&afterCount, 0, sizeof(afterCount));
+						afterCount.size = (uint32_t)sizeof(afterCount);
+						afterCount.version = 1;
+						bool matched = false;
+						bool readOk = false;
+						if (again >= 0) {
+							bigtime_t start = system_time();
+							for (;;) {
+								r5_gpu_counters sample;
+								memset(&sample, 0, sizeof(sample));
+								sample.size = (uint32_t)sizeof(sample);
+								sample.version = 1;
+								if (ioctl(again, R5_GPU_GET_COUNTERS, &sample,
+										sizeof(sample)) == 0) {
+									afterCount = sample;
+									readOk = true;
+									if (r5_gpu_counters_match(&beforeKill,
+											&afterCount)) {
+										matched = true;
+										break;
+									}
+								}
+								if (system_time() - start >= 2000000)
+									break;
+								snooze(100000);
+							}
+						}
+						if (matched)
+							fprintf(out, "counters back\n");
+						else if (readOk) {
+							fprintf(out, "counters difference bo %u/%u "
+								"pages %u/%u vmids %u/%u trees %u/%u\n",
+								afterCount.bo_count - beforeKill.bo_count,
+								afterCount.bo_count_space
+									- beforeKill.bo_count_space,
+								afterCount.pt_pages - beforeKill.pt_pages,
+								afterCount.pt_pages_space
+									- beforeKill.pt_pages_space,
+								afterCount.vmids - beforeKill.vmids,
+								afterCount.vmids_space
+									- beforeKill.vmids_space,
+								afterCount.trees - beforeKill.trees,
+								afterCount.tree_pages
+									- beforeKill.tree_pages);
+						}
+						if (again >= 0)
+							close(again);
+					}
 					if (device_lost()) {
 						skip_lost(out, "selftest");
 						skip_lost(out, "ib");

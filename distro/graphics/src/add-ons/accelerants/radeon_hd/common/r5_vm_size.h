@@ -123,6 +123,39 @@ r5_gfx9_vmid_cntl(const struct r5_vm_size* size, int translate_further)
 }
 
 
+/* Linux v6.12 drivers/gpu/drm/amd/amdgpu/gmc_v9_0.c
+ * gmc_v9_0_vm_fault_interrupt_state(), lines 473-479. These are the
+ * ENABLE_INTERRUPT bits. gc_9_0_sh_mask.h puts each one immediately
+ * below the matching ENABLE_DEFAULT bit. */
+static inline uint32_t
+r5_gfx9_vmid_fault_irq_bits(void)
+{
+	return (1u << VM_CONTEXT0_CNTL__RANGE_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT)
+		| (1u << VM_CONTEXT0_CNTL__DUMMY_PAGE_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT)
+		| (1u << VM_CONTEXT0_CNTL__PDE0_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT)
+		| (1u << VM_CONTEXT0_CNTL__VALID_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT)
+		| (1u << VM_CONTEXT0_CNTL__READ_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT)
+		| (1u << VM_CONTEXT0_CNTL__WRITE_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT)
+		| (1u << VM_CONTEXT0_CNTL__EXECUTE_PROTECTION_FAULT_ENABLE_INTERRUPT__SHIFT);
+}
+
+
+/* Contexts 1 through 15. irq 0 is the default-only value from
+ * gfxhub_v1_0_setup_vmid_config. irq 1 ORs the interrupt bits, which
+ * is the value VMID 1 is given at its own setup. */
+static inline void
+r5_gfx9_vmid_cntl_list(const struct r5_vm_size* size, int irq,
+	uint32_t out[15])
+{
+	uint32_t cntl = r5_gfx9_vmid_cntl(size, 0);
+	uint32_t i;
+	if (irq)
+		cntl |= r5_gfx9_vmid_fault_irq_bits();
+	for (i = 0; i < 15u; i++)
+		out[i] = cntl;
+}
+
+
 static inline uint32_t
 r5_gfx9_sh_mem_config(void)
 {

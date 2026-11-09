@@ -2209,6 +2209,8 @@ static int sGpuDebug = 0;
 static int sFlushFence = 0;
 static int sCondExec = 0;
 static int sPasidMap = 0;
+/* gfx9_vmid_per_file. The LUT write follows the flush for that file. */
+static int sFilePasid = 0;
 static int sCeMeta = 0;
 static int sGdsSwitch = 0;
 static struct r5_gds sGdsState;
@@ -2547,7 +2549,10 @@ r5_gfx9_user_commit_dwords(uint32 count)
 	body = r5_cs_user_words(count);
 	if (body == 0)
 		return 0;
-	extra = r5_gfx9_vmid1_flush_due(&pd) ? r5_cs_vm_switch_words() : 0;
+	extra = r5_gfx9_vmid1_flush_due(&pd)
+		? r5_cs_vm_switch_words() : 0;
+	if (extra != 0 && sJobPasid != 0 && (sPasidMap || sFilePasid))
+		extra += 5u;
 	return extra + body + r5_cs_pad_dwords(
 		sRadeonGfx9Ring.submitted + extra + body);
 }
@@ -2578,6 +2583,13 @@ void
 r5_gfx9_set_pasid_map(int on)
 {
 	sPasidMap = on ? 1 : 0;
+}
+
+
+void
+r5_gfx9_set_file_pasid(int on)
+{
+	sFilePasid = on ? 1 : 0;
 }
 
 
@@ -2711,8 +2723,12 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	memset(&jobGds, 0, sizeof(jobGds));
 	int gds = sGdsSwitch && r5_gds_switch_needed(&sGdsState, &jobGds);
 	int inBlock = flush || gds;
+	uint32 mapVmid = 1;
+	if (flush && count > 0 && ibVm[0] >= 1u && ibVm[0] <= 15u)
+		mapVmid = ibVm[0];
 	int pasidMap = inBlock
-		&& r5_pasid_map_due(sPasidMap, sPasidOfVmid[1], sJobPasid);
+		&& r5_pasid_map_due(sPasidMap || sFilePasid,
+			sPasidOfVmid[mapVmid], sJobPasid);
 	int endFence = sFlushFence && (flush || pasidMap);
 	/* The CS ioctl has no GDS chunk. A GFX9 RADV job then carries
 	 * zeros, and the packet runs once for this VMID. */
@@ -2780,13 +2796,18 @@ r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 			r5_cs_cond_exec_mc(pageMc));
 	}
 	if (flush) {
-		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd, fenceMc,
-			sUserSequence);
+		switched = r5_cs_vm_switch(packets, cap, ibVm[0], pd,
+			fenceMc, sUserSequence);
+		if (sJobPasid != 0 && ibVm[0] < 16u) {
+			sPasidOfVmid[ibVm[0]] = sJobPasid;
+			sFileOfVmid[ibVm[0]] = sJobFile;
+		}
 	}
 	if (pasidMap) {
-		switched = r5_cs_pasid_map(packets, cap, switched, 1, sJobPasid);
-		sPasidOfVmid[1] = sJobPasid;
-		sFileOfVmid[1] = sJobFile;
+		switched = r5_cs_pasid_map(packets, cap, switched, mapVmid,
+			sJobPasid);
+		sPasidOfVmid[mapVmid] = sJobPasid;
+		sFileOfVmid[mapVmid] = sJobFile;
 	}
 	if (gds) {
 		switched = r5_cs_gds_switch(packets, cap, switched, 1, &jobGds);

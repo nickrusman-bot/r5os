@@ -429,10 +429,13 @@ r5_ctx(int fd, union drm_amdgpu_ctx *ctx)
 		 * no reset here. The lost bit is that report, so Mesa
 		 * returns VK_ERROR_DEVICE_LOST. */
 		if ((info.capabilities & R5_GPU_CAP_LOST) != 0) {
-			ctx->out.state.flags = AMDGPU_CTX_QUERY2_FLAGS_RESET
-				| AMDGPU_CTX_QUERY2_FLAGS_GUILTY;
+			ctx->out.state.flags = AMDGPU_CTX_QUERY2_FLAGS_RESET;
 			ctx->out.state.hangs = 1;
-			ctx->out.state.reset_status = AMDGPU_CTX_GUILTY_RESET;
+			ctx->out.state.reset_status = AMDGPU_CTX_INNOCENT_RESET;
+			if (r5_gpu_query_guilty(info.capabilities)) {
+				ctx->out.state.flags |= AMDGPU_CTX_QUERY2_FLAGS_GUILTY;
+				ctx->out.state.reset_status = AMDGPU_CTX_GUILTY_RESET;
+			}
 		}
 		return 0;
 	}

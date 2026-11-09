@@ -70,6 +70,30 @@ r5_vm_va_fits(uint64_t va, uint64_t bytes)
 	return low || high;
 }
 
+
+/* An indirect buffer is dword aligned and at most 0xfffff dwords.
+ * The covered pages have to sit in the VA layout. va + bytes must not wrap. */
+static inline int
+r5_ib_span(uint64_t va, uint32_t dwords, uint64_t* first, uint64_t* last)
+{
+	uint64_t bytes;
+	uint64_t end;
+	uint64_t span;
+	if (first == NULL || last == NULL || dwords == 0 || dwords > 0xfffffu
+		|| (va & 3ull) != 0)
+		return 0;
+	if (va > ~0ull - (uint64_t)dwords * 4ull)
+		return 0;
+	bytes = (uint64_t)dwords * 4ull;
+	end = va + bytes;
+	*first = va & ~0xfffull;
+	*last = (end - 1ull) & ~0xfffull;
+	if (*last < *first)
+		return 0;
+	span = *last - *first + 4096ull;
+	return r5_vm_va_fits(*first, span);
+}
+
 /* gpu_va_map adds the filled byte count to the GPU address. The sum
  * stays canonical. It is not masked before the walk. */
 static inline int
@@ -217,6 +241,107 @@ r5_vm_lookup(const r5_vm* vm, uint64_t va, uint64_t* pte)
 	if (pte != NULL)
 		*pte = leaf;
 	return (leaf & (uint64_t)R5_GFX9_PTE_VALID) != 0;
+}
+
+
+/* 1 when every page of the indirect buffer is still a valid leaf.
+ * A wait drops the lock; the submit calls this again and refuses a 0. */
+static inline int
+r5_ib_still_mapped(const r5_vm* vm, uint64_t va, uint32_t dwords)
+{
+	uint64_t first = 0;
+	uint64_t last = 0;
+	uint64_t page;
+	if (!r5_ib_span(va, dwords, &first, &last))
+		return 0;
+	for (page = first; ; page += 4096ull) {
+		if (!r5_vm_lookup(vm, page, NULL))
+			return 0;
+		if (page == last)
+			break;
+	}
+	return 1;
+}
+
+
+/* Linux amdgpu_map_static_csa. The same physical pages and the same
+ * virtual address, written into this tree. */
+static inline int
+r5_csa_map_pages(r5_vm* vm, uint64_t va, const uint64_t* page,
+	uint32_t count, uint64_t flags)
+{
+	uint32_t i;
+	if (vm == NULL || page == NULL || count == 0 || (va & 0xfffull) != 0)
+		return 0;
+	for (i = 0; i < count; i++) {
+		if (!r5_vm_map_page(vm, va + (uint64_t)i * 4096ull,
+				page[i] | flags))
+			return 0;
+	}
+	return 1;
+}
+
+
+/* A file's VRAM limit covers its buffers and its page-table pages.
+ * 0 means the sum does not fit. The caller returns B_NO_MEMORY. */
+static inline int
+r5_vram_fits(uint64_t limit, uint64_t buffers, uint32_t pages, uint64_t add)
+{
+	uint64_t tables;
+	if (pages > (uint32_t)(~0ull / 4096ull))
+		return 0;
+	tables = (uint64_t)pages * 4096ull;
+	if (buffers > ~0ull - tables)
+		return 0;
+	if (buffers + tables > limit)
+		return 0;
+	if (add > limit - (buffers + tables))
+		return 0;
+	return 1;
+}
+
+
+/* A file tree stays until the client and every parked buffer in it
+ * have dropped their reference. The counters return on the last drop. */
+struct r5_file_count {
+	int32_t		trees;
+	int32_t		pages;
+	int32_t		refs;
+};
+
+
+static inline void
+r5_file_count_open(struct r5_file_count* count, int32_t pages)
+{
+	if (count == NULL)
+		return;
+	count->trees++;
+	count->pages += pages;
+	count->refs++;
+}
+
+
+static inline void
+r5_file_count_hold(struct r5_file_count* count)
+{
+	if (count == NULL || count->refs <= 0)
+		return;
+	count->refs++;
+}
+
+
+/* 1 when this drop frees the tree. */
+static inline int
+r5_file_count_drop(struct r5_file_count* count, int32_t pages)
+{
+	if (count == NULL || count->refs <= 0)
+		return 0;
+	count->refs--;
+	if (count->refs > 0)
+		return 0;
+	count->trees--;
+	count->pages -= pages;
+	return 1;
 }
 
 #endif

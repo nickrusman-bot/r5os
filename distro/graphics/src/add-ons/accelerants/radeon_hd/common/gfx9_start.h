@@ -83,6 +83,19 @@ bool r5_gfx9_stage_ib(uint8* cpu, uint64 destVa);
 bool r5_gfx9_stage_wb(uint8* cpu, uint64 destVa);
 void r5_gfx9_cp_dump(const char* why, uint64 pte);
 bool r5_gfx9_vmid1_setup();
+/* gfx9_vmid_per_file. Off unless the radeon_hd setting says so.
+ * Map, unmap and lookup take the tree. There is no current tree. */
+struct r5_vm;
+struct r5_vm_page;
+bool r5_gfx9_vmid_per_file(void);
+/* The shared VMID 1 tree. A file tree is the r5_vm passed to map. */
+struct r5_vm* r5_gfx9_shared_vm(void);
+bool r5_gfx9_vm_map(struct r5_vm* vm, uint64 va, uint64 pte);
+bool r5_gfx9_vm_lookup(struct r5_vm* vm, uint64 va);
+bool r5_gfx9_file_vm_init(struct r5_vm* vm, struct r5_vm_page* pages,
+	uint32 capacity);
+/* Physical address with the valid bit, the root r5_gfx9_vmid1_setup wrote. */
+uint64 r5_gfx9_vmid1_shared_root(void);
 bool r5_gfx9_vmid1_map(uint64 va, uint64 pte);
 bool r5_gfx9_vmid1_flush();
 /* Page-table base for the ring flush: physical address with the valid bit. */
@@ -134,6 +147,8 @@ void r5_gfx9_set_flush_fence(int on);
 void r5_gfx9_set_cond_exec(int on);
 /* gfx9_pasid_map. Off unless the radeon_hd setting says so. */
 void r5_gfx9_set_pasid_map(int on);
+/* gfx9_vmid_per_file. The LUT packet follows the VM flush. */
+void r5_gfx9_set_file_pasid(int on);
 /* gfx9_ce_meta. Off unless the radeon_hd setting says so. */
 void r5_gfx9_set_ce_meta(int on);
 int r5_gfx9_ce_meta_on(void);
@@ -171,5 +186,8 @@ void r5_gfx9_log_state(const char* when, char* line, size_t bytes);
 /* The file last written into the IH LUT for this VMID. */
 uint64 r5_gfx9_file_for_vmid(uint32 vmid);
 uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);
+/* One queued page fault. 0 when the queue is empty. The interrupt
+ * handler only writes the queue. */
+int r5_gfx9_fault_take(uint32* pasid, uint32* vmid, uint64* addr);
 
 #endif
