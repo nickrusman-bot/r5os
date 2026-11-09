@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Network shares are on the VirtualBox image
+
+smbfs.hpkg and userland_fs.hpkg were both in the first-boot package list. Tracker and Deskbar started on that image and again after a restart. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
