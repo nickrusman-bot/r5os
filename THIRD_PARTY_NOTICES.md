@@ -30,6 +30,11 @@ Location: `distro/kernel/src/system/kernel/thread.cpp`.
 
 The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 
+### I/O request iteration
+
+Location: `distro/kernel/src/system/kernel/device_manager/IORequest.cpp` and `IORequest.h`.
+
+The files are Haiku's. Copyright the Haiku authors named in the files. License: MIT. One block is haiku-pi `90fa3bc401` (star row 19): a fragmented file is walked in a loop instead of by recursion. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku headers stay.
 ### Page writer flush after a timeout
 
 Location: `distro/kernel/src/system/kernel/vm/vm_page_writer.cpp`.
