@@ -96,7 +96,7 @@ Copyright, URLs, and what was not copied (AirPlay 2 pairing, NQPTP, FairPlay) ar
 
 Location: `distro/smb/src/libs/libsmb2`, public headers `distro/smb/headers/libs/libsmb2`.
 
-libsmb2 6.2 (tag `libsmb2-6.2`, `d67e213`), from https://github.com/sahlberg/libsmb2, as brought into air/OS (`github.com/airos-works/haiku`). Copyright 2016 Ronnie Sahlberg. Portions of the sources are copyright 2017 Primary Data Inc. License: LGPL-2.1-or-later. The license text is `LICENSES/LGPL-2.1.txt` and `distro/smb/src/libs/libsmb2/LICENCE-LGPL-2.1.txt`. The Haiku notes are `README.haiku`. The Kerberos wrapper is not included. The library is built as the static library `libsmb2.a`.
+libsmb2 6.2 (tag `libsmb2-6.2`, `d67e213`), from https://github.com/sahlberg/libsmb2, as brought into air/OS (`github.com/airos-works/haiku`). Copyright 2016 Ronnie Sahlberg. Portions of the sources are copyright 2017 Primary Data Inc. License: LGPL-2.1-or-later. The license text is `LICENSES/LGPL-2.1.txt` and `distro/smb/src/libs/libsmb2/LICENCE-LGPL-2.1.txt`. The Haiku notes are `README.haiku`. The Kerberos wrapper is not included. The library is linked statically into the smbfs add-on. The source of libsmb2 and the object files of smbfs are available so that add-on can be linked again. The source is in this repository at `distro/smb/src/libs/libsmb2/` and `distro/smb/headers/libs/libsmb2/`. The object files are those of the smbfs add-on built from `distro/smb/src/add-ons/kernel/file_systems/smbfs/`.
 
 ### SMB file system
 
