@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Deleting a folder does not stall a disk sync
+
+BFS kept a reference to a file until its I/O finished, then dropped that reference on the I/O notifier thread. If the file had been removed, that drop deleted the inode there and could wait for the journal while the thread that held the journal waited for the notifier. The last reference is now handed to the vnode undertaker, which deletes the inode on its own thread. The shell build of BFS still uses its own put. This is haiku-pi star row 57, commit 44cc183c0c. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
