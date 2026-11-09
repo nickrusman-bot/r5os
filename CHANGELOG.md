@@ -20,6 +20,42 @@ A FUSE file system had one server, so the next share of that kind could not be m
 
 smbfs.hpkg and userland_fs.hpkg were both in the first-boot package list. Tracker and Deskbar started on that image and again after a restart. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/.
 
+### Deleting a folder does not stall a disk sync
+
+BFS kept a reference to a file until its I/O finished, then dropped that reference on the I/O notifier thread. If the file had been removed, that drop deleted the inode there and could wait for the journal while the thread that held the journal waited for the notifier. The last reference is now handed to the vnode undertaker, which deletes the inode on its own thread. The shell build of BFS still uses its own put. This is haiku-pi star row 57, commit 44cc183c0c. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### Unplugging a USB disk does not stall its transfer
+
+Tearing a USB disk down deleted each LUN's I/O scheduler while holding the device lock. The scheduler thread runs the disk transfer, which takes that same lock, so the two threads could wait for each other. The schedulers are now deleted after the device is marked removed and before the lock is taken. A transfer that is still queued for a removed disk finishes at once with "device not ready" instead of waiting out each command. This is haiku-pi star row 54, commit d3cc8e3fd1. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### A volume that cannot be mounted does not stop the system
+
+When a BFS mount failed after the journal had been created, the journal was left in place. If the block allocator had opened a transaction to repair the bitmap, deleting the block cache then panicked. A failed mount now waits for the block allocator, then deletes the root node and the journal, and returns the error. This is haiku-pi star row 50, commit 9799738757. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### A profiler timer is stopped when the program stops
+
+Profiling left a timer armed on a CPU after the profiled thread was gone. The next use of that timer could hang the CPU, or the timer could fire for an idle thread and crash. A thread is now passed through the debugger code on the way out while it still has a profiling timer, the timer is cancelled before it is armed again, and it is cancelled when a profiled thread exits. A timer that is not the running thread's is ignored. This is haiku-pi star row 23, commit 5180e96119. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### A shared file stays shared after its protection changes
+
+Changing the protection of a mapped file inserted a copy-on-write cache whenever that cache had consumers, including a file cache. A shared mapping then stopped sharing with the file, and with mappings made later. A file cache is no longer made copy-on-write on that path. The creation flags already kept by `vm_set_area_protection` are unchanged. This is haiku-pi star row 21, commit 894c4abe7f. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### A large fragmented file no longer overflows the kernel stack
+
+An I/O request walked the rest of a fragmented file by calling its iteration callback again from the completion of the previous piece. Synchronous I/O finishes before that callback returns, so each round of file vectors added another kernel stack frame. A large fragmented file could run off the end of the stack. A completion that arrives while the callback is still running is now only recorded. The caller's loop continues with the next round. Asynchronous completions are unchanged. This is haiku-pi star row 19, commit 90fa3bc401. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### The page writer saves the last modified pages when its wait ends
+
+The per-device page writer waited up to three seconds for a full batch. A timeout went straight back to waiting, so the last modified pages of a device, fewer than 256 pages, stayed in memory until a sync. A power cut lost them. The wait still happens, and the under-quota condition is unchanged. After the wait, including a timeout, the writer continues and writes whatever modified pages there are. An empty queue is still skipped just below that. This is haiku-pi star row 18, commit 1539d29eee. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
+### PCI devices on another firmware segment can be seen
+
+The PCI bus manager on x86_64 treated every bus number as segment 0 and skipped every other segment in the firmware's memory-mapped configuration table. Segment 0 is unchanged: its bus numbers and its configuration window stay as they were. Each other segment is a further host controller. It does not claim the legacy configuration port, and it does not fall back to that port. A bus number segment 0 already uses stays on segment 0. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. Another firmware segment was not exercised. There is no What's new section and `distro/BUILD` stays the same.
+
+### A per-thread value in a startup library can be loaded
+
+The runtime loader rejected the x86_64 initial-exec TLS relocations, so a library built that way did not load. Those relocations are now accepted. The value stored is not the symbol's offset in the ELF TLS block by itself: the thread pointer is the start of the slot array, and the ELF block is not there. The startup images' TLS template bytes are placed at one fixed offset from the thread pointer on every thread, and the relocation stores that offset plus the symbol offset and the addend. A 32-bit relocation is written as 32 bits. The host check is `scripts/test-tpoff-offset.cpp`. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. The library load was not run in the guest. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
