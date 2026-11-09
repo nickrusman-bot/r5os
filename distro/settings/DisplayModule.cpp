@@ -17,6 +17,7 @@
 #include <Alert.h>
 #include <Box.h>
 #include <Button.h>
+#include <Card.h>
 #include <ControlLook.h>
 #include <GroupLayout.h>
 #include <GroupView.h>
@@ -42,6 +43,7 @@
 #include <string.h>
 
 
+using BAppearanceKit::BCard;
 using BAppearanceKit::BScreenArrangement;
 using BAppearanceKit::screen_tile;
 
@@ -103,15 +105,7 @@ quiet_color(uint8 amount)
 static rgb_color
 box_fill()
 {
-	return mix_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 100);
-}
-
-
-static rgb_color
-box_border()
-{
-	return tint_color(ui_color(B_PANEL_BACKGROUND_COLOR), B_DARKEN_2_TINT);
+	return r5_settings_tile_fill();
 }
 
 
@@ -161,6 +155,77 @@ private:
 };
 
 
+// A box filled only inside its border. With the fill as the view colour,
+// the strip above the border beside the title was light too. The fill
+// starts at the top border line, not at InnerFrame(): that starts under
+// the whole title and left a grey band below the line.
+class FilledBox : public BBox {
+public:
+								FilledBox(const char* name)
+									:
+									BBox(name)
+								{
+									SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+								}
+
+	virtual	void				Draw(BRect updateRect)
+								{
+									BRect fill = InnerFrame().InsetByCopy(-1, -1);
+									fill.top = TopBorderOffset() + 1;
+									SetHighColor(box_fill());
+									FillRect(fill);
+									BBox::Draw(updateRect);
+								}
+};
+
+
+// The box title sits on the border line, as in the mockup: window grey
+// above the line, the box fill below it. A plain BStringView painted one
+// block of a single colour behind the text.
+class BoxTitle : public BStringView {
+public:
+								BoxTitle(const char* text)
+									:
+									BStringView("box title", text)
+								{
+									SetFont(r5_settings_bold_font());
+								}
+
+	virtual	void				Draw(BRect updateRect)
+								{
+									(void)updateRect;
+									BRect bounds = Bounds();
+									float line = bounds.top
+										+ floorf(bounds.Height() / 2.0f);
+									BBox* box = dynamic_cast<BBox*>(Parent());
+									if (box != NULL)
+										line = box->TopBorderOffset()
+											- Frame().top;
+									BRect top = bounds;
+									top.bottom = line;
+									BRect bottom = bounds;
+									bottom.top = line + 1;
+									SetHighColor(ui_color(
+										B_PANEL_BACKGROUND_COLOR));
+									FillRect(top);
+									SetHighColor(box_fill());
+									FillRect(bottom);
+									font_height height;
+									GetFontHeight(&height);
+									float y = (bounds.top + bounds.bottom
+										- ceilf(height.ascent)
+										- ceilf(height.descent)) / 2.0f
+										+ ceilf(height.ascent);
+									SetDrawingMode(B_OP_OVER);
+									SetHighColor(ui_color(
+										B_PANEL_TEXT_COLOR));
+									DrawString(Text(), BPoint(bounds.left,
+										y));
+									SetDrawingMode(B_OP_COPY);
+								}
+};
+
+
 class WorkspaceWatch : public BMessageFilter {
 public:
 								WorkspaceWatch(WorkspaceGrid* grid)
@@ -182,36 +247,6 @@ public:
 
 private:
 			WorkspaceGrid*		fGrid;
-};
-
-
-class ArrangementCard : public BView {
-public:
-								ArrangementCard()
-									:
-									BView("arrangement", B_WILL_DRAW
-										| B_FULL_UPDATE_ON_RESIZE)
-								{
-									SetViewColor(ui_color(
-										B_DOCUMENT_BACKGROUND_COLOR));
-								}
-
-	virtual	void				Draw(BRect updateRect)
-								{
-									(void)updateRect;
-									SetHighColor(ui_color(
-										B_DOCUMENT_BACKGROUND_COLOR));
-									FillRect(Bounds());
-									SetHighColor(box_border());
-									StrokeRect(Bounds());
-								}
-
-	virtual	void				MessageReceived(BMessage* message)
-								{
-									if (message->what == B_COLORS_UPDATED)
-										Invalidate();
-									BView::MessageReceived(message);
-								}
 };
 
 
@@ -240,7 +275,7 @@ private:
 			bool				fConfirming;
 			BAlert*				fAlert;
 			BMessageRunner*		fConfirmRunner;
-			ArrangementCard*	fArrangement;
+			BCard*				fArrangement;
 			BStringView*		fArrangeTitle;
 			BStringView*		fArrangeHint;
 			BScreenArrangement*	fScreens;
@@ -251,6 +286,7 @@ private:
 			BMenuField*			fResolutionField;
 			BMenuField*			fColorsField;
 			BMenuField*			fRefreshField;
+			BMenuField*			fScopeField;
 			BLayoutItem*		fColorsLabelItem;
 			BLayoutItem*		fColorsMenuItem;
 			BSpinner*			fColumns;
@@ -263,6 +299,9 @@ private:
 			BPopUpMenu*			fColorsMenu;
 			BPopUpMenu*			fRefreshMenu;
 			BButton*			fApply;
+			BGridView*			fSpinners;
+			BGroupLayout*		fWorkRow;
+			BGroupLayout*		fBoxRow;
 };
 
 
@@ -312,6 +351,7 @@ private:
 			DisplayChoice		fActive;
 			DisplayChoice		fSelected;
 			display_mode		fPreviousMode;
+			DisplayChoice		fPreviousChoice;
 			int32				fSettled;
 			bool				fTiming;
 };
@@ -374,7 +414,7 @@ WorkspaceGrid::_Cell(int32 column, int32 row) const
 	float u = unit();
 	float left = u * 4.0f + column * (u * 34.0f + u * 3.0f);
 	float top = u * 4.0f + row * (u * 22.0f + u * 3.0f);
-	return BRect(left, top, left + u * 34.0f, top + u * 22.0f);
+	return BRect(left, top, left + u * 34.0f - 1, top + u * 22.0f - 1);
 }
 
 
@@ -386,18 +426,23 @@ WorkspaceGrid::Draw(BRect updateRect)
 	SetHighColor(box_fill());
 	FillRect(Bounds());
 	int32 current = current_workspace();
+	// The frame and the gaps are one dark plate (#3b3f46). The cells sit on
+	// it: the current one in the selection colour, the others in a lighter
+	// desktop colour.
 	rgb_color frame = mix_color(ui_color(B_PANEL_BACKGROUND_COLOR),
 		ui_color(B_DOCUMENT_TEXT_COLOR), 200);
+	BSize size = _Size();
+	BRect plate(0, 0, size.width - 1, size.height - 1);
+	SetHighColor(frame);
+	FillRoundRect(plate, u * 3.0f, u * 3.0f);
+	rgb_color other = tint_color(ui_color(B_DESKTOP_COLOR), B_LIGHTEN_2_TINT);
 	for (uint32 row = 0; row < fRows; row++) {
 		for (uint32 column = 0; column < fColumns; column++) {
 			BRect cell = _Cell(column, row);
 			int32 index = (int32)(row * fColumns + column);
 			SetHighColor(index == current
-				? ui_color(B_STATUS_BAR_COLOR)
-				: ui_color(B_DESKTOP_COLOR));
-			FillRoundRect(cell, u * 3.0f, u * 3.0f);
-			SetHighColor(frame);
-			StrokeRoundRect(cell, u * 3.0f, u * 3.0f);
+				? ui_color(B_STATUS_BAR_COLOR) : other);
+			FillRect(cell);
 		}
 	}
 }
@@ -459,6 +504,7 @@ DisplayModule::DisplayModule()
 	fOpened.rows = 1;
 	fActive = fOpened;
 	fSelected = fOpened;
+	fPreviousChoice = fOpened;
 }
 
 
@@ -540,6 +586,8 @@ DisplayModule::RevertSettings(SettingsContext* context)
 		fActive = fOpened;
 	if (fView != NULL)
 		fView->ShowChoice(fActive, true);
+	if (fContext != NULL)
+		fContext->NotifyChanged(Identifier());
 	return status;
 }
 
@@ -565,6 +613,10 @@ DisplayModule::UserEdited(const DisplayChoice& choice, bool workspaces)
 	}
 	if (fView != NULL)
 		fView->ShowChoice(fSelected, false);
+	// The window enables Revert from IsModified(). Without this call it
+	// never asked, and Revert stayed grey.
+	if (fContext != NULL)
+		fContext->NotifyChanged(Identifier());
 }
 
 
@@ -586,7 +638,12 @@ DisplayModule::_SetMode(const display_mode& mode, bool all, bool makeDefault)
 void
 DisplayModule::_RestoreHardware()
 {
-	_SetMode(fPreviousMode, fActive.allWorkspaces, false);
+	// fActive is the trial mode at this point. Go back to the choice from
+	// before Apply, so the menus show the picture that returned.
+	_SetMode(fPreviousMode, fPreviousChoice.allWorkspaces, false);
+	fActive = fPreviousChoice;
+	fActive.columns = fSelected.columns;
+	fActive.rows = fSelected.rows;
 	fSelected = fActive;
 }
 
@@ -615,6 +672,7 @@ DisplayModule::Apply()
 		return status;
 
 	fPreviousMode = previous;
+	fPreviousChoice = fActive;
 	fActive = fSelected;
 	fSettled = 0;
 	fTiming = true;
@@ -635,9 +693,13 @@ DisplayModule::Settle(bool keep)
 		if (_Match(fSelected, mode))
 			_SetMode(mode, fSelected.allWorkspaces, true);
 		fActive = fSelected;
+		if (fContext != NULL)
+			fContext->NotifyChanged(Identifier());
 		return;
 	}
 	_RestoreHardware();
+	if (fContext != NULL)
+		fContext->NotifyChanged(Identifier());
 }
 
 
@@ -660,6 +722,7 @@ DisplayView::DisplayView(DisplayModule* module)
 	fResolutionField(NULL),
 	fColorsField(NULL),
 	fRefreshField(NULL),
+	fScopeField(NULL),
 	fColorsLabelItem(NULL),
 	fColorsMenuItem(NULL),
 	fColumns(NULL),
@@ -671,19 +734,22 @@ DisplayView::DisplayView(DisplayModule* module)
 	fResolutionMenu(NULL),
 	fColorsMenu(NULL),
 	fRefreshMenu(NULL),
-	fApply(NULL)
+	fApply(NULL),
+	fSpinners(NULL),
+	fWorkRow(NULL),
+	fBoxRow(NULL)
 {
 	float u = unit();
-	fArrangement = new ArrangementCard();
+	fArrangement = new BCard("arrangement", BAppearanceKit::B_CARD_DOCUMENT,
+		B_VERTICAL);
 	fArrangeTitle = new BStringView("arrange title", "Arrangement");
 	fArrangeHint = new BStringView("arrange hint",
 		"Drag the screens to match your desk. Click one to change it.");
 	fScreens = new BScreenArrangement("screens", new BMessage(kMsgScreen));
 	fScreens->SetDraggable(false);
 
-	fScreenBox = new BBox("screen");
-	fScreenBox->SetViewColor(box_fill());
-	fScreenLabel = r5_settings_box_title("Screen");
+	fScreenBox = new FilledBox("screen");
+	fScreenLabel = new BoxTitle("Screen");
 	fScreenBox->SetLabel(fScreenLabel);
 
 	fScopeMenu = new BPopUpMenu("scope", true, true);
@@ -692,8 +758,7 @@ DisplayView::DisplayView(DisplayModule* module)
 	fScopeMenu->AddItem(new BMenuItem("This workspace",
 		new BMessage(kMsgScope)));
 	fAllItem->SetMarked(true);
-	BMenuField* scopeField = new BMenuField("scope field", "Apply to:",
-		fScopeMenu);
+	fScopeField = new BMenuField("scope field", "Apply to:", fScopeMenu);
 
 	fResolutionMenu = new BPopUpMenu("resolution", true, true);
 	fColorsMenu = new BPopUpMenu("colors", true, true);
@@ -724,9 +789,9 @@ DisplayView::DisplayView(DisplayModule* module)
 		fRefreshField->CreateMenuBarLayoutItem(), 1, 1);
 	controls->GridLayout()->AddItem(fColorsLabelItem, 0, 2);
 	controls->GridLayout()->AddItem(fColorsMenuItem, 1, 2);
-	controls->GridLayout()->AddItem(scopeField->CreateLabelLayoutItem(), 0, 3);
+	controls->GridLayout()->AddItem(fScopeField->CreateLabelLayoutItem(), 0, 3);
 	controls->GridLayout()->AddItem(
-		scopeField->CreateMenuBarLayoutItem(), 1, 3);
+		fScopeField->CreateMenuBarLayoutItem(), 1, 3);
 	BLayoutBuilder::Group<>(fScreenGroup)
 		.Add(controls)
 		.AddGroup(B_HORIZONTAL, 0)
@@ -735,9 +800,9 @@ DisplayView::DisplayView(DisplayModule* module)
 			.End()
 		.AddGlue();
 
-	BBox* workBox = new BBox("workspaces");
-	workBox->SetViewColor(box_fill());
-	workBox->SetLabel(r5_settings_box_title("Workspaces"));
+	BBox* workBox = new FilledBox("workspaces");
+	BStringView* workLabel = new BoxTitle("Workspaces");
+	workBox->SetLabel(workLabel);
 	fColumns = new BSpinner("columns", "Columns:", new BMessage(kMsgColumns));
 	fRows = new BSpinner("rows", "Rows:", new BMessage(kMsgRows));
 	fColumns->SetRange(1, 32);
@@ -747,31 +812,44 @@ DisplayView::DisplayView(DisplayModule* module)
 	fWorkGroup = new BGroupView(B_VERTICAL, 0);
 	fWorkGroup->SetViewColor(box_fill());
 	workBox->AddChild(fWorkGroup);
+	// A spinner placed as one view sizes its field from what the label
+	// leaves over, so Columns and Rows got fields of different widths.
+	// Label and field as separate grid items line both fields up.
+	fSpinners = new BGridView(B_USE_DEFAULT_SPACING, u * 6.0f);
+	fSpinners->SetViewColor(box_fill());
+	fSpinners->GridLayout()->AddItem(fColumns->CreateLabelLayoutItem(), 0, 0);
+	fSpinners->GridLayout()->AddItem(fColumns->CreateTextViewLayoutItem(),
+		1, 0);
+	fSpinners->GridLayout()->AddItem(fRows->CreateLabelLayoutItem(), 0, 1);
+	fSpinners->GridLayout()->AddItem(fRows->CreateTextViewLayoutItem(), 1, 1);
+	fSpinners->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT, B_ALIGN_TOP));
 	BLayoutBuilder::Group<>(fWorkGroup)
-		.AddGroup(B_HORIZONTAL, 0)
+		.AddGroup(B_HORIZONTAL, u * 12.0f)
+			.GetLayout(&fWorkRow)
 			.Add(fGrid)
-			.AddGroup(B_VERTICAL, 0)
-				.Add(fColumns)
-				.Add(fRows)
-				.End()
+			.Add(fSpinners)
 			.AddGlue()
 			.End()
 		.Add(fWorkspaceLine)
 		.AddGlue();
+	fGrid->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT, B_ALIGN_TOP));
 
-	BLayoutBuilder::Group<>(fArrangement)
+	// BLayoutBuilder::Group<>(BView*) would replace the card's vertical
+	// layout with a horizontal one. Build into the layout BCard made.
+	BLayoutBuilder::Group<>(
+		dynamic_cast<BGroupLayout*>(fArrangement->GetLayout()))
 		.AddGroup(B_HORIZONTAL, u * 10.0f)
 			.Add(fArrangeTitle)
 			.Add(fArrangeHint)
 			.AddGlue()
 			.End()
-		.Add(fScreens)
-		.AddGlue(0);
+		.Add(fScreens);
 
 	BLayoutBuilder::Group<>(this)
 		.SetInsets(0)
 		.Add(fArrangement, 0)
-		.AddGroup(B_HORIZONTAL, 0, 1.0f)
+		.AddGroup(B_HORIZONTAL, u * 10.0f, 1.0f)
+			.GetLayout(&fBoxRow)
 			.Add(fScreenBox, 1.6f)
 			.Add(workBox, 1.0f)
 			.End();
@@ -784,14 +862,14 @@ void
 DisplayView::_ApplySizes()
 {
 	float u = unit();
-	fArrangement->SetExplicitMinSize(BSize(0, u * 150.0f + u * 12.5f
-		+ u * 6.0f + u * 10.0f + u * 12.0f));
-	fArrangement->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED,
-		u * 150.0f + u * 36.0f));
 	BFont title = sized_font(u * 12.5f, true);
 	BFont hint = sized_font(u * 11.5f, false);
 	fArrangeTitle->SetFont(&title);
-	fArrangeTitle->SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+	fArrangeTitle->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	fArrangeTitle->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	fArrangeHint->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	fArrangeHint->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	fArrangeTitle->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 	fArrangeHint->SetFont(&hint);
 	fArrangeHint->SetHighColor(quiet_color(140));
 	fScreens->SetExplicitMinSize(BSize(u * 220.0f, u * 150.0f));
@@ -810,10 +888,11 @@ DisplayView::_ApplySizes()
 	fResolutionField->SetFont(&label);
 	fRefreshField->SetFont(&label);
 	fColorsField->SetFont(&label);
+	fScopeField->SetFont(&label);
 	BFont button = sized_font(be_plain_font->Size(), true);
 	fApply->SetFont(&button);
-	fApply->SetExplicitMinSize(BSize(u * 72.0f, u * 28.0f));
-	fApply->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, u * 28.0f));
+	fApply->SetExplicitMinSize(BSize(B_SIZE_UNSET, u * 28.0f));
+	fApply->SetExplicitMaxSize(BSize(B_SIZE_UNSET, u * 28.0f));
 
 	BGroupLayout* screenLayout
 		= fScreenGroup != NULL
@@ -833,36 +912,29 @@ DisplayView::_ApplySizes()
 	BFont line = sized_font(u * 11.5f, false);
 	fWorkspaceLine->SetFont(&line);
 	fWorkspaceLine->SetHighColor(quiet_color(160));
-	fColumns->SetExplicitMinSize(BSize(u * 120.0f, u * 22.0f));
-	fRows->SetExplicitMinSize(BSize(u * 120.0f, u * 22.0f));
-	fColumns->SetExplicitMaxSize(BSize(u * 160.0f, u * 22.0f));
-	fRows->SetExplicitMaxSize(BSize(u * 160.0f, u * 22.0f));
-	fColumns->TextView()->SetExplicitMinSize(BSize(u * 44.0f, u * 22.0f));
-	fColumns->TextView()->SetExplicitMaxSize(BSize(u * 44.0f, u * 22.0f));
-	fRows->TextView()->SetExplicitMinSize(BSize(u * 44.0f, u * 22.0f));
-	fRows->TextView()->SetExplicitMaxSize(BSize(u * 44.0f, u * 22.0f));
 
 	BMenuBar* bars[] = {
 		fResolutionField->MenuBar(), fRefreshField->MenuBar(),
-		fColorsField->MenuBar()
+		fColorsField->MenuBar(), fScopeField->MenuBar()
 	};
-	for (int32 index = 0; index < 3; index++) {
+	for (int32 index = 0; index < 4; index++) {
 		if (bars[index] == NULL)
 			continue;
-		bars[index]->SetExplicitMinSize(BSize(u * 140.0f, u * 26.0f));
+		bars[index]->SetExplicitMinSize(BSize(B_SIZE_UNSET, u * 26.0f));
 		bars[index]->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, u * 26.0f));
 	}
+
+	if (fSpinners != NULL)
+		fSpinners->GridLayout()->SetVerticalSpacing(u * 6.0f);
+	if (fWorkRow != NULL)
+		fWorkRow->SetSpacing(u * 12.0f);
 
 	if (GetLayout() != NULL) {
 		BGroupLayout* layout = dynamic_cast<BGroupLayout*>(GetLayout());
 		if (layout != NULL) {
 			layout->SetSpacing(u * 10.0f);
-			if (layout->ItemAt(1) != NULL) {
-				BGroupLayout* row = dynamic_cast<BGroupLayout*>(
-					layout->ItemAt(1)->Layout());
-				if (row != NULL)
-					row->SetSpacing(u * 10.0f);
-			}
+			if (fBoxRow != NULL)
+				fBoxRow->SetSpacing(u * 10.0f);
 		}
 	}
 }
@@ -903,8 +975,8 @@ DisplayView::_FillMenus()
 		delete fColorsMenu->RemoveItem((int32)0);
 
 	display_mode recommended;
-	bool hasRecommended = display_screen_recommended(fModule->Modes(),
-		fModule->ModeCount(), &recommended);
+	bool hasRecommended = display_screen_recommended(B_MAIN_SCREEN_ID.id,
+		&recommended);
 
 	int32 previousWidth = -1;
 	int32 previousHeight = -1;
@@ -1093,16 +1165,34 @@ DisplayView::_UpdatePicture()
 		tiles[index].main = screen->main;
 		tiles[index].enabled = true;
 	}
+	int32 selected = fScreens->Selected();
 	fScreens->SetScreens(tiles, screens.CountItems());
 	delete[] tiles;
-	fScreens->SetSelected(screens.ItemAt(0)->id);
-	fScreens->SetCaption(screens.CountItems() > 1
-		? "The Deskbar is on screen 1." : NULL);
+	int32 selectedIndex = 0;
+	int32 mainIndex = 0;
+	for (int32 index = 0; index < screens.CountItems(); index++) {
+		if (screens.ItemAt(index)->id == selected)
+			selectedIndex = index;
+		if (screens.ItemAt(index)->main)
+			mainIndex = index;
+	}
+	fScreens->SetSelected(screens.ItemAt(selectedIndex)->id);
+	BString caption;
+	if (screens.CountItems() > 1) {
+		caption.SetToFormat("The Deskbar is on screen %" B_PRId32 ".",
+			mainIndex + 1);
+	}
+	fScreens->SetCaption(caption.String());
 	fScreens->SetDraggable(screens.CountItems() > 1);
 
-	BString title("Screen");
+	// With one screen the title has no number.
+	BString title;
 	if (screens.CountItems() == 1)
 		title.SetToFormat("Screen – %s", screens.ItemAt(0)->name.String());
+	else {
+		title.SetToFormat("Screen %" B_PRId32 " – %s", selectedIndex + 1,
+			screens.ItemAt(selectedIndex)->name.String());
+	}
 	fScreenLabel->SetText(title.String());
 	fScreenBox->InvalidateLayout();
 }
@@ -1200,6 +1290,7 @@ DisplayView::MessageReceived(BMessage* message)
 			_Edited(true);
 			break;
 		case kMsgScreen:
+			_UpdatePicture();
 			break;
 		case kMsgApply:
 		{

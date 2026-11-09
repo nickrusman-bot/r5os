@@ -172,13 +172,44 @@ heading->SetIcon(icon);
 
 ## Screen arrangement
 
-`BAppearanceKit::BScreenArrangement` draws one or more screens in a row, the way Display shows them. The header is `<ScreenArrangement.h>`. It is a control. A click sends the message from the constructor with `int32 "be:screen"` set to that screen's id. The view does not change the system.
+`BAppearanceKit::BScreenArrangement` draws one or more screens in their places on the desk, the way Display shows them. The header is `<ScreenArrangement.h>`. It is a `BView` and a `BInvoker`. A click, Space, or Enter sends the message from the constructor with `int32 "be:screen"` set to that screen's id. The target is the window unless `SetTarget()` names another. The view does not change the system. The caller applies a change.
 
-`SetScreens()` copies the tiles. `ScreenAt()` is valid until the next `SetScreens()`. The name pointer inside it points at that copy. Tiles are kept in id order. `SetSelected(-1)` selects none. `SetCaption(NULL)` hides the caption.
+```cpp
+namespace BAppearanceKit {
 
-The picture is filled with the list background mixed toward `B_CONTROL_HIGHLIGHT_COLOR` by 18, and stroked with the same mix at 48. That is the Search tip blue (`#f3f6fb` and `#dbe3ef` on the light theme). Each screen is `r5_screen_draw()`, filled with `B_DESKTOP_COLOR`. The main screen then draws the Deskbar strip the same way Desktop and Deskbar does, following the running Deskbar. A filled circle sits in the glass with the number, starting at 1 in id order. The selected circle uses `B_STATUS_BAR_COLOR`. The others use the control border. The name is one bold line under the frame, cut with an ellipsis. A selected screen has a ring in `B_STATUS_BAR_COLOR` just outside the frame. Keyboard focus strokes the view in `B_KEYBOARD_NAVIGATION_COLOR`. The caption is one line at the bottom left, in the document background mixed toward the document text by 140 (`#64748b` on the light theme).
+struct screen_tile {
+	int32		id;			// the caller's id for this screen
+	BRect		frame;		// in desktop coordinates
+	const char*	name;		// copied by SetScreens()
+	bool		main;		// the Deskbar is on this screen
+	bool		enabled;	// false draws it dimmed
+};
 
-One screen is centered and keeps its own shape. Its height is at most 60 percent of the view. It is not stretched across the width. More than one screen are scaled together so the gaps stay, and the group is centered. Dragging is off unless `SetDraggable(true)` and there are two or more screens. On release, a screen snaps so its edge meets the next one, with no gap and no overlap. The modification message, adopted by `SetModificationMessage()`, then goes to the window with `int32 "be:screen"` and `BPoint "be:origin"` (the new top left in desktop coordinates).
+class BScreenArrangement : public BView, public BInvoker {
+public:
+	BScreenArrangement(const char* name, BMessage* selectionMessage);
+
+	status_t	SetScreens(const screen_tile* tiles, int32 count);
+	int32		CountScreens() const;
+	bool		ScreenAt(int32 index, screen_tile* tile) const;
+	void		SetSelected(int32 id);
+	int32		Selected() const;			// -1 when none
+	void		SetDraggable(bool draggable);
+	bool		IsDraggable() const;
+	void		SetModificationMessage(BMessage* message);	// adopted
+	BMessage*	ModificationMessage() const;
+	void		SetCaption(const char* caption);	// NULL or "" hides it
+	const char*	Caption() const;
+};
+
+}
+```
+
+`SetScreens()` copies the tiles and returns `B_BAD_VALUE` for a negative count or a NULL list with a count. Tiles are kept in id order. `ScreenAt()` fills the caller's tile. Its `name` stays valid until the next `SetScreens()`. Arrow keys move the selection to the nearest screen in that direction.
+
+The picture is filled with the list background mixed toward `B_CONTROL_HIGHLIGHT_COLOR` by 18, and stroked with the same mix at 48. That is the Search tip blue (`#f3f6fb` and `#dbe3ef` on the light theme). Each screen is `r5_screen_draw()`, filled with `B_DESKTOP_COLOR`. A screen with `enabled` false is filled with the panel background tinted `B_DARKEN_1_TINT`. The main screen then draws the Deskbar strip the same way Desktop and Deskbar does, following the running Deskbar. A filled circle sits in the glass with the number, starting at 1 in id order. The selected circle uses `B_STATUS_BAR_COLOR`. The others use the control border. The name is one bold line under the frame, cut with an ellipsis. A selected screen has a ring in `B_STATUS_BAR_COLOR` just outside the frame. Keyboard focus strokes the view in `B_KEYBOARD_NAVIGATION_COLOR`. The caption is one line at the bottom left, in the document background mixed toward the document text by 140 (`#64748b` on the light theme).
+
+One screen is centered and keeps its own shape. Its height is at most 60 percent of the view. It is not stretched across the width. More than one screen are scaled together so the gaps stay, and the group is centered. Dragging is off unless `SetDraggable(true)` and there are two or more screens. On release, a screen snaps so its edge meets the next one, with no gap and no overlap. While the mouse is down the screen follows it. The modification message, adopted by `SetModificationMessage()`, then goes to the target with `int32 "be:screen"` and `BPoint "be:origin"` (the new top left in desktop coordinates).
 
 Sizes follow `u = be_plain_font->Size() / 13`. The circle is `u*22`, and `u*26` when selected. The ring is `u*3` thick and sits `u*2` outside the frame. The name is `u*10`. The caption is `u*11`, `u*12` in from the left and `u*8` up from the bottom. The minimum size is `u*220` by `u*100`. The preferred height is 140 at a 12 point font.
 

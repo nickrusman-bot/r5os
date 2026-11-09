@@ -26,6 +26,7 @@
 
 #include <ControlLook.h>
 #include <Deskbar.h>
+#include <LayoutUtils.h>
 #include <Message.h>
 #include <R5UI.h>
 #include <String.h>
@@ -55,8 +56,6 @@ struct TileCopy {
 
 struct BScreenArrangement::Data {
 	std::vector<TileCopy>	tiles;
-	screen_tile				exposed;
-	BString					exposedName;
 	int32					selected;
 	bool					draggable;
 	BString					caption;
@@ -65,6 +64,7 @@ struct BScreenArrangement::Data {
 	int32					dragIndex;
 	BPoint					dragStart;
 	BRect					dragFrame;
+	BPoint					dragOffset;
 	bool					placed;
 };
 
@@ -105,8 +105,8 @@ picture_border()
 BScreenArrangement::BScreenArrangement(const char* name,
 	BMessage* selectionMessage)
 	:
-	BControl(name, NULL, selectionMessage, B_WILL_DRAW | B_NAVIGABLE
-		| B_FULL_UPDATE_ON_RESIZE),
+	BView(name, B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE),
+	BInvoker(selectionMessage, NULL),
 	fData(NULL)
 {
 	_Init();
@@ -115,12 +115,16 @@ BScreenArrangement::BScreenArrangement(const char* name,
 
 BScreenArrangement::BScreenArrangement(BMessage* archive)
 	:
-	BControl(archive),
+	BView(archive),
+	BInvoker(),
 	fData(NULL)
 {
 	_Init();
-	if (archive == NULL)
+	if (archive == NULL || fData == NULL)
 		return;
+	BMessage selection;
+	if (archive->FindMessage("r5:message", &selection) == B_OK)
+		SetMessage(new BMessage(selection));
 	const char* caption = NULL;
 	if (archive->FindString("r5:caption", &caption) == B_OK)
 		fData->caption = caption;
@@ -173,7 +177,9 @@ BScreenArrangement::Instantiate(BMessage* archive)
 status_t
 BScreenArrangement::Archive(BMessage* archive, bool deep) const
 {
-	status_t status = BControl::Archive(archive, deep);
+	if (fData == NULL)
+		return B_NO_MEMORY;
+	status_t status = BView::Archive(archive, deep);
 	if (status != B_OK)
 		return status;
 	if (archive->ReplaceString("class", kClassName) != B_OK)
@@ -197,6 +203,8 @@ BScreenArrangement::Archive(BMessage* archive, bool deep) const
 	}
 	if (status == B_OK && fData->modification != NULL)
 		status = archive->AddMessage("r5:modification", fData->modification);
+	if (status == B_OK && Message() != NULL)
+		status = archive->AddMessage("r5:message", Message());
 	return status;
 }
 
@@ -216,8 +224,6 @@ BScreenArrangement::_Init()
 	for (int32 index = 0; index < 4; index++)
 		_reserved[index] = 0;
 	SetViewColor(picture_fill());
-	SetExplicitMinSize(MinSize());
-	SetExplicitPreferredSize(PreferredSize());
 }
 
 
@@ -228,11 +234,15 @@ BScreenArrangement::_Unit() const
 }
 
 
-void
+status_t
 BScreenArrangement::SetScreens(const screen_tile* tiles, int32 count)
 {
 	if (fData == NULL)
-		return;
+		return B_NO_MEMORY;
+	if (count < 0 || (count > 0 && tiles == NULL))
+		return B_BAD_VALUE;
+	fData->dragging = false;
+	fData->dragIndex = -1;
 	fData->tiles.clear();
 	if (tiles != NULL && count > 0) {
 		for (int32 index = 0; index < count; index++) {
@@ -255,6 +265,7 @@ BScreenArrangement::SetScreens(const screen_tile* tiles, int32 count)
 		fData->selected = fData->tiles.empty() ? -1 : fData->tiles[0].id;
 	fData->placed = false;
 	Invalidate();
+	return B_OK;
 }
 
 
@@ -267,19 +278,19 @@ BScreenArrangement::CountScreens() const
 }
 
 
-const screen_tile*
-BScreenArrangement::ScreenAt(int32 index) const
+bool
+BScreenArrangement::ScreenAt(int32 index, screen_tile* tile) const
 {
-	if (fData == NULL || index < 0 || index >= (int32)fData->tiles.size())
-		return NULL;
-	const TileCopy& tile = fData->tiles[index];
-	fData->exposedName = tile.name;
-	fData->exposed.id = tile.id;
-	fData->exposed.frame = tile.frame;
-	fData->exposed.name = fData->exposedName.String();
-	fData->exposed.main = tile.main;
-	fData->exposed.enabled = tile.enabled;
-	return &fData->exposed;
+	if (fData == NULL || tile == NULL || index < 0
+		|| index >= (int32)fData->tiles.size())
+		return false;
+	const TileCopy& copy = fData->tiles[index];
+	tile->id = copy.id;
+	tile->frame = copy.frame;
+	tile->name = copy.name.String();
+	tile->main = copy.main;
+	tile->enabled = copy.enabled;
+	return true;
 }
 
 
@@ -324,6 +335,13 @@ BScreenArrangement::SetModificationMessage(BMessage* message)
 	}
 	delete fData->modification;
 	fData->modification = message;
+}
+
+
+BMessage*
+BScreenArrangement::ModificationMessage() const
+{
+	return fData != NULL ? fData->modification : NULL;
 }
 
 
@@ -484,6 +502,9 @@ BScreenArrangement::Draw(BRect updateRect)
 		if (!tile.drawn.IsValid() || tile.drawn.Width() < 2.0f)
 			continue;
 		bool selected = tile.id == fData->selected;
+		BRect placed = tile.drawn;
+		if (fData->dragging && (int32)index == fData->dragIndex)
+			tile.drawn.OffsetBy(fData->dragOffset);
 		if (selected) {
 			BRect ring = tile.drawn.InsetByCopy(-(u * 2.0f), -(u * 2.0f));
 			SetHighColor(selectedColor);
@@ -491,7 +512,9 @@ BScreenArrangement::Draw(BRect updateRect)
 			StrokeRect(ring);
 			SetPenSize(1.0f);
 		}
-		BRect content = r5_screen_draw(this, tile.drawn, desktop);
+		BRect content = r5_screen_draw(this, tile.drawn, tile.enabled
+			? desktop : tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+				B_DARKEN_1_TINT));
 		if (tile.main)
 			deskbar_strip(this, content);
 
@@ -532,6 +555,7 @@ BScreenArrangement::Draw(BRect updateRect)
 				(tile.drawn.left + tile.drawn.right) / 2.0f - labelWidth / 2.0f,
 				tile.drawn.bottom + u * 12.0f));
 		}
+		tile.drawn = placed;
 	}
 
 	if (fData->caption.Length() > 0) {
@@ -579,7 +603,9 @@ BScreenArrangement::_SelectIndex(int32 index, bool invoke)
 	Invalidate();
 	if (!invoke)
 		return;
-	BMessage message(Message() != NULL ? *Message() : BMessage(B_CONTROL_INVOKED));
+	if (Message() == NULL)
+		return;
+	BMessage message(*Message());
 	message.RemoveName("be:screen");
 	message.AddInt32("be:screen", fData->selected);
 	Invoke(&message);
@@ -603,6 +629,7 @@ BScreenArrangement::MouseDown(BPoint where)
 		fData->dragIndex = index;
 		fData->dragStart = where;
 		fData->dragFrame = fData->tiles[index].frame;
+		fData->dragOffset = BPoint(0, 0);
 		SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
 	}
 }
@@ -643,14 +670,15 @@ BScreenArrangement::_Snap(int32 index, BRect proposed)
 	fData->placed = false;
 	Invalidate();
 
-	if (fData->modification == NULL || Window() == NULL)
+	// The view never changes the system. The caller applies the new origin.
+	if (fData->modification == NULL)
 		return;
 	BMessage message(*fData->modification);
 	message.RemoveName("be:screen");
 	message.RemoveName("be:origin");
 	message.AddInt32("be:screen", fData->tiles[index].id);
 	message.AddPoint("be:origin", proposed.LeftTop());
-	BMessenger(Window()).SendMessage(&message);
+	Invoke(&message);
 }
 
 
@@ -662,6 +690,7 @@ BScreenArrangement::MouseUp(BPoint where)
 	int32 index = fData->dragIndex;
 	fData->dragging = false;
 	fData->dragIndex = -1;
+	fData->dragOffset = BPoint(0, 0);
 	if (index < 0 || index >= (int32)fData->tiles.size())
 		return;
 	BRect drawn = fData->tiles[index].drawn;
@@ -679,9 +708,12 @@ void
 BScreenArrangement::MouseMoved(BPoint where, uint32 transit,
 	const BMessage* dragMessage)
 {
-	(void)where;
 	(void)transit;
 	(void)dragMessage;
+	if (fData == NULL || !fData->dragging)
+		return;
+	fData->dragOffset = where - fData->dragStart;
+	Invalidate();
 }
 
 
@@ -725,7 +757,7 @@ void
 BScreenArrangement::KeyDown(const char* bytes, int32 numBytes)
 {
 	if (fData == NULL || numBytes < 1) {
-		BControl::KeyDown(bytes, numBytes);
+		BView::KeyDown(bytes, numBytes);
 		return;
 	}
 	int32 current = -1;
@@ -752,7 +784,7 @@ BScreenArrangement::KeyDown(const char* bytes, int32 numBytes)
 			_SelectIndex(current, true);
 			return;
 		default:
-			BControl::KeyDown(bytes, numBytes);
+			BView::KeyDown(bytes, numBytes);
 			return;
 	}
 	if (next >= 0)
@@ -763,7 +795,7 @@ BScreenArrangement::KeyDown(const char* bytes, int32 numBytes)
 void
 BScreenArrangement::MakeFocus(bool focus)
 {
-	BControl::MakeFocus(focus);
+	BView::MakeFocus(focus);
 	Invalidate();
 }
 
@@ -771,17 +803,35 @@ BScreenArrangement::MakeFocus(bool focus)
 void
 BScreenArrangement::AttachedToWindow()
 {
-	BControl::AttachedToWindow();
-	fData->placed = false;
+	BView::AttachedToWindow();
+	if (!Messenger().IsValid())
+		SetTarget(Window());
+	if (fData != NULL)
+		fData->placed = false;
 }
 
 
 void
 BScreenArrangement::MessageReceived(BMessage* message)
 {
-	if (message->what == B_COLORS_UPDATED || message->what == B_FONTS_UPDATED)
+	if (message->what == B_COLORS_UPDATED
+		|| message->what == B_FONTS_UPDATED) {
+		if (fData != NULL)
+			fData->placed = false;
 		Invalidate();
-	BControl::MessageReceived(message);
+	}
+	BView::MessageReceived(message);
+}
+
+
+void
+BScreenArrangement::GetPreferredSize(float* width, float* height)
+{
+	BSize size = PreferredSize();
+	if (width != NULL)
+		*width = size.width;
+	if (height != NULL)
+		*height = size.height;
 }
 
 
@@ -789,14 +839,16 @@ BSize
 BScreenArrangement::MinSize()
 {
 	float u = unit_size();
-	return BSize(u * 220.0f, u * 100.0f);
+	return BLayoutUtils::ComposeSize(ExplicitMinSize(),
+		BSize(u * 220.0f, u * 100.0f));
 }
 
 
 BSize
 BScreenArrangement::MaxSize()
 {
-	return BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
+	return BLayoutUtils::ComposeSize(ExplicitMaxSize(),
+		BSize(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED));
 }
 
 
@@ -804,7 +856,8 @@ BSize
 BScreenArrangement::PreferredSize()
 {
 	float size = be_plain_font != NULL ? be_plain_font->Size() : 12.0f;
-	return BSize(size / 12.0f * 320.0f, size / 12.0f * 140.0f);
+	return BLayoutUtils::ComposeSize(ExplicitPreferredSize(),
+		BSize(size / 12.0f * 320.0f, size / 12.0f * 140.0f));
 }
 
 

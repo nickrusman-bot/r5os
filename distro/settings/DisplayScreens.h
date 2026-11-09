@@ -26,8 +26,10 @@ struct DisplayScreen {
 status_t display_screens_get(BObjectList<DisplayScreen, true>& screens);
 status_t display_screen_modes(int32 screenId, display_mode** modes,
 	uint32* count);
-bool display_screen_recommended(const display_mode* modes, uint32 count,
-	display_mode* mode);
+// The mode to mark "(recommended)": the monitor's native mode when R5 can
+// read it, else the largest. BScreen has no native mode yet, so it is the
+// largest today.
+bool display_screen_recommended(int32 screenId, display_mode* mode);
 void display_screens_identify();
 
 int32 display_bits_per_pixel(color_space space);

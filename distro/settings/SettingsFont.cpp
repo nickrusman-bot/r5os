@@ -9,6 +9,7 @@
 #include "SettingsFont.h"
 
 #include <FindDirectory.h>
+#include <InterfaceDefs.h>
 #include <Font.h>
 #include <Path.h>
 #include <StringView.h>
@@ -104,6 +105,14 @@ r5_settings_box_title(const char* text)
 	BStringView* title = new BStringView("box title", text);
 	title->SetFont(r5_settings_bold_font());
 	return title;
+}
+
+
+rgb_color
+r5_settings_tile_fill()
+{
+	return mix_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 100);
 }
 
 

@@ -734,7 +734,9 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fDefaults = new BButton("defaults", "Defaults", new BMessage(kMsgDefaults));
 
 	// The list is 200 wide. Search sits under it. The lock, Revert,
-	// and Defaults sit on the bottom row of the right column.
+	// and Defaults sit on the bottom row of the right column. Both
+	// columns leave u*12 above their bottom row, so the list and the
+	// page end on the same line, as in the mockup.
 	float u = be_plain_font->Size() / 13.0f;
 	const float sidebarWidth = 200;
 	scroll->SetExplicitMinSize(BSize(sidebarWidth, 160));
@@ -747,7 +749,7 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	BLayoutBuilder::Group<>(this, B_VERTICAL, u * 12.0f)
 		.SetInsets(u * 12.0f)
 		.AddGroup(B_HORIZONTAL, u * 14.0f, 1)
-			.AddGroup(B_VERTICAL, u * 10.0f, 1)
+			.AddGroup(B_VERTICAL, u * 12.0f, 1)
 				.Add(scroll, 1)
 				.Add(fSearch)
 				.End()

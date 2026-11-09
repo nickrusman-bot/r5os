@@ -143,11 +143,17 @@ display_screen_modes(int32 screenId, display_mode** modes, uint32* count)
 
 
 bool
-display_screen_recommended(const display_mode* modes, uint32 count,
-	display_mode* mode)
+display_screen_recommended(int32 screenId, display_mode* mode)
 {
-	if (modes == NULL || count == 0 || mode == NULL)
+	if (mode == NULL)
 		return false;
+	display_mode* modes = NULL;
+	uint32 count = 0;
+	if (display_screen_modes(screenId, &modes, &count) != B_OK
+		|| modes == NULL || count == 0) {
+		free(modes);
+		return false;
+	}
 	const display_mode* best = &modes[0];
 	for (uint32 index = 1; index < count; index++) {
 		uint32 area = modes[index].virtual_width * modes[index].virtual_height;
@@ -160,6 +166,7 @@ display_screen_recommended(const display_mode* modes, uint32 count,
 			best = &modes[index];
 	}
 	*mode = *best;
+	free(modes);
 	return true;
 }
 

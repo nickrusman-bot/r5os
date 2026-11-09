@@ -24,23 +24,24 @@
 #define _SCREEN_ARRANGEMENT_H
 
 
-#include <Control.h>
+#include <Invoker.h>
 #include <Rect.h>
+#include <View.h>
 
 
 namespace BAppearanceKit {
 
 
 struct screen_tile {
-	int32			id;
-	BRect			frame;
-	const char*		name;
-	bool			main;
-	bool			enabled;
+	int32			id;			// the caller's id for this screen
+	BRect			frame;		// in desktop coordinates
+	const char*		name;		// copied by SetScreens()
+	bool			main;		// the Deskbar is on this screen
+	bool			enabled;	// false draws it dimmed
 };
 
 
-class BScreenArrangement : public BControl {
+class BScreenArrangement : public BView, public BInvoker {
 public:
 								BScreenArrangement(const char* name,
 									BMessage* selectionMessage);
@@ -60,21 +61,28 @@ public:
 	virtual	void				MakeFocus(bool focus = true);
 	virtual	void				AttachedToWindow();
 	virtual	void				MessageReceived(BMessage* message);
+	virtual	void				GetPreferredSize(float* width, float* height);
 	virtual	BSize				MinSize();
 	virtual	BSize				MaxSize();
 	virtual	BSize				PreferredSize();
 
-			void				SetScreens(const screen_tile* tiles,
+			status_t			SetScreens(const screen_tile* tiles,
 									int32 count);
 			int32				CountScreens() const;
-			const screen_tile*	ScreenAt(int32 index) const;
+			bool				ScreenAt(int32 index,
+									screen_tile* tile) const;
+									// tile->name stays valid until the
+									// next SetScreens()
 			void				SetSelected(int32 id);
 			int32				Selected() const;
 			void				SetDraggable(bool draggable);
 			bool				IsDraggable() const;
 			void				SetModificationMessage(BMessage* message);
+									// adopted
+			BMessage*			ModificationMessage() const;
 			void				SetCaption(const char* caption);
 			const char*			Caption() const;
+									// NULL when there is none
 
 private:
 			struct Data;
