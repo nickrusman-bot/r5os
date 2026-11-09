@@ -26,5 +26,9 @@ SubDir HAIKU_TOP src preferences r5ui ;
 SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
 	R5UI.cpp
 	Card.cpp
-	: be [ TargetLibstdc++ ]
+	SidebarItem.cpp
+	Sidebar.cpp
+	ActionCard.cpp
+	PageHeader.cpp
+	: be libr5icons.so [ TargetLibstdc++ ]
 	;
