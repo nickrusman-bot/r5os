@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - the USB image reached the desktop in VirtualBox
+
+The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 17:04 Europe/Amsterdam. The desktop, with the Deskbar and the Tracker icon, was on the screen at 17:07. The machine was left running. A USB stick was not passed through, so the earlier "third try" transaction errors were not measured again. The descriptor-length checks that were already in the tree do not explain a SuperSpeed endpoint whose packet size is 0.
+
 ## 2026-11-09 - the firmware reset of a built-in USB device stays on the first PCI segment
 
 That reset looks the device up by its bus number in the firmware tables. A controller on another segment has a different bus number than the firmware uses, so the lookup could hit the wrong device. The reset now runs only for a controller on segment 0, and a firmware root bridge that says it is on another segment is skipped.
