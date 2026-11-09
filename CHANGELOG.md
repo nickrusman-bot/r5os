@@ -6,10 +6,10 @@
 - **A stale strip at the right of the list** after opening. The list scroll bar hides at start, the list gets wider, and only the new strip was redrawn. `BSidebar` now redraws in full when its width changes.
 - **Hover:** a list row under the pointer gets a light tint of the selection blue. A card under the pointer turns light blue with a blue border, as in the mockup. Before, it turned light grey.
 - **Recently changed** now starts at the top of its cell, level with the card title next to it.
-- **Search** shows a magnifier and the word Search inside the field, with the text centred. The magnifier was drawn under the text view before, so it never showed.
+- **Search** shows a magnifier and the word Search inside the field. The magnifier was drawn under the text view before, so it never showed. The hint and typed text sit on one baseline that centres the capitals in the field: Manrope has much room above its capitals, so centring on ascent plus descent put the word about 4 px low. A click on the hint or the magnifier puts the cursor in the field.
 - **Revert and Defaults** take the width of their label instead of stretching.
 
-Tested: jam `jam_exit=0` (the 16 translator header errors are not from this change). One QEMU boot (TCG), Home opened: the wave shows in the heading, the Home row and the Deskbar; no strip at the right of the list; Search, Recently changed and the buttons as described. The user checked the hover on rows and cards in the same QEMU run. Not tested on hardware.
+Tested: jam `jam_exit=0` (the 16 translator header errors are not from this change). One QEMU boot (TCG), Home opened: the wave shows in the heading, the Home row and the Deskbar; no strip at the right of the list; Search, Recently changed and the buttons as described. The user checked the hover on rows and cards, and in a second boot the Search text centred in the field. Not tested on hardware.
 
 ## 2026-11-09 - Settings uses a folding list and cards
 

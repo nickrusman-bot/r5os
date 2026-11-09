@@ -99,12 +99,75 @@ private:
 };
 
 
+// The baseline that puts the capital letters in the middle of a box of
+// this height. Manrope has much room above its capitals, so centring on
+// ascent plus descent puts the letters low.
+static float
+search_baseline(const BFont& font, float height)
+{
+	BRect box;
+	font.GetBoundingBoxesAsGlyphs("H", 1, B_SCREEN_METRIC, &box);
+	float cap = -box.top;
+	if (cap <= 0) {
+		font_height metrics;
+		font.GetHeight(&metrics);
+		cap = metrics.ascent * 0.7f;
+	}
+	return floorf(height / 2.0f + cap / 2.0f);
+}
+
+
+// The word Search in the empty field, on the same baseline as typed text.
+// A click on it, or on the magnifier, puts the cursor in the field.
+class SearchHint : public BView {
+public:
+								SearchHint(BView* target);
+	virtual	void				Draw(BRect update);
+	virtual	void				MouseDown(BPoint where);
+
+private:
+			BView*				fTarget;
+};
+
+
+SearchHint::SearchHint(BView* target)
+	:
+	BView("hint", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE),
+	fTarget(target)
+{
+	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	SetFont(r5_settings_plain_font());
+}
+
+
+void
+SearchHint::Draw(BRect update)
+{
+	(void)update;
+	BFont font;
+	GetFont(&font);
+	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
+	DrawString("Search", BPoint(0, search_baseline(font, Bounds().Height())));
+}
+
+
+void
+SearchHint::MouseDown(BPoint where)
+{
+	(void)where;
+	if (fTarget != NULL)
+		fTarget->MakeFocus(true);
+}
+
+
 // The magnifier at the left of Search. A sibling on top of the text view,
 // so the text view cannot paint over it.
 class SearchGlass : public BView {
 public:
 								SearchGlass();
 	virtual	void				Draw(BRect update);
+	virtual	void				MouseDown(BPoint where);
 };
 
 
@@ -135,6 +198,16 @@ SearchGlass::Draw(BRect update)
 }
 
 
+void
+SearchGlass::MouseDown(BPoint where)
+{
+	(void)where;
+	BTextControl* field = dynamic_cast<BTextControl*>(Parent());
+	if (field != NULL && field->TextView() != NULL)
+		field->TextView()->MakeFocus(true);
+}
+
+
 class SearchField : public BTextControl {
 public:
 								SearchField();
@@ -146,7 +219,7 @@ public:
 
 private:
 			void				_SyncHint();
-			BStringView*		fHint;
+			SearchHint*			fHint;
 			SearchGlass*		fGlass;
 			BMessageFilter*		fWatch;
 };
@@ -321,11 +394,7 @@ SearchField::SearchField()
 	fWatch(NULL)
 {
 	SetDivider(0);
-	fHint = new BStringView("hint", "Search");
-	fHint->SetFont(r5_settings_plain_font());
-	fHint->SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
-	fHint->SetFlags(fHint->Flags() | B_TRANSPARENT_BACKGROUND);
+	fHint = new SearchHint(TextView());
 	AddChild(fHint);
 	fGlass = new SearchGlass();
 	AddChild(fGlass);
@@ -386,9 +455,13 @@ SearchField::_SyncHint()
 	float u = be_plain_font->Size() / 13.0f;
 	float left = u * 30.0f;
 	BRect text = TextView()->Frame();
-	// Room for the magnifier, and the typed line centred in the field.
-	float line = TextView()->LineHeight(0);
-	float top = floorf((text.Height() - line) / 2.0f);
+	// Room for the magnifier. The typed text sits on the same baseline as
+	// the hint: the capitals centred in the field.
+	BFont font;
+	font_height metrics;
+	TextView()->GetFontAndColor(0, &font);
+	font.GetHeight(&metrics);
+	float top = search_baseline(font, text.Height()) - ceilf(metrics.ascent);
 	if (top < 0)
 		top = 0;
 	float oldLeft, oldTop, oldRight, oldBottom;
