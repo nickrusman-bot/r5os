@@ -19,6 +19,11 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/thread.cpp",
         "src/system/kernel/vm/vm.cpp",
+        "src/add-ons/kernel/bus_managers/pci/pci.cpp",
+        "src/add-ons/kernel/busses/pci/ecam/ECAMPCIControllerACPI.cpp",
+        "src/add-ons/kernel/busses/pci/x86/X86PCIController.cpp",
+        "src/add-ons/kernel/busses/pci/x86/X86PCIController.h",
+        "src/add-ons/kernel/busses/pci/x86/kernel_interface.cpp",
     )
     for relative in files:
         install_file(
