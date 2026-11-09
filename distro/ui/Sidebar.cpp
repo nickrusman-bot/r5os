@@ -45,6 +45,7 @@ struct Section {
 
 
 struct BSidebar::Data {
+	int32				hover;
 	bool				single;
 	bool				filtering;
 	bool				inList;
@@ -258,6 +259,8 @@ BSidebar::DrawLatch(BRect itemRect, int32 level, bool collapsed,
 void
 BSidebar::MouseDown(BPoint where)
 {
+	// A click can fold or unfold, which moves the rows.
+	_SetHover(-1);
 	int32 index = IndexOf(where);
 	BSidebarItem* item = index >= 0 ? _ItemAt(index) : NULL;
 	if (item == NULL || !item->IsEnabled())
@@ -268,6 +271,42 @@ BSidebar::MouseDown(BPoint where)
 		return;
 	}
 	BOutlineListView::MouseDown(where);
+}
+
+
+void
+BSidebar::MouseMoved(BPoint where, uint32 transit, const BMessage* dragMessage)
+{
+	int32 index = -1;
+	if (transit != B_EXITED_VIEW && transit != B_OUTSIDE_VIEW
+		&& dragMessage == NULL) {
+		index = IndexOf(where);
+		BSidebarItem* item = index >= 0 ? _ItemAt(index) : NULL;
+		if (item == NULL || !item->IsEnabled() || item->_IsSeparator())
+			index = -1;
+	}
+	_SetHover(index);
+	BOutlineListView::MouseMoved(where, transit, dragMessage);
+}
+
+
+void
+BSidebar::_SetHover(int32 index)
+{
+	if (fData == NULL || index == fData->hover)
+		return;
+	fData->hover = index;
+	// Folding and Search change the row order, so clear every item, not
+	// only the one that was marked before.
+	for (int32 i = 0; i < FullListCountItems(); i++) {
+		BSidebarItem* item = dynamic_cast<BSidebarItem*>(FullListItemAt(i));
+		if (item != NULL)
+			item->_SetHovered(false);
+	}
+	BSidebarItem* item = index >= 0 ? _ItemAt(index) : NULL;
+	if (item != NULL)
+		item->_SetHovered(true);
+	Invalidate();
 }
 
 
@@ -481,12 +520,16 @@ void
 BSidebar::_Init()
 {
 	fData = new(std::nothrow) Data;
+	fData->hover = -1;
 	fData->single = true;
 	fData->filtering = false;
 	fData->inList = true;
 	for (int32 index = 0; index < 4; index++)
 		_reserved[index] = 0;
 	SetViewUIColor(B_LIST_BACKGROUND_COLOR);
+	// The rows, the tip, and the selection depend on the width. Without a
+	// full redraw, a width change at start leaves the old right edge behind.
+	SetFlags(Flags() | B_FULL_UPDATE_ON_RESIZE);
 }
 
 

@@ -209,21 +209,29 @@ BActionCard::Draw(BRect updateRect)
 		flags |= BControlLook::B_FOCUSED;
 	rgb_color base = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 	rgb_color panel = ui_color(B_PANEL_BACKGROUND_COLOR);
+	// The mockup's hover is #f5f9ff with a #0084ff border and a soft blue
+	// ring: the selection blue of the list, B_STATUS_BAR_COLOR.
+	rgb_color accent = ui_color(B_STATUS_BAR_COLOR);
 	if ((flags & BControlLook::B_ACTIVATED) != 0)
-		base = mix_color(base, ui_color(B_CONTROL_HIGHLIGHT_COLOR), 31);
+		base = mix_color(base, accent, 26);
 	else if ((flags & BControlLook::B_HOVER) != 0)
-		base = mix_color(base, ui_color(B_CONTROL_HIGHLIGHT_COLOR), 13);
+		base = mix_color(base, accent, 10);
 	SetLowColor(base);
 	float radius = be_plain_font->Size() * 0.25f;
 	SetHighColor(base);
 	FillRoundRect(Bounds(), radius, radius);
 	rgb_color border = tint_color(panel, B_DARKEN_2_TINT);
 	if ((flags & BControlLook::B_HOVER) != 0)
-		border = mix_color(border, ui_color(B_CONTROL_HIGHLIGHT_COLOR), 64);
+		border = accent;
 	if ((flags & BControlLook::B_FOCUSED) != 0)
 		border = ui_color(B_KEYBOARD_NAVIGATION_COLOR);
 	SetHighColor(border);
 	StrokeRoundRect(Bounds(), radius, radius);
+	if ((flags & (BControlLook::B_HOVER | BControlLook::B_ACTIVATED)) != 0) {
+		SetHighColor(mix_color(base, accent, 70));
+		BRect ring = Bounds().InsetByCopy(1, 1);
+		StrokeRoundRect(ring, radius, radius);
+	}
 
 	// Padding is u*10 by u*14. The icon is u*44, then a gap of u*12.
 	float u = unit();

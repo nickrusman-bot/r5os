@@ -70,6 +70,7 @@ public:
 private:
 			void				_SetRole(bool inGroup, bool first, bool last);
 			bool				_IsSeparator() const;
+			void				_SetHovered(bool hovered);
 			BBitmap*			_Copy(const BBitmap* icon) const;
 
 	virtual	void				_ReservedSidebarItem1();

@@ -60,6 +60,9 @@ _SemiBold(BFont* font)
 
 
 struct BSidebarItem::Data {
+	bool				hovered;
+
+	Data() : hovered(false) {}
 };
 
 
@@ -231,6 +234,14 @@ BSidebarItem::DrawItem(BView* owner, BRect frame, bool complete)
 		row.top = frame.bottom - u * 34.0f;
 	else if (!_IsSeparator())
 		row.bottom = frame.top + u * 36.0f;
+	if (!selected && !_IsSeparator() && fData != NULL && fData->hovered) {
+		// The row under the pointer gets a light tint of the selection
+		// blue, with the same small corner.
+		BRect mark = row.InsetByCopy(padX, 0);
+		owner->SetHighColor(mix_color(background, ui_color(B_STATUS_BAR_COLOR),
+			28));
+		owner->FillRoundRect(mark, u * 4.0f, u * 4.0f);
+	}
 	if (selected) {
 		// B_LIST_SELECTED_BACKGROUND_COLOR is gray. The row is the
 		// status-bar blue, with light text, and a small corner.
@@ -430,6 +441,14 @@ bool
 BSidebarItem::_IsSeparator() const
 {
 	return fLabel.Length() == 0 && fId.Length() == 0;
+}
+
+
+void
+BSidebarItem::_SetHovered(bool hovered)
+{
+	if (fData != NULL)
+		fData->hovered = hovered;
 }
 
 

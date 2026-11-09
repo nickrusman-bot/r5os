@@ -99,11 +99,47 @@ private:
 };
 
 
+// The magnifier at the left of Search. A sibling on top of the text view,
+// so the text view cannot paint over it.
+class SearchGlass : public BView {
+public:
+								SearchGlass();
+	virtual	void				Draw(BRect update);
+};
+
+
+SearchGlass::SearchGlass()
+	:
+	BView("glass", B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE)
+{
+	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+}
+
+
+void
+SearchGlass::Draw(BRect update)
+{
+	(void)update;
+	float u = be_plain_font->Size() / 13.0f;
+	float size = u * 14.0f;
+	float radius = size * 0.32f;
+	float cx = u * 10.0f + radius;
+	float cy = Bounds().Height() / 2.0f - radius * 0.25f;
+	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
+		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
+	SetPenSize(u * 1.6f);
+	StrokeEllipse(BPoint(cx, cy), radius, radius);
+	StrokeLine(BPoint(cx + radius * 0.72f, cy + radius * 0.72f),
+		BPoint(cx + radius * 1.75f, cy + radius * 1.75f));
+	SetPenSize(1.0f);
+}
+
+
 class SearchField : public BTextControl {
 public:
 								SearchField();
 	virtual	void				AttachedToWindow();
-	virtual	void				Draw(BRect update);
+	virtual	void				DoLayout();
 	virtual	void				FrameResized(float width, float height);
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
@@ -111,6 +147,7 @@ public:
 private:
 			void				_SyncHint();
 			BStringView*		fHint;
+			SearchGlass*		fGlass;
 			BMessageFilter*		fWatch;
 };
 
@@ -280,16 +317,18 @@ SearchField::SearchField()
 	:
 	BTextControl("search", "", "", NULL),
 	fHint(NULL),
+	fGlass(NULL),
 	fWatch(NULL)
 {
-	float u = be_plain_font->Size() / 13.0f;
-	SetDivider(u * 30.0f);
+	SetDivider(0);
 	fHint = new BStringView("hint", "Search");
 	fHint->SetFont(r5_settings_plain_font());
 	fHint->SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
 		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
 	fHint->SetFlags(fHint->Flags() | B_TRANSPARENT_BACKGROUND);
 	AddChild(fHint);
+	fGlass = new SearchGlass();
+	AddChild(fGlass);
 }
 
 
@@ -306,22 +345,16 @@ SearchField::AttachedToWindow()
 
 
 void
-SearchField::Draw(BRect update)
+SearchField::DoLayout()
 {
-	BTextControl::Draw(update);
-	float u = be_plain_font->Size() / 13.0f;
-	float size = u * 14.0f;
-	float cx = u * 8.0f + size * 0.42f;
-	float cy = Bounds().Height() / 2.0f;
-	float radius = size * 0.32f;
-	SetHighColor(mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-		ui_color(B_DOCUMENT_TEXT_COLOR), 140));
-	SetPenSize(1.5f);
-	StrokeEllipse(BRect(cx - radius, cy - radius * 1.15f,
-		cx + radius, cy + radius * 0.85f));
-	StrokeLine(BPoint(cx + radius * 0.65f, cy + radius * 0.55f),
-		BPoint(cx + radius * 1.7f, cy + radius * 1.6f));
-	SetPenSize(1.0f);
+	BTextControl::DoLayout();
+	// The text view fills the field inside its frame, so the frame and
+	// the text are centred on the u * 34 height.
+	if (TextView() != NULL) {
+		BRect inner = Bounds().InsetByCopy(2, 2);
+		TextView()->MoveTo(inner.LeftTop());
+		TextView()->ResizeTo(inner.Width(), inner.Height());
+	}
 	_SyncHint();
 }
 
@@ -348,12 +381,25 @@ SearchField::MessageReceived(BMessage* message)
 void
 SearchField::_SyncHint()
 {
-	if (fHint == NULL || TextView() == NULL)
+	if (fHint == NULL || fGlass == NULL || TextView() == NULL)
 		return;
-	bool empty = Text() == NULL || Text()[0] == '\0';
+	float u = be_plain_font->Size() / 13.0f;
+	float left = u * 30.0f;
 	BRect text = TextView()->Frame();
-	fHint->MoveTo(text.left, text.top);
-	fHint->ResizeTo(text.Width(), text.Height());
+	// Room for the magnifier, and the typed line centred in the field.
+	float line = TextView()->LineHeight(0);
+	float top = floorf((text.Height() - line) / 2.0f);
+	if (top < 0)
+		top = 0;
+	float oldLeft, oldTop, oldRight, oldBottom;
+	TextView()->GetInsets(&oldLeft, &oldTop, &oldRight, &oldBottom);
+	if (oldLeft != left || oldTop != top)
+		TextView()->SetInsets(left, top, u * 6.0f, 0);
+	fGlass->MoveTo(text.left, text.top);
+	fGlass->ResizeTo(left - u * 2.0f, text.Height());
+	bool empty = Text() == NULL || Text()[0] == '\0';
+	fHint->MoveTo(text.left + left, text.top);
+	fHint->ResizeTo(text.Width() - left, text.Height());
 	if (empty && fHint->IsHidden())
 		fHint->Show();
 	else if (!empty && !fHint->IsHidden())
@@ -655,9 +701,9 @@ SettingsWindow::SettingsWindow(SettingsManager* manager,
 	fLock->SetExplicitMaxSize(BSize(u * 38.0f, buttonHeight));
 	fLock->SetExplicitPreferredSize(BSize(u * 38.0f, buttonHeight));
 	fRevert->SetExplicitMinSize(BSize(B_SIZE_UNSET, buttonHeight));
-	fRevert->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, buttonHeight));
+	fRevert->SetExplicitMaxSize(BSize(B_SIZE_UNSET, buttonHeight));
 	fDefaults->SetExplicitMinSize(BSize(B_SIZE_UNSET, buttonHeight));
-	fDefaults->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, buttonHeight));
+	fDefaults->SetExplicitMaxSize(BSize(B_SIZE_UNSET, buttonHeight));
 	fLock->SetToolTip("Unlock");
 	_ReloadLock(false);
 	fLockRunner = new BMessageRunner(BMessenger(this),

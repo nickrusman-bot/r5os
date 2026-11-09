@@ -1,5 +1,16 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - Settings: the wave shows in the pebble, and rows and cards light up under the pointer
+
+- **The pebble showed as a plain disc** in the Settings heading, the Home row and the Deskbar. Its wave is a second ring in the same shape. Haiku fills a shape with the non-zero rule, so the wave is only open when that ring turns the other way. The SVG's wave already turned the other way, and `generate-r5-artwork.py` reversed it once more. That mistake came with the gradient fix earlier the same day. The generator now reverses the wave only when both rings turn the same way. The two `r5-symbol.hvif` files, the About R5 icon, `Settings.rdef` and `r5_pebble.inc` were rewritten from it, the last two with `join-settings-icon.py`.
+- **A stale strip at the right of the list** after opening. The list scroll bar hides at start, the list gets wider, and only the new strip was redrawn. `BSidebar` now redraws in full when its width changes.
+- **Hover:** a list row under the pointer gets a light tint of the selection blue. A card under the pointer turns light blue with a blue border, as in the mockup. Before, it turned light grey.
+- **Recently changed** now starts at the top of its cell, level with the card title next to it.
+- **Search** shows a magnifier and the word Search inside the field, with the text centred. The magnifier was drawn under the text view before, so it never showed.
+- **Revert and Defaults** take the width of their label instead of stretching.
+
+Tested: jam `jam_exit=0` (the 16 translator header errors are not from this change). One QEMU boot (TCG), Home opened: the wave shows in the heading, the Home row and the Deskbar; no strip at the right of the list; Search, Recently changed and the buttons as described. The hover was not checked on a still picture. Not tested on hardware.
+
 ## 2026-11-09 - Settings uses a folding list and cards
 
 The Settings window keeps every page, the lock, Revert, Defaults, and search. The list now starts with Home, then the five categories. Only the category of the open page is unfolded. Home and a category are cards. A page is still that page's own view. Recently changed keeps the last three pages that saved, newest first, in `~/config/settings/r5-settings/settings-window`. The application icon is the R5 wave pebble plus the preferences wrench, built by `scripts/join-settings-icon.py`. What's new is build 10051.

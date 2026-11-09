@@ -83,10 +83,10 @@ RecentPanel::Draw(BRect update)
 	font_height bodyHeight;
 	title.GetHeight(&titleHeight);
 	body.GetHeight(&bodyHeight);
-	float block = titleHeight.ascent + titleHeight.descent + u * 4.0f
-		+ bodyHeight.ascent + bodyHeight.descent;
-	float y = (Bounds().Height() - block) / 2 + titleHeight.ascent;
-	float x = u * 16.0f;
+	// Top aligned, with the same top padding as the cards (u * 10), so
+	// the title lines up with the card title next to it.
+	float y = u * 10.0f + titleHeight.ascent;
+	float x = u * 14.0f;
 	SetFont(&title);
 	SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 	DrawString("Recently changed", BPoint(x, y));

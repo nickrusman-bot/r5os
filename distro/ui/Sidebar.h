@@ -49,6 +49,8 @@ public:
 									bool collapsed, bool highlighted,
 									bool misTracked);
 	virtual	void				MouseDown(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 transit,
+									const BMessage* dragMessage);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 
 			void				SetSingleExpand(bool single);
@@ -71,6 +73,7 @@ private:
 			bool				_Matches(BSidebarItem* item,
 									const char* filter) const;
 			BSidebarItem*		_ItemAt(int32 index) const;
+			void				_SetHover(int32 index);
 
 	virtual	void				_ReservedSidebar1();
 	virtual	void				_ReservedSidebar2();
