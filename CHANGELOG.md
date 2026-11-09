@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### The isolation command list can be executed
+
+`gfx9_vmid_per_file` stays off. Stick 30 stopped in the owner's own command list at `0x80002000`. Fault status `0x00800880` is VMID 8 and a permission fault; the address register `0x80002` is that page. The list was mapped readable and writable, and the command processor fetches it. Both command lists (`0x80002000` and `0x80001000`) are now readable, writable and executable. The data page stays readable and writable. The host test checks the two maps in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### GET_INFO reads the live counters under the GPU lock
 
 `gfx9_vmid_per_file` stays off. The lost bit, the guilty file and the buffer bytes are sampled while the lock is held. The copy back to the caller stays outside the lock. The host test checks that order. It was not booted. There is no What's new section and `distro/BUILD` stays the same.

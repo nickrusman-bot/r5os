@@ -67,8 +67,16 @@ bo_create(int fd, uint32_t* handle, int32_t* area, void** cpu)
 }
 
 
+/* Stick 30 fault status 0x00800880 is VMID 8 and PERMISSION_FAULTS 8.
+ * The address register 0x80002 is page 0x80002000, the owner's command
+ * list. The command processor fetches that page, so it is executable.
+ * The data page stays readable and writable only. */
+static const uint32_t kCommandFlags = R5_GPU_VA_READ | R5_GPU_VA_WRITE
+	| R5_GPU_VA_EXEC;
+
+
 static int
-va_map(int fd, uint32_t handle, uint64_t va)
+va_map(int fd, uint32_t handle, uint64_t va, uint32_t flags)
 {
 	r5_gpu_va map;
 	memset(&map, 0, sizeof(map));
@@ -78,7 +86,7 @@ va_map(int fd, uint32_t handle, uint64_t va)
 	map.handle = handle;
 	map.gpu_va = va;
 	map.map_bytes = 4096;
-	map.flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
+	map.flags = flags;
 	return ioctl(fd, R5_GPU_VA_MAP, &map, sizeof(map));
 }
 
@@ -194,7 +202,7 @@ foreign(void)
 		return 0;
 	}
 	if (ctx_create(fd) != 0 || bo_create(fd, &handle, &area, &cpu) != 0
-		|| va_map(fd, handle, va) != 0) {
+		|| va_map(fd, handle, va, R5_GPU_VA_READ | R5_GPU_VA_WRITE) != 0) {
 		fprintf(stderr, "owner map errno %d\n", errno);
 		return 1;
 	}
@@ -218,7 +226,7 @@ foreign(void)
 			_exit(3);
 		if (ctx_create(mine) != 0
 			|| bo_create(mine, &ibHandle, &ibArea, &ibCpu) != 0
-			|| va_map(mine, ibHandle, ibVa) != 0)
+			|| va_map(mine, ibHandle, ibVa, kCommandFlags) != 0)
 			_exit(4);
 		fill_ib((uint32_t*)ibCpu, foreignVa, ibVa + 256ull);
 		if (submit_write(mine, ibVa, 14) == 0)
@@ -236,7 +244,7 @@ foreign(void)
 		void* ownCpu = NULL;
 		uint64_t ownIb = 0x80002000ull;
 		if (bo_create(fd, &ownHandle, &ownArea, &ownCpu) != 0
-			|| va_map(fd, ownHandle, ownIb) != 0)
+			|| va_map(fd, ownHandle, ownIb, kCommandFlags) != 0)
 			return 1;
 		fill_ib((uint32_t*)ownCpu, ownIb + 256ull, ownIb + 512ull);
 		if (submit_write(fd, ownIb, 14) != 0) {

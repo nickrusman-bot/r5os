@@ -2139,6 +2139,15 @@ main()
 				"distro/graphics/src/bin/r5-gpu-isolation/"
 				"r5-gpu-isolation.cpp", isolation, 4) != 0)
 			return 1;
+		const char* commandFlags[] = {
+			"kCommandFlags",
+			"va_map(mine, ibHandle, ibVa, kCommandFlags)",
+			"va_map(fd, ownHandle, ownIb, kCommandFlags)"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-isolation/"
+				"r5-gpu-isolation.cpp", commandFlags, 3) != 0)
+			return 1;
 	}
 	if (r5_gpu_query_guilty(R5_GPU_CAP_LOST) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
