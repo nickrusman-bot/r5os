@@ -19,6 +19,8 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/thread.cpp",
         "src/system/kernel/vm/vm.cpp",
+        "src/system/kernel/debug/user_debugger.cpp",
+        "src/system/kernel/scheduler/scheduler.cpp",
     )
     for relative in files:
         install_file(
