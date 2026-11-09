@@ -1,5 +1,8 @@
 # R5OS changelog (lokaal)
 
+### A volume that cannot be mounted does not stop the system
+
+When a BFS mount failed after the journal had been created, the journal was left in place. If the block allocator had opened a transaction to repair the bitmap, deleting the block cache then panicked. A failed mount now waits for the block allocator, then deletes the root node and the journal, and returns the error. This is haiku-pi star row 50, commit 9799738757. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
 ### A profiler timer is stopped when the program stops
 
 Profiling left a timer armed on a CPU after the profiled thread was gone. The next use of that timer could hang the CPU, or the timer could fire for an idle thread and crash. A thread is now passed through the debugger code on the way out while it still has a profiling timer, the timer is cancelled before it is armed again, and it is cancelled when a profiled thread exits. A timer that is not the running thread's is ignored. This is haiku-pi star row 23, commit 5180e96119. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
