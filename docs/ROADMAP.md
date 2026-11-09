@@ -221,3 +221,40 @@ How they fit R5:
 - **Panels become Settings pages.** Wi-Fi, Bluetooth, power and display panels become pages in the R5 Settings window, under the fixed layout in `AGENTS.md`. The separate program stays installed, as for Display and Notifications.
 - **Dark mode** goes into the Appearance page, without changing its tabs or the page order.
 - **Scaling** is designed together with the GPU plan for app_server.
+
+#### Feature choice, RenkuOS additions (9 Nov 2026)
+
+The user went through RenkuOS's own commits since mid-September 2026. Added to "Wanted", in this order:
+
+1. **Input on both test laptops:**
+   - `i2c_hid` reads the input-ready line on AMD GPIO controllers (`dd62b72f0f`), likely what the HP Envy x360 touchpad needs;
+   - TrackPoint middle-button scrolling and button fixes (`e126f76b75`, `04fdaf98e4`, `29e452e51d`) for the X1 Carbon;
+   - the native Elan I2C protocol, clickpad buttons and finger tracking (`a9f23126d3`, `cb22fd5cfe`, `17bb2a0c3e`).
+   Tested on the next hardware stick that is made anyway.
+2. **Audio devices that come and go:**
+   - nodes for devices that appear later (`c864a45947`);
+   - back to the saved default output when it appears, restored by name (`e95a210256`, `d1028141c2`);
+   - `multi_audio` waits for an unplugged device (`ba4d3113aa`);
+   - Media preferences follow the device list (`917e0e9e30`);
+   - the mix to more than one output (`0903682eaa`), and a buffer size the user chooses (`6ed1b63f79`).
+   Compare with R5's own USB audio work first, as for the other audio imports.
+3. **Buttons in notifications:** `BNotification` actions (`ade5789ad1`, `28b2c9a4c2`). It is an additive API. Network shares are the first user ("not reachable – Try again").
+4. **Cleaning up packages:** removing dependencies nobody needs on uninstall, `pkgman autoremove`, `mark-auto` and `mark-explicit` (`47eaecbfd8`, `a66a779566`, `64c4b84e96`, `347c732de1`, `04b3721f7a`). Before the R5 Store.
+5. **Bluetooth stability:** atomozero's `l2cap`, `h2generic` and SDP fixes, before air/OS's Low Energy, HID and A2DP work.
+6. **Also wanted:**
+   - eMMC as a disk, and booting from it (`06e55a8212`, `a0bb867239`, `eb7eb2a994`);
+   - `BMarkdownView` and `MarkdownScrollView` (`afcb7896d6` and the commits around it), for What's new and help texts;
+   - brightness on VESA and Intel (`6223654a25`, `0309481a4a`).
+7. **Small fixes, for a fix round:**
+   - tool tip leaks (`b4d59fed21`, `e2480454c9`);
+   - the menu window thread race (`1118615561`);
+   - the launch_daemon environment pipe (`2f00aa816a`);
+   - the VM randomisation underflow (`f1967012d9`);
+   - no driver scan while the node tree is built (`c039b25536`).
+
+**Not taken from RenkuOS:**
+- its dark mode: air/OS's is chosen, because it sits in Screen and Appearance;
+- branding, the Spritz Depot repository, and the `radeon_hd` changes (reference only, because R5 has its own GPU path);
+- Bay Trail, Stoney Ridge audio, and Raspberry Pi or ARM64 work.
+
+Commits that reached R5 through `upstream` are skipped (the Terminal cursor keys, and mount only for root).
