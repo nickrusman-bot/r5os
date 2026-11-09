@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visual Brand Guide — R5 Operating System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --r5-blue: #0084ff;
+      --r5-blue-hover: #0070db;
+      --r5-sky: #3898ff;
+      --r5-seafoam: #65b891;
+      --r5-gold: #ffb800;
+      --r5-tab-yellow: #f8cc26;
+      --r5-tab-border: #a88200;
+      --wp-ice: #bfd7ff;
+      --wp-sky: #9bc0fa;
+      --wp-cobalt: #6f9ce6;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-400: #94a3b8;
+      --slate-300: #cbd5e1;
+      --slate-200: #e2e8f0;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --bg-page: #fcfdfe;
+      --redline: #e11d48;
+      --guide-cyan: #0284c7;
+      --brand-grad: linear-gradient(135deg, #0084ff 0%, #3898ff 45%, #65b891 72%, #ffb800 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      overflow-y: scroll;
+    }
+
+    body {
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background-color: var(--bg-page);
+      color: var(--slate-900);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    code, pre, .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    /* --- Whisper-quiet Minimal Navigation (Identical across all pages) --- */
+    header.site-nav {
+      padding: 28px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    a.brand-lockup {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      text-decoration: none;
+      color: var(--slate-900);
+    }
+
+    a.brand-lockup svg {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .brand-lockup-text {
+      font-size: 17px;
+      letter-spacing: -0.015em;
+    }
+
+    .brand-lockup-text strong {
+      font-weight: 700;
+      color: var(--slate-900);
+    }
+
+    .brand-lockup-text span {
+      font-weight: 400;
+      color: var(--slate-500);
+      margin-left: 3px;
+    }
+
+    nav.nav-links {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+    }
+
+    nav.nav-links a.text-link {
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--slate-500);
+      transition: color 0.15s ease;
+    }
+
+    nav.nav-links a.text-link:hover,
+    nav.nav-links a.text-link.active {
+      color: var(--slate-900);
+    }
+
+    nav.nav-links a.nav-pill {
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #ffffff;
+      background-color: var(--slate-900);
+      padding: 7px 18px;
+      border-radius: 999px;
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+
+    nav.nav-links a.nav-pill:hover {
+      background-color: var(--slate-700);
+      transform: translateY(-1px);
+    }
+
+    /* --- Centered Serene Hero (Identical geometry across all pages) --- */
+    section.hero {
+      text-align: center;
+      padding: 36px 0 68px;
+    }
+
+    .hero-jewel {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 24px;
+      filter: drop-shadow(0 12px 24px rgba(0, 132, 255, 0.22));
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 4.2vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: var(--slate-900);
+      margin-bottom: 12px;
+      line-height: 1.15;
+    }
+
+    .hero p.subtitle {
+      font-size: clamp(15px, 1.6vw, 17.5px);
+      font-weight: 400;
+      color: var(--slate-500);
+      max-width: 660px;
+      margin: 0 auto 28px;
+    }
+
+    .hero-stats-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 20px;
+      border-radius: 999px;
+      background-color: var(--slate-100);
+      font-size: 13px;
+      color: var(--slate-700);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .hero-stats-bar strong {
+      font-weight: 700;
+      color: var(--slate-900);
+    }
+
+    /* --- Top Section Jump Bar & Redline Switch --- */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 24px;
+      margin-bottom: 48px;
+      border-bottom: 1px solid var(--slate-200);
+      flex-wrap: wrap;
+    }
+
+    .section-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .sec-pill {
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 6px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--slate-200);
+      background-color: #ffffff;
+      color: var(--slate-500);
+      transition: all 0.15s ease;
+    }
+
+    .sec-pill:hover {
+      border-color: var(--slate-400);
+      color: var(--slate-900);
+    }
+
+    .sec-pill span.num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--r5-blue);
+      margin-right: 4px;
+    }
+
+    .redline-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 15px;
+      border-radius: 999px;
+      background-color: rgba(225, 29, 72, 0.06);
+      border: 1px solid rgba(225, 29, 72, 0.25);
+      color: var(--redline);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .redline-switch input {
+      accent-color: var(--redline);
+      cursor: pointer;
+    }
+
+    /* --- Guide Sections --- */
+    section.guide-section {
+      margin-bottom: 72px;
+      scroll-margin-top: 28px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--slate-200);
+    }
+
+    .section-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--r5-blue);
+      background: rgba(0, 132, 255, 0.08);
+      border: 1px solid rgba(0, 132, 255, 0.22);
+      padding: 3px 9px;
+      border-radius: 6px;
+    }
+
+    .section-header h2 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--slate-900);
+      letter-spacing: -0.02em;
+    }
+
+    .section-desc {
+      color: var(--slate-500);
+      font-size: 15px;
+      line-height: 1.65;
+      margin-bottom: 24px;
+      max-width: 820px;
+    }
+
+    /* --- Cards & Grids --- */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--slate-200);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.02);
+    }
+
+    .card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--slate-900);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .card p {
+      font-size: 14px;
+      color: var(--slate-500);
+      line-height: 1.6;
+    }
+
+    /* --- Blueprint / Redline Canvas (Light by default) --- */
+    .blueprint-stage {
+      background:
+        linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+        #ffffff;
+      background-size: 20px 20px;
+      border: 1px solid var(--slate-200);
+      border-radius: 16px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .blueprint-stage.dark-stage {
+      background:
+        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        #0f172a;
+      background-size: 20px 20px;
+      border: 1px solid var(--slate-700);
+      color: #ffffff;
+    }
+
+    /* Toggleable Redline Overlay */
+    body.hide-redlines .redline-layer {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .redline-layer {
+      transition: opacity 0.2s ease;
+    }
+
+    /* --- Spec Tables --- */
+    table.spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      background: #ffffff;
+      border: 1px solid var(--slate-200);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    table.spec-table th,
+    table.spec-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--slate-200);
+      color: var(--slate-700);
+    }
+
+    table.spec-table th {
+      background: var(--slate-50);
+      color: var(--slate-900);
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    table.spec-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .pill-measure {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(225, 29, 72, 0.08);
+      color: var(--redline);
+      border: 1px solid rgba(225, 29, 72, 0.25);
+    }
+
+    .pill-cyan {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(0, 132, 255, 0.08);
+      color: var(--r5-blue);
+      border: 1px solid rgba(0, 132, 255, 0.22);
+    }
+
+    /* --- Color Swatches --- */
+    .swatch-card {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--slate-200);
+      background: #ffffff;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .swatch-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--r5-blue);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    .swatch-color {
+      height: 88px;
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 8px 10px;
+    }
+
+    .swatch-copy-hint {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(15, 23, 42, 0.72);
+      color: #fff;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .swatch-card:hover .swatch-copy-hint {
+      opacity: 1;
+    }
+
+    .swatch-body {
+      padding: 14px;
+    }
+
+    .swatch-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--slate-900);
+    }
+
+    .swatch-role {
+      font-size: 11.5px;
+      color: var(--slate-500);
+      margin-bottom: 8px;
+    }
+
+    .swatch-codes {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: var(--slate-700);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* --- Do / Don't Cards --- */
+    .dodont-card {
+      border-radius: 14px;
+      padding: 20px;
+      background: #ffffff;
+      border: 1px solid var(--slate-200);
+    }
+
+    .dodont-card.do {
+      border-top: 4px solid #16a34a;
+    }
+
+    .dodont-card.dont {
+      border-top: 4px solid #dc2626;
+    }
+
+    .dodont-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .do .dodont-tag {
+      background: rgba(22, 163, 74, 0.1);
+      color: #15803d;
+    }
+
+    .dont .dodont-tag {
+      background: rgba(220, 38, 38, 0.1);
+      color: #b91c1c;
+    }
+
+    /* --- Minimal Footer (Identical across all pages) --- */
+    footer.site-footer {
+      border-top: 1px solid var(--slate-200);
+      padding: 28px 0 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--slate-500);
+    }
+
+    footer.site-footer a {
+      color: var(--slate-700);
+      text-decoration: none;
+      font-weight: 600;
+      margin-left: 24px;
+    }
+
+    footer.site-footer a:hover {
+      color: var(--r5-blue);
+    }
+
+    @media (max-width: 940px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+      }
+      nav.nav-links {
+        gap: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Master Inline SVG Definition -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="r5-wave-grad" x1="12%" y1="12%" x2="88%" y2="88%">
+        <stop offset="0%" stop-color="#0084ff"/>
+        <stop offset="45%" stop-color="#3898ff"/>
+        <stop offset="72%" stop-color="#65b891"/>
+        <stop offset="100%" stop-color="#ffb800"/>
+      </linearGradient>
+      <g id="r5-wave-pebble">
+        <path d="M50,8 C74,8 92,25 92,49 C92,74 73,92 49,92 C25,92 8,75 8,50 C8,24 27,8 50,8 Z
+                 M54,24 C42,24 37,32 43,42 C49,51 46,62 35,66 C26,69 27,77 41,77 C64,77 77,64 77,48 C77,33 66,24 54,24 Z"
+              fill="url(#r5-wave-grad)" fill-rule="evenodd"/>
+        <path d="M22,29 C30,17 44,12 58,14"
+              fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" opacity="0.38"/>
+      </g>
+    </defs>
+  </svg>
+
+  <div class="container">
+
+    <!-- Top Navigation (Identical across all pages) -->
+    <header class="site-nav">
+      <a href="website.html" class="brand-lockup">
+        <svg viewBox="0 0 100 100"><use href="#r5-wave-pebble"/></svg>
+        <div class="brand-lockup-text"><strong>R5</strong><span>Operating System</span></div>
+      </a>
+
+      <nav class="nav-links">
+        <a href="website.html#overview" class="text-link">Overview</a>
+        <a href="website.html#beyond-haiku" class="text-link">Features</a>
+        <a href="prs.html" class="text-link">Pull Requests</a>
+        <a href="wallpapers.html" class="text-link">Wallpapers</a>
+        <a href="brand-guide.html" class="text-link active">Brand Guide</a>
+        <a href="website.html#download" class="nav-pill">Download</a>
+      </nav>
+    </header>
+
+    <!-- Serene Center Hero (Identical position & jewel size across all pages) -->
+    <section class="hero">
+      <div class="hero-jewel">
+        <svg viewBox="0 0 100 100" width="72" height="72"><use href="#r5-wave-pebble"/></svg>
+      </div>
+      <h1>Visual Brand Guide.</h1>
+      <p class="subtitle">
+        Alle verhoudingen, constructiegrids, clearspace, padding, kleurcodes en UI-maatlijnen voor R5 Operating System.
+      </p>
+      <div class="hero-stats-bar">
+        <span>Beeldmerk: <strong>De Golf-Steen (Wave Pebble)</strong></span>
+        <span>&bull;</span>
+        <span>Systeemfont: <strong>Manrope (700 / 400)</strong></span>
+        <span>&bull;</span>
+        <span>Standaard: <strong>Build 10049</strong></span>
+      </div>
+    </section>
+
+    <!-- Section Jump Pills & Interactive Redline Toggle -->
+    <div class="controls-row">
+      <div class="section-pills">
+        <a href="#sec-naming" class="sec-pill"><span class="num">01</span>Naamgeving</a>
+        <a href="#sec-symbol" class="sec-pill"><span class="num">02</span>Geometrie</a>
+        <a href="#sec-lockup" class="sec-pill"><span class="num">03</span>Woordmerk &amp; Padding</a>
+        <a href="#sec-colors" class="sec-pill"><span class="num">04</span>Kleurenpalet</a>
+        <a href="#sec-typography" class="sec-pill"><span class="num">05</span>Typografie</a>
+        <a href="#sec-ui-specs" class="sec-pill"><span class="num">06</span>Systeem-UI</a>
+        <a href="#sec-dodont" class="sec-pill"><span class="num">07</span>Do's &amp; Don'ts</a>
+        <a href="#sec-assets" class="sec-pill"><span class="num">08</span>Brand Kit</a>
+      </div>
+
+      <label class="redline-switch">
+        <input type="checkbox" id="toggleRedlines" checked onchange="document.body.classList.toggle('hide-redlines', !this.checked)" />
+        <span>Toon Maatlijnen &amp; Grids</span>
+      </label>
+    </div>
+
+    <!-- 01. Naming & Identity -->
+    <section id="sec-naming" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">01</span>
+        <h2>Merkidentiteit &amp; Naamgevingsregels</h2>
+      </div>
+      <p class="section-desc">
+        Het besturingssysteem heet <strong>R5 Operating System</strong>, kort <strong>R5</strong>.
+        Het combineert het reactieve, menselijke ontwerp van <em>BeOS</em> en <em>Haiku</em> met een eigen,
+        moderne 64-bit architectuur.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Officiële Productnaam <span class="pill-cyan">Verplicht in UI &amp; Merk</span></h3>
+          <p style="margin-bottom: 12px;">
+            Gebruik in alle logo's, venstertitels, het opstartscherm, documentatie, <em>What's new</em> en
+            website-teksten uitsluitend:
+          </p>
+          <ul style="padding-left: 18px; font-size: 14px; color: var(--slate-700); line-height: 1.8;">
+            <li>Volledig: <strong>R5 Operating System</strong></li>
+            <li>Kort: <strong>R5</strong> (bijv. <em>About R5</em>, systeemschijf <em>R5</em>)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Technische Identifier <span class="pill-measure">Alleen Code / Repo</span></h3>
+          <p style="margin-bottom: 12px;">
+            De string <code class="mono">R5OS</code> is uitsluitend een technische identifier en mag
+            <strong>nooit</strong> in een logo, splash screen of zichtbare UI-titel verschijnen:
+          </p>
+          <ul style="padding-left: 18px; font-size: 13.5px; color: var(--slate-600); line-height: 1.8;">
+            <li>Toegestaan in: repository-naam, C-macro's (<code class="mono">R5_OS_VERSION</code>), bestaande logstrings.</li>
+            <li>Verboden in: woordmerk, Deskbar, Boot Splash, <em>About R5</em>, marketing.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02. Symbol Geometry & Clearspace -->
+    <section id="sec-symbol" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">02</span>
+        <h2>Het Beeldmerk: Geometrie, Constructiegrid &amp; Clearspace</h2>
+      </div>
+      <p class="section-desc">
+        <strong>De Golf-Steen (The Wave Pebble)</strong> is opgebouwd op een <code class="mono">100 &times; 100</code>
+        coördinatengrid (<code class="mono">viewBox="0 0 100 100"</code>). De buitenste contour beslaat exact
+        <code class="mono">84 &times; 84</code> eenheden (<code class="mono">x: 8..92, y: 8..92</code>), waardoor er rondom
+        een ingebouwde optische marge van <code class="mono">8u</code> (<code class="mono">8%</code>) aanwezig is.
+      </p>
+
+      <div class="grid-2" style="margin-bottom: 24px;">
+        <!-- Left: Geometric Redline Blueprint -->
+        <div class="blueprint-stage">
+          <div style="font-size: 12px; font-weight: 700; color: var(--slate-500); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em;">
+            2.1 Vector Constructiegrid (100 &times; 100 u)
+          </div>
+          <svg viewBox="-12 -12 124 124" width="320" height="320">
+            <!-- Outer 100x100 viewBox frame -->
+            <rect x="0" y="0" width="100" height="100" fill="none" stroke="rgba(100,116,139,0.35)" stroke-width="0.6"/>
+            <!-- Symbol -->
+            <use href="#r5-wave-pebble"/>
+            <!-- Redline Overlay -->
+            <g class="redline-layer">
+              <!-- 8u internal safe zone -->
+              <rect x="8" y="8" width="84" height="84" fill="none" stroke="#e11d48" stroke-width="0.7" stroke-dasharray="2,2"/>
+              <!-- Inner S-wave bounding box (26..77, 24..77) -->
+              <rect x="27" y="24" width="50" height="53" fill="none" stroke="#0284c7" stroke-width="0.6" stroke-dasharray="1.5,1.5"/>
+              <!-- Center crosshairs -->
+              <line x1="50" y1="0" x2="50" y2="100" stroke="rgba(225,29,72,0.35)" stroke-width="0.4"/>
+              <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(225,29,72,0.35)" stroke-width="0.4"/>
+              <!-- 135deg gradient axis -->
+              <line x1="12" y1="12" x2="88" y2="88" stroke="#d97706" stroke-width="0.7" stroke-dasharray="2.5,2"/>
+              <circle cx="12" cy="12" r="1.8" fill="#0084ff" stroke="#fff" stroke-width="0.5"/>
+              <circle cx="88" cy="88" r="1.8" fill="#ffb800" stroke="#fff" stroke-width="0.5"/>
+              <!-- Dimension Labels -->
+              <text x="50" y="-4" fill="#64748b" font-size="4.2" text-anchor="middle" font-family="JetBrains Mono">viewBox: 100u</text>
+              <text x="50" y="6.2" fill="#e11d48" font-size="4" text-anchor="middle" font-family="JetBrains Mono">Active Pebble: 84u (x:8..92)</text>
+              <text x="52" y="22.2" fill="#0284c7" font-size="3.8" text-anchor="middle" font-family="JetBrains Mono">S-Wave Cutout: 50&times;53u</text>
+              <text x="4" y="52" fill="#e11d48" font-size="3.8" text-anchor="middle" font-family="JetBrains Mono">8u</text>
+              <text x="96" y="52" fill="#e11d48" font-size="3.8" text-anchor="middle" font-family="JetBrains Mono">8u</text>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Right: Clearspace Rule Diagram -->
+        <div class="blueprint-stage">
+          <div style="font-size: 12px; font-weight: 700; color: var(--slate-500); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em;">
+            2.2 Minimale Vrije Ruimte (Clearspace = 0.25 &times; D)
+          </div>
+          <svg viewBox="0 0 160 160" width="320" height="320">
+            <!-- Clearspace outer zone (150x150 around 100x100 symbol = 25u padding on each side) -->
+            <g class="redline-layer">
+              <rect x="5" y="5" width="150" height="150" fill="rgba(225, 29, 72, 0.04)" stroke="#e11d48" stroke-width="0.8" stroke-dasharray="3,2"/>
+              <rect x="30" y="30" width="100" height="100" fill="none" stroke="#0284c7" stroke-width="0.8"/>
+              <!-- Dimension arrows -->
+              <line x1="5" y1="80" x2="30" y2="80" stroke="#e11d48" stroke-width="0.8"/>
+              <line x1="130" y1="80" x2="155" y2="80" stroke="#e11d48" stroke-width="0.8"/>
+              <line x1="80" y1="5" x2="80" y2="30" stroke="#e11d48" stroke-width="0.8"/>
+              <line x1="80" y1="130" x2="80" y2="155" stroke="#e11d48" stroke-width="0.8"/>
+              <text x="17.5" y="76" fill="#e11d48" font-size="4.8" text-anchor="middle" font-family="JetBrains Mono">0.25 D</text>
+              <text x="142.5" y="76" fill="#e11d48" font-size="4.8" text-anchor="middle" font-family="JetBrains Mono">0.25 D</text>
+              <text x="80" y="19" fill="#e11d48" font-size="4.8" text-anchor="middle" font-family="JetBrains Mono">0.25 D</text>
+              <text x="80" y="145" fill="#e11d48" font-size="4.8" text-anchor="middle" font-family="JetBrains Mono">0.25 D</text>
+              <text x="80" y="127" fill="#0284c7" font-size="4.6" text-anchor="middle" font-family="JetBrains Mono">D = Symboolbreedte</text>
+            </g>
+            <!-- Centered 100x100 symbol at (30,30) -->
+            <g transform="translate(30,30)">
+              <use href="#r5-wave-pebble"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Onderdeel</th>
+            <th>Coördinaten / Waarde</th>
+            <th>Toelichting</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Canvas / ViewBox</strong></td>
+            <td><span class="pill-cyan">0 0 100 100</span></td>
+            <td>Vierkante eenheidsmatrix; schaalt verliesvrij naar elk pixelformaat.</td>
+          </tr>
+          <tr>
+            <td><strong>Buitenste Pebble-contour</strong></td>
+            <td><span class="pill-measure">x: 8..92, y: 8..92 (84 &times; 84 u)</span></td>
+            <td>4 gesloten kubische Bézier-segmenten met <code class="mono">8u</code> optische marge tot de rand.</td>
+          </tr>
+          <tr>
+            <td><strong>Binnenste S-Golf (Negatieve Ruimte)</strong></td>
+            <td><span class="pill-measure">x: 26..77, y: 24..77 (51 &times; 53 u)</span></td>
+            <td>Uitgesneden via <code class="mono">fill-rule="evenodd"</code>; vormt subtiel een S-golf en abstracte <strong>5</strong>.</td>
+          </tr>
+          <tr>
+            <td><strong>Specular Top-Left Highlight</strong></td>
+            <td><span class="pill-cyan">M22,29 C30,17 44,12 58,14</span></td>
+            <td>Witte glanslijn (<code class="mono">stroke-width: 2.5u</code>, <code class="mono">opacity: 0.38</code>, zachte Gaussische blur in raster-exports).</td>
+          </tr>
+          <tr>
+            <td><strong>Standaard Clearspace</strong></td>
+            <td><span class="pill-measure">Minimaal 0.25 &times; D rondom</span></td>
+            <td>Vrije ruimte rond het losse symbool op web, print en marketing. (Uitzondering: Deskbar-knop <code class="mono">28&times;22 px</code>).</td>
+          </tr>
+          <tr>
+            <td><strong>Minimale Weergavegrootte</strong></td>
+            <td><span class="pill-cyan">16 &times; 16 px (UI) / 20 &times; 20 px (Deskbar)</span></td>
+            <td>Onder <code class="mono">64 &times; 64 px</code> wordt het symbool zonder slagschaduw gerenderd voor maximale scherpte.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 03. Wordmark, Lockup Spacing & Padding -->
+    <section id="sec-lockup" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">03</span>
+        <h2>Woordmerk &amp; Lockup: Maatlijnen, Spacing &amp; Padding</h2>
+      </div>
+      <p class="section-desc">
+        De horizontale lockup combineert het <strong>Wave Pebble</strong>-symbool links met
+        <strong>R5</strong> in <em>Manrope Bold (700)</em> en <strong>Operating System</strong> in
+        <em>Manrope Regular (400)</em> op exact dezelfde tekstbasislijn.
+      </p>
+
+      <!-- Full-width interactive redline blueprint of the Horizontal Lockup -->
+      <div class="blueprint-stage" style="margin-bottom: 24px; padding: 36px 28px;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--slate-500); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.06em;">
+          3.1 Horizontale Lockup &amp; Header-Kaart Maatlijnen (Referentie: About R5 Header Card — Hoogte 88 px)
+        </div>
+
+        <svg viewBox="0 0 640 136" width="100%" style="max-width: 780px; height: auto;">
+          <!-- Outer Card (512 x 88 scaled inside 640x136 view) -->
+          <g transform="translate(24, 24)">
+            <!-- Card background -->
+            <rect x="0" y="0" width="592" height="88" fill="#ffffff" stroke="#c4c4c4" stroke-width="1.5"/>
+
+            <!-- Redline Paddings & Guides -->
+            <g class="redline-layer">
+              <!-- Left padding 14px -->
+              <rect x="0" y="0" width="14" height="88" fill="rgba(225,29,72,0.1)"/>
+              <!-- Top padding 14px -->
+              <rect x="14" y="0" width="60" height="14" fill="rgba(225,29,72,0.1)"/>
+              <!-- Bottom padding 14px -->
+              <rect x="14" y="74" width="60" height="14" fill="rgba(225,29,72,0.1)"/>
+              <!-- Icon-to-text gap 14px (x: 74..88) -->
+              <rect x="74" y="0" width="14" height="88" fill="rgba(2,132,199,0.12)"/>
+              <!-- Word gap 8px between R5 and Operating System (x: 126..134) -->
+              <rect x="126" y="18" width="8" height="34" fill="rgba(2,132,199,0.18)"/>
+
+              <!-- Baselines -->
+              <line x1="74" y1="46" x2="578" y2="46" stroke="#e11d48" stroke-width="1" stroke-dasharray="3,2"/>
+              <line x1="74" y1="68" x2="578" y2="68" stroke="#0284c7" stroke-width="1" stroke-dasharray="3,2"/>
+
+              <!-- Symbol bounding box 60x60 -->
+              <rect x="14" y="14" width="60" height="60" fill="none" stroke="#e11d48" stroke-width="1" stroke-dasharray="2,2"/>
+
+              <!-- Dimension annotations -->
+              <text x="7" y="-6" fill="#e11d48" font-size="9.5" text-anchor="middle" font-family="JetBrains Mono" font-weight="600">14px</text>
+              <text x="44" y="-6" fill="#e11d48" font-size="9.5" text-anchor="middle" font-family="JetBrains Mono" font-weight="600">Symbool: 60&times;60px</text>
+              <text x="81" y="-6" fill="#0284c7" font-size="9.5" text-anchor="middle" font-family="JetBrains Mono" font-weight="600">14px</text>
+              <text x="130" y="13" fill="#0284c7" font-size="9.5" text-anchor="middle" font-family="JetBrains Mono" font-weight="600">8px</text>
+              <text x="585" y="43" fill="#e11d48" font-size="9" text-anchor="end" font-family="JetBrains Mono">Baseline 1 (y=46px)</text>
+              <text x="585" y="65" fill="#0284c7" font-size="9" text-anchor="end" font-family="JetBrains Mono">Baseline 2 (y=68px, +22px)</text>
+              <text x="44" y="102" fill="#e11d48" font-size="9.5" text-anchor="middle" font-family="JetBrains Mono" font-weight="600">Pad onder: 14px</text>
+            </g>
+
+            <!-- 60x60 Wave Pebble Symbol at (14, 14) -->
+            <svg x="14" y="14" width="60" height="60" viewBox="0 0 100 100">
+              <use href="#r5-wave-pebble"/>
+            </svg>
+
+            <!-- Typography -->
+            <text x="88" y="46" font-family="Manrope, sans-serif" font-weight="700" font-size="28" fill="#0f172a">R5</text>
+            <text x="134" y="46" font-family="Manrope, sans-serif" font-weight="400" font-size="23" fill="#334155">Operating System</text>
+            <text x="88" y="68" font-family="Manrope, sans-serif" font-weight="400" font-size="12" fill="#64748b">Version 2026.1-dev Build 10049  •  AMD64</text>
+          </g>
+        </svg>
+      </div>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Relatieve Formule</th>
+            <th>About R5 Header (<code class="mono">88 px</code> hoog)</th>
+            <th>Boot Splash (<code class="mono">372 &times; 96 px</code>)</th>
+            <th>Master Logo (<code class="mono">842 &times; 140 px</code>)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Symboolgrootte (<code class="mono">S</code>)</strong></td>
+            <td><span class="pill-cyan">0.72 &times; H</span> (of <code class="mono">2.0 &times; CapHeight</code>)</td>
+            <td><code class="mono">60 &times; 60 px</code></td>
+            <td><code class="mono">58 &times; 58 px</code></td>
+            <td><code class="mono">101 &times; 101 px</code></td>
+          </tr>
+          <tr>
+            <td><strong>Padding Rondom Symbool</strong></td>
+            <td><span class="pill-measure">0.16 &times; H</span></td>
+            <td><code class="mono">14 px</code> (boven/onder/links)</td>
+            <td><code class="mono">19 px</code> (vert) / <code class="mono">22 px</code> (links)</td>
+            <td><code class="mono">22 px</code></td>
+          </tr>
+          <tr>
+            <td><strong>Afstand Symbool &rarr; <code class="mono">R5</code></strong></td>
+            <td><span class="pill-measure">0.23 &times; S</span> (<code class="mono">0.16 &times; H</code>)</td>
+            <td><code class="mono">14 px</code> (tekst start op <code class="mono">x = 88 px</code>)</td>
+            <td><code class="mono">14 px</code> (tekst start op <code class="mono">x = 94 px</code>)</td>
+            <td><code class="mono">22 px</code></td>
+          </tr>
+          <tr>
+            <td><strong>Afstand <code class="mono">R5</code> &rarr; <code class="mono">Operating System</code></strong></td>
+            <td><span class="pill-measure">0.09 &times; H</span></td>
+            <td><code class="mono">8 px</code> op dezelfde basislijn</td>
+            <td><code class="mono">8 px</code> op dezelfde basislijn</td>
+            <td><code class="mono">13 px</code> op dezelfde basislijn</td>
+          </tr>
+          <tr>
+            <td><strong>Korpsgrootte <code class="mono">R5</code> (Manrope Bold)</strong></td>
+            <td><span class="pill-cyan">100% (Referentie T)</span></td>
+            <td><code class="mono">28 px</code> (<code class="mono">#0F172A</code>)</td>
+            <td><code class="mono">31 px</code> (<code class="mono">#FFFFFF</code> of <code class="mono">#0F172A</code>)</td>
+            <td><code class="mono">50 px</code> (<code class="mono">#0F172A</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Korpsgrootte <code class="mono">Operating System</code> (Regular)</strong></td>
+            <td><span class="pill-cyan">82% &ndash; 83% van T</span></td>
+            <td><code class="mono">23 px</code> (<code class="mono">#334155</code>)</td>
+            <td><code class="mono">25 px</code> (<code class="mono">#CBD5E1</code> of <code class="mono">#334155</code>)</td>
+            <td><code class="mono">42 px</code> (<code class="mono">#334155</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Subregel (Versie &amp; Build)</strong></td>
+            <td><span class="pill-cyan">43% van T</span></td>
+            <td><code class="mono">12 px</code> (<code class="mono">#64748B</code>, basislijn <code class="mono">+22 px</code>)</td>
+            <td><em>Geen versieregel op Boot Splash</em></td>
+            <td><em>Optioneel in card-lockup</em></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 04. Color Palette -->
+    <section id="sec-colors" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">04</span>
+        <h2>Kleurenpalet &amp; Gradiënt-Specificatie</h2>
+      </div>
+      <p class="section-desc">
+        Klik op een kleurkaart om de Hex-waarde direct naar het klembord te kopiëren.
+        De merkgradiënt loopt onder een hoek van <strong>135&deg;</strong> (van <code class="mono">12%, 12%</code>
+        linksboven naar <code class="mono">88%, 88%</code> rechtsonder).
+      </p>
+
+      <!-- Gradient Bar Preview -->
+      <div style="margin-bottom: 24px; border-radius: 16px; padding: 22px 26px; background: var(--brand-grad); color: #ffffff; text-shadow: 0 1px 2px rgba(15,23,42,0.28); display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; font-weight: 700; box-shadow: 0 10px 24px rgba(0, 132, 255, 0.18);">
+        <span>0% &bull; #0084FF (BeOS / R5 Blue)</span>
+        <span>45% &bull; #3898FF (Sky Wave)</span>
+        <span>72% &bull; #65B891 (Seafoam Bridge)</span>
+        <span>100% &bull; #FFB800 (Haiku Tab Gold)</span>
+      </div>
+
+      <div class="grid-4" style="margin-bottom: 20px;">
+        <div class="swatch-card" onclick="copyHex('#0084FF', this)">
+          <div class="swatch-color" style="background: #0084FF;"><span class="swatch-copy-hint">Kopieer #0084FF</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">BeOS / R5 Blue</div>
+            <div class="swatch-role">Gradient Stop 0% &bull; Primary Accent</div>
+            <div class="swatch-codes"><span>HEX: #0084FF</span><span>RGB: 0, 132, 255</span></div>
+          </div>
+        </div>
+
+        <div class="swatch-card" onclick="copyHex('#3898FF', this)">
+          <div class="swatch-color" style="background: #3898FF;"><span class="swatch-copy-hint">Kopieer #3898FF</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Sky Wave Blue</div>
+            <div class="swatch-role">Gradient Stop 45% &bull; Wallpaper Link</div>
+            <div class="swatch-codes"><span>HEX: #3898FF</span><span>RGB: 56, 152, 255</span></div>
+          </div>
+        </div>
+
+        <div class="swatch-card" onclick="copyHex('#65B891', this)">
+          <div class="swatch-color" style="background: #65B891;"><span class="swatch-copy-hint">Kopieer #65B891</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Seafoam Bridge</div>
+            <div class="swatch-role">Gradient Stop 72% &bull; Mid Transition</div>
+            <div class="swatch-codes"><span>HEX: #65B891</span><span>RGB: 101, 184, 145</span></div>
+          </div>
+        </div>
+
+        <div class="swatch-card" onclick="copyHex('#FFB800', this)">
+          <div class="swatch-color" style="background: #FFB800;"><span class="swatch-copy-hint">Kopieer #FFB800</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Haiku Tab Gold</div>
+            <div class="swatch-role">Gradient Stop 100% &bull; Window Tab</div>
+            <div class="swatch-codes"><span>HEX: #FFB800</span><span>RGB: 255, 184, 0</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="swatch-card" onclick="copyHex('#BFD7FF', this)">
+          <div class="swatch-color" style="background: #BFD7FF;"><span class="swatch-copy-hint">Kopieer #BFD7FF</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Horizon Ice</div>
+            <div class="swatch-role">R5 Wallpaper Bovenste Golf</div>
+            <div class="swatch-codes"><span>HEX: #BFD7FF</span><span>RGB: 191, 215, 255</span></div>
+          </div>
+        </div>
+
+        <div class="swatch-card" onclick="copyHex('#9BC0FA', this)">
+          <div class="swatch-color" style="background: #9BC0FA;"><span class="swatch-copy-hint">Kopieer #9BC0FA</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Horizon Sky</div>
+            <div class="swatch-role">R5 Wallpaper Middelste Golf</div>
+            <div class="swatch-codes"><span>HEX: #9BC0FA</span><span>RGB: 155, 192, 250</span></div>
+          </div>
+        </div>
+
+        <div class="swatch-card" onclick="copyHex('#6F9CE6', this)">
+          <div class="swatch-color" style="background: #6F9CE6;"><span class="swatch-copy-hint">Kopieer #6F9CE6</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Horizon Cobalt</div>
+            <div class="swatch-role">R5 Wallpaper Onderste Golf</div>
+            <div class="swatch-codes"><span>HEX: #6F9CE6</span><span>RGB: 111, 156, 230</span></div>
+          </div>
+        </div>
+
+        <div class="swatch-card" onclick="copyHex('#0F172A', this)">
+          <div class="swatch-color" style="background: #0F172A;"><span class="swatch-copy-hint">Kopieer #0F172A</span></div>
+          <div class="swatch-body">
+            <div class="swatch-name">Deep Slate</div>
+            <div class="swatch-role">Woordmerk &ldquo;R5&rdquo; op Lichte Kaart</div>
+            <div class="swatch-codes"><span>HEX: #0F172A</span><span>RGB: 15, 23, 42</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05. Typography -->
+    <section id="sec-typography" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">05</span>
+        <h2>Typografie &amp; Schaal (<code class="mono">Manrope</code>)</h2>
+      </div>
+      <p class="section-desc">
+        <strong>Manrope</strong> (<code class="mono">distro/fonts/manrope/</code>, SIL Open Font License 1.1)
+        is zowel het standaard desktop-lettertype van R5 als het officiële merklettertype.
+      </p>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--slate-200);">
+          <div>
+            <div style="font-size: 12px; color: var(--r5-blue); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;">Merk- &amp; Systeemlettertype</div>
+            <div style="font-size: 40px; font-weight: 700; color: var(--slate-900); letter-spacing: -0.02em;">Manrope Bold <span style="font-weight: 400; color: var(--slate-500);">&amp; Regular</span></div>
+          </div>
+          <div class="mono" style="font-size: 13px; color: var(--slate-500);">
+            ABCDEFGHIJKLMNOPQRSTUVWXYZ<br/>
+            abcdefghijklmnopqrstuvwxyz &bull; 0123456789
+          </div>
+        </div>
+
+        <table class="spec-table" style="margin-top: 18px;">
+          <thead>
+            <tr>
+              <th>UI- / Merk-element</th>
+              <th>Gewicht &amp; Bestand</th>
+              <th>Grootte</th>
+              <th>Tracking / Line-Height</th>
+              <th>Kleur (Licht / Donker)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Woordmerk <code class="mono">R5</code></strong></td>
+              <td><strong>Bold (700)</strong> &bull; <code class="mono">Manrope-Bold.ttf</code></td>
+              <td><span class="pill-cyan">28 px</span> (About) / <span class="pill-cyan">31 px</span> (Splash)</td>
+              <td><code class="mono">-0.02em</code> / <code class="mono">1.0</code></td>
+              <td><code class="mono">#0F172A</code> / <code class="mono">#FFFFFF</code></td>
+            </tr>
+            <tr>
+              <td><strong>Woordmerk <code class="mono">Operating System</code></strong></td>
+              <td><strong>Regular (400)</strong> &bull; <code class="mono">Manrope-Regular.ttf</code></td>
+              <td><span class="pill-cyan">23 px</span> (About) / <span class="pill-cyan">25 px</span> (Splash)</td>
+              <td><code class="mono">-0.01em</code> / <code class="mono">1.0</code></td>
+              <td><code class="mono">#334155</code> / <code class="mono">#CBD5E1</code></td>
+            </tr>
+            <tr>
+              <td><strong>Versie- &amp; Build-subregel</strong></td>
+              <td><strong>Regular (400)</strong></td>
+              <td><span class="pill-cyan">12 px</span></td>
+              <td><code class="mono">0em</code> / <code class="mono">1.35</code></td>
+              <td><code class="mono">#64748B</code> / <code class="mono">#94A3B8</code></td>
+            </tr>
+            <tr>
+              <td><strong>Venstertab &amp; Box-titels</strong></td>
+              <td><strong>Bold (700)</strong></td>
+              <td><span class="pill-cyan">12 &ndash; 13 px</span></td>
+              <td><code class="mono">0em</code> / <code class="mono">1.2</code></td>
+              <td><code class="mono">#141414</code> op geel <code class="mono">#F8CC26</code></td>
+            </tr>
+            <tr>
+              <td><strong>What's new Sectiekop</strong></td>
+              <td><strong>Bold (700)</strong></td>
+              <td><span class="pill-cyan">13 px</span></td>
+              <td><code class="mono">0em</code> / <code class="mono">1.4</code></td>
+              <td>Groen accent <code class="mono">#2A8324</code></td>
+            </tr>
+            <tr>
+              <td><strong>Body / formulierlabels / lijsten</strong></td>
+              <td><strong>Regular (400)</strong></td>
+              <td><span class="pill-cyan">12 px</span></td>
+              <td><code class="mono">0em</code> / <code class="mono">1.45</code></td>
+              <td><code class="mono">#1E293B</code> op paneelgrijs <code class="mono">#EDEDED</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 06. System UI Redlines (Deskbar, Boot Splash, System Disk, About R5) -->
+    <section id="sec-ui-specs" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">06</span>
+        <h2>Systeem-UI Maatlijnen: Deskbar, Boot Splash, System Disk &amp; About R5</h2>
+      </div>
+      <p class="section-desc">
+        Exacte pixelmaten, marges en padding voor alle plekken waar het merk in <strong>R5 Operating System</strong> verschijnt.
+      </p>
+
+      <div class="grid-2" style="margin-bottom: 24px;">
+        <!-- 6.1 Deskbar Leaf Button -->
+        <div class="card">
+          <h3>6.1 Deskbar Leaf-Knop <span class="pill-measure">28 &times; 22 px</span></h3>
+          <p style="margin-bottom: 16px;">
+            De knop links in de Deskbar toont <strong>uitsluitend het abstracte symbool</strong>
+            (geen tekst <code class="mono">"R5"</code> of <code class="mono">"R5OS"</code>).
+          </p>
+          <div class="blueprint-stage" style="padding: 20px;">
+            <svg viewBox="0 0 220 110" width="100%" style="max-width: 300px;">
+              <!-- Zoomed 28x22 canvas (scaled 4x -> 112x88 at x=54, y=11) -->
+              <g transform="translate(54, 11)">
+                <rect x="0" y="0" width="112" height="88" fill="#e6e6e6" stroke="#888" stroke-width="1.5" rx="4"/>
+                <!-- 20x20 symbol at (4,1) scaled 4x -> 80x80 at (16,4) -->
+                <svg x="16" y="4" width="80" height="80" viewBox="0 0 100 100">
+                  <use href="#r5-wave-pebble"/>
+                </svg>
+                <g class="redline-layer">
+                  <!-- 4px left & right padding (16u each) -->
+                  <rect x="0" y="0" width="16" height="88" fill="rgba(225,29,72,0.16)"/>
+                  <rect x="96" y="0" width="16" height="88" fill="rgba(225,29,72,0.16)"/>
+                  <!-- 1px top & bottom padding (4u each) -->
+                  <rect x="16" y="0" width="80" height="4" fill="rgba(2,132,199,0.22)"/>
+                  <rect x="16" y="84" width="80" height="4" fill="rgba(2,132,199,0.22)"/>
+                  <rect x="16" y="4" width="80" height="80" fill="none" stroke="#e11d48" stroke-width="1" stroke-dasharray="3,2"/>
+                  <text x="-6" y="47" fill="#e11d48" font-size="9" text-anchor="end" font-family="JetBrains Mono">Pad L: 4px</text>
+                  <text x="118" y="47" fill="#e11d48" font-size="9" text-anchor="start" font-family="JetBrains Mono">Pad R: 4px</text>
+                  <text x="56" y="-3" fill="#0284c7" font-size="9" text-anchor="middle" font-family="JetBrains Mono">20&times;20px Symbool (Pad T/B: 1px)</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+          <ul style="margin-top: 14px; padding-left: 18px; font-size: 13px; color: var(--slate-600); line-height: 1.7;">
+            <li>Bestand: <code class="mono">distro/artwork/r5-os-deskbar.png</code> (<code class="mono">28 &times; 22 px</code> RGBA).</li>
+            <li>Symbool: <code class="mono">20 &times; 20 px</code> gecentreerd op <code class="mono">x = 4 px, y = 1 px</code>.</li>
+            <li>Horizontale padding: <code class="mono">4 px</code> links en <code class="mono">4 px</code> rechts.</li>
+          </ul>
+        </div>
+
+        <!-- 6.2 Boot Splash (Black & White variants) -->
+        <div class="card">
+          <h3>6.2 Boot Splash (Zwart &amp; Wit) <span class="pill-measure">372 &times; 96 px</span></h3>
+          <p style="margin-bottom: 16px;">
+            Volgt exact de horizontale <em>About R5</em>-lockup zonder hardcoded build- of architectuurtekst,
+            beschikbaar in zowel donker (<code class="mono">#000000</code>) als wit (<code class="mono">#FFFFFF</code>).
+          </p>
+          <div class="blueprint-stage" style="padding: 18px; gap: 10px;">
+            <svg viewBox="0 0 372 114" width="100%" style="max-width: 372px;">
+              <g transform="translate(0, 14)">
+                <rect x="0" y="0" width="372" height="96" fill="#000000" stroke="#cbd5e1" stroke-width="1"/>
+                <rect x="8" y="8" width="356" height="80" rx="12" fill="#0e121a" stroke="#2a3446" stroke-width="1"/>
+                <svg x="22" y="19" width="58" height="58" viewBox="0 0 100 100">
+                  <use href="#r5-wave-pebble"/>
+                </svg>
+                <text x="94" y="58" font-family="Manrope, sans-serif" font-weight="700" font-size="31" fill="#ffffff">R5</text>
+                <text x="141" y="58" font-family="Manrope, sans-serif" font-weight="400" font-size="25" fill="#cbd5e1">Operating System</text>
+
+                <g class="redline-layer">
+                  <rect x="80" y="8" width="14" height="80" fill="rgba(2,132,199,0.25)"/>
+                  <rect x="22" y="19" width="58" height="58" fill="none" stroke="#e11d48" stroke-width="1" stroke-dasharray="2,2"/>
+                  <line x1="80" y1="58" x2="360" y2="58" stroke="#e11d48" stroke-width="0.8" stroke-dasharray="3,2"/>
+                  <text x="51" y="-3" fill="#e11d48" font-size="8.5" text-anchor="middle" font-family="JetBrains Mono">58&times;58px (x=22,y=19)</text>
+                  <text x="87" y="-3" fill="#0284c7" font-size="8.5" text-anchor="middle" font-family="JetBrains Mono">14px</text>
+                  <text x="240" y="-3" fill="#64748b" font-size="8.5" text-anchor="middle" font-family="JetBrains Mono">Kaart: 356&times;80px (r=12px, marge=8px)</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+          <ul style="margin-top: 14px; padding-left: 18px; font-size: 13px; color: var(--slate-600); line-height: 1.7;">
+            <li>Donker: <code class="mono">r5-os-splash.png</code> &amp; <code class="mono">.bgr</code> (<code class="mono">107.136 bytes</code> raw BGR).</li>
+            <li>Wit: <code class="mono">r5-os-splash-white.png</code> &amp; <code class="mono">r5-os-splash-white-borderless.png</code> (+ <code class="mono">.bgr</code>).</li>
+            <li>Symbool: <code class="mono">58 &times; 58 px</code> op <code class="mono">x = 22 px, y = 19 px</code>; gap <code class="mono">14 px</code> naar <code class="mono">R5</code>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 6.2.1 Boot Splash Progress Icons Strip -->
+      <div class="card" style="margin-bottom: 24px;">
+        <h3>6.2.1 Opstartvoortgang &amp; Boot Splash Icons <span class="pill-measure">308 &times; 80 px (7 &times; 44 px cellen)</span></h3>
+        <p style="margin-bottom: 16px;">
+          Haiku toont tijdens het opstarten een iconenstrook (<code class="mono">splash_icons.png</code>) waarin zeven stappen doorlopen worden.
+          Voor <strong>R5 Operating System</strong> op een witte achtergrond (<code class="mono">#FFFFFF</code>) worden zeven losse, transparante
+          kleuriconen van <code class="mono">40 &times; 40 px</code> gebruikt. Het generator-script (<code class="mono">scripts/generate-splash-icons.py</code>)
+          plaatst ze gecentreerd op wit, genereert automatisch de gedimde &ldquo;nog niet&rdquo;-rij in neutraal leisteengrijs, en bouwt de 
+          <code class="mono">308 &times; 80 px</code> strip en raw BGR.
+        </p>
+
+        <!-- 7 Individual Transparent Color Icons -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 24px;">
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/1.png" width="40" height="40" alt="1.png - modules laden" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">1.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">modules laden</div>
+          </div>
+
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/2.png" width="40" height="40" alt="2.png - opstart-bestandssysteem" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">2.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">opstart-bestandssysteem</div>
+          </div>
+
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/3.png" width="40" height="40" alt="3.png - apparaten zoeken" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">3.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">apparaten zoeken</div>
+          </div>
+
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/4.png" width="40" height="40" alt="4.png - opstartschijf koppelen" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">4.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">opstartschijf koppelen</div>
+          </div>
+
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/5.png" width="40" height="40" alt="5.png - processormodules" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">5.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">processormodules</div>
+          </div>
+
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/6.png" width="40" height="40" alt="6.png - geheugenmodules" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">6.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">geheugenmodules</div>
+          </div>
+
+          <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="width: 48px; height: 48px; margin: 0 auto 8px; background: #ffffff; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="brand-kit/boot_splash/icons/7.png" width="40" height="40" alt="7.png - opstartscript" />
+            </div>
+            <div class="mono" style="font-weight: 700; font-size: 13px; color: var(--r5-blue);">7.png</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">opstartscript</div>
+          </div>
+        </div>
+
+        <!-- Live Boot Simulation -->
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.04); margin-bottom: 16px;">
+          <div style="margin-bottom: 20px;">
+            <img src="brand-kit/r5-os-splash-white-borderless.png" style="max-width: 320px; width: 100%; height: auto; display: inline-block;" alt="R5 Boot Splash" />
+          </div>
+
+          <!-- 7-Stage Live Blit Simulation Container -->
+          <div id="bootProgressContainer" style="display: inline-flex; width: 308px; height: 40px; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+            <!-- Rendered via JS -->
+          </div>
+
+          <div style="margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+            <button type="button" id="btnBootStep" class="nav-pill" style="cursor: pointer; border: none;">Volgende Stap &rarr;</button>
+            <button type="button" id="btnBootAuto" class="text-link" style="cursor: pointer; padding: 6px 14px; border: 1px solid var(--border, #cbd5e1); border-radius: 999px;">Automatisch Afspelen</button>
+            <button type="button" id="btnBootReset" class="text-link" style="cursor: pointer; color: var(--text-muted, #64748b);">Herstarten</button>
+            <span id="bootStageLabel" class="mono" style="font-size: 12.5px; color: var(--r5-blue); font-weight: 700; margin-left: 8px;">Status: Gestart (0 / 7 voltooid)</span>
+          </div>
+        </div>
+
+        <!-- Strip Spec Details -->
+        <div style="font-size: 13px; color: var(--text-secondary, #475569); line-height: 1.6;">
+          <strong>Gegenereerde bestanden:</strong>
+          <ul style="margin: 6px 0 0 20px;">
+            <li><code class="mono">distro/artwork/boot_splash/icons/[1-7].png</code>: Zeven transparante <code class="mono">40 &times; 40 px</code> kleuriconen.</li>
+            <li><code class="mono">distro/artwork/boot_splash/splash_icons_white.png</code>: Volledige <code class="mono">308 &times; 80 px</code> strip (boven: kleur, onder: grijs).</li>
+            <li><code class="mono">distro/artwork/boot_splash/splash_icons_white.bgr</code>: 24-bit raw BGR formaat voor de kernel framebuffer blitter.</li>
+            <li><code class="mono">scripts/generate-splash-icons.py</code>: Bouwscript dat op wit zet en de &ldquo;nog niet&rdquo;-rij genereert.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 6.3 System Disk & 6.4 Single-Column About R5 -->
+      <div class="grid-2">
+        <!-- 6.3 System Disk Overlay -->
+        <div class="card">
+          <h3>6.3 System Disk Badge Overlay <span class="pill-measure">air/OS-stijl</span></h3>
+          <p style="margin-bottom: 16px;">
+            De opstartschijf in Tracker en op het bureaublad krijgt de <strong>Golf-Steen</strong> als
+            overlay-badge in het rechterbovenkwadrant van de bovenplaat.
+          </p>
+          <div class="blueprint-stage" style="padding: 20px;">
+            <svg viewBox="0 0 120 110" width="220" height="200">
+              <g transform="translate(10, 5)">
+                <polygon points="8,50 50,72 50,81 8,59" fill="#7a8492" stroke="#3a424c" stroke-width="1.5"/>
+                <polygon points="50,72 92,50 92,59 50,81" fill="#565f6c" stroke="#3a424c" stroke-width="1.5"/>
+                <polygon points="8,50 50,28 92,50 50,72" fill="#e2e8f0" stroke="#3a424c" stroke-width="1.5"/>
+                <polygon points="15,56.5 23,60.7 23,63.7 15,59.5" fill="#40e068"/>
+                <circle cx="59" cy="37" r="20" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+                <svg x="36" y="14" width="46" height="46" viewBox="0 0 100 100">
+                  <use href="#r5-wave-pebble"/>
+                </svg>
+                <g class="redline-layer">
+                  <rect x="36" y="14" width="46" height="46" fill="none" stroke="#e11d48" stroke-width="1" stroke-dasharray="2,2"/>
+                  <text x="59" y="10" fill="#e11d48" font-size="6" text-anchor="middle" font-family="JetBrains Mono">Badge: 46% (x=36%, y=14%)</text>
+                </g>
+              </g>
+            </svg>
+          </div>
+          <ul style="margin-top: 14px; padding-left: 18px; font-size: 13px; color: var(--slate-600); line-height: 1.7;">
+            <li><strong>Volledig schijven-icoon (<code class="mono">brand-kit/r5-system-disk-*.png</code>):</strong> badge = <code class="mono">46%</code> van icoongrootte op <code class="mono">(36%, 14%)</code> met witte contrasterende achtergrondschijf.</li>
+            <li><strong>Tracker live badge-overlay (<code class="mono">Pose.cpp</code>):</strong> <code class="mono">45%</code> van icoongrootte (geclampt <code class="mono">10..28 px</code>) rechtsonder op het root-volume icoon.</li>
+          </ul>
+        </div>
+
+        <!-- 6.4 About R5 Single-Column Layout -->
+        <div class="card">
+          <h3>6.4 <em>About R5</em> Venster (Enkele Kolom) <span class="pill-measure">540 &times; 520 px</span></h3>
+          <p style="margin-bottom: 16px;">
+            Geen tweekoloms-split meer: alle drie de hoofdcomponenten lopen over de <strong>volle breedte</strong>
+            met <code class="mono">14 px</code> vensterpadding (<code class="mono">B_USE_WINDOW_SPACING</code>).
+          </p>
+          <div class="blueprint-stage" style="padding: 16px;">
+            <svg viewBox="0 0 280 230" width="100%" style="max-width: 320px;">
+              <!-- Window tab -->
+              <rect x="10" y="6" width="76" height="16" fill="#f8cc26" stroke="#a88200" stroke-width="1"/>
+              <text x="24" y="17" font-family="Manrope, sans-serif" font-weight="700" font-size="8" fill="#141414">About R5</text>
+              <!-- Window body -->
+              <rect x="10" y="22" width="260" height="198" fill="#ededed" stroke="#808080" stroke-width="1"/>
+              <!-- 1. Header Card -->
+              <rect x="20" y="32" width="240" height="44" fill="#ffffff" stroke="#c4c4c4" stroke-width="1"/>
+              <svg x="27" y="39" width="30" height="30" viewBox="0 0 100 100"><use href="#r5-wave-pebble"/></svg>
+              <text x="64" y="55" font-family="Manrope, sans-serif" font-weight="700" font-size="13" fill="#0f172a">R5</text>
+              <text x="84" y="55" font-family="Manrope, sans-serif" font-weight="400" font-size="11" fill="#334155">Operating System</text>
+              <text x="64" y="67" font-family="Manrope, sans-serif" font-weight="400" font-size="6.5" fill="#64748b">Version 2026.1-dev Build 10049 • AMD64</text>
+
+              <!-- 2. Full-width SysInfoView -->
+              <rect x="20" y="84" width="240" height="52" fill="#e4e4e4" stroke="#c4c4c4" stroke-width="1"/>
+              <text x="28" y="99" font-family="Manrope, sans-serif" font-weight="700" font-size="6.8" fill="#1e293b">12 Processors: <tspan font-weight="400">AMD Ryzen 5 5625U</tspan></text>
+              <text x="145" y="99" font-family="Manrope, sans-serif" font-weight="700" font-size="6.8" fill="#1e293b">Memory: <tspan font-weight="400">612 MiB used</tspan></text>
+              <text x="28" y="120" font-family="Manrope, sans-serif" font-weight="700" font-size="6.8" fill="#1e293b">Kernel: <tspan font-weight="400">Nov 8, 2026</tspan></text>
+              <text x="145" y="120" font-family="Manrope, sans-serif" font-weight="700" font-size="6.8" fill="#1e293b">Time running: <tspan font-weight="400">24m 15s</tspan></text>
+
+              <!-- 3. Full-width Tabs -->
+              <rect x="20" y="144" width="52" height="13" fill="#ffffff" stroke="#aaaaaa" stroke-width="1"/>
+              <text x="46" y="153" font-family="Manrope, sans-serif" font-weight="700" font-size="6.5" text-anchor="middle" fill="#141414">What's new</text>
+              <rect x="74" y="146" width="42" height="11" fill="#dcdcdc" stroke="#aaaaaa" stroke-width="1"/>
+              <text x="95" y="154" font-family="Manrope, sans-serif" font-size="6.5" text-anchor="middle" fill="#555">Credits</text>
+              <rect x="118" y="146" width="44" height="11" fill="#dcdcdc" stroke="#aaaaaa" stroke-width="1"/>
+              <text x="140" y="154" font-family="Manrope, sans-serif" font-size="6.5" text-anchor="middle" fill="#555">Licenses</text>
+              <rect x="20" y="157" width="240" height="53" fill="#ffffff" stroke="#aaaaaa" stroke-width="1"/>
+              <text x="27" y="171" font-family="Manrope, sans-serif" font-weight="700" font-size="7" fill="#2a8324">R5 2026.1-dev Build 10049 - Visual Identity</text>
+              <text x="27" y="182" font-family="Manrope, sans-serif" font-size="6.5" fill="#334155">New wave-pebble icon, Deskbar button, boot screen, and About R5.</text>
+
+              <!-- Redlines -->
+              <g class="redline-layer">
+                <rect x="10" y="22" width="10" height="198" fill="rgba(225,29,72,0.16)"/>
+                <rect x="260" y="22" width="10" height="198" fill="rgba(225,29,72,0.16)"/>
+                <rect x="20" y="76" width="240" height="8" fill="rgba(2,132,199,0.2)"/>
+                <rect x="20" y="136" width="240" height="8" fill="rgba(2,132,199,0.2)"/>
+              </g>
+            </svg>
+          </div>
+          <ul style="margin-top: 14px; padding-left: 18px; font-size: 13px; color: var(--slate-600); line-height: 1.7;">
+            <li><strong>Boven:</strong> Witte Header-kaart (<code class="mono">88 px</code> hoog, <code class="mono">14 px</code> interne padding).</li>
+            <li><strong>Midden (<code class="mono">+12 px</code> gap):</strong> <code class="mono">SysInfoView</code> over de volle breedte.</li>
+            <li><strong>Onder (<code class="mono">+14 px</code> gap):</strong> <code class="mono">BTabView</code> (<em>What's new</em>, <em>Credits</em>, <em>Licenses</em>).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07. Do's & Don'ts -->
+    <section id="sec-dodont" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">07</span>
+        <h2>Do's &amp; Don'ts (Merkbewaking)</h2>
+      </div>
+
+      <div class="grid-3">
+        <div class="dodont-card do">
+          <span class="dodont-tag">DO &mdash; Naamgeving</span>
+          <p style="font-size: 13.5px; color: var(--slate-600);">
+            Schrijf altijd <strong>R5 Operating System</strong> (met <strong>R5</strong> in Bold en
+            <em>Operating System</em> in Regular) of kort <strong>R5</strong>.
+          </p>
+        </div>
+        <div class="dodont-card dont">
+          <span class="dodont-tag">DON'T &mdash; Geen &ldquo;R5OS&rdquo;</span>
+          <p style="font-size: 13.5px; color: var(--slate-600);">
+            Gebruik nooit <code class="mono">R5OS</code> in het logo, het opstartscherm, de Deskbar of
+            <em>About R5</em>.
+          </p>
+        </div>
+        <div class="dodont-card do">
+          <span class="dodont-tag">DO &mdash; Deskbar Knop</span>
+          <p style="font-size: 13.5px; color: var(--slate-600);">
+            Plaats in de Deskbar uitsluitend het abstracte <strong>Wave Pebble</strong>-symbool
+            (<code class="mono">20 &times; 20 px</code> in <code class="mono">28 &times; 22 px</code>).
+          </p>
+        </div>
+        <div class="dodont-card dont">
+          <span class="dodont-tag">DON'T &mdash; Geen Tekst in Deskbar</span>
+          <p style="font-size: 13.5px; color: var(--slate-600);">
+            Zet geen tekst naast het icoon in de Deskbar-knop; dat maakt de knop te breed en onrustig.
+          </p>
+        </div>
+        <div class="dodont-card do">
+          <span class="dodont-tag">DO &mdash; Dynamisch Buildnummer</span>
+          <p style="font-size: 13.5px; color: var(--slate-600);">
+            Lees <code class="mono">R5_OS_VERSION</code> en <code class="mono">R5_OS_BUILD</code> in
+            <em>About R5</em> altijd dynamisch uit <code class="mono">r5_os_version.h</code>.
+          </p>
+        </div>
+        <div class="dodont-card dont">
+          <span class="dodont-tag">DON'T &mdash; Geen Wrench op About R5</span>
+          <p style="font-size: 13.5px; color: var(--slate-600);">
+            Het voorkeuren-steeksleuteltje (<code class="mono">r5_settings_apply_prefs_overlay()</code>)
+            hoort alleen op <em>Settings</em>-modules, nooit op <em>About R5</em>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08. Brand Kit Files Table -->
+    <section id="sec-assets" class="guide-section">
+      <div class="section-header">
+        <span class="section-num">08</span>
+        <h2>Compleet Overzicht van Gegenereerde Brand Kit Bestanden</h2>
+      </div>
+      <p class="section-desc">
+        Alle 25 bestanden staan klaar in <code class="mono">distro/artwork/brand-kit/</code> en worden
+        gegenereerd met <code class="mono">python scripts/generate-r5-artwork.py</code>.
+      </p>
+
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>Bestand</th>
+            <th>Afmeting / Formaat</th>
+            <th>Padding / Specificatie</th>
+            <th>Toepassing</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="r5-symbol.svg" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-symbol.svg</a></td>
+            <td><span class="pill-cyan">viewBox 0 0 100 100</span></td>
+            <td><code class="mono">8u</code> interne marge (<code class="mono">84&times;84u</code> actief)</td>
+            <td>Canonieke master-SVG (<code class="mono">GPL-3.0-or-later</code>)</td>
+          </tr>
+          <tr>
+            <td class="mono">r5-symbol-1024.png t/m 16.png</td>
+            <td><span class="pill-cyan">1024, 512, 256, 128, 64, 32, 22, 16 px</span></td>
+            <td>4&times; supersampled RGBA; schaduw vanaf <code class="mono">64 px</code></td>
+            <td>App-iconen, UI-badges, HiDPI weergave</td>
+          </tr>
+          <tr>
+            <td class="mono">r5-symbol-mono-white.png / dark.png</td>
+            <td><span class="pill-cyan">512 &times; 512 px</span></td>
+            <td>Puur wit <code class="mono">#FFFFFF</code> &amp; donker <code class="mono">#0F172A</code></td>
+            <td>Watermerken, monochrome afdrukken, embossing</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-deskbar.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-deskbar.png</a></td>
+            <td><span class="pill-measure">28 &times; 22 px</span></td>
+            <td><code class="mono">20&times;20 px</code> symbool op <code class="mono">(4, 1)</code></td>
+            <td>Deskbar leaf-knop (alleen symbool)</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-logo.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-logo.png</a> / <a href="r5-os-logo-dark.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">dark</a></td>
+            <td><span class="pill-cyan">842 &times; 140 px</span></td>
+            <td>Transparante horizontale lockup (licht `#0F172A` &amp; donker `#FFFFFF`)</td>
+            <td>Algemeen horizontaal R5-woordmerk (Manrope 700 &amp; 400 op zelfde basislijn)</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-logo.svg" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-logo.svg</a> / <a href="r5-os-logo-dark.svg" style="color: var(--r5-blue); font-weight: 700;" class="mono">dark</a></td>
+            <td><span class="pill-cyan">viewBox 0 0 490 84</span></td>
+            <td>Vector-master van de horizontale lockup</td>
+            <td>Vector SVG-lockup voor web, drukwerk en marketing</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-logo-r5-only.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-logo-r5-only.png</a> / <a href="r5-os-logo-r5-only-dark.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">dark</a></td>
+            <td><span class="pill-cyan">410 &times; 140 px</span></td>
+            <td>Korte lockup: [Wave Pebble] + &ldquo;R5&rdquo; (licht &amp; donker)</td>
+            <td>Korte merkidentiteit waar de volledige naam niet past</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-logo-stacked.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-logo-stacked.png</a> / <a href="r5-os-logo-stacked-dark.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">dark</a></td>
+            <td><span class="pill-cyan">380 &times; 260 px</span></td>
+            <td>Gestapelde verticale lockup (symbool boven, tekst eronder)</td>
+            <td>Verticale toepassingen, posters en splash mockups</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-splash.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-splash.png</a> + <span class="mono">.bgr</span></td>
+            <td><span class="pill-measure">372 &times; 96 px</span> (<code class="mono">107.136 B</code>)</td>
+            <td>Zwarte achtergrond <code class="mono">#000000</code>, kaart <code class="mono">356&times;80 px</code></td>
+            <td>Standaard donkere Boot Splash PNG + 24-bit raw BGR</td>
+          </tr>
+          <tr>
+            <td><a href="r5-os-splash-white.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-os-splash-white.png</a> + <span class="mono">borderless</span></td>
+            <td><span class="pill-measure">372 &times; 96 px</span> (<code class="mono">107.136 B</code>)</td>
+            <td>Witte achtergrond <code class="mono">#FFFFFF</code> zonder build/AMD64-tekst</td>
+            <td>Witte Boot Splash (met subtiele kaartrand &amp; puur wit) + <code class="mono">.bgr</code></td>
+          </tr>
+          <tr>
+            <td class="mono">r5-system-disk-128 / 64 / 32.png</td>
+            <td><span class="pill-cyan">128, 64, 32 px</span></td>
+            <td>Isometrische schijf + <code class="mono">46%</code> R5-badge op <code class="mono">(36%,14%)</code></td>
+            <td>System Disk icoon met R5-overlay (air/OS-stijl)</td>
+          </tr>
+          <tr>
+            <td><a href="r5-lockup-light-card.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-lockup-light-card.png</a> / <span class="mono">dark</span></td>
+            <td><span class="pill-cyan">962 &times; 160 px</span></td>
+            <td>Inclusief versieregel Build 10049</td>
+            <td>Header-kaart voor <em>About R5</em> &amp; documentatie</td>
+          </tr>
+          <tr>
+            <td><a href="r5-about-window-preview.png" style="color: var(--r5-blue); font-weight: 700;" class="mono">r5-about-window-preview.png</a></td>
+            <td><span class="pill-cyan">960 &times; 680 px</span></td>
+            <td>Single-column <em>About R5</em> (<code class="mono">540&times;520 px</code>) op wallpaper</td>
+            <td>Volledige desktop-referentie</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Minimal Footer -->
+    <footer class="site-footer">
+      <div><strong>R5 Operating System</strong> &nbsp;&bull;&nbsp; Version 2026.1-dev Build 10049</div>
+      <div>
+        <a href="website.html">Home</a>
+        <a href="prs.html">Pull Requests</a>
+        <a href="wallpapers.html">Wallpapers</a>
+        <a href="https://github.com/nickrusman-bot/r5os">GitHub</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    function copyHex(hex, el) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(hex);
+      }
+      const hint = el.querySelector('.swatch-copy-hint');
+      if (hint) {
+        const old = hint.textContent;
+        hint.textContent = 'Gekopieerd: ' + hex + '!';
+        hint.style.opacity = '1';
+        setTimeout(() => {
+          hint.textContent = old;
+          hint.style.opacity = '';
+        }, 1400);
+      }
+    }
+
+    // Interactive Boot Splash Progression Simulation
+    (function () {
+      const stageNames = [
+        "modules laden",
+        "opstart-bestandssysteem",
+        "apparaten zoeken",
+        "opstartschijf koppelen",
+        "processormodules",
+        "geheugenmodules",
+        "opstartscript",
+      ];
+      let currentStage = 0;
+      let autoTimer = null;
+
+      const container = document.getElementById("bootProgressContainer");
+      const stageLabel = document.getElementById("bootStageLabel");
+      const btnStep = document.getElementById("btnBootStep");
+      const btnAuto = document.getElementById("btnBootAuto");
+      const btnReset = document.getElementById("btnBootReset");
+
+      if (!container) return;
+
+      function renderBootStrip() {
+        container.innerHTML = "";
+        for (let i = 0; i < 7; i++) {
+          const isLit = i < currentStage;
+          const cell = document.createElement("div");
+          cell.style.width = "44px";
+          cell.style.height = "40px";
+          cell.style.display = "flex";
+          cell.style.alignItems = "center";
+          cell.style.justifyContent = "center";
+          cell.style.position = "relative";
+          cell.style.background = "#ffffff";
+          cell.title = `Stap ${i + 1}: ${stageNames[i]} (${isLit ? "Voltooid" : "In afwachting"})`;
+
+          const img = document.createElement("img");
+          img.src = `brand-kit/boot_splash/icons/${i + 1}.png`;
+          img.width = 40;
+          img.height = 40;
+          img.style.display = "block";
+          img.style.transition = "filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease";
+
+          if (isLit) {
+            img.style.filter = "none";
+            img.style.opacity = "1";
+            img.style.transform = "scale(1)";
+          } else {
+            // Unlit "nog niet" grayscale representation
+            img.style.filter = "grayscale(100%) brightness(1.15) contrast(0.55)";
+            img.style.opacity = "0.45";
+            img.style.transform = "scale(0.96)";
+          }
+
+          cell.appendChild(img);
+          container.appendChild(cell);
+        }
+
+        if (stageLabel) {
+          if (currentStage === 0) {
+            stageLabel.textContent = "Status: Gestart (0 / 7 voltooid)";
+            stageLabel.style.color = "var(--text-muted, #64748b)";
+          } else if (currentStage < 7) {
+            stageLabel.textContent = `Stap ${currentStage}/7: ${stageNames[currentStage - 1]}`;
+            stageLabel.style.color = "var(--r5-blue, #0084ff)";
+          } else {
+            stageLabel.textContent = "Voltooid (7 / 7) - Welkom in R5 Operating System!";
+            stageLabel.style.color = "#16a34a";
+          }
+        }
+      }
+
+      if (btnStep) {
+        btnStep.addEventListener("click", () => {
+          if (currentStage < 7) {
+            currentStage++;
+          } else {
+            currentStage = 0;
+          }
+          renderBootStrip();
+        });
+      }
+
+      if (btnReset) {
+        btnReset.addEventListener("click", () => {
+          if (autoTimer) {
+            clearInterval(autoTimer);
+            autoTimer = null;
+            if (btnAuto) btnAuto.textContent = "Automatisch Afspelen";
+          }
+          currentStage = 0;
+          renderBootStrip();
+        });
+      }
+
+      if (btnAuto) {
+        btnAuto.addEventListener("click", () => {
+          if (autoTimer) {
+            clearInterval(autoTimer);
+            autoTimer = null;
+            btnAuto.textContent = "Automatisch Afspelen";
+          } else {
+            btnAuto.textContent = "Pauzeren";
+            if (currentStage >= 7) currentStage = 0;
+            renderBootStrip();
+            autoTimer = setInterval(() => {
+              if (currentStage < 7) {
+                currentStage++;
+                renderBootStrip();
+              } else {
+                clearInterval(autoTimer);
+                autoTimer = null;
+                btnAuto.textContent = "Automatisch Afspelen";
+              }
+            }, 600);
+          }
+        });
+      }
+
+      renderBootStrip();
+    })();
+  </script>
+</body>
+</html>
