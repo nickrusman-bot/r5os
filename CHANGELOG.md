@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - Settings uses a folding list and cards
+
+The Settings window keeps every page, the lock, Revert, Defaults, and search. The list now starts with Home, then the five categories. Only the category of the open page is unfolded. Home and a category are cards. A page is still that page's own view. Recently changed keeps the last three pages that saved, newest first, in `~/config/settings/r5-settings/settings-window`. The application icon is the R5 wave pebble plus the preferences wrench, built by `scripts/join-settings-icon.py`. What's new is build 10051.
+
+Tested: not yet. The jam and the QEMU comparison against `docs/design/settings-mockup/` come after this note and will be recorded here when they finish.
+
 ## 2026-11-09 - the About R5 icon shows the blue of the wave pebble again
 
 The vector icon of About R5 (and the `r5-symbol.hvif` files) showed the wave pebble almost entirely in gold, with no blue. `generate-r5-artwork.py` wrote the gradient matrix the wrong way round. It mapped the icon onto the gradient, while HVIF stores the gradient-to-icon matrix and `IconRenderer` inverts it when it draws. Most of the gradient therefore fell outside the icon. The matrix now maps the gradient's -64..64 axis onto the SVG diagonal, from (12%, 12%) to (88%, 88%). Only the six matrix values in the HVIF changed. The shapes and stops are the same. Tested: the new HVIF from `AboutSystem.rdef` was converted to SVG and rendered on the desk, and it shows blue at the top left through to gold at the bottom right, like `r5-symbol.svg`. Not tested: Not jammed, and not seen in Deskbar or Tracker. `--check` of the generator already differs on main for the PNGs (font and Pillow output), so only the HVIF and the About resource were regenerated, not the other artwork.
