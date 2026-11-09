@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### Saving into a shared folder no longer leaves it locked
+
+A folder lock that had to be waited for was kept, so the share stopped answering. This is air/OS `08a75db478698cd9c1e35649b30bf57f08e6d4d8`. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A second shared folder of the same kind can be mounted
 
 A FUSE file system had one server, so the next share of that kind could not be mounted. The name can now carry the share, as in "smbfs:music", and a mount that gives up early reports the reason. This is air/OS `00e1291e8095e94362e211d2b8dfaed38127a2cd`. The smbfs add-on already asked for that name. There is no What's new section and `distro/BUILD` stays the same.
