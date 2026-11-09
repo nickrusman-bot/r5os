@@ -18,6 +18,7 @@ The R5 interface classes: what exists, and when to use it. The exact calls, colo
 | `BSidebar` | `<Sidebar.h>` | A list of categories that fold, with one category open, and a filter that hides the rest | The contents of a settings page | Settings, beside the page |
 | `BActionCard` | `<ActionCard.h>` | A card the user clicks, with a title, a short summary, and small labels | A form. The card does not contain other views | Settings home. The R5 Hub and Store start page is the second user |
 | `BPageHeader` | `<PageHeader.h>` | The heading of a page: a small category line, a title, a description, and an icon | The controls under that heading | Settings. Users & Accounts is the second user, for the account card heading |
+| `BScreenArrangement` | `<ScreenArrangement.h>` | The screens on a desk, each one drawn with `r5_screen_draw()`, with a number and a name | Changing the mode or the workspace count. The view only reports a click or a drag | Display. Desktop and Deskbar is the second user, when that page shows more than one screen |
 
 ## Adding a class
 

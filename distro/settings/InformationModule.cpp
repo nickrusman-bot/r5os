@@ -79,8 +79,7 @@ quiet_color(uint8 amount)
 static rgb_color
 tile_fill()
 {
-	return mix_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 100);
+	return r5_settings_tile_fill();
 }
 
 

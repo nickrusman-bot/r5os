@@ -58,6 +58,8 @@ SOURCES = (
     "InformationModule.h",
     "DisplayModule.cpp",
     "DisplayModule.h",
+    "DisplayScreens.cpp",
+    "DisplayScreens.h",
     "DeskbarModule.cpp",
     "DeskbarModule.h",
     "NotificationsModule.cpp",
