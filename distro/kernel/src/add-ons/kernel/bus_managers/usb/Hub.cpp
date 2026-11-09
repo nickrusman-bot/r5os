@@ -304,9 +304,13 @@ Hub::PowerCyclePort(uint8 index)
 	// Bits 0-1 of the characteristics are the switching mode, and any
 	// value other than 01b means the ports are ganged or not switchable.
 	// Clearing PORT_POWER on a ganged hub takes down every port in the
-	// gang, which on a root hub is the whole controller.
+	// gang, which on a root hub is the whole controller. Every root hub
+	// reports characteristics 0x0000, so a device on a root port gets the
+	// retry cap and the cooldown, and this step only runs on an external
+	// hub that switches power per port. The refusal is a property of the
+	// hub, so it is not printed on every failed round.
 	if ((fHubCharacteristics & 0x3) != 0x1) {
-		TRACE_ALWAYS("hub does not switch port power individually "
+		TRACE("hub does not switch port power individually "
 			"(characteristics 0x%04x); not power cycling port %u\n",
 			fHubCharacteristics, index);
 		return B_NOT_SUPPORTED;
@@ -337,25 +341,32 @@ Hub::Explore(change_item **changeList)
 {
 	for (int32 i = 0; i < fPortCount; i++) {
 		if (kBoundedPortRetries && fIgnoredUntil[i] != 0) {
-			if (fIgnoredUntil[i] == B_INFINITE_TIMEOUT
+			// Read the status even while the port is ignored. Skipping the
+			// read would leave a port written off for the boot unable to
+			// notice that the device was unplugged. Reading does not clear
+			// the change bits.
+			if (UpdatePortStatus(i) < B_OK)
+				continue;
+
+			if ((fPortStatus[i].status & PORT_STATUS_CONNECTION) == 0) {
+				fIgnoredUntil[i] = 0;
+				fFailedAttempts[i] = 0;
+				fPowerCycleAttempts[i] = 0;
+				fRearmCount[i] = 0;
+			} else if (fIgnoredUntil[i] == B_INFINITE_TIMEOUT
 					|| system_time() < fIgnoredUntil[i]) {
 				continue;
-			}
-
-			// The wait is over. Only a fresh connection earns another
-			// chance. Reading the status does not clear the change bits.
-			if (UpdatePortStatus(i) < B_OK
-					|| (fPortStatus[i].change & PORT_STATUS_CONNECTION) == 0) {
+			} else if ((fPortStatus[i].change & PORT_STATUS_CONNECTION) == 0) {
 				continue;
+			} else {
+				fRearmCount[i]++;
+				fIgnoredUntil[i] = 0;
+				fFailedAttempts[i] = 0;
+				fPowerCycleAttempts[i] = 0;
+				TRACE_ALWAYS("port %" B_PRId32 ": new connection event after "
+					"cooldown, giving the port another chance (%u of %u)\n",
+					i, fRearmCount[i], kMaxPortRearms);
 			}
-
-			fRearmCount[i]++;
-			fIgnoredUntil[i] = 0;
-			fFailedAttempts[i] = 0;
-			fPowerCycleAttempts[i] = 0;
-			TRACE_ALWAYS("port %" B_PRId32 ": new connection event after "
-				"cooldown, giving the port another chance (%u of %u)\n", i,
-				fRearmCount[i], kMaxPortRearms);
 		}
 
 		status_t result = UpdatePortStatus(i);
@@ -394,13 +405,7 @@ Hub::Explore(change_item **changeList)
 				USB_REQUEST_CLEAR_FEATURE, C_PORT_CONNECTION, i + 1,
 				0, NULL, 0, NULL);
 
-			if (kBoundedPortRetries
-					&& (fPortStatus[i].status & PORT_STATUS_CONNECTION) != 0
-					&& fFailedAttempts[i] >= kMaxPortFailedAttempts) {
-				// A device that bounces raises a fresh connection on every
-				// pass. Do not clear the failure count for that, or the
-				// port never stops being reset.
-			} else if (fPortStatus[i].status & PORT_STATUS_CONNECTION) {
+			if (fPortStatus[i].status & PORT_STATUS_CONNECTION) {
 				// new device attached!
 				TRACE_ALWAYS("port %" B_PRId32 ": new device connected\n", i);
 

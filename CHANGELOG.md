@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - unplugging a given-up USB port lets the next device in
+
+A port that had been ignored for the rest of the boot was skipped before its status was read, so unplugging it and plugging in another device did nothing until a restart. The status is read anyway. With nothing connected, the ignore and the counters are cleared. A port that is still occupied stays ignored. The address-0 descriptor read from the previous change is gone: it was an extra control transfer on every device, and nothing here needed it. From RenkuOS 14576fdf3c5bc1e59739126b7e5539ab5bba8a45 by rainygirl.
+
 ## 2026-11-09 - a USB port that keeps failing setup is left alone
 
 A port that failed to set up was reset on every look, for the whole boot. After two failed setups it is powered off and on, at most twice, and only when that hub switches power per port. After that it is ignored until a new connection arrives, and after three of those it stays ignored for the rest of the boot. Unplugging it starts the count over. On 32-bit x86 the device is also asked for its descriptor before it is given an address; that answer is only written to the log. From RenkuOS 64d38d0286e6ae25d125bc6124bde04ba6e71e3f by rainygirl. The hub descriptor is not stored; the power-switching bits are kept beside the port count. This image is 64-bit, so the new behaviour is not compiled in yet.
