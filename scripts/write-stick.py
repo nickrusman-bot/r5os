@@ -20,12 +20,21 @@ Safety:
 - After writing, it reads the whole image size back from the stick and
   compares the SHA-256 with the image. A mismatch is an error.
 
+After a write that matched, it removes older stick copies, so they do not
+pile up (9 Nov 2026: 75 GB of old sticks). That is every .iso, .img or
+.image whose name contains "stick", in the image's own directory and in
+the WSL folder \\\\wsl.localhost\\Ubuntu\\home\\nickr\\r5os. The image just
+written stays, and so does every .write.log. The build outputs
+(r5-os-anyboot.iso, r5-os.img, r5-os.image, r5-os.vdi) have no "stick" in
+their names and are never touched. --keep-old skips this step.
+
 When this script needs a change (a larger image, another stick, a new
 Windows quirk), change this file. Do not write a new writer, and do not
 use PowerShell, dd or another tool to write a stick.
 """
 import argparse
 import ctypes
+import glob
 import hashlib
 import json
 import os
@@ -393,6 +402,37 @@ def write_and_check(drive, image_path, size, expected):
 		kernel32.CloseHandle(handle)
 
 
+STICK_SUFFIXES = (".iso", ".img", ".image")
+WSL_STICK_DIR = r"\\wsl.localhost\Ubuntu\home\nickr\r5os"
+
+
+def remove_old_sticks(written_path):
+	"""Remove older stick copies after a write that matched. Only files whose
+	name contains "stick" and ends in .iso, .img or .image are removed; the
+	image just written is kept."""
+	written = os.path.normcase(os.path.abspath(written_path))
+	folders = [os.path.dirname(os.path.abspath(written_path))]
+	if os.path.isdir(WSL_STICK_DIR):
+		folders.append(WSL_STICK_DIR)
+	freed = 0
+	for folder in folders:
+		for path in glob.glob(os.path.join(folder, "*stick*")):
+			name = os.path.basename(path).lower()
+			if not os.path.isfile(path) or not name.endswith(STICK_SUFFIXES):
+				continue
+			if os.path.normcase(os.path.abspath(path)) == written:
+				continue
+			try:
+				size = os.path.getsize(path)
+				os.remove(path)
+			except OSError as error:
+				print(f"could not remove {path}: {error}")
+				continue
+			freed += size
+			print(f"removed old stick image {path}")
+	print(f"old stick images: {freed // (1024 * 1024)} MB freed")
+
+
 def main():
 	parser = argparse.ArgumentParser(description="Write an R5 image to the USB stick.")
 	parser.add_argument("image")
@@ -402,6 +442,8 @@ def main():
 		help="write an image without an EFI partition anyway")
 	parser.add_argument("--name", default="General UDisk",
 		help="FriendlyName of the stick (default: General UDisk)")
+	parser.add_argument("--keep-old", action="store_true",
+		help="do not remove older stick images after the write")
 	args = parser.parse_args()
 	image_path = os.path.abspath(args.image)
 	if not os.path.isfile(image_path):
@@ -427,6 +469,8 @@ def main():
 		finally:
 			for handle in held:
 				kernel32.CloseHandle(handle)
+		if not args.keep_old:
+			remove_old_sticks(image_path)
 		print("done", datetime.now().isoformat(timespec="seconds"))
 	except SystemExit as stop:
 		if stop.code not in (None, 0):
