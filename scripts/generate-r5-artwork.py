@@ -814,13 +814,16 @@ def render_symbol_hvif() -> bytes:
     if len(rings) != 2:
         raise SystemExit("r5-full must be the pebble and the wave")
     scale = 64.0 / 100.0
-    # gradient_x runs from -64 to 64. Map the SVG diagonal onto that axis.
+    # A linear gradient runs along x from -64 to 64 in its own space. The
+    # stored matrix maps that space into the icon (IconRenderer inverts it
+    # when drawing), in agg store_to() order: sx, shy, shx, sy, tx, ty.
+    # Map -64 to the SVG's (12%, 12%) and 64 to (88%, 88%), so the
+    # gradient runs along the diagonal like the SVG.
     start = 12.0 * scale
     end = 88.0 * scale
-    span = end - start
-    slope = 128.0 / (2.0 * span)
-    tx = -64.0 - slope * (start + start)
-    matrix = (slope, 0.0, slope, 1.0, tx, 0.0)
+    step = (end - start) / 128.0
+    middle = (start + end) / 2.0
+    matrix = (step, step, -step, step, middle, middle)
     stops = (
         (0, (0x00, 0x84, 0xFF, 0xFF)),
         (int(round(0.45 * 255)), (0x38, 0x98, 0xFF, 0xFF)),

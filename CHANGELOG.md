@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - the About R5 icon shows the blue of the wave pebble again
+
+The vector icon of About R5 (and the `r5-symbol.hvif` files) showed the wave pebble almost entirely in gold, with no blue. `generate-r5-artwork.py` wrote the gradient matrix the wrong way round. It mapped the icon onto the gradient, while HVIF stores the gradient-to-icon matrix and `IconRenderer` inverts it when it draws. Most of the gradient therefore fell outside the icon. The matrix now maps the gradient's -64..64 axis onto the SVG diagonal, from (12%, 12%) to (88%, 88%). Only the six matrix values in the HVIF changed. The shapes and stops are the same. Tested: the new HVIF from `AboutSystem.rdef` was converted to SVG and rendered on the desk, and it shows blue at the top left through to gold at the bottom right, like `r5-symbol.svg`. Not tested: Not jammed, and not seen in Deskbar or Tracker. `--check` of the generator already differs on main for the PNGs (font and Pillow output), so only the HVIF and the About resource were regenerated, not the other artwork.
+
 ## 2026-11-09 - the USB image reached the desktop in VirtualBox
 
 The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 17:04 Europe/Amsterdam. The desktop, with the Deskbar and the Tracker icon, was on the screen at 17:07. The machine was left running. A USB stick was not passed through, so the earlier "third try" transaction errors were not measured again. The descriptor-length checks that were already in the tree do not explain a SuperSpeed endpoint whose packet size is 0.
