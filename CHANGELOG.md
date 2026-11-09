@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - a device behind a full-speed hub is found
+
+The path stored for a device behind a full-speed hub used the port of the transaction translator, which is the hub's own upstream port. The controller then rejected the address, and nothing behind that hub appeared. The path now uses the port the hub is setting up, and each hub's port on the hub above it. From air/OS 39515d87e198923306f404d02b7f05a2586aeb64. The guest test in that commit was not taken.
+
 ## 2026-11-09 - a warm reset actually resets the SuperSpeed port
 
 The warm-reset bit was the wrong one, so the reset never happened. It is now bit 31 of the port register. After the reset the device has lost its address, and the hub enumerates it again. A warm-reset change that the controller will not clear is reported once, not on every pass. From air/OS 2ae6e2c26b60f6840fb7f9bbf5368f8cdccc1f8a.

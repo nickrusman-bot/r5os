@@ -22,7 +22,8 @@ Hub::Hub(Object *parent, int8 hubAddress, uint8 hubPort,
 			depth, controllerCookie),
 		fInterruptPipe(NULL),
 		fPortCount(0),
-		fPowerOnToPowerGood(0)
+		fPowerOnToPowerGood(0),
+		fEnumeratingPort(0)
 {
 	TRACE("creating hub\n");
 
@@ -169,6 +170,17 @@ Hub::Changed(change_item **changeList, bool added)
 	}
 
 	return B_OK;
+}
+
+
+uint8
+Hub::PortOf(const Device* child) const
+{
+	for (uint8 i = 0; i < fPortCount; i++) {
+		if (fChildren[i] == child)
+			return i + 1;
+	}
+	return 0;
 }
 
 
@@ -351,8 +363,10 @@ Hub::Explore(change_item **changeList)
 						hubPort = i + 1;
 					}
 
+					fEnumeratingPort = i + 1;
 					Device *newDevice = GetBusManager()->AllocateDevice(this,
 						hubAddress, hubPort, speed);
+					fEnumeratingPort = 0;
 
 					if (newDevice) {
 						newDevice->Changed(changeList, true);
