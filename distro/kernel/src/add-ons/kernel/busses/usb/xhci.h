@@ -302,6 +302,12 @@ private:
 			uint8				fEventCcs;
 			uint8				fCmdCcs;
 
+			// Transfer error log rate limiting. ProcessEvents() holds
+			// fEventLock around HandleTransferComplete().
+			bigtime_t			fLastTransferErrorLog;
+			uint32				fSuppressedTransferErrors;
+			uint8				fLastTransferErrorCode;
+
 			uint32				fExitLatMax;
 };
 

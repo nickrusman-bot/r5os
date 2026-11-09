@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-09 - unplugging a USB audio device no longer floods the log
+
+Every failed packet was written to the log. Unplugging a device that sends many packets stalled the machine on the serial port. The same error is now written at most once every tenth of a second, with a count of the lines that were skipped. The message itself is unchanged. From air/OS c707b89ff80be4fdfa780637da5cf1d38167a46f by David Beckman.
+
 ## 2026-11-09 - unplugging a USB audio device no longer panics on a wait that finished
 
 The wait for a USB object to go idle gave up after two milliseconds, and it also panicked when the object became idle on the last try, because the counter was not decremented on that try. It now waits half a second, and it panics only when the object is still busy. From air/OS df92a69cdb633ebf70dcdd08d68ca8bed9f6a37c by David Beckman. The two-second budget in the original note was not taken.

@@ -364,7 +364,10 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 	fEventIdx(0),
 	fCmdIdx(0),
 	fEventCcs(1),
-	fCmdCcs(1)
+	fCmdCcs(1),
+	fLastTransferErrorLog(0),
+	fSuppressedTransferErrors(0),
+	fLastTransferErrorCode(COMP_INVALID)
 {
 	B_INITIALIZE_SPINLOCK(&fSpinlock);
 	mutex_init(&fFinishedLock, "XHCI finished transfers");
@@ -2804,8 +2807,24 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 
 	if (completionCode != COMP_SUCCESS && completionCode != COMP_SHORT_PACKET
 			&& completionCode != COMP_STOPPED && completionCode != COMP_STOPPED_LENGTH_INVALID) {
-		TRACE_ALWAYS("transfer error on slot %" B_PRId8 " endpoint %" B_PRId8
-			": %s\n", slot, endpointNumber, xhci_error_string(completionCode));
+		// Once per transfer event. An isochronous endpoint raises one event
+		// per packet, so an unplug can print thousands of identical lines
+		// and stall the machine on the serial port. Log one code at most
+		// once per 100 ms. ProcessEvents() holds fEventLock around this.
+		const bigtime_t now = system_time();
+		if (completionCode != fLastTransferErrorCode
+				|| now - fLastTransferErrorLog >= 100000) {
+			if (fSuppressedTransferErrors > 0) {
+				TRACE_ALWAYS("(%" B_PRIu32 " further transfer errors "
+					"suppressed)\n", fSuppressedTransferErrors);
+				fSuppressedTransferErrors = 0;
+			}
+			TRACE_ALWAYS("transfer error on slot %" B_PRId8 " endpoint %" B_PRId8
+				": %s\n", slot, endpointNumber, xhci_error_string(completionCode));
+			fLastTransferErrorLog = now;
+			fLastTransferErrorCode = completionCode;
+		} else
+			fSuppressedTransferErrors++;
 	}
 
 	phys_addr_t source = B_LENDIAN_TO_HOST_INT64(trb->address);
