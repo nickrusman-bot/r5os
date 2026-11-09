@@ -162,7 +162,7 @@ Write-Host "  bridge: $bridge"
 	--firmware bios `
 	--rtcuseutc on `
 	--mouse usbtablet `
-	--audio-driver dsound `
+	--audio-driver was `
 	--audiocontroller hda `
 	--nic1 bridged `
 	--bridgeadapter1 $bridge `

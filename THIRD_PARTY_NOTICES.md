@@ -20,6 +20,12 @@ Location: `distro/kernel/src/system/kernel/signal.cpp`, `distro/kernel/headers/p
 
 The files are Haiku's. Copyright the Haiku authors named in each file. License: MIT, and NewOS for `vm.cpp`. The added blocks are haiku-pi `6e517bb52c`: a blocked or ignored fault signal is reset to the default and unblocked before it is sent. Copyright 2026 Witold Bołt. The snippets are distributed as GPL-3.0-or-later. The Haiku headers stay. ARM64 `arch_int.cpp` is not included.
 
+### Exited thread stack
+
+Location: `distro/kernel/src/system/kernel/thread.cpp`.
+
+The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+
 ### Wired range shrink
 
 Location: `distro/kernel/src/system/kernel/vm/vm.cpp`.
