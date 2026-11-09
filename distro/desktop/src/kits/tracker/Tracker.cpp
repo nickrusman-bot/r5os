@@ -110,6 +110,12 @@ namespace BPrivate {
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Tracker"
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static const uint32 kMountErrorAlertClosed = 'Tmec';
+// SPDX-SnippetEnd
+
 
 // prototypes for some private kernel calls that will some day be public
 #ifndef _IMPEXP_ROOT
@@ -558,6 +564,44 @@ TTracker::MessageReceived(BMessage* message)
 		case kMountAllNow:
 			MountServer().SendMessage(message);
 			break;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		case kMountNetworkShare:
+			// how that went is known when the server has answered
+			MountServer().SendMessage(message, this);
+			break;
+
+		case kNetworkShareReply:
+		{
+			status_t error = message->GetInt32("error", B_OK);
+			if (error == B_OK)
+				break;
+
+			BString text(B_TRANSLATE("The share \"%name%\" could not be "
+				"mounted:\n\n%error%"));
+			text.ReplaceFirst("%name%", message->GetString("name", ""));
+			text.ReplaceFirst("%error%", strerror(error));
+
+			// not waited for, there is more to Tracker than this
+			BAlert* alert = new BAlert(B_TRANSLATE("Mount error"), text,
+				B_TRANSLATE("Network shares" B_UTF8_ELLIPSIS),
+				B_TRANSLATE("OK"), NULL, B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+			alert->SetShortcut(1, B_ESCAPE);
+			alert->Go(new BInvoker(new BMessage(kMountErrorAlertClosed),
+				this));
+			break;
+		}
+
+		case kMountErrorAlertClosed:
+			if (message->GetInt32("which", 1) == 0) {
+				ShowSettingsWindow();
+				fSettingsWindow->ShowPage(
+					TrackerSettingsWindow::kNetworkSharesSettings);
+			}
+			break;
+// SPDX-SnippetEnd
 
 		case B_RESTORE_BACKGROUND_IMAGE:
 		{

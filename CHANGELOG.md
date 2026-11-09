@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A Windows share mounts by address
+
+Tested on 9 Nov 2026 in VirtualBox with a bridged adapter. A Windows share was mounted by IP address, with a user name and a password. A Windows name does not work yet; only an IP address does. Without a user name, Windows 11 refuses the anonymous login and R5 reports "Invalid Argument". That case comes later. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-09 - the USB image reached the desktop in VirtualBox
 
 The image was built (`jam_exit=0`, `mesa_exit=0`) and the VirtualBox machine started with the xHCI controller and the bridged Wi-Fi adapter, at 17:04 Europe/Amsterdam. The desktop, with the Deskbar and the Tracker icon, was on the screen at 17:07. The machine was left running. A USB stick was not passed through, so the earlier "third try" transaction errors were not measured again. The descriptor-length checks that were already in the tree do not explain a SuperSpeed endpoint whose packet size is 0.
@@ -75,31 +79,58 @@ A device that refuses a request stalls its control pipe, and the controller leav
 ## 2026-11-09 - xHCI clears a finished transfer on the VIA VL805
 
 A VIA VL805 reads a few slots past the transfer it was told to run. A finished transfer left its old entry in the ring, and the controller could run it again. Each endpoint ring now has four empty slots after it, a transfer buffer has the same empty slots, and the driver clears the ring entry when the transfer finishes. The firmware version is written to the log. From haiku-pi c65ac5a2e6a6383be3e6630ded05b1a29d506166.
+### Files on a shared folder get a type from the name
+
+A missing attribute came back as out of memory, so the file type was lost. This is air/OS `6b3fed7c57ba230d356ada64e394ca02e3d4310b`. The smbfs add-on already answers the type from the name. There is no What's new section and `distro/BUILD` stays the same.
+
+### A shared file that was deleted while open is let go
+
+Closing it failed once it had no name, so the server kept the deleted file. This is air/OS `5b3aae72a780e69adb4ae4e010a986e696711fb7`. The smbfs add-on already uses the open handle for that. There is no What's new section and `distro/BUILD` stays the same.
+
+### Saving into a shared folder no longer leaves it locked
+
+A folder lock that had to be waited for was kept, so the share stopped answering. This is air/OS `08a75db478698cd9c1e35649b30bf57f08e6d4d8`. There is no What's new section and `distro/BUILD` stays the same.
+
+### A second shared folder of the same kind can be mounted
+
+A FUSE file system had one server, so the next share of that kind could not be mounted. The name can now carry the share, as in "smbfs:music", and a mount that gives up early reports the reason. This is air/OS `00e1291e8095e94362e211d2b8dfaed38127a2cd`. The smbfs add-on already asked for that name. There is no What's new section and `distro/BUILD` stays the same.
+
+### Network shares are on the VirtualBox image
+
+smbfs.hpkg and userland_fs.hpkg were both in the first-boot package list. Tracker and Deskbar started on that image and again after a restart. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/.
 
 ### Deleting a folder does not stall a disk sync
 
 BFS kept a reference to a file until its I/O finished, then dropped that reference on the I/O notifier thread. If the file had been removed, that drop deleted the inode there and could wait for the journal while the thread that held the journal waited for the notifier. The last reference is now handed to the vnode undertaker, which deletes the inode on its own thread. The shell build of BFS still uses its own put. This is haiku-pi star row 57, commit 44cc183c0c. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Unplugging a USB disk does not stall its transfer
 
 Tearing a USB disk down deleted each LUN's I/O scheduler while holding the device lock. The scheduler thread runs the disk transfer, which takes that same lock, so the two threads could wait for each other. The schedulers are now deleted after the device is marked removed and before the lock is taken. A transfer that is still queued for a removed disk finishes at once with "device not ready" instead of waiting out each command. This is haiku-pi star row 54, commit d3cc8e3fd1. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A volume that cannot be mounted does not stop the system
 
 When a BFS mount failed after the journal had been created, the journal was left in place. If the block allocator had opened a transaction to repair the bitmap, deleting the block cache then panicked. A failed mount now waits for the block allocator, then deletes the root node and the journal, and returns the error. This is haiku-pi star row 50, commit 9799738757. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A profiler timer is stopped when the program stops
 
 Profiling left a timer armed on a CPU after the profiled thread was gone. The next use of that timer could hang the CPU, or the timer could fire for an idle thread and crash. A thread is now passed through the debugger code on the way out while it still has a profiling timer, the timer is cancelled before it is armed again, and it is cancelled when a profiled thread exits. A timer that is not the running thread's is ignored. This is haiku-pi star row 23, commit 5180e96119. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A shared file stays shared after its protection changes
 
 Changing the protection of a mapped file inserted a copy-on-write cache whenever that cache had consumers, including a file cache. A shared mapping then stopped sharing with the file, and with mappings made later. A file cache is no longer made copy-on-write on that path. The creation flags already kept by `vm_set_area_protection` are unchanged. This is haiku-pi star row 21, commit 894c4abe7f. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A large fragmented file no longer overflows the kernel stack
 
 An I/O request walked the rest of a fragmented file by calling its iteration callback again from the completion of the previous piece. Synchronous I/O finishes before that callback returns, so each round of file vectors added another kernel stack frame. A large fragmented file could run off the end of the stack. A completion that arrives while the callback is still running is now only recorded. The caller's loop continues with the next round. Asynchronous completions are unchanged. This is haiku-pi star row 19, commit 90fa3bc401. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### The page writer saves the last modified pages when its wait ends
 
 The per-device page writer waited up to three seconds for a full batch. A timeout went straight back to waiting, so the last modified pages of a device, fewer than 256 pages, stayed in memory until a sync. A power cut lost them. The wait still happens, and the under-quota condition is unchanged. After the wait, including a timeout, the writer continues and writes whatever modified pages there are. An empty queue is still skipped just below that. This is haiku-pi star row 18, commit 1539d29eee. The combined VirtualBox image of 9 Nov 2026, with these changes and the network-share packages, reached the desktop. Tracker and Deskbar started. There is no panic. The empty IDE ports log the usual missing-device lines. A Windows share was not mounted. The guest syslog is generated/vbox-x86-64-b/. There is no What's new section and `distro/BUILD` stays the same.
+
 ### PCI devices on another firmware segment can be seen
 
 The PCI bus manager on x86_64 treated every bus number as segment 0 and skipped every other segment in the firmware's memory-mapped configuration table. Segment 0 is unchanged: its bus numbers and its configuration window stay as they were. Each other segment is a further host controller. It does not claim the legacy configuration port, and it does not fall back to that port. A bus number segment 0 already uses stays on segment 0. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. Another firmware segment was not exercised. There is no What's new section and `distro/BUILD` stays the same.
+
 ### A per-thread value in a startup library can be loaded
 
 The runtime loader rejected the x86_64 initial-exec TLS relocations, so a library built that way did not load. Those relocations are now accepted. The value stored is not the symbol's offset in the ELF TLS block by itself: the thread pointer is the start of the slot array, and the ELF block is not there. The startup images' TLS template bytes are placed at one fixed offset from the thread pointer on every thread, and the relocation stores that offset plus the symbol offset and the addend. A 32-bit relocation is written as 32 bits. The host check is `scripts/test-tpoff-offset.cpp`. The part A VirtualBox image reached the desktop on 9 Nov 2026. The guest syslog of that image was not kept. The library load was not run in the guest. There is no What's new section and `distro/BUILD` stays the same.
@@ -275,10 +306,23 @@ The splash is 372×96 on `#FFFFFF`, with the dark wordmark and no border. The bo
 
 `gfx9_vmid_per_file` stays off. A mapped range stores its `r5_vm`. Map, unmap and lookup take that tree. There is no current tree, so closing one file does not clear the same virtual address in another file. The empty PTE stays `0x10` (not valid). The host test maps `0xffff800000001000` in two trees, clears the first, and the second page is unchanged. The ring order is unchanged. There is no What's new section and `distro/BUILD` stays the same.
 
+### Network shares install userland_fs from the local build
+
+`smbfs` requires `userland_fs`. The image had the add-on only as a loose file under `system/non-packaged/add-ons/userlandfs`, and the package name `userland_fs` was not in `system/packages`. Putting only `smbfs.hpkg` there made the image solver download `userland_fs` from the public repository, which returned 404. `AddHaikuImageSystemPackages` only installs names from a remote catalog, so both packages are copied with `AddPackageFilesToHaikuImage` from the local `userland_fs.hpkg` and `smbfs.hpkg`. The loose add-on copy is gone.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`. The image `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image` was written at 19:27 Europe/Amsterdam on 8 Nov 2026 and is 2147483648 bytes. `system/packages` contains `userland_fs.hpkg` (325301 bytes, sha256 `134bf374065083b6d1ab205005da479f321fa79cdb868962adb61e41bf3f9584`) and `smbfs.hpkg` (114955 bytes, sha256 `bad0294cd78e80d92fdf05cf13a1b28cb4a1aeabcdc2784ddbc6d185d2dcfe69`). Those bytes are the packages this tree built, version `r1~beta6_r5_2026.1_dev-1`. The solver did not download `userland_fs`. `system/non-packaged/add-ons/userlandfs` is not on the image. A Windows share was not mounted. VirtualBox bridged was not run. There is no new What's new section, and `distro/BUILD` stays 10050.
+
+### Network shares mount from Tracker
+
+Imported from air/OS (`github.com/airos-works/haiku`) into `distro/smb` and the Tracker files under `distro/desktop`. libsmb2 6.2 is LGPL-2.1-or-later (Ronnie Sahlberg; portions Primary Data Inc.). smbfs is the MIT userlandfs add-on and links `libsmb2.a`. The mount server stores the password with `BKeyStore` as `smb://server/share`, retries while the network is down, and posts a notification when the error is not that kind. Tracker preferences has the Network shares page, and the Mount menu lists shares that are not mounted.
+
+The mount parameter string does not contain `password=`. `userlandfs_server` is started with three arguments: the server path, the file system name, and the port. The add-on's `main()` receives the mount parameters. `password=` is refused there and the value is not written to the log. smbfs reads the same keystore entry. The syslog lines name the share, the server, and the error.
+
+`distro/BUILD` is 10050. `jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0` at 16:30 Europe/Amsterdam on 8 Nov 2026. The image is `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image`, 2147483648 bytes. `smbfs.o`, `Tracker.o`, and `NetworkShares.o` were produced, and the add-on is copied to `system/non-packaged/add-ons/userlandfs`. Putting `smbfs.hpkg` in `system/packages` made the image solver try to download `userland_fs` from the public repository, which returned 404, so the add-on is installed beside the package instead. A Windows share was not mounted. VirtualBox bridged was not run. QEMU usernet cannot see a Windows share.
+
 ### Each open GPU file can have its own page table
 
 `gfx9_vmid_per_file` stays off. When the radeon_hd setting is on, the first call for an open render node builds a root with the same allocator as VMID 1, and a submit grabs a VMID from `r5_vmid_reserve` (the portable form of Linux v6.18 `amdgpu_vmid_grab`). The VM flush that already exists writes that root, then writes the shared root back. Off, the submit stays on VMID 1 and the shared tree. The debug switch still refuses the bit. The unmodified `amdgpu_ids.c` and `amdgpu_vm.c` from Linux v6.18 are stored under `distro/graphics/third_party/linux-v6.18/` and are not compiled: they include Linux kernel headers. The host test `scripts/test-r5-gpu.cpp` maps `0xffff800000001000` in two trees and reads two different pages and two roots. Page-table pages stay allocated until the next boot. A VMID above 1 still needs `gfx9_vmids` for its context bounds. The ring order, the K2 invalidate word, and VMID 0 are unchanged. The GPU-core split and the kernel copies on `cursor/gpu-m5` are not in this step: they remove the page-table files main now uses. `jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`. The image is `/home/nickr/r5os/haiku/generated.x86_64/r5-os.image`, 2147483648 bytes, at 18:52 Europe/Amsterdam on 8 Nov 2026. VirtualBox `R5OS` was started from that image at 18:53 and was running. The desktop was not read. `gfx9_vmid_per_file` was not turned on, so this boot does not use the new page tables. There is no What's new section and `distro/BUILD` stays the same.
-
 ### The boot splash is black, and the Deskbar mark is centered
 
 `scripts/generate-r5-artwork.py` draws the Wave Pebble from `distro/artwork/r5-symbol.svg`. The splash and its BGR are `#000000`, with no gray card and no version. The 16 and 22 pixel marks use the thicker wave in that SVG. The Deskbar button uses the 16 pixel mark, and the picture is centered in the button instead of sitting on the lower edge. Example cards read `distro/VERSION` and `distro/BUILD` and say example. `--check` compares the product files. `apply-overlay.sh` runs that check and copies the Deskbar mark, the logo, the splash, and the About symbol. It does not copy the brand-kit previews. About R5 is one column with that symbol, and Tracker draws the mark on the boot volume. `distro/BUILD` is 10049. The black splash and the centered small mark have not been booted. A 5625U boot was not part of this change.

@@ -125,6 +125,24 @@ Location: `distro/airplay`.
 
 Copyright, URLs, and what was not copied (AirPlay 2 pairing, NQPTP, FairPlay) are in `distro/airplay/THIRD_PARTY.md`.
 
+### SMB client library
+
+Location: `distro/smb/src/libs/libsmb2`, public headers `distro/smb/headers/libs/libsmb2`.
+
+libsmb2 6.2 (tag `libsmb2-6.2`, `d67e213`), from https://github.com/sahlberg/libsmb2, as brought into air/OS (`github.com/airos-works/haiku`). Copyright 2016 Ronnie Sahlberg. Portions of the sources are copyright 2017 Primary Data Inc. License: LGPL-2.1-or-later. The license text is `LICENSES/LGPL-2.1.txt` and `distro/smb/src/libs/libsmb2/LICENCE-LGPL-2.1.txt`. The Haiku notes are `README.haiku`. The Kerberos wrapper is not included. The library is linked statically into the smbfs add-on. The source of libsmb2 and the object files of smbfs are available so that add-on can be linked again. The source is in this repository at `distro/smb/src/libs/libsmb2/` and `distro/smb/headers/libs/libsmb2/`. The object files are those of the smbfs add-on built from `distro/smb/src/add-ons/kernel/file_systems/smbfs/`.
+
+### SMB file system
+
+Location: `distro/smb/src/add-ons/kernel/file_systems/smbfs`.
+
+A userlandfs add-on from air/OS (`github.com/airos-works/haiku`). Copyright 2026 Haiku, Inc. License: MIT. It links `libsmb2.a`, so the add-on as shipped combines that MIT code with LGPL-2.1-or-later. The notices stay on each part.
+
+The userlandfs files that add-on runs in are copied from Haiku into `distro/smb/src/add-ons/kernel/file_systems/userlandfs/`. They keep the Haiku MIT header. The changes are from air/OS, by jmgasper <jmgasper@gmail.com>: `00e1291e8095e94362e211d2b8dfaed38127a2cd`, `08a75db478698cd9c1e35649b30bf57f08e6d4d8`, `5b3aae72a780e69adb4ae4e010a986e696711fb7`, and `6b3fed7c57ba230d356ada64e394ca02e3d4310b`. `scripts/apply-smb.py` copies them with the rest of `distro/smb`.
+
+The mount server side is `distro/smb/src/servers/mount` and `distro/smb/headers/private/mount/MountServer.h`. Same origin, MIT. Passwords are stored with `BKeyStore` under `smb://server/share`. The server retries a share that failed because the network was not up, and posts a notification when the failure is not that kind.
+
+Tracker preferences gain the Network shares page, and the Mount menu lists shares that are not mounted. Those files are `distro/desktop/src/kits/tracker/NetworkSharesSettings.cpp`, `NetworkSharesSettings.h`, `MountMenu.cpp`, `TrackerSettingsWindow.cpp`, and `TrackerSettingsWindow.h`. MIT, from the same air/OS import. The message handling added to `Tracker.cpp` is an R5 snippet.
+
 The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is `LICENSES/Unlicense.txt`. The Apache-2.0 text is not in `LICENSES/` yet.
 
 R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
