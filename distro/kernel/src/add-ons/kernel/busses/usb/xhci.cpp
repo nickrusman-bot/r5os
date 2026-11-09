@@ -17,6 +17,7 @@
 #include <bus/PCI.h>
 #include <USB3.h>
 #include <KernelExport.h>
+#include <ACPI.h>
 
 #include <ByteOrder.h>
 #include <util/AutoLock.h>
@@ -364,7 +365,10 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 	fEventIdx(0),
 	fCmdIdx(0),
 	fEventCcs(1),
-	fCmdCcs(1)
+	fCmdCcs(1),
+	fLastTransferErrorLog(0),
+	fSuppressedTransferErrors(0),
+	fLastTransferErrorCode(COMP_INVALID)
 {
 	B_INITIALIZE_SPINLOCK(&fSpinlock);
 	mutex_init(&fFinishedLock, "XHCI finished transfers");
@@ -497,6 +501,13 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 		}
 	}
 
+	if (fPCIInfo->vendor_id == PCI_VENDOR_VIA
+		&& fPCIInfo->device_id == PCI_DEVICE_VIA_VL805) {
+		uint32 firmware = fPci->read_pci_config(fDevice,
+			XHCI_VL805_FIRMWARE_VERSION, 4);
+		TRACE_ALWAYS("VL805 firmware version 0x%08" B_PRIx32 "\n", firmware);
+	}
+
 	// halt the host controller
 	if (ControllerHalt() < B_OK) {
 		return;
@@ -563,6 +574,7 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 	install_io_interrupt_handler(fIRQ, InterruptHandler, (void*)this, 0);
 
 	memset(fPortSpeeds, 0, sizeof(fPortSpeeds));
+	memset(fStuckWarmResetChange, 0, sizeof(fStuckWarmResetChange));
 	memset((void*)fDevices, 0, sizeof(fDevices));
 
 	fInitOK = true;
@@ -1329,6 +1341,231 @@ XHCI::CancelDebugTransfer(Transfer* transfer)
 }
 
 
+#if defined(__i386__) || defined(__x86_64__)
+
+
+static status_t
+acpi_integer(acpi_module_info* acpi, acpi_handle handle, const char* name,
+	uint64& value)
+{
+	acpi_object_type object;
+	acpi_data buffer;
+	buffer.pointer = &object;
+	buffer.length = sizeof(object);
+	status_t status = acpi->evaluate_method(handle, name, NULL, &buffer);
+	if (status != B_OK)
+		return status;
+	if (object.object_type != ACPI_TYPE_INTEGER)
+		return B_BAD_TYPE;
+
+	value = object.integer.integer;
+	return B_OK;
+}
+
+
+static acpi_handle
+acpi_child_at(acpi_module_info* acpi, acpi_handle parent, uint64 address)
+{
+	acpi_handle child = NULL;
+	while (acpi->get_next_object(ACPI_TYPE_DEVICE, parent, &child) == B_OK) {
+		uint64 value;
+		if (acpi_integer(acpi, child, "_ADR", value) == B_OK
+			&& value == address) {
+			return child;
+		}
+	}
+	return NULL;
+}
+
+
+/*!	Looks for the PCI function \a target among the ACPI devices below
+	\a parent, whose devices sit on PCI bus \a bus, and below the bridges
+	there whose bus range holds the target's bus.
+*/
+static acpi_handle
+acpi_find_pci_function(acpi_module_info* acpi, pci_module_info* pci,
+	acpi_handle parent, uint8 bus, const pci_info& target, int32 depth)
+{
+	acpi_handle child = NULL;
+	while (acpi->get_next_object(ACPI_TYPE_DEVICE, parent, &child) == B_OK) {
+		uint64 address;
+		if (acpi_integer(acpi, child, "_ADR", address) != B_OK)
+			continue;
+
+		uint16 device = address >> 16;
+		uint16 function = address & 0xffff;
+		if (device >= 32 || function >= 8)
+			continue;
+		if (bus == target.bus && device == target.device
+			&& function == target.function) {
+			return child;
+		}
+
+		if (depth == 0
+			|| pci->read_pci_config(bus, device, function, PCI_device_id, 2)
+				== 0xffff) {
+			continue;
+		}
+		uint8 headerType = pci->read_pci_config(bus, device, function,
+			PCI_header_type, 1);
+		if ((headerType & PCI_header_type_mask)
+				!= PCI_header_type_PCI_to_PCI_bridge) {
+			continue;
+		}
+		uint8 secondaryBus = pci->read_pci_config(bus, device, function,
+			PCI_secondary_bus, 1);
+		uint8 subordinateBus = pci->read_pci_config(bus, device, function,
+			PCI_subordinate_bus, 1);
+		if (secondaryBus <= bus || target.bus < secondaryBus
+			|| target.bus > subordinateBus) {
+			continue;
+		}
+
+		acpi_handle found = acpi_find_pci_function(acpi, pci, child,
+			secondaryBus, target, depth - 1);
+		if (found != NULL)
+			return found;
+	}
+	return NULL;
+}
+
+
+static acpi_handle
+acpi_find_pci_function(acpi_module_info* acpi, const pci_info& target)
+{
+	pci_module_info* pci;
+	if (get_module(B_PCI_MODULE_NAME, (module_info**)&pci) != B_OK)
+		return NULL;
+
+	acpi_handle found = NULL;
+	const char* rootBridgeIDs[] = { "PNP0A08", "PNP0A03" };
+	for (int32 i = 0; i < 2 && found == NULL; i++) {
+		char path[256];
+		for (uint32 index = 0; found == NULL
+				&& acpi->get_device(rootBridgeIDs[i], index, path,
+					sizeof(path)) == B_OK; index++) {
+			acpi_handle rootBridge;
+			if (acpi->get_handle(NULL, path, &rootBridge) != B_OK)
+				continue;
+
+			// A root bridge on another firmware segment numbers its buses
+			// in that segment. Those buses are not the bus numbers the
+			// driver sees, so a match there would reset the wrong port.
+			uint64 segment = 0;
+			if (acpi_integer(acpi, rootBridge, "_SEG", segment) == B_OK
+					&& segment != 0) {
+				continue;
+			}
+
+			uint64 bus = 0;
+			acpi_integer(acpi, rootBridge, "_BBN", bus);
+			found = acpi_find_pci_function(acpi, pci, rootBridge, bus, target,
+				8);
+		}
+	}
+
+	put_module(B_PCI_MODULE_NAME);
+	return found;
+}
+
+
+/*!	Returns the power resource that resets the device behind port \a index
+	of the controller \a controller (the first one its ACPI port lists in
+	_PRR), or NULL. The root hub has address 0 below the controller, its
+	ports count from 1, as the controller's.
+*/
+static acpi_handle
+acpi_port_reset_resource(acpi_module_info* acpi, const pci_info& controller,
+	uint8 index)
+{
+	acpi_handle controllerHandle = acpi_find_pci_function(acpi, controller);
+	if (controllerHandle == NULL)
+		return NULL;
+	acpi_handle rootHub = acpi_child_at(acpi, controllerHandle, 0);
+	if (rootHub == NULL)
+		return NULL;
+	acpi_handle port = acpi_child_at(acpi, rootHub, index + 1);
+	if (port == NULL)
+		return NULL;
+
+	acpi_object_type resources[4];
+	if (acpi->evaluate_object(port, "_PRR", NULL, resources,
+			sizeof(resources)) != B_OK
+		|| resources[0].object_type != ACPI_TYPE_PACKAGE
+		|| resources[0].package.count == 0) {
+		return NULL;
+	}
+
+	acpi_handle resource = NULL;
+	acpi_object_type& reference = resources[0].package.objects[0];
+	if (reference.object_type == ACPI_TYPE_LOCAL_REFERENCE)
+		resource = reference.reference.handle;
+	else if (reference.object_type == ACPI_TYPE_STRING)
+		acpi->get_handle(NULL, reference.string.string, &resource);
+	return resource;
+}
+
+
+#endif	// __i386__ || __x86_64__
+
+
+/*!	A device built into the machine (the Bluetooth part of a Wi-Fi card) can
+	have a reset line the firmware describes as the _PRR power resource of
+	its port in ACPI. That resource's _RST holds the device in reset a moment
+	and lets it go.
+*/
+status_t
+XHCI::PlatformResetPort(uint8 index)
+{
+#if defined(__i386__) || defined(__x86_64__)
+	if (fPCIInfo == NULL || index >= fPortCount)
+		return B_NOT_SUPPORTED;
+
+	// Only a controller on firmware segment 0. Another segment is given
+	// its own bus numbers, which are not the numbers ACPI uses.
+	uint8 domain = 0;
+	device_node* sim = gDeviceManager->get_parent_node(Node());
+	if (sim != NULL) {
+		device_node* pciDevice = gDeviceManager->get_parent_node(sim);
+		gDeviceManager->put_node(sim);
+		if (pciDevice != NULL) {
+			gDeviceManager->get_attr_uint8(pciDevice, B_PCI_DEVICE_DOMAIN,
+				&domain, false);
+			gDeviceManager->put_node(pciDevice);
+		}
+	}
+	if (domain != 0)
+		return B_NOT_SUPPORTED;
+
+	acpi_module_info* acpi;
+	if (get_module(B_ACPI_MODULE_NAME, (module_info**)&acpi) != B_OK)
+		return B_NOT_SUPPORTED;
+
+	status_t status = B_NOT_SUPPORTED;
+	acpi_handle resource = acpi_port_reset_resource(acpi, *fPCIInfo, index);
+	if (resource != NULL) {
+		char name[128] = "?";
+		acpi_data nameBuffer;
+		nameBuffer.pointer = name;
+		nameBuffer.length = sizeof(name);
+		acpi->ns_handle_to_pathname(resource, &nameBuffer);
+
+		TRACE_ALWAYS("port %" B_PRIu8 ": device does not respond, resetting it "
+			"with %s._RST\n", index, name);
+		status = acpi->evaluate_method(resource, "_RST", NULL, NULL);
+		if (status != B_OK)
+			TRACE_ERROR("port %" B_PRIu8 ": %s._RST failed\n", index, name);
+	}
+
+	put_module(B_ACPI_MODULE_NAME);
+	return status;
+#else
+	return B_NOT_SUPPORTED;
+#endif
+}
+
+
+
 status_t
 XHCI::NotifyPipeChange(Pipe* pipe, usb_change change)
 {
@@ -1374,14 +1611,19 @@ XHCI::CreateDescriptor(uint32 trbCount, uint32 bufferCount, size_t bufferSize)
 	// We always allocate 1 more TRB than requested, so that
 	// _LinkDescriptorForPipe() has room to insert a link TRB.
 	trbCount++;
+	// Leave empty slots after the link. A VL805 reads past the doorbell.
+	uint32 padded = trbCount + XHCI_TRB_OVERFETCH;
 	if (fStack->AllocateChunk((void**)&result->trbs, &result->trb_addr,
-			(trbCount * sizeof(xhci_trb))) < B_OK) {
+			(padded * sizeof(xhci_trb))) < B_OK) {
 		TRACE_ERROR("failed to allocate TRBs\n");
 		FreeDescriptor(result);
 		return NULL;
 	}
 	result->trb_count = trbCount;
 	result->trb_used = 0;
+	result->ring_link = 0;
+	result->ring_event_data = 0;
+	memset(result->trbs, 0, padded * sizeof(xhci_trb));
 
 	if (bufferSize > 0) {
 		// Due to how the USB stack allocates physical memory, we can't just
@@ -1464,7 +1706,7 @@ XHCI::FreeDescriptor(xhci_td* descriptor)
 
 	if (descriptor->trbs != NULL) {
 		fStack->FreeChunk(descriptor->trbs, descriptor->trb_addr,
-			(descriptor->trb_count * sizeof(xhci_trb)));
+			((descriptor->trb_count + XHCI_TRB_OVERFETCH) * sizeof(xhci_trb)));
 	}
 	if (descriptor->buffers != NULL) {
 		size_t totalSize = descriptor->buffer_size * descriptor->buffer_count;
@@ -1605,7 +1847,11 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 	_WriteContext(&device->input_ctx->input.dropFlags, 0);
 	_WriteContext(&device->input_ctx->input.addFlags, 3);
 
-	uint8 rhPort = hubPort;
+	// The route string is the downstream port of every hub below the root.
+	// hubPort and HubPort() name the transaction translator, which below a
+	// full-speed hub is a port further up, not the device's own port.
+	uint8 rhPort = parent->EnumeratingPort() != 0
+		? parent->EnumeratingPort() : hubPort;
 	uint32 route = 0;
 	for (Device* hubDevice = parent; hubDevice != RootObject();
 			hubDevice = (Device*)hubDevice->Parent()) {
@@ -1617,7 +1863,11 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 		route = route << 4;
 		route |= rhPort;
 
-		rhPort = hubDevice->HubPort();
+		Object* upper = hubDevice->Parent();
+		uint8 port = 0;
+		if ((upper->Type() & USB_OBJECT_HUB) != 0)
+			port = static_cast<Hub*>(upper)->PortOf(hubDevice);
+		rhPort = port != 0 ? port : hubDevice->HubPort();
 	}
 
 	uint32 dwslot0 = SLOT_0_NUM_ENTRIES(1) | SLOT_0_ROUTE(route);
@@ -1713,12 +1963,14 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 
 	device->trb_area = fStack->AllocateArea((void**)&device->trbs,
 		&device->trb_addr, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
-			* XHCI_ENDPOINT_RING_SIZE, "XHCI endpoint trbs");
+			* XHCI_ENDPOINT_RING_STRIDE, "XHCI endpoint trbs");
 	if (device->trb_area < B_OK) {
 		TRACE_ERROR("unable to create a device trbs area\n");
 		CleanupDevice(device);
 		return NULL;
 	}
+	memset(device->trbs, 0, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
+		* XHCI_ENDPOINT_RING_STRIDE);
 
 	// set up slot pointer to device context
 	fDcba->baseAddress[slot] = device->device_ctx_addr;
@@ -1745,6 +1997,7 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 	ASSERT(endpoint0->td_list.IsEmpty());
 	endpoint0->used = 0;
 	endpoint0->next = 0;
+	endpoint0->recovering = false;
 	endpoint0->trbs = device->trbs;
 	endpoint0->trb_addr = device->trb_addr;
 
@@ -1935,6 +2188,21 @@ XHCI::_GetEndpointState(xhci_endpoint* endpoint)
 }
 
 
+void
+XHCI::_ClearRingEntries(xhci_endpoint* endpoint, uint8 start, uint8 count)
+{
+	if (endpoint->trbs == NULL || count == 0)
+		return;
+
+	for (uint8 i = 0; i < count; i++) {
+		uint8 index = (start + i) & (XHCI_ENDPOINT_RING_SIZE - 1);
+		endpoint->trbs[index].address = 0;
+		endpoint->trbs[index].status = 0;
+		endpoint->trbs[index].flags = 0;
+	}
+}
+
+
 status_t
 XHCI::_InsertEndpointForPipe(Pipe* pipe)
 {
@@ -1982,12 +2250,13 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 		ASSERT(endpoint->td_list.IsEmpty());
 		endpoint->used = 0;
 		endpoint->next = 0;
+		endpoint->recovering = false;
 
-		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_SIZE;
+		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_STRIDE;
 		endpoint->trb_addr = device->trb_addr
-			+ id * XHCI_ENDPOINT_RING_SIZE * sizeof(xhci_trb);
+			+ id * XHCI_ENDPOINT_RING_STRIDE * sizeof(xhci_trb);
 		memset(endpoint->trbs, 0,
-			sizeof(xhci_trb) * XHCI_ENDPOINT_RING_SIZE);
+			sizeof(xhci_trb) * XHCI_ENDPOINT_RING_STRIDE);
 
 		TRACE("insert endpoint for pipe: trbs, device %p endpoint %p\n",
 			device->trbs, endpoint->trbs);
@@ -2165,6 +2434,8 @@ XHCI::_LinkDescriptorForPipe(xhci_td* descriptor, xhci_endpoint* endpoint)
 
 	// Everything is ready, so write the cycle bit.
 	endpoint->trbs[link].flags |= B_HOST_TO_LENDIAN_INT32(TRB_3_CYCLE_BIT);
+	descriptor->ring_link = (uint8)link;
+	descriptor->ring_event_data = (uint8)eventdata;
 
 	TRACE("_LinkDescriptorForPipe pLink %p phys 0x%" B_PRIxPHYSADDR
 		" 0x%" B_PRIxPHYSADDR " 0x%08" B_PRIx32 "\n", &endpoint->trbs[link],
@@ -2173,6 +2444,7 @@ XHCI::_LinkDescriptorForPipe(xhci_td* descriptor, xhci_endpoint* endpoint)
 		B_LENDIAN_TO_HOST_INT32(endpoint->trbs[link].flags));
 
 	endpoint->next = next;
+	const bool ring = !endpoint->recovering;
 	endpointLocker.Unlock();
 
 	TRACE("Endpoint status 0x%08" B_PRIx32 " 0x%08" B_PRIx32 " 0x%016" B_PRIx64 "\n",
@@ -2180,7 +2452,8 @@ XHCI::_LinkDescriptorForPipe(xhci_td* descriptor, xhci_endpoint* endpoint)
 		_ReadContext(&endpoint->device->device_ctx->endpoints[endpoint->id].dwendpoint1),
 		_ReadContext(&endpoint->device->device_ctx->endpoints[endpoint->id].qwendpoint2));
 
-	Ring(endpoint->device->slot, endpoint->id + 1);
+	if (ring)
+		Ring(endpoint->device->slot, endpoint->id + 1);
 
 	TRACE("Endpoint status 0x%08" B_PRIx32 " 0x%08" B_PRIx32 " 0x%016" B_PRIx64 "\n",
 		_ReadContext(&endpoint->device->device_ctx->endpoints[endpoint->id].dwendpoint0),
@@ -2420,7 +2693,9 @@ XHCI::GetPortStatus(uint8 index, usb_port_status* status)
 	if (fPortSpeeds[index] >= USB_SPEED_SUPERSPEED) {
 		if (portStatus & PS_PLC)
 			status->change |= PORT_CHANGE_LINK_STATE;
-		if (portStatus & PS_WRC)
+		if ((portStatus & PS_WRC) == 0)
+			fStuckWarmResetChange[index] = false;
+		else if (!fStuckWarmResetChange[index])
 			status->change |= PORT_CHANGE_BH_PORT_RESET;
 	}
 
@@ -2451,6 +2726,28 @@ XHCI::SetPortFeature(uint8 index, uint16 feature)
 		case PORT_RESET:
 			WriteOpReg(portRegister, portStatus | PS_PR);
 			break;
+		case PORT_BH_PORT_RESET:
+			// a warm reset, SuperSpeed ports only
+			if (fPortSpeeds[index] < USB_SPEED_SUPERSPEED
+				&& (portStatus & PS_PLS_MASK) != PS_XDEV_INACTIVE
+				&& (portStatus & PS_PLS_MASK) != PS_XDEV_COMP_MODE)
+				return B_BAD_VALUE;
+		{
+			uint32 before = ReadOpReg(portRegister);
+			WriteOpReg(portRegister, portStatus | PS_WPR);
+			uint32 after = before;
+			for (int i = 0; i < 20; i++) {
+				snooze(10000);
+				after = ReadOpReg(portRegister);
+				if ((after & (PS_WRC | PS_PRC)) != 0)
+					break;
+			}
+			TRACE_ALWAYS("port %u warm reset: PORTSC %#" B_PRIx32 " -> %#"
+				B_PRIx32 " (link state %" B_PRIu32 ", connected %d)\n", index,
+				before, after, (after & PS_PLS_MASK) >> 5,
+				(after & PS_CCS) != 0);
+			break;
+		}
 		case PORT_POWER:
 			WriteOpReg(portRegister, portStatus | PS_PP);
 			break;
@@ -2504,6 +2801,12 @@ XHCI::ClearPortFeature(uint8 index, uint16 feature)
 			break;
 		case C_PORT_BH_PORT_RESET:
 			WriteOpReg(portRegister, portStatus | PS_WRC);
+			if ((ReadOpReg(portRegister) & PS_WRC) != 0
+				&& !fStuckWarmResetChange[index]) {
+				TRACE_ALWAYS("port %u: its warm reset change does not clear, "
+					"not reporting it\n", index);
+				fStuckWarmResetChange[index] = true;
+			}
 			break;
 		case C_PORT_LINK_STATE:
 			WriteOpReg(portRegister, portStatus | PS_PLC);
@@ -2676,8 +2979,10 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 	const uint8 endpointNumber = TRB_3_ENDPOINT_GET(flags),
 		slot = TRB_3_SLOT_GET(flags);
 
-	if (slot > fSlotCount)
+	if (slot > fSlotCount) {
 		TRACE_ERROR("invalid slot\n");
+		return;
+	}
 	if (endpointNumber == 0 || endpointNumber >= XHCI_MAX_ENDPOINTS) {
 		TRACE_ERROR("invalid endpoint\n");
 		return;
@@ -2728,8 +3033,24 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 
 	if (completionCode != COMP_SUCCESS && completionCode != COMP_SHORT_PACKET
 			&& completionCode != COMP_STOPPED && completionCode != COMP_STOPPED_LENGTH_INVALID) {
-		TRACE_ALWAYS("transfer error on slot %" B_PRId8 " endpoint %" B_PRId8
-			": %s\n", slot, endpointNumber, xhci_error_string(completionCode));
+		// Once per transfer event. An isochronous endpoint raises one event
+		// per packet, so an unplug can print thousands of identical lines
+		// and stall the machine on the serial port. Log one code at most
+		// once per 100 ms. ProcessEvents() holds fEventLock around this.
+		const bigtime_t now = system_time();
+		if (completionCode != fLastTransferErrorCode
+				|| now - fLastTransferErrorLog >= 100000) {
+			if (fSuppressedTransferErrors > 0) {
+				TRACE_ALWAYS("(%" B_PRIu32 " further transfer errors "
+					"suppressed)\n", fSuppressedTransferErrors);
+				fSuppressedTransferErrors = 0;
+			}
+			TRACE_ALWAYS("transfer error on slot %" B_PRId8 " endpoint %" B_PRId8
+				": %s\n", slot, endpointNumber, xhci_error_string(completionCode));
+			fLastTransferErrorLog = now;
+			fLastTransferErrorCode = completionCode;
+		} else
+			fSuppressedTransferErrors++;
 	}
 
 	phys_addr_t source = B_LENDIAN_TO_HOST_INT64(trb->address);
@@ -2802,6 +3123,8 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 		// likely failed midway; so just accept it anyway.
 		if (offset == (td->trb_used - 1) || completionCode != COMP_SUCCESS) {
 			_UnlinkDescriptorForPipe(td, endpoint);
+			_ClearRingEntries(endpoint, td->ring_link, 1);
+			_ClearRingEntries(endpoint, td->ring_event_data, 1);
 			endpointLocker.Unlock();
 
 			td->trb_completion_code = completionCode;
@@ -3162,6 +3485,58 @@ XHCI::FinishThread(void* data)
 
 
 void
+XHCI::_RecoverHaltedEndpoint(xhci_endpoint* endpoint, xhci_td* td)
+{
+	if (endpoint == NULL || endpoint->trbs == NULL || endpoint->device == NULL
+		|| td == NULL || td->trbs == NULL
+		|| td->trb_used >= td->trb_count
+		|| _GetEndpointState(endpoint) != ENDPOINT_STATE_HALTED) {
+		return;
+	}
+
+	// The link at the end of the descriptor returns to its Event Data TRB
+	// on the endpoint ring. The ring continues at the TRB after that one.
+	// On this CPU the descriptor buffer is host endian, which is little
+	// endian, so the swap is a no-op.
+	const phys_addr_t resume = B_LENDIAN_TO_HOST_INT64(
+		td->trbs[td->trb_used].address) + sizeof(xhci_trb);
+
+	MutexLocker endpointLocker(endpoint->lock);
+	if (endpoint->recovering)
+		return;
+	endpoint->recovering = true;
+	endpointLocker.Unlock();
+
+	TRACE("recovering halted endpoint %" B_PRIu8 " of slot %" B_PRIu8 "\n",
+		endpoint->id, endpoint->device->slot);
+	status_t status = ResetEndpoint(false, endpoint);
+
+	endpointLocker.Lock();
+	if (status == B_OK && endpoint->td_list.IsEmpty()) {
+		memset(endpoint->trbs, 0, sizeof(xhci_trb) * XHCI_ENDPOINT_RING_SIZE);
+		endpoint->used = 0;
+		endpoint->next = 0;
+		status = SetTRDequeue(endpoint->trb_addr, 0, endpoint->id + 1,
+			endpoint->device->slot);
+	} else if (status == B_OK) {
+		status = SetTRDequeue(resume, 0, endpoint->id + 1,
+			endpoint->device->slot);
+	}
+	if (status != B_OK) {
+		TRACE_ERROR("recovering halted endpoint %" B_PRIu8 " of slot %" B_PRIu8
+			" failed: %s\n", endpoint->id, endpoint->device->slot,
+			strerror(status));
+	}
+	endpoint->recovering = false;
+	const bool ring = !endpoint->td_list.IsEmpty();
+	endpointLocker.Unlock();
+
+	if (ring)
+		Ring(endpoint->device->slot, endpoint->id + 1);
+}
+
+
+void
 XHCI::RecoverHaltedEndpoint(xhci_endpoint* endpoint)
 {
 	if (endpoint == NULL || endpoint->trbs == NULL || endpoint->device == NULL)
@@ -3266,6 +3641,24 @@ XHCI::FinishTransfers()
 				}
 			}
 
+			// A control endpoint that halted is reset before the callback.
+			// A device refuses a request it does not support with a stall,
+			// and the next request needs the endpoint running.
+			// A bulk or interrupt endpoint that stalled is reset too. The
+			// driver clears the halt in the device, and nothing else would
+			// reset the endpoint in the controller, so the next transfer
+			// would never run. Only a stall: an unplug raises transaction
+			// errors in bursts, and each command to a slot that is gone
+			// costs a timeout on this thread.
+			xhci_endpoint* endpoint
+				= (xhci_endpoint*)transfer->TransferPipe()->ControllerCookie();
+			if (endpoint != NULL && completionCode != COMP_SUCCESS
+				&& completionCode != COMP_SHORT_PACKET
+				&& (endpoint->id == 0 || (completionCode == COMP_STALL
+					&& transfer->IsochronousData() == NULL))) {
+				_RecoverHaltedEndpoint(endpoint, td);
+			}
+
 			FreeDescriptor(td);
 
 			// this transfer may still have data left
@@ -3283,9 +3676,13 @@ XHCI::FinishTransfers()
 				// Leave it halted and every later transfer on this controller
 				// stops (Haiku #20149). Reset the ring before the callback
 				// queues the next packet.
-				if (completionCode == COMP_BABBLE || completionCode == COMP_STALL
-					|| completionCode == COMP_USB_TRANSACTION
-					|| completionCode == COMP_SPLIT_TRANSACTION) {
+				// Isochronous audio keeps the earlier reset. A stall on any
+				// other pipe was already handled above. Transaction errors on
+				// those pipes are left for the transfer's own timeout.
+				if (transfer->IsochronousData() != NULL
+					&& (completionCode == COMP_BABBLE || completionCode == COMP_STALL
+						|| completionCode == COMP_USB_TRANSACTION
+						|| completionCode == COMP_SPLIT_TRANSACTION)) {
 					Pipe* pipe = transfer->TransferPipe();
 					xhci_endpoint* endpoint = (pipe != NULL)
 						? (xhci_endpoint*)pipe->ControllerCookie() : NULL;

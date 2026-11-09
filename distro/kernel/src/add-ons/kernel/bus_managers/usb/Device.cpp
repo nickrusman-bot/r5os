@@ -384,6 +384,15 @@ Device::~Device()
 		fNode = NULL;
 	}
 
+	// A driver may be waiting for a control request to a device that is
+	// gone, holding a reference to an endpoint meanwhile. Fail those
+	// requests now: the control timeout is far longer than the endpoints
+	// below wait to become idle.
+	if (fDefaultPipe != NULL) {
+		fDefaultPipe->PutUSBID(false);
+		fDefaultPipe->CancelQueuedTransfers(true);
+	}
+
 	// Destroy open endpoints. Do not send a device request to unconfigure
 	// though, since we may be deleted because the device was unplugged already.
 	Unconfigure(false);

@@ -326,7 +326,7 @@ Stick 29, `generated/boot-5625u-29/syslog`, is the evidence:
 - Each new process took the next fence context, 2 through 8, with the load bits `81018003`: lines 3396, 3465, 3527, 3590, 3660, 3722 and 3951.
 - The log has no `vm fault` and no `gpu lost`.
 
-**Limit.** Stick 29 wrote the range at run time, after stage P. The boot position, before the first user job, has not been booted. The next GPU stick confirms it.
+**Limit.** Stick 29 wrote the range at run time, after stage P. The boot position, before the first user job, has not been booted. The next GPU stick confirms it. That stick also tries a USB 3 stick on an HP machine, plugged in and out, to see whether the mouse and keyboard keep working.
 
 Built, and not needed for M4, still default off: `gfx9_hub_linux`, `gfx9_vmids`, `gfx9_flush_fence`, `gfx9_cond_exec`, `gfx9_pasid_map`, `gfx9_gds_switch`, `gfx9_ce_meta`, `gfx9_deferred_free`.
 
