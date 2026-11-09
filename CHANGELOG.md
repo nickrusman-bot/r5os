@@ -1,20 +1,30 @@
 # R5OS changelog (lokaal)
 
+### Each program has its own GPU memory
+
+`gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
+
+Stick 30 reached the desktop. Six teapot self-tests were fine. Isolation failed. Fault status `0x00800880` is VMID 8 and an execute permission fault at `0x80002000`, the owner's own command list, which was not executable. Contexts 1–15 had been rewritten to `0x00555407`, so none of them raised a fault interrupt.
+
+Stick 31 reached the desktop. The command lists are executable, and the log has `vmid fault irq cntl 007ffe07`. There is no fault at `0x80002000`. The owner then stayed inside the copy. The control word was register to register. The counters did not return: the reading was taken before isolation, and only once, while the kill loop still held its buffers. The GPU was then lost.
+
+Stick 32 reached the desktop. The copy is memory to memory. The owner's page stayed unchanged. Fault status `00900c10` is VMID 9 at byte address `0x80000000`, the other program's page. The read/write bit in that word is 0. After the kill, the log says `counters back`. Still open: the driver does not write a `vm fault` line. The test program always prints `vm fault addr`, and that line is not the driver's. The GPU is lost after the guilty job. A reset was not run. The hang policy leaves the GPU off until the next boot. Not run on this stick: two teapots at the same time, and a standard account with the render switch off.
+
 ### The kill's buffers are counted after they are released
 
-`gfx9_vmid_per_file` stays off. Stick 31 read the counters before the isolation stage, and once more the moment the kill stage returned. The kill loop still held its buffers then, so the difference included that stage. The reading is now taken just before the kill. For two seconds after the kill returns, the same reading is repeated every 100 ms until the counts match. `counters back` is that match. `counters difference` is the last reading when they still differ. The host test checks that order in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+`gfx9_vmid_per_file` stays off. Stick 31 read the counters before the isolation stage, and once more the moment the kill stage returned. The kill loop still held its buffers then, so the difference included that stage. The reading is now taken just before the kill. For two seconds after the kill returns, the same reading is repeated every 100 ms until the counts match. `counters back` is that match. `counters difference` is the last reading when they still differ. The host test checks that order in the source. Stick 32 printed `counters back`. There is no What's new section and `distro/BUILD` stays the same.
 
 ### The isolation copy reads and writes memory
 
-`gfx9_vmid_per_file` stays off. Stick 31 reached the desktop. The permission fault at `0x80002000` was gone, and the log has `vmid fault irq cntl 007ffe07`. The owner's submit then stayed inside `COPY_DATA` (`me hdr c0044000`). The control word was `(1 << 16) | (1 << 20)`: `SRC_SEL` 0 and `DST_SEL` 0, register to register. It is now memory to memory, Mesa 25.3.6 `src/amd/common/sid.h` lines 129-144: `COPY_DATA_SRC_SEL(1) | COPY_DATA_DST_SEL(5) | COPY_DATA_COUNT_SEL | COPY_DATA_WR_CONFIRM`. `WRITE_DATA` is unchanged. The host test checks that control word in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+`gfx9_vmid_per_file` stays off. Stick 31 reached the desktop. The permission fault at `0x80002000` was gone, and the log has `vmid fault irq cntl 007ffe07`. The owner's submit then stayed inside `COPY_DATA` (`me hdr c0044000`). The control word was `(1 << 16) | (1 << 20)`: `SRC_SEL` 0 and `DST_SEL` 0, register to register. It is now memory to memory, Mesa 25.3.6 `src/amd/common/sid.h` lines 129-144: `COPY_DATA_SRC_SEL(1) | COPY_DATA_DST_SEL(5) | COPY_DATA_COUNT_SEL | COPY_DATA_WR_CONFIRM`. `WRITE_DATA` is unchanged. The host test checks that control word in the source. Stick 32 ran this copy. The owner's page stayed unchanged, and the client's access faulted at `0x80000000`. There is no What's new section and `distro/BUILD` stays the same.
 
 ### Every graphics context can report a bad memory access
 
-`gfx9_vmid_per_file` stays off. Programming contexts 1–15 wrote only the default fault bits, `0x00555407`, including over VMID 1, which setup had given `0x007ffe07`. No context raised a fault after that. When `gfx9_irq` is on, the interrupt bits are ORed afterwards, the same step as Linux v6.12 `gmc_v9_0_vm_fault_interrupt_state()` (lines 473–479 and 513–529). All fifteen contexts are then `0x007ffe07`. Context 0 is unchanged. The host test checks that list of fifteen. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+`gfx9_vmid_per_file` stays off. Programming contexts 1–15 wrote only the default fault bits, `0x00555407`, including over VMID 1, which setup had given `0x007ffe07`. No context raised a fault after that. When `gfx9_irq` is on, the interrupt bits are ORed afterwards, the same step as Linux v6.12 `gmc_v9_0_vm_fault_interrupt_state()` (lines 473–479 and 513–529). All fifteen contexts are then `0x007ffe07`. Context 0 is unchanged. The host test checks that list of fifteen. Sticks 31 and 32 logged `vmid fault irq cntl 007ffe07`. There is no What's new section and `distro/BUILD` stays the same.
 
 ### The isolation command list can be executed
 
-`gfx9_vmid_per_file` stays off. Stick 30 stopped in the owner's own command list at `0x80002000`. Fault status `0x00800880` is VMID 8 and a permission fault; the address register `0x80002` is that page. The list was mapped readable and writable, and the command processor fetches it. Both command lists (`0x80002000` and `0x80001000`) are now readable, writable and executable. The data page stays readable and writable. The host test checks the two maps in the source. This has not been booted. There is no What's new section and `distro/BUILD` stays the same.
+`gfx9_vmid_per_file` stays off. Stick 30 stopped in the owner's own command list at `0x80002000`. Fault status `0x00800880` is VMID 8 and a permission fault; the address register `0x80002` is that page. The list was mapped readable and writable, and the command processor fetches it. Both command lists (`0x80002000` and `0x80001000`) are now readable, writable and executable. The data page stays readable and writable. The host test checks the two maps in the source. Stick 31 no longer faulted at `0x80002000`. There is no What's new section and `distro/BUILD` stays the same.
 
 ### GET_INFO reads the live counters under the GPU lock
 
