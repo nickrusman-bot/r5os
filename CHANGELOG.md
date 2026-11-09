@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A volume that cannot be mounted does not stop the system
+
+When a BFS mount failed after the journal had been created, the journal was left in place. If the block allocator had opened a transaction to repair the bitmap, deleting the block cache then panicked. A failed mount now waits for the block allocator, then deletes the root node and the journal, and returns the error. This is haiku-pi star row 50, commit 9799738757. It was not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Each program has its own GPU memory
 
 `gfx9_vmid_per_file` stays off. M5 stops here. The three sticks are the record. There is no What's new section and `distro/BUILD` stays the same.
