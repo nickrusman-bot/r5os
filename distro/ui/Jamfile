@@ -30,5 +30,6 @@ SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
 	Sidebar.cpp
 	ActionCard.cpp
 	PageHeader.cpp
+	ScreenArrangement.cpp
 	: be libr5icons.so [ TargetLibstdc++ ]
 	;
