@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+### A shared file that was deleted while open is let go
+
+Closing it failed once it had no name, so the server kept the deleted file. This is air/OS `5b3aae72a780e69adb4ae4e010a986e696711fb7`. The smbfs add-on already uses the open handle for that. There is no What's new section and `distro/BUILD` stays the same.
+
 ### Saving into a shared folder no longer leaves it locked
 
 A folder lock that had to be waited for was kept, so the share stopped answering. This is air/OS `08a75db478698cd9c1e35649b30bf57f08e6d4d8`. There is no What's new section and `distro/BUILD` stays the same.
