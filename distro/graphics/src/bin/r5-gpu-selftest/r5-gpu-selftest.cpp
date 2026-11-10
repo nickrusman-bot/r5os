@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -321,24 +322,187 @@ run_stage(FILE* out, const char* title, const char* command, int seconds)
 }
 
 
-static void
-write_command(FILE* out, const char* title, const char* command)
+static int
+spawn_stage(const char* command, int* readFd, pid_t* pid)
 {
-	stage_at(out, title);
-	FILE* pipe = popen(command, "r");
-	if (pipe == NULL) {
-		fprintf(out, "not available, %s\n", strerror(errno));
+	int fds[2];
+	if (pipe(fds) != 0)
+		return 0;
+	pid_t child = fork();
+	if (child < 0) {
+		close(fds[0]);
+		close(fds[1]);
+		return 0;
+	}
+	if (child == 0) {
+		setpgid(0, 0);
+		dup2(fds[1], 1);
+		dup2(fds[1], 2);
+		close(fds[0]);
+		close(fds[1]);
+		execl("/bin/sh", "sh", "-c", command, (char*)NULL);
+		_exit(127);
+	}
+	setpgid(child, child);
+	close(fds[1]);
+	fcntl(fds[0], F_SETFL, O_NONBLOCK);
+	*readFd = fds[0];
+	*pid = child;
+	return 1;
+}
+
+
+static void
+keep_output(char* buf, size_t* used, size_t cap, const char* src, ssize_t got)
+{
+	if (got <= 0 || *used + 1 >= cap)
+		return;
+	size_t room = cap - *used - 1;
+	size_t take = (size_t)got;
+	if (take > room)
+		take = room;
+	memcpy(buf + *used, src, take);
+	*used += take;
+	buf[*used] = 0;
+}
+
+
+/* Two teapots at once. Each child's text is kept, then written as its
+ * own block, so the lines of one do not land inside the other. */
+static void
+run_pair(FILE* out, const char* titleA, const char* titleB,
+	const char* command, int seconds)
+{
+	const size_t cap = 65536;
+	char* bufA = (char*)malloc(cap);
+	char* bufB = (char*)malloc(cap);
+	if (bufA == NULL || bufB == NULL) {
+		free(bufA);
+		free(bufB);
+		stage_at(out, titleA);
+		fprintf(out, "not available, no memory\n");
+		stage_at(out, titleB);
+		fprintf(out, "not available, no memory\n");
+		fflush(out);
 		return;
 	}
-	char line[512];
-	bool any = false;
-	while (fgets(line, sizeof(line), pipe) != NULL) {
-		fputs(line, out);
-		any = true;
+	bufA[0] = 0;
+	bufB[0] = 0;
+	size_t usedA = 0;
+	size_t usedB = 0;
+	int fdA = -1;
+	int fdB = -1;
+	pid_t pidA = -1;
+	pid_t pidB = -1;
+	if (!spawn_stage(command, &fdA, &pidA)
+		|| !spawn_stage(command, &fdB, &pidB)) {
+		if (pidA > 0) {
+			kill(-pidA, SIGKILL);
+			kill_team(pidA);
+			waitpid(pidA, NULL, 0);
+		}
+		if (fdA >= 0)
+			close(fdA);
+		stage_at(out, titleA);
+		fprintf(out, "not available, %s\n", strerror(errno));
+		stage_at(out, titleB);
+		fprintf(out, "not available, %s\n", strerror(errno));
+		free(bufA);
+		free(bufB);
+		fflush(out);
+		return;
 	}
-	int status = pclose(pipe);
-	if (!any)
-		fprintf(out, "no output, status %d\n", status);
+	int statusA = 0;
+	int statusB = 0;
+	bool endedA = false;
+	bool endedB = false;
+	bool killedA = false;
+	bool killedB = false;
+	bigtime_t deadline = system_time() + (bigtime_t)seconds * 1000000;
+	char tmp[256];
+	while (!endedA || !endedB) {
+		if (!endedA) {
+			ssize_t got = read(fdA, tmp, sizeof(tmp));
+			if (got > 0)
+				keep_output(bufA, &usedA, cap, tmp, got);
+			pid_t wait = waitpid(pidA, &statusA, WNOHANG);
+			if (wait == pidA)
+				endedA = true;
+		}
+		if (!endedB) {
+			ssize_t got = read(fdB, tmp, sizeof(tmp));
+			if (got > 0)
+				keep_output(bufB, &usedB, cap, tmp, got);
+			pid_t wait = waitpid(pidB, &statusB, WNOHANG);
+			if (wait == pidB)
+				endedB = true;
+		}
+		if ((!endedA || !endedB) && system_time() >= deadline) {
+			if (!endedA) {
+				kill(-pidA, SIGKILL);
+				kill_team(pidA);
+				waitpid(pidA, &statusA, 0);
+				killedA = true;
+				endedA = true;
+			}
+			if (!endedB) {
+				kill(-pidB, SIGKILL);
+				kill_team(pidB);
+				waitpid(pidB, &statusB, 0);
+				killedB = true;
+				endedB = true;
+			}
+			break;
+		}
+		if (!endedA || !endedB)
+			snooze(50000);
+	}
+	ssize_t rest;
+	while ((rest = read(fdA, tmp, sizeof(tmp))) > 0)
+		keep_output(bufA, &usedA, cap, tmp, rest);
+	while ((rest = read(fdB, tmp, sizeof(tmp))) > 0)
+		keep_output(bufB, &usedB, cap, tmp, rest);
+	close(fdA);
+	close(fdB);
+	stage_at(out, titleA);
+	fputs(bufA, out);
+	if (killedA)
+		fprintf(out, "killed, it did not exit\n");
+	else
+		fprintf(out, "exit %d\n", statusA);
+	stage_at(out, titleB);
+	fputs(bufB, out);
+	if (killedB)
+		fprintf(out, "killed, it did not exit\n");
+	else
+		fprintf(out, "exit %d\n", statusB);
+	free(bufA);
+	free(bufB);
+	fflush(out);
+}
+
+
+static void
+write_ring_line(FILE* out)
+{
+	r5_gpu_ring_fill in;
+	memset(&in, 0, sizeof(in));
+	in.size = (uint32_t)sizeof(in);
+	in.version = 1;
+	in.dwords = 1024;
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd >= 0) {
+		if (ioctl(fd, R5_GPU_RING_FILL, &in, sizeof(in)) != 0) {
+			in.waits = 0;
+			in.max_fill = 0;
+			in.dwords = 1024;
+		}
+		close(fd);
+	}
+	fprintf(out, "ring waits %u max %u of %u\n",
+		in.waits, in.max_fill, in.dwords);
+	fprintf(out, "selftest done\n");
+	fflush(out);
 }
 
 
@@ -508,7 +672,12 @@ main()
 	BPath cache;
 	if (find_directory(B_USER_CACHE_DIRECTORY, &cache) != B_OK)
 		return 1;
+	BPath previous;
+	previous.SetTo(cache.Path());
+	previous.Append("r5-gpu-selftest.old.txt");
 	cache.Append("r5-gpu-selftest.txt");
+	unlink(previous.Path());
+	rename(cache.Path(), previous.Path());
 	FILE* out = fopen(cache.Path(), "w");
 	if (out == NULL)
 		return 1;
@@ -521,8 +690,12 @@ main()
 			(long long)system_time());
 		fprintf(out, "stage vulkaninfo t %lld: not available, no supported GPU\n",
 			(long long)system_time());
-		write_command(out, "VulkanTeapot",
-			"/bin/VulkanTeapot --selftest 2>&1");
+		run_stage(out, "VulkanTeapot",
+			"/bin/VulkanTeapot --selftest 2>&1", 180);
+		run_stage(out, "VulkanTeapot cube",
+			"/bin/VulkanTeapot --cube --selftest 2>&1", 180);
+		run_pair(out, "VulkanTeapot A", "VulkanTeapot B",
+			"/bin/VulkanTeapot --selftest 2>&1", 180);
 	} else {
 		uint8_t bytes[sizeof(r5_gpu_info) + sizeof(r5_gpu_amd_info)];
 		memset(bytes, 0, sizeof(bytes));
@@ -586,6 +759,10 @@ main()
 					stage_regs(out);
 					int pass = run_stage(out, "VulkanTeapot",
 						"/bin/VulkanTeapot --selftest 2>&1", 120);
+					if (!device_lost()) {
+						run_stage(out, "VulkanTeapot cube",
+							"/bin/VulkanTeapot --cube --selftest 2>&1", 180);
+					}
 					if (pass == 0 && !device_lost()) {
 						stage_regs(out);
 						pass = run_stage(out, "VulkanTeapot (sam)",
@@ -632,6 +809,10 @@ main()
 							run_stage(out, "VulkanTeapot",
 								"/bin/VulkanTeapot --selftest 2>&1", 120);
 						}
+					}
+					if (!device_lost()) {
+						run_pair(out, "VulkanTeapot A", "VulkanTeapot B",
+							"/bin/VulkanTeapot --selftest 2>&1", 180);
 					}
 					run_stage(out, "isolation",
 						"/bin/r5-gpu-isolation 2>&1", 60);
@@ -722,6 +903,7 @@ main()
 				}
 		}
 	}
+	write_ring_line(out);
 	fclose(out);
 	return 0;
 }

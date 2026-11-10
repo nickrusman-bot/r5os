@@ -1819,6 +1819,20 @@ amd_fault_take(uint32* pasid, uint32* vmid, uint64* addr)
 }
 
 
+static void
+amd_ring_waited(void)
+{
+	r5_gfx9_ring_waited();
+}
+
+
+static void
+amd_ring_fill(uint32* waits, uint32* maxFill, uint32* dwords)
+{
+	r5_gfx9_ring_fill(waits, maxFill, dwords);
+}
+
+
 static int
 amd_map_vram(uint64 offset, uint64 bytes, void** address)
 {
@@ -1923,5 +1937,7 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_dump,
 	amd_gtt_wc,
 	amd_fault_take,
-	amd_map_vram
+	amd_map_vram,
+	amd_ring_waited,
+	amd_ring_fill
 };

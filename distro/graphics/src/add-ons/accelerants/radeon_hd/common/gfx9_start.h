@@ -193,5 +193,9 @@ uint32 r5_gfx9_pasid_for_vmid(uint32 vmid);
 /* One queued page fault. 0 when the queue is empty. The interrupt
  * handler only writes the queue. */
 int r5_gfx9_fault_take(uint32* pasid, uint32* vmid, uint64* addr);
+/* A submit waited because the ring had no room. The count is for the log. */
+void r5_gfx9_ring_waited(void);
+/* waits, highest used dwords, and the ring length. Does not submit. */
+void r5_gfx9_ring_fill(uint32* waits, uint32* maxFill, uint32* dwords);
 
 #endif

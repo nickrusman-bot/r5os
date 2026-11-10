@@ -27,7 +27,8 @@ STICK_NAME = "General UDisk"
 
 # Paths on the boot volume. The first hit wins for each output name.
 WANTED = (
-    ("home/r5-gpu-selftest.txt", "r5-gpu-selftest.txt"),
+    ("home/config/cache/r5-gpu-selftest.txt", "r5-gpu-selftest.txt"),
+    ("home/config/cache/r5-gpu-selftest.old.txt", "r5-gpu-selftest.old.txt"),
     ("home/r5-session.log", "r5-session.log"),
     ("system/var/log/syslog", "syslog"),
     ("system/var/log/syslog.old", "syslog.old"),

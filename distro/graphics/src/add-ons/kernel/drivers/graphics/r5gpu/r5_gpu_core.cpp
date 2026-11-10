@@ -1256,6 +1256,8 @@ gpu_wait_room(void* info, uint32 dwords)
 		return ECANCELED;
 	if (gR5GpuOps.user_room(dwords))
 		return B_OK;
+	if (gR5GpuOps.ring_waited != NULL)
+		gR5GpuOps.ring_waited();
 	bigtime_t deadline = system_time() + (bigtime_t)kRoomWaitUs;
 	while (!gR5GpuOps.user_room(dwords)) {
 		ConditionVariableEntry entry;
@@ -2047,6 +2049,37 @@ gpu_get_counters(gpu_client* client, void* buffer, size_t length)
 }
 
 
+static int sRingLogged = 0;
+
+
+static status_t
+gpu_ring_fill(void* buffer, size_t length)
+{
+	r5_gpu_ring_fill out;
+	if (buffer == NULL || length < sizeof(out))
+		return B_BAD_VALUE;
+	memset(&out, 0, sizeof(out));
+	if (user_memcpy(&out, buffer, sizeof(out)) != B_OK)
+		return B_BAD_ADDRESS;
+	if (out.version != 1 || out.size < sizeof(out))
+		return B_BAD_VALUE;
+	out.waits = 0;
+	out.max_fill = 0;
+	out.dwords = 1024;
+	if (gR5GpuOps.ring_fill != NULL)
+		gR5GpuOps.ring_fill(&out.waits, &out.max_fill, &out.dwords);
+	if (!sRingLogged) {
+		sRingLogged = 1;
+		dprintf("radeon_hd: ring waits %lu max %lu of %lu\n",
+			(unsigned long)out.waits, (unsigned long)out.max_fill,
+			(unsigned long)out.dwords);
+	}
+	if (user_memcpy(buffer, &out, sizeof(out)) != B_OK)
+		return B_BAD_ADDRESS;
+	return B_OK;
+}
+
+
 static status_t
 gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 {
@@ -2060,6 +2093,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	}
 	if (op == R5_GPU_GET_COUNTERS)
 		return gpu_get_counters(client, buffer, length);
+	if (op == R5_GPU_RING_FILL)
+		return gpu_ring_fill(buffer, length);
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)

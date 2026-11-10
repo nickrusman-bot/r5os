@@ -2068,6 +2068,8 @@ main()
 		return fail("log regs opcode");
 	if (R5_GPU_GET_COUNTERS != R5_GPU_OP_BASE + 28u)
 		return fail("counters opcode");
+	if (R5_GPU_RING_FILL != R5_GPU_OP_BASE + 29u)
+		return fail("ring fill opcode");
 	{
 		r5_gpu_counters same;
 		memset(&same, 0, sizeof(same));

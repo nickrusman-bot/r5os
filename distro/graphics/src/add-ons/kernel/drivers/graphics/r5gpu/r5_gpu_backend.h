@@ -52,6 +52,11 @@ typedef struct r5_gpu_backend_ops {
 	int			(*gtt_wc)(void);
 	int			(*fault_take)(uint32_t* pasid, uint32_t* vmid, uint64_t* addr);
 	int			(*map_vram)(uint64_t offset, uint64_t bytes, void** address);
+	/* One submit found the ring full and waited. */
+	void		(*ring_waited)(void);
+	/* waits, highest used dwords, ring length. Logging only. */
+	void		(*ring_fill)(uint32_t* waits, uint32_t* maxFill,
+				uint32_t* dwords);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

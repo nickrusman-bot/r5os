@@ -2208,6 +2208,10 @@ radeon_gfx9_submit(const uint32* packets, uint32 count, uint64 sequence,
 
 
 static uint64 sUserSequence = 0;
+/* How often a submit waited for room, and the highest used dword count.
+ * Logging only. The room decision below is unchanged. */
+static uint32 sRingWaits = 0;
+static uint32 sRingMaxFill = 0;
 /* Linux ring->current_ctx. 0 valid means the next job is a switch. */
 static r5_cs_ring_ctx sRingCtx;
 static int sGpuDebug = 0;
@@ -4126,7 +4130,34 @@ r5_ring_has_room(uint32 count)
 		return false;
 	uint64 wptr = sRadeonGfx9Ring.submitted;
 	uint64 rptr = r5_gfx9_rptr_count(dwords, wptr, r5_ring_rptr());
+	if (wptr >= rptr && (wptr - rptr) > sRingMaxFill)
+		sRingMaxFill = (uint32)(wptr - rptr);
 	return (uint64)count <= r5_gfx9_ring_space(dwords, wptr, rptr);
+}
+
+
+void
+r5_gfx9_ring_waited()
+{
+	sRingWaits++;
+}
+
+
+void
+r5_gfx9_ring_fill(uint32* waits, uint32* maxFill, uint32* dwords)
+{
+	uint32 length = 1024;
+	if (sRadeonGfx9Ring.ringBytes >= sizeof(uint32)) {
+		uint32 count = sRadeonGfx9Ring.ringBytes / sizeof(uint32);
+		if (count >= 2 && (count & (count - 1u)) == 0)
+			length = count;
+	}
+	if (waits != NULL)
+		*waits = sRingWaits;
+	if (maxFill != NULL)
+		*maxFill = sRingMaxFill;
+	if (dwords != NULL)
+		*dwords = length;
 }
 
 

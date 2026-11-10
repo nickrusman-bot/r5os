@@ -54,7 +54,9 @@ enum {
 	/* Read-only register and setting print for the self-test. */
 	R5_GPU_LOG_REGS = R5_GPU_OP_BASE + 27,
 	/* Counts only. Older callers never send this opcode. */
-	R5_GPU_GET_COUNTERS = R5_GPU_OP_BASE + 28
+	R5_GPU_GET_COUNTERS = R5_GPU_OP_BASE + 28,
+	/* Ring fill. Logging only. Older callers never send this opcode. */
+	R5_GPU_RING_FILL = R5_GPU_OP_BASE + 29
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -484,6 +486,17 @@ typedef struct {
 	uint32_t	tree_pages;
 	uint32_t	tree_pages_space;
 } r5_gpu_counters;
+
+/* How full the 1024-dword ring has been. waits is how often a submit
+ * found no room and waited. max_fill is the highest used dword count.
+ * dwords is the ring length. This call does not change the ring. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	waits;
+	uint32_t	max_fill;
+	uint32_t	dwords;
+} r5_gpu_ring_fill;
 
 static inline int
 r5_gpu_counters_match(const r5_gpu_counters* before,
