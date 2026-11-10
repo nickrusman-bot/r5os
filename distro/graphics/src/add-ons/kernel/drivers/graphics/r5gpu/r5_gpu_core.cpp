@@ -20,6 +20,7 @@
 #include "r5_log.h"
 #include "r5_span.h"
 #include "r5_vmid.h"
+#include "r5_wait.h"
 
 #include <KernelExport.h>
 #include <kernel.h>

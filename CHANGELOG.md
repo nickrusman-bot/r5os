@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The core includes the wait header
+
+`r5_gpu_core.cpp` includes `r5_wait.h`. The wait moved into the core on this branch, and the include was left behind, so a jam of this branch stopped because `r5_wait_step` was not declared. The include was first added on `cursor/gpu-m6-workload` and moved here so that each pull request builds on its own, in merge order.
+
 ## 2026-11-10 - The VRAM header is copied into the build
 
 `scripts/apply-radeon.py` copies `headers/private/r5gpu/r5_vram_pool.h`. The first jam of this stack stopped because that header was not in the Haiku tree.
