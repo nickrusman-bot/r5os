@@ -8,6 +8,7 @@
 
 
 #include "r5_gpu.h"
+#include "r5_selftest_ib.h"
 
 #include <FindDirectory.h>
 #include <Path.h>
@@ -180,15 +181,7 @@ stage_bo(FILE* out, uint64_t lowVa, uint64_t highVa, bool submitIb)
 				if (submitIb) {
 				stage_at(out, "ib");
 				uint32_t packet[8];
-				packet[0] = (3u << 30) | (3u << 16) | (0x37u << 8);
-				packet[1] = (5u << 8) | (1u << 20);
-				packet[2] = (uint32_t)word;
-				packet[3] = (uint32_t)(word >> 32);
-				packet[4] = 0xDEADBEEFu;
-				uint32_t nop = (3u << 30) | (0x3fffu << 16) | (0x10u << 8);
-				packet[5] = nop;
-				packet[6] = nop;
-				packet[7] = nop;
+				r5_selftest_fill_ib(packet, word);
 				memcpy(dst, packet, sizeof(packet));
 				if (doCtx != NULL)
 					ret = doCtx(device, &context);

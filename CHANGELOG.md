@@ -1,5 +1,37 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The indirect-buffer headers are copied into the build
+
+`scripts/apply-radeon.py` copies `r5_selftest_ib.h` and `r5_isolation_ib.h`. This branch adds those headers, so the copy belongs here: without it a jam of this branch stops because the self-test cannot include its header. The copy was first made on `cursor/gpu-m6-workload` and moved here so that each pull request builds on its own, in merge order.
+
+## 2026-11-10 - The command-list check follows the function, not the line
+
+A packet site is now the file, the function, and the order of packet lines in that function. Adding a comment above a packet no longer makes the checker say the packet was not emitted. The three words that already ran are back as they were: the stage `DMA_DATA` control is `0x60200000`, and the two chained indirect buffers in stage P are `6` and `0x68` without bit 23. Linux `soc15d.h` does not name destination select 2. The checker allows that one word and rejects any other select 2. Whether select 2 should be 3 waits for its own boot. Bit 23 stays allowed on an indirect buffer and is no longer required when the VMID field is 0, because the chained buffers ran without it and no cited line requires it there. The ring contents are unchanged.
+
+Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
+## 2026-11-10 - The command-list check names every builder
+
+`scripts/check-pm4.py` now fails a stream that uses a type-2 dword, a `DMA_DATA` destination select of 2, or an opcode it does not know. `LOAD_*` packets are checked as an address plus a count, because stage P does load context registers, and they are not register-set packets. `SET_SH_REG_INDEX` is checked. An indirect buffer whose VMID field is 0 must set the valid bit. The executable-flag check says in its output that it is a text search, not a page-table walk.
+
+The isolation command list and the self-test indirect buffer are headers that the program and the checker both include. The kernel ring stays a copy. The checker compares its constants with `gfx9_start.cpp`. The diagnostic `DMA_DATA` control word is `0x60300000` (destination select 3, L2). Linux `soc15d.h` does not define select 2. The same word in the stage P copy was updated, and the two stage P indirect buffers with VMID 0 now set the valid bit. The ring contents are unchanged.
+
+`scripts/read-stick-logs.py` reads the General UDisk and copies the self-test, syslog, session log and radeon_hd settings into `generated/boot-5625u-<n>/`. It does not write the stick. The reader was checked against the raw image on 10 Nov 2026: the volume root lists `home` and `system`, and `system/settings/bashrc` reads back. No stick was plugged in, so it did not copy a boot log.
+
+Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
+## 2026-11-10 - Command lists are checked before a test boot
+
+`scripts/check-pm4.py` reads Mesa 25.3.6 `src/amd/common/sid.h` and checks the hand-written command lists: the kernel clear-state ring (914 dwords), the isolation copy, the self-test indirect buffer, stage P, the user frame, the VM switch, and the compute indirect buffer. A `COPY_DATA` that says "register" and then carries a GPU address is rejected. That is the failure from stick 31. The isolation command list must still be mapped executable. That is the failure from stick 30. Three opcodes that this Mesa header no longer names (`PREAMBLE_CNTL`, `SWITCH_BUFFER`, `FRAME_CONTROL`) are accepted from Mesa 22.3 and from Linux `gfx_v9_0.c`, and the script says so.
+
+The leftovers from stick 32 are written in `docs/GPU-M6.md` and are not code yet. The fault status `00900c10` was the register dump (`fault %08lx`), not a `vm fault` line. Linux v6.12 `gmc_v9_0_process_interrupt` (line 545) reads `VM_L2_PROTECTION_FAULT_STATUS` and clears bit 0 of the fault control (lines 661–676). R5's handler does neither, and it queues a fault only for client `0x12` or `0x1b` with source 0. `print_fault()` then prints `vm fault addr` even when that line is absent. A guilty job still marks the GPU lost and does not reset it. A mode-2 reset through the PSP, then the same ring start, is described there and is not part of M6. The ring contract is unchanged.
+
+Host test, 10 Nov 2026: `python3 scripts/check-pm4.py` printed `ok pm4 48 streams, 89 opcodes`.
+
+`jam -q @r5-raw` finished at 00:35 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 8417 targets, `mesa_exit=0`. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because three artwork files are CRLF; the rest of the apply was run and the script was put back.
+
+VirtualBox, same image, new VDI, bridged. The welcome window came up, Try R5 reached Sign in, and Sign in reached the desktop: Tracker, Deskbar, and the home icons. No panic was on screen. Not a GPU test. Lavapipe was not started. The 5625U was not used.
+
 ## 2026-11-10 - app_server names a program it refuses
 
 On the first boot of a fresh VirtualBox disk, the desktop hung after Sign in. The syslog showed `Application for user 0 does not support the current server protocol (0)` twenty times right after the VirtualBox share was mounted, and once to three times on later boots that worked. The line did not say which program it was; the start order points at VBoxTray, not proven. The line now adds the sender's team id and command line. No other change.

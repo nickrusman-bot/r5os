@@ -3030,6 +3030,10 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	asm volatile("sfence" ::: "memory");
 	r5_gfx9_stage_bytes(src.cpu, 128);
 	uint32* words = (uint32*)ib.cpu;
+	/* DMA_DATA control 0x60200000. This is the word the stage ran.
+	 * Linux soc15d.h names DST_SEL 0, 1 and 3 and does not name 2.
+	 * The checker allows this word and rejects any other DST_SEL 2.
+	 * Whether 2 should be 3 waits for its own diagnostic boot. */
 	words[0] = 0xc0055000u;
 	words[1] = 0x60200000u;
 	words[2] = (uint32)src.va;

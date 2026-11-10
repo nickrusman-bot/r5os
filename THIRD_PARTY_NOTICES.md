@@ -213,6 +213,16 @@ Location: `distro/graphics/src/add-ons/accelerants/radeon_hd/clearstate_defs.h` 
 
 The files are unmodified. sha256 `70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285` and `e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5`. The permission text stays in each file. AMD does not endorse R5.
 
+### Mesa packet definitions
+
+Location: `distro/graphics/third_party/mesa-25.3.6/src/amd/common/sid.h`. Read by `scripts/check-pm4.py` on the host. Not compiled into the image.
+
+| Piece | Project | License |
+|---|---|---|
+| `sid.h` | Advanced Micro Devices, Inc., 2011, Mesa 25.3.6 `src/amd/common/sid.h` | MIT |
+
+The file is unmodified. sha256 `ab108b90f8d4443eaf6742f1bf6f4454fc43bd5c9f3373cb1e02f1f0cf5308d3`. The permission text stays in the file. AMD does not endorse R5.
+
 ## Not included
 
 The Linux `amdgpu` driver is not imported. The clear-state table above is the only file taken from that tree.
