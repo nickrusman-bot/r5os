@@ -215,3 +215,17 @@ QEMU, 2026-10-31 about 16:00 Europe/Amsterdam. TCG, `-cpu qemu64`, `-display non
 
 Still open: boot the 5625U and record the idle and busy samples. Write one P-state only after that, with safemode leaving the registers alone. Intel HWP on hardware was not executed.
 
+## Memory types
+
+AMD64 turns PAT on unless safemode disables it or the CPU is one of the Pentium parts whose PAT is left off. The boot line is `using PAT for memory type configuration`. A write-combined page then uses the PAT bit in the page table. Uncached is PCD and PWT. Write-back leaves those bits clear.
+
+`vm_set_area_memory_type()` still records an MTRR for device memory. With PAT, a write-combined RAM range is left out of the MTRRs, because the page table carries that type. Other types keep the previous rule: an overlap with the boot RAM MTRR is refused unless the type is write-combined.
+
+`vm_set_area_page_memory_type()` changes the page-table type and does not program an MTRR. It takes the address-space write lock. While the translation map is locked it looks up each page and runs `clflush` on that page in the kernel physical map. It does not flush the area's own address, so a user clone does not touch a user pointer under SMAP. The line size is CPUID leaf 1, EBX bits 15:8, times 8. Without PAT the call returns `B_NOT_SUPPORTED` and changes nothing. `vm_clone_area()` copies the memory type only for device areas, so a GTT clone stays write-back until this call sets it. The graphics driver does that on the clone when the buffer is write-combined. The pages were also flushed when the kernel area was marked.
+
+The physical map on AMD64 stays write-back for all RAM. A write-combined area therefore has a write-back alias. That is a known limit of `gfx9_wc_gtt`, and the setting stays off until a later change covers the direct map the way Linux `set_pages_array_wc()` does.
+
+The flush is empty on the other architectures, and those architectures report the page type as unsupported. ARM64 and RISC-V are not this path.
+
+Write-combined graphics buffers stay off unless the radeon_hd setting `gfx9_wc_gtt` is true. VirtualBox reached the desktop after a reboot on 10 Nov 2026. The syslog line was not captured. The 5625U was not used.
+

@@ -4597,6 +4597,65 @@ vm_set_area_memory_type(area_id id, phys_addr_t physicalBase, uint32 type)
 }
 
 
+/* SPDX-SnippetBegin
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+ * Other architectures cannot name a page type, and they do not flush.
+ * AMD64 replaces both when PAT is on. The write lock is held because
+ * the type and the entries change together. The flush is after the
+ * translation-map unlock, which has already shot the TLB down.
+ */
+extern "C" __attribute__((weak)) bool
+arch_vm_page_memory_type_supported(uint32 type)
+{
+	(void)type;
+	return false;
+}
+
+
+extern "C" __attribute__((weak)) void
+arch_vm_flush_memory_type_range(addr_t address, size_t bytes)
+{
+	(void)address;
+	(void)bytes;
+}
+
+
+status_t
+vm_set_area_page_memory_type(area_id id, uint32 type)
+{
+	AddressSpaceWriteLocker locker;
+	VMArea* area;
+	status_t status = locker.SetFromArea(id, area);
+	if (status != B_OK)
+		return status;
+
+	uint32 oldType = area->MemoryType();
+	if (type == oldType)
+		return B_OK;
+	if (!arch_vm_page_memory_type_supported(type))
+		return B_NOT_SUPPORTED;
+
+	VMTranslationMap* map = area->address_space->TranslationMap();
+	addr_t base = area->Base();
+	addr_t end = base + area->Size();
+	map->Lock();
+	area->SetMemoryType(type);
+	map->ProtectArea(area, area->protection);
+	for (addr_t virtualAddress = base; virtualAddress < end;
+			virtualAddress += B_PAGE_SIZE) {
+		phys_addr_t physicalAddress;
+		uint32 flags;
+		if (map->Query(virtualAddress, &physicalAddress, &flags) != B_OK)
+			continue;
+		arch_vm_flush_memory_type_range((addr_t)physicalAddress, B_PAGE_SIZE);
+	}
+	map->Unlock();
+	return B_OK;
+}
+/* SPDX-SnippetEnd */
+
+
 /*!	This function enforces some protection properties:
 	 - kernel areas must be W^X (after kernel startup)
 	 - if B_WRITE_AREA is set, B_KERNEL_WRITE_AREA is set as well

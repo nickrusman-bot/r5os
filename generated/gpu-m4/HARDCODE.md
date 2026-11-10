@@ -4,18 +4,18 @@ Paper inventory from `generated/gpu-m4/HARDCODE-AUDIT.md` step 1. Line numbers a
 
 | # | File:line | What | Value | Linux source | Risk | Plan |
 |---|---|---|---|---|---|---|
-| 1 | `r5_gpu.cpp:542` | `num_shader_engines` | 1 | Linux v6.12 `gfx_v9_0.c:gfx_v9_0_gpu_early_init` for GC 9.3 (one SE). Not read from `gpu_info` yet | high | M5 passport |
-| 2 | `r5_gpu.cpp:543` | `num_shader_arrays_per_engine` | 1 | same function, `max_sh_per_se` for Renoir | high | M5 passport |
-| 3 | `r5_gpu.cpp:63` and `:546` | `kCuPerSh` / `num_cu_per_sh` | 8 | Linux v6.12 `gfx_v9_0_gpu_early_init` Renoir `max_cu_per_sh` 8. The active bitmap is read from `CC_GC_SHADER_ARRAY_CONFIG`; the width of that mask is this constant | high | M5 passport, from `gpu_info` or the register |
+| 1 | `r5_passport.cpp` | `num_shader_engines` | 1, then discovery | Linux v6.12 `amdgpu_discovery_get_gfx_info` `gc_num_se`. The GC 9.3 row is the cross-check | high | M6. Discovery wins and logs `passport mismatch` |
+| 2 | `r5_passport.cpp` | `num_shader_arrays_per_engine` | 1, then discovery | `gc_num_sa_per_se` | high | M6, same as row 1 |
+| 3 | `r5_passport.cpp` | `num_cu_per_sh` | 8, then discovery | `2 * (gc_num_wgp0_per_sa + gc_num_wgp1_per_sa)`. The active bitmap is still `CC_GC_SHADER_ARRAY_CONFIG`; the width follows discovery when it is 1–16 | high | M6 |
 | 4 | `r5_gpu.cpp:541` | `family` | `R5_AMDGPU_FAMILY_RV` | Linux v6.12 `amdgpu_device.c` family for Renoir/Cezanne is `AMDGPU_FAMILY_RV` | medium | M5 device table |
-| 5 | `r5_gpu.cpp:581–582` | `gpu_counter_freq` only when PCI `0x15e7` | 100000 kHz | Linux v6.12 `amdgpu_kms.c` copies `adev->clock.xclk`. Mesa's capture for this PCI id is 100000. Other ids stay 0 | high | M5, read `xclk`; delete the PCI test |
+| 5 | `r5_passport.cpp` | `gpu_counter_freq` | 100000 for Renoir, ATOM printed beside it | Linux tag v6.12 `soc15.c` `soc15_get_xclk()` lines 326-330 return 10000 for MP1 12.0.0 and 12.0.1. `amdgpu_kms.c` line 863 stores that times 10 | high | M6 |
 | 6 | `r5_gpu.cpp:510–511` | `vram_bytes` and `gtt_bytes` | framebuffer size in KiB, and the same number again for GTT | Linux v6.12 `amdgpu_kms.c:amdgpu_info_ioctl` reports `real_vram_size` and `gart_size`. The 6 Nov 2026 capture is VRAM 512M and GTT 15701M. R5 reports the BAR twice | high | M5 passport. GTT is a quarter of RAM in the M5 limit, not the BAR |
-| 7 | `r5_gpu.cpp:564–569` | engine and memory clocks, memory type, width | 1800000 / 1333000 kHz, type 11, 128 bits | Mesa drm-shim record for device `15e7`. Linux reads the SMU and `atom_get_clock_info` / the UMC table. min equals max, as the non-DPM branch of `amdgpu_kms.c` | high | M5, or stays until the SMU is read. Marked temporary |
+| 7 | `r5_passport.cpp` | engine and memory clocks, memory type, width | ATOM, or 0 | `atom_firmware_info_v3_1` boot clocks times 10. APU `integratedsysteminfo` v1.11/v1.12 or v2.1–v2.3. LpDdr4 is type 11. min equals max. The Mesa 1800000/1333000/128 record is not written | high | M6 |
 | 8 | `r5_gpu.cpp:556` | `num_hw_gfx_contexts` | 8 | Linux v6.12 `gfx_v9_0.c:gfx_v9_0_gpu_early_init`, IP 9.3.0 | low | M5 passport |
 | 9 | `r5_gpu.cpp:558` | `ce_ram_size` | `0x8000` | Linux v6.12 `gfx_v9_0.c:gfx_v9_0_sw_init` | low | M5 passport |
 | 10 | `r5_gpu.cpp:560` | `pte_fragment_size` | 2097152 | default VM fragment 9: `(1 << 9) * 4096`. The capture logs fragment size 9-bit | low | M5, from the VM size setup |
-| 11 | `r5_gpu.cpp:570` | `gc_double_offchip_lds_buf` | 1 | Renoir config Linux copies into `AMDGPU_INFO_DEV_INFO` | medium | M5 passport |
-| 12 | `r5_gpu.cpp:573–577` | VGPR, TCC, GS depths | 256, 4, 32, 1792, 32 | Linux v6.12 GFX9 config copied into the info struct (`max_gprs`, `max_texture_channel_caches`, GS table) | medium | M5 passport |
+| 11 | `r5_passport.cpp` | `gc_double_offchip_lds_buf` | 1, then discovery | `gc_double_offchip_lds_buffer` | medium | M6 |
+| 12 | `r5_passport.cpp` | VGPR, TCC, GS depths | 256, 4, 32, 1792, 32, then discovery | `gc_num_gprs`, `gc_num_gl2c`, `gc_gs_table_depth`, `gc_gsprim_buff_depth`. `max_gs_waves_per_vgt` stays the row | medium | M6 |
 | 13 | `r5_gpu.cpp:585–586` | VA alignment and GART page | 4096, 4096 | page size. Linux `AMDGPU_GPU_PAGE_SIZE` | low | stays, it is the page size |
 | 14 | `r5_gpu.cpp:590–596` | GFX IP 9.3, IB align 32/4, one GFX ring, compute rings 0 | constants | Linux v6.12 `gfx_v9_0_sw_init` / IP discovery for GC 9.3.0. Compute is off until its own step | medium | M5 passport for the version; rings stay until compute ships |
 | 15 | `r5_gpu.h:231–234` | `external_rev` by PCI id | `0x15e7`/`0x1638` add `0xa1`; `0x1636`/`0x164c` add `0x91` | Linux v6.12 `nbio_v7_0.c` strap plus the Renoir/Cezanne revision offset in `soc15.c` | medium | M5 device table. The K path may ask the table; bytes stay |
@@ -23,7 +23,7 @@ Paper inventory from `generated/gpu-m4/HARDCODE-AUDIT.md` step 1. Line numbers a
 | 17 | `gfx9_start.cpp:1854` | which PCI ids get the GFX9 ring | `0x15e7`, `0x1636`, `0x1638` | the device table in `driver.cpp:624–627` is the one place ids should be named | high | M5. Fixed K path asks the table and stays byte-for-byte |
 | 18 | `gpu.cpp:1002` | PCI `0x15e7`/`0x1636`/`0x1638` | those ids | same | medium | M5 device table |
 | 19 | `gfx9_k12.cpp:1186` | PCI test around the K path | `0x15e7`, `0x1636`, `0x1638` | same | high | M5. Fixed contract, AGENTS.md: behaviour unchanged |
-| 20 | `r5_gpu.cpp:579–581` | PCI `0x15e7` gates the counter frequency | `0x15e7` | see row 5 | high | M5 |
+| 20 | `r5_passport.cpp` | the PCI test on the counter frequency | removed | see row 5. The four GC 9.3 ids still name the cross-check row | high | M6 |
 | 21 | `driver.cpp:624–627` | the existing device table | `0x15e7` Renoir (Barcelo), `0x1636` Renoir, `0x1638` Cezanne | Linux v6.12 `amdgpu_drv.c` pciid list and `vi.c` / `nv.c` chip names. This is the allowed place for a PCI id | low | stays, and grows into `r5_amd_device` |
 | 22 | `r5_gpu.cpp:64` | `kMaxBo` | 256 | no Linux counterpart. A process limit, not a hardware value | medium | M5, still a limit, counted |
 | 23 | `r5_gpu.cpp:65` | `kMaxClientBo` | 256 | same | medium | M5 |

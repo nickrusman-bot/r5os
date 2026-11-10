@@ -93,9 +93,10 @@ typedef struct {
 #define R5_GPU_DOMAIN_VRAM 1u
 #define R5_GPU_DOMAIN_GTT 2u
 
-/* AMDGPU_GEM_CREATE_CPU_GTT_USWC, bit 2. The kernel accepts the bit.
- * No RAM area is given a write-combined memory type. A GTT page stays
- * cached and snooped, the same as amdgpu_bo_support_uswc() false. */
+/* AMDGPU_GEM_CREATE_CPU_GTT_USWC, bit 2. The kernel makes the GTT area
+ * write-combined only when the radeon_hd setting gfx9_wc_gtt is true.
+ * The default is off, so a GTT page stays cached and snooped, the same
+ * as amdgpu_bo_support_uswc() false. */
 #define R5_GPU_BO_WC 4u
 /* AMDGPU_GEM_CREATE_VRAM_CLEARED, bit 3. User VRAM is cleared on every
  * allocation, including a span a previous owner freed. */

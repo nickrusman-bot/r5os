@@ -31,6 +31,7 @@
 #include <arch/cpu.h>
 
 #include <arch/x86/bios.h>
+#include <arch/x86/arch_kernel.h>
 
 
 //#define TRACE_ARCH_VM
@@ -326,6 +327,66 @@ ensure_temporary_ranges_space(int32 count)
 
 	return true;
 }
+
+
+/* SPDX-SnippetBegin
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+ * clflush after the page tables change. The address is physical.
+ * The flush walks the kernel physical map, never the area's own
+ * address, so SMAP does not fault on a user clone. The line size is
+ * CPUID leaf 1, EBX bits 15:8, times 8.
+ */
+extern "C" bool
+arch_vm_page_memory_type_supported(uint32 type)
+{
+	if (type == 0 || type == B_WRITE_BACK_MEMORY)
+		return true;
+	return x86_use_pat();
+}
+
+
+static uint32
+memory_type_flush_bytes()
+{
+	static uint32 bytes = 0;
+	uint32 eax;
+	uint32 ebx;
+	uint32 ecx;
+	uint32 edx;
+
+	if (bytes != 0)
+		return bytes;
+	asm volatile("cpuid"
+		: "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+		: "a"(1));
+	bytes = ((ebx >> 8) & 0xff) * 8;
+	return bytes;
+}
+
+
+extern "C" void
+arch_vm_flush_memory_type_range(addr_t address, size_t bytes)
+{
+	uint32 step;
+	addr_t line;
+	addr_t end;
+	addr_t mapped;
+
+	if (!x86_use_pat() || bytes == 0 || address + bytes < address)
+		return;
+	step = memory_type_flush_bytes();
+	if (step == 0 || address >= KERNEL_PMAP_SIZE
+		|| bytes > KERNEL_PMAP_SIZE - address)
+		return;
+	mapped = KERNEL_PMAP_BASE + address;
+	line = mapped & ~((addr_t)step - 1);
+	end = mapped + bytes;
+	for (; line < end; line += step)
+		asm volatile("clflush (%0)" : : "r"(line) : "memory");
+	asm volatile("sfence" ::: "memory");
+}
+/* SPDX-SnippetEnd */
 
 
 static status_t

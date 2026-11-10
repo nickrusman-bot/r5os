@@ -63,6 +63,14 @@ static bool sInvRange = true;
 static bool sHubLinux = false;
 static bool sVmids = false;
 static bool sFaultIrq = false;
+static bool sWcGtt = false;
+
+bool
+r5_gfx9_wc_gtt()
+{
+	return sWcGtt;
+}
+
 
 void
 r5_gfx9_set_inv_range(int on)
@@ -1976,6 +1984,8 @@ r5_gfx9_kernel_start(radeon_info& info)
 			false, true);
 		sVmidPerFile = get_driver_boolean_parameter(settings,
 			"gfx9_vmid_per_file", false, true);
+		sWcGtt = get_driver_boolean_parameter(settings, "gfx9_wc_gtt",
+			false, true);
 		if (sVmidPerFile && r5_vmid_file_ok(1, sVmids ? 1 : 0) == 0) {
 			knote("gfx9_vmid_per_file needs gfx9_vmids");
 			sVmidPerFile = false;

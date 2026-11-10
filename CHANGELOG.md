@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The page-type flush uses the physical map
+
+`vm_set_area_page_memory_type()` looks up each page and runs `clflush` on that page in the kernel physical map. It does not flush the area's own address, so a user clone is not a user pointer under SMAP. The line size is CPUID leaf 1, EBX bits 15:8, times 8. Linux tag v6.12 was read for the two passport facts: `soc15.c` `soc15_get_xclk()` lines 326-330 return 10000 for MP1 12.0.0 and 12.0.1, and `amdgpu_kms.c` line 863 stores that times 10. `amdgpu_discovery_set_ip_blocks()` (line 2425) has no `CHIP_RENOIR` case. `generated/gpu-m4/HARDCODE.md` row 5 names the same clock lines. Not booted. QEMU with SMAP was not run.
+
+## 2026-11-10 - Write-combined graphics memory stays a page type
+
+With PAT, only a write-combined RAM range is left out of the MTRRs. Other types keep the previous overlap rule. `vm_set_area_page_memory_type()` takes the address-space write lock, changes the page tables, then runs `clflush` on that area. It does not run `wbinvd`, and `vm_set_area_memory_type()` no longer flushes on the way in. Without PAT the page-type call returns `B_NOT_SUPPORTED`. The program's clone of a write-combined buffer gets that type after `vm_clone_area()`, which only copies the type for device areas. The physical map stays write-back. That alias is the known limit of `gfx9_wc_gtt` in `docs/KERNEL.md`. The library no longer reads the settings file. It asks for write-combining when the caller did, and the kernel reply is the flags that were used.
+
+Renoir's `gpu_counter_freq` is 100000 kHz, from Linux `soc15_get_xclk()` (MP1 12.0 returns 10000) times 10. The ATOM reference clock is printed once as `passport counter_freq … atom …`. The row is the device table's `RADEON_RENOIR` entry, which already includes `164c`. `passport discovery missing` is the expected Renoir line, because Linux does not read a discovery binary for that chip. The mismatch and missing lines are printed once per boot. The eight contexts, the 32 KiB constant engine, and the memory-type map name the Linux functions they come from. `generated/gpu-m4/HARDCODE.md` is not in this tree, so its row 5 was not edited. Not booted.
+
 ## 2026-11-10 - The core includes the wait header
 
 `r5_gpu_core.cpp` includes `r5_wait.h`. The wait moved into the core on this branch, and the include was left behind, so a jam of this branch stopped because `r5_wait_step` was not declared. The include was first added on `cursor/gpu-m6-workload` and moved here so that each pull request builds on its own, in merge order.
@@ -41,6 +51,20 @@ The isolation command list and the self-test indirect buffer are headers that th
 `scripts/read-stick-logs.py` reads the General UDisk and copies the self-test, syslog, session log and radeon_hd settings into `generated/boot-5625u-<n>/`. It does not write the stick. The reader was checked against the raw image on 10 Nov 2026: the volume root lists `home` and `system`, and `system/settings/bashrc` reads back. No stick was plugged in, so it did not copy a boot log.
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
+## 2026-11-10 - The graphics card reports its own clocks
+
+The AMD device block no longer writes the Mesa record for device `15e7`. `r5_passport.cpp` keeps one GC 9.3 row for PCI `15e7`, `1636`, `1638`, and `164c`. That row is the cross-check. When the carveout is mapped, 10 KiB at the end of that window minus 64 KiB is the discovery binary (Linux v6.12 `DISCOVERY_TMR_SIZE` and `DISCOVERY_TMR_OFFSET`, signature `0x28211407`). A checksum failure, or no carveout, logs `passport discovery missing` and keeps the row. A field that disagrees logs `passport mismatch` and the discovery value is the one reported. An unknown PCI id logs `passport no row` and does not invent one.
+
+Engine and memory clocks come from ATOM `firmwareinfo` (boot value times 10, min equal to max). `gpu_counter_freq` is `smu_info` `core_refclk_10khz` times 10. The memory type and width come from `integratedsysteminfo`. A missing table leaves the field 0. Firmware versions were already the ucode header values and still are. The GFX9 ring, the stop order, the page-table base, the PTE flags, the invalidate word, and the ring-index formula are unchanged. `distro/BUILD` is unchanged.
+
+`vm_set_area_page_memory_type()` changes the page-table memory type and does not program an MTRR. `vm_set_area_memory_type()` writes the caches back with `wbinvd` before that page-table update when PAT is on. A range inside the boot RAM MTRR is not a second MTRR while PAT is on. Device memory outside that RAM still gets an MTRR. Other architectures keep an empty flush.
+
+A GTT buffer is write-combined only when the radeon_hd setting `gfx9_wc_gtt` is true and the buffer asked for it. The setting is off, so the page stays cached and snooped, as before. The library does not pass the flag unless that setting is on. The kernel drops the flag when the setting is off.
+
+`jam -q radeon_hd` linked the driver and the kernel, `driver_exit=0`. `jam -q @r5-raw` then finished with `jam_exit=0` and `mesa_exit=0`, 8431 targets, at about 10:01 Europe/Amsterdam on 10 Nov 2026. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because of CRLF; that one line was skipped for the apply and the script in the tree was not changed. `scripts/check-pm4.py` was not part of this round. The host GPU test still stops on the pre-existing `gfx9_inv_range` mark and was not re-run.
+
+VirtualBox, same image, new VDI, bridged. The first start stayed on a blue screen with a small window at the top (`VideoMode` 1024x768). After a reboot the desktop was up. Tracker showed `/boot/system`, Terminal was open, and Settings was open on its home page. The Deskbar listed Tracker, Terminal, and Settings. The guest clock read 9:06 AM, about an hour behind this machine. No panic was on screen. The guest was then shut down. Not a GPU test. Lavapipe was not started. The 5625U was not used. The syslog line `using PAT for memory type configuration` was not captured.
 
 ## 2026-11-10 - The GPU core is split from the AMD backend
 
