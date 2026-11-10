@@ -47,7 +47,11 @@ static uint32 sIrq = 0;
 static sem_id sEopSem = -1;
 static uint8* sIhRing = NULL;
 static volatile uint32* sIhWriteback = NULL;
+static uint64 sIhWbOffset = 0;
+static bool sIhWbReady = false;
 static uint32 sIhRptr = 0;
+static uint32 sMsiCount = 0;
+static uint32 sEarlyCount = 0;
 static uint32 sIhEntries = 0;
 static uint32 sIhOther = 0;
 extern bool r5_gpu_log_error();
@@ -407,17 +411,74 @@ r5_gfx9_fault_take(uint32* pasid, uint32* vmid, uint64* addr)
 }
 
 
+/* The carve-out is the read. The pool pointer is the fallback until
+ * map_carveout has run. No second mapping is created. */
+static uint32
+ih_writeback()
+{
+	uint32 word = 0;
+	if (sIhWbReady) {
+		uint8* cpu = r5_gfx9_vram_cpu(sIhWbOffset);
+		if (cpu != NULL)
+			word = *(volatile uint32*)cpu;
+		else if (sIhWriteback != NULL)
+			word = *sIhWriteback;
+	}
+	return word & 0x0003fffc;
+}
+
+
+static void
+ih_set_rptr(uint32 rptr)
+{
+	sIhRptr = rptr;
+	*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_RPTR)) = rptr;
+}
+
+
+void
+r5_gfx9_ih_counts(uint32* msi, uint32* early, uint32* eop)
+{
+	if (msi != NULL)
+		*msi = sMsiCount;
+	if (early != NULL)
+		*early = sEarlyCount;
+	if (eop != NULL)
+		*eop = sEopCount;
+}
+
+
 static int32
 ih_handler(void* data)
 {
 	(void)data;
-	if (sIhRing == NULL || sIhWriteback == NULL || sInfo == NULL)
+	if (sIhRing == NULL || sInfo == NULL || !sIhWbReady)
 		return B_UNHANDLED_INTERRUPT;
-	uint32 wptr = *sIhWriteback & 0x0003fffc;
+	sMsiCount++;
 	uint32 rptr = sIhRptr;
-	if (wptr == rptr)
-		return B_UNHANDLED_INTERRUPT;
 	bool woke = false;
+	bool found = false;
+	/* Pass 0 walks what the writeback already shows. An empty pass still
+	 * writes IH_RB_RPTR, because RPTR_REARM sends the next interrupt only
+	 * after that write. Pass 1 reads the write pointer once more. */
+	for (int pass = 0; pass < 2; pass++) {
+	uint32 wptr = ih_writeback();
+	if (pass == 1 && wptr == rptr)
+		wptr = kread(sInfo, oss_byte(mmIH_RB_WPTR)) & 0x0003fffc;
+	if (pass == 0 && wptr == rptr)
+		sEarlyCount++;
+	if (wptr == rptr) {
+		if (pass == 0) {
+			ih_set_rptr(rptr);
+			continue;
+		}
+		/* Shared legacy line. The read pointer is already written.
+		 * Another device on this line still needs the interrupt. */
+		if (!found && !sMsi)
+			return B_UNHANDLED_INTERRUPT;
+		return woke ? B_INVOKE_SCHEDULER : B_HANDLED_INTERRUPT;
+	}
+	found = true;
 	uint32 walked = 0;
 	while (rptr != wptr && walked < (kIhBytes / 32)) {
 		r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(sIhRing + rptr);
@@ -488,8 +549,8 @@ ih_handler(void* data)
 		rptr = (rptr + 32) & (kIhBytes - 1);
 		walked++;
 	}
-	sIhRptr = rptr;
-	*(volatile uint32*)(sInfo->registers + oss_byte(mmIH_RB_RPTR)) = rptr;
+	ih_set_rptr(rptr);
+	}
 	return woke ? B_INVOKE_SCHEDULER : B_HANDLED_INTERRUPT;
 }
 
@@ -692,6 +753,8 @@ ih_on()
 	memset(ring, 0, kIhBytes + 4);
 	sIhRing = ring;
 	sIhWriteback = (volatile uint32*)(ring + kIhBytes);
+	sIhWbOffset = ringOffset + kIhBytes;
+	sIhWbReady = true;
 	sIhRptr = 0;
 	uint32 location = kread(sInfo, gc_byte(mmMC_VM_FB_LOCATION_BASE));
 	uint64 ringMc = r5_gfx9_fb_start(location) + ringOffset;

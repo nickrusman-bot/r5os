@@ -330,11 +330,11 @@ The likely reason the handler saw nothing new is which window it read. The IH wr
 
 ### The fix, in its own change
 
-The driver change is a later pull request, before the step 5 stick. This document does not make it. The one-second semaphore stays the backup for a missing interrupt. It is not shortened. The fence packet, the ring, and the GPU addresses stay as they are.
+The driver change is this pull request. The one-second semaphore stays the backup for a missing interrupt. It is not shortened. The fence packet, the ring, and the GPU addresses stay as they are. VirtualBox has no Radeon, so this change is compiled there and not measured. The proof is still the step 5 stick.
 
-- `ih_handler` writes `IH_RB_RPTR` even when it found nothing, and reads the write pointer once more after that write.
+- `ih_handler` writes `IH_RB_RPTR` even when it found nothing, and reads the write pointer once more after that write. When both reads are empty and the line is shared legacy (`sMsi` is false), the handler returns `B_UNHANDLED_INTERRUPT` after that write. An MSI empty visit stays handled.
 - If the writeback word still equals the read pointer, the handler reads the `IH_RB_WPTR` register over MMIO.
 - The user fence and the IH writeback are read through the carve-out mapping, `r5_gfx9_vram_cpu`, not through the frame-buffer window. `map_carveout` (line 2037) runs after `run_k1` (line 2033), so until the carve-out exists the handler uses a fallback and still writes the read pointer. The same page is not mapped uncached beside the write-combining mapping. x86 forbids two memory types on one page.
-- The self-test prints four counters once, at the end: MSIs received, early returns, end-of-pipe entries, and retire wakes.
+- The self-test prints four counters once, at the end: MSIs received, early returns, end-of-pipe entries, and retire wakes. `R5_GPU_IH_COUNTS` and `R5_GPU_RING_FILL` copy the caller buffer with `gpu_copy_in` and `gpu_copy_out`. A kernel address is rejected.
 
 The proof rides on step 5, boot 1, in `check.sh`. The pass line is VulkanTeapot's `cpu span ms` for 100 frames under 2000, and the end-of-pipe counter at least 100. The later `fence timeout` and fault `00700c10` stay a separate problem. They are the hang with no reset, and this fix does not claim to clear them.

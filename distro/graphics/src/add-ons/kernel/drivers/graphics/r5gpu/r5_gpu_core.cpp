@@ -342,11 +342,22 @@ gpu_retire_thread(void* data)
 }
 
 
+static int32 sRetireWakes = 0;
+
+
 extern "C" void
 r5_gpu_retire_wake()
 {
+	atomic_add(&sRetireWakes, 1);
 	if (sRetireSem >= 0)
 		release_sem_etc(sRetireSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
+extern "C" uint32
+r5_gpu_retire_wakes()
+{
+	return (uint32)sRetireWakes;
 }
 
 
@@ -2056,12 +2067,10 @@ static status_t
 gpu_ring_fill(void* buffer, size_t length)
 {
 	r5_gpu_ring_fill out;
-	if (buffer == NULL || length < sizeof(out))
-		return B_BAD_VALUE;
-	memset(&out, 0, sizeof(out));
-	if (user_memcpy(&out, buffer, sizeof(out)) != B_OK)
-		return B_BAD_ADDRESS;
-	if (out.version != 1 || out.size < sizeof(out))
+	status_t status = gpu_copy_in(buffer, length, &out, sizeof(out));
+	if (status != B_OK)
+		return status;
+	if (out.version != 1)
 		return B_BAD_VALUE;
 	out.waits = 0;
 	out.max_fill = 0;
@@ -2074,9 +2083,25 @@ gpu_ring_fill(void* buffer, size_t length)
 			(unsigned long)out.waits, (unsigned long)out.max_fill,
 			(unsigned long)out.dwords);
 	}
-	if (user_memcpy(buffer, &out, sizeof(out)) != B_OK)
-		return B_BAD_ADDRESS;
-	return B_OK;
+	return gpu_copy_out(buffer, length, &out, sizeof(out));
+}
+
+
+void r5_gfx9_ih_counts(uint32* msi, uint32* early, uint32* eop);
+
+
+static status_t
+gpu_ih_counts(void* buffer, size_t length)
+{
+	r5_gpu_ih_counts out;
+	status_t status = gpu_copy_in(buffer, length, &out, sizeof(out));
+	if (status != B_OK)
+		return status;
+	if (out.version != 1)
+		return B_BAD_VALUE;
+	r5_gfx9_ih_counts(&out.msi, &out.early, &out.eop);
+	out.wake = r5_gpu_retire_wakes();
+	return gpu_copy_out(buffer, length, &out, sizeof(out));
 }
 
 
@@ -2095,6 +2120,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		return gpu_get_counters(client, buffer, length);
 	if (op == R5_GPU_RING_FILL)
 		return gpu_ring_fill(buffer, length);
+	if (op == R5_GPU_IH_COUNTS)
+		return gpu_ih_counts(buffer, length);
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)
