@@ -39,7 +39,7 @@ from tracker_lib import (
     write_r5_status,
 )
 
-REPO = "nickrusman-bot/r5os"
+REPO = "r5-operating-system/r5os"
 API = "https://api.github.com"
 MAP_PATH = ROOT / "tracker" / "github.tsv"
 MAP_FIELDS = ("id", "number", "state")

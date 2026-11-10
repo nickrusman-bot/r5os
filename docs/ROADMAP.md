@@ -30,9 +30,9 @@ The order is impact, not ticket number.
    - **M5 is done on the 5625U**, with two gaps: the driver's fault line, and the GPU staying up after a guilty job. The M5 row in `docs/GPU-ARCHITECTURE.md` has the evidence.
    - **The goal:** when a supported GPU passes its checks, R5 renders on the GPU by default; otherwise in software. Haiku applications stay unchanged.
    - Display (DCN modesetting, more than one screen, vsync) is a separate track. Today the picture is still the firmware one.
-2. **Finish multi-user** ([#63](https://github.com/nickrusman-bot/r5os/issues/63)).
-   - The lock screen is done ([#64](https://github.com/nickrusman-bot/r5os/issues/64), build 10013).
-   - Open: the keyboard shortcut for the lock screen ([#72](https://github.com/nickrusman-bot/r5os/issues/72)), and guest plus Public/Shared ([#65](https://github.com/nickrusman-bot/r5os/issues/65)).
+2. **Finish multi-user** ([#63](https://github.com/r5-operating-system/r5os/issues/63)).
+   - The lock screen is done ([#64](https://github.com/r5-operating-system/r5os/issues/64), build 10013).
+   - Open: the keyboard shortcut for the lock screen ([#72](https://github.com/r5-operating-system/r5os/issues/72)), and guest plus Public/Shared ([#65](https://github.com/r5-operating-system/r5os/issues/65)).
    - Still one graphical session at a time. Do not skip isolation, and do not treat a list of names as "done".
 3. **Other hardware on the Ryzen 5 5625U:** Wi-Fi on the laptop's own card, backlight, sleep and resume, and HiDPI without breaking the layout. None of these has been shown on the metal yet.
 4. **Browser:** a current WebKit or Qt browser in the image. WebPositive is the weak daily application.
@@ -102,7 +102,7 @@ Do not start these during an unrelated bugfix.
     3. Integration with the Media Kit comes after that.
   - **Before M7:** build nothing for `BVulkanView`, but design the M7 presentation (the R5 WSI layer) so that `BVulkanView` can sit on top of it.
 - **Audio and MIDI.** Improve streaming and device interop, in small steps. The contracts are `docs/USB-AUDIO.md`, `docs/HDMI-AUDIO.md`, `docs/VIRTUAL-SURROUND.md` and `docs/MIDI2.md`.
-- **Mixxx** is a side quest ([#55](https://github.com/nickrusman-bot/r5os/issues/55), `docs/MIXXX.md`). It is not an image application, and not while multi-user is open.
+- **Mixxx** is a side quest ([#55](https://github.com/r5-operating-system/r5os/issues/55), `docs/MIXXX.md`). It is not an image application, and not while multi-user is open.
 
 ## Architectures
 

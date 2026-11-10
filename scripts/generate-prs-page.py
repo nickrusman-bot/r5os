@@ -152,7 +152,7 @@ def load_github_prs() -> dict[int, dict[str, str]]:
                 "pr",
                 "list",
                 "--repo",
-                "nickrusman-bot/r5os",
+                "r5-operating-system/r5os",
                 "--state",
                 "merged",
                 "--limit",
@@ -876,7 +876,7 @@ def render_html(prs: list[dict[str, object]]) -> str:
         <a href="prs.html">Pull Requests</a>
         <a href="wallpapers.html">Wallpapers</a>
         <a href="brand-guide.html">Visual Brand Guide</a>
-        <a href="https://github.com/nickrusman-bot/r5os">GitHub</a>
+        <a href="https://github.com/r5-operating-system/r5os">GitHub</a>
       </div>
     </footer>
 
@@ -931,7 +931,7 @@ def render_html(prs: list[dict[str, object]]) -> str:
               <span class="pr-accent-bar" style="background-color: ${{p.color}};"></span>
               <div class="pr-top-row">
                 <div class="pr-title-group">
-                  <a class="pr-number" href="https://github.com/nickrusman-bot/r5os/pull/${{p.number}}" target="_blank" rel="noopener">#${{p.number}}</a>
+                  <a class="pr-number" href="https://github.com/r5-operating-system/r5os/pull/${{p.number}}" target="_blank" rel="noopener">#${{p.number}}</a>
                   <h2 class="pr-title">${{escapeHtml(p.title)}}</h2>
                 </div>
                 <div class="pr-stats mono">
