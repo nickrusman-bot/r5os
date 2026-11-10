@@ -14,6 +14,15 @@ Not yet, and not part of M6:
 - **The GPU was lost afterwards,** in the older R1c, selftest and ib stages (`gpu lost watchdog ... fault 00700c10`), the same gap as M5: no reset yet.
 - **Boot 2** (`gfx9_wc_gtt true`) did not run. Write-combining stays off by default.
 - **Shutdown** still needs a long press (compared with Linux on paper only).
+## 2026-11-10 - First 5625U boot of the M6 stick
+
+The stick written at 14:47 Europe/Amsterdam was read back at 15:12. One self-test file, no `r5-gpu-selftest.old.txt`. The settings file is still boot 1, last line `gfx9_wc_gtt false`. Haiku rotated the log: `system/var/log/syslog.1` is 524432 bytes and has the one boot banner, and `syslog` is the last 8966 bytes. `check.sh` reads only `syslog`, so it printed FAIL for lines that are in `syslog.1`. Logs are `generated/boot-5625u-33/`.
+
+`syslog.1` has `GFX9 ring contract verified`, `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `k0 ok fence`, `k1 ok msi irq 61`, `k2 ok gart`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 3 seen 3`. There is no `passport mismatch`. The lines are `passport discovery missing`, `passport atom missing`, and `passport counter_freq 100000 atom 0`.
+
+The self-test file did finish. Nine blocks, each `compared driverID 3 AMD Radeon Graphics (RADV RENOIR) and driverID 13 llvmpipe`, `pixels ok max 2 share 0.0% limit 1%`, and a GPU span below the CPU span. The first teapot: `radeon ms per frame 0.305`, `gpu span ms 97977.856 cpu span ms 99202.012`, `lavapipe ms per frame 0.929`. Teapots A and B started at `t 840961965` and `t 840962108`. `counters back` is present. The file ends `ring waits 0 max 256 of 1024` and `selftest done`.
+
+After that, the syslog has `fence timeout` on `va 0000000080001000`, fault `00700c10` at `addr 0000000000080000`, then `gpu lost watchdog` with the same fault. `p1 r1c-gtt timeout 624 ms`. The self-test then says `stage selftest` and `stage ib` were `skipped, gpu lost`. The kernel line `ring waits 0 max 256 of 1024` matches the file. `bo domain 2 requested 00000004 used 00000000 snooped 1` is boot 1 dropping write combining, which is what `gfx9_wc_gtt false` is for. The log ends by freeing the interrupt vectors. Boot 2 was not run.
 
 ## 2026-11-10 - The graphics check keeps the previous start
 
