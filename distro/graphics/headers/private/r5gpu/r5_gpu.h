@@ -56,7 +56,9 @@ enum {
 	/* Counts only. Older callers never send this opcode. */
 	R5_GPU_GET_COUNTERS = R5_GPU_OP_BASE + 28,
 	/* Ring fill. Logging only. Older callers never send this opcode. */
-	R5_GPU_RING_FILL = R5_GPU_OP_BASE + 29
+	R5_GPU_RING_FILL = R5_GPU_OP_BASE + 29,
+	/* Interrupt counts. Logging only. Older callers never send this opcode. */
+	R5_GPU_IH_COUNTS = R5_GPU_OP_BASE + 30
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -497,6 +499,18 @@ typedef struct {
 	uint32_t	max_fill;
 	uint32_t	dwords;
 } r5_gpu_ring_fill;
+
+/* One line at the end of the graphics self-test. msi is interrupts
+ * delivered, early is visits that saw an empty ring, eop is end-of-pipe
+ * entries, wake is retire wakes. This call does not change the ring. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	msi;
+	uint32_t	early;
+	uint32_t	eop;
+	uint32_t	wake;
+} r5_gpu_ih_counts;
 
 static inline int
 r5_gpu_counters_match(const r5_gpu_counters* before,

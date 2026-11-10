@@ -330,7 +330,7 @@ The likely reason the handler saw nothing new is which window it read. The IH wr
 
 ### The fix, in its own change
 
-The driver change is a later pull request, before the step 5 stick. This document does not make it. The one-second semaphore stays the backup for a missing interrupt. It is not shortened. The fence packet, the ring, and the GPU addresses stay as they are.
+The driver change is this pull request. The one-second semaphore stays the backup for a missing interrupt. It is not shortened. The fence packet, the ring, and the GPU addresses stay as they are. VirtualBox has no Radeon, so this change is compiled there and not measured. The proof is still the step 5 stick.
 
 - `ih_handler` writes `IH_RB_RPTR` even when it found nothing, and reads the write pointer once more after that write.
 - If the writeback word still equals the read pointer, the handler reads the `IH_RB_WPTR` register over MMIO.

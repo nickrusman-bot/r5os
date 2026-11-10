@@ -501,6 +501,18 @@ write_ring_line(FILE* out)
 	}
 	fprintf(out, "ring waits %u max %u of %u\n",
 		in.waits, in.max_fill, in.dwords);
+	r5_gpu_ih_counts ih;
+	memset(&ih, 0, sizeof(ih));
+	ih.size = (uint32_t)sizeof(ih);
+	ih.version = 1;
+	fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd >= 0) {
+		if (ioctl(fd, R5_GPU_IH_COUNTS, &ih, sizeof(ih)) != 0)
+			memset(&ih, 0, sizeof(ih));
+		close(fd);
+	}
+	fprintf(out, "ih msi %u early %u eop %u wake %u\n",
+		ih.msi, ih.early, ih.eop, ih.wake);
 	fprintf(out, "selftest done\n");
 	fflush(out);
 }

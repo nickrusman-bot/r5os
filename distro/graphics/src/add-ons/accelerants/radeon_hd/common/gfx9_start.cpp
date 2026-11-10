@@ -2256,12 +2256,28 @@ r5_gfx9_fence_offset(uint64* offset)
 }
 
 
+/* The kernel file defines the real mapping. This one is the fallback
+ * for the accelerant, and for the kernel until that file is linked. */
+uint8* r5_gfx9_vram_cpu(uint64 offset) __attribute__((weak));
+uint8*
+r5_gfx9_vram_cpu(uint64 offset)
+{
+	(void)offset;
+	return NULL;
+}
+
+
 uint64
 r5_gfx9_user_seen()
 {
 	if (sRadeonGfx9Ring.fenceAddress == NULL)
 		return 0;
-	return *(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + kR5UserFenceOffset);
+	/* Carve-out when it exists. The pool mapping is the fallback for the
+	 * part of boot before map_carveout. The accelerant has no carve-out. */
+	uint8* cpu = r5_gfx9_vram_cpu(sRadeonGfx9Ring.fenceOffset + kR5UserFenceOffset);
+	if (cpu == NULL)
+		cpu = sRadeonGfx9Ring.fenceAddress + kR5UserFenceOffset;
+	return *(volatile uint64*)cpu;
 }
 
 

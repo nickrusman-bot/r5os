@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The interrupt handler rearms when the ring looks empty
+
+An empty visit of `ih_handler` used to return before it wrote `IH_RB_RPTR`. With `RPTR_REARM` the interrupt unit then sends no further interrupt, and the retire thread wakes from its one-second poll. The handler now writes that register even when the first read shows nothing, then reads the write pointer once more. If the writeback word still matches the read pointer, it reads `IH_RB_WPTR` over MMIO. The user fence and the interrupt writeback are read through the carve-out (`r5_gfx9_vram_cpu`). Until `map_carveout` has run, those reads use the previous mapping. No second mapping of that page is added. The fence packet, the ring words, and the GPU addresses are unchanged. The one-second semaphore is unchanged.
+
+The self-test prints `ih msi N early N eop N wake N` once, after the ring line and before `selftest done`. Those four numbers are interrupts delivered, empty visits, end-of-pipe entries, and retire wakes.
+
+Not yet proven. VirtualBox has no Radeon, so this image only compiles the driver. The proof is step 5, boot 1, on the Ryzen 5 5625U: VulkanTeapot's `cpu span ms` for 100 frames under 2000, the end-of-pipe count at least 100, and the K2 lines. The later `fence timeout` and fault `00700c10` are a separate hang. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - Lavapipe draws a Vulkan window
 
 Lavapipe now exports `VK_RFIVE_view_surface` and presents a swapchain into an ordinary window. The surface, the swapchain and the present live in `distro/mesa/wsi/wsi_common_haiku.cpp` (MIT, copyright 2026 R5OS Contributors). Mesa is built against R5's `vk_icd.h`. The platform is on for Lavapipe only. Each swapchain image is a CPU image and one `BBitmap`. Present copies the rows, waits for the next refresh with the window unlocked, then locks the window, calls `SetViewBitmap` and `Invalidate`, and waits with `BWindow::Sync` before it unlocks. The image can be acquired again after that reply. FIFO is the only present mode. RADV is not linked to this file. The buffer-image path waits for step 5. Nothing was copied from haiku-amdgpu, haiku-rpi or summit. The test program is `r5-wsi-test` (GPL-3.0-or-later). The package is `mesa_lavapipe-25.3.6-2`. The RADV package stays `mesa_radv-25.3.6-1`.
