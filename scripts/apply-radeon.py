@@ -73,6 +73,8 @@ FILES = (
     "src/bin/r5-gpu-isolation/r5_isolation_ib.h",
     "src/bin/r5-gpu-isolation/Jamfile",
     "src/bin/r5-gpu-isolation/r5-gpu-isolation.cpp",
+    "src/bin/r5-wsi-test/Jamfile",
+    "src/bin/r5-wsi-test/r5-wsi-test.cpp",
 )
 
 
@@ -160,6 +162,24 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
             raise SystemExit("isolation anchor missing in regular image")
         regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
         print("patched regular image isolation")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin r5-wsi-test ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin r5-gpu-isolation ;\n"
+        if anchor not in text:
+            raise SystemExit("wsi-test anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile wsi-test")
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += r5-wsi-test ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += r5-gpu-isolation ;\n"
+        if anchor not in text:
+            raise SystemExit("wsi-test anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image wsi-test")
 
     launch = haiku / "data" / "launch" / "user"
     text = launch.read_text(encoding="utf-8")

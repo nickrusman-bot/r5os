@@ -1,0 +1,11 @@
+SubDir HAIKU_TOP src bin r5-wsi-test ;
+
+Application r5-wsi-test :
+	r5-wsi-test.cpp
+	: be [ TargetLibsupc++ ]
+	;
+
+ObjectC++Flags r5-wsi-test.cpp :
+	-DVK_USE_PLATFORM_VIEW_RFIVE
+	-I/home/nickr/r5os/mesa-build/vulkan-headers-r5/install/include
+	;

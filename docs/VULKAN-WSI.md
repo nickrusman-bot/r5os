@@ -54,7 +54,7 @@ The patch adds the platform the way Metal is added in that tag. Metal is the pat
 
 `copy_surface_create_info` stays as it is. The new terminator passes `VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE` in its type list, the way Metal passes its own type at line 1737.
 
-That name list is a filter. The loader passes on the names a driver reports. It does not add `VK_RFIVE_view_surface` itself. Lavapipe does not export the name until the Mesa surface exists, so `vulkaninfo` does not print it until that step.
+That name list is a filter. The loader passes on the names a driver reports. It does not add `VK_RFIVE_view_surface` itself. Lavapipe exports the name, so `vulkaninfo` prints it for the software driver.
 
 Until Khronos publishes the enum, R5's copy of `vk_icd.h` carries `VK_ICD_WSI_PLATFORM_VIEW_RFIVE` after `VK_ICD_WSI_PLATFORM_UBM`, and `VkIcdSurfaceViewRFIVE` next to `VkIcdSurfaceMetal`. The loader and Mesa are built against that same header so the number matches. The public structure type in `vulkan_r5.h` is the other placeholder. Both go away together when the registered values exist. A release does not ship either placeholder.
 
@@ -273,7 +273,7 @@ New R5 files carry an SPDX header. Mesa and loader files keep their own licence.
 | `build-radv.sh` | The platform turned on for Lavapipe and RADV | — |
 | `r5-wsi-test`, new, under `distro/graphics` | The step 2 test program | GPL-3.0-or-later |
 
-Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The Mesa file, the `build-radv.sh` platform switch and `r5-wsi-test` are not in this step. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets.
+Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets. Step 2 adds the Mesa surface for Lavapipe: a CPU image, one `BBitmap` per swapchain image, and `r5-wsi-test`. The RADV buffer image is step 5. `wsi_common_haiku.cpp` is MIT. `r5-wsi-test` is GPL-3.0-or-later. Nothing is copied from haiku-amdgpu, haiku-rpi, or summit.
 
 ### Settings
 

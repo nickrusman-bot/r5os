@@ -26,7 +26,7 @@ for name in \
 	libdrm-2.4.124-1-x86_64.hpkg \
 	mesa-25.3.6-2-x86_64.hpkg \
 	mesa_devel-25.3.6-1-x86_64.hpkg \
-	mesa_lavapipe-25.3.6-1-x86_64.hpkg \
+	mesa_lavapipe-25.3.6-2-x86_64.hpkg \
 	mesa_radv-25.3.6-1-x86_64.hpkg \
 	llvm21_runtime-21.1.8-1-x86_64.hpkg \
 	vulkan_loader-1.4.367-2-x86_64.hpkg \
@@ -49,7 +49,7 @@ for name in \
 	libdrm-2.4.124-1-x86_64.hpkg \
 	mesa-25.3.6-2-x86_64.hpkg \
 	mesa_radv-25.3.6-1-x86_64.hpkg \
-	mesa_lavapipe-25.3.6-1-x86_64.hpkg \
+	mesa_lavapipe-25.3.6-2-x86_64.hpkg \
 	vulkanteapot-1.0.0-1-x86_64.hpkg
 do
 	rm -rf "$LEAK/$name"
