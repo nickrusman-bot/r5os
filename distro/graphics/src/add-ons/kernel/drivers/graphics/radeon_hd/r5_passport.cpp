@@ -404,7 +404,8 @@ r5_passport_apply(radeon_info* info, r5_gpu_amd_info* amd, uint32_t* cuPerSh,
 	/* Linux tag v6.12 amdgpu_discovery.c
 	 * amdgpu_discovery_set_ip_blocks() starts at line 2425 and has
 	 * no CHIP_RENOIR case. The Raven case at line 2474 sets IP
-	 * versions by hand. passport discovery missing stays the line
-	 * this chip prints when the binary is absent. */
+	 * versions by hand, and Linux then takes the discovery path, so
+	 * the table may be present. passport discovery missing and
+	 * passport discovery se … sh … cu … are both acceptable. */
 	sSaid = true;
 }
