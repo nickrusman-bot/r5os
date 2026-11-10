@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - Vulkan lists the view surface extension
+
+The image used HaikuPorts' Vulkan loader. That package has no place for a view surface, and a patch on it would disappear the next time the package is bumped. R5 now builds loader 1.4.367 itself (`distro/vulkan/build-loader.sh`), still pinned to that tag. The HaikuPorts portability fixes stay, so the loader can find an ICD on Haiku. The new patch follows Metal in that tag: a platform value, an ICD surface, a trampoline, a terminator, and the generated dispatch entries. `copy_surface_create_info` is not edited. The public header is `vulkan_r5.h` (MIT). R5's copy of `vk_icd.h` appends `VK_ICD_WSI_PLATFORM_VIEW_RFIVE` and `VkIcdSurfaceViewRFIVE`. Both numbers are placeholders (`1000999000` for the structure type). Nothing is released with them. Lavapipe does not export the name yet, so the loader reports `VK_RFIVE_view_surface` revision 1 itself. The package is `vulkan_loader-1.4.367-2`, vendor R5OS. The HaikuPorts 1.4.367-1 package is no longer in the image repository.
+
+The design's generated-file table cited line 1694 as the ICD fill. In v1.4.367 that line fills `VkLayerInstanceDispatchTable`. The driver's function is filled at line 268. `docs/VULKAN-WSI.md` says so. The same section now says the GPU's interrupt unit (IH) sends the next interrupt.
+
+VirtualBox, one fresh boot, image built from branch `cursor/m7-view-surface`. No jam was running while the image was copied. `vulkaninfo | grep RFIVE` printed a tab and then:
+
+`VK_RFIVE_view_surface                  : extension revision 1`
+
+vulkaninfo then stopped at device creation: `VK_KHR_swapchain` is not supported by the selected device. This guest has no Radeon, so that device is Lavapipe. The grep did not include a device name. Creating a surface still returns an error until Mesa implements it.
+
+Not yet: the Mesa surface, a window, and a Khronos number. The request text is drafted and not posted. The placeholder must not ship in a release.
+
 ## 2026-11-10 - The repository moved to r5-operating-system/r5os
 
 The GitHub account was renamed from `nickrusman-bot` to `r5-operating-system`, so the project no longer carries a personal name. GitHub forwards the old links. Links in AGENTS.md, README.md, the roadmap and docs, the website pages, `generate-prs-page.py` and `sync-github-issues.py` now use the new name. Older CHANGELOG entries keep the old links as history. New commits use the account's no-reply address.
