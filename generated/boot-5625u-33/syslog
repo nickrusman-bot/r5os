@@ -1,0 +1,109 @@
+KERN: radeon_hd: t 837723831 submit ib va ffff800100314000 dw 24 flags 0
+KERN: radeon_hd: t 837724070 submit ib va ffff800100001000 dw 832 flags 0
+KERN: radeon_hd: t 837724382 user job fence a flush 1 cntx 81018003 seq 934 c0053c00 00000113 007ea800 000000f4 000003a5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 838722780 submit ib va ffff800100314000 dw 24 flags 0
+KERN: radeon_hd: t 838723019 submit ib va ffff800100001000 dw 832 flags 0
+KERN: radeon_hd: t 838723345 user job fence 9 flush 1 cntx 81018003 seq 935 c0053c00 00000113 007ea800 000000f4 000003a6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 838723864 submit ib va ffff800100314000 dw 24 flags 0
+KERN: radeon_hd: t 838724102 submit ib va ffff800100001000 dw 832 flags 0
+KERN: radeon_hd: t 838724411 user job fence a flush 1 cntx 81018003 seq 936 c0053c00 00000113 007ea800 000000f4 000003a7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 839722789 submit ib va ffff800100314000 dw 24 flags 0
+KERN: radeon_hd: t 839723026 submit ib va ffff800100001000 dw 832 flags 0
+KERN: radeon_hd: t 839723353 user job fence 9 flush 1 cntx 81018003 seq 937 c0053c00 00000113 007ea800 000000f4 000003a8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 839723869 submit ib va ffff800100314000 dw 24 flags 0
+KERN: radeon_hd: t 839724105 submit ib va ffff800100001000 dw 832 flags 0
+KERN: radeon_hd: t 839724415 user job fence a flush 1 cntx 81018003 seq 938 c0053c00 00000113 007ea800 000000f4 000003a9 ffffffff 00000004 c0033700
+KERN: remove_memory_type_range(): no range known for area 67701
+KERN: remove_memory_type_range(): no range known for area 67704
+KERN: remove_memory_type_range(): no range known for area 67688
+KERN: remove_memory_type_range(): no range known for area 67694
+KERN: remove_memory_type_range(): no range known for area 67689
+KERN: remove_memory_type_range(): no range known for area 67695
+KERN: remove_memory_type_range(): no range known for area 67681
+KERN: remove_memory_type_range(): no range known for area 67685
+KERN: remove_memory_type_range(): no range known for area 67678
+KERN: remove_memory_type_range(): no range known for area 67682
+KERN: remove_memory_type_range(): no range known for area 67671
+KERN: remove_memory_type_range(): no range known for area 67672
+KERN: remove_memory_type_range(): no range known for area 67706
+KERN: remove_memory_type_range(): no range known for area 67710
+KERN: remove_memory_type_range(): no range known for area 67709
+KERN: remove_memory_type_range(): no range known for area 67714
+KERN: remove_memory_type_range(): no range known for area 67713
+KERN: remove_memory_type_range(): no range known for area 67716
+KERN: radeon_hd: bo domain 2 requested 00000004 used 00000000 bytes 4096 snooped 1
+KERN: radeon_hd: t 840974673 va map 0000000080000000 bytes 4096 domain 2
+KERN: radeon_hd: bo domain 2 requested 00000004 used 00000000 bytes 4096 snooped 1
+KERN: radeon_hd: t 840975267 vmid1 reused, clients 1
+KERN: radeon_hd: t 840975424 va map 0000000080002000 bytes 4096 domain 2
+KERN: radeon_hd: bo domain 2 requested 00000004 used 00000000 bytes 4096 snooped 1
+KERN: radeon_hd: t 840975888 submit ib va 0000000080002000 dw 14 flags 0
+KERN: radeon_hd: t 840976159 user job fence b flush 1 cntx 81018003 seq 939 c0053c00 00000113 007ea800 000000f4 000003aa ffffffff 00000004 c0033700
+KERN: radeon_hd: t 840976626 va map 0000000080001000 bytes 4096 domain 2
+KERN: radeon_hd: t 840976850 submit ib va 0000000080001000 dw 14 flags 0
+KERN: radeon_hd: t 840977118 user job fence c flush 1 cntx 81018003 seq 940 c0053c00 00000113 007ea800 000000f4 000003ab ffffffff 00000004 c0033700
+KERN: usb_disk: operation 0x35 failed at the SCSI level
+KERN: usb_disk: request_sense: key: 0x05; asc: 0x24; ascq: 0x00; Invalid field in CDB
+KERN: radeon_hd: fence timeout ib1 va 0000000080001000 dw 14 got 0 cp_off 0
+KERN: radeon_hd: fence timeout ib2 va ffff800100015000 dw 1024 got 0 cp_off 0
+KERN: radeon_hd: fence timeout roq ib1 010d010d
+KERN: radeon_hd: fence timeout cp 84038200 grbm a0003028 grbm2 50000008 me 15000000 seen 939
+KERN: radeon_hd: fence timeout rptr 000002c0 wptr 000000000003af00 kern 241408 fence 241408 bell 18446744073709551615
+KERN: radeon_hd: fence timeout stall 00000c00 00010000 00000400 fault 00700c10 addr 0000000000080000 ib 0000000080001000 sz 00000000 off 00000000 pte 0000000000000000
+KERN: radeon_hd: fence timeout ring ffff1000 ffff1000 ffff1000 ffff1000 ffff1000 ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: fence timeout default 0000000000811094 cntl 3ffffffc
+KERN: radeon_hd: fence timeout stall3 00000400 stall1 00000c00 stall2 00010000 me_ip 00000000 pfp_ip 00000000
+KERN: radeon_hd: fence timeout me hdr c0044000 c0023f00 c0009000 c0012800 c0004200 c0008b00 c0004200 c0008b00
+KERN: radeon_hd: fence timeout pfp hdr ffff1000 ffff1000 ffff1000 c0033700 c0044000 c0023f00 c0009000 c0001700
+KERN: remove_memory_type_range(): no range known for area 73499
+KERN: remove_memory_type_range(): no range known for area 73457
+KERN: remove_memory_type_range(): no range known for area 73497
+KERN: radeon_hd: bo domain 2 requested 00000004 used 00000000 bytes 4096 snooped 1
+KERN: Last message repeated 19 times.
+KERN: remove_memory_type_range(): no range known for area 74189
+KERN: remove_memory_type_range(): no range known for area 74191
+KERN: remove_memory_type_range(): no range known for area 74193
+KERN: remove_memory_type_range(): no range known for area 74195
+KERN: remove_memory_type_range(): no range known for area 74197
+KERN: remove_memory_type_range(): no range known for area 74199
+KERN: remove_memory_type_range(): no range known for area 74201
+KERN: remove_memory_type_range(): no range known for area 74203
+KERN: remove_memory_type_range(): no range known for area 74205
+KERN: remove_memory_type_range(): no range known for area 74207
+KERN: remove_memory_type_range(): no range known for area 74209
+KERN: remove_memory_type_range(): no range known for area 74211
+KERN: remove_memory_type_range(): no range known for area 74213
+KERN: remove_memory_type_range(): no range known for area 74215
+KERN: remove_memory_type_range(): no range known for area 74217
+KERN: remove_memory_type_range(): no range known for area 74219
+KERN: remove_memory_type_range(): no range known for area 74221
+KERN: remove_memory_type_range(): no range known for area 74223
+KERN: remove_memory_type_range(): no range known for area 74225
+KERN: remove_memory_type_range(): no range known for area 74227
+KERN: radeon_hd: t 851094227 regs selftest inv0 ffffffff 0000001f inv17 ffffffff 0000001f l1 00003d59 agp 00000000 00000000 aper 003d0000 003d0800 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 851096924 r1c before x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 851097362 r1c gtt x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 851097880 user job fence 0 flush 1 cntx 81018003 seq 941 c0053c00 00000113 007ea800 000000f4 000003ac ffffffff 00000004 c0033700
+KERN: radeon_hd: gpu lost watchdog ib1 va 0000000080001000 dw 1024 got 0 cp_off 0
+KERN: radeon_hd: gpu lost watchdog ib2 va ffff800100015000 dw 1024 got 0 cp_off 0
+KERN: radeon_hd: gpu lost watchdog roq ib1 010d010d
+KERN: radeon_hd: gpu lost watchdog cp 84038200 grbm a0003028 grbm2 50000008 me 15000000 seen 939
+KERN: radeon_hd: gpu lost watchdog rptr 000002c0 wptr 000000000003b000 kern 241664 fence 241664 bell 18446744073709551615
+KERN: radeon_hd: gpu lost watchdog stall 00000c00 00010000 00000400 fault 00700c10 addr 0000000000080000 ib 0000000080001000 sz 00000000 off 00000000 pte 0000000000000000
+KERN: radeon_hd: gpu lost watchdog ring ffff1000 ffff1000 ffff1000 ffff1000 ffff1000 ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: gpu lost watchdog default 0000000000811094 cntl 3ffffffc
+KERN: radeon_hd: gpu lost watchdog stall3 00000400 stall1 00000c00 stall2 00010000 me_ip 00000000 pfp_ip 00000000
+KERN: radeon_hd: gpu lost watchdog me hdr c0044000 c0023f00 c0009000 c0012800 c0004200 c0008b00 c0004200 c0008b00
+KERN: radeon_hd: gpu lost watchdog pfp hdr ffff1000 ffff1000 ffff1000 c0033700 c0044000 c0023f00 c0009000 c0001700
+KERN: radeon_hd: p1 r1c-gtt timeout 624 ms
+KERN: radeon_hd: t 851726393 r1 free a x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: ring waits 0 max 256 of 1024
+KERN: usb_disk: operation 0x35 failed at the SCSI level
+KERN: usb_disk: request_sense: key: 0x05; asc: 0x24; ascq: 0x00; Invalid field in CDB
+KERN: usb_disk: operation 0x35 failed at the SCSI level
+KERN: usb_disk: request_sense: key: 0x05; asc: 0x24; ascq: 0x00; Invalid field in CDB
+KERN: R5 interface: HaikuControlLook from distro
+KERN: msi_free_vectors: freeing 1 vectors starting from 62
+KERN: free_io_interrupt_vectors: freeing 1 vectors starting from 62
+KERN: msi_free_vectors: freeing 1 vectors starting from 63
+KERN: free_io_interrupt_vectors: freeing 1 vectors starting from 63
