@@ -6,7 +6,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 
 > R5 Operating System is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
 
-**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10048**. There is no public release yet.
+**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10053**. There is no public release yet.
 
 ---
 
@@ -15,7 +15,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 ### Desktop
 - R5 Operating System branding throughout: Deskbar, installer, boot splash, About.
 - Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
-- **Settings** is one window, with a list on the left, search, and pages for Appearance, Display, Desktop and Deskbar, Wallpaper, Notifications, Virtual memory and more. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
+- **Settings** is one window. Home shows a card per category; the list on the left folds open to the pages of one category, and Search jumps to any page. Pages include Information (your computer at a glance), Display (your screen and workspaces), Appearance, Desktop and Deskbar, Wallpaper, Notifications and Virtual memory. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
 - Notifications, with a choice of where they appear on screen.
 
 ### Accounts
@@ -27,6 +27,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - Wi-Fi: join a network, and it is remembered.
 - IPv6 on a home network (SLAAC).
 - Printing to AirPrint/IPP printers.
+- **Network shares:** mount a Windows (SMB) share from Tracker, by IP address. The password stays in the keystore.
 - Sound to AirPlay 1 speakers. AirPlay 2 is not supported.
 
 ### Sound
@@ -39,7 +40,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 
 ### Graphics
 - OpenGL through Mesa, and Vulkan through Lavapipe, on the CPU.
-- On AMD Renoir laptops (such as the Ryzen 5 5625U), Vulkan programs can run on the GPU through RADV, as an experimental opt-in. The desktop itself is still drawn by the CPU. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
+- On AMD Renoir laptops (such as the Ryzen 5 5625U), Vulkan programs can run on the GPU through RADV, as an experimental opt-in. On the reference laptop the GPU draws the same picture as the software renderer, pixel for pixel, and several programs can use it at once, each in its own address space. Programs still draw offscreen; Vulkan in a window is the next step. The desktop itself is still drawn by the CPU. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md) and [`docs/GPU-ARCHITECTURE.md`](docs/GPU-ARCHITECTURE.md).
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
@@ -48,7 +49,7 @@ The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`
 
 ## Not there yet
 
-- No GPU acceleration. The desktop is still drawn by the CPU.
+- No GPU acceleration for the desktop. The desktop is still drawn by the CPU, and Vulkan cannot draw in a window yet.
 - One graphical session at a time. There is no fast user switching and no guest account.
 - The bundled browser (WebPositive) is weak for today's web.
 - Sleep, backlight and HiDPI on the reference laptop are still open.
@@ -139,6 +140,7 @@ R5 Operating System is **multi-license**:
 
 - Files that come from Haiku keep their original license and copyright, mostly MIT.
 - New files that R5 owns are GPL-3.0-or-later.
+- Libraries and public headers that applications link or include are MIT, so any program can use them: the R5 libraries (`libr5icons`, `libr5ui`), the R5 GPU interface header and the R5 DRM library.
 - The combined system is distributed under GPL-3.0-or-later.
 - Third-party components keep their own licenses. They are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Examples are the VirtualBox Guest Additions (GPL-3.0-only), the AMD firmware and Mesa.
 
