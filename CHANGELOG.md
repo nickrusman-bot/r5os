@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The command-list check follows the function, not the line
+
+A packet site is now the file, the function, and the order of packet lines in that function. Adding a comment above a packet no longer makes the checker say the packet was not emitted. The three words that already ran are back as they were: the stage `DMA_DATA` control is `0x60200000`, and the two chained indirect buffers in stage P are `6` and `0x68` without bit 23. Linux `soc15d.h` does not name destination select 2. The checker allows that one word and rejects any other select 2. Whether select 2 should be 3 waits for its own boot. Bit 23 stays allowed on an indirect buffer and is no longer required when the VMID field is 0, because the chained buffers ran without it and no cited line requires it there. The ring contents are unchanged.
+
+Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
 ## 2026-11-10 - The command-list check names every builder
 
 `scripts/check-pm4.py` now fails a stream that uses a type-2 dword, a `DMA_DATA` destination select of 2, or an opcode it does not know. `LOAD_*` packets are checked as an address plus a count, because stage P does load context registers, and they are not register-set packets. `SET_SH_REG_INDEX` is checked. An indirect buffer whose VMID field is 0 must set the valid bit. The executable-flag check says in its output that it is a text search, not a page-table walk.

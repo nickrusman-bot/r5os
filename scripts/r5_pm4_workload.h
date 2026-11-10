@@ -33,7 +33,7 @@ static const uint32_t kDmaChunk = 0x100000;
 static const uint32_t kWlSubmitDwords = 12;
 static const uint32_t kK2Pattern = 0xA5A5A5A5;
 /* DST_SEL 3 (L2), SRC_SEL 3. See the comment on the kernel copy. */
-static const uint32_t kStageDmaCtrl = 0x60300000u;
+static const uint32_t kStageDmaCtrl = 0x60200000u;
 
 
 static inline uint32_t

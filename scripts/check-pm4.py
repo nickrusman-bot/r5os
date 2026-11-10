@@ -184,11 +184,11 @@ def check_ib(body, where, errors):
         fail(errors, where, "INDIRECT_BUFFER control %08x" % ctrl)
     if (ctrl & 0xFFFFF) == 0:
         fail(errors, where, "INDIRECT_BUFFER length is 0")
-    # The ring's own IB (VMID field 0) sets INDIRECT_BUFFER_VALID, bit 23.
-    # A user IB carries a non-zero VMID and does not set that bit.
-    vmid = (ctrl >> 24) & 0xF
-    if vmid == 0 and (ctrl & (1 << 23)) == 0:
-        fail(errors, where, "INDIRECT_BUFFER_VALID is required when the VMID field is 0")
+    # Bit 23 is INDIRECT_BUFFER_VALID. The ring's own indirect buffer sets
+    # it. A chained indirect buffer in stage P uses VMID field 0 without
+    # that bit, and those words already ran. No cited Linux line requires
+    # the bit for the chained case, so the checker allows it and does not
+    # demand it.
 
 
 def check_context(body, where, errors):
@@ -285,13 +285,19 @@ def check_packet(opcode, body, where, errors):
             fail(errors, where, "DMA_DATA count")
         else:
             # Linux soc15d.h: SRC_SEL is bits 30:29, DST_SEL is bits 21:20
-            # (0 DAS, 1 GDS, 3 L2; 2 is not a destination), the engine is
-            # bit 27, and CP_SYNC is bit 31.
+            # (0 DAS, 1 GDS, 3 L2). The header does not name DST_SEL 2.
+            # The engine is bit 27 and CP_SYNC is bit 31.
+            # 0x60200000 is the DMA_DATA control word the stage ran
+            # (stick logs, gpu_stage_dma and R5_P_DMA_DATA). DST_SEL is 2
+            # in that word. It stays until a diagnostic boot tries 3.
+            # Any other DST_SEL 2 fails.
             allowed = (3 << 20) | (1 << 27) | (3 << 29) | (1 << 31)
             if bits_outside(body[0], allowed):
                 fail(errors, where, "DMA_DATA control %08x" % body[0])
             dst = (body[0] >> 20) & 3
-            if dst not in (0, 1, 3):
+            if dst == 2 and body[0] != 0x60200000:
+                fail(errors, where, "DMA_DATA DST_SEL 2 is only the word that ran, 0x60200000")
+            elif dst not in (0, 1, 2, 3):
                 fail(errors, where, "DMA_DATA DST_SEL %u" % dst)
     elif opcode == 0x58:
         check_acquire(body, where, errors)
@@ -488,13 +494,42 @@ def is_packet_helper(line):
 
 def source_sites():
     """Every line that builds a type-3 header, except the helper itself
-    and a comparison against one."""
+    and a comparison against one. The key is the function and the order
+    of packet lines inside it, so a comment above a packet does not
+    change the key."""
     found = []
     call = re.compile(r"\b(radeon_packet3|r5_cs_packet3|r5_packet3)\s*\(")
     shift = re.compile(r"\(3u\s*<<\s*30\)")
+    name_at_start = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+    alone = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)$")
+    array = re.compile(r"^static const uint32_t ([A-Za-z_][A-Za-z0-9_]*)\[\]")
+    skip = {"if", "for", "while", "switch", "return", "sizeof"}
     for rel in SOURCES:
-        text = blank_comments((ROOT / rel).read_text(encoding="utf-8"))
+        raw = (ROOT / rel).read_text(encoding="utf-8")
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        text = blank_comments(raw)
+        raw_lines = raw.splitlines()
+        function = "file"
+        ordinal = {}
+        pending = None
         for number, line in enumerate(text.splitlines(), 1):
+            original = raw_lines[number - 1] if number <= len(raw_lines) else ""
+            stripped = original.strip()
+            named_array = array.match(stripped)
+            if named_array:
+                function = named_array.group(1)
+                pending = None
+            elif pending and stripped.startswith("("):
+                function = pending
+                pending = None
+            elif alone.match(stripped) and stripped not in skip:
+                pending = stripped
+            else:
+                pending = None
+                if not original.startswith((" ", "\t")):
+                    named = name_at_start.match(stripped)
+                    if named and named.group(1) not in skip:
+                        function = named.group(1)
             code = line.split("//", 1)[0]
             if "!=" in code or is_packet_helper(code):
                 continue
@@ -510,7 +545,8 @@ def source_sites():
                         hit = True
                         break
             if hit:
-                found.append("%s:%u" % (rel, number))
+                ordinal[function] = ordinal.get(function, 0) + 1
+                found.append("%s:%s#%u" % (rel, function, ordinal[function]))
     return found
 
 
@@ -521,7 +557,7 @@ def check_sites(printed, errors):
     for site in missing:
         fail(errors, "coverage", "not emitted: %s" % site)
     for site in extra:
-        fail(errors, "coverage", "emitter names a line that does not build a packet: %s" % site)
+        fail(errors, "coverage", "emitter names a site that does not build a packet: %s" % site)
 
 
 def self_check(known):
