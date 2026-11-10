@@ -12,10 +12,13 @@ src/add-ons/kernel/file_systems/bfs in a Haiku tree.
 from __future__ import annotations
 
 import argparse
+import datetime
+import json
 import os
 import struct
+import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 SUPER_MAGIC1 = 0x42465331  # BFS1
@@ -28,6 +31,8 @@ S_IFMT = 0xF000
 S_IFDIR = 0x4000
 S_IFREG = 0x8000
 S_IFLNK = 0xA000
+
+WINDOWS_ILLEGAL_CHARS = set(':*?"<>|')
 
 
 def u16(buf: bytes, off: int) -> int:
@@ -52,6 +57,79 @@ def i64(buf: bytes, off: int) -> int:
 
 def align8(value: int) -> int:
     return (value + 7) & ~7
+
+
+def check_device_allowed(path: str) -> None:
+    """Refuse opening physical disk 0 (Windows NVMe system disk) under all circumstances."""
+    norm = path.lower().replace("/", "\\")
+    if "physicaldrive0" in norm:
+        raise PermissionError("PhysicalDrive0 (disk 0) is forbidden: protected system disk")
+
+
+def sanitize_filename(name: str) -> tuple[str, bool]:
+    """Sanitize filename for Windows filesystem compatibility.
+    Replaces ':', '*', '?', '"', '<', '>', '|' with '_' and strips trailing dots/spaces.
+    Returns (safe_name, was_changed).
+    """
+    chars: list[str] = []
+    changed = False
+    for ch in name:
+        if ch in WINDOWS_ILLEGAL_CHARS or ord(ch) < 32:
+            chars.append("_")
+            changed = True
+        else:
+            chars.append(ch)
+    safe = "".join(chars)
+    stripped = safe.rstrip(". ")
+    if not stripped:
+        safe = "_"
+        changed = True
+    elif stripped != safe:
+        safe = stripped
+        changed = True
+    return safe, changed
+
+
+def list_removable_drives() -> list[dict[str, object]]:
+    """Query Windows for removable storage drives. Strictly excludes disk 0 and system disk."""
+    if sys.platform != "win32":
+        return []
+    drives: list[dict[str, object]] = []
+    try:
+        cmd = [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance Win32_DiskDrive | "
+            "Select-Object DeviceID, Index, MediaType, Model, InterfaceType, Size | "
+            "ConvertTo-Json -Compress",
+        ]
+        raw = subprocess.check_output(cmd, encoding="utf-8", errors="replace").strip()
+        if not raw:
+            return []
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            data = [data]
+        for item in data:
+            idx = item.get("Index")
+            dev_id = str(item.get("DeviceID", ""))
+            # NEVER allow disk 0 or PhysicalDrive0
+            if idx == 0 or "physicaldrive0" in dev_id.lower():
+                continue
+            media_type = str(item.get("MediaType", "")).lower()
+            interface_type = str(item.get("InterfaceType", "")).lower()
+            if "removable" in media_type or "usb" in interface_type:
+                drives.append({
+                    "device_id": dev_id,
+                    "index": idx,
+                    "model": item.get("Model", "Removable Disk"),
+                    "size": item.get("Size", 0),
+                    "media_type": item.get("MediaType", ""),
+                    "interface": item.get("InterfaceType", ""),
+                })
+    except Exception:
+        pass
+    return drives
 
 
 @dataclass
@@ -82,9 +160,116 @@ class Inode:
             return "link"
         return "file"
 
+    @property
+    def modified_time(self) -> int:
+        """Return unix epoch timestamp (seconds) from inode last_modified_time."""
+        if len(self.raw) >= 44:
+            return i64(self.raw, 36) >> 16
+        return 0
+
+    @property
+    def mime_type(self) -> str:
+        """Extract BEOS:TYPE attribute from small_data in raw inode if present."""
+        idx = self.raw.find(b"BEOS:TYPE")
+        if idx >= 8:
+            try:
+                name_size = u16(self.raw, idx - 4)
+                data_size = u16(self.raw, idx - 2)
+                data_off = idx + ((name_size + 3) & ~3)
+                if data_off + data_size <= len(self.raw):
+                    raw_mime = self.raw[data_off:data_off + data_size]
+                    return raw_mime.split(b"\x00", 1)[0].decode("utf-8", "replace").strip()
+            except Exception:
+                pass
+        return ""
+
+
+@dataclass
+class ExportSummary:
+    files_count: int = 0
+    bytes_count: int = 0
+    dirs_count: int = 0
+    failures: list[str] = field(default_factory=list)
+    renamed: list[tuple[str, str]] = field(default_factory=list)
+
+
+def export_path(
+    volume: Volume,
+    befs_path: str,
+    dest_path: str,
+    recursive: bool = False,
+    progress_callback = None,
+) -> ExportSummary:
+    """Export file or directory from volume to Windows destination.
+    Sanitizes illegal Windows characters and records any renames.
+    """
+    summary = ExportSummary()
+    inode = volume.lookup(befs_path)
+
+    if inode.kind() != "dir":
+        try:
+            data = volume.read_file(inode)
+            dest_dir = os.path.dirname(dest_path)
+            if dest_dir:
+                os.makedirs(dest_dir, exist_ok=True)
+            with open(dest_path, "wb") as output:
+                output.write(data)
+            summary.files_count += 1
+            summary.bytes_count += len(data)
+            if progress_callback:
+                progress_callback(befs_path, len(data))
+        except Exception as exc:
+            summary.failures.append(f"{befs_path}: {exc}")
+        return summary
+
+    if not recursive:
+        raise IsADirectoryError(f"'{befs_path}' is a directory (use -r / --recursive to export)")
+
+    os.makedirs(dest_path, exist_ok=True)
+    summary.dirs_count += 1
+
+    def _walk(curr_path: str, curr_dest: str):
+        try:
+            entries = volume.list_path(curr_path)
+        except Exception as exc:
+            summary.failures.append(f"{curr_path}: {exc}")
+            return
+
+        for name, child_inode in entries:
+            if name in (".", ".."):
+                continue
+            safe_name, changed = sanitize_filename(name)
+            sub_befs = f"{curr_path}/{name}".lstrip("/")
+            if changed:
+                summary.renamed.append((sub_befs, safe_name))
+            target_child = os.path.join(curr_dest, safe_name)
+
+            if child_inode.kind() == "dir":
+                try:
+                    os.makedirs(target_child, exist_ok=True)
+                    summary.dirs_count += 1
+                    _walk(sub_befs, target_child)
+                except Exception as exc:
+                    summary.failures.append(f"{sub_befs}: {exc}")
+            else:
+                try:
+                    file_data = volume.read_file(child_inode)
+                    with open(target_child, "wb") as f_out:
+                        f_out.write(file_data)
+                    summary.files_count += 1
+                    summary.bytes_count += len(file_data)
+                    if progress_callback:
+                        progress_callback(sub_befs, len(file_data))
+                except Exception as exc:
+                    summary.failures.append(f"{sub_befs}: {exc}")
+
+    _walk(befs_path.rstrip("/"), dest_path)
+    return summary
+
 
 class Volume:
     def __init__(self, path: str, offset: int | None) -> None:
+        check_device_allowed(path)
         self._file = open(path, "rb")
         self.base = 0 if offset is None else offset
         if offset is None:
@@ -305,12 +490,26 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Read a BeFS volume from an image or a physical drive."
     )
-    parser.add_argument("command", choices=("ls", "cat", "export"))
-    parser.add_argument("image")
+    parser.add_argument("command", choices=("ls", "cat", "export", "drives"))
+    parser.add_argument("image", nargs="?")
     parser.add_argument("path", nargs="?", default="/")
     parser.add_argument("dest", nargs="?")
+    parser.add_argument("-r", "--recursive", action="store_true", help="Recursively export directories")
     parser.add_argument("--offset", type=int, default=None)
     args = parser.parse_args()
+
+    if args.command == "drives":
+        drives = list_removable_drives()
+        if not drives:
+            print("No removable drives found.")
+            return 0
+        for d in drives:
+            size_gib = d["size"] / (1024**3) if d["size"] else 0
+            print(f"{d['device_id']}: {d['model']} ({size_gib:.1f} GiB, {d['interface']})")
+        return 0
+
+    if not args.image:
+        parser.error(f"{args.command} requires an image argument")
 
     volume = Volume(args.image, args.offset)
     try:
@@ -325,10 +524,22 @@ def main() -> int:
             if not args.dest:
                 raise SystemExit("export needs a destination path")
             inode = volume.lookup(args.path)
-            data = volume.read_file(inode)
-            with open(args.dest, "wb") as output:
-                output.write(data)
-            print(f"wrote {len(data)} bytes to {args.dest}")
+            if inode.kind() == "dir":
+                summary = export_path(volume, args.path, args.dest, recursive=args.recursive)
+                print(f"exported {summary.files_count} files ({summary.bytes_count} bytes) to {args.dest}")
+                if summary.renamed:
+                    print("renamed on extract for Windows compatibility:")
+                    for orig, safe in summary.renamed:
+                        print(f"  {orig} -> {safe}")
+                if summary.failures:
+                    print(f"failures ({len(summary.failures)}):")
+                    for f in summary.failures:
+                        print(f"  {f}")
+            else:
+                data = volume.read_file(inode)
+                with open(args.dest, "wb") as output:
+                    output.write(data)
+                print(f"wrote {len(data)} bytes to {args.dest}")
     finally:
         volume.close()
     return 0
