@@ -19,7 +19,7 @@ needed=(
 	mesa_devel-25.3.6-1-x86_64.hpkg
 	mesa_lavapipe-25.3.6-1-x86_64.hpkg
 	mesa_radv-25.3.6-1-x86_64.hpkg
-	vulkan_loader-1.4.367-1-x86_64.hpkg
+	vulkan_loader-1.4.367-2-x86_64.hpkg
 	vulkan_tools-1.4.367-1-x86_64.hpkg
 	vulkanteapot-1.0.0-1-x86_64.hpkg
 )
@@ -50,7 +50,7 @@ new = (
     "\tmesa_devel-25.3.6-1\n"
     "\tmesa_lavapipe-25.3.6-1\n"
     "\tmesa_radv-25.3.6-1\n"
-    "\tvulkan_loader-1.4.367-1\n"
+    "\tvulkan_loader-1.4.367-2\n"
     "\tvulkan_tools-1.4.367-1\n"
     "\tvulkanteapot-1.0.0-1\n"
 )
@@ -63,7 +63,7 @@ elif "\tmesa-25.3.6-1\n" in text and "\tmesa_zink-25.3.6-1\n" not in text:
         1,
     )
 elif "\tvulkan_tools-1.4.367-1\n" not in text:
-    anchor = "\tvulkan_loader-1.4.367-1\n"
+    anchor = "\tvulkan_loader-1.4.367-2\n"
     if anchor not in text:
         sys.exit("mesa pin block not found")
     text = text.replace(anchor, anchor + "\tvulkan_tools-1.4.367-1\n", 1)
@@ -79,18 +79,21 @@ if "\tvulkanteapot-1.0.0-1\n" not in text and "\tvulkan_tools-1.4.367-1\n" in te
     )
 if "mesa-22.0.5-3" in text or "mesa_swpipe-22" in text:
     sys.exit("mesa 22 still in the pin")
+text = text.replace("\tvulkan_loader-1.4.367-1\n", "\tvulkan_loader-1.4.367-2\n")
+if "\tvulkan_loader-1.4.367-2\n" not in text:
+    sys.exit("vulkan loader pin missing")
 path.write_text(text, encoding="utf-8")
 print("pin updated")
 PY
 
 list="$(mktemp)"
-"$REPO_TOOL" list -f "$CACHE" \
-	| sed -n 's/^[[:space:]]*\(.*\.hpkg\)$/\1/p' \
-	| grep -v -E '^(mesa|mesa_devel|mesa_swpipe|mesa_source)-22\.0\.5-3-' \
-	> "$list"
-# Official packages stay in a Haiku Project repository. R5OS packages use
-# another repository because package_repo rejects a mixed vendor.
-cat > "$DL/r5-haikuports.repo.info" <<'EOF'
+if [[ -f "$CACHE" ]]; then
+	"$REPO_TOOL" list -f "$CACHE" \
+		| sed -n 's/^[[:space:]]*\(.*\.hpkg\)$/\1/p' \
+		| grep -v -E '^(mesa|mesa_devel|mesa_swpipe|mesa_source)-22\.0\.5-3-' \
+		| grep -v -E '^vulkan_loader-1\.4\.367-1-' \
+		> "$list"
+	cat > "$DL/r5-haikuports.repo.info" <<'EOF'
 name HaikuPorts-BuildPackages
 vendor "Haiku Project"
 summary "The HaikuPorts/Build-Packages repository"
@@ -99,9 +102,14 @@ baseurl https://eu.hpkg.haiku-os.org/haikuports/master/build-packages
 identifier https://eu.hpkg.haiku-os.org/haikuports/master/build-packages/
 architecture x86_64
 EOF
-"$REPO_TOOL" update -C "$DL" -q -t "$CACHE" "$OUT" "$list"
+	"$REPO_TOOL" update -C "$DL" -q -t "$CACHE" "$OUT" "$list"
+else
+	echo "haikuports cache missing; leaving $OUT unchanged" >&2
+fi
 rm -f "$list"
 
+# Official packages stay in a Haiku Project repository. R5 packages use
+# another repository because package_repo rejects a mixed vendor.
 cat > "$DL/r5-opengl.repo.info" <<'EOF'
 name R5OpenGL
 vendor "R5OS"
@@ -111,12 +119,9 @@ baseurl https://eu.hpkg.haiku-os.org/haikuports/master/build-packages
 identifier tag:r5os.local,2026:repositories/opengl/x86_64
 architecture x86_64
 EOF
-# vulkan_loader is the HaikuPorts package (vendor Haiku Project). The others are R5OS.
+# R5 builds vulkan_loader. The HaikuPorts copy stays out of this repository.
 r5pkgs=()
 for name in "${needed[@]}"; do
-	if [[ "$name" == vulkan_loader-* ]]; then
-		continue
-	fi
 	r5pkgs+=("$DL/$name")
 done
 "$REPO_TOOL" create -q "$DL/r5-opengl.repo.info" "${r5pkgs[@]}"

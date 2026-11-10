@@ -1,0 +1,356 @@
+diff -ruN a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2026-10-30 15:54:36.000000000 +0100
++++ b/CMakeLists.txt	2026-11-10 16:53:03.113982796 +0100
+@@ -171,6 +171,13 @@
+         # vulkan_core.h includes <directfb.h> but the header is installed to directfb/directfb.h
+         target_include_directories(platform_wsi INTERFACE ${DIRECTFB_INCLUDE_DIRS} ${DIRECTFB_INCLUDE_DIRS}/directfb)
+     endif()
++    # SPDX-SnippetBegin
++    # SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++    # SPDX-License-Identifier: Apache-2.0
++    if(CMAKE_SYSTEM_NAME STREQUAL "Haiku")
++        target_compile_definitions(platform_wsi INTERFACE VK_USE_PLATFORM_VIEW_RFIVE)
++    endif()
++    # SPDX-SnippetEnd
+ elseif(CMAKE_SYSTEM_NAME MATCHES "QNX")
+     message(FATAL_ERROR "See BUILD.md for QNX build")
+ elseif(CMAKE_SYSTEM_NAME MATCHES "Fuchsia")
+diff -ruN a/loader/generated/vk_layer_dispatch_table.h b/loader/generated/vk_layer_dispatch_table.h
+--- a/loader/generated/vk_layer_dispatch_table.h	2026-10-30 15:54:36.000000000 +0100
++++ b/loader/generated/vk_layer_dispatch_table.h	2026-11-10 16:53:03.106634437 +0100
+@@ -29,6 +29,13 @@
+ #pragma once
+ 
+ #include <vulkan/vulkan.h>
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++#include <vulkan/vulkan_r5.h>
++#endif
++// SPDX-SnippetEnd
+ #include <vulkan/vk_layer.h>
+ 
+ // Instance function pointer dispatch table
+@@ -244,6 +251,15 @@
+     PFN_vkCreateMetalSurfaceEXT CreateMetalSurfaceEXT;
+ #endif // VK_USE_PLATFORM_METAL_EXT
+ 
++    // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    PFN_vkCreateViewSurfaceRFIVE CreateViewSurfaceRFIVE;
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+     // ---- VK_EXT_tooling_info extension commands
+     PFN_vkGetPhysicalDeviceToolPropertiesEXT GetPhysicalDeviceToolPropertiesEXT;
+ 
+diff -ruN a/loader/generated/vk_loader_extensions.c b/loader/generated/vk_loader_extensions.c
+--- a/loader/generated/vk_loader_extensions.c	2026-10-30 15:54:36.000000000 +0100
++++ b/loader/generated/vk_loader_extensions.c	2026-11-10 16:53:03.111081635 +0100
+@@ -268,6 +268,15 @@
+     LOOKUP_GIPA(CreateMetalSurfaceEXT);
+ #endif // VK_USE_PLATFORM_METAL_EXT
+ 
++    // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    LOOKUP_GIPA(CreateViewSurfaceRFIVE);
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+     // ---- VK_EXT_tooling_info extension commands
+     LOOKUP_GIPA(GetPhysicalDeviceToolPropertiesEXT);
+ 
+@@ -1694,6 +1703,15 @@
+     table->CreateMetalSurfaceEXT = (PFN_vkCreateMetalSurfaceEXT)gpa(inst, "vkCreateMetalSurfaceEXT");
+ #endif // VK_USE_PLATFORM_METAL_EXT
+ 
++    // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    table->CreateViewSurfaceRFIVE = (PFN_vkCreateViewSurfaceRFIVE)gpa(inst, "vkCreateViewSurfaceRFIVE");
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+     // ---- VK_EXT_tooling_info extension commands
+     table->GetPhysicalDeviceToolPropertiesEXT = (PFN_vkGetPhysicalDeviceToolPropertiesEXT)gpa(inst, "vkGetPhysicalDeviceToolPropertiesEXT");
+ 
+@@ -5425,6 +5443,17 @@
+             break;
+ #endif // VK_USE_PLATFORM_METAL_EXT
+ 
++        // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++        case 0xd195f123u:
++            if (!strcmp(name, "CreateViewSurfaceRFIVE")) return (void *)table->CreateViewSurfaceRFIVE;
++            break;
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+         // ---- VK_EXT_tooling_info extension commands
+         case 0x0c2f1fb6u:
+             if (!strcmp(name, "GetPhysicalDeviceToolPropertiesEXT")) return (void *)table->GetPhysicalDeviceToolPropertiesEXT;
+@@ -18377,6 +18406,14 @@
+ #if defined(VK_USE_PLATFORM_METAL_EXT)
+         else if (0 == strcmp(extension_list[i], VK_EXT_METAL_SURFACE_EXTENSION_NAME)) { enables->ext_metal_surface = 1; }
+ #endif // VK_USE_PLATFORM_METAL_EXT
++    // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++        else if (0 == strcmp(extension_list[i], VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME)) { enables->rfive_view_surface = 1; }
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
+ 
+     // ---- VK_EXT_validation_features extension commands
+         else if (0 == strcmp(extension_list[i], VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME)) { enables->ext_validation_features = 1; }
+@@ -18721,6 +18758,15 @@
+     .CreateMetalSurfaceEXT = terminator_CreateMetalSurfaceEXT,
+ #endif // VK_USE_PLATFORM_METAL_EXT
+ 
++    // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    .CreateViewSurfaceRFIVE = terminator_CreateViewSurfaceRFIVE,
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+     // ---- VK_EXT_tooling_info extension commands
+     .GetPhysicalDeviceToolPropertiesEXT = terminator_GetPhysicalDeviceToolPropertiesEXT,
+ 
+@@ -18871,6 +18917,13 @@
+ #if defined(VK_USE_PLATFORM_METAL_EXT)
+                                                   VK_EXT_METAL_SURFACE_EXTENSION_NAME,
+ #endif // VK_USE_PLATFORM_METAL_EXT
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++                                                  VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME,
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
+                                                   VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME,
+                                                   VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME,
+                                                   VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME,
+diff -ruN a/loader/generated/vk_loader_extensions.h b/loader/generated/vk_loader_extensions.h
+--- a/loader/generated/vk_loader_extensions.h	2026-10-30 15:54:36.000000000 +0100
++++ b/loader/generated/vk_loader_extensions.h	2026-11-10 16:53:03.111872798 +0100
+@@ -30,6 +30,13 @@
+ 
+ #include <stdbool.h>
+ #include <vulkan/vulkan.h>
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++#include <vulkan/vulkan_r5.h>
++#endif
++// SPDX-SnippetEnd
+ #include <vulkan/vk_layer.h>
+ #include "vk_layer_dispatch_table.h"
+ 
+@@ -437,6 +444,15 @@
+     PFN_vkCreateMetalSurfaceEXT CreateMetalSurfaceEXT;
+ #endif // VK_USE_PLATFORM_METAL_EXT
+ 
++    // ---- VK_RFIVE_view_surface extension commands
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    PFN_vkCreateViewSurfaceRFIVE CreateViewSurfaceRFIVE;
++#endif // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+     // ---- VK_EXT_tooling_info extension commands
+     PFN_vkGetPhysicalDeviceToolPropertiesEXT GetPhysicalDeviceToolPropertiesEXT;
+ 
+@@ -583,6 +599,13 @@
+ #if defined(VK_USE_PLATFORM_METAL_EXT)
+     uint8_t ext_metal_surface;
+ #endif // defined(VK_USE_PLATFORM_METAL_EXT)
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    uint8_t rfive_view_surface;
++#endif // defined(VK_USE_PLATFORM_VIEW_RFIVE)
++// SPDX-SnippetEnd
+     uint8_t ext_validation_features;
+     uint8_t ext_headless_surface;
+     uint8_t ext_surface_maintenance1;
+diff -ruN a/loader/wsi.c b/loader/wsi.c
+--- a/loader/wsi.c	2026-10-30 15:54:36.000000000 +0100
++++ b/loader/wsi.c	2026-11-10 16:53:03.112392735 +0100
+@@ -27,6 +27,13 @@
+ #include <stdlib.h>
+ 
+ #include <vulkan/vk_icd.h>
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++#include <vulkan/vulkan_r5.h>
++#endif
++// SPDX-SnippetEnd
+ 
+ #include "allocation.h"
+ #include "loader.h"
+@@ -197,6 +204,23 @@
+                     break;
+ #endif  // VK_USE_PLATFORM_METAL_EXT
+ 
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++                case VK_ICD_WSI_PLATFORM_VIEW_RFIVE:
++                    if (NULL != icd_term->dispatch.CreateViewSurfaceRFIVE &&
++                        icd_term->enabled_instance_extensions.rfive_view_surface) {
++                        result = icd_term->dispatch.CreateViewSurfaceRFIVE(
++                            icd_term->instance, (const VkViewSurfaceCreateInfoRFIVE *)icd_surface->create_info, pAllocator,
++                            &icd_term->surface_list.list[icd_surface->surface_index]);
++                    } else {
++                        result = VK_ERROR_EXTENSION_NOT_PRESENT;
++                    }
++                    break;
++#endif  // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
++
+ #if defined(VK_USE_PLATFORM_DIRECTFB_EXT)
+                 case VK_ICD_WSI_PLATFORM_DIRECTFB:
+                     if (NULL != icd_term->dispatch.CreateDirectFBSurfaceEXT &&
+@@ -1753,6 +1777,69 @@
+ 
+ #endif  // VK_USE_PLATFORM_METAL_EXT
+ 
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++LOADER_EXPORT VKAPI_ATTR VkResult VKAPI_CALL vkCreateViewSurfaceRFIVE(VkInstance instance,
++                                                                      const VkViewSurfaceCreateInfoRFIVE *pCreateInfo,
++                                                                      const VkAllocationCallbacks *pAllocator,
++                                                                      VkSurfaceKHR *pSurface) {
++    struct loader_instance *loader_inst = loader_get_instance(instance);
++    if (NULL == loader_inst) {
++        loader_log(NULL, VULKAN_LOADER_FATAL_ERROR_BIT | VULKAN_LOADER_ERROR_BIT | VULKAN_LOADER_VALIDATION_BIT, 0,
++                   "vkCreateViewSurfaceRFIVE: Invalid instance [VUID-vkCreateViewSurfaceRFIVE-instance-parameter]");
++        abort(); /* Intentionally fail so user can correct issue. */
++    }
++    return loader_inst->disp->layer_inst_disp.CreateViewSurfaceRFIVE(loader_inst->instance, pCreateInfo, pAllocator, pSurface);
++}
++
++VKAPI_ATTR VkResult VKAPI_CALL terminator_CreateViewSurfaceRFIVE(VkInstance instance,
++                                                                 const VkViewSurfaceCreateInfoRFIVE *pCreateInfo,
++                                                                 const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface) {
++    VkResult result = VK_SUCCESS;
++    VkIcdSurface *icd_surface = NULL;
++    loader_platform_thread_lock_mutex(&loader_lock);
++
++    struct loader_instance *loader_inst = loader_get_instance(instance);
++    if (!loader_inst->enabled_extensions.rfive_view_surface) {
++        loader_log(loader_inst, VULKAN_LOADER_ERROR_BIT, 0,
++                   "VK_RFIVE_view_surface extension not enabled. vkCreateViewSurfaceRFIVE will not be executed.");
++        result = VK_ERROR_EXTENSION_NOT_PRESENT;
++        goto out;
++    }
++
++    result = allocate_icd_surface_struct(loader_inst, sizeof(icd_surface->view_r5_surf.base), sizeof(icd_surface->view_r5_surf),
++                                         pAllocator, &icd_surface);
++    if (VK_SUCCESS != result) {
++        goto out;
++    }
++
++    icd_surface->view_r5_surf.base.platform = VK_ICD_WSI_PLATFORM_VIEW_RFIVE;
++    icd_surface->view_r5_surf.view = pCreateInfo->view;
++
++    const struct loader_struct_type_info ci_types[] = {
++        {VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE, sizeof(VkViewSurfaceCreateInfoRFIVE)},
++    };
++    result = copy_surface_create_info(loader_inst, icd_surface, pCreateInfo, sizeof(ci_types) / sizeof(ci_types[0]), ci_types,
++                                      "VkViewSurfaceCreateInfoRFIVE", pAllocator);
++    if (VK_SUCCESS != result) {
++        goto out;
++    }
++
++    *pSurface = wrap_surface_handle(icd_surface);
++
++out:
++    cleanup_surface_creation(loader_inst, result, icd_surface, pAllocator);
++    loader_platform_thread_unlock_mutex(&loader_lock);
++
++    return result;
++}
++// SPDX-SnippetEnd
++
++#endif  // VK_USE_PLATFORM_VIEW_RFIVE
++
+ #if defined(VK_USE_PLATFORM_SCREEN_QNX)
+ 
+ // This is the trampoline entrypoint for CreateScreenSurfaceQNX
+@@ -3215,6 +3302,16 @@
+         return true;
+     }
+ #endif  // VK_USE_PLATFORM_METAL_EXT
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++    if (!strcmp("vkCreateViewSurfaceRFIVE", name)) {
++        *addr = loader_inst->enabled_extensions.rfive_view_surface ? (void *)vkCreateViewSurfaceRFIVE : NULL;
++        return true;
++    }
++#endif  // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
+ 
+ #if defined(VK_USE_PLATFORM_SCREEN_QNX)
+ 
+diff -ruN a/loader/wsi.h b/loader/wsi.h
+--- a/loader/wsi.h	2026-10-30 15:54:36.000000000 +0100
++++ b/loader/wsi.h	2026-11-10 16:53:03.112565964 +0100
+@@ -57,6 +57,13 @@
+ #if defined(VK_USE_PLATFORM_METAL_EXT)
+         VkIcdSurfaceMetal metal_surf;
+ #endif  // VK_USE_PLATFORM_METAL_EXT
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++        VkIcdSurfaceViewRFIVE view_r5_surf;
++#endif  // VK_USE_PLATFORM_VIEW_RFIVE
++// SPDX-SnippetEnd
+ #if defined(VK_USE_PLATFORM_SCREEN_QNX)
+         VkIcdSurfaceScreen screen_surf;
+ #endif  // VK_USE_PLATFORM_SCREEN_QNX
+@@ -182,6 +189,15 @@
+ VKAPI_ATTR VkResult VKAPI_CALL terminator_CreateMetalSurfaceEXT(VkInstance instance, const VkMetalSurfaceCreateInfoEXT *pCreateInfo,
+                                                                 const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface);
+ #endif
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: Apache-2.0
++#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
++VKAPI_ATTR VkResult VKAPI_CALL terminator_CreateViewSurfaceRFIVE(VkInstance instance,
++                                                                 const VkViewSurfaceCreateInfoRFIVE *pCreateInfo,
++                                                                 const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface);
++#endif
++// SPDX-SnippetEnd
+ #if defined(VK_USE_PLATFORM_SCREEN_QNX)
+ VKAPI_ATTR VkResult VKAPI_CALL terminator_CreateScreenSurfaceQNX(VkInstance instance,
+                                                                  const VkScreenSurfaceCreateInfoQNX *pCreateInfo,

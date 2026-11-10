@@ -133,7 +133,8 @@ if ($reuse) {
 	# Convert from a local NTFS copy. Reading the raw image through
 	# \\wsl.localhost on first power-on often hangs until the VM is reset.
 	Write-Host "  copying raw image to $localRaw"
-	wsl -e bash -lc "cp -f /home/nickr/r5os/haiku/generated.x86_64/r5-os.image /mnt/c/Users/nickr/Projects/R5OS/generated/r5-os.img"
+	$wslImg = (wsl -e wslpath -u "$localRaw").Trim()
+	wsl -e bash -lc "cp -f /home/nickr/r5os/haiku/generated.x86_64/r5-os.image '$wslImg'"
 	if ($LASTEXITCODE -ne 0 -or -not (Test-Path $localRaw)) {
 		throw "copy raw image failed"
 	}

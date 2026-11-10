@@ -4,7 +4,7 @@ HAIKU=/home/nickr/r5os/haiku
 WIN="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH=/usr/bin:/bin:/home/nickr/bin:$PATH
 
-"$WIN/scripts/pin-mesa-packages.sh"
+"$WIN/scripts/pin-mesa-packages.sh" || exit 1
 
 ver="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/VERSION" | head -1 | tr -d '\r' | tr -d '[:space:]')"
 build="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/BUILD" | head -1 | tr -d '\r' | tr -d '[:space:]')"

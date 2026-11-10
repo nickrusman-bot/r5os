@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - Vulkan lists the view surface extension
+
+The image used HaikuPorts' Vulkan loader. That package has no place for a view surface, and a patch on it would disappear the next time the package is bumped. R5 now builds loader 1.4.367 itself (`distro/vulkan/build-loader.sh`), still pinned to that tag. The HaikuPorts portability fixes stay, so the loader can find an ICD on Haiku. The new patch follows Metal in that tag: a platform value, an ICD surface, a trampoline, a terminator, and the generated dispatch entries. `copy_surface_create_info` is not edited. The public header is `vulkan_r5.h` (MIT). R5's copy of `vk_icd.h` appends `VK_ICD_WSI_PLATFORM_VIEW_RFIVE` and `VkIcdSurfaceViewRFIVE`. Both numbers are placeholders (`1000999000` for the structure type). Nothing is released with them. The loader does not add `VK_RFIVE_view_surface` to the instance extensions it reports. It passes on what a driver reports. The package is `vulkan_loader-1.4.367-2`, vendor R5OS. The HaikuPorts 1.4.367-1 package is no longer in the image repository.
+
+The design's generated-file table cited line 1694 as the ICD fill. In v1.4.367 that line fills `VkLayerInstanceDispatchTable`. The driver's function is filled at line 268. `docs/VULKAN-WSI.md` says so. The same section now says the GPU's interrupt unit (IH) sends the next interrupt.
+
+`vulkaninfo` without `--summary` logs `VK_KHR_swapchain` not supported while it asks for device-group present capabilities. Lavapipe is built with `-Dplatforms=haiku`, which does not define a WSI platform, so `LVP_USE_WSI_PLATFORM` is off and the driver does not list that extension. The HaikuPorts loader 1.4.367 uses the same check and returns `VK_ERROR_EXTENSION_NOT_PRESENT`. That log is not new. `vulkaninfo --summary` does not take that path.
+
+VirtualBox, one fresh boot, image built from branch `cursor/m7-view-surface`. No jam was running while the image was copied. `vulkaninfo --summary` ran to the end. The device line is `deviceName         = llvmpipe (LLVM 21.1.8, 256 bits)`. The last line is `driverUUID         = 6c6c766d-7069-7065-5555-494400000000`. The instance extensions do not include `VK_RFIVE_view_surface`.
+
+Not yet: the Mesa surface, a window, and a Khronos number. `vulkaninfo` prints `VK_RFIVE_view_surface : extension revision 1` when Mesa reports the name, which is step 2. The request text is drafted and not posted. The placeholder must not ship in a release.
+
 ## 2026-11-10 - The repository moved to r5-operating-system/r5os
 
 The GitHub account was renamed from `nickrusman-bot` to `r5-operating-system`, so the project no longer carries a personal name. GitHub forwards the old links. Links in AGENTS.md, README.md, the roadmap and docs, the website pages, `generate-prs-page.py` and `sync-github-issues.py` now use the new name. Older CHANGELOG entries keep the old links as history. New commits use the account's no-reply address.

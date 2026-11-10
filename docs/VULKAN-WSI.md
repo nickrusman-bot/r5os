@@ -1,6 +1,6 @@
 # Vulkan in a window
 
-M7 step 0, written 10 Nov 2026. This is the design. It contains no code. The next step waits until this text is reviewed.
+M7 step 0, written 10 Nov 2026. This is the design. Step 1 adds the loader recipe and the two headers. The Mesa surface is not in that step.
 
 M7 shows a Vulkan picture in an ordinary window: VulkanTeapot and `vkcube`, through RADV on the Ryzen 5 5625U and through Lavapipe in VirtualBox. The window can be resized, moved between workspaces, minimised and closed. If the GPU cannot present, the same program draws through Lavapipe. app_server still paints the window on the CPU. Sharing a GPU buffer with app_server is M8.
 
@@ -45,7 +45,7 @@ The patch adds the platform the way Metal is added in that tag. Metal is the pat
 | Dispatch to the driver when the surface is first used. | `loader/wsi.c` lines 187–198, `case VK_ICD_WSI_PLATFORM_METAL` |
 | Exported trampoline. The application calls this, and it forwards to the layer dispatch. | `loader/wsi.c` `vkCreateMetalSurfaceEXT`, lines 1696–1709 |
 | Name lookup, so `vkGetInstanceProcAddr` returns the trampoline only when the extension is enabled. | `loader/wsi.c` `wsi_swapchain_instance_gpa`, lines 3211–3217 |
-| ICD dispatch entry, filled from the driver's function. | `loader/generated/vk_loader_extensions.c` line 1694, and `vk_loader_extensions.h` lines 435–438 |
+| ICD dispatch entry, filled from the driver's function. | `loader/generated/vk_loader_extensions.c` line 268, `LOOKUP_GIPA(CreateMetalSurfaceEXT)`, and `vk_loader_extensions.h` lines 435–438. Line 1694 is a different table: `loader_init_instance_extension_dispatch_table` writes the same command into `VkLayerInstanceDispatchTable`. That field is declared in `loader/generated/vk_layer_dispatch_table.h` lines 242–245 |
 | Layer dispatch entry, the terminator the trampoline calls. | `loader/generated/vk_loader_extensions.c` line 18721, `.CreateMetalSurfaceEXT = terminator_CreateMetalSurfaceEXT` |
 | Union member on the loader's `VkIcdSurface`, so the surface object can hold the platform struct. | `loader/wsi.h` lines 57–58, `metal_surf` |
 | Platform define that compiles those blocks in. Metal's is `VK_USE_PLATFORM_METAL_EXT` on Apple. R5 adds `VK_USE_PLATFORM_VIEW_RFIVE` for this build the same way. | `CMakeLists.txt` line 132 |
@@ -53,6 +53,8 @@ The patch adds the platform the way Metal is added in that tag. Metal is the pat
 | Turn the extension bit on when the application enables the name, and publish the name. | `loader/generated/vk_loader_extensions.c` lines 18376–18378 and 18871–18872 |
 
 `copy_surface_create_info` stays as it is. The new terminator passes `VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE` in its type list, the way Metal passes its own type at line 1737.
+
+That name list is a filter. The loader passes on the names a driver reports. It does not add `VK_RFIVE_view_surface` itself. Lavapipe does not export the name until the Mesa surface exists, so `vulkaninfo` does not print it until that step.
 
 Until Khronos publishes the enum, R5's copy of `vk_icd.h` carries `VK_ICD_WSI_PLATFORM_VIEW_RFIVE` after `VK_ICD_WSI_PLATFORM_UBM`, and `VkIcdSurfaceViewRFIVE` next to `VkIcdSurfaceMetal`. The loader and Mesa are built against that same header so the number matches. The public structure type in `vulkan_r5.h` is the other placeholder. Both go away together when the registered values exist. A release does not ship either placeholder.
 
@@ -271,7 +273,7 @@ New R5 files carry an SPDX header. Mesa and loader files keep their own licence.
 | `build-radv.sh` | The platform turned on for Lavapipe and RADV | — |
 | `r5-wsi-test`, new, under `distro/graphics` | The step 2 test program | GPL-3.0-or-later |
 
-Before any of those files are added, the licence line above is the report this step owes. Nothing in this change adds the code.
+Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The Mesa file, the `build-radv.sh` platform switch and `r5-wsi-test` are not in this step. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets.
 
 ### Settings
 
@@ -320,7 +322,7 @@ The fence value itself is not late. The one-second poll reads it and the wait re
 
 `ih_handler` in `gfx9_k12.cpp` reads the write pointer and returns at lines 418–419 when it equals the read pointer. That return does not write `IH_RB_RPTR`. The write of the read pointer is at line 492, after the loop, so an empty visit never reaches it.
 
-`ih_on` sets `RPTR_REARM` for MSI, bit 21 of `IH_RB_CNTL` at line 737. In that mode the interrupt handler sends the next interrupt only after the read pointer is written. Linux does the same: `vega10_ih.c` sets `RPTR_REARM` for MSI, and `amdgpu_ih_process` always calls `amdgpu_ih_set_rptr`. One interrupt that sees nothing new therefore stops every later interrupt. The retire thread is left with its one-second poll. That matches the log. K1 received its one interrupt (`k1 ok msi irq 61 eop 1`), and the frames after that are the 98 gaps of about 999 ms.
+`ih_on` sets `RPTR_REARM` for MSI, bit 21 of `IH_RB_CNTL` at line 737. In that mode the GPU's interrupt unit (IH) sends the next interrupt only after the read pointer is written. Linux does the same: `vega10_ih.c` sets `RPTR_REARM` for MSI, and `amdgpu_ih_process` always calls `amdgpu_ih_set_rptr`. One interrupt that sees nothing new therefore stops every later interrupt. The retire thread is left with its one-second poll. That matches the log. K1 received its one interrupt (`k1 ok msi irq 61 eop 1`), and the frames after that are the 98 gaps of about 999 ms.
 
 A write-combining load is not the cause. On x86 that load is not kept in the CPU cache. It can be satisfied early. It does not stay stale for 0.3 ms.
 
