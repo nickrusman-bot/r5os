@@ -1,0 +1,22 @@
+Try 'mv --help' for more information.
+
+Welcome to the Haiku shell.
+
+~> ~> f=/boot/home/config/settings/kernel/drivers/radeon_hd
+bash: f=/boot/home/config/settings/kernel/drivers/radeon_hd: No such file or directory
+~> ~> f=/boot/home/config/settings/kernel/drivers/radeon_hd
+bash: f=/boot/home/config/settings/kernel/drivers/radeon_hd: No such file or directory
+~> f=/boot/home/config/settings/kernel/drivers/radeon_hd
+~> grep -v '^gpu_selftest' $f > /boot/home/rh.new
+~> rm -f $f
+~> mv /boot/home/rh.new &f
+[1] 937
+bash: f: command not found
+~> mv: missing destination file operand after '/boot/home/rh.new'
+Try 'mv --help' for more information.
+mv /boot/home/rh.new &f
+[2] 1002
+bash: f: command not found
+[1]   Exit 1                     mv /boot/home/rh.new
+~> mv: missing destination file operand after '/boot/home/rh.new'
+Try 'mv --help' for more information.

@@ -1,0 +1,25 @@
+
+Welcome to the Haiku shell.
+
+~> r5-wsi-test > /boot/home/wsi.txt
+~> r5-wsi-window-test.sh VulkanTeapot > /boot/home/win-teapot.txt
+~> r5-wsi-window-test.sh vcube > /boot/home/win-vcube.txt
+~> r5-wsi-window-test.sh vkcube > /boot/home/win-vkcube.txt
+~> check.sh
+boot 1
+FAIL wsi clear ok AMD Radeon Graphics
+PASS window VulkanTeapot
+PASS window vkcube
+FAIL window driver VulkanTeapot
+FAIL window driver vkcube
+PASS cpu span ms under 2000
+PASS eop 940
+PASS GFX9 ring contract verified
+PASS GFX9 scratch 0xdeadbeef
+PASS fence landed
+PASS k2 ok gart
+FAIL
+~> 
+
+
+
