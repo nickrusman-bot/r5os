@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - Vulkan windows can use the GPU
+
+RADV presents a view surface by drawing into a device image and copying into a host-visible buffer. That is Mesa's buffer image (`wsi_configure_buffer_image`), which the existing CPU image parameters select because RADV does not set `wants_linear`. The M6 write-combining boot never passed, so the buffer is ordinary host-coherent memory. It is not a write-combined mapping, and there is no second mapping. The present waits for RADV's blit queue before it reads that buffer. Lavapipe still uses a CPU image.
+
+`gpu_present true` in `~/config/settings/kernel/drivers/radeon_hd` lets RADV answer yes to a graphics queue. `gpu_present_fail true` forces no, for the fallback test. Both are off when the line is absent. The first time a process is told no, syslog gets one line: `RADV view surface: no, window through Lavapipe`. A swapchain opened on RADV anyway returns `VK_ERROR_INITIALIZATION_FAILED` and writes that same line once. Lavapipe's answer is unchanged.
+
+`boot2.sh` and `check.sh` are installed with `mesa_radv` as `/boot/system/bin/boot2.sh` and `check.sh`. `boot2.sh` removes the settings file, writes it again with the previous lines plus `gpu_present true` and `gpu_present_fail true`, shows it, and reboots only when the answer is `y`. `check.sh` waits for the self-test and three captures, then prints PASS or FAIL. Boot 1 wants `wsi clear ok` with the RADV name. Boot 2 wants `llvmpipe` and the syslog line. Both want every window line ok, `device lost no`, `cpu span ms` under 2000, an end-of-pipe count of at least 100, and the contract lines `GFX9 ring contract verified`, `GFX9 scratch 0xdeadbeef`, `fence landed` and `k2 ok gart`.
+
+Not booted. VirtualBox has no Radeon, so it cannot show this present path. The stick is not written. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - vkcube draws in an R5 window
 
 `vkcube` from Vulkan-Tools 1.4.367 opens a `BWindow` and a `BView` and creates the surface with `vkCreateViewSurfaceRFIVE`, in the same place `cube.c` creates a Metal surface. The program still chooses the device itself. It is `bin/vkcube` in `vulkan_tools-1.4.367-1`. The signature is `application/x-vnd.R5OS-vkcube`. `r5-wsi-window-test.sh` takes the program as its argument. With no argument it still drives `VulkanTeapot --window`. The script in the `vulkanteapot` package is that file, with LF line endings.

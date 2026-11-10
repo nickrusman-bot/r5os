@@ -20,8 +20,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *
- * View-surface WSI for Lavapipe. The pixels come from a CPU image
- * (wsi_configure_cpu_image). The RADV buffer image is a later step.
+ * View-surface WSI. Lavapipe keeps a CPU image. RADV does not set
+ * wants_linear, so the same CPU image parameters ask Mesa for a buffer
+ * image (wsi_configure_buffer_image): a device image copied into a
+ * host-visible buffer. That buffer is ordinary host-coherent memory.
+ * The M6 write-combining boot never passed, so this is not a
+ * write-combined mapping, and there is no second mapping.
  * Written from the R5 view-surface specification. No code is taken from
  * haiku-amdgpu, haiku-rpi, or summit.
  */
@@ -30,20 +34,25 @@
 
 #include "wsi_common_private.h"
 #include "vk_alloc.h"
+#include "vk_device.h"
 #include "vk_instance.h"
+#include "vk_queue.h"
 #include "vulkan/vulkan_r5.h"
 
 #include <Bitmap.h>
+#include <FindDirectory.h>
 #include <Messenger.h>
 #include <Screen.h>
 #include <View.h>
 #include <Window.h>
 
 #include <OS.h>
+#include <syslog.h>
 
 #include <assert.h>
 #include <new>
 #include <pthread.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
@@ -217,18 +226,75 @@ r5_fill_capabilities(struct r5_surface *surface, VkSurfaceCapabilitiesKHR *caps)
 		| VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 }
 
+static bool gSettingsReady;
+static bool gGpuPresent;
+static bool gGpuPresentFail;
+static bool gRefused;
+
+static void
+r5_read_settings(void)
+{
+	if (gSettingsReady)
+		return;
+	gSettingsReady = true;
+	char base[512];
+	char path[640];
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, base, sizeof(base)) != B_OK)
+		return;
+	snprintf(path, sizeof(path), "%s/kernel/drivers/radeon_hd", base);
+	FILE *file = fopen(path, "r");
+	if (file == NULL)
+		return;
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		char key[64];
+		char value[64];
+		if (sscanf(line, " %63s %63s", key, value) != 2)
+			continue;
+		if (key[0] == '#')
+			continue;
+		bool on = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
+		if (strcmp(key, "gpu_present") == 0)
+			gGpuPresent = on;
+		else if (strcmp(key, "gpu_present_fail") == 0)
+			gGpuPresentFail = on;
+	}
+	fclose(file);
+}
+
+static bool
+r5_radv_may_present(void)
+{
+	r5_read_settings();
+	return gGpuPresent && !gGpuPresentFail;
+}
+
+static void
+r5_log_refuse_once(void)
+{
+	if (gRefused)
+		return;
+	gRefused = true;
+	syslog(LOG_INFO, "RADV view surface: no, window through Lavapipe");
+}
+
 static VkResult
 r5_get_support(VkIcdSurfaceBase *icd, struct wsi_device *wsi,
 	uint32_t queueFamilyIndex, VkBool32 *supported)
 {
-	/*
-	 * Lavapipe sets wsi->sw. RADV does not. RADV stays false until step 5
-	 * reads gpu_present. A graphics queue on the software device is the
-	 * only yes this step gives.
-	 */
+	(void)icd;
 	uint64_t mask = r5_graphics_for(wsi);
-	bool graphics = wsi->sw && queueFamilyIndex < 64
+	bool graphics = queueFamilyIndex < 64
 		&& (mask & ((uint64_t)1 << queueFamilyIndex)) != 0;
+	if (!wsi->sw) {
+		if (!r5_radv_may_present()) {
+			r5_log_refuse_once();
+			*supported = VK_FALSE;
+			return VK_SUCCESS;
+		}
+		*supported = graphics ? VK_TRUE : VK_FALSE;
+		return VK_SUCCESS;
+	}
 	*supported = graphics ? VK_TRUE : VK_FALSE;
 	return VK_SUCCESS;
 }
@@ -496,6 +562,23 @@ r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 		return VK_SUCCESS;
 	}
 
+	/*
+	 * RADV's blit runs on its own queue. The graphics-queue fence does not
+	 * cover it, and Mesa waits that fence only for a software device.
+	 * Wait for the blit queue before reading the host-visible buffer.
+	 */
+	if (chain->base.blit.type == WSI_SWAPCHAIN_BUFFER_BLIT
+		&& chain->base.blit.queue != NULL) {
+		VK_FROM_HANDLE(vk_device, vkdev, chain->base.device);
+		VkResult waited = vkdev->dispatch_table.QueueWaitIdle(
+			vk_queue_to_handle(chain->base.blit.queue));
+		if (waited != VK_SUCCESS) {
+			r5_release_image(chain, image_index);
+			pthread_mutex_unlock(&chain->present_mu);
+			return waited;
+		}
+	}
+
 	r5_copy_rows(&image->base, image->bitmap, chain->width, chain->height);
 
 	BWindow *window = NULL;
@@ -617,6 +700,10 @@ r5_create_swapchain(VkIcdSurfaceBase *icd, VkDevice device,
 {
 	struct r5_surface *surface = r5_surface_from_icd(icd);
 
+	if (!wsi_device->sw && !r5_radv_may_present()) {
+		r5_log_refuse_once();
+		return VK_ERROR_INITIALIZATION_FAILED;
+	}
 	if (info->presentMode != VK_PRESENT_MODE_FIFO_KHR)
 		return VK_ERROR_INITIALIZATION_FAILED;
 	if (info->minImageCount > 3 || info->imageArrayLayers != 1)
@@ -639,6 +726,10 @@ r5_create_swapchain(VkIcdSurfaceBase *icd, VkDevice device,
 	if (chain == NULL)
 		return VK_ERROR_OUT_OF_HOST_MEMORY;
 
+	/*
+	 * WSI_IMAGE_TYPE_CPU. Lavapipe sets wants_linear and stays a CPU image.
+	 * RADV does not, so Mesa calls wsi_configure_buffer_image.
+	 */
 	struct wsi_cpu_image_params params = {};
 	params.base.image_type = WSI_IMAGE_TYPE_CPU;
 
