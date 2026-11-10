@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The repository moved to r5-operating-system/r5os
+
+The GitHub account was renamed from `nickrusman-bot` to `r5-operating-system`, so the project no longer carries a personal name. GitHub forwards the old links. Links in AGENTS.md, README.md, the roadmap and docs, the website pages, `generate-prs-page.py` and `sync-github-issues.py` now use the new name. Older CHANGELOG entries keep the old links as history. New commits use the account's no-reply address.
+
 ## 2026-11-10 - M6: the 5625U draws the same picture on Radeon as on Lavapipe
 
 GPU milestone M6 passed on stick 33 (`r5-os-anyboot-m6.iso`, from `main` after #4164), boot 1, settings with `gfx9_wc_gtt false`. Logs: `generated/boot-5625u-33`.

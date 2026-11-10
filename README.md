@@ -91,7 +91,7 @@ The full list of what Haiku needs is in [`haiku/ReadMe.Compiling.md`](haiku/Read
 Get the sources and Haiku's build tools, and install `jam`:
 
 ```bash
-git clone https://github.com/nickrusman-bot/r5os.git ~/Projects/R5OS
+git clone https://github.com/r5-operating-system/r5os.git ~/Projects/R5OS
 cd ~/Projects/R5OS
 git clone https://review.haiku-os.org/buildtools
 make -C buildtools/jam

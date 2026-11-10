@@ -27,19 +27,19 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 
   VBox 2026-10-30 Europe/Amsterdam: build 10012 bevestigd (slot op Printers, Repositories, VirtualMemory; machine-paden; verplicht wachtwoord; Add-succes).
 
-  Live lijst: GitHub [#63](https://github.com/nickrusman-bot/r5os/issues/63).
+  Live lijst: GitHub [#63](https://github.com/r5-operating-system/r5os/issues/63).
 
   **Nu**
-  1. Lock screen: [#64](https://github.com/nickrusman-bot/r5os/issues/64). Build 10013, bladmenu, gezien 2026-10-30 09:45 Europe/Amsterdam (titel-tab). Sneltoets is [#72](https://github.com/nickrusman-bot/r5os/issues/72).
-  2. Guest + Public/Shared: [#65](https://github.com/nickrusman-bot/r5os/issues/65).
+  1. Lock screen: [#64](https://github.com/r5-operating-system/r5os/issues/64). Build 10013, bladmenu, gezien 2026-10-30 09:45 Europe/Amsterdam (titel-tab). Sneltoets is [#72](https://github.com/r5-operating-system/r5os/issues/72).
+  2. Guest + Public/Shared: [#65](https://github.com/r5-operating-system/r5os/issues/65).
 
   **Later / niet tijdens lock screen**
-  - Eén Preferences-venster (R5 Hub): [#66](https://github.com/nickrusman-bot/r5os/issues/66).
-  - WebPositive-defaults uit `webpositive.hpkg`: [#67](https://github.com/nickrusman-bot/r5os/issues/67).
-  - Image-`passwd`: `user` al uid ≥ 1000: [#68](https://github.com/nickrusman-bot/r5os/issues/68).
-  - Add-account-dialoog uitlijnen: [#69](https://github.com/nickrusman-bot/r5os/issues/69).
-  - Overlays in native bron: [#70](https://github.com/nickrusman-bot/r5os/issues/70).
-  - Sign-in-layout: [#71](https://github.com/nickrusman-bot/r5os/issues/71).
+  - Eén Preferences-venster (R5 Hub): [#66](https://github.com/r5-operating-system/r5os/issues/66).
+  - WebPositive-defaults uit `webpositive.hpkg`: [#67](https://github.com/r5-operating-system/r5os/issues/67).
+  - Image-`passwd`: `user` al uid ≥ 1000: [#68](https://github.com/r5-operating-system/r5os/issues/68).
+  - Add-account-dialoog uitlijnen: [#69](https://github.com/r5-operating-system/r5os/issues/69).
+  - Overlays in native bron: [#70](https://github.com/r5-operating-system/r5os/issues/70).
+  - Sign-in-layout: [#71](https://github.com/r5-operating-system/r5os/issues/71).
 
   **Expres niet:** `StartSession` van de aangemelde persoon; prefs verbergen per rol; fast user switching zonder uitloggen tot er één scherm blijft.
 
@@ -93,7 +93,7 @@ Eigen werk, los van de Haiku-tickettracker in `tracker/`.
 ## Later / lang
 
 - [ ] **Mixxx (DJ, side quest)**  
-  GitHub [#55](https://github.com/nickrusman-bot/r5os/issues/55). Plan: `docs/MIXXX.md`. Niet in de image. Eerst HaikuPorts 2.5.4 op AMD64, daarna speakers, class-compliant MIDI, UAC1 2ch. UAC2/cue/HID/vinyl later. Niet tijdens multi-user.
+  GitHub [#55](https://github.com/r5-operating-system/r5os/issues/55). Plan: `docs/MIXXX.md`. Niet in de image. Eerst HaikuPorts 2.5.4 op AMD64, daarna speakers, class-compliant MIDI, UAC1 2ch. UAC2/cue/HID/vinyl later. Niet tijdens multi-user.
 
 - [ ] **Ronder venster**  
   Plan: `docs/LOOK.md`. Huidige tab-geel houden, hoeken ronder, daarna knoppen, velden, Deskbar-padding, schaduw als laatste. Niet tijdens multi-user.
