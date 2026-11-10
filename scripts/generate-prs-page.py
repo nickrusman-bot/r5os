@@ -13,7 +13,8 @@ import shutil
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-WEBSITE_OUT = ROOT / "docs" / "website" / "prs.html"
+DESKTOP_OUT = pathlib.Path(r"C:\Users\nickr\Desktop\r5-website\prs.html")
+BRAND_KIT_OUT = ROOT / "distro" / "artwork" / "brand-kit" / "prs.html"
 
 
 def classify_pr(title: str, branch: str, summary: str) -> tuple[str, str]:
@@ -1003,9 +1004,12 @@ def render_html(prs: list[dict[str, object]]) -> str:
 def main() -> int:
     prs = collect_prs()
     html_out = render_html(prs).replace('website.html', 'index.html')
-    WEBSITE_OUT.parent.mkdir(parents=True, exist_ok=True)
-    WEBSITE_OUT.write_text(html_out, encoding="utf-8")
-    print(f"Generated {WEBSITE_OUT} with {len(prs)} merged PRs across {(len(prs) + 14) // 15} pages.")
+    if DESKTOP_OUT.parent.is_dir():
+        DESKTOP_OUT.write_text(html_out, encoding="utf-8")
+        print(f"Generated {DESKTOP_OUT} with {len(prs)} merged PRs across {(len(prs) + 14) // 15} pages.")
+    if BRAND_KIT_OUT.parent.is_dir():
+        BRAND_KIT_OUT.write_text(html_out, encoding="utf-8")
+        print(f"Mirrored to {BRAND_KIT_OUT}")
     return 0
 
 
