@@ -2,7 +2,9 @@
 
 ## 2026-11-10 - First 5625U boot of the M6 stick
 
-The stick written at 14:47 Europe/Amsterdam was read back at 15:12. One self-test file, no `r5-gpu-selftest.old.txt`. The settings file is still boot 1, last line `gfx9_wc_gtt false`. The syslog on the volume is 8966 bytes and starts in the middle of the run, at `t 837723831`. It has no boot banner, no `GFX9 ring contract verified`, no `fence landed`, no `k2 ok gart`, and no `passport counter_freq`. That is why `check.sh` printed FAIL for those lines. `PASS no passport mismatch` only means that text is absent too. Logs are `generated/boot-5625u-33/`.
+The stick written at 14:47 Europe/Amsterdam was read back at 15:12. One self-test file, no `r5-gpu-selftest.old.txt`. The settings file is still boot 1, last line `gfx9_wc_gtt false`. Haiku rotated the log: `system/var/log/syslog.1` is 524432 bytes and has the one boot banner, and `syslog` is the last 8966 bytes. `check.sh` reads only `syslog`, so it printed FAIL for lines that are in `syslog.1`. Logs are `generated/boot-5625u-33/`.
+
+`syslog.1` has `GFX9 ring contract verified`, `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `k0 ok fence`, `k1 ok msi irq 61`, `k2 ok gart`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 3 seen 3`. There is no `passport mismatch`. The lines are `passport discovery missing`, `passport atom missing`, and `passport counter_freq 100000 atom 0`.
 
 The self-test file did finish. Nine blocks, each `compared driverID 3 AMD Radeon Graphics (RADV RENOIR) and driverID 13 llvmpipe`, `pixels ok max 2 share 0.0% limit 1%`, and a GPU span below the CPU span. The first teapot: `radeon ms per frame 0.305`, `gpu span ms 97977.856 cpu span ms 99202.012`, `lavapipe ms per frame 0.929`. Teapots A and B started at `t 840961965` and `t 840962108`. `counters back` is present. The file ends `ring waits 0 max 256 of 1024` and `selftest done`.
 
