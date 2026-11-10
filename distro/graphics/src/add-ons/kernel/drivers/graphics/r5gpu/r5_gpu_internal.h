@@ -112,7 +112,7 @@ struct gpu_client {
 	/* Handed out at CTX create. 0 means there is no live context. */
 	uint64			fenceCtx;
 	uint32			pasid;
-	/* Own page table when each open file has its own address space. */
+	/* Own page table when gfx9_vmid_per_file is on. Off leaves this empty. */
 	r5_file_tree*	tree;
 	/* Set by the retire thread when this file's PASID faults. */
 	bool			faulted;
@@ -164,13 +164,5 @@ void gpu_bo_hold_tree(gpu_bo* bo);
 void gpu_bo_release(gpu_bo* bo);
 void r5_file_tree_drop(r5_file_tree* tree);
 uint32 gpu_known_dw(uint64 va);
-void r5_gpu_eop();
-void gpu_fault_retire();
-status_t gpu_wait_value(void* info, volatile uint64* value, uint64 target,
-	uint64 timeoutUs);
-status_t gpu_free(void* cookie);
-status_t gpu_read(void* cookie, off_t position, void* buffer, size_t* numBytes);
-status_t gpu_write(void* cookie, off_t position, const void* buffer,
-	size_t* numBytes);
 
 #endif

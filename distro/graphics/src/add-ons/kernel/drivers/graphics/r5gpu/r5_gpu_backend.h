@@ -40,7 +40,6 @@ typedef struct r5_gpu_backend_ops {
 	int			(*user_submit)(const uint64_t* va, const uint32_t* dwords,
 				const uint32_t* vmid, const uint32_t* flags, uint32_t count,
 				uint64_t fenceCtx, int32_t* preamble, uint64_t* sequence);
-	int			(*bo_map)(void* client, void* buffer, size_t length);
 	int			(*get_info)(void* client, void* buffer, size_t length);
 	int			(*debug_switch)(void* buffer, size_t length);
 	int			(*stage_p)(void* info, void* out);
@@ -49,6 +48,8 @@ typedef struct r5_gpu_backend_ops {
 				uint32_t* oldWord, uint32_t* newWord);
 	int			(*log_state)(const char* why, char* line, uint32_t bytes);
 	int			(*dump)(const char* why);
+	int			(*fault_take)(uint32_t* pasid, uint32_t* vmid, uint64_t* addr);
+	int			(*map_vram)(uint64_t offset, uint64_t bytes, void** address);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

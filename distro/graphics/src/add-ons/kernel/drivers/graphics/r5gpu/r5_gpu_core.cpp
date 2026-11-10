@@ -5,6 +5,13 @@
  * GPU core: clients, buffers, sync objects, jobs, the per-file VMID
  * book, limits, user-memory copies, and the watchdog. Hardware goes
  * through r5_gpu_backend_ops. A null operation returns B_NOT_SUPPORTED.
+ *
+ * Render node /dev/gpu/radeon_hd/<n>. The graphics node is unchanged.
+ * Without gpu_render the node only answers GET_INFO. VMID 1 is one
+ * shared address space unless gfx9_vmid_per_file is set. A job that
+ * stays in the ring for 5 seconds
+ * marks the device lost. A client wait does not. There is no reset.
+ * The GFX watchdog is 10 seconds, the same as amdgpu.lockup_timeout.
  */
 
 #include "r5_gpu_internal.h"
@@ -26,6 +33,16 @@
 
 extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
 extern "C" bool team_is_valid(team_id id);
+
+static void r5_gpu_eop();
+static void gpu_fault_retire();
+static status_t gpu_wait_value(void* info, volatile uint64* value, uint64 target,
+	uint64 timeoutUs);
+static status_t gpu_bo_map(gpu_client* client, void* buffer, size_t length);
+static status_t gpu_free(void* cookie);
+static status_t gpu_read(void* cookie, off_t position, void* buffer, size_t* numBytes);
+static status_t gpu_write(void* cookie, off_t position, const void* buffer,
+	size_t* numBytes);
 
 
 int sErrorLines;
@@ -853,11 +870,12 @@ gpu_prt_add(r5_vm* vm, uint64 va, uint64 bytes)
 static status_t
 gpu_va_write_prt(r5_vm* vm, uint64 va, uint64 bytes)
 {
-	/* The PTE is a value built in the backend: bit 51, VALID clear,
-	 * no address. This path does not read or write a user address (SMAP).
-	 */
 	if (gR5GpuOps.map_prt == NULL)
 		return B_NOT_SUPPORTED;
+	/* The PTE is a value built here: bit 51, VALID clear, no address.
+	 * r5_gfx9_vmid1_map writes that page-table entry. This path does
+	 * not read or write a user address (SMAP).
+	 */
 	for (uint64 page = 0; page < bytes; page += 4096) {
 		if (!gpu_hw_prt(vm, va + page)) {
 			gpu_va_clear(vm, va, page);
@@ -1200,6 +1218,8 @@ gpu_ib_mapped(gpu_client* client, uint64 va, uint32 dwords)
 }
 
 
+/* The sync wait and the ring-room wait drop the lock. An unmap in that
+ * window must fail the submit before the cache flush and the doorbell. */
 static status_t
 gpu_ibs_mapped(gpu_client* client, const r5_gpu_ib* ibs, uint32 count,
 	uint32 ring)
@@ -2098,12 +2118,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		status = gpu_bo_create(client, buffer, length);
 	else if (op == R5_GPU_BO_FREE)
 		status = gpu_bo_free(client, buffer, length);
-	else if (op == R5_GPU_BO_MAP) {
-		if (gR5GpuOps.bo_map == NULL)
-			status = B_NOT_SUPPORTED;
-		else
-			status = gR5GpuOps.bo_map(client, buffer, length);
-	}
+	else if (op == R5_GPU_BO_MAP)
+		status = gpu_bo_map(client, buffer, length);
 	else if (op == R5_GPU_VA_MAP)
 		status = gpu_va_map(client, buffer, length);
 	else if (op == R5_GPU_VA_UNMAP)
@@ -2223,6 +2239,258 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		status = B_UNSUPPORTED;
 	gpu_unlock();
 	return status;
+}
+
+
+
+/* vm.h pulls thread types in before the mutex type. These are the calls
+ * radeon_hd already resolves from the kernel, same as vm_set_area_memory_type.
+ */
+extern "C" area_id vm_clone_area(team_id team, const char* name, void** address,
+	uint32 addressSpec, uint32 protection, uint32 mapping, area_id sourceArea,
+	bool kernel);
+extern "C" team_id team_get_current_team_id(void);
+
+/* headers/private/system/vm_defs.h: REGION_NO_PRIVATE_MAP = 0. */
+static const uint32 kRegionNoPrivateMap = 0;
+
+
+static void
+r5_gpu_eop()
+{
+	if (!sReady)
+		return;
+	uint64 seen = gpu_hw_seen();
+	for (uint32 i = 0; i < kMaxJob; i++) {
+		gpu_job* job = &sJobs[i];
+		if (!job->live || job->sequence > seen)
+			continue;
+		for (uint32 n = 0; n < job->count; n++) {
+			gpu_sync* sync = job->syncs[n];
+			if (sync != NULL && sync->live && job->points[n] > sync->point)
+				sync->point = job->points[n];
+		}
+		job->live = false;
+	}
+	sEop.NotifyAll();
+}
+
+
+static uint64
+gpu_counter(volatile uint64* value)
+{
+	if (value == NULL)
+		return gpu_hw_seen();
+	return *value;
+}
+
+
+static status_t
+gpu_wait_value(void* info, volatile uint64* value, uint64 target,
+	uint64 timeoutUs)
+{
+	(void)info;
+	int step = r5_wait_step(gpu_counter(value), target, timeoutUs, 0);
+	if (step == R5_WAIT_DONE)
+		return B_OK;
+	if (sLost)
+		return ECANCELED;
+	if (step == R5_WAIT_POLL)
+		return B_TIMED_OUT;
+	bigtime_t deadline = system_time() + (bigtime_t)timeoutUs;
+	while (true) {
+		ConditionVariableEntry entry;
+		sEop.Add(&entry);
+		bigtime_t now = system_time();
+		step = r5_wait_step(gpu_counter(value), target, timeoutUs,
+			now >= deadline);
+		if (step == R5_WAIT_DONE)
+			return B_OK;
+		if (sLost)
+			return ECANCELED;
+		if (step == R5_WAIT_TIMEOUT)
+			return B_TIMED_OUT;
+		bigtime_t left = deadline - now;
+		gpu_unlock();
+		entry.Wait(B_RELATIVE_TIMEOUT, left);
+		gpu_lock();
+	}
+}
+
+
+static void
+gpu_fault_retire()
+{
+	uint32 pasid = 0;
+	uint32 vmid = 0;
+	uint64 addr = 0;
+	while (gR5GpuOps.fault_take != NULL
+		&& gR5GpuOps.fault_take(&pasid, &vmid, &addr)) {
+		gpu_client* found = NULL;
+		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+			if (scan->pasid != 0 && scan->pasid == pasid) {
+				found = scan;
+				break;
+			}
+		}
+		if (found == NULL) {
+			dprintf("radeon_hd: vm fault pasid %lu unknown addr %016llx\n",
+				(unsigned long)pasid, (unsigned long long)addr);
+			continue;
+		}
+		found->faulted = true;
+		if (sGuilty == NULL)
+			sGuilty = found;
+		dprintf("radeon_hd: vm fault pasid %lu vmid %lu addr %016llx\n",
+			(unsigned long)pasid, (unsigned long)vmid,
+			(unsigned long long)addr);
+	}
+}
+
+
+static status_t
+gpu_bo_map(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_bo in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_MAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
+	gpu_bo* bo = gpu_bo_get(client, in.handle);
+	if (bo == NULL)
+		return gpu_refuse("BO_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0, 0, 0, 0,
+			0);
+	/* Another team does not get a clone until M5. The same team gets
+	 * the clone it already has. clone_area() would put user pages in the
+	 * kernel address space and add the kernel bits (SMAP). vm_clone_area
+	 * with kernel true puts only the user bits in this team. The kernel
+	 * does not read or write through that clone.
+	 */
+	team_id team = team_get_current_team_id();
+	if (bo->area >= 0) {
+		if (bo->mapTeam != team)
+			return gpu_refuse("BO_MAP", "team", B_NOT_ALLOWED, in.handle,
+				bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+		in.area = bo->area;
+		return gpu_copy_out(buffer, length, &in, sizeof(in));
+	}
+	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+		void* kernel = NULL;
+		if (gR5GpuOps.map_vram == NULL)
+			return gpu_refuse("BO_MAP", "vram", B_NOT_SUPPORTED, in.handle,
+				bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+		area_id kernelArea = gR5GpuOps.map_vram(bo->vramOffset, bo->bytes,
+			&kernel);
+		if (kernelArea < 0 || kernel == NULL)
+			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
+				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+		bo->kernelArea = kernelArea;
+		bo->kernel = kernel;
+	}
+	void* user = NULL;
+	area_id area = vm_clone_area(team, "r5 gpu bo", &user, B_ANY_ADDRESS,
+		B_READ_AREA | B_WRITE_AREA, kRegionNoPrivateMap, bo->kernelArea,
+		true);
+	if (area < 0)
+		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
+			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	bo->area = area;
+	bo->mapTeam = team;
+	in.area = area;
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_MAP", "copy", status, in.handle, bo->domain,
+			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	return B_OK;
+}
+
+
+static status_t
+gpu_free(void* cookie)
+{
+	gpu_client* client = (gpu_client*)cookie;
+	if (client == NULL)
+		return B_OK;
+	gpu_lock();
+	status_t status = B_OK;
+	uint64 seen = gpu_hw_seen();
+	r5_gpu_eop();
+	for (uint32 i = 0; i < kMaxJob; i++) {
+		if (!sJobs[i].live)
+			continue;
+		for (uint32 n = 0; n < sJobs[i].count; n++) {
+			gpu_sync* sync = sJobs[i].syncs[n];
+			if (sync != NULL && sync->owner == client)
+				sJobs[i].syncs[n] = NULL;
+		}
+	}
+	for (uint32 i = 0; i < client->handleCount; i++) {
+		uint32 handle = client->handles[i];
+		if (handle == 0 || handle > kMaxBo)
+			continue;
+		gpu_bo* bo = &sBo[handle - 1u];
+		if (!bo->live || bo->owner != client)
+			continue;
+		uint64 sequence = client->lastSequence;
+		if (!sLost && sequence != 0 && seen < sequence) {
+			bo->owner = NULL;
+			bo->parked = true;
+			bo->parkSequence = sequence;
+			gpu_bo_hold_tree(bo);
+		} else
+			gpu_bo_release(bo);
+	}
+	for (uint32 i = 0; i < kMaxSync; i++) {
+		client->syncs[i].live = false;
+		client->syncs[i].owner = NULL;
+	}
+	if (client->pasid != 0)
+		r5_pasid_free(&sPasids, client->pasid);
+	if (client->tree != NULL) {
+		r5_file_tree* tree = client->tree;
+		client->tree = NULL;
+		tree->seen = seen;
+		r5_file_tree_drop(tree);
+	}
+	if (sClientList == client)
+		sClientList = client->next;
+	else {
+		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+			if (scan->next == client) {
+				scan->next = client->next;
+				break;
+			}
+		}
+	}
+	if (client->contexts > 0) {
+		sContexts -= client->contexts;
+		if (sContexts < 0)
+			sContexts = 0;
+	}
+	gpu_unlock();
+	free(client);
+	return status;
+}
+
+
+static status_t
+gpu_read(void* cookie, off_t position, void* buffer, size_t* numBytes)
+{
+	(void)cookie;
+	(void)position;
+	(void)buffer;
+	*numBytes = 0;
+	return B_ERROR;
+}
+
+
+static status_t
+gpu_write(void* cookie, off_t position, const void* buffer, size_t* numBytes)
+{
+	(void)cookie;
+	(void)position;
+	(void)buffer;
+	*numBytes = 0;
+	return B_ERROR;
 }
 
 

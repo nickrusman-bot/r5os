@@ -25,14 +25,7 @@
 #include <string.h>
 
 
-extern "C" area_id vm_clone_area(team_id team, const char* name, void** address,
-	uint32 addressSpec, uint32 protection, uint32 mapping, area_id sourceArea,
-	bool kernel);
-extern "C" team_id team_get_current_team_id(void);
 area_id r5_gfx9_map_vram(uint64 offset, uint64 bytes, void** address);
-
-/* headers/private/system/vm_defs.h: REGION_NO_PRIVATE_MAP = 0. */
-static const uint32 kRegionNoPrivateMap = 0;
 
 
 extern radeon_info* gDeviceInfo[];
@@ -143,6 +136,10 @@ gpu_active_cus(radeon_info* info, uint32* _bitmap)
 }
 
 
+/* gfx_v9_0_get_rb_active_bitmap and gfx_v9_0_setup_rb. One SE and one
+ * SH, so this does not write GRBM_GFX_INDEX. num is the pipe count
+ * Linux puts in num_rb_pipes (max backends times shader engines).
+ * mask is backend_enable_mask. */
 static void
 gpu_rb(radeon_info* info, uint32* num, uint32* mask)
 {
@@ -162,67 +159,10 @@ gpu_rb(radeon_info* info, uint32* num, uint32* mask)
 }
 
 
-void
-r5_gpu_eop()
-{
-	if (!sReady)
-		return;
-	uint64 seen = r5_gfx9_user_seen();
-	for (uint32 i = 0; i < kMaxJob; i++) {
-		gpu_job* job = &sJobs[i];
-		if (!job->live || job->sequence > seen)
-			continue;
-		for (uint32 n = 0; n < job->count; n++) {
-			gpu_sync* sync = job->syncs[n];
-			if (sync != NULL && sync->live && job->points[n] > sync->point)
-				sync->point = job->points[n];
-		}
-		job->live = false;
-	}
-	sEop.NotifyAll();
-}
 
 
-static uint64
-gpu_counter(volatile uint64* value)
-{
-	if (value == NULL)
-		return r5_gfx9_user_seen();
-	return *value;
-}
 
 
-status_t
-gpu_wait_value(void* info, volatile uint64* value, uint64 target,
-	uint64 timeoutUs)
-{
-	(void)info;
-	int step = r5_wait_step(gpu_counter(value), target, timeoutUs, 0);
-	if (step == R5_WAIT_DONE)
-		return B_OK;
-	if (sLost)
-		return ECANCELED;
-	if (step == R5_WAIT_POLL)
-		return B_TIMED_OUT;
-	bigtime_t deadline = system_time() + (bigtime_t)timeoutUs;
-	while (true) {
-		ConditionVariableEntry entry;
-		sEop.Add(&entry);
-		bigtime_t now = system_time();
-		step = r5_wait_step(gpu_counter(value), target, timeoutUs,
-			now >= deadline);
-		if (step == R5_WAIT_DONE)
-			return B_OK;
-		if (sLost)
-			return ECANCELED;
-		if (step == R5_WAIT_TIMEOUT)
-			return B_TIMED_OUT;
-		bigtime_t left = deadline - now;
-		gpu_unlock();
-		entry.Wait(B_RELATIVE_TIMEOUT, left);
-		gpu_lock();
-	}
-}
 
 
 static status_t
@@ -369,86 +309,8 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 }
 
 
-void
-gpu_fault_retire()
-{
-	uint32 pasid = 0;
-	uint32 vmid = 0;
-	uint64 addr = 0;
-	while (r5_gfx9_fault_take(&pasid, &vmid, &addr)) {
-		gpu_client* found = NULL;
-		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
-			if (scan->pasid != 0 && scan->pasid == pasid) {
-				found = scan;
-				break;
-			}
-		}
-		if (found == NULL) {
-			dprintf("radeon_hd: vm fault pasid %lu unknown addr %016llx\n",
-				(unsigned long)pasid, (unsigned long long)addr);
-			continue;
-		}
-		found->faulted = true;
-		if (sGuilty == NULL)
-			sGuilty = found;
-		dprintf("radeon_hd: vm fault pasid %lu vmid %lu addr %016llx\n",
-			(unsigned long)pasid, (unsigned long)vmid,
-			(unsigned long long)addr);
-	}
-}
 
 
-static status_t
-gpu_bo_map(gpu_client* client, void* buffer, size_t length)
-{
-	r5_gpu_bo in;
-	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
-	if (status != B_OK)
-		return gpu_refuse("BO_MAP", "copy", status, 0, 0, 0, 0, 0, 0, 0);
-	gpu_bo* bo = gpu_bo_get(client, in.handle);
-	if (bo == NULL)
-		return gpu_refuse("BO_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0, 0, 0, 0,
-			0);
-	/* Another team does not get a clone until M5. The same team gets
-	 * the clone it already has. clone_area() would put user pages in the
-	 * kernel address space and add the kernel bits (SMAP). vm_clone_area
-	 * with kernel true puts only the user bits in this team. The kernel
-	 * does not read or write through that clone.
-	 */
-	team_id team = team_get_current_team_id();
-	if (bo->area >= 0) {
-		if (bo->mapTeam != team)
-			return gpu_refuse("BO_MAP", "team", B_NOT_ALLOWED, in.handle,
-				bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-		in.area = bo->area;
-		return gpu_copy_out(buffer, length, &in, sizeof(in));
-	}
-	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
-		void* kernel = NULL;
-		area_id kernelArea = r5_gfx9_map_vram(bo->vramOffset, bo->bytes,
-			&kernel);
-		if (kernelArea < 0 || kernel == NULL)
-			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
-				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-		bo->kernelArea = kernelArea;
-		bo->kernel = kernel;
-	}
-	void* user = NULL;
-	area_id area = vm_clone_area(team, "r5 gpu bo", &user, B_ANY_ADDRESS,
-		B_READ_AREA | B_WRITE_AREA, kRegionNoPrivateMap, bo->kernelArea,
-		true);
-	if (area < 0)
-		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
-			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-	bo->area = area;
-	bo->mapTeam = team;
-	in.area = area;
-	status = gpu_copy_out(buffer, length, &in, sizeof(in));
-	if (status != B_OK)
-		return gpu_refuse("BO_MAP", "copy", status, in.handle, bo->domain,
-			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-	return B_OK;
-}
 
 
 static uint64
@@ -875,6 +737,9 @@ gpu_stage_word(uint8* destCpu, bool flush)
 }
 
 
+/* Architectural PAT index: PAT is bit 7, PCD bit 4, PWT bit 3.
+ * Write-back is 0. Haiku's write-combining PTE sets only the PAT bit
+ * when PAT is on, which is index 4. */
 static uint32
 gpu_stage_pat(void* cpu)
 {
@@ -909,6 +774,9 @@ gpu_stage_pat(void* cpu)
 }
 
 
+/* Caller holds the lock and drops it while polling. A miss is a landed
+ * fence, or an idle CP, with the word absent: the series continues.
+ * A hang is a busy CP at 5s, or the device already lost. */
 static gpu_stage_pace
 gpu_stage_pace_wait(radeon_info* info, int slot, uint64 sequence,
 	bool expectWord, uint8* destCpu, bool flush, bool requireFence)
@@ -969,6 +837,9 @@ gpu_stage_how(const gpu_stage_pace& pace, bool expectWord)
 }
 
 
+/* One VMID 1 IB. The WRITE_DATA destination is destVa. A miss keeps
+ * the series going. A hang stops it. linuxWords is the five-dword
+ * wb test; the other steps keep the eight-dword packet. */
 static bool
 gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	uint8* destCpu, uint64 destVa, uint64 destPhys, bool expectWord,
@@ -1055,6 +926,8 @@ gpu_stage_mtrr(const char* when)
 }
 
 
+/* Eight words through the page's own pointer, then through a second
+ * mapping of the same physical page. A mismatch stops the series. */
 static bool
 gpu_stage_visible(const char* name, gpu_stage_page* page)
 {
@@ -1135,6 +1008,9 @@ gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
 }
 
 
+/* DMA_DATA from a page in the high range into a fresh low VRAM page.
+ * The indirect buffer stays at a fresh low VA. A miss continues. A
+ * busy CP at 5s stops the series. */
 static bool
 gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 {
@@ -1297,6 +1173,10 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 }
 
 
+/* Kernel mappings only. The IB and the test page are VRAM windows,
+ * never a user pointer. One packet type per step. A privilege fault
+ * marks the device lost. A fence that is still out at 5s is lost
+ * through the watchdog. U4 and U2 run later, from stage U. */
 static status_t
 gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 {
@@ -1413,6 +1293,7 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 }
 
 
+/* Stick 25 does not call this. The CPU self-check stays for a later stick. */
 __attribute__((unused))
 static bool
 gpu_stage_self(radeon_info* info, const char* name, bool gtt)
@@ -1428,6 +1309,9 @@ gpu_stage_self(radeon_info* info, const char* name, bool gtt)
 }
 
 
+/* CPU only. Eight words go out through the PCI BAR. The same offset
+ * is read back through the carveout at once, then again after sfence.
+ * No clflush: that would hide a write the HDP is still holding. */
 static void
 gpu_stage_hdp(radeon_info* info)
 {
@@ -1499,6 +1383,9 @@ gpu_stage_r1_line(const char* what, uint64 x, uint64 y)
 }
 
 
+/* R1a WRITE_DATA and R1b RELEASE_MEM, or R1c the IB fetch.
+ * Page A stays allocated until this returns, so a stale write still
+ * has a page to land on. R1c is a separate call: a miss there can hang. */
 static void
 gpu_stage_r1(radeon_info* info, uint32 which, uint64 x, uint64 y,
 	uint32_t* oldWord, uint32_t* newWord)
@@ -1677,94 +1564,10 @@ gpu_stage_u(radeon_info* info)
 }
 
 
-status_t
-gpu_free(void* cookie)
-{
-	gpu_client* client = (gpu_client*)cookie;
-	if (client == NULL)
-		return B_OK;
-	gpu_lock();
-	status_t status = B_OK;
-	uint64 seen = r5_gfx9_user_seen();
-	r5_gpu_eop();
-	for (uint32 i = 0; i < kMaxJob; i++) {
-		if (!sJobs[i].live)
-			continue;
-		for (uint32 n = 0; n < sJobs[i].count; n++) {
-			gpu_sync* sync = sJobs[i].syncs[n];
-			if (sync != NULL && sync->owner == client)
-				sJobs[i].syncs[n] = NULL;
-		}
-	}
-	for (uint32 i = 0; i < client->handleCount; i++) {
-		uint32 handle = client->handles[i];
-		if (handle == 0 || handle > kMaxBo)
-			continue;
-		gpu_bo* bo = &sBo[handle - 1u];
-		if (!bo->live || bo->owner != client)
-			continue;
-		uint64 sequence = client->lastSequence;
-		if (!sLost && sequence != 0 && seen < sequence) {
-			bo->owner = NULL;
-			bo->parked = true;
-			bo->parkSequence = sequence;
-			gpu_bo_hold_tree(bo);
-		} else
-			gpu_bo_release(bo);
-	}
-	for (uint32 i = 0; i < kMaxSync; i++) {
-		client->syncs[i].live = false;
-		client->syncs[i].owner = NULL;
-	}
-	if (client->pasid != 0)
-		r5_pasid_free(&sPasids, client->pasid);
-	if (client->tree != NULL) {
-		r5_file_tree* tree = client->tree;
-		client->tree = NULL;
-		tree->seen = seen;
-		r5_file_tree_drop(tree);
-	}
-	if (sClientList == client)
-		sClientList = client->next;
-	else {
-		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
-			if (scan->next == client) {
-				scan->next = client->next;
-				break;
-			}
-		}
-	}
-	if (client->contexts > 0) {
-		sContexts -= client->contexts;
-		if (sContexts < 0)
-			sContexts = 0;
-	}
-	gpu_unlock();
-	free(client);
-	return status;
-}
 
 
-status_t
-gpu_read(void* cookie, off_t position, void* buffer, size_t* numBytes)
-{
-	(void)cookie;
-	(void)position;
-	(void)buffer;
-	*numBytes = 0;
-	return B_ERROR;
-}
 
 
-status_t
-gpu_write(void* cookie, off_t position, const void* buffer, size_t* numBytes)
-{
-	(void)cookie;
-	(void)position;
-	(void)buffer;
-	*numBytes = 0;
-	return B_ERROR;
-}
 
 
 static status_t
@@ -2022,9 +1825,16 @@ amd_user_submit(const uint64* va, const uint32* dwords, const uint32* vmid,
 
 
 static int
-amd_bo_map(void* client, void* buffer, size_t length)
+amd_fault_take(uint32* pasid, uint32* vmid, uint64* addr)
 {
-	return gpu_bo_map((gpu_client*)client, buffer, length);
+	return r5_gfx9_fault_take(pasid, vmid, addr);
+}
+
+
+static int
+amd_map_vram(uint64 offset, uint64 bytes, void** address)
+{
+	return r5_gfx9_map_vram(offset, bytes, address);
 }
 
 
@@ -2109,12 +1919,13 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_set_shared_root,
 	amd_touch_root,
 	amd_user_submit,
-	amd_bo_map,
 	amd_get_info,
 	amd_debug_switch,
 	amd_stage_p,
 	amd_stage_u,
 	amd_stage_r1,
 	amd_log_state,
-	amd_dump
+	amd_dump,
+	amd_fault_take,
+	amd_map_vram
 };

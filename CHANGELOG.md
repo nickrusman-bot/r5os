@@ -10,6 +10,10 @@ A packet site is now the file, the function, and the order of packet lines in th
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
 
+## 2026-11-10 - The GPU bookkeeping lives in the core
+
+`gpu_free`, the end-of-pipe retire, the wait, the fault retire, buffer mapping, and the empty read and write hooks moved from `r5_gpu.cpp` into `r5_gpu_core.cpp`. The backend table no longer has `bo_map`. `fault_take` and `map_vram` were added at the end. The comments that the split had dropped are back on the functions they describe, including the lock rule above `gpu_ibs_mapped` and the render-node paragraph. `docs/LICENSING.md` lists the three MIT files in `r5gpu/`. The ring contract is unchanged.
+
 ## 2026-11-10 - The command-list check names every builder
 
 `scripts/check-pm4.py` now fails a stream that uses a type-2 dword, a `DMA_DATA` destination select of 2, or an opcode it does not know. `LOAD_*` packets are checked as an address plus a count, because stage P does load context registers, and they are not register-set packets. `SET_SH_REG_INDEX` is checked. An indirect buffer whose VMID field is 0 must set the valid bit. The executable-flag check says in its output that it is a text search, not a page-table walk.
