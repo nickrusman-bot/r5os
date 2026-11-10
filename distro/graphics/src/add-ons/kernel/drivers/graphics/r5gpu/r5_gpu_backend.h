@@ -48,6 +48,8 @@ typedef struct r5_gpu_backend_ops {
 				uint32_t* oldWord, uint32_t* newWord);
 	int			(*log_state)(const char* why, char* line, uint32_t bytes);
 	int			(*dump)(const char* why);
+	/* 1 when the radeon_hd setting gfx9_wc_gtt is on. Default 0. */
+	int			(*gtt_wc)(void);
 	int			(*fault_take)(uint32_t* pasid, uint32_t* vmid, uint64_t* addr);
 	int			(*map_vram)(uint64_t offset, uint64_t bytes, void** address);
 } r5_gpu_backend_ops;

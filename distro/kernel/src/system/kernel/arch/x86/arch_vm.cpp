@@ -328,6 +328,37 @@ ensure_temporary_ranges_space(int32 count)
 }
 
 
+/* SPDX-SnippetBegin
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+ */
+static bool
+range_inside_boot_ram(uint64 base, uint64 size)
+{
+	if (size == 0 || base + size < base)
+		return false;
+	uint64 end = base + size;
+	for (MemoryTypeRangeList::Iterator it = sMemoryTypeRanges.GetIterator();
+			memory_type_range* range = it.Next();) {
+		if (range->area != -1 || range->size == 0)
+			continue;
+		if (base >= range->base && end <= range->base + range->size)
+			return true;
+	}
+	return false;
+}
+
+
+extern "C" void
+arch_vm_flush_before_memory_type(void)
+{
+	if (!x86_use_pat())
+		return;
+	wbinvd();
+}
+/* SPDX-SnippetEnd */
+
+
 static status_t
 update_mtrrs(update_mtrr_info& updateInfo)
 {
@@ -343,13 +374,15 @@ update_mtrrs(update_mtrr_info& updateInfo)
 		/* SPDX-SnippetBegin
 		 * SPDX-License-Identifier: GPL-3.0-or-later
 		 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		 * A write-combining RAM range overlaps the boot write-back MTRR.
-		 * Leaving it in this list would replace that range. With PAT the
-		 * page type is the PTE, so the range stays recorded and is not an
-		 * MTRR.
+		 * A range that sits inside the boot RAM MTRR is a page type when
+		 * PAT is on. It stays recorded and is not a second MTRR. The boot
+		 * RAM range itself is still programmed. Device memory outside
+		 * that range still gets an MTRR.
 		 */
-		if (x86_use_pat() && range->type == B_WRITE_COMBINING_MEMORY)
+		if (x86_use_pat() && range->area != -1
+			&& range_inside_boot_ram(range->base, range->size)) {
 			continue;
+		}
 		/* SPDX-SnippetEnd */
 
 		if (range->type == B_UNCACHED_MEMORY) {
@@ -512,17 +545,6 @@ update_mtrrs(update_mtrr_info& updateInfo)
 			if (ranges[i].size == 0 || ranges[i].type != type)
 				continue;
 
-			/* SPDX-SnippetBegin
-			 * SPDX-License-Identifier: GPL-3.0-or-later
-			 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			 * Write-combining RAM sits inside the write-back MTRR. With PAT
-			 * the PTE selects write-combining, so this range is recorded and
-			 * not programmed as another MTRR.
-			 */
-			if (x86_use_pat() && type == B_WRITE_COMBINING_MEMORY)
-				continue;
-			/* SPDX-SnippetEnd */
-
 			if (!add_mtrrs_for_range(ranges[i].base, ranges[i].size, type))
 				return B_BUSY;
 		}
@@ -599,11 +621,11 @@ add_memory_type_range(area_id areaID, uint64 base, uint64 size, uint32 type,
 		/* SPDX-SnippetBegin
 		 * SPDX-License-Identifier: GPL-3.0-or-later
 		 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		 * A write-combining RAM area overlaps the boot write-back MTRR.
-		 * With PAT that overlap is the page type, not a second MTRR.
+		 * The boot RAM range is already an MTRR. A page type inside it
+		 * is not a conflicting range. When PAT is on, the emit path
+		 * above does not add an MTRR for that page type.
 		 */
-		if (range->area == -1
-			&& (!x86_use_pat() || type == B_WRITE_COMBINING_MEMORY)) {
+		if (range->area == -1) {
 			// Physical memory range in MTRRs; permit overlapping.
 			continue;
 		}

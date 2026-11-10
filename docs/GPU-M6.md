@@ -1,6 +1,6 @@
 # M6 notes
 
-Written 10 Nov 2026, before any M6 code that changes the GPU. The fixed GFX9 contract is unchanged. Nothing here was run on the 5625U.
+The fault notes below were written on 10 Nov 2026, before the code that reads them. The passport and the page-memory type landed after that. The fixed GFX9 contract is unchanged. Nothing here was run on the 5625U.
 
 ## Fault interrupt (stick 32)
 
@@ -54,3 +54,13 @@ A reset on R5 would have to do all of the following, in this order. This note do
 ## Shutdown
 
 The comparison with Linux `amdgpu_device_fini_hw` is round 3, point 17. It is not in this note.
+
+## Passport
+
+`r5_passport.cpp` keeps one GC 9.3 row for PCI `15e7`, `1636`, `1638`, and `164c`. Discovery is 10 KiB at the end of the mapped carveout minus 64 KiB, which is Linux v6.12 `DISCOVERY_TMR_SIZE` and `DISCOVERY_TMR_OFFSET`. The signature is `0x28211407`. The byte sum after `binary_checksum` has to match, and the GC table (index 1, id `0x4347`, version 1) has its own sum. A field that disagrees with the row is logged as `passport mismatch` and the discovery value is the one reported. Shader engines, arrays, CUs per array (`2 * (wgp0 + wgp1)`), VGPRs, GL2C, the GS depths, the off-chip flag, and the wave size come from that table. The enabled render-backend count still comes from the disable registers. The mask width follows discovery when it is 1–8.
+
+If the carveout is not mapped, or the signature or a sum fails, the log is `passport discovery missing` and the row stays. An id with no row logs `passport no row` and does not invent the row.
+
+Clocks are the ATOM v2.1 `firmwareinfo` boot values times 10, in kHz, and min equals max. `gpu_counter_freq` is `smu_info` `core_refclk_10khz` times 10, for format 3 or 4. The memory type and width come from `integratedsysteminfo` v1.11, v1.12, or v2.1 through v2.3. LpDdr4 (atom type 30) is type 11. LpDdr5 (35) uses 32 bits per channel; the others use 64. A channel count of 0 is 1. A missing table leaves the field 0. There is no constant 100000 and no Mesa 1800000/1333000 record. Firmware versions still come from the ucode headers.
+
+This was not booted on the 5625U, so no `passport` line has been seen.

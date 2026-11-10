@@ -19,6 +19,8 @@ def install_kernel_sources() -> None:
         "src/system/kernel/signal.cpp",
         "src/system/kernel/thread.cpp",
         "src/system/kernel/vm/vm.cpp",
+        "headers/private/kernel/vm/vm.h",
+        "headers/private/kernel/arch/vm.h",
         "src/system/runtime_loader/arch/x86_64/arch_relocate.cpp",
         "src/system/runtime_loader/export.cpp",
         "headers/private/runtime_loader/runtime_loader.h",

@@ -4574,6 +4574,14 @@ vm_set_area_memory_type(area_id id, phys_addr_t physicalBase, uint32 type)
 	if (type == oldType)
 		return B_OK;
 
+	/* SPDX-SnippetBegin
+	 * SPDX-License-Identifier: GPL-3.0-or-later
+	 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	 * Drop cached lines before the page tables change type.
+	 */
+	arch_vm_flush_before_memory_type();
+	/* SPDX-SnippetEnd */
+
 	// set the memory type of the area and the mapped pages
 	VMTranslationMap* map = area->address_space->TranslationMap();
 	map->Lock();
@@ -4595,6 +4603,42 @@ vm_set_area_memory_type(area_id id, phys_addr_t physicalBase, uint32 type)
 	return B_OK;
 
 }
+
+
+/* SPDX-SnippetBegin
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+ * Other architectures do not flush. AMD64 replaces this when PAT is on.
+ */
+extern "C" __attribute__((weak)) void
+arch_vm_flush_before_memory_type(void)
+{
+}
+
+
+status_t
+vm_set_area_page_memory_type(area_id id, uint32 type)
+{
+	AddressSpaceReadLocker locker;
+	VMArea* area;
+	status_t status = locker.SetFromArea(id, area);
+	if (status != B_OK)
+		return status;
+
+	uint32 oldType = area->MemoryType();
+	if (type == oldType)
+		return B_OK;
+
+	arch_vm_flush_before_memory_type();
+
+	VMTranslationMap* map = area->address_space->TranslationMap();
+	map->Lock();
+	area->SetMemoryType(type);
+	map->ProtectArea(area, area->protection);
+	map->Unlock();
+	return B_OK;
+}
+/* SPDX-SnippetEnd */
 
 
 /*!	This function enforces some protection properties:

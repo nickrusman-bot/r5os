@@ -133,6 +133,8 @@ int32 r5_gfx9_priv_count();
 /* Kernel mapping only. Makes a stage IB visible to the GPU. */
 void r5_gfx9_stage_bytes(uint8* cpu, uint32 bytes);
 bool r5_gfx9_k2_gart_page(uint64* mc, uint8** cpu);
+/* radeon_hd setting gfx9_wc_gtt. Off unless that line says true. */
+bool r5_gfx9_wc_gtt();
 int32 r5_gfx9_eop_sem();
 status_t r5_gfx9_alloc_vram(uint64 bytes, uint64 align, uint64* offset,
 	uint8** address);

@@ -51,6 +51,8 @@ FILES = (
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
+    "src/add-ons/kernel/drivers/graphics/radeon_hd/r5_passport.cpp",
+    "src/add-ons/kernel/drivers/graphics/radeon_hd/r5_passport.h",
     "src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
     "src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_backend.h",
     "src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_internal.h",

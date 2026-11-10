@@ -215,3 +215,15 @@ QEMU, 2026-10-31 about 16:00 Europe/Amsterdam. TCG, `-cpu qemu64`, `-display non
 
 Still open: boot the 5625U and record the idle and busy samples. Write one P-state only after that, with safemode leaving the registers alone. Intel HWP on hardware was not executed.
 
+## Memory types
+
+AMD64 turns PAT on unless safemode disables it or the CPU is one of the Pentium parts whose PAT is left off. The boot line is `using PAT for memory type configuration`. A write-combined page then uses the PAT bit in the page table. Uncached is PCD and PWT. Write-back leaves those bits clear.
+
+`vm_set_area_memory_type()` writes the cached lines back with `wbinvd` before it changes the page tables, when PAT is on. It still records an MTRR for device memory. A range that sits fully inside the boot RAM range (area id -1) is not given a second MTRR while PAT is on. The boot RAM range itself stays.
+
+`vm_set_area_page_memory_type()` does the flush and the page-table update and does not program an MTRR. That is the call for a buffer whose pages are not one physical span. A clone copies the area's memory type, so the user mapping gets the same type on every page.
+
+The flush is empty on the other architectures. ARM64 and RISC-V are not this path.
+
+Write-combined graphics buffers stay off unless the radeon_hd setting `gfx9_wc_gtt` is true. VirtualBox reached the desktop after a reboot on 10 Nov 2026. The syslog line was not captured. The 5625U was not used.
+

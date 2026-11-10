@@ -34,6 +34,7 @@
 
 extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
 extern "C" bool team_is_valid(team_id id);
+extern "C" status_t vm_set_area_page_memory_type(area_id id, uint32 type);
 
 static void r5_gpu_eop();
 static void gpu_fault_retire();
@@ -573,16 +574,24 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		bo->kernelArea = area;
 		bo->kernel = kernel;
 	}
-	/* R5_GPU_BO_WC stays stored. The RAM area stays write-back, and a
-	 * GTT page is snooped. The reply carries the flags that were used. */
+	/* The reply carries the flags that were used. Write-combined GTT
+	 * needs gfx9_wc_gtt. Otherwise the page stays cached and snooped. */
 	{
-		uint32 used = in.flags & ~R5_GPU_BO_WC;
+		uint32 used = in.flags;
+		if ((used & R5_GPU_BO_WC) != 0) {
+			int allow = in.domain == R5_GPU_DOMAIN_GTT
+				&& gR5GpuOps.gtt_wc != NULL && gR5GpuOps.gtt_wc() != 0;
+			if (!allow || vm_set_area_page_memory_type(bo->kernelArea,
+					B_WRITE_COMBINING_MEMORY) != B_OK)
+				used &= ~R5_GPU_BO_WC;
+		}
 		if (gpu_selftest_enabled()) {
 			dprintf("radeon_hd: bo domain %lu requested %08lx used %08lx "
 				"bytes %llu snooped %d\n",
 				(unsigned long)in.domain, (unsigned long)in.flags,
 				(unsigned long)used, (unsigned long long)bytes,
-				in.domain == R5_GPU_DOMAIN_GTT ? 1 : 0);
+				in.domain == R5_GPU_DOMAIN_GTT
+					&& (used & R5_GPU_BO_WC) == 0 ? 1 : 0);
 		}
 		in.flags = used;
 	}

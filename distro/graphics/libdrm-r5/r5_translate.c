@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -345,6 +346,58 @@ r5_amdgpu_info(int fd, struct drm_amdgpu_info *query)
 }
 
 
+static int
+r5_word(const char* at, const char* word)
+{
+	size_t n = strlen(word);
+	if (strncmp(at, word, n) != 0)
+		return 0;
+	char end = at[n];
+	return end == '\0' || end == ' ' || end == '\t' || end == '\n'
+		|| end == '\r' || end == '#';
+}
+
+
+static int
+r5_file_says_wc(const char* path, int* seen)
+{
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return 0;
+	char buf[4096];
+	ssize_t n = read(fd, buf, sizeof(buf) - 1);
+	close(fd);
+	if (n <= 0)
+		return 0;
+	buf[n] = 0;
+	const char* key = "gfx9_wc_gtt";
+	char* at = strstr(buf, key);
+	if (at == NULL)
+		return 0;
+	*seen = 1;
+	at += strlen(key);
+	while (*at == ' ' || *at == '\t')
+		at++;
+	return r5_word(at, "true") || r5_word(at, "on") || r5_word(at, "yes")
+		|| r5_word(at, "1");
+}
+
+
+static int
+r5_wc_gtt_enabled(void)
+{
+	int seen = 0;
+	int on = r5_file_says_wc(
+		"/boot/system/settings/kernel/drivers/radeon_hd", &seen);
+	int userSeen = 0;
+	int user = r5_file_says_wc(
+		"/boot/home/config/settings/kernel/drivers/radeon_hd", &userSeen);
+	if (userSeen)
+		return user;
+	return seen ? on : 0;
+}
+
+
 static uint32_t
 r5_domain(uint64_t domains)
 {
@@ -369,7 +422,8 @@ r5_gem_create(int fd, union drm_amdgpu_gem_create *gem)
 	bo.version = 1;
 	bo.domain = r5_domain(gem->in.domains);
 	bo.bytes = gem->in.bo_size;
-	if ((gem->in.domain_flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC) != 0)
+	if ((gem->in.domain_flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC) != 0
+		&& r5_wc_gtt_enabled())
 		bo.flags |= R5_GPU_BO_WC;
 	if (r5_call(fd, R5_GPU_BO_CREATE, &bo, sizeof(bo)) != 0)
 		return -1;
