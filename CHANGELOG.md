@@ -1,5 +1,20 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - M6: the 5625U draws the same picture on Radeon as on Lavapipe
+
+GPU milestone M6 passed on stick 33 (`r5-os-anyboot-m6.iso`, from `main` after #4164), boot 1, settings with `gfx9_wc_gtt false`. Logs: `generated/boot-5625u-33`.
+
+- **Pictures:** VulkanTeapot, the cube, the SAM teapot, and teapots A and B started 143 microseconds apart each printed `compared driverID 3 AMD Radeon Graphics (RADV RENOIR) and driverID 13 llvmpipe (LLVM 21.1.8, 256 bits)` and `pixels ok max 2 share 0.0% limit 1%`.
+- **Time:** RADV 0.18–0.31 ms per frame on the GPU, Lavapipe 0.81–1.27 ms.
+- **Ring:** `ring waits 0 max 256 of 1024`. The 1024-dword ring never waited, so the larger ring is not needed for this workload.
+- **Contract and passport:** the syslog has `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `k2 ok gart`, and `passport counter_freq 100000` without `passport mismatch`. `counters back` after the isolation stage.
+
+Not yet, and not part of M6:
+- **A RADV frame takes about 1 s of wall time.** For 100 frames the GPU span is about 98 s and the CPU span about 99 s, while the GPU works 0.3 ms per frame. Something waits about a second per submit. This must be found before M7 shows RADV in a window.
+- **The GPU was lost afterwards,** in the older R1c, selftest and ib stages (`gpu lost watchdog ... fault 00700c10`), the same gap as M5: no reset yet.
+- **Boot 2** (`gfx9_wc_gtt true`) did not run. Write-combining stays off by default.
+- **Shutdown** still needs a long press (compared with Linux on paper only).
+
 ## 2026-11-10 - The graphics check keeps the previous start
 
 Login still starts `r5-gpu-selftest` after Sign in. After the first teapot it runs `VulkanTeapot --cube --selftest`. Before isolation it starts two `VulkanTeapot --selftest` processes together, and writes each as its own block (`VulkanTeapot A`, then `VulkanTeapot B`). Without a render node the same three runs still happen, so Lavapipe is covered. Before the new file is opened, an existing `~/config/cache/r5-gpu-selftest.txt` is renamed to `r5-gpu-selftest.old.txt`. `scripts/read-stick-logs.py` copies `home/config/cache/r5-gpu-selftest.txt` and the `.old` file. A submit that has to wait for ring room is counted, and the highest used dword count is kept. The self-test prints `ring waits N max M of 1024` once, and the kernel prints the same line once. The ring stays 1024 dwords. Its words and its wrap are unchanged. `passport discovery missing` is not required. `passport discovery se … sh … cu …` is also acceptable. Pass remains no `passport mismatch`, and `passport counter_freq 100000 atom …`. The last line of the self-test file is `selftest done`.
