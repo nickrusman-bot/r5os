@@ -8,7 +8,7 @@ Stick 34, boot 1 (`generated/boot-5625u-34`), ran `wsi clear ok` on llvmpipe. Wi
 
 The stick settings file is `distro/graphics/boot/radeon_hd`. It keeps the M6 lines `gfx9_vmids true`, `gfx9_vmid_per_file true` and `gfx9_pasid_map true`. Stick 34 omitted them. The isolation stage then refused `VA_MAP` and `vkCreateDevice` returned -2. `boot2.sh` writes those three lines again, then `gpu_present true` and `gpu_present_fail true`.
 
-`jam -q @r5-raw` from `cursor/m7-stick-35` finished at 22:18 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 1193 targets, `mesa_exit=0`. The image's `system/packages` contains `mesa_radv-25.3.6-2-x86_64.hpkg` and does not contain `mesa_radv-25.3.6-1`. `libvulkan_radeon.so` from that package contains `VK_RFIVE_view_surface`, and the package version is `25.3.6-2`. VirtualBox has not been booted. The stick is not written. There is no What's new section and `distro/BUILD` stays the same.
+`jam -q @r5-raw` from `cursor/m7-stick-35` finished at 22:18 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 1193 targets, `mesa_exit=0`. The image's `system/packages` contains `mesa_radv-25.3.6-2-x86_64.hpkg` and does not contain `mesa_radv-25.3.6-1`. `libvulkan_radeon.so` from that package contains `VK_RFIVE_view_surface`, and the package version is `25.3.6-2`. VirtualBox, one fresh boot of that image, printed for VulkanTeapot and for vkcube: `window driver llvmpipe (LLVM 21.1.8, 256 bits)`, three `window resize ok`, two `window workspace ok`, `window minimise ok`, `window restore ok`, `window close ok`, `device lost no`. VirtualBox has no Radeon, so those lines do not prove the RADV window. The stick is not written. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-10 - Vulkan windows can use the GPU
 
