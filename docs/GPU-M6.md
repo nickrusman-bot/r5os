@@ -53,7 +53,23 @@ A reset on R5 would have to do all of the following, in this order. This note do
 
 ## Shutdown
 
-The comparison with Linux `amdgpu_device_fini_hw` is round 3, point 17. It is not in this note.
+This is the comparison for point 17. No shutdown code is added here. The stop order in `r5_gfx9_kernel_stop` stays as it is. A change needs a boot on the 5625U. This is not the mode-2 reset in the section above: that reset brings the GFX block back. Shutdown leaves it off.
+
+Linux v6.18 `amdgpu_device_fini_hw` (`amdgpu_device.c` line 4945) disables every interrupt source (`amdgpu_irq_disable_all`, `amdgpu_irq.c` line 124), finishes the fences, then `amdgpu_device_ip_fini_early` (line 3617) walks the IP blocks from last to first and calls each `hw_fini` (`amdgpu_ip_block_hw_fini`, line 3572). After that walk, `amdgpu_irq_fini_hw` (line 330) frees the IRQ and the IH rings.
+
+For GC 9.3, and not a virtual function, not inside a reset, and not GC 9.4.2 or newer, `gfx_v9_0_hw_fini` (line 4048) does this:
+
+1. Drop the privilege and bad-opcode interrupt refs (lines 4052–4056).
+2. Disable the compute queues (line 4061).
+3. Finish the KIQ registers (lines 4077–4085).
+4. `gfx_v9_0_cp_enable(adev, false)` (line 4087). That halts the GFX command processor (`gfx_v9_0_cp_gfx_enable`, line 3241): ME, PFP, and CE halt, plus the pipe-reset and icache-invalidate bits, written to `CP_ME_CNTL` (lines 3244–3257). It also halts compute (`gfx_v9_0_cp_compute_enable`, line 3457): `CP_MEC_CNTL` gets the icache invalidate, the pipe resets, and both `MEC_ME1_HALT` and `MEC_ME2_HALT` (lines 3462–3471).
+5. Stop the RLC (`gfx_v9_0_rlc_stop`, line 3119, installed at line 5221). That clears `RLC_ENABLE_F32`, turns the GUI idle interrupt off, and waits for the serdes (lines 3121–3123). GC 9.3 is below 9.4.2, so this halt is not skipped (lines 4090–4096).
+
+GART and the VM contexts are the GMC block, not the GFX block. `gmc_v9_0_hw_fini` (line 2248) calls `gmc_v9_0_gart_disable` (line 2241). On the GFX hub, `gfxhub_v1_0_gart_disable` (line 341) writes 0 to all 16 `VM_CONTEXT*_CNTL` registers (lines 347–350), then turns the L1 TLB off and the L2 cache off (lines 357–367).
+
+The PSP block is `psp_hw_fini` (`amdgpu_psp.c` line 3217). It calls `psp_tmr_terminate` (line 3234), which unloads the TMR (`psp_tmr_unload`, line 945, command `GFX_CMD_ID_DESTROY_TMR` at line 942), and then `psp_ring_destroy` (line 3236).
+
+`r5_gfx9_kernel_stop` (`gfx9_k12.cpp`) already halts ME, PFP, and CE with bits 24, 26, and 28, and sets MEC bits 30 and 28. It writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the engine-17 invalidate and waits for the ack, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the areas, including the carveout mapping. It does not stop the RLC, it does not write 0 to all 16 VM contexts, it does not turn the L1 TLB or the L2 cache off, and it does not send the PSP a destroy-TMR command or destroy the PSP ring. Unmapping the carveout is not that command. Those steps stay out of the code until a 5625U boot records the new stop.
 
 ## Passport
 

@@ -2,10 +2,12 @@
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Draws the freeglut Newell teapot with Vulkan. --selftest renders one
- * offscreen frame and prints the device and a few pixels.
+ * Draws the freeglut Newell teapot, or a cube with --cube, through Vulkan.
+ * --selftest draws 100 offscreen frames, prints the median GPU time, and
+ * compares the first frame with the last.
  */
 
+#include "r5_pixels.h"
 #include "teapot_spv.h"
 
 typedef float GLfloat;
@@ -268,6 +270,45 @@ build_teapot(void)
 }
 
 
+static Mesh
+build_cube(void)
+{
+	Mesh mesh;
+	memset(&mesh, 0, sizeof(mesh));
+	static const float faces[6][4][3] = {
+		{{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}},
+		{{-1, -1, -1}, {-1, 1, -1}, {1, 1, -1}, {1, -1, -1}},
+		{{-1, 1, -1}, {-1, 1, 1}, {1, 1, 1}, {1, 1, -1}},
+		{{-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {-1, -1, 1}},
+		{{1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {1, -1, 1}},
+		{{-1, -1, -1}, {-1, -1, 1}, {-1, 1, 1}, {-1, 1, -1}}
+	};
+	static const float normals[6][3] = {
+		{0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}
+	};
+	mesh.vertices = (Vertex*)calloc(24, sizeof(Vertex));
+	mesh.indices = (uint32_t*)calloc(36, sizeof(uint32_t));
+	mesh.vertexCount = 24;
+	mesh.indexCount = 36;
+	for (int face = 0; face < 6; face++) {
+		for (int corner = 0; corner < 4; corner++) {
+			Vertex* vertex = &mesh.vertices[face * 4 + corner];
+			memcpy(vertex->position, faces[face][corner], sizeof(vertex->position));
+			memcpy(vertex->normal, normals[face], sizeof(vertex->normal));
+		}
+		uint32_t base = (uint32_t)face * 4u;
+		uint32_t* out = mesh.indices + face * 6;
+		out[0] = base;
+		out[1] = base + 1;
+		out[2] = base + 2;
+		out[3] = base;
+		out[4] = base + 2;
+		out[5] = base + 3;
+	}
+	return mesh;
+}
+
+
 static void
 mvp(float out[16])
 {
@@ -390,6 +431,8 @@ struct DrawState {
 	uint32_t		indexCount;
 	uint8_t*		pixels;
 	uint8_t*		pixelsVram;
+	VkQueryPool		queries;
+	uint32_t		queryBase;
 };
 
 
@@ -400,6 +443,10 @@ draw_frame(DrawState* draw, const float matrix[16])
 	VkCommandBufferBeginInfo begin = {};
 	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	check("vkBeginCommandBuffer", vkBeginCommandBuffer(draw->cmd, &begin));
+	if (draw->queries != VK_NULL_HANDLE) {
+		vkCmdWriteTimestamp(draw->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+			draw->queries, draw->queryBase);
+	}
 	VkClearValue clears[2] = {};
 	clears[0].color.float32[0] = 0.15f;
 	clears[0].color.float32[1] = 0.18f;
@@ -434,6 +481,10 @@ draw_frame(DrawState* draw, const float matrix[16])
 	if (draw->readbackVram != VK_NULL_HANDLE) {
 		vkCmdCopyImageToBuffer(draw->cmd, draw->color,
 			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, draw->readbackVram, 1, &copy);
+	}
+	if (draw->queries != VK_NULL_HANDLE) {
+		vkCmdWriteTimestamp(draw->cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			draw->queries, draw->queryBase + 1);
 	}
 	check("vkEndCommandBuffer", vkEndCommandBuffer(draw->cmd));
 	VkSubmitInfo submit = {};
@@ -566,11 +617,48 @@ private:
 };
 
 
+static int
+cmp_double(const void* left, const void* right)
+{
+	double a = *(const double*)left;
+	double b = *(const double*)right;
+	if (a < b)
+		return -1;
+	if (a > b)
+		return 1;
+	return 0;
+}
+
+
+static double
+median_ms(const uint64_t* stamps, int frames, float period)
+{
+	double samples[100];
+	if (frames > 100)
+		frames = 100;
+	for (int i = 0; i < frames; i++) {
+		uint64_t start = stamps[i * 2];
+		uint64_t end = stamps[i * 2 + 1];
+		double ticks = end >= start ? (double)(end - start) : 0;
+		samples[i] = ticks * (double)period / 1000000.0;
+	}
+	qsort(samples, (size_t)frames, sizeof(samples[0]), cmp_double);
+	return samples[frames / 2];
+}
+
+
 int
 main(int argc, char** argv)
 {
-	int selftest = argc > 1 && strcmp(argv[1], "--selftest") == 0;
-	Mesh mesh = build_teapot();
+	int selftest = 0;
+	int cube = 0;
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "--selftest") == 0)
+			selftest = 1;
+		else if (strcmp(argv[i], "--cube") == 0)
+			cube = 1;
+	}
+	Mesh mesh = cube ? build_cube() : build_teapot();
 	float matrix[16];
 	mvp(matrix);
 
@@ -954,61 +1042,82 @@ main(int argc, char** argv)
 	}
 
 	int pixelStatus = 0;
+	const int kFrames = 100;
+	VkQueryPool queryPool = VK_NULL_HANDLE;
+	int timestamps = properties.limits.timestampComputeAndGraphics;
+	if (selftest && timestamps) {
+		VkQueryPoolCreateInfo queryInfo = {};
+		queryInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+		queryInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+		queryInfo.queryCount = (uint32_t)kFrames * 2u;
+		check("vkCreateQueryPool",
+			vkCreateQueryPool(device, &queryInfo, NULL, &queryPool));
+		vkResetQueryPool(device, queryPool, 0, (uint32_t)kFrames * 2u);
+		draw.queries = queryPool;
+	}
 	if (selftest) {
-		draw_frame(&draw, matrix);
-		const int sampleAt[][2] = {
-			{24, 24}, {192, 80}, {192, 192}, {192, 134}, {90, 192}, {280, 192}
-		};
+		const int bytes = kSize * kSize * 4;
+		uint8_t* first = (uint8_t*)malloc((size_t)bytes);
+		uint8_t* second = (uint8_t*)malloc((size_t)bytes);
+		for (int frame = 0; frame < kFrames; frame++) {
+			draw.queryBase = (uint32_t)frame * 2u;
+			draw_frame(&draw, matrix);
+			if (frame == 0)
+				memcpy(first, draw.pixels, (size_t)bytes);
+		}
+		memcpy(second, draw.pixels, (size_t)bytes);
+		printf("scene %s\n", cube ? "cube" : "teapot");
 		printf("device %s\n", properties.deviceName);
 		printf("deviceType %u\n", (unsigned)properties.deviceType);
 		if (driverKnown)
 			printf("driverID %u\n", driverID);
 		else
 			printf("driverID unknown\n");
-		printf("frames 1\n");
-		printf("fps 0\n");
-		VkPhysicalDeviceMemoryProperties memoryProperties;
-		vkGetPhysicalDeviceMemoryProperties(gpu, &memoryProperties);
-		if (alloc.memoryTypeIndex < memoryProperties.memoryTypeCount) {
-			printf("readback type %u flags %08x heap %u\n",
-				alloc.memoryTypeIndex,
-				(unsigned)memoryProperties.memoryTypes[
-					alloc.memoryTypeIndex].propertyFlags,
-				memoryProperties.memoryTypes[alloc.memoryTypeIndex].heapIndex);
+		printf("frames %d\n", kFrames);
+		double ms = 0;
+		if (queryPool != VK_NULL_HANDLE) {
+			uint64_t* stamps = (uint64_t*)calloc((size_t)kFrames * 2u, sizeof(uint64_t));
+			VkResult read = vkGetQueryPoolResults(device, queryPool, 0,
+				(uint32_t)kFrames * 2u, (size_t)kFrames * 2u * sizeof(uint64_t),
+				stamps, sizeof(uint64_t),
+				VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+			if (read == VK_SUCCESS)
+				ms = median_ms(stamps, kFrames, properties.limits.timestampPeriod);
+			else
+				timestamps = 0;
+			free(stamps);
 		}
-		/* Lavapipe on the image of 5 Nov 2026, 23:46 Europe/Amsterdam.
-		 * The second sample is the same background as the first. */
-		static const uint8_t reference[6][4] = {
-			{0x26, 0x2e, 0x38, 0xff},
-			{0x26, 0x2e, 0x38, 0xff},
-			{0x85, 0x3b, 0x16, 0xff},
-			{0xa6, 0x4a, 0x1c, 0xff},
-			{0x87, 0x3c, 0x17, 0xff},
-			{0x69, 0x2e, 0x11, 0xff}
+		if (timestamps)
+			printf("gpu ms per frame %.3f\n", ms);
+		else
+			printf("gpu ms per frame none\n");
+		if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
+			if (timestamps)
+				printf("lavapipe ms per frame %.3f\n", ms);
+			else
+				printf("lavapipe ms per frame none\n");
+		}
+		const int sampleAt[][2] = {
+			{24, 24}, {192, 80}, {192, 192}, {192, 134}, {90, 192}, {280, 192}
 		};
-		int mismatch = 0;
 		for (int i = 0; i < 6; i++) {
 			int x = sampleAt[i][0];
 			int y = sampleAt[i][1];
-			const uint8_t* p = draw.pixels + (y * kSize + x) * 4;
+			const uint8_t* p = first + (y * kSize + x) * 4;
 			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
-			for (int channel = 0; channel < 4; channel++) {
-				int delta = (int)p[channel] - (int)reference[i][channel];
-				if (delta < 0)
-					delta = -delta;
-				if (delta > 2)
-					mismatch = 1;
-			}
 		}
-		if (draw.pixelsVram != NULL) {
-			const uint8_t* vramPixel = draw.pixelsVram + (192 * kSize + 192) * 4;
-			printf("pixel-vram 192 192 %02x%02x%02x%02x\n",
-				vramPixel[0], vramPixel[1], vramPixel[2], vramPixel[3]);
-		} else
-			printf("pixel-vram none\n");
-		printf("%s\n", mismatch ? "pixels MISMATCH" : "pixels ok");
-		if (mismatch)
+		int percent = 0;
+		int worst = 0;
+		int mismatch = r5_pixels_compare(first, second, (uint32_t)(kSize * kSize),
+			2, &percent, &worst);
+		printf("pixel delta max %d\n", worst);
+		if (mismatch) {
+			printf("pixels MISMATCH %d%%\n", percent);
 			pixelStatus = 2;
+		} else
+			printf("pixels ok\n");
+		free(first);
+		free(second);
 	} else {
 		if (be_app == NULL)
 			new BApplication("application/x-vnd.R5OS-VulkanTeapot");
@@ -1055,6 +1164,8 @@ main(int argc, char** argv)
 	vkFreeMemory(device, depthMemory, NULL);
 	vkDestroyImage(device, color, NULL);
 	vkFreeMemory(device, colorMemory, NULL);
+	if (queryPool != VK_NULL_HANDLE)
+		vkDestroyQueryPool(device, queryPool, NULL);
 	vkDestroyDevice(device, NULL);
 	vkDestroyInstance(instance, NULL);
 	free(mesh.vertices);

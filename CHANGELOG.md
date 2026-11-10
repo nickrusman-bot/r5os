@@ -52,6 +52,24 @@ The isolation command list and the self-test indirect buffer are headers that th
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
 
+## 2026-11-10 - A cube is drawn and compared
+
+`vkcube` from Vulkan-Tools 1.4.367 draws into a window system this image does not have. It has no offscreen path. The cube is VulkanTeapot `--cube`: a unit cube through the same shader and the same view as the teapot. `--selftest` draws 100 frames, prints the median time as `gpu ms per frame`, and compares the first frame with the last. A pixel fails when any channel differs by more than 2. The line is `pixels ok` or `pixels MISMATCH n%`. When the device is a CPU device the same number is also printed as `lavapipe ms per frame`. If timestamps are missing the line is `gpu ms per frame none`. On a machine with only Lavapipe the two frames are both Lavapipe. When a GPU device is also present, the program still picks that device and compares two frames of it. It does not draw the second device. The stored six-pixel reference is no longer the pass test. The six sample pixels are still printed.
+
+The host check `g++ -std=c++17 scripts/test-r5-pixels.cpp` printed `ok pixels` on 10 Nov 2026. Equal frames pass. A channel delta of 2 passes. One pixel of four that differs by 3 fails at 25 percent. The package `vulkanteapot-1.0.0-1-x86_64.hpkg` was rebuilt with the Haiku cross compiler and stripped. It contains no `/home/nickr`. `distro/BUILD` is unchanged. The GFX9 ring stays 1024 dwords. The stop order is unchanged.
+
+Shutdown against Linux v6.18 is written in `docs/GPU-M6.md` and is not code. `amdgpu_device_fini_hw` disables every interrupt, then each block's `hw_fini`. For GC 9.3 that halts the command processor and the MEC, stops the RLC, and the GMC and PSP blocks disable all 16 VM contexts and release the TMR and the PSP ring. `r5_gfx9_kernel_stop` already halts ME, PFP, CE and the MEC, clears the interrupt registers, and unmaps the carveout. It does not stop the RLC, it does not zero every VM context, and it does not send the PSP a destroy-TMR command. Those steps stay out until a 5625U boot.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`, 8393 targets, at about 10:36 Europe/Amsterdam on 10 Nov 2026. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because of CRLF; that one line was skipped for the apply and the script in the tree was not changed.
+
+VirtualBox, new VDI, bridged. Try R5, then Sign in as `user` with an empty password, reached the desktop. Terminal ran both self-tests. The Deskbar listed Tracker and Terminal. The guest clock read 9:54 AM, about an hour behind this machine. No panic was on screen. The guest was then shut down (`poweroff`).
+
+Teapot, device `llvmpipe (LLVM 21.1.8, 256 bits)`, device type 4, 100 frames: `gpu ms per frame 2.307`, `lavapipe ms per frame 2.307`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)` and `(192,80)` `262e38ff`, `(192,192)` `853b16ff`, `(192,134)` `a64a1cff`, `(90,192)` `873c17ff`, `(280,192)` `692e11ff`.
+
+Cube, same device, 100 frames: `gpu ms per frame 2.213`, `lavapipe ms per frame 2.213`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)`, `(192,80)`, `(90,192)` and `(280,192)` `262e38ff`, `(192,192)` and `(192,134)` `5a280fff`.
+
+The 5625U was not used. RADV was not started. A run with both devices still does not compare them.
+
 ## 2026-11-10 - The graphics card reports its own clocks
 
 The AMD device block no longer writes the Mesa record for device `15e7`. `r5_passport.cpp` keeps one GC 9.3 row for PCI `15e7`, `1636`, `1638`, and `164c`. That row is the cross-check. When the carveout is mapped, 10 KiB at the end of that window minus 64 KiB is the discovery binary (Linux v6.12 `DISCOVERY_TMR_SIZE` and `DISCOVERY_TMR_OFFSET`, signature `0x28211407`). A checksum failure, or no carveout, logs `passport discovery missing` and keeps the row. A field that disagrees logs `passport mismatch` and the discovery value is the one reported. An unknown PCI id logs `passport no row` and does not invent one.
