@@ -1023,8 +1023,13 @@ radeon_psp_load_engines(uint32 location, uint32 fbOffset)
 	// the GFX loads. A fence timeout does: the GPCOM ring is wedged.
 	uint64 tmrOffset = 0;
 	uint8* tmrAddress = NULL;
-	if (r5_vram(kPspTmrBytes, kPspTmrBytes, &tmrOffset,
-			&tmrAddress) != B_OK || tmrAddress == NULL) {
+	if (sHost->vram_claim != NULL)
+		sHost->vram_claim(sHost->cookie, 1);
+	status_t tmrAlloc = r5_vram(kPspTmrBytes, kPspTmrBytes, &tmrOffset,
+		&tmrAddress);
+	if (sHost->vram_claim != NULL)
+		sHost->vram_claim(sHost->cookie, 0);
+	if (tmrAlloc != B_OK || tmrAddress == NULL) {
 		ERROR("%s: R5 radeon_hd: PSP SETUP_TMR skipped, 4 MiB is not"
 			" in the pool\n", __func__);
 	} else {

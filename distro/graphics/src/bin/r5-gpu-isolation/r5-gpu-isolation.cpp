@@ -131,16 +131,22 @@ print_fault(uint64_t addr)
 	char needle[32];
 	char line[512];
 	FILE* log;
+	int found = 0;
 	snprintf(needle, sizeof(needle), "%016llx", (unsigned long long)addr);
 	log = fopen("/var/log/syslog", "r");
 	if (log != NULL) {
 		while (fgets(line, (int)sizeof(line), log) != NULL) {
-			if (strstr(line, "vm fault") != NULL && strstr(line, needle) != NULL)
+			if (strstr(line, "vm fault") != NULL && strstr(line, needle) != NULL) {
 				fputs(line, stdout);
+				found = 1;
+			}
 		}
 		fclose(log);
 	}
-	fprintf(stdout, "vm fault addr %s\n", needle);
+	if (found)
+		fprintf(stdout, "vm fault addr %s\n", needle);
+	else
+		fprintf(stdout, "vm fault not in syslog %s\n", needle);
 	fflush(stdout);
 }
 

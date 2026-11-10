@@ -20,6 +20,7 @@
 #include "r5_inv_range.h"
 #include "r5_vm_size.h"
 #include "r5_span.h"
+#include "r5_vram_pool.h"
 #include "r5_vm.h"
 #include "r5_wait.h"
 #include "r5_stage_p.h"
@@ -282,6 +283,16 @@ snippet(const char* path, const char* begin, const char* end, char* out,
 	}
 	text[size] = 0;
 	fclose(file);
+	{
+		char* src = text;
+		char* dst = text;
+		while (*src != 0) {
+			if (*src != '\r')
+				*dst++ = *src;
+			src++;
+		}
+		*dst = 0;
+	}
 	const char* from = strstr(text, begin);
 	const char* to = from == NULL ? NULL : strstr(from, end);
 	if (from == NULL || to == NULL || (size_t)(to - from) >= cap) {
@@ -318,17 +329,24 @@ waiter_fence()
 	if (strstr(text, "r5_gpu_retire_wake()") == NULL)
 		return fail("eop wake");
 	if (snippet(
-			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			"r5_gpu_eop()", "gpu_counter(", text, sizeof(text)) != 0)
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+			"r5_gpu_eop()\n{", "gpu_counter(", text, sizeof(text)) != 0)
 		return 1;
-	if (strstr(text, "r5_gfx9_user_seen()") == NULL)
+	if (strstr(text, "gpu_hw_seen()") == NULL)
 		return fail("retire fence");
 	if (snippet(
+			"distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/r5_gpu_core.cpp",
+			"gpu_counter(volatile uint64* value)", "gpu_wait_value(", text,
+			sizeof(text)) != 0)
+		return 1;
+	if (strstr(text, "return gpu_hw_seen()") == NULL)
+		return fail("wait fence");
+	if (snippet(
 			"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",
-			"gpu_counter(", "gpu_wait_value(", text, sizeof(text)) != 0)
+			"amd_user_seen(void)", "amd_set_debug(", text, sizeof(text)) != 0)
 		return 1;
 	if (strstr(text, "return r5_gfx9_user_seen()") == NULL)
-		return fail("wait fence");
+		return fail("seen hook");
 	if ((kR5CsRel64 & 0x03000000u) != 0
 		|| (kR5CsRel32Int & 0x03000000u) != 0x02000000u)
 		return fail("int sel");
@@ -374,6 +392,16 @@ source_order(const char* path, const char** marks, int count)
 	}
 	text[size] = 0;
 	fclose(file);
+	{
+		char* src = text;
+		char* dst = text;
+		while (*src != 0) {
+			if (*src != '\r')
+				*dst++ = *src;
+			src++;
+		}
+		*dst = 0;
+	}
 	const char* cursor = text;
 	for (int i = 0; i < count; i++) {
 		const char* found = strstr(cursor, marks[i]);
@@ -636,12 +664,12 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", ibAgain, 3) != 0)
+				"r5gpu/r5_gpu_core.cpp", ibAgain, 3) != 0)
 			return 1;
 		char body[12000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
+				"r5gpu/r5_gpu_core.cpp",
 				"gpu_va_replace(", "gpu_va_unmap(", body, sizeof(body)) != 0)
 			return 1;
 		if (strstr(body, "gpu_va_map_copied") == NULL
@@ -687,16 +715,16 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", lostSeen, 3) != 0)
+				"r5gpu/r5_gpu_core.cpp", lostSeen, 3) != 0)
 			return 1;
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
-				"gpu_free(void* cookie)", "gpu_read(void* cookie",
+				"r5gpu/r5_gpu_core.cpp",
+				"gpu_free(void* cookie)\n", "gpu_read(void* cookie",
 				body, sizeof(body)) != 0)
 			return 1;
-		const char* once = strstr(body, "r5_gfx9_user_seen()");
-		if (once == NULL || strstr(once + 1, "r5_gfx9_user_seen()") != NULL)
+		const char* once = strstr(body, "gpu_hw_seen()");
+		if (once == NULL || strstr(once + 1, "gpu_hw_seen()") != NULL)
 			return fail("fence once");
 		if (strstr(body, "gpu_bo_hold_tree(bo)") == NULL
 			|| strstr(body, "tree->seen = seen") == NULL
@@ -767,14 +795,14 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", book, 4) != 0)
+				"r5gpu/r5_gpu_core.cpp", book, 4) != 0)
 			return 1;
 	}
 	{
 		char openBody[2500];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
+				"r5gpu/r5_gpu_core.cpp",
 				"gpu_open(const char* name", "gpu_close(void* cookie)",
 				openBody, sizeof(openBody)) != 0)
 			return 1;
@@ -788,10 +816,10 @@ main()
 		if (locked == NULL || opened == NULL || unlocked == NULL
 			|| cookie == NULL)
 			return fail("open lock");
-		char controlBody[12000];
+		char controlBody[20000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
+				"r5gpu/r5_gpu_core.cpp",
 				"gpu_control(void* cookie", "device_hooks gR5GpuHooks",
 				controlBody, sizeof(controlBody)) != 0)
 			return 1;
@@ -826,14 +854,14 @@ main()
 				"radeon_hd/gfx9_k12.cpp", faultQ, 5) != 0)
 			return 1;
 		const char* faultRetire[] = {
-			"r5_gfx9_fault_take(&pasid, &vmid, &addr)",
+			"gR5GpuOps.fault_take(&pasid, &vmid, &addr)",
 			"scan->pasid == pasid",
 			"vm fault pasid %lu unknown addr",
 			"found->faulted = true"
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", faultRetire, 4) != 0)
+				"r5gpu/r5_gpu_core.cpp", faultRetire, 4) != 0)
 			return 1;
 	}
 	if (tablePages[0].cpu[1] != kR5VmPdeEmpty)
@@ -1331,19 +1359,19 @@ main()
 	{
 		char text[4000];
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "gpu_debug_enabled()",
+			"r5gpu/r5_gpu_core.cpp", "gpu_debug_enabled()",
 			"gpu_error_line()", text, sizeof(text)) != 0)
 			return fail("debug reader");
 		if (strstr(text, "load_driver_settings") != NULL)
 			return fail("debug reads every call");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "r5_gpu_init()", "r5_gpu_uninit()",
+			"r5gpu/r5_gpu_core.cpp", "r5_gpu_init()", "r5_gpu_uninit()",
 			text, sizeof(text)) != 0)
 			return fail("init");
 		if (strstr(text, "gpu_cache_log_settings()") == NULL)
 			return fail("settings once");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "sSelftestOn < 0",
+			"r5gpu/r5_gpu_core.cpp", "sSelftestOn < 0",
 			"gpu_known_dw(", text, sizeof(text)) != 0)
 			return fail("selftest reader");
 		if (strstr(text, "load_driver_settings") != NULL)
@@ -1418,7 +1446,7 @@ main()
 			|| strstr(text, "eng = 0") != NULL)
 			return fail("vmid1 engine");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "r5_gfx9_map_vram(bo->vramOffset",
+			"r5gpu/r5_gpu_core.cpp", "gR5GpuOps.map_vram(bo->vramOffset",
 			"bo->kernel = kernel", text, sizeof(text)) != 0)
 			return fail("bo map");
 	}
@@ -1815,7 +1843,7 @@ main()
 			return 1;
 		const char* m5Next[] = {
 			"**M4 is done:**",
-			"**Next, M5:**"
+			"**M5 is done on the 5625U**"
 		};
 		if (source_order("docs/ROADMAP.md", m5Next, 2) != 0)
 			return 1;
@@ -2151,17 +2179,24 @@ main()
 			return 1;
 	}
 	{
-		const char* isolation[] = {
+		const char* isolationIb[] = {
 			"COPY_DATA reads dest. WRITE_DATA then writes dest.",
 			"words[1] = 1u | (5u << 8) | (1u << 16) | (1u << 20);",
-			"words[6] = 0xc0033700u;",
+			"words[6] = 0xc0033700u;"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-isolation/"
+				"r5_isolation_ib.h", isolationIb, 3) != 0)
+			return 1;
+		const char* isolation[] = {
 			"vm fault addr",
+			"vm fault not in syslog",
 			"memset(cpu, 0x5a, 4096)",
 			"owner unchanged"
 		};
 		if (source_order(
 				"distro/graphics/src/bin/r5-gpu-isolation/"
-				"r5-gpu-isolation.cpp", isolation, 6) != 0)
+				"r5-gpu-isolation.cpp", isolation, 4) != 0)
 			return 1;
 		const char* commandFlags[] = {
 			"kCommandFlags",
@@ -2187,6 +2222,126 @@ main()
 		|| r5_gpu_query_guilty(R5_GPU_CAP_GUILTY) != 0
 		|| r5_gpu_query_guilty(R5_GPU_CAP_LOST | R5_GPU_CAP_GUILTY) != 1)
 		return fail("guilty");
+	{
+		r5_vram_hole holes[R5_VRAM_HOLES];
+		uint64_t cursor = 0x7e9000ull;
+		uint64_t poolEnd = 256ull << 20;
+		uint64_t claim = 0;
+		uint64_t placed = 0;
+		int i;
+		memset(holes, 0, sizeof(holes));
+		holes[0].offset = R5_VRAM_PSP_TMR_OFFSET;
+		holes[0].bytes = R5_VRAM_PSP_TMR_BYTES;
+		r5_vram_discovery_hole(512ull << 20, &holes[1]);
+		if (holes[1].bytes != R5_VRAM_DISCOVERY_BYTES
+			|| holes[1].offset != (512ull << 20) - R5_VRAM_DISCOVERY_BYTES)
+			return fail("discovery");
+		if (r5_vram_overlap(0, poolEnd, holes[1].offset, holes[1].bytes))
+			return fail("discovery in bar");
+		for (i = 0; i < 2000; i++) {
+			if (!r5_vram_bump(cursor, 0x7e9000ull, poolEnd, 4096, 4096,
+					holes, R5_VRAM_HOLES, 0, &placed))
+				return fail("page bump");
+			if (r5_vram_overlap(placed, 4096, holes[0].offset, holes[0].bytes))
+				return fail("page in psp");
+			cursor = placed + 4096;
+		}
+		if (!r5_vram_bump(0xb00000ull, 0x7e9000ull, poolEnd,
+				R5_VRAM_PSP_TMR_BYTES, R5_VRAM_PSP_TMR_BYTES, holes,
+				R5_VRAM_HOLES, 1, &claim)
+			|| claim != R5_VRAM_PSP_TMR_OFFSET)
+			return fail("psp claim");
+		if (r5_vram_bump(0xb00000ull, 0x7e9000ull, poolEnd,
+				R5_VRAM_PSP_TMR_BYTES, R5_VRAM_PSP_TMR_BYTES, holes,
+				R5_VRAM_HOLES, 0, &placed)
+			&& placed == R5_VRAM_PSP_TMR_OFFSET)
+			return fail("size is not a claim");
+		if (!r5_vram_bump(0xb00000ull, 0x7e9000ull, poolEnd,
+				4ull << 20, 4096, holes, R5_VRAM_HOLES, 0, &placed)
+			|| placed != R5_VRAM_PSP_TMR_OFFSET + R5_VRAM_PSP_TMR_BYTES)
+			return fail("skip psp");
+		if (!r5_vram_bump(R5_VRAM_PSP_TMR_OFFSET + 4096, 0x7e9000ull,
+				poolEnd, 4096, 4096, holes, R5_VRAM_HOLES, 0, &placed)
+			|| placed != R5_VRAM_PSP_TMR_OFFSET + R5_VRAM_PSP_TMR_BYTES)
+			return fail("skip inside psp");
+		{
+			uint8_t bios[256];
+			r5_vram_hole fw;
+			memset(bios, 0, sizeof(bios));
+			bios[0x48] = 0x60;
+			bios[0x60 + 32] = 0xa0;
+			bios[0xa0 + 2] = 2;
+			bios[0xa0 + 4 + 11 * 2] = 0xc0;
+			bios[0xc4] = 0x00;
+			bios[0xc5] = 0x20;
+			bios[0xc8] = 64;
+			if (!r5_vram_fw_hole(bios, sizeof(bios), &fw)
+				|| fw.offset != 0x2000ull * 1024ull
+				|| fw.bytes != 64ull * 1024ull)
+				return fail("fw range");
+			holes[2] = fw;
+			if (!r5_vram_bump(fw.offset - 2048, 0, poolEnd, 4096, 4096,
+					holes, R5_VRAM_HOLES, 0, &placed)
+				|| r5_vram_overlap(placed, 4096, fw.offset, fw.bytes)
+				|| placed < fw.offset + fw.bytes)
+				return fail("fw skip");
+		}
+		{
+			r5_vram_hole top;
+			r5_vram_discovery_hole(32ull << 20, &top);
+			if (r5_vram_bump(top.offset, 0, 32ull << 20, 4096, 4096,
+					&top, 1, 0, &placed))
+				return fail("discovery placed");
+		}
+		{
+			/* Stick 32, generated/boot-5625u-32/syslog. The sizes are
+			 * the firmware bytes that boot printed, padded to 4096,
+			 * then the PSP ring, command page, fence page and the
+			 * 4 MiB SETUP_TMR claim. */
+			const uint64_t bytes[] = {
+				0x1000, 4096, 4096,
+				0x9000, 0x15000, 0x11000, 0x42000, 4096,
+				4096, 4096, 0x3000, 0x5000,
+				4096, 4096, 4096, R5_VRAM_PSP_TMR_BYTES
+			};
+			const uint64_t align[] = {
+				0x1000, 4096, 4096,
+				4096, 4096, 4096, 4096, 4096,
+				4096, 4096, 4096, 4096,
+				4096, 4096, 4096, R5_VRAM_PSP_TMR_BYTES
+			};
+			const uint64_t want[] = {
+				0x7e9000ull, 0x7ea000ull, 0x7eb000ull,
+				0, 0, 0, 0, 0,
+				0, 0, 0, 0,
+				0x868000ull, 0x869000ull, 0, 0xc00000ull
+			};
+			r5_vram_hole empty[R5_VRAM_HOLES];
+			uint64_t at = 0x7e9000ull;
+			uint64_t end = 0x7e9000ull + 0xf817000ull;
+			unsigned step;
+			memset(empty, 0, sizeof(empty));
+			for (step = 0; step < sizeof(bytes) / sizeof(bytes[0]); step++) {
+				int claimFlag = step + 1 == sizeof(bytes) / sizeof(bytes[0]);
+				if (!r5_vram_bump(at, 0x7e9000ull, end, bytes[step],
+						align[step], empty, R5_VRAM_HOLES, claimFlag,
+						&placed))
+					return fail("stick 32 bump");
+				if (want[step] != 0 && placed != want[step])
+					return fail("stick 32 offset");
+				if (claimFlag) {
+					empty[0].offset = placed;
+					empty[0].bytes = bytes[step];
+				}
+				at = placed + bytes[step];
+			}
+			if (r5_vram_bump(0xb00000ull, 0x7e9000ull, end,
+					R5_VRAM_PSP_TMR_BYTES, R5_VRAM_PSP_TMR_BYTES,
+					empty, R5_VRAM_HOLES, 0, &placed)
+				&& placed == 0xc00000ull)
+				return fail("stick 32 user claim");
+		}
+	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);
 	return 0;
 }

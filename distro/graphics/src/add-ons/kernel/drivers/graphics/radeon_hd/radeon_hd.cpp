@@ -19,6 +19,7 @@
 
 
 #include "radeon_hd.h"
+#include "r5_vram_pool.h"
 #include "sensors.h"
 
 #include "atombios/atombios.h"
@@ -1200,6 +1201,37 @@ radeon_hd_init(radeon_info &info)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 	radeon_map_doorbell(info);
+	if (!radeon_hd_uses_dce(info.chipsetID)) {
+		/* The PSP hole is whatever SETUP_TMR allocates. It is not
+		 * installed from a constant before that call. */
+		/* CONFIG_MEMSIZE is unused on Raven, so graphics_memory_size is
+		 * the BAR and the discovery region is not in this window. When
+		 * the register was read and it is larger than the BAR, the hole
+		 * is the top 74 KiB of that real size. */
+		if (info.shared_info->graphics_memory_size > fbBarSize) {
+			r5_vram_hole discovery;
+			r5_vram_discovery_hole(
+				(uint64)info.shared_info->graphics_memory_size * 1024ull,
+				&discovery);
+			info.shared_info->vram_hole_offset[1] = discovery.offset;
+			info.shared_info->vram_hole_bytes[1] = discovery.bytes;
+		}
+		if (info.atom_buffer != NULL && info.shared_info->rom_size >= 0x4a) {
+			r5_vram_hole firmware;
+			if (r5_vram_fw_hole(info.atom_buffer, info.shared_info->rom_size,
+					&firmware)) {
+				info.shared_info->vram_hole_offset[2] = firmware.offset;
+				info.shared_info->vram_hole_bytes[2] = firmware.bytes;
+			}
+		}
+		ERROR("%s: R5 radeon_hd: vram holes discovery 0x%" B_PRIx64
+			"+0x%" B_PRIx64 " fw 0x%" B_PRIx64 "+0x%" B_PRIx64
+			" (psp claim is SETUP_TMR)\n", __func__,
+			info.shared_info->vram_hole_offset[1],
+			info.shared_info->vram_hole_bytes[1],
+			info.shared_info->vram_hole_offset[2],
+			info.shared_info->vram_hole_bytes[2]);
+	}
 	void r5_gfx9_kernel_start(radeon_info& info);
 	r5_gfx9_kernel_start(info);
 // SPDX-SnippetEnd

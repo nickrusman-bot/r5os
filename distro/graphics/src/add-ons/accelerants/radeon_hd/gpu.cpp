@@ -27,6 +27,7 @@
 #include <driver_settings.h>
 #include <stdarg.h>
 #include "gfx9_start.h"
+#include "r5_vram_pool.h"
 // SPDX-SnippetEnd
 
 #include <fcntl.h>
@@ -612,6 +613,18 @@ radeon_vram_pool_report()
 }
 
 
+static int sVramClaim = 0;
+
+
+static int
+r5_host_vram_claim(void* cookie, int on)
+{
+	(void)cookie;
+	sVramClaim = on ? 1 : 0;
+	return 0;
+}
+
+
 status_t
 radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
 	uint8** _address)
@@ -631,20 +644,28 @@ radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
 	uint64 start = info->vram_pool_offset;
 	uint64 end = start + info->vram_pool_bytes;
 	uint64 cursor = info->vram_pool_cursor;
-	if (cursor < start)
-		cursor = start;
-	uint64 aligned = (cursor + alignment - 1) & ~(alignment - 1);
-	if (aligned < cursor || aligned > end || bytes > end - aligned)
+	r5_vram_hole holes[R5_VRAM_HOLES];
+	uint64 placed = 0;
+	for (int i = 0; i < R5_VRAM_HOLES; i++) {
+		holes[i].offset = info->vram_hole_offset[i];
+		holes[i].bytes = info->vram_hole_bytes[i];
+	}
+	if (!r5_vram_bump(cursor, start, end, bytes, alignment, holes,
+			R5_VRAM_HOLES, sVramClaim, &placed))
 		return B_NO_MEMORY;
+	if (sVramClaim) {
+		info->vram_hole_offset[0] = placed;
+		info->vram_hole_bytes[0] = bytes;
+	}
 
-	info->vram_pool_cursor = aligned + bytes;
-	*_offset = aligned;
+	info->vram_pool_cursor = placed + bytes;
+	*_offset = placed;
 
 	if (_address != NULL) {
 		uint8* base = (uint8*)info->frame_buffer;
 		if (!radeon_hd_uses_dce(info->chipsetID))
 			base -= info->vram_reserved_offset;
-		*_address = base + aligned;
+		*_address = base + placed;
 	}
 	return B_OK;
 }
@@ -927,6 +948,7 @@ r5_host_fill(r5_gfx9_host* host)
 	host->sleep_us = r5_host_sleep;
 	host->log = r5_host_log;
 	host->vram_alloc = r5_host_vram;
+	host->vram_claim = r5_host_vram_claim;
 	host->read_firmware = r5_host_firmware;
 	host->free_firmware = r5_host_free_firmware;
 	host->doorbell = sGfx9Doorbell;
