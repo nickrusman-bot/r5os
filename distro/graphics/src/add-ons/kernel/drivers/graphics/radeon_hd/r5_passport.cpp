@@ -14,6 +14,8 @@
 
 #include <KernelExport.h>
 
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 
@@ -74,11 +76,29 @@ sum_bytes(const uint8* base, uint32 size)
 }
 
 
+/* The PCI ids live in the radeon_hd device table in driver.cpp.
+ * 15e7, 1636, 1638 and 164c (Lucienne) are RADEON_RENOIR there. */
 static bool
-known_gc93(uint16 device)
+known_gc93(radeon_info* info)
 {
-	return device == 0x15e7 || device == 0x1636 || device == 0x1638
-		|| device == 0x164c;
+	return info != NULL && info->chipsetID == RADEON_RENOIR;
+}
+
+
+static bool sSaid = false;
+
+
+static void
+say(const char* format, ...)
+{
+	char line[320];
+	va_list args;
+	if (sSaid)
+		return;
+	va_start(args, format);
+	vsnprintf(line, sizeof(line), format, args);
+	va_end(args);
+	dprintf("%s", line);
 }
 
 
@@ -87,7 +107,7 @@ mismatch(const char* field, uint32 table, uint32 discovery)
 {
 	if (table == discovery)
 		return;
-	dprintf("radeon_hd: passport mismatch %s table %lu discovery %lu\n",
+	say("radeon_hd: passport mismatch %s table %lu discovery %lu\n",
 		field, (unsigned long)table, (unsigned long)discovery);
 }
 
@@ -100,7 +120,9 @@ apply_row(r5_gpu_amd_info* amd, uint32* cuPerSh, uint32* rbPerSe)
 	amd->device.num_shader_engines = kTableSe;
 	amd->device.num_shader_arrays_per_engine = kTableSh;
 	amd->device.num_cu_per_sh = kTableCu;
+	/* Linux v6.12 gfx_v9_0.c gfx_v9_0_gpu_early_init, IP 9.3.0. */
 	amd->device.num_hw_gfx_contexts = 8;
+	/* Linux v6.12 gfx_v9_0.c gfx_v9_0_sw_init. The same for every GFX9. */
 	amd->device.ce_ram_size = 0x8000;
 	amd->device.gc_double_offchip_lds_buf = kTableOffchip;
 	amd->device.num_shader_visible_vgprs = kTableVgpr;
@@ -125,7 +147,7 @@ discovery_gc(radeon_info* info, uint32* se, uint32* sh, uint32* cu,
 {
 	if (info == NULL || info->carveout == NULL
 		|| info->carveout_bytes < kDiscoveryOffset) {
-		dprintf("radeon_hd: passport discovery missing\n");
+		say("radeon_hd: passport discovery missing\n");
 		return false;
 	}
 	const uint8* bin = info->carveout
@@ -138,12 +160,12 @@ discovery_gc(radeon_info* info, uint32* se, uint32* sh, uint32* cu,
 		|| !read_u16(bin, kDiscoveryBytes, 8, &stored)
 		|| !read_u16(bin, kDiscoveryBytes, 10, &binarySize)
 		|| binarySize <= 10 || binarySize > kDiscoveryBytes) {
-		dprintf("radeon_hd: passport discovery missing\n");
+		say("radeon_hd: passport discovery missing\n");
 		return false;
 	}
 	/* Bytes after binary_checksum. Linux amdgpu_discovery_init. */
 	if (sum_bytes(bin + 10, (uint32)binarySize - 10u) != stored) {
-		dprintf("radeon_hd: passport discovery missing\n");
+		say("radeon_hd: passport discovery missing\n");
 		return false;
 	}
 	uint16 gcOff = 0;
@@ -156,14 +178,14 @@ discovery_gc(radeon_info* info, uint32* se, uint32* sh, uint32* cu,
 		|| gcOff == 0 || gcSize < 12u + 11u * 4u
 		|| (uint32)gcOff + gcSize > binarySize
 		|| sum_bytes(bin + gcOff, gcSize) != gcSum) {
-		dprintf("radeon_hd: passport discovery missing\n");
+		say("radeon_hd: passport discovery missing\n");
 		return false;
 	}
 	uint32 tableId = 0;
 	uint16 major = 0;
 	if (!read_u32(bin, binarySize, gcOff, &tableId) || tableId != kGcTableId
 		|| !read_u16(bin, binarySize, gcOff + 4u, &major) || major != 1) {
-		dprintf("radeon_hd: passport discovery missing\n");
+		say("radeon_hd: passport discovery missing\n");
 		return false;
 	}
 	/* gc_info_v1_0, after the 12-byte gpu_info_header.
@@ -182,7 +204,7 @@ discovery_gc(radeon_info* info, uint32* se, uint32* sh, uint32* cu,
 		|| !read_u32(bin, binarySize, base + 40u, offchip)
 		|| !read_u32(bin, binarySize, base + 44u, wave)
 		|| !read_u32(bin, binarySize, base + 64u, sh)) {
-		dprintf("radeon_hd: passport discovery missing\n");
+		say("radeon_hd: passport discovery missing\n");
 		return false;
 	}
 	*cu = 2u * (wgp0 + wgp1);
@@ -245,7 +267,7 @@ apply_atom(radeon_info* info, r5_gpu_amd_info* amd)
 	uint32 size = 0;
 	if (info == NULL || info->atom_buffer == NULL
 		|| !atom_size(info->atom_buffer, &size)) {
-		dprintf("radeon_hd: passport atom missing\n");
+		say("radeon_hd: passport atom missing\n");
 		return;
 	}
 	const uint8* rom = info->atom_buffer;
@@ -276,7 +298,7 @@ apply_atom(radeon_info* info, r5_gpu_amd_info* amd)
 	}
 	if (!atom_table(rom, size, kAtomIntegrated, &offset, &format, &content,
 			&tableSize)) {
-		dprintf("radeon_hd: passport atom missing\n");
+		say("radeon_hd: passport atom missing\n");
 		return;
 	}
 	uint32 typeAt = 0;
@@ -285,7 +307,7 @@ apply_atom(radeon_info* info, r5_gpu_amd_info* amd)
 	else if (format == 2 && content >= 1 && content <= 3 && tableSize >= 28)
 		typeAt = offset + 26u;
 	else {
-		dprintf("radeon_hd: passport atom missing\n");
+		say("radeon_hd: passport atom missing\n");
 		return;
 	}
 	uint8 memoryType = rom[typeAt];
@@ -293,6 +315,11 @@ apply_atom(radeon_info* info, r5_gpu_amd_info* amd)
 	if (channels == 0)
 		channels = 1;
 	uint32 kind = 0;
+	/* Linux v6.12 amdgpu_atomfirmware.c
+	 * convert_atom_mem_type_to_vram_type. 19 and 28 are Ddr2 (2),
+	 * 24 and 29 are Ddr3 (7), 26 is Ddr4 (8), 30 is LpDdr4 (11),
+	 * 35 is LpDdr5 (12). The width rule in that file is 32 bits per
+	 * channel for LpDdr5 and 64 for the others. */
 	if (memoryType == 19 || memoryType == 28)
 		kind = 2;
 	else if (memoryType == 24 || memoryType == 29)
@@ -314,12 +341,11 @@ r5_passport_apply(radeon_info* info, r5_gpu_amd_info* amd, uint32_t* cuPerSh,
 {
 	if (amd == NULL || info == NULL || info->pci == NULL)
 		return;
-	uint16 device = info->pci->device_id;
-	bool row = known_gc93(device);
+	bool row = known_gc93(info);
 	if (row)
 		apply_row(amd, cuPerSh, rbPerSe);
 	else
-		dprintf("radeon_hd: passport no row\n");
+		say("radeon_hd: passport no row\n");
 
 	uint32 se = 0;
 	uint32 sh = 0;
@@ -358,8 +384,24 @@ r5_passport_apply(radeon_info* info, r5_gpu_amd_info* amd, uint32_t* cuPerSh,
 			*cuPerSh = cu;
 		if (rbPerSe != NULL && rb > 0 && rb <= 8)
 			*rbPerSe = rb;
-		dprintf("radeon_hd: passport discovery se %lu sh %lu cu %lu\n",
+		say("radeon_hd: passport discovery se %lu sh %lu cu %lu\n",
 			(unsigned long)se, (unsigned long)sh, (unsigned long)cu);
 	}
 	apply_atom(info, amd);
+	{
+		uint32 atomFreq = amd->device.gpu_counter_freq;
+		/* Linux v6.12 drivers/gpu/drm/amd/amdgpu/soc15.c
+		 * soc15_get_xclk(): MP1 12.0.0 and 12.0.1 return 10000.
+		 * amdgpu_kms.c copies that xclk times 10 into gpu_counter_freq.
+		 * Renoir is that IP version. The ATOM clock is the cross-check. */
+		if (known_gc93(info))
+			amd->device.gpu_counter_freq = 100000;
+		say("radeon_hd: passport counter_freq %lu atom %lu\n",
+			(unsigned long)amd->device.gpu_counter_freq,
+			(unsigned long)atomFreq);
+	}
+	/* Linux v6.12 amdgpu_discovery.c amdgpu_discovery_set_ip_blocks()
+	 * sets CHIP_RENOIR by hand and does not read a discovery binary.
+	 * passport discovery missing is the expected line on this chip. */
+	sSaid = true;
 }

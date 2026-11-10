@@ -37,11 +37,12 @@ void arch_vm_unset_memory_type(struct VMArea *area);
 /* SPDX-SnippetBegin
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
- * Write back cached lines before a page-table memory type changes.
- * AMD64 does this when PAT is on. Other architectures keep the empty
- * function in vm.cpp.
+ * After the page tables change, flush the lines. AMD64 uses clflush
+ * when PAT is on. A type the page tables cannot name is refused.
+ * Other architectures keep the empty functions in vm.cpp.
  */
-void arch_vm_flush_before_memory_type(void);
+bool arch_vm_page_memory_type_supported(uint32 type);
+void arch_vm_flush_memory_type_range(addr_t address, size_t bytes);
 /* SPDX-SnippetEnd */
 
 #ifdef __cplusplus

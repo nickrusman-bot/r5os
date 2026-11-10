@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - Write-combined graphics memory stays a page type
+
+With PAT, only a write-combined RAM range is left out of the MTRRs. Other types keep the previous overlap rule. `vm_set_area_page_memory_type()` takes the address-space write lock, changes the page tables, then runs `clflush` on that area. It does not run `wbinvd`, and `vm_set_area_memory_type()` no longer flushes on the way in. Without PAT the page-type call returns `B_NOT_SUPPORTED`. The program's clone of a write-combined buffer gets that type after `vm_clone_area()`, which only copies the type for device areas. The physical map stays write-back. That alias is the known limit of `gfx9_wc_gtt` in `docs/KERNEL.md`. The library no longer reads the settings file. It asks for write-combining when the caller did, and the kernel reply is the flags that were used.
+
+Renoir's `gpu_counter_freq` is 100000 kHz, from Linux `soc15_get_xclk()` (MP1 12.0 returns 10000) times 10. The ATOM reference clock is printed once as `passport counter_freq … atom …`. The row is the device table's `RADEON_RENOIR` entry, which already includes `164c`. `passport discovery missing` is the expected Renoir line, because Linux does not read a discovery binary for that chip. The mismatch and missing lines are printed once per boot. The eight contexts, the 32 KiB constant engine, and the memory-type map name the Linux functions they come from. `generated/gpu-m4/HARDCODE.md` is not in this tree, so its row 5 was not edited. Not booted.
+
 ## 2026-11-10 - The core includes the wait header
 
 `r5_gpu_core.cpp` includes `r5_wait.h`. The wait moved into the core on this branch, and the include was left behind, so a jam of this branch stopped because `r5_wait_step` was not declared. The include was first added on `cursor/gpu-m6-workload` and moved here so that each pull request builds on its own, in merge order.

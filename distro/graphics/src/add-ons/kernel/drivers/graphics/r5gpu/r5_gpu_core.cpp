@@ -2404,6 +2404,16 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	if (area < 0)
 		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
 			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	/* vm_clone_area() copies the memory type for device areas only.
+	 * A GTT buffer is RAM, so the program's mapping stays write-back
+	 * until this call. */
+	if ((bo->flags & R5_GPU_BO_WC) != 0
+		&& vm_set_area_page_memory_type(area, B_WRITE_COMBINING_MEMORY)
+			!= B_OK) {
+		vm_delete_area(team, area, true);
+		return gpu_refuse("BO_MAP", "wc", B_NOT_SUPPORTED, in.handle,
+			bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+	}
 	bo->area = area;
 	bo->mapTeam = team;
 	in.area = area;

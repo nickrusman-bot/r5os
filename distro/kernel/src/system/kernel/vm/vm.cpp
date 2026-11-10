@@ -4574,14 +4574,6 @@ vm_set_area_memory_type(area_id id, phys_addr_t physicalBase, uint32 type)
 	if (type == oldType)
 		return B_OK;
 
-	/* SPDX-SnippetBegin
-	 * SPDX-License-Identifier: GPL-3.0-or-later
-	 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	 * Drop cached lines before the page tables change type.
-	 */
-	arch_vm_flush_before_memory_type();
-	/* SPDX-SnippetEnd */
-
 	// set the memory type of the area and the mapped pages
 	VMTranslationMap* map = area->address_space->TranslationMap();
 	map->Lock();
@@ -4608,18 +4600,31 @@ vm_set_area_memory_type(area_id id, phys_addr_t physicalBase, uint32 type)
 /* SPDX-SnippetBegin
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
- * Other architectures do not flush. AMD64 replaces this when PAT is on.
+ * Other architectures cannot name a page type, and they do not flush.
+ * AMD64 replaces both when PAT is on. The write lock is held because
+ * the type and the entries change together. The flush is after the
+ * translation-map unlock, which has already shot the TLB down.
  */
-extern "C" __attribute__((weak)) void
-arch_vm_flush_before_memory_type(void)
+extern "C" __attribute__((weak)) bool
+arch_vm_page_memory_type_supported(uint32 type)
 {
+	(void)type;
+	return false;
+}
+
+
+extern "C" __attribute__((weak)) void
+arch_vm_flush_memory_type_range(addr_t address, size_t bytes)
+{
+	(void)address;
+	(void)bytes;
 }
 
 
 status_t
 vm_set_area_page_memory_type(area_id id, uint32 type)
 {
-	AddressSpaceReadLocker locker;
+	AddressSpaceWriteLocker locker;
 	VMArea* area;
 	status_t status = locker.SetFromArea(id, area);
 	if (status != B_OK)
@@ -4628,14 +4633,17 @@ vm_set_area_page_memory_type(area_id id, uint32 type)
 	uint32 oldType = area->MemoryType();
 	if (type == oldType)
 		return B_OK;
+	if (!arch_vm_page_memory_type_supported(type))
+		return B_NOT_SUPPORTED;
 
-	arch_vm_flush_before_memory_type();
-
+	addr_t base = area->Base();
+	size_t bytes = area->Size();
 	VMTranslationMap* map = area->address_space->TranslationMap();
 	map->Lock();
 	area->SetMemoryType(type);
 	map->ProtectArea(area, area->protection);
 	map->Unlock();
+	arch_vm_flush_memory_type_range(base, bytes);
 	return B_OK;
 }
 /* SPDX-SnippetEnd */
