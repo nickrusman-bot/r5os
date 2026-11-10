@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - VulkanTeapot can draw in a resizable window
+
+`VulkanTeapot --window` opens an ordinary window and presents through `VK_RFIVE_view_surface`. The device is the one that reports surface support. A present that returns `VK_SUBOPTIMAL_KHR` or `VK_ERROR_OUT_OF_DATE_KHR` builds a new swapchain. `VK_ERROR_SURFACE_LOST_KHR` exits without a crash dialog. `--selftest` is still the offscreen compare and is unchanged. `r5-wsi-window-test.sh` is installed with the `vulkanteapot` package. It drives the window with `hey`: three resizes, workspace 2 and back, minimise and restore, then close. Each action prints `window <action> ok` or `window <action> FAIL`, and the last line is `device lost no` or `device lost yes`.
+
+The view-surface code no longer keeps one process-wide device or one process-wide visible swapchain. The queue mask is stored per device. The view bitmap is read and written under the surface lock.
+
+Not yet: the VirtualBox lines from `r5-wsi-window-test.sh`. RADV in a window, the Ryzen 5 5625U, and `vkcube` stay later steps. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - Lavapipe draws a Vulkan window
 
 Lavapipe now exports `VK_RFIVE_view_surface` and presents a swapchain into an ordinary window. The surface, the swapchain and the present live in `distro/mesa/wsi/wsi_common_haiku.cpp` (MIT, copyright 2026 R5OS Contributors). Mesa is built against R5's `vk_icd.h`. The platform is on for Lavapipe only. Each swapchain image is a CPU image and one `BBitmap`. Present copies the rows, waits for the next refresh with the window unlocked, then locks the window, calls `SetViewBitmap` and `Invalidate`, and waits with `BWindow::Sync` before it unlocks. The image can be acquired again after that reply. FIFO is the only present mode. RADV is not linked to this file. The buffer-image path waits for step 5. Nothing was copied from haiku-amdgpu, haiku-rpi or summit. The test program is `r5-wsi-test` (GPL-3.0-or-later). The package is `mesa_lavapipe-25.3.6-2`. The RADV package stays `mesa_radv-25.3.6-1`.

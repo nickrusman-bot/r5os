@@ -30,6 +30,8 @@ typedef float GLfloat;
 
 
 static const int kSize = 384;
+
+int run_window(int cube);
 static const int kSubDiv = 8;
 
 
@@ -224,7 +226,7 @@ add_patch_indices(Mesh* mesh, uint32_t base)
 }
 
 
-static Mesh
+Mesh
 build_teapot(void)
 {
 	Mesh mesh;
@@ -271,7 +273,7 @@ build_teapot(void)
 }
 
 
-static Mesh
+Mesh
 build_cube(void)
 {
 	Mesh mesh;
@@ -364,7 +366,7 @@ mvp(float out[16])
 }
 
 
-static void
+void
 mvp_turned(float out[16], float angle)
 {
 	float base[16];
@@ -387,7 +389,7 @@ mvp_turned(float out[16], float angle)
 }
 
 
-static uint32_t
+uint32_t
 memory_type(VkPhysicalDevice gpu, uint32_t bits, VkMemoryPropertyFlags flags)
 {
 	VkPhysicalDeviceMemoryProperties properties;
@@ -657,12 +659,17 @@ main(int argc, char** argv)
 {
 	int selftest = 0;
 	int cube = 0;
+	int windowMode = 0;
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--selftest") == 0)
 			selftest = 1;
 		else if (strcmp(argv[i], "--cube") == 0)
 			cube = 1;
+		else if (strcmp(argv[i], "--window") == 0)
+			windowMode = 1;
 	}
+	if (windowMode && !selftest)
+		return run_window(cube);
 	Mesh mesh = cube ? build_cube() : build_teapot();
 	float matrix[16];
 	mvp(matrix);
