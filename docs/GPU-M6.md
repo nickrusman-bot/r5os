@@ -35,7 +35,7 @@ The code change, not done in this note: on a GFXHUB fault IV, do the dummy read,
 
 ## `print_fault()`
 
-`r5-gpu-isolation` `print_fault()` scans syslog for `vm fault` and the address, prints any matching line, and then always prints `vm fault addr`. Stick 32 had no driver line, so the program's own line was the only one, and it is not evidence. The change, not done in this note: print `vm fault addr` only when a syslog line was found. Print a different line when it was not, so a missing driver fault stays visible.
+`r5-gpu-isolation` `print_fault()` scans syslog for `vm fault` and the address and prints any matching line. It prints `vm fault addr` only when a syslog line containing both `vm fault` and the address was found. When none was found it prints `vm fault not in syslog` and the address, so a missing driver fault stays visible. The interrupt status read and the GPU reset did not land.
 
 ## Reset
 

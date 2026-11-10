@@ -20,6 +20,20 @@ The isolation command list and the self-test indirect buffer are headers that th
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
 
+## 2026-11-10 - The GPU core is split from the AMD backend
+
+The bookkeeping in the radeon_hd GPU driver (clients, buffers, sync objects, jobs, the per-file page table, copies, and the watchdog) moved into `distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/`: `r5_gpu_core.cpp`, `r5_gpu_backend.h`, and `r5_gpu_internal.h`. Those three files are MIT, the exception in `docs/GPU-ARCHITECTURE.md`. `r5_gpu.cpp` stays the AMD backend. It fills `r5_gpu_backend_ops` and still calls `r5_gfx9_*`. A null operation returns `B_NOT_SUPPORTED`; the radeon_hd table fills every operation the core uses. Ioctls, log strings, refusal reasons, and limits are unchanged. The GFX9 ring contract is unchanged. `distro/BUILD` is unchanged.
+
+`r5-gpu-isolation` `print_fault()` prints `vm fault addr` only when a syslog line contains both `vm fault` and the address. When none was found it prints `vm fault not in syslog` and the same `%016llx` address. The isolation program was not run. The interrupt status read and the GPU reset did not land.
+
+The move needed four compile fixes that do not change the calls. The AMD file includes `r5_wait.h` again. The last indirect-buffer list is shared with the core, because stage P still records it. The core includes `Drivers.h` for the device hooks, and `gpu_prt_release_tree()` is declared before it is used.
+
+Host, 10 Nov 2026: `wsl python3 scripts/check-pm4.py` printed `ok pm4 48 streams, 89 opcodes`. `g++ -std=c++17` of `scripts/test-r5-gpu.cpp` was run on LF copies of this tree. It stops on `get_driver_boolean_parameter(settings, "gfx9_inv_range",` in `gfx9_k12.cpp`. That file is not part of this change. The file continues with one tab and `true, true);`. The test looks for three tabs. The same text is on current main.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`, 8179 targets updated. The image was packaged at 01:49 Europe/Amsterdam on 10 Nov 2026. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because of CRLF; that one line was skipped for the apply and the script was put back. `radeon_hd` and `r5-gpu-isolation` both linked.
+
+VirtualBox, same image, new VDI, bridged. The welcome window came up, Try R5 reached Sign in, and Sign in as `user` with an empty password reached the desktop: Tracker, Deskbar, and the home icons. No panic was on screen. Not a GPU test. Lavapipe was not started. The isolation program was not run. The 5625U was not used.
+
 ## 2026-11-10 - Command lists are checked before a test boot
 
 `scripts/check-pm4.py` reads Mesa 25.3.6 `src/amd/common/sid.h` and checks the hand-written command lists: the kernel clear-state ring (914 dwords), the isolation copy, the self-test indirect buffer, stage P, the user frame, the VM switch, and the compute indirect buffer. A `COPY_DATA` that says "register" and then carries a GPU address is rejected. That is the failure from stick 31. The isolation command list must still be mapped executable. That is the failure from stick 30. Three opcodes that this Mesa header no longer names (`PREAMBLE_CNTL`, `SWITCH_BUFFER`, `FRAME_CONTROL`) are accepted from Mesa 22.3 and from Linux `gfx_v9_0.c`, and the script says so.

@@ -636,12 +636,12 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", ibAgain, 3) != 0)
+				"r5gpu/r5_gpu_core.cpp", ibAgain, 3) != 0)
 			return 1;
 		char body[12000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
+				"r5gpu/r5_gpu_core.cpp",
 				"gpu_va_replace(", "gpu_va_unmap(", body, sizeof(body)) != 0)
 			return 1;
 		if (strstr(body, "gpu_va_map_copied") == NULL
@@ -687,7 +687,7 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", lostSeen, 3) != 0)
+				"r5gpu/r5_gpu_core.cpp", lostSeen, 3) != 0)
 			return 1;
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
@@ -767,14 +767,14 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp", book, 4) != 0)
+				"r5gpu/r5_gpu_core.cpp", book, 4) != 0)
 			return 1;
 	}
 	{
 		char openBody[2500];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
+				"r5gpu/r5_gpu_core.cpp",
 				"gpu_open(const char* name", "gpu_close(void* cookie)",
 				openBody, sizeof(openBody)) != 0)
 			return 1;
@@ -791,7 +791,7 @@ main()
 		char controlBody[12000];
 		if (snippet(
 				"distro/graphics/src/add-ons/kernel/drivers/graphics/"
-				"radeon_hd/r5_gpu.cpp",
+				"r5gpu/r5_gpu_core.cpp",
 				"gpu_control(void* cookie", "device_hooks gR5GpuHooks",
 				controlBody, sizeof(controlBody)) != 0)
 			return 1;
@@ -1331,19 +1331,19 @@ main()
 	{
 		char text[4000];
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "gpu_debug_enabled()",
+			"r5gpu/r5_gpu_core.cpp", "gpu_debug_enabled()",
 			"gpu_error_line()", text, sizeof(text)) != 0)
 			return fail("debug reader");
 		if (strstr(text, "load_driver_settings") != NULL)
 			return fail("debug reads every call");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "r5_gpu_init()", "r5_gpu_uninit()",
+			"r5gpu/r5_gpu_core.cpp", "r5_gpu_init()", "r5_gpu_uninit()",
 			text, sizeof(text)) != 0)
 			return fail("init");
 		if (strstr(text, "gpu_cache_log_settings()") == NULL)
 			return fail("settings once");
 		if (snippet("distro/graphics/src/add-ons/kernel/drivers/graphics/"
-			"radeon_hd/r5_gpu.cpp", "sSelftestOn < 0",
+			"r5gpu/r5_gpu_core.cpp", "sSelftestOn < 0",
 			"gpu_known_dw(", text, sizeof(text)) != 0)
 			return fail("selftest reader");
 		if (strstr(text, "load_driver_settings") != NULL)
@@ -2156,12 +2156,13 @@ main()
 			"words[1] = 1u | (5u << 8) | (1u << 16) | (1u << 20);",
 			"words[6] = 0xc0033700u;",
 			"vm fault addr",
+			"vm fault not in syslog",
 			"memset(cpu, 0x5a, 4096)",
 			"owner unchanged"
 		};
 		if (source_order(
 				"distro/graphics/src/bin/r5-gpu-isolation/"
-				"r5-gpu-isolation.cpp", isolation, 6) != 0)
+				"r5-gpu-isolation.cpp", isolation, 7) != 0)
 			return 1;
 		const char* commandFlags[] = {
 			"kCommandFlags",
