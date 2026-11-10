@@ -17,5 +17,5 @@ sys_root = '/home/nickr/r5os/haiku/generated.x86_64/cross-tools-x86_64/sysroot'
 pkg_config_libdir = '/home/nickr/r5os/r5-sysroot/lib/pkgconfig:/home/nickr/r5os/mesa-build/pkgconfig:/home/nickr/r5os/mesa-build/sysroot/lib/pkgconfig:/home/nickr/r5os/mesa-build/sysroot/develop/lib/pkgconfig'
 
 [built-in options]
-c_args = ['-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h']
-cpp_args = ['-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h']
+c_args = ['-DVK_USE_PLATFORM_VIEW_RFIVE', '-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h']
+cpp_args = ['-DVK_USE_PLATFORM_VIEW_RFIVE', '-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h']

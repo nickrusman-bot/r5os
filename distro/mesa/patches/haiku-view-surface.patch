@@ -1,0 +1,242 @@
+--- a/src/vulkan/wsi/wsi_common.h
++++ b/src/vulkan/wsi/wsi_common.h
+@@ -51,7 +51,7 @@
+ 
+ struct driOptionCache;
+ 
+-#define VK_ICD_WSI_PLATFORM_MAX (VK_ICD_WSI_PLATFORM_METAL + 1)
++#define VK_ICD_WSI_PLATFORM_MAX (VK_ICD_WSI_PLATFORM_VIEW_RFIVE + 1)
+ 
+ struct wsi_device {
+    /* Allocator for the instance */
+--- a/src/vulkan/wsi/wsi_common.c
++++ b/src/vulkan/wsi/wsi_common.c
+@@ -335,6 +335,11 @@
+ #endif
+ }
+ 
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++void wsi_view_r5_surface_destroy(VkIcdSurfaceBase *icd_surface,
++   VkInstance instance, const VkAllocationCallbacks *allocator)
++   __attribute__((weak));
++#endif
+ VKAPI_ATTR void VKAPI_CALL
+ wsi_DestroySurfaceKHR(VkInstance _instance,
+                       VkSurfaceKHR _surface,
+@@ -355,6 +360,13 @@
+ #ifdef VK_USE_PLATFORM_WIN32_KHR
+    if (surface->platform == VK_ICD_WSI_PLATFORM_WIN32) {
+       wsi_win32_surface_destroy(surface, _instance, pAllocator);
++      return;
++   }
++#endif
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   if (surface->platform == VK_ICD_WSI_PLATFORM_VIEW_RFIVE
++       && wsi_view_r5_surface_destroy != NULL) {
++      wsi_view_r5_surface_destroy(surface, _instance, pAllocator);
+       return;
+    }
+ #endif
+--- a/src/gallium/frontends/lavapipe/lvp_device.c
++++ b/src/gallium/frontends/lavapipe/lvp_device.c
+@@ -22,6 +22,13 @@
+  */
+ 
+ #include "lvp_private.h"
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++#include <string.h>
++#include "vulkan/vulkan_r5.h"
++VKAPI_ATTR VkResult VKAPI_CALL wsi_CreateViewSurfaceRFIVE(
++   VkInstance instance, const VkViewSurfaceCreateInfoRFIVE *pCreateInfo,
++   const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface);
++#endif
+ #include "lvp_conv.h"
+ #include "lvp_acceleration_structure.h"
+ 
+@@ -61,7 +65,8 @@
+     defined(VK_USE_PLATFORM_WIN32_KHR) || \
+     defined(VK_USE_PLATFORM_XCB_KHR) || \
+     defined(VK_USE_PLATFORM_XLIB_KHR) || \
+-    defined(VK_USE_PLATFORM_METAL_EXT)
++    defined(VK_USE_PLATFORM_METAL_EXT) || \
++    defined(VK_USE_PLATFORM_VIEW_RFIVE)
+ #define LVP_USE_WSI_PLATFORM
+ #endif
+ 
+@@ -1473,16 +1478,45 @@
+    vk_instance_dispatch_table_from_entrypoints(
+       &dispatch_table, &wsi_instance_entrypoints, false);
+ 
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   const char *view_names[64];
++   uint32_t view_count = 0;
++   bool view_r5 = false;
++   uint32_t enabled = pCreateInfo->enabledExtensionCount;
++   if (enabled > 64) {
++      vk_free(pAllocator, instance);
++      return vk_error(NULL, VK_ERROR_OUT_OF_HOST_MEMORY);
++   }
++   for (uint32_t i = 0; i < enabled; i++) {
++      const char *name = pCreateInfo->ppEnabledExtensionNames[i];
++      if (strcmp(name, VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME) == 0)
++         view_r5 = true;
++      else
++         view_names[view_count++] = name;
++   }
++   VkInstanceCreateInfo view_info = *pCreateInfo;
++   view_info.enabledExtensionCount = view_count;
++   view_info.ppEnabledExtensionNames = view_count ? view_names : NULL;
++   result = vk_instance_init(&instance->vk,
++                             &lvp_instance_extensions_supported,
++                             &dispatch_table,
++                             &view_info,
++                             pAllocator);
++#else
+    result = vk_instance_init(&instance->vk,
+                              &lvp_instance_extensions_supported,
+                              &dispatch_table,
+                              pCreateInfo,
+                              pAllocator);
++#endif
+    if (result != VK_SUCCESS) {
+       vk_free(pAllocator, instance);
+       return vk_error(NULL, result);
+    }
+ 
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   instance->view_r5 = view_r5;
++#endif
+    instance->apiVersion = LVP_API_VERSION;
+ 
+    instance->vk.physical_devices.enumerate = lvp_enumerate_physical_devices;
+@@ -1682,6 +1716,16 @@
+    VkInstance                                  _instance,
+    const char*                                 pName)
+ {
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   if (strcmp(pName, "vkCreateViewSurfaceRFIVE") == 0) {
++      if (_instance == VK_NULL_HANDLE)
++         return (PFN_vkVoidFunction)wsi_CreateViewSurfaceRFIVE;
++      VK_FROM_HANDLE(lvp_instance, lvp, _instance);
++      if (!lvp->view_r5)
++         return NULL;
++      return (PFN_vkVoidFunction)wsi_CreateViewSurfaceRFIVE;
++   }
++#endif
+    VK_FROM_HANDLE(vk_instance, instance, _instance);
+    return vk_instance_get_proc_addr(instance,
+                                     &lvp_instance_entrypoints,
+@@ -1943,8 +1987,31 @@
+    if (pLayerName)
+       return vk_error(NULL, VK_ERROR_LAYER_NOT_PRESENT);
+ 
+-   return vk_enumerate_instance_extension_properties(
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   uint32_t view_capacity = *pPropertyCount;
++#endif
++   VkResult result = vk_enumerate_instance_extension_properties(
+       &lvp_instance_extensions_supported, pPropertyCount, pProperties);
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   if (pProperties == NULL) {
++      *pPropertyCount += 1;
++      return VK_SUCCESS;
++   }
++   if (result != VK_SUCCESS && result != VK_INCOMPLETE)
++      return result;
++   if (*pPropertyCount < view_capacity) {
++      VkExtensionProperties *extra = &pProperties[*pPropertyCount];
++      memset(extra, 0, sizeof(*extra));
++      strncpy(extra->extensionName, VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME,
++         sizeof(extra->extensionName) - 1);
++      extra->specVersion = VK_RFIVE_VIEW_SURFACE_SPEC_VERSION;
++      *pPropertyCount += 1;
++      return VK_SUCCESS;
++   }
++   return VK_INCOMPLETE;
++#else
++   return result;
++#endif
+ }
+ 
+ VKAPI_ATTR VkResult VKAPI_CALL lvp_EnumerateInstanceLayerProperties(
+--- a/src/gallium/frontends/lavapipe/lvp_private.h
++++ b/src/gallium/frontends/lavapipe/lvp_private.h
+@@ -179,6 +179,9 @@
+ 
+    struct pipe_loader_device *devs;
+    int num_devices;
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   bool view_r5;
++#endif
+ };
+ 
+ VkResult lvp_init_wsi(struct lvp_physical_device *physical_device);
+--- a/src/gallium/frontends/lavapipe/lvp_wsi.c
++++ b/src/gallium/frontends/lavapipe/lvp_wsi.c
+@@ -45,6 +45,22 @@
+       return result;
+ 
+    physical_device->wsi_device.wants_linear = true;
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   {
++      VkPhysicalDevice handle =
++         lvp_physical_device_to_handle(physical_device);
++      VkQueueFamilyProperties2 props[8] = { 0 };
++      uint32_t count = 8;
++      lvp_GetPhysicalDeviceQueueFamilyProperties2(handle, &count, props);
++      uint64_t graphics = 0;
++      for (uint32_t i = 0; i < count && i < 8; i++) {
++         if (props[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
++            graphics |= (uint64_t)1 << i;
++      }
++      void wsi_view_r5_init_wsi(struct wsi_device *wsi, uint64_t mask);
++      wsi_view_r5_init_wsi(&physical_device->wsi_device, graphics);
++   }
++#endif
+    physical_device->vk.wsi_device = &physical_device->wsi_device;
+ 
+    return VK_SUCCESS;
+@@ -53,6 +69,10 @@
+ void
+ lvp_finish_wsi(struct lvp_physical_device *physical_device)
+ {
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   void wsi_view_r5_finish_wsi(struct wsi_device *wsi);
++   wsi_view_r5_finish_wsi(&physical_device->wsi_device);
++#endif
+    physical_device->vk.wsi_device = NULL;
+    wsi_device_finish(&physical_device->wsi_device,
+                      &physical_device->vk.instance->alloc);
+--- a/src/gallium/frontends/lavapipe/meson.build
++++ b/src/gallium/frontends/lavapipe/meson.build
+@@ -35,11 +35,19 @@
+     'lvp_ray_tracing_pipeline.c',
+     'lvp_wsi.c')
+ 
++if host_machine.system() == 'haiku'
++  liblvp_files += files('../../../vulkan/wsi/wsi_common_haiku.cpp')
++endif
++
+ if with_platform_android
+   liblvp_files += 'lvp_android.c'
+ endif
+ 
+ lvp_deps = []
++if host_machine.system() == 'haiku'
++  lvp_deps += cpp.find_library('be')
++  lvp_deps += cpp.find_library('stdc++')
++endif
+ lvp_flags = []
+ 
+ if with_platform_x11
+--- a/src/gallium/targets/lavapipe/meson.build
++++ b/src/gallium/targets/lavapipe/meson.build
+@@ -13,7 +13,7 @@
+   # The linker still expects a definition for weak symbols at build time, just not at runtime.
+   # We have to forcibly ignore undefined symbols, which unfortunately applies to all symbols.
+   override_options : ['b_lundef=@0@'.format(host_machine.system() == 'darwin' ? 'false' : get_option('b_lundef').to_string())],
+-  dependencies : [driver_llvmpipe, idep_mesautil],
++  dependencies : [driver_llvmpipe, idep_mesautil] + (host_machine.system() == 'haiku' ? [cpp.find_library('be'), cpp.find_library('stdc++')] : []),
+   name_prefix : host_machine.system() == 'windows' ? '' : [],
+   install : true,
+ )

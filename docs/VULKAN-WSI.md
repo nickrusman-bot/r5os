@@ -17,7 +17,7 @@ Read on 10 Nov 2026. None of these registered an extension with Khronos.
 | air/OS, including [airos-works/summit](https://github.com/airos-works/summit) | Presents by importing the screen's frame buffer (`VkImportScanoutMemoryHAIKU` in the air/OS Mesa and kernel trees). | Licence unclear (`NOASSERTION`). Copy nothing. Scanout is M8. |
 | RenkuOS | No Vulkan window. Its Chromium port has a `haiku_surface` only. | Not relevant. |
 
-R5 does not chain a private structure onto the headless surface. In loader 1.4.367, `copy_surface_create_info` (`loader/wsi.c` line 769) returns `VK_ERROR_EXTENSION_NOT_PRESENT` for an unknown structure in that chain. The log at line 787 says "Unsupported extension structure". A program such as SDL also cannot ask whether a view surface exists if the only name on the instance is the headless extension. R5 adds its own instance extension, `VK_RFIVE_view_surface`, and asks Khronos for the author tag and the extension number at step 1, once a working loader can be pointed at. The request is drafted then, shown to the user, and posted only after that approval. This document is the text that request can point at. Nothing is sent from this step.
+R5 does not chain a private structure onto the headless surface. In loader 1.4.367, `copy_surface_create_info` (`loader/wsi.c` line 769) returns `VK_ERROR_EXTENSION_NOT_PRESENT` for an unknown structure in that chain. The log at line 787 says "Unsupported extension structure". A program such as SDL also cannot ask whether a view surface exists if the only name on the instance is the headless extension. R5 adds its own instance extension, `VK_RFIVE_view_surface`, and asks Khronos for the author tag and the extension number at step 1, once a working loader can be pointed at. The request is [KhronosGroup/Vulkan-Docs#2851](https://github.com/KhronosGroup/Vulkan-Docs/issues/2851): author ID `RFIVE`, extension 732. It is posted and not merged. This document is the text that request points at. The header still uses the placeholder until that request lands.
 
 The structure type `1000999000` in the header below is an R5 placeholder. hans2294 used that same unofficial number for a different struct. It is not a shared assignment. No release ships with it.
 
@@ -54,7 +54,7 @@ The patch adds the platform the way Metal is added in that tag. Metal is the pat
 
 `copy_surface_create_info` stays as it is. The new terminator passes `VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE` in its type list, the way Metal passes its own type at line 1737.
 
-That name list is a filter. The loader passes on the names a driver reports. It does not add `VK_RFIVE_view_surface` itself. Lavapipe does not export the name until the Mesa surface exists, so `vulkaninfo` does not print it until that step.
+That name list is a filter. The loader passes on the names a driver reports. It does not add `VK_RFIVE_view_surface` itself. Lavapipe exports the name, so `vulkaninfo` prints it for the software driver.
 
 Until Khronos publishes the enum, R5's copy of `vk_icd.h` carries `VK_ICD_WSI_PLATFORM_VIEW_RFIVE` after `VK_ICD_WSI_PLATFORM_UBM`, and `VkIcdSurfaceViewRFIVE` next to `VkIcdSurfaceMetal`. The loader and Mesa are built against that same header so the number matches. The public structure type in `vulkan_r5.h` is the other placeholder. Both go away together when the registered values exist. A release does not ship either placeholder.
 
@@ -67,7 +67,7 @@ A successful present makes the image appear in the view, and stay there when app
 - Lavapipe renders into a CPU image (`wsi_configure_cpu_image`).
 - RADV renders into a device image and copies into a host-visible buffer (`wsi_configure_buffer_image`), the blit Mesa already uses for software presentation. Write-combined memory for that buffer is used only if the M6 write-combining boot has passed. Otherwise the buffer is ordinary memory, and the step 5 report says so.
 
-Each swapchain image has its own `BBitmap`. Present copies that image's pixels into its bitmap. It does not share one bitmap across images, so a later present does not overwrite pixels app_server is still reading.
+Each swapchain image has its own `BBitmap`. Present copies that image's pixels into its bitmap. It does not share one bitmap across images, so a later present does not overwrite pixels app_server is still reading. Acquire hands out the image after the last one presented, and it does not hand out the bitmap that is currently the view bitmap. Present checks that before the copy.
 
 The present thread is whichever thread called `vkQueuePresentKHR`. That thread locks the window with `BMessenger::LockTargetWithTimeout` for at most one frame. The messenger was taken at surface creation. The window thread is not asked to wait. If the caller is already the window thread, the lock succeeds at once, which is how Haiku's looper works. The view is touched only after that lock has succeeded.
 
@@ -88,7 +88,7 @@ FIFO waits for the display on the present thread, not on the window thread. The 
 
 ## 5. The fallback
 
-Lavapipe always reports that it can present to a view surface. RADV reports that it can only when the `radeon_hd` setting `gpu_present` is true and the present path can be built. The query is `vkGetPhysicalDeviceSurfaceSupportKHR`. A program that picks a device by that query, which is what VulkanTeapot, `vkcube` and `r5-wsi-test` do, then opens Lavapipe.
+Lavapipe always reports that it can present to a view surface. That answer is true only for a software device. RADV's answer stays false until step 5 reads the `radeon_hd` setting `gpu_present` and the present path can be built. The query is `vkGetPhysicalDeviceSurfaceSupportKHR`. A program that picks a device by that query, which is what VulkanTeapot, `vkcube` and `r5-wsi-test` do, then opens Lavapipe.
 
 `gpu_present` defaults to false, so a window is on Lavapipe until the setting is turned on. `gpu_present_fail true` forces the RADV answer to false, so the fallback can be tested. It stays off except in that test.
 
@@ -120,7 +120,7 @@ This is the behaviour. An implementation that follows it, on any system that has
 
 **Spec version.** 1
 
-**Contact.** R5 Operating System. The author tag `RFIVE` and the extension number are requested from Khronos. They are not chosen here.
+**Contact.** R5 Operating System. The author ID `RFIVE` and extension 732 are requested in [KhronosGroup/Vulkan-Docs#2851](https://github.com/KhronosGroup/Vulkan-Docs/issues/2851). That request is not merged. The header keeps the placeholder until it is.
 
 **New command.**
 
@@ -273,7 +273,7 @@ New R5 files carry an SPDX header. Mesa and loader files keep their own licence.
 | `build-radv.sh` | The platform turned on for Lavapipe and RADV | — |
 | `r5-wsi-test`, new, under `distro/graphics` | The step 2 test program | GPL-3.0-or-later |
 
-Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The Mesa file, the `build-radv.sh` platform switch and `r5-wsi-test` are not in this step. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets.
+Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets. Step 2 adds the Mesa surface for Lavapipe: a CPU image, one `BBitmap` per swapchain image, and `r5-wsi-test`. The RADV buffer image is step 5. `wsi_common_haiku.cpp` is MIT. `r5-wsi-test` is GPL-3.0-or-later. Nothing is copied from haiku-amdgpu, haiku-rpi, or summit.
 
 ### Settings
 
