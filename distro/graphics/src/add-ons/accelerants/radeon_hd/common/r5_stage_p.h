@@ -288,7 +288,8 @@ r5_stage_p_build(uint32_t step, uint64_t page, uint32_t* out, uint32_t cap,
 			uint32_t srcLo = (uint32_t)(page + 128u);
 			uint32_t dstLo = (uint32_t)(page + 192u);
 			const uint32_t src[] = {
-				0xc0055000u, 0x60200000u, srcLo, hi, dstLo, hi, 0x80000040u
+				/* DST_SEL 3 is L2. The dump had 2, which soc15d.h does not name. */
+				0xc0055000u, 0x60300000u, srcLo, hi, dstLo, hi, 0x80000040u
 			};
 			n = r5_p_words(out, cap, src, 7);
 			break;
@@ -344,12 +345,14 @@ r5_stage_p_build(uint32_t step, uint64_t page, uint32_t* out, uint32_t cap,
 			break;
 		}
 		case R5_P_IB2: {
-			/* PKT3 INDIRECT_BUFFER, size only. VMID stays 0 so the
-			 * CP keeps the parent VMID. The body is six dwords. */
+			/* PKT3 INDIRECT_BUFFER. VMID stays 0 so the CP keeps the
+			 * parent VMID. Bit 23 is INDIRECT_BUFFER_VALID, which the
+			 * ring's own IB sets. The body is six dwords. */
 			if (ib2 == 0)
 				return 0;
 			const uint32_t src[] = {
-				0xc0023f00u, (uint32_t)ib2, (uint32_t)(ib2 >> 32), 6u
+				0xc0023f00u, (uint32_t)ib2, (uint32_t)(ib2 >> 32),
+				6u | (1u << 23)
 			};
 			n = r5_p_words(out, cap, src, 4);
 			break;
@@ -426,7 +429,8 @@ r5_stage_p_build(uint32_t step, uint64_t page, uint32_t* out, uint32_t cap,
 			if (ib2 == 0)
 				return 0;
 			const uint32_t src[] = {
-				0xc0023f00u, (uint32_t)ib2, (uint32_t)(ib2 >> 32), 0x68u,
+				0xc0023f00u, (uint32_t)ib2, (uint32_t)(ib2 >> 32),
+				0x68u | (1u << 23),
 				0xc0004200u, 0,
 				0xc0055800u, 0x28c40000u, 0xffffffffu, 0x00ffffffu,
 				0, 0, 0x0au,

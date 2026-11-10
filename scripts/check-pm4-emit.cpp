@@ -13,6 +13,9 @@
 #include "gfx9_compute_ib.h"
 #include "r5_cs.h"
 #include "r5_gc9_regs.h"
+#include "r5_isolation_ib.h"
+#include "r5_pm4_workload.h"
+#include "r5_selftest_ib.h"
 #include "r5_stage_p.h"
 #include "r5_stage_r1.h"
 
@@ -41,20 +44,22 @@ dump(const uint32_t* words, uint32_t count)
 static uint32_t
 kernel_ring(uint32_t* ring, uint32_t capacity)
 {
+	const uint32_t kPreambleBegin = 2u << 28;
+	const uint32_t kUconfigIndexType = 2u << 28;
+	const uint32_t kCePartitionBase = 3;
+	const uint32_t kGfx9StartDwords = 914;
 	const uint32_t seg1 = GC_BASE__INST0_SEG1;
 	const uint32_t contextStart = 0x0000a000u;
 	const uint32_t contextEnd = 0x0000a400u;
 	const uint32_t uconfigStart = 0x0000c000u;
-	const uint32_t preambleBegin = 2u << 28;
 	const uint32_t preambleEnd = 3u << 28;
-	const uint32_t uconfigIndex = 2u << 28;
 	const uint32_t vgtIndex = 0x2243u;
 	uint32_t n = 0;
 	uint32_t vgt;
 	uint32_t scratch;
 
 	ring[n++] = (3u << 30) | (0x4Au << 8);
-	ring[n++] = preambleBegin;
+	ring[n++] = kPreambleBegin;
 	ring[n++] = (3u << 30) | (1u << 16) | (0x28u << 8);
 	ring[n++] = 0x80000000u;
 	ring[n++] = 0x80000000u;
@@ -86,55 +91,163 @@ kernel_ring(uint32_t* ring, uint32_t capacity)
 	ring[n++] = (3u << 30) | (0x12u << 8);
 	ring[n++] = 0;
 	ring[n++] = (3u << 30) | (2u << 16) | (0x11u << 8);
-	ring[n++] = 3u;
+	ring[n++] = kCePartitionBase;
 	ring[n++] = 0x8000u;
 	ring[n++] = 0x8000u;
 	ring[n++] = (3u << 30) | (1u << 16) | (0x79u << 8);
-	ring[n++] = uconfigIndex | vgt;
+	ring[n++] = kUconfigIndexType | vgt;
 	ring[n++] = 0;
 	ring[n++] = (3u << 30) | (1u << 16) | (0x79u << 8);
 	ring[n++] = scratch;
 	ring[n++] = 0xDEADBEEFu;
-	if (n != 914u)
+	if (n != kGfx9StartDwords)
 		return 0;
 	return n;
 }
 
 
-/* r5-gpu-isolation.cpp fill_ib. Memory to memory, then WRITE_DATA. */
-static void
-isolation(uint32_t* words, uint64_t dest, uint64_t readBack)
-{
-	words[0] = 0xc0044000u;
-	words[1] = 1u | (5u << 8) | (1u << 16) | (1u << 20);
-	words[2] = (uint32_t)dest;
-	words[3] = (uint32_t)(dest >> 32);
-	words[4] = (uint32_t)readBack;
-	words[5] = (uint32_t)(readBack >> 32);
-	words[6] = 0xc0033700u;
-	words[7] = (5u << 8) | (1u << 20);
-	words[8] = (uint32_t)dest;
-	words[9] = (uint32_t)(dest >> 32);
-	words[10] = 0xdeadbeefu;
-	words[11] = 0xffff1000u;
-	words[12] = 0xffff1000u;
-	words[13] = 0xffff1000u;
-}
-
-
-/* r5-gpu-selftest.cpp, the eight-dword indirect buffer. */
-static void
-selftest_ib(uint32_t* packet, uint64_t word)
-{
-	packet[0] = (3u << 30) | (3u << 16) | (0x37u << 8);
-	packet[1] = (5u << 8) | (1u << 20);
-	packet[2] = (uint32_t)word;
-	packet[3] = (uint32_t)(word >> 32);
-	packet[4] = 0xDEADBEEFu;
-	packet[5] = (3u << 30) | (0x3fffu << 16) | (0x10u << 8);
-	packet[6] = packet[5];
-	packet[7] = packet[5];
-}
+/* One line per packet builder in the sources. check-pm4.py compares this
+ * list with its own scan. */
+static const char* kSites[] = {
+	"distro/graphics/src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp:3037",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:273",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:276",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:293",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:308",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:311",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:318",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:323",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:327",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2291",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2312",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2832",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2834",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2853",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2965",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2975",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:2984",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3030",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3034",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3113",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3125",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3129",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3357",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3369",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:3373",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4164",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4173",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4177",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4218",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4222",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4254",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4262",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/gfx9_start.cpp:4266",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:243",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:276",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:278",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:284",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:287",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:293",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:298",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:300",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:308",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:319",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:348",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:365",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:367",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:397",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:447",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:474",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:502",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:569",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:578",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:583",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:591",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_cs.h:600",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:133",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:134",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:135",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:136",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:137",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:138",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:139",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:140",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:141",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:143",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:144",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:145",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:146",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:147",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:148",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:149",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:150",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:151",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:152",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:153",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:154",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:155",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:156",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:157",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:161",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:162",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:163",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:167",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:168",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:169",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:170",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:209",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:237",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:245",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:246",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:253",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:254",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:260",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:264",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:268",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:272",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:276",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:282",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:292",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:299",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:305",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:310",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:316",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:321",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:326",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:331",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:338",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:339",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:340",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:341",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:354",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:361",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:366",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:371",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:376",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:382",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:388",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:394",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:399",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:432",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:434",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:435",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:437",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_p.h:438",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_stage_r1.h:23",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:44",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:57",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:67",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:79",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:133",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:138",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:158",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h:162",
+	"distro/graphics/src/bin/r5-gpu-isolation/r5_isolation_ib.h:29",
+	"distro/graphics/src/bin/r5-gpu-isolation/r5_isolation_ib.h:35",
+	"distro/graphics/src/bin/r5-gpu-selftest/r5_selftest_ib.h:17",
+	"distro/graphics/src/bin/r5-gpu-selftest/r5_selftest_ib.h:18",
+	0
+};
 
 
 int
@@ -150,19 +263,44 @@ main()
 	struct r5_gds job;
 	uint32_t i;
 
+	for (uint32_t s = 0; kSites[s] != 0; s++)
+		printf("# site %s\n", kSites[s]);
+
 	n = kernel_ring(ring, 1024);
 	if (n != 914u)
 		return 1;
 	begin("kernel-ring");
 	dump(ring, n);
 
-	isolation(words, 0x80000000ull, 0x80000100ull);
+	r5_isolation_fill_ib(words, 0x80000000ull, 0x80000100ull);
 	begin("isolation");
 	dump(words, 14);
 
-	selftest_ib(words, 0x80001040ull);
+	r5_selftest_fill_ib(words, 0x80001040ull);
 	begin("selftest-ib");
 	dump(words, 8);
+
+	r5_pm4_stage_ib_store(words, 0x80001040ull);
+	begin("stage-ib-store");
+	dump(words, 8);
+	r5_pm4_stage_wb(words, 0x80001040ull);
+	begin("stage-wb");
+	dump(words, 5);
+	n = r5_pm4_dma_ib(words, 0x80000000ull, 0x90000000ull);
+	begin("dma-ib");
+	dump(words, n);
+	r5_pm4_submit(words, 0x80002000ull, n, 0x80000440ull, 2ull, 1u << 29, 0);
+	begin("workload-submit");
+	dump(words, 12);
+	r5_pm4_submit(words, 0x80002000ull, 5u, 0x80000440ull, 3ull, 1u << 29, 2u << 24);
+	begin("user-submit");
+	dump(words, 12);
+	r5_pm4_switch_pair(words);
+	begin("switch-pair");
+	dump(words, 4);
+	r5_pm4_stage_dma(words, 0x80003000ull, 0x80004000ull);
+	begin("stage-dma");
+	dump(words, 7);
 
 	for (i = 0; i < R5_P_COUNT; i++) {
 		char name[32];
@@ -240,6 +378,17 @@ main()
 	r5_cs_pad(words, 4);
 	begin("pad-4");
 	dump(words, 4);
+
+	n = r5_cs_eop_fence(words, 64, 0, 0x80001000ull, 4ull);
+	if (n == 0)
+		return 8;
+	begin("eop-fence");
+	dump(words, n);
+	n = r5_cs_flush_fence(words, 64, 0, 0x80001000ull, 5ull);
+	if (n == 0)
+		return 8;
+	begin("flush-fence");
+	dump(words, n);
 
 	return 0;
 }
