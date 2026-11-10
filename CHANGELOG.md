@@ -1,5 +1,16 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - BeFS Windows GUI and standalone reader
+
+`tools/r5-befs/r5_befs_gui.py` is a tkinter graphical interface for browsing and extracting files from BeFS disk images and removable USB drives on Windows. It displays a folder tree, file list with sizes, modification dates and BeOS MIME types (`BEOS:TYPE`), text file preview (first 64 KB), real-time name search filter, and recursive extraction with a progress bar and Windows illegal character sanitization (`:*?"<>|`, trailing dot/space).
+
+`tools/r5-befs/r5_befs.py` remains the BeFS engine and CLI. It adds the `drives` command (listing removable drives only, strictly excluding disk 0 and the Windows system disk), recursive directory export (`export -r` / `export --recursive`), and explicit permission checks refusing access to `PhysicalDrive0`. Existing CLI commands (`ls`, `cat`, single-file `export`) produce identical output.
+
+`tools/r5-befs/build-exe.ps1` builds a single standalone Windows executable `tools/r5-befs/r5-befs.exe` via PyInstaller (GPL-2.0-or-later with bootloader exception, documented in `docs/LICENSING.md`). Without arguments it launches the GUI; with arguments it executes CLI commands.
+
+Tested on `r5-os-anyboot.iso`: `ls /`, `cat home/config/settings/first_login`, and single-file `export` verified identical before and after. `r5-befs.exe` tested for `ls`, `cat`, `drives`, and disk 0 rejection. Host tests verified recursive extraction of `home/` (66 files, 56 directories, 27,062 bytes, 1 renamed file, 0 failures), text preview of `system/settings/bashrc` (130 B, MIME `text/plain`), and directory listing of `system/var/log`. `\\.\PhysicalDrive0` access is forbidden and raises `PermissionError`. There is no What's new section and `distro/BUILD` stays the same.
+
+
 ## 2026-11-10 - Interrupt counts reject a kernel address
 
 `R5_GPU_IH_COUNTS` and `R5_GPU_RING_FILL` copied the caller buffer with `user_memcpy` and did not check `is_user_address_range`. A program could pass a kernel address. Both calls now use `gpu_copy_in` and `gpu_copy_out`, the same path as the other GPU calls. The structs are unchanged.

@@ -21,3 +21,6 @@ Thumbs.db
 !/distro/artwork/r5-os-splash.bgr
 !/distro/artwork/splash_icons.bgr
 /scripts/github-prs-cache.json
+/tools/r5-befs/build/
+/tools/r5-befs/*.exe
+/tools/r5-befs/*.spec
