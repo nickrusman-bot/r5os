@@ -55,6 +55,7 @@ struct r5_surface {
 	uint32_t height;
 	bigtime_t refresh;
 	BBitmap *view_bitmap;
+	pthread_mutex_t bitmap_mu;
 
 	r5_surface()
 		: window(),
@@ -66,8 +67,52 @@ struct r5_surface {
 	{
 		icd.base.platform = VK_ICD_WSI_PLATFORM_VIEW_RFIVE;
 		icd.view = NULL;
+		pthread_mutex_init(&bitmap_mu, NULL);
+	}
+
+	~r5_surface()
+	{
+		pthread_mutex_destroy(&bitmap_mu);
 	}
 };
+
+struct r5_wsi_slot {
+	struct wsi_device *wsi;
+	uint64_t graphics;
+};
+
+static struct r5_wsi_slot g_slots[4];
+static pthread_mutex_t g_slot_mu = PTHREAD_MUTEX_INITIALIZER;
+
+static uint64_t
+r5_graphics_for(struct wsi_device *wsi)
+{
+	uint64_t mask = 0;
+	pthread_mutex_lock(&g_slot_mu);
+	for (int i = 0; i < 4; i++) {
+		if (g_slots[i].wsi == wsi)
+			mask = g_slots[i].graphics;
+	}
+	pthread_mutex_unlock(&g_slot_mu);
+	return mask;
+}
+
+static BBitmap *
+r5_view_bitmap(struct r5_surface *surface)
+{
+	pthread_mutex_lock(&surface->bitmap_mu);
+	BBitmap *bitmap = surface->view_bitmap;
+	pthread_mutex_unlock(&surface->bitmap_mu);
+	return bitmap;
+}
+
+static void
+r5_set_view_bitmap(struct r5_surface *surface, BBitmap *bitmap)
+{
+	pthread_mutex_lock(&surface->bitmap_mu);
+	surface->view_bitmap = bitmap;
+	pthread_mutex_unlock(&surface->bitmap_mu);
+}
 
 struct r5_image {
 	struct wsi_image base;
@@ -92,10 +137,6 @@ struct r5_swapchain {
 	/* The image after the last one presented. Zero until the first present. */
 	uint32_t next_image;
 };
-
-static struct wsi_device *g_wsi;
-static uint64_t g_graphics;
-static struct r5_swapchain *g_visible;
 
 static struct r5_surface *
 r5_surface_from_icd(VkIcdSurfaceBase *base)
@@ -185,8 +226,9 @@ r5_get_support(VkIcdSurfaceBase *icd, struct wsi_device *wsi,
 	 * reads gpu_present. A graphics queue on the software device is the
 	 * only yes this step gives.
 	 */
-	bool graphics = wsi->sw && wsi == g_wsi && queueFamilyIndex < 64
-		&& (g_graphics & ((uint64_t)1 << queueFamilyIndex)) != 0;
+	uint64_t mask = r5_graphics_for(wsi);
+	bool graphics = wsi->sw && queueFamilyIndex < 64
+		&& (mask & ((uint64_t)1 << queueFamilyIndex)) != 0;
 	*supported = graphics ? VK_TRUE : VK_FALSE;
 	return VK_SUCCESS;
 }
@@ -337,7 +379,7 @@ r5_acquire_next_image(struct wsi_swapchain *wsi_chain,
 				continue;
 			/* Still on screen. The next present must not write this bitmap. */
 			if (chain->images[i].bitmap != NULL
-				&& chain->images[i].bitmap == chain->surface->view_bitmap)
+				&& chain->images[i].bitmap == r5_view_bitmap(chain->surface))
 				continue;
 			chain->images[i].held = true;
 			*image_index = i;
@@ -446,8 +488,9 @@ r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 	 * The bitmap on the view is the one app_server is reading. Copying into
 	 * it would replace the frame that is still on screen.
 	 */
-	assert(image->bitmap != surface->view_bitmap);
-	if (image->bitmap == surface->view_bitmap) {
+	BBitmap *showing = r5_view_bitmap(surface);
+	assert(image->bitmap != showing);
+	if (image->bitmap == showing) {
 		r5_release_image(chain, image_index);
 		pthread_mutex_unlock(&chain->present_mu);
 		return VK_SUCCESS;
@@ -508,9 +551,8 @@ r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 	BRect dst = surface->view->Bounds();
 	surface->view->SetViewBitmap(image->bitmap, src, dst, B_FOLLOW_ALL, 0);
 	surface->view->Invalidate();
-	surface->view_bitmap = image->bitmap;
+	r5_set_view_bitmap(surface, image->bitmap);
 	chain->next_image = (image_index + 1) % chain->base.image_count;
-	g_visible = chain;
 	/*
 	 * BView::Sync() calls CheckOwnerLock() and stops in the debugger if the
 	 * looper is not locked. BWindow::Sync() takes the lock itself, sends
@@ -539,14 +581,17 @@ r5_swapchain_destroy(struct wsi_swapchain *wsi_chain,
 	struct r5_swapchain *chain = (struct r5_swapchain *)wsi_chain;
 	struct r5_surface *surface = chain->surface;
 
+	BBitmap *showing = r5_view_bitmap(surface);
+	bool ours = false;
+	for (uint32_t i = 0; i < chain->base.image_count; i++) {
+		if (chain->images[i].bitmap != NULL && chain->images[i].bitmap == showing)
+			ours = true;
+	}
 	BWindow *window = NULL;
-	if (g_visible == chain && r5_lock_window(surface, chain->refresh, &window)) {
+	if (ours && r5_lock_window(surface, chain->refresh, &window)) {
 		surface->view->ClearViewBitmap();
-		surface->view_bitmap = NULL;
+		r5_set_view_bitmap(surface, NULL);
 		window->Unlock();
-		g_visible = NULL;
-	} else if (g_visible == chain) {
-		g_visible = NULL;
 	}
 
 	for (uint32_t i = 0; i < chain->base.image_count; i++) {
@@ -665,8 +710,22 @@ extern "C" {
 void
 wsi_view_r5_init_wsi(struct wsi_device *wsi, uint64_t graphics_mask)
 {
-	g_wsi = wsi;
-	g_graphics = graphics_mask;
+	pthread_mutex_lock(&g_slot_mu);
+	int free_slot = -1;
+	for (int i = 0; i < 4; i++) {
+		if (g_slots[i].wsi == wsi) {
+			g_slots[i].graphics = graphics_mask;
+			free_slot = -2;
+			break;
+		}
+		if (g_slots[i].wsi == NULL && free_slot < 0)
+			free_slot = i;
+	}
+	if (free_slot >= 0) {
+		g_slots[free_slot].wsi = wsi;
+		g_slots[free_slot].graphics = graphics_mask;
+	}
+	pthread_mutex_unlock(&g_slot_mu);
 	wsi->wsi[VK_ICD_WSI_PLATFORM_VIEW_RFIVE] = &r5_interface;
 }
 
@@ -674,8 +733,14 @@ void
 wsi_view_r5_finish_wsi(struct wsi_device *wsi)
 {
 	wsi->wsi[VK_ICD_WSI_PLATFORM_VIEW_RFIVE] = NULL;
-	if (g_wsi == wsi)
-		g_wsi = NULL;
+	pthread_mutex_lock(&g_slot_mu);
+	for (int i = 0; i < 4; i++) {
+		if (g_slots[i].wsi == wsi) {
+			g_slots[i].wsi = NULL;
+			g_slots[i].graphics = 0;
+		}
+	}
+	pthread_mutex_unlock(&g_slot_mu);
 }
 
 void
