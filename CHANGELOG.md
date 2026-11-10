@@ -8,7 +8,7 @@ Stick 35, boot 1 (`generated/boot-5625u-35`), printed `wsi clear ok llvmpipe (LL
 
 An unknown `vkcube` option used `snprintf` with a null buffer to measure the usage text. On stick 34 that was a segment violation (`debug_server: Thread 836 entered the debugger: Segment violation`, team `/bin/vkcube --cc 300`). The usage text now goes into a fixed buffer, and the program prints it and exits 1.
 
-There is no What's new section and `distro/BUILD` stays the same.
+`jam -q @r5-raw` from `cursor/m7-stick-36` `3a683299cc` finished at 23:57 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, `mesa_exit=0`. `jam -q @r5-anyboot` from that same tree finished at 23:59, `anyboot_exit=0`. `r5-os.image` is 23:57:12 and `r5-os-anyboot.iso` is 23:59:10. The anyboot contains `mesa_radv-25.3.6-2-x86_64.hpkg` (4120336 bytes) and does not contain `mesa_radv-25.3.6-1`. VirtualBox has not been booted. The stick is not written. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-10 - The image installs the RADV that offers a Vulkan window
 
