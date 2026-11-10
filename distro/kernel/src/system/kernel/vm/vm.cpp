@@ -4636,14 +4636,21 @@ vm_set_area_page_memory_type(area_id id, uint32 type)
 	if (!arch_vm_page_memory_type_supported(type))
 		return B_NOT_SUPPORTED;
 
-	addr_t base = area->Base();
-	size_t bytes = area->Size();
 	VMTranslationMap* map = area->address_space->TranslationMap();
+	addr_t base = area->Base();
+	addr_t end = base + area->Size();
 	map->Lock();
 	area->SetMemoryType(type);
 	map->ProtectArea(area, area->protection);
+	for (addr_t virtualAddress = base; virtualAddress < end;
+			virtualAddress += B_PAGE_SIZE) {
+		phys_addr_t physicalAddress;
+		uint32 flags;
+		if (map->Query(virtualAddress, &physicalAddress, &flags) != B_OK)
+			continue;
+		arch_vm_flush_memory_type_range((addr_t)physicalAddress, B_PAGE_SIZE);
+	}
 	map->Unlock();
-	arch_vm_flush_memory_type_range(base, bytes);
 	return B_OK;
 }
 /* SPDX-SnippetEnd */

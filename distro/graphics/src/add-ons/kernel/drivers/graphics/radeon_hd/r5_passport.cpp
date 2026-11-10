@@ -390,18 +390,21 @@ r5_passport_apply(radeon_info* info, r5_gpu_amd_info* amd, uint32_t* cuPerSh,
 	apply_atom(info, amd);
 	{
 		uint32 atomFreq = amd->device.gpu_counter_freq;
-		/* Linux v6.12 drivers/gpu/drm/amd/amdgpu/soc15.c
-		 * soc15_get_xclk(): MP1 12.0.0 and 12.0.1 return 10000.
-		 * amdgpu_kms.c copies that xclk times 10 into gpu_counter_freq.
-		 * Renoir is that IP version. The ATOM clock is the cross-check. */
+		/* Linux tag v6.12, drivers/gpu/drm/amd/amdgpu/soc15.c
+		 * soc15_get_xclk() lines 326-330: MP1 12.0.0 and 12.0.1
+		 * return 10000. The same return covers 13.0.6 and 13.0.14.
+		 * amdgpu_kms.c line 863 stores amdgpu_asic_get_xclk() * 10.
+		 * Renoir is MP1 12.0. The ATOM clock is the cross-check. */
 		if (known_gc93(info))
 			amd->device.gpu_counter_freq = 100000;
 		say("radeon_hd: passport counter_freq %lu atom %lu\n",
 			(unsigned long)amd->device.gpu_counter_freq,
 			(unsigned long)atomFreq);
 	}
-	/* Linux v6.12 amdgpu_discovery.c amdgpu_discovery_set_ip_blocks()
-	 * sets CHIP_RENOIR by hand and does not read a discovery binary.
-	 * passport discovery missing is the expected line on this chip. */
+	/* Linux tag v6.12 amdgpu_discovery.c
+	 * amdgpu_discovery_set_ip_blocks() starts at line 2425 and has
+	 * no CHIP_RENOIR case. The Raven case at line 2474 sets IP
+	 * versions by hand. passport discovery missing stays the line
+	 * this chip prints when the binary is absent. */
 	sSaid = true;
 }

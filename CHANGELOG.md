@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The page-type flush uses the physical map
+
+`vm_set_area_page_memory_type()` looks up each page and runs `clflush` on that page in the kernel physical map. It does not flush the area's own address, so a user clone is not a user pointer under SMAP. The line size is CPUID leaf 1, EBX bits 15:8, times 8. Linux tag v6.12 was read for the two passport facts: `soc15.c` `soc15_get_xclk()` lines 326-330 return 10000 for MP1 12.0.0 and 12.0.1, and `amdgpu_kms.c` line 863 stores that times 10. `amdgpu_discovery_set_ip_blocks()` (line 2425) has no `CHIP_RENOIR` case. `generated/gpu-m4/HARDCODE.md` row 5 names the same clock lines. Not booted. QEMU with SMAP was not run.
+
 ## 2026-11-10 - Write-combined graphics memory stays a page type
 
 With PAT, only a write-combined RAM range is left out of the MTRRs. Other types keep the previous overlap rule. `vm_set_area_page_memory_type()` takes the address-space write lock, changes the page tables, then runs `clflush` on that area. It does not run `wbinvd`, and `vm_set_area_memory_type()` no longer flushes on the way in. Without PAT the page-type call returns `B_NOT_SUPPORTED`. The program's clone of a write-combined buffer gets that type after `vm_clone_area()`, which only copies the type for device areas. The physical map stays write-back. That alias is the known limit of `gfx9_wc_gtt` in `docs/KERNEL.md`. The library no longer reads the settings file. It asks for write-combining when the caller did, and the kernel reply is the flags that were used.
