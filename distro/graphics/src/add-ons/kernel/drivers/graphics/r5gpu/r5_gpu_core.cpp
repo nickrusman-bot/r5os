@@ -2091,7 +2091,7 @@ gpu_ring_fill(void* buffer, size_t length)
 }
 
 
-extern "C" void r5_gfx9_ih_counts(uint32* msi, uint32* early, uint32* eop);
+void r5_gfx9_ih_counts(uint32* msi, uint32* early, uint32* eop);
 
 
 static status_t
