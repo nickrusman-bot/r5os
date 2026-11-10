@@ -65,7 +65,7 @@ The loader patch is Apache-2.0, like the loader. Each changed function keeps the
 A successful present makes the image appear in the view, and stay there when app_server asks the view to draw again. Lavapipe and RADV use the same bitmaps and the same present. They differ only in where the pixels are rendered:
 
 - Lavapipe renders into a CPU image (`wsi_configure_cpu_image`).
-- RADV renders into a device image and copies into a host-visible buffer (`wsi_configure_buffer_image`), the blit Mesa already uses for software presentation. Write-combined memory for that buffer is used only if the M6 write-combining boot has passed. Otherwise the buffer is ordinary memory, and the step 5 report says so.
+- RADV renders into a device image and copies into a host-visible buffer (`wsi_configure_buffer_image`), the blit Mesa already uses for software presentation. The M6 write-combining boot did not pass, so that buffer is ordinary host-coherent memory. It is not a write-combined mapping, and there is no second mapping.
 
 Each swapchain image has its own `BBitmap`. Present copies that image's pixels into its bitmap. It does not share one bitmap across images, so a later present does not overwrite pixels app_server is still reading. Acquire hands out the image after the last one presented, and it does not hand out the bitmap that is currently the view bitmap. Present checks that before the copy. The graphics-queue mask is kept per device, and the view bitmap is read and written under the surface lock.
 
@@ -92,7 +92,7 @@ Lavapipe always reports that it can present to a view surface. That answer is tr
 
 `gpu_present` defaults to false, so a window is on Lavapipe until the setting is turned on. `gpu_present_fail true` forces the RADV answer to false, so the fallback can be tested. It stays off except in that test.
 
-The first time RADV refuses a view surface, one syslog line says the program is drawing its window through Lavapipe. There is no dialog. The window looks the same. The line is not repeated for later frames.
+The first time RADV refuses a view surface, one syslog line says `RADV view surface: no, window through Lavapipe`. There is no dialog. The window looks the same. The line is not repeated for later frames in that process.
 
 If a program ignores the query and still opens RADV, creating the swapchain fails with `VK_ERROR_INITIALIZATION_FAILED` and the same single line is written. The fallback does not switch device in the middle of a frame.
 
