@@ -52,9 +52,11 @@ typedef VkResult (VKAPI_PTR *PFN_vkCreateViewSurfaceRFIVE)(VkInstance instance,
 	const VkViewSurfaceCreateInfoRFIVE* pCreateInfo,
 	const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 
+#ifndef VK_NO_PROTOTYPES
 VKAPI_ATTR VkResult VKAPI_CALL vkCreateViewSurfaceRFIVE(VkInstance instance,
 	const VkViewSurfaceCreateInfoRFIVE* pCreateInfo,
 	const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+#endif
 
 #ifdef __cplusplus
 }

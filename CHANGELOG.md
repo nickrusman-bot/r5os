@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - vkcube draws in an R5 window
+
+`vkcube` from Vulkan-Tools 1.4.367 opens a `BWindow` and a `BView` and creates the surface with `vkCreateViewSurfaceRFIVE`, in the same place `cube.c` creates a Metal surface. The program still chooses the device itself. It is `bin/vkcube` in `vulkan_tools-1.4.367-1`. The signature is `application/x-vnd.R5OS-vkcube`. `r5-wsi-window-test.sh` takes the program as its argument. With no argument it still drives `VulkanTeapot --window`. The script in the `vulkanteapot` package is that file, with LF line endings.
+
+`vulkan_r5.h` hides `vkCreateViewSurfaceRFIVE` when `VK_NO_PROTOTYPES` is set, so `cube.c` can load the command the way it loads the Metal command. The cross build is `scripts/build-vkcube.sh`. The stripped `vkcube` has no `/home/nickr`.
+
+Not booted. The VirtualBox check is Lavapipe, on the image that also has the GPU window, and it has not been run. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - Interrupt counts reject a kernel address
 
 `R5_GPU_IH_COUNTS` and `R5_GPU_RING_FILL` copied the caller buffer with `user_memcpy` and did not check `is_user_address_range`. A program could pass a kernel address. Both calls now use `gpu_copy_in` and `gpu_copy_out`, the same path as the other GPU calls. The structs are unchanged.

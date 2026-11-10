@@ -102,7 +102,7 @@ If a program ignores the query and still opens RADV, creating the swapchain fail
 
 ## 7. Ported programs
 
-An R5 program gets the extension above.
+An R5 program gets the extension above. `vkcube` from Vulkan-Tools 1.4.367 is that program: a `BWindow` and a `BView`, then `vkCreateViewSurfaceRFIVE`, in the same place `cube.c` creates a Metal surface. It keeps `vkcube`'s own device choice. `r5-wsi-window-test.sh` takes the program as its argument. `VulkanTeapot` is the default.
 
 SDL, GLFW and other ports get nothing new until they grow a backend. That backend is a `BView` in a `BWindow`, then `vkCreateViewSurfaceRFIVE`. It is the same extension. It is not a second one.
 

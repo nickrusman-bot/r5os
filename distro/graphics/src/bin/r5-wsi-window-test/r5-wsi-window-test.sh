@@ -1,9 +1,28 @@
 #!/bin/sh
-# Drives VulkanTeapot --window with hey. One line per action.
-APP=application/x-vnd.R5OS-VulkanTeapot
+# Drives one Vulkan window with hey. The argument is the program.
+# VulkanTeapot is the default. vkcube is the other program.
 OUT=/tmp/r5-wsi-window-app.txt
-TEAPOT=${TEAPOT:-VulkanTeapot}
-"$TEAPOT" --window >"$OUT" 2>&1 &
+if [ $# -ge 1 ]; then
+	prog=$1
+else
+	prog=${TEAPOT:-VulkanTeapot}
+fi
+base=$(basename "$prog")
+case "$base" in
+VulkanTeapot)
+	APP=application/x-vnd.R5OS-VulkanTeapot
+	set -- --window
+	;;
+vkcube)
+	APP=application/x-vnd.R5OS-vkcube
+	set --
+	;;
+*)
+	echo "window program FAIL"
+	exit 1
+	;;
+esac
+"$prog" "$@" >"$OUT" 2>&1 &
 pid=$!
 ready=0
 i=0
