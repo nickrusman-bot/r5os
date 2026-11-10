@@ -2179,10 +2179,16 @@ main()
 			return 1;
 	}
 	{
-		const char* isolation[] = {
+		const char* isolationIb[] = {
 			"COPY_DATA reads dest. WRITE_DATA then writes dest.",
 			"words[1] = 1u | (5u << 8) | (1u << 16) | (1u << 20);",
-			"words[6] = 0xc0033700u;",
+			"words[6] = 0xc0033700u;"
+		};
+		if (source_order(
+				"distro/graphics/src/bin/r5-gpu-isolation/"
+				"r5_isolation_ib.h", isolationIb, 3) != 0)
+			return 1;
+		const char* isolation[] = {
 			"vm fault addr",
 			"vm fault not in syslog",
 			"memset(cpu, 0x5a, 4096)",
@@ -2190,7 +2196,7 @@ main()
 		};
 		if (source_order(
 				"distro/graphics/src/bin/r5-gpu-isolation/"
-				"r5-gpu-isolation.cpp", isolation, 7) != 0)
+				"r5-gpu-isolation.cpp", isolation, 4) != 0)
 			return 1;
 		const char* commandFlags[] = {
 			"kCommandFlags",
@@ -2234,7 +2240,7 @@ main()
 			return fail("discovery in bar");
 		for (i = 0; i < 2000; i++) {
 			if (!r5_vram_bump(cursor, 0x7e9000ull, poolEnd, 4096, 4096,
-					holes, R5_VRAM_HOLES, &placed))
+					holes, R5_VRAM_HOLES, 0, &placed))
 				return fail("page bump");
 			if (r5_vram_overlap(placed, 4096, holes[0].offset, holes[0].bytes))
 				return fail("page in psp");
@@ -2242,15 +2248,20 @@ main()
 		}
 		if (!r5_vram_bump(0xb00000ull, 0x7e9000ull, poolEnd,
 				R5_VRAM_PSP_TMR_BYTES, R5_VRAM_PSP_TMR_BYTES, holes,
-				R5_VRAM_HOLES, &claim)
+				R5_VRAM_HOLES, 1, &claim)
 			|| claim != R5_VRAM_PSP_TMR_OFFSET)
 			return fail("psp claim");
+		if (r5_vram_bump(0xb00000ull, 0x7e9000ull, poolEnd,
+				R5_VRAM_PSP_TMR_BYTES, R5_VRAM_PSP_TMR_BYTES, holes,
+				R5_VRAM_HOLES, 0, &placed)
+			&& placed == R5_VRAM_PSP_TMR_OFFSET)
+			return fail("size is not a claim");
 		if (!r5_vram_bump(0xb00000ull, 0x7e9000ull, poolEnd,
-				4ull << 20, 4096, holes, R5_VRAM_HOLES, &placed)
+				4ull << 20, 4096, holes, R5_VRAM_HOLES, 0, &placed)
 			|| placed != R5_VRAM_PSP_TMR_OFFSET + R5_VRAM_PSP_TMR_BYTES)
 			return fail("skip psp");
 		if (!r5_vram_bump(R5_VRAM_PSP_TMR_OFFSET + 4096, 0x7e9000ull,
-				poolEnd, 4096, 4096, holes, R5_VRAM_HOLES, &placed)
+				poolEnd, 4096, 4096, holes, R5_VRAM_HOLES, 0, &placed)
 			|| placed != R5_VRAM_PSP_TMR_OFFSET + R5_VRAM_PSP_TMR_BYTES)
 			return fail("skip inside psp");
 		{
@@ -2270,7 +2281,7 @@ main()
 				return fail("fw range");
 			holes[2] = fw;
 			if (!r5_vram_bump(fw.offset - 2048, 0, poolEnd, 4096, 4096,
-					holes, R5_VRAM_HOLES, &placed)
+					holes, R5_VRAM_HOLES, 0, &placed)
 				|| r5_vram_overlap(placed, 4096, fw.offset, fw.bytes)
 				|| placed < fw.offset + fw.bytes)
 				return fail("fw skip");
@@ -2279,8 +2290,56 @@ main()
 			r5_vram_hole top;
 			r5_vram_discovery_hole(32ull << 20, &top);
 			if (r5_vram_bump(top.offset, 0, 32ull << 20, 4096, 4096,
-					&top, 1, &placed))
+					&top, 1, 0, &placed))
 				return fail("discovery placed");
+		}
+		{
+			/* Stick 32, generated/boot-5625u-32/syslog. The sizes are
+			 * the firmware bytes that boot printed, padded to 4096,
+			 * then the PSP ring, command page, fence page and the
+			 * 4 MiB SETUP_TMR claim. */
+			const uint64_t bytes[] = {
+				0x1000, 4096, 4096,
+				0x9000, 0x15000, 0x11000, 0x42000, 4096,
+				4096, 4096, 0x3000, 0x5000,
+				4096, 4096, 4096, R5_VRAM_PSP_TMR_BYTES
+			};
+			const uint64_t align[] = {
+				0x1000, 4096, 4096,
+				4096, 4096, 4096, 4096, 4096,
+				4096, 4096, 4096, 4096,
+				4096, 4096, 4096, R5_VRAM_PSP_TMR_BYTES
+			};
+			const uint64_t want[] = {
+				0x7e9000ull, 0x7ea000ull, 0x7eb000ull,
+				0, 0, 0, 0, 0,
+				0, 0, 0, 0,
+				0x868000ull, 0x869000ull, 0, 0xc00000ull
+			};
+			r5_vram_hole empty[R5_VRAM_HOLES];
+			uint64_t at = 0x7e9000ull;
+			uint64_t end = 0x7e9000ull + 0xf817000ull;
+			unsigned step;
+			memset(empty, 0, sizeof(empty));
+			for (step = 0; step < sizeof(bytes) / sizeof(bytes[0]); step++) {
+				int claimFlag = step + 1 == sizeof(bytes) / sizeof(bytes[0]);
+				if (!r5_vram_bump(at, 0x7e9000ull, end, bytes[step],
+						align[step], empty, R5_VRAM_HOLES, claimFlag,
+						&placed))
+					return fail("stick 32 bump");
+				if (want[step] != 0 && placed != want[step])
+					return fail("stick 32 offset");
+				if (claimFlag) {
+					empty[0].offset = placed;
+					empty[0].bytes = bytes[step];
+				}
+				at = placed + bytes[step];
+			}
+			if (r5_vram_bump(0xb00000ull, 0x7e9000ull, end,
+					R5_VRAM_PSP_TMR_BYTES, R5_VRAM_PSP_TMR_BYTES,
+					empty, R5_VRAM_HOLES, 0, &placed)
+				&& placed == 0xc00000ull)
+				return fail("stick 32 user claim");
 		}
 	}
 	printf("ok gpu api %u.%u walk\n", R5_GPU_API_MAJOR, R5_GPU_API_MINOR);

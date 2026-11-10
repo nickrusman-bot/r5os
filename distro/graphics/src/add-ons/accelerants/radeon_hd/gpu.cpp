@@ -613,6 +613,18 @@ radeon_vram_pool_report()
 }
 
 
+static int sVramClaim = 0;
+
+
+static int
+r5_host_vram_claim(void* cookie, int on)
+{
+	(void)cookie;
+	sVramClaim = on ? 1 : 0;
+	return 0;
+}
+
+
 status_t
 radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
 	uint8** _address)
@@ -639,8 +651,12 @@ radeon_vram_alloc(uint64 bytes, uint64 alignment, uint64* _offset,
 		holes[i].bytes = info->vram_hole_bytes[i];
 	}
 	if (!r5_vram_bump(cursor, start, end, bytes, alignment, holes,
-			R5_VRAM_HOLES, &placed))
+			R5_VRAM_HOLES, sVramClaim, &placed))
 		return B_NO_MEMORY;
+	if (sVramClaim) {
+		info->vram_hole_offset[0] = placed;
+		info->vram_hole_bytes[0] = bytes;
+	}
 
 	info->vram_pool_cursor = placed + bytes;
 	*_offset = placed;
@@ -932,6 +948,7 @@ r5_host_fill(r5_gfx9_host* host)
 	host->sleep_us = r5_host_sleep;
 	host->log = r5_host_log;
 	host->vram_alloc = r5_host_vram;
+	host->vram_claim = r5_host_vram_claim;
 	host->read_firmware = r5_host_firmware;
 	host->free_firmware = r5_host_free_firmware;
 	host->doorbell = sGfx9Doorbell;

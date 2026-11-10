@@ -30,6 +30,8 @@ struct r5_gfx9_host {
 	uint8*		doorbell;
 	uint64		doorbellBytes;
 	void*		cookie;
+	/* 1 around the SETUP_TMR allocation, 0 after it. NULL skips the note. */
+	int			(*vram_claim)(void* cookie, int on);
 };
 
 struct r5_gfx9_results {

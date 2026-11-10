@@ -12,11 +12,12 @@
 
 #include <stdint.h>
 
-/* GC 9.3 SETUP_TMR in this tree takes 4 MiB, aligned to 4 MiB, and the
- * stick recorded that page at window offset 0xc00000. A request of that
- * size and alignment may take the range. Any other request skips it.
- * Linux v6.12 amdgpu_discovery.c reserves DISCOVERY_TMR_OFFSET (64 KiB)
- * plus DISCOVERY_TMR_SIZE (10 KiB) at the top of real VRAM.
+/* Stick 32 recorded SETUP_TMR at window offset 0xc00000, 4 MiB. That
+ * number is the record, not a hole installed before the allocation.
+ * The driver records the hole from the allocation that passes claim,
+ * and only that call may land inside it. Linux v6.12 amdgpu_discovery.c
+ * reserves DISCOVERY_TMR_OFFSET (64 KiB) plus DISCOVERY_TMR_SIZE
+ * (10 KiB) at the top of real VRAM.
  */
 #define R5_VRAM_PSP_TMR_OFFSET	0xc00000ull
 #define R5_VRAM_PSP_TMR_BYTES	(4ull * 1024ull * 1024ull)
@@ -40,21 +41,13 @@ r5_vram_overlap(uint64_t a, uint64_t aBytes, uint64_t b, uint64_t bBytes)
 }
 
 
-static inline int
-r5_vram_is_psp_claim(uint64_t offset, uint64_t bytes, uint64_t align)
-{
-	return bytes == R5_VRAM_PSP_TMR_BYTES
-		&& align == R5_VRAM_PSP_TMR_BYTES
-		&& offset == R5_VRAM_PSP_TMR_OFFSET;
-}
-
-
-/* 1 when *placed is inside [poolStart, poolEnd) and outside every hole,
- * except the one PSP claim above. cursor walks forward. */
+/* 1 when *placed is inside [poolStart, poolEnd) and outside every hole.
+ * Hole 0 is the PSP range. claim is set only for the SETUP_TMR call,
+ * and that call may land in hole 0. cursor walks forward. */
 static inline int
 r5_vram_bump(uint64_t cursor, uint64_t poolStart, uint64_t poolEnd,
 	uint64_t bytes, uint64_t align, const r5_vram_hole* holes, int holeCount,
-	uint64_t* placed)
+	int claim, uint64_t* placed)
 {
 	int step;
 
@@ -77,9 +70,7 @@ r5_vram_bump(uint64_t cursor, uint64_t poolStart, uint64_t poolEnd,
 				if (!r5_vram_overlap(aligned, bytes, holes[i].offset,
 						holes[i].bytes))
 					continue;
-				if (r5_vram_is_psp_claim(aligned, bytes, align)
-					&& holes[i].offset == R5_VRAM_PSP_TMR_OFFSET
-					&& holes[i].bytes == R5_VRAM_PSP_TMR_BYTES)
+				if (claim && i == 0)
 					continue;
 				hit = i;
 				break;

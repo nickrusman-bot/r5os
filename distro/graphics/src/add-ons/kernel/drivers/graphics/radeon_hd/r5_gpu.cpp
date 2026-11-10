@@ -573,6 +573,15 @@ gpu_stage_dump(const char* name, uint64 ibVa, uint8* cpu, uint64 phys)
 }
 
 
+/* Just below the advertised limits, so a program that grows upward from
+ * va_offset or high_va_offset does not land on a stage page. */
+static const uint64 kStageLowVram = R5_GPU_VA_MAX - 0x3000ull;
+static const uint64 kStageLowGtt = R5_GPU_VA_MAX - 0x2000ull;
+static const uint64 kStageHighGtt = R5_GPU_HIGH_VA_MAX - 0x3000ull;
+static const uint64 kStageHighVram = R5_GPU_HIGH_VA_MAX - 0x2000ull;
+static_assert(kStageLowVram < kStageLowGtt, "stage pages");
+static_assert(kStageHighGtt < kStageHighVram, "stage pages");
+
 /* One page per step, above the pages stage P already released. */
 static uint64 sStageFresh = 0;
 
@@ -977,6 +986,8 @@ gpu_stage_visible(const char* name, gpu_stage_page* page)
 }
 
 
+/* One indirect buffer and one WRITE_DATA page. ibFlush makes the
+ * packet visible. readFlush is only the CPU read of the word. */
 static bool
 gpu_stage_pair(radeon_info* info, const char* name, uint64 ibVa, bool ibGtt,
 	bool ibWc, uint64 destVa, bool destGtt, bool destWc, bool ibFlush,

@@ -1202,8 +1202,8 @@ radeon_hd_init(radeon_info &info)
 // SPDX-License-Identifier: GPL-3.0-or-later
 	radeon_map_doorbell(info);
 	if (!radeon_hd_uses_dce(info.chipsetID)) {
-		info.shared_info->vram_hole_offset[0] = R5_VRAM_PSP_TMR_OFFSET;
-		info.shared_info->vram_hole_bytes[0] = R5_VRAM_PSP_TMR_BYTES;
+		/* The PSP hole is whatever SETUP_TMR allocates. It is not
+		 * installed from a constant before that call. */
 		/* CONFIG_MEMSIZE is unused on Raven, so graphics_memory_size is
 		 * the BAR and the discovery region is not in this window. When
 		 * the register was read and it is larger than the BAR, the hole
@@ -1224,11 +1224,9 @@ radeon_hd_init(radeon_info &info)
 				info.shared_info->vram_hole_bytes[2] = firmware.bytes;
 			}
 		}
-		ERROR("%s: R5 radeon_hd: vram holes psp 0x%" B_PRIx64
-			"+0x%" B_PRIx64 " discovery 0x%" B_PRIx64 "+0x%" B_PRIx64
-			" fw 0x%" B_PRIx64 "+0x%" B_PRIx64 "\n", __func__,
-			info.shared_info->vram_hole_offset[0],
-			info.shared_info->vram_hole_bytes[0],
+		ERROR("%s: R5 radeon_hd: vram holes discovery 0x%" B_PRIx64
+			"+0x%" B_PRIx64 " fw 0x%" B_PRIx64 "+0x%" B_PRIx64
+			" (psp claim is SETUP_TMR)\n", __func__,
 			info.shared_info->vram_hole_offset[1],
 			info.shared_info->vram_hole_bytes[1],
 			info.shared_info->vram_hole_offset[2],

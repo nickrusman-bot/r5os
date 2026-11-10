@@ -248,6 +248,18 @@ klog(void* cookie, const char* format, ...)
 }
 
 
+static int sTmrClaim = 0;
+
+
+static int
+kvram_claim(void* cookie, int on)
+{
+	(void)cookie;
+	sTmrClaim = on ? 1 : 0;
+	return 0;
+}
+
+
 static status_t
 kvram(void* cookie, uint64 bytes, uint64 align, uint64* offset, uint8** address)
 {
@@ -268,10 +280,16 @@ kvram(void* cookie, uint64 bytes, uint64 align, uint64* offset, uint8** address)
 		holes[i].bytes = shared->vram_hole_bytes[i];
 	}
 	if (!r5_vram_bump(cursor, start, end, bytes, align, holes,
-			R5_VRAM_HOLES, &placed))
+			R5_VRAM_HOLES, sTmrClaim, &placed))
 		return B_NO_MEMORY;
 	if (info->kernel_window == NULL || placed < shared->vram_pool_offset)
 		return B_NO_MEMORY;
+	if (sTmrClaim) {
+		shared->vram_hole_offset[0] = placed;
+		shared->vram_hole_bytes[0] = bytes;
+		dprintf("radeon_hd: psp tmr claim 0x%llx+0x%llx\n",
+			(unsigned long long)placed, (unsigned long long)bytes);
+	}
 	shared->vram_pool_cursor = placed + bytes;
 	*offset = placed;
 	if (address != NULL) {
@@ -1983,6 +2001,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	sHost.sleep_us = ksleep;
 	sHost.log = klog;
 	sHost.vram_alloc = kvram;
+	sHost.vram_claim = kvram_claim;
 	sHost.read_firmware = kfirmware;
 	sHost.free_firmware = kfree_fw;
 	sHost.doorbell = info.doorbell;

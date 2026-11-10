@@ -214,6 +214,7 @@ r5_gpu_log_error()
 }
 
 
+/* The first 32 refusals in a boot. Later ones still return the status. */
 status_t
 gpu_refuse(const char* op, const char* why, status_t status, uint32 handle,
 	uint32 domain, uint64 bytes, uint64 va, uint64 offset, uint64 mapBytes,

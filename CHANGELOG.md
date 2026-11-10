@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The PSP page is the allocation, not a size
+
+The visible-VRAM bump no longer treats every 4 MiB request as the trusted-memory claim. `SETUP_TMR` sets a flag on that call. The hole is the range that call returns, and only that call may land in it. The constant `0xc00000` stays the offset stick 32 recorded. It is not installed before the call. A host replay of that boot's allocation order (ring `0x7e9000`, fence `0x7ea000`, the default page `0x7eb000`, PSP ring `0x868000`, command page `0x869000`, `SETUP_TMR` `0xc00000`) matches `generated/boot-5625u-32/syslog`. The host program printed `ok gpu api 1.0 walk` on 10 Nov 2026, Europe/Amsterdam, from a checkout that includes `generated/`. Three comments that the split had dropped are back on the functions they describe.
+
 ## 2026-11-10 - The indirect-buffer headers are copied into the build
 
 `scripts/apply-radeon.py` copies `r5_selftest_ib.h` and `r5_isolation_ib.h`. This branch adds those headers, so the copy belongs here: without it a jam of this branch stops because the self-test cannot include its header. The copy was first made on `cursor/gpu-m6-workload` and moved here so that each pull request builds on its own, in merge order.
