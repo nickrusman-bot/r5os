@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The window test runs before the isolation fault
+
+Stick 35, boot 1 (`generated/boot-5625u-35`), printed `wsi clear ok llvmpipe (LLVM 21.1.8, 256 bits) 64x64 frames 100` and `window driver llvmpipe (LLVM 21.1.8, 256 bits)` for VulkanTeapot and vkcube. `check.sh` failed those RADV lines and passed the window actions, `eop 940`, and the four contract lines. The syslog has no `RADV view surface` line. After the RADV buffer allocations it has `vm fault pasid 32770 vmid 7 addr 0000000080000000`, `fence timeout` with `fault 00700c10` and `pte 0000000000000000`, then `gpu lost watchdog` with `seen 939`. That fault is the isolation stage. The window tests were typed after it, so they only found Lavapipe. `gpu_selftest false` does not stop this: login still starts `r5-gpu-selftest`, and that program still runs isolation.
+
+`r5-gpu-selftest` now runs `r5-wsi-test`, `r5-wsi-window-test.sh VulkanTeapot` and `r5-wsi-window-test.sh vkcube` after the VulkanTeapot stages and before a stage that can fault. It writes `/boot/home/wsi.txt`, `win-teapot.txt` and `win-vkcube.txt`, and one syslog line, `r5 window tests`, before those three commands. The isolation and kill stages run only when `gpu_isolation_test true` is set, and then they run last. The line is absent on this stick, so they stay off. `boot2.sh` strips the line if it was present. `check.sh` fails `gpu lost before window tests` when a `gpu lost` line is above that marker. Its `cpu span ms` rule reads only the line that follows `radeon ms per frame` and a number.
+
+An unknown `vkcube` option used `snprintf` with a null buffer to measure the usage text. On stick 34 that was a segment violation (`debug_server: Thread 836 entered the debugger: Segment violation`, team `/bin/vkcube --cc 300`). The usage text now goes into a fixed buffer, and the program prints it and exits 1.
+
+There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - The image installs the RADV that offers a Vulkan window
 
 Stick 34, boot 1 (`generated/boot-5625u-34`), ran `wsi clear ok` on llvmpipe. With `VK_LOADER_DRIVERS_SELECT='*radeon*'`, `r5-wsi-test` printed `wsi clear FAIL instance`. `vkcube` listed RADV and still drew with llvmpipe. The syslog has no `RADV view surface` line. The RADV package was still named `mesa_radv-25.3.6-1`, so the image could install the 9 Nov copy, which does not export `VK_RFIVE_view_surface`. The package is now `mesa_radv-25.3.6-2`, the same revision step Lavapipe took. `pack-radv.py` extracts the old package, replaces `libvulkan_radeon.so`, and writes the new name. The pin and the image check require that name and reject `mesa_radv-25.3.6-1`.

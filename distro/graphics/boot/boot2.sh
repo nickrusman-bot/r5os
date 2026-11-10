@@ -7,6 +7,7 @@ rm -f "$file"
 mkdir -p "$(dirname "$file")"
 {
 	printf '%s\n' "$old" | grep -v '^gpu_present' | grep -v '^gpu_present_fail' \
+		| grep -v '^gpu_isolation_test' \
 		| grep -v '^gfx9_vmids' | grep -v '^gfx9_vmid_per_file' \
 		| grep -v '^gfx9_pasid_map' | grep -v '^$'
 	echo "gfx9_vmids true"

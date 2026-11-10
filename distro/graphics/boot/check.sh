@@ -75,17 +75,23 @@ fi
 
 span_fail=0
 spans=0
+prev=
 while read -r line; do
-	case "$line" in
-	*"cpu span ms "*)
-		spans=$((spans + 1))
-		num=$(printf '%s\n' "$line" | sed 's/.*cpu span ms //')
-		int=${num%%.*}
-		if [ -z "$int" ] || [ "$int" -ge 2000 ]; then
-			span_fail=1
-		fi
+	case "$prev" in
+	"radeon ms per frame "[0-9]*)
+		case "$line" in
+		*"cpu span ms "*)
+			spans=$((spans + 1))
+			num=$(printf '%s\n' "$line" | sed 's/.*cpu span ms //')
+			int=${num%%.*}
+			if [ -z "$int" ] || [ "$int" -ge 2000 ]; then
+				span_fail=1
+			fi
+			;;
+		esac
 		;;
 	esac
+	prev=$line
 done < "$test"
 if [ "$spans" -gt 0 ] && [ "$span_fail" -eq 0 ]; then
 	say 0 "cpu span ms under 2000"
@@ -111,6 +117,14 @@ need "GFX9 ring contract verified"
 need "GFX9 scratch 0xdeadbeef"
 need "fence landed"
 need "k2 ok gart"
+
+lost=$(grep -n "gpu lost" "$log" | head -n 1 | cut -d: -f1)
+mark=$(grep -n "r5 window tests" "$log" | head -n 1 | cut -d: -f1)
+if [ -n "$lost" ] && { [ -z "$mark" ] || [ "$lost" -lt "$mark" ]; }; then
+	say 1 "gpu lost before window tests"
+else
+	say 0 "gpu lost before window tests"
+fi
 
 if [ "$boot" -eq 2 ]; then
 	need "RADV view surface: no, window through Lavapipe"

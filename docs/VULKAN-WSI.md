@@ -284,6 +284,8 @@ Both keys live in the `radeon_hd` driver settings, with the other GPU keys. Both
 
 The stick file is `distro/graphics/boot/radeon_hd`. It keeps the M6 lines `gfx9_vmids true`, `gfx9_vmid_per_file true` and `gfx9_pasid_map true`. `boot2.sh` writes those three lines again, then `gpu_present true` and `gpu_present_fail true`. Stick 34 left them out. The isolation stage then refused `VA_MAP` and `vkCreateDevice` returned -2.
 
+`gpu_isolation_test` defaults to off. The stick file leaves it off. While it is off, `r5-gpu-selftest` does not run the isolation or kill stage. When it is on, those two stages run last. Sign-in still starts `r5-gpu-selftest`. After the VulkanTeapot stages, and before a stage that can fault, that program writes `~/wsi.txt`, `~/win-teapot.txt` and `~/win-vkcube.txt` itself. It also writes one syslog line, `r5 window tests`, at the start of those three commands. `check.sh` fails `gpu lost before window tests` when a `gpu lost` line is above that marker. The `cpu span ms` rule reads only the line that follows `radeon ms per frame` and a number. An unknown `vkcube` option prints the usage and exits 1.
+
 ## Before step 5
 
 A RADV frame on stick 33 takes about a second of wall time. The GPU work is about 0.3 ms. This has to be fixed before M7 step 5, or a window draws one frame a second. This section is the finding. It does not change the driver.

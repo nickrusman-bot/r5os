@@ -312,6 +312,30 @@ static void demo_run(struct demo *demo) {
         "#elif defined(__unix__) || defined(__linux) || defined(__linux__) || defined(__ANDROID__) || defined(__QNX__) || defined(__APPLE__)\n",
         "#elif defined(__unix__) || defined(__linux) || defined(__linux__) || defined(__HAIKU__) || defined(__ANDROID__) || defined(__QNX__) || defined(__APPLE__)\n",
     )
+    once(
+        CUBE,
+        """        int length = snprintf(NULL, 0, message, APP_SHORT_NAME, available_wsi_platforms, VK_PRESENT_MODE_IMMEDIATE_KHR,
+                              VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+        char *usage = (char *)malloc(length + 1);
+        if (!usage) {
+            exit(1);
+        }
+        snprintf(usage, length + 1, message, APP_SHORT_NAME, available_wsi_platforms, VK_PRESENT_MODE_IMMEDIATE_KHR,
+                 VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+""",
+        """        char usage[2048];
+        snprintf(usage, sizeof(usage), message, APP_SHORT_NAME, available_wsi_platforms, VK_PRESENT_MODE_IMMEDIATE_KHR,
+                 VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+""",
+    )
+    once(
+        CUBE,
+        """        free(usage);
+        exit(1);
+""",
+        """        exit(1);
+""",
+    )
     text = CUBE.read_text(encoding="utf-8")
     if "demo_r5_create" not in text:
         text += r"""

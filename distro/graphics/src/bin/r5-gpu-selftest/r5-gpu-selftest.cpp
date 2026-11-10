@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
@@ -678,6 +679,122 @@ stage_selftest(FILE* out)
 }
 
 
+static bool
+isolation_requested()
+{
+	char base[512];
+	char path[640];
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, base, sizeof(base))
+			!= B_OK)
+		return false;
+	snprintf(path, sizeof(path), "%s/kernel/drivers/radeon_hd", base);
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return false;
+	bool on = false;
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		char key[64];
+		char value[64];
+		if (sscanf(line, " %63s %63s", key, value) != 2)
+			continue;
+		if (strcmp(key, "gpu_isolation_test") == 0)
+			on = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
+	}
+	fclose(file);
+	return on;
+}
+
+
+static void
+run_window_tests(FILE* out)
+{
+	static bool done = false;
+	if (done)
+		return;
+	done = true;
+	syslog(LOG_INFO, "r5 window tests");
+	run_stage(out, "wsi",
+		"/bin/r5-wsi-test > /boot/home/wsi.txt", 180);
+	run_stage(out, "window VulkanTeapot",
+		"/bin/r5-wsi-window-test.sh VulkanTeapot > /boot/home/win-teapot.txt",
+		180);
+	run_stage(out, "window vkcube",
+		"/bin/r5-wsi-window-test.sh vkcube > /boot/home/win-vkcube.txt", 180);
+}
+
+
+static void
+run_isolation_stages(FILE* out)
+{
+	run_stage(out, "isolation",
+		"/bin/r5-gpu-isolation 2>&1", 60);
+	/* The kill loop still holds its buffers when the
+	 * stage returns. Read just before that stage, then
+	 * again every 100 ms for up to 2 s. */
+	r5_gpu_counters beforeKill;
+	memset(&beforeKill, 0, sizeof(beforeKill));
+	beforeKill.size = (uint32_t)sizeof(beforeKill);
+	beforeKill.version = 1;
+	{
+		int beforeFd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+		if (beforeFd >= 0) {
+			ioctl(beforeFd, R5_GPU_GET_COUNTERS, &beforeKill,
+				sizeof(beforeKill));
+			close(beforeFd);
+		}
+	}
+	run_stage(out, "kill",
+		"/bin/r5-gpu-isolation kill 2>&1", 2);
+	{
+		int again = open("/dev/gpu/radeon_hd/0", O_RDWR);
+		r5_gpu_counters afterCount;
+		memset(&afterCount, 0, sizeof(afterCount));
+		afterCount.size = (uint32_t)sizeof(afterCount);
+		afterCount.version = 1;
+		bool matched = false;
+		bool readOk = false;
+		if (again >= 0) {
+			bigtime_t start = system_time();
+			for (;;) {
+				r5_gpu_counters sample;
+				memset(&sample, 0, sizeof(sample));
+				sample.size = (uint32_t)sizeof(sample);
+				sample.version = 1;
+				if (ioctl(again, R5_GPU_GET_COUNTERS, &sample,
+						sizeof(sample)) == 0) {
+					afterCount = sample;
+					readOk = true;
+					if (r5_gpu_counters_match(&beforeKill, &afterCount)) {
+						matched = true;
+						break;
+					}
+				}
+				if (system_time() - start >= 2000000)
+					break;
+				snooze(100000);
+			}
+		}
+		if (matched)
+			fprintf(out, "counters back\n");
+		else if (readOk) {
+			fprintf(out, "counters difference bo %u/%u "
+				"pages %u/%u vmids %u/%u trees %u/%u\n",
+				afterCount.bo_count - beforeKill.bo_count,
+				afterCount.bo_count_space - beforeKill.bo_count_space,
+				afterCount.pt_pages - beforeKill.pt_pages,
+				afterCount.pt_pages_space - beforeKill.pt_pages_space,
+				afterCount.vmids - beforeKill.vmids,
+				afterCount.vmids_space - beforeKill.vmids_space,
+				afterCount.trees - beforeKill.trees,
+				afterCount.tree_pages - beforeKill.tree_pages);
+		}
+		if (again >= 0)
+			close(again);
+	}
+}
+
+
 int
 main()
 {
@@ -708,6 +825,7 @@ main()
 			"/bin/VulkanTeapot --cube --selftest 2>&1", 180);
 		run_pair(out, "VulkanTeapot A", "VulkanTeapot B",
 			"/bin/VulkanTeapot --selftest 2>&1", 180);
+		run_window_tests(out);
 	} else {
 		uint8_t bytes[sizeof(r5_gpu_info) + sizeof(r5_gpu_amd_info)];
 		memset(bytes, 0, sizeof(bytes));
@@ -747,6 +865,7 @@ main()
 			skip_lost(out, "VulkanTeapot");
 			skip_lost(out, "VulkanTeapot (sam)");
 			skip_lost(out, "VulkanTeapot");
+			run_window_tests(out);
 			skip_lost(out, "selftest");
 			skip_lost(out, "ib");
 		} else {
@@ -757,6 +876,7 @@ main()
 				skip_lost(out, "VulkanTeapot");
 				skip_lost(out, "VulkanTeapot (sam)");
 				skip_lost(out, "VulkanTeapot");
+				run_window_tests(out);
 				skip_lost(out, "selftest");
 				skip_lost(out, "ib");
 			} else if (run_stage(out, "vulkaninfo",
@@ -765,6 +885,7 @@ main()
 					skip_lost(out, "VulkanTeapot");
 					skip_lost(out, "VulkanTeapot (sam)");
 					skip_lost(out, "VulkanTeapot");
+					run_window_tests(out);
 					skip_lost(out, "selftest");
 					skip_lost(out, "ib");
 				} else {
@@ -826,76 +947,7 @@ main()
 						run_pair(out, "VulkanTeapot A", "VulkanTeapot B",
 							"/bin/VulkanTeapot --selftest 2>&1", 180);
 					}
-					run_stage(out, "isolation",
-						"/bin/r5-gpu-isolation 2>&1", 60);
-					/* The kill loop still holds its buffers when the
-					 * stage returns. Read just before that stage, then
-					 * again every 100 ms for up to 2 s. */
-					r5_gpu_counters beforeKill;
-					memset(&beforeKill, 0, sizeof(beforeKill));
-					beforeKill.size = (uint32_t)sizeof(beforeKill);
-					beforeKill.version = 1;
-					{
-						int beforeFd = open("/dev/gpu/radeon_hd/0", O_RDWR);
-						if (beforeFd >= 0) {
-							ioctl(beforeFd, R5_GPU_GET_COUNTERS, &beforeKill,
-								sizeof(beforeKill));
-							close(beforeFd);
-						}
-					}
-					run_stage(out, "kill",
-						"/bin/r5-gpu-isolation kill 2>&1", 2);
-					{
-						int again = open("/dev/gpu/radeon_hd/0", O_RDWR);
-						r5_gpu_counters afterCount;
-						memset(&afterCount, 0, sizeof(afterCount));
-						afterCount.size = (uint32_t)sizeof(afterCount);
-						afterCount.version = 1;
-						bool matched = false;
-						bool readOk = false;
-						if (again >= 0) {
-							bigtime_t start = system_time();
-							for (;;) {
-								r5_gpu_counters sample;
-								memset(&sample, 0, sizeof(sample));
-								sample.size = (uint32_t)sizeof(sample);
-								sample.version = 1;
-								if (ioctl(again, R5_GPU_GET_COUNTERS, &sample,
-										sizeof(sample)) == 0) {
-									afterCount = sample;
-									readOk = true;
-									if (r5_gpu_counters_match(&beforeKill,
-											&afterCount)) {
-										matched = true;
-										break;
-									}
-								}
-								if (system_time() - start >= 2000000)
-									break;
-								snooze(100000);
-							}
-						}
-						if (matched)
-							fprintf(out, "counters back\n");
-						else if (readOk) {
-							fprintf(out, "counters difference bo %u/%u "
-								"pages %u/%u vmids %u/%u trees %u/%u\n",
-								afterCount.bo_count - beforeKill.bo_count,
-								afterCount.bo_count_space
-									- beforeKill.bo_count_space,
-								afterCount.pt_pages - beforeKill.pt_pages,
-								afterCount.pt_pages_space
-									- beforeKill.pt_pages_space,
-								afterCount.vmids - beforeKill.vmids,
-								afterCount.vmids_space
-									- beforeKill.vmids_space,
-								afterCount.trees - beforeKill.trees,
-								afterCount.tree_pages
-									- beforeKill.tree_pages);
-						}
-						if (again >= 0)
-							close(again);
-					}
+					run_window_tests(out);
 					if (device_lost()) {
 						skip_lost(out, "selftest");
 						skip_lost(out, "ib");
@@ -914,6 +966,8 @@ main()
 					}
 				}
 		}
+		if (isolation_requested())
+			run_isolation_stages(out);
 	}
 	write_ring_line(out);
 	fclose(out);
