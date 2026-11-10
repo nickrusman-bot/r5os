@@ -24,7 +24,8 @@ sed -i 's/\r$//' "$MESA/include/vulkan/vk_icd.h" \
 if ! grep -q 'VK_ICD_WSI_PLATFORM_VIEW_RFIVE + 1' "$MESA/src/vulkan/wsi/wsi_common.h"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-view-surface.patch"
 fi
-if ! grep -q 'wsi_view_r5_init_wsi' "$MESA/src/amd/vulkan/radv_wsi.c"; then
+if ! grep -q 'wsi_view_r5_init_wsi' "$MESA/src/amd/vulkan/radv_wsi.c" \
+	|| ! grep -q 'defined(VK_USE_PLATFORM_VIEW_RFIVE)' "$MESA/src/amd/vulkan/radv_wsi.h"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-radv-view-surface.patch"
 fi
 
