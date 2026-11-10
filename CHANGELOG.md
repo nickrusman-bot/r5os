@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - M6: the 5625U draws the same picture on Radeon as on Lavapipe
+
+GPU milestone M6 passed on stick 33 (`r5-os-anyboot-m6.iso`, from `main` after #4164), boot 1, settings with `gfx9_wc_gtt false`. Logs: `generated/boot-5625u-33`.
+
+- **Pictures:** VulkanTeapot, the cube, the SAM teapot, and teapots A and B started 143 microseconds apart each printed `compared driverID 3 AMD Radeon Graphics (RADV RENOIR) and driverID 13 llvmpipe (LLVM 21.1.8, 256 bits)` and `pixels ok max 2 share 0.0% limit 1%`.
+- **Time:** RADV 0.18–0.31 ms per frame on the GPU, Lavapipe 0.81–1.27 ms.
+- **Ring:** `ring waits 0 max 256 of 1024`. The 1024-dword ring never waited, so the larger ring is not needed for this workload.
+- **Contract and passport:** the syslog has `GFX9 scratch 0xdeadbeef rptr 0x392 dwords 914, fence landed`, `k2 ok gart`, and `passport counter_freq 100000` without `passport mismatch`. `counters back` after the isolation stage.
+
+Not yet, and not part of M6:
+- **A RADV frame takes about 1 s of wall time.** For 100 frames the GPU span is about 98 s and the CPU span about 99 s, while the GPU works 0.3 ms per frame. Something waits about a second per submit. This must be found before M7 shows RADV in a window.
+- **The GPU was lost afterwards,** in the older R1c, selftest and ib stages (`gpu lost watchdog ... fault 00700c10`), the same gap as M5: no reset yet.
+- **Boot 2** (`gfx9_wc_gtt true`) did not run. Write-combining stays off by default.
+- **Shutdown** still needs a long press (compared with Linux on paper only).
 ## 2026-11-10 - First 5625U boot of the M6 stick
 
 The stick written at 14:47 Europe/Amsterdam was read back at 15:12. One self-test file, no `r5-gpu-selftest.old.txt`. The settings file is still boot 1, last line `gfx9_wc_gtt false`. Haiku rotated the log: `system/var/log/syslog.1` is 524432 bytes and has the one boot banner, and `syslog` is the last 8966 bytes. `check.sh` reads only `syslog`, so it printed FAIL for lines that are in `syslog.1`. Logs are `generated/boot-5625u-33/`.
