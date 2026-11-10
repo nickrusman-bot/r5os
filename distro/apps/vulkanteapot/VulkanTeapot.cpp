@@ -434,6 +434,7 @@ struct DrawState {
 	uint8_t*		pixelsVram;
 	VkQueryPool		queries;
 	uint32_t		queryBase;
+	uint32_t		queryCount;
 };
 
 
@@ -445,6 +446,9 @@ draw_frame(DrawState* draw, const float matrix[16])
 	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	check("vkBeginCommandBuffer", vkBeginCommandBuffer(draw->cmd, &begin));
 	if (draw->queries != VK_NULL_HANDLE) {
+		if (draw->queryBase == 0) {
+			vkCmdResetQueryPool(draw->cmd, draw->queries, 0, draw->queryCount);
+		}
 		vkCmdWriteTimestamp(draw->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
 			draw->queries, draw->queryBase);
 	}
@@ -759,6 +763,8 @@ main(int argc, char** argv)
 	const int kBytes = kSize * kSize * 4;
 	uint8_t* shot[2] = {};
 	double passMs[2] = {};
+	double passSpanMs[2] = {};
+	double passCpuMs[2] = {};
 	int passTimed[2] = {};
 	int pixelStatus = 0;
 	for (int devicePass = 0; devicePass < pickCount; devicePass++) {
@@ -773,9 +779,11 @@ main(int argc, char** argv)
 	VkQueueFamilyProperties* familyInfo =
 		(VkQueueFamilyProperties*)calloc(families, sizeof(*familyInfo));
 	vkGetPhysicalDeviceQueueFamilyProperties(gpu, &families, familyInfo);
+	uint32_t timestampBits = 0;
 	for (uint32_t i = 0; i < families; i++) {
 		if (familyInfo[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			family = i;
+			timestampBits = familyInfo[i].timestampValidBits;
 			break;
 		}
 	}
@@ -1091,26 +1099,36 @@ main(int argc, char** argv)
 		queryInfo.queryCount = (uint32_t)kFrames * 2u;
 		check("vkCreateQueryPool",
 			vkCreateQueryPool(device, &queryInfo, NULL, &queryPool));
-		vkResetQueryPool(device, queryPool, 0, (uint32_t)kFrames * 2u);
 		draw.queries = queryPool;
+		draw.queryCount = (uint32_t)kFrames * 2u;
 	}
 	if (selftest) {
 		shot[devicePass] = (uint8_t*)malloc((size_t)kBytes);
+		bigtime_t cpuStart = system_time();
 		for (int frame = 0; frame < kFrames; frame++) {
 			draw.queryBase = (uint32_t)frame * 2u;
 			draw_frame(&draw, matrix);
 			if (frame == 0)
 				memcpy(shot[devicePass], draw.pixels, (size_t)kBytes);
 		}
+		passCpuMs[devicePass] = (double)(system_time() - cpuStart) / 1000.0;
 		if (queryPool != VK_NULL_HANDLE) {
 			uint64_t* stamps = (uint64_t*)calloc((size_t)kFrames * 2u, sizeof(uint64_t));
 			VkResult read = vkGetQueryPoolResults(device, queryPool, 0,
 				(uint32_t)kFrames * 2u, (size_t)kFrames * 2u * sizeof(uint64_t),
 				stamps, sizeof(uint64_t),
 				VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-			if (read == VK_SUCCESS) {
+			if (read == VK_SUCCESS && timestampBits > 0) {
+				uint64_t mask = timestampBits >= 64
+					? ~0ull : (1ull << timestampBits) - 1ull;
+				uint64_t first = stamps[0] & mask;
+				uint64_t last = stamps[(kFrames - 1) * 2 + 1] & mask;
+				uint64_t ticks = last >= first
+					? last - first : (mask - first) + 1ull + last;
 				passMs[devicePass] = median_ms(stamps, kFrames,
 					properties.limits.timestampPeriod);
+				passSpanMs[devicePass] = (double)ticks
+					* (double)properties.limits.timestampPeriod / 1.0e6;
 				passTimed[devicePass] = 1;
 			}
 			free(stamps);
@@ -1182,22 +1200,26 @@ main(int argc, char** argv)
 			int lvp = picks[devicePass].driverKnown
 				&& picks[devicePass].driverID == VK_DRIVER_ID_MESA_LLVMPIPE;
 			if (radv && !printedGpu) {
-				if (passTimed[devicePass])
-					printf("gpu ms per frame %.3f\n", passMs[devicePass]);
-				else
-					printf("gpu ms per frame none\n");
+				if (passTimed[devicePass]) {
+					printf("radeon ms per frame %.3f\n", passMs[devicePass]);
+					printf("gpu span ms %.3f cpu span ms %.3f\n",
+						passSpanMs[devicePass], passCpuMs[devicePass]);
+				} else
+					printf("radeon ms per frame none\n");
 				printedGpu = 1;
 			}
 			if (lvp && !printedLvp) {
-				if (passTimed[devicePass])
+				if (passTimed[devicePass]) {
 					printf("lavapipe ms per frame %.3f\n", passMs[devicePass]);
-				else
+					printf("gpu span ms %.3f cpu span ms %.3f\n",
+						passSpanMs[devicePass], passCpuMs[devicePass]);
+				} else
 					printf("lavapipe ms per frame none\n");
 				printedLvp = 1;
 			}
 		}
 		if (!printedGpu)
-			printf("gpu ms per frame none\n");
+			printf("radeon ms per frame none\n");
 		if (!printedLvp)
 			printf("lavapipe ms per frame none\n");
 		const int sampleAt[][2] = {
@@ -1209,16 +1231,26 @@ main(int argc, char** argv)
 			const uint8_t* p = shot[0] + (y * kSize + x) * 4;
 			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
 		}
-		int percent = 0;
+		int share = 0;
 		int worst = 0;
 		int mismatch = r5_pixels_compare(shot[0], shot[1], (uint32_t)(kSize * kSize),
-			2, &percent, &worst);
+			2, &share, &worst);
+		int lavapipeOnly = picks[0].driverKnown && picks[1].driverKnown
+			&& picks[0].driverID == VK_DRIVER_ID_MESA_LLVMPIPE
+			&& picks[1].driverID == VK_DRIVER_ID_MESA_LLVMPIPE;
 		printf("pixel delta max %d\n", worst);
 		if (mismatch) {
-			printf("pixels MISMATCH %d%%\n", percent);
+			printf("pixels MISMATCH max 2 share %d.%d%% limit 1%%\n",
+				share / 10, share % 10);
 			pixelStatus = 2;
-		} else
-			printf("pixels ok\n");
+		} else if (lavapipeOnly) {
+			printf("pixels ok lavapipe only\n");
+			printf("pixels ok max 2 share %d.%d%% limit 1%%\n",
+				share / 10, share % 10);
+		} else {
+			printf("pixels ok max 2 share %d.%d%% limit 1%%\n",
+				share / 10, share % 10);
+		}
 		free(shot[0]);
 		free(shot[1]);
 	}

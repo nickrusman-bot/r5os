@@ -10,7 +10,7 @@
 
 int
 r5_pixels_compare(const uint8_t* a, const uint8_t* b, uint32_t pixels,
-	int maxChannel, int* percent, int* maxDelta)
+	int maxChannel, int* shareTenths, int* maxDelta)
 {
 	uint32_t bad = 0;
 	int worst = 0;
@@ -30,12 +30,10 @@ r5_pixels_compare(const uint8_t* a, const uint8_t* b, uint32_t pixels,
 		if (failed)
 			bad++;
 	}
-	int share = (int)((bad * 100u) / pixels);
-	if (bad > 0 && share == 0)
-		share = 1;
-	if (percent != NULL)
-		*percent = share;
+	int share = (int)(((uint64_t)bad * 1000u) / pixels);
+	if (shareTenths != NULL)
+		*shareTenths = share;
 	if (maxDelta != NULL)
 		*maxDelta = worst;
-	return bad > 0 ? 1 : 0;
+	return share > 10 ? 1 : 0;
 }

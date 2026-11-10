@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The frame compare states its tolerance and its time
+
+A pixel may differ by 2 in a channel. At most 1% of the pixels may be over that. The line is `pixels ok max 2 share 0.3% limit 1%`. Lavapipe compared with itself also prints `pixels ok lavapipe only`. `radeon ms per frame` and `lavapipe ms per frame` are each printed once. `gpu span ms` is the first top-of-pipe timestamp to the last bottom-of-pipe timestamp over the 100 frames, beside the CPU time of that same loop. A GPU span larger than the CPU span means the timestamp frequency is wrong. The timestamps are masked with the queue's `timestampValidBits`. The pool is reset with `vkCmdResetQueryPool` in the first command buffer. `docs/GPU-M6.md` records that Haiku `system_shutdown()` does not call the driver, so `r5_gfx9_kernel_stop()` does not run on shutdown or reboot. No stop code was added. The package `vulkanteapot-1.0.0-1-x86_64.hpkg` was rebuilt from `distro/apps/vulkanteapot/VulkanTeapot.cpp` and `r5_pixels.c` with the Haiku cross compiler and stripped. It contains no `/home/nickr`.
+
+Host, 10 Nov 2026, Europe/Amsterdam: `g++ -std=c++17 scripts/test-r5-pixels.cpp` printed `ok pixels`. `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
 ## 2026-11-10 - The page-type flush uses the physical map
 
 `vm_set_area_page_memory_type()` looks up each page and runs `clflush` on that page in the kernel physical map. It does not flush the area's own address, so a user clone is not a user pointer under SMAP. The line size is CPUID leaf 1, EBX bits 15:8, times 8. Linux tag v6.12 was read for the two passport facts: `soc15.c` `soc15_get_xclk()` lines 326-330 return 10000 for MP1 12.0.0 and 12.0.1, and `amdgpu_kms.c` line 863 stores that times 10. `amdgpu_discovery_set_ip_blocks()` (line 2425) has no `CHIP_RENOIR` case. `generated/gpu-m4/HARDCODE.md` row 5 names the same clock lines. Not booted. QEMU with SMAP was not run.

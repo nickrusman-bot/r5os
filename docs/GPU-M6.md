@@ -55,6 +55,8 @@ A reset on R5 would have to do all of the following, in this order. This note do
 
 This is the comparison for point 17. No shutdown code is added here. The stop order in `r5_gfx9_kernel_stop` stays as it is. A change needs a boot on the 5625U. This is not the mode-2 reset in the section above: that reset brings the GFX block back. Shutdown leaves it off.
 
+Haiku `system_shutdown()` (`src/system/kernel/shutdown.cpp`) sets `gKernelShutdown`, kills the other teams on a reboot, calls `sync()`, then `arch_cpu_shutdown()`. On AMD64 that is `acpi_shutdown()` (`arch_cpu.cpp`). Neither function calls a driver's uninit. `r5_gfx9_kernel_stop()` is only called from `radeon_hd_uninit()`, and Haiku keeps the driver loaded until power-off, so a normal shutdown or reboot runs none of the stop. There is no driver hook before `acpi_shutdown()`. A stop that has to run would be a new call from `system_shutdown()` after `sync()` and before `arch_cpu_shutdown()`. That call is not in the tree. The order it would use is the Linux order: interrupts off first, then the blocks in reverse, GFX, then PSP, then IH and GMC. Renoir's SMU 12 `hw_fini` is the SMU step in that reverse walk. Its source line was not checked against Linux v6.12 in this pass.
+
 Linux v6.18 `amdgpu_device_fini_hw` (`amdgpu_device.c` line 4945) disables every interrupt source (`amdgpu_irq_disable_all`, `amdgpu_irq.c` line 124), finishes the fences, then `amdgpu_device_ip_fini_early` (line 3617) walks the IP blocks from last to first and calls each `hw_fini` (`amdgpu_ip_block_hw_fini`, line 3572). After that walk, `amdgpu_irq_fini_hw` (line 330) frees the IRQ and the IH rings.
 
 For GC 9.3, and not a virtual function, not inside a reset, and not GC 9.4.2 or newer, `gfx_v9_0_hw_fini` (line 4048) does this:

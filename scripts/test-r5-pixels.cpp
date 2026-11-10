@@ -40,12 +40,24 @@ main(void)
 	b[5] = 13;
 	if (r5_pixels_compare(a, b, 4, 2, &percent, &delta) == 0)
 		return fail("over tolerance");
-	if (percent != 25 || delta != 3)
+	if (percent != 250 || delta != 3)
 		return fail("one pixel");
+	uint8_t manyA[400];
+	uint8_t manyB[400];
+	memset(manyA, 10, sizeof(manyA));
+	memset(manyB, 10, sizeof(manyB));
+	manyB[0] = 13;
+	if (r5_pixels_compare(manyA, manyB, 100, 2, &percent, &delta) != 0)
+		return fail("one percent");
+	if (percent != 10)
+		return fail("one percent share");
+	manyB[4] = 13;
+	if (r5_pixels_compare(manyA, manyB, 100, 2, &percent, &delta) == 0)
+		return fail("two percent");
 	memset(b, 0, sizeof(b));
 	if (r5_pixels_compare(a, b, 4, 2, &percent, &delta) == 0)
 		return fail("all");
-	if (percent != 100)
+	if (percent != 1000)
 		return fail("percent");
 	printf("ok pixels\n");
 	return 0;
