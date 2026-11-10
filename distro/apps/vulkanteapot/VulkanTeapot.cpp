@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Draws the freeglut Newell teapot, or a cube with --cube, through Vulkan.
- * --selftest draws 100 offscreen frames, prints the median GPU time, and
- * compares the first frame with the last.
+ * --selftest draws the same frame on two explicitly chosen devices and
+ * compares those pictures. RADV is driver id 3, Lavapipe is driver id 13.
+ * With only one of them, that device is rendered twice.
  */
 
 #include "r5_pixels.h"
@@ -685,11 +686,18 @@ main(int argc, char** argv)
 		die("no device", VK_ERROR_INITIALIZATION_FAILED);
 	VkPhysicalDevice* gpus = (VkPhysicalDevice*)calloc(count, sizeof(*gpus));
 	vkEnumeratePhysicalDevices(instance, &count, gpus);
-	VkPhysicalDevice gpu = VK_NULL_HANDLE;
-	VkPhysicalDeviceProperties properties;
-	uint32_t driverID = 0;
-	int driverKnown = 0;
-	memset(&properties, 0, sizeof(properties));
+	struct DevicePick {
+		VkPhysicalDevice gpu;
+		VkPhysicalDeviceProperties properties;
+		uint32_t driverID;
+		int driverKnown;
+	};
+	DevicePick radvPick = {};
+	DevicePick lvpPick = {};
+	DevicePick anyPick = {};
+	int haveRadv = 0;
+	int haveLvp = 0;
+	int haveAny = 0;
 	for (uint32_t i = 0; i < count; i++) {
 		VkPhysicalDeviceDriverProperties driver = {};
 		driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
@@ -697,15 +705,11 @@ main(int argc, char** argv)
 		props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
 		props2.pNext = &driver;
 		vkGetPhysicalDeviceProperties2(gpus[i], &props2);
-		bool cpu = props2.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
-		if (gpu != VK_NULL_HANDLE && cpu)
-			continue;
-		gpu = gpus[i];
-		properties = props2.properties;
-		driverKnown = 0;
-		driverID = 0;
+		DevicePick pick = {};
+		pick.gpu = gpus[i];
+		pick.properties = props2.properties;
 		if (props2.properties.apiVersion >= VK_API_VERSION_1_2)
-			driverKnown = 1;
+			pick.driverKnown = 1;
 		else {
 			uint32_t extensions = 0;
 			vkEnumerateDeviceExtensionProperties(gpus[i], NULL, &extensions, NULL);
@@ -715,16 +719,53 @@ main(int argc, char** argv)
 				vkEnumerateDeviceExtensionProperties(gpus[i], NULL, &extensions, names);
 				for (uint32_t n = 0; n < extensions; n++) {
 					if (strcmp(names[n].extensionName, "VK_KHR_driver_properties") == 0)
-						driverKnown = 1;
+						pick.driverKnown = 1;
 				}
 				free(names);
 			}
 		}
-		if (driverKnown)
-			driverID = driver.driverID;
-		if (!cpu)
-			break;
+		if (pick.driverKnown)
+			pick.driverID = driver.driverID;
+		if (!haveAny) {
+			anyPick = pick;
+			haveAny = 1;
+		}
+		if (pick.driverKnown && pick.driverID == VK_DRIVER_ID_MESA_RADV && !haveRadv) {
+			radvPick = pick;
+			haveRadv = 1;
+		}
+		if (pick.driverKnown && pick.driverID == VK_DRIVER_ID_MESA_LLVMPIPE && !haveLvp) {
+			lvpPick = pick;
+			haveLvp = 1;
+		}
 	}
+
+	DevicePick picks[2];
+	int pickCount = 0;
+	if (selftest) {
+		if (!haveRadv && !haveLvp)
+			die("no RADV or Lavapipe", VK_ERROR_INITIALIZATION_FAILED);
+		/* Same selection either way: RADV then Lavapipe when both exist.
+		 * One of them is used for both renders when the other is absent. */
+		picks[0] = haveRadv ? radvPick : lvpPick;
+		picks[1] = haveLvp ? lvpPick : radvPick;
+		pickCount = 2;
+	} else {
+		picks[0] = haveRadv ? radvPick : (haveLvp ? lvpPick : anyPick);
+		pickCount = 1;
+	}
+
+	const int kFrames = 100;
+	const int kBytes = kSize * kSize * 4;
+	uint8_t* shot[2] = {};
+	double passMs[2] = {};
+	int passTimed[2] = {};
+	int pixelStatus = 0;
+	for (int devicePass = 0; devicePass < pickCount; devicePass++) {
+	VkPhysicalDevice gpu = picks[devicePass].gpu;
+	VkPhysicalDeviceProperties properties = picks[devicePass].properties;
+	uint32_t driverID = picks[devicePass].driverID;
+	int driverKnown = picks[devicePass].driverKnown;
 
 	uint32_t family = 0;
 	uint32_t families = 0;
@@ -1041,8 +1082,6 @@ main(int argc, char** argv)
 			kSize * kSize * 4, 0, (void**)&draw.pixelsVram));
 	}
 
-	int pixelStatus = 0;
-	const int kFrames = 100;
 	VkQueryPool queryPool = VK_NULL_HANDLE;
 	int timestamps = properties.limits.timestampComputeAndGraphics;
 	if (selftest && timestamps) {
@@ -1056,68 +1095,26 @@ main(int argc, char** argv)
 		draw.queries = queryPool;
 	}
 	if (selftest) {
-		const int bytes = kSize * kSize * 4;
-		uint8_t* first = (uint8_t*)malloc((size_t)bytes);
-		uint8_t* second = (uint8_t*)malloc((size_t)bytes);
+		shot[devicePass] = (uint8_t*)malloc((size_t)kBytes);
 		for (int frame = 0; frame < kFrames; frame++) {
 			draw.queryBase = (uint32_t)frame * 2u;
 			draw_frame(&draw, matrix);
 			if (frame == 0)
-				memcpy(first, draw.pixels, (size_t)bytes);
+				memcpy(shot[devicePass], draw.pixels, (size_t)kBytes);
 		}
-		memcpy(second, draw.pixels, (size_t)bytes);
-		printf("scene %s\n", cube ? "cube" : "teapot");
-		printf("device %s\n", properties.deviceName);
-		printf("deviceType %u\n", (unsigned)properties.deviceType);
-		if (driverKnown)
-			printf("driverID %u\n", driverID);
-		else
-			printf("driverID unknown\n");
-		printf("frames %d\n", kFrames);
-		double ms = 0;
 		if (queryPool != VK_NULL_HANDLE) {
 			uint64_t* stamps = (uint64_t*)calloc((size_t)kFrames * 2u, sizeof(uint64_t));
 			VkResult read = vkGetQueryPoolResults(device, queryPool, 0,
 				(uint32_t)kFrames * 2u, (size_t)kFrames * 2u * sizeof(uint64_t),
 				stamps, sizeof(uint64_t),
 				VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-			if (read == VK_SUCCESS)
-				ms = median_ms(stamps, kFrames, properties.limits.timestampPeriod);
-			else
-				timestamps = 0;
+			if (read == VK_SUCCESS) {
+				passMs[devicePass] = median_ms(stamps, kFrames,
+					properties.limits.timestampPeriod);
+				passTimed[devicePass] = 1;
+			}
 			free(stamps);
 		}
-		if (timestamps)
-			printf("gpu ms per frame %.3f\n", ms);
-		else
-			printf("gpu ms per frame none\n");
-		if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) {
-			if (timestamps)
-				printf("lavapipe ms per frame %.3f\n", ms);
-			else
-				printf("lavapipe ms per frame none\n");
-		}
-		const int sampleAt[][2] = {
-			{24, 24}, {192, 80}, {192, 192}, {192, 134}, {90, 192}, {280, 192}
-		};
-		for (int i = 0; i < 6; i++) {
-			int x = sampleAt[i][0];
-			int y = sampleAt[i][1];
-			const uint8_t* p = first + (y * kSize + x) * 4;
-			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
-		}
-		int percent = 0;
-		int worst = 0;
-		int mismatch = r5_pixels_compare(first, second, (uint32_t)(kSize * kSize),
-			2, &percent, &worst);
-		printf("pixel delta max %d\n", worst);
-		if (mismatch) {
-			printf("pixels MISMATCH %d%%\n", percent);
-			pixelStatus = 2;
-		} else
-			printf("pixels ok\n");
-		free(first);
-		free(second);
 	} else {
 		if (be_app == NULL)
 			new BApplication("application/x-vnd.R5OS-VulkanTeapot");
@@ -1167,10 +1164,67 @@ main(int argc, char** argv)
 	if (queryPool != VK_NULL_HANDLE)
 		vkDestroyQueryPool(device, queryPool, NULL);
 	vkDestroyDevice(device, NULL);
+	free(familyInfo);
+	}
+	if (selftest) {
+		printf("scene %s\n", cube ? "cube" : "teapot");
+		printf("compared driverID %u %s and driverID %u %s\n",
+			picks[0].driverKnown ? picks[0].driverID : 0,
+			picks[0].properties.deviceName,
+			picks[1].driverKnown ? picks[1].driverID : 0,
+			picks[1].properties.deviceName);
+		printf("frames %d\n", kFrames);
+		int printedGpu = 0;
+		int printedLvp = 0;
+		for (int devicePass = 0; devicePass < pickCount; devicePass++) {
+			int radv = picks[devicePass].driverKnown
+				&& picks[devicePass].driverID == VK_DRIVER_ID_MESA_RADV;
+			int lvp = picks[devicePass].driverKnown
+				&& picks[devicePass].driverID == VK_DRIVER_ID_MESA_LLVMPIPE;
+			if (radv && !printedGpu) {
+				if (passTimed[devicePass])
+					printf("gpu ms per frame %.3f\n", passMs[devicePass]);
+				else
+					printf("gpu ms per frame none\n");
+				printedGpu = 1;
+			}
+			if (lvp && !printedLvp) {
+				if (passTimed[devicePass])
+					printf("lavapipe ms per frame %.3f\n", passMs[devicePass]);
+				else
+					printf("lavapipe ms per frame none\n");
+				printedLvp = 1;
+			}
+		}
+		if (!printedGpu)
+			printf("gpu ms per frame none\n");
+		if (!printedLvp)
+			printf("lavapipe ms per frame none\n");
+		const int sampleAt[][2] = {
+			{24, 24}, {192, 80}, {192, 192}, {192, 134}, {90, 192}, {280, 192}
+		};
+		for (int i = 0; i < 6; i++) {
+			int x = sampleAt[i][0];
+			int y = sampleAt[i][1];
+			const uint8_t* p = shot[0] + (y * kSize + x) * 4;
+			printf("pixel %d %d %02x%02x%02x%02x\n", x, y, p[0], p[1], p[2], p[3]);
+		}
+		int percent = 0;
+		int worst = 0;
+		int mismatch = r5_pixels_compare(shot[0], shot[1], (uint32_t)(kSize * kSize),
+			2, &percent, &worst);
+		printf("pixel delta max %d\n", worst);
+		if (mismatch) {
+			printf("pixels MISMATCH %d%%\n", percent);
+			pixelStatus = 2;
+		} else
+			printf("pixels ok\n");
+		free(shot[0]);
+		free(shot[1]);
+	}
 	vkDestroyInstance(instance, NULL);
 	free(mesh.vertices);
 	free(mesh.indices);
 	free(gpus);
-	free(familyInfo);
 	return pixelStatus;
 }

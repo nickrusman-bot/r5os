@@ -52,6 +52,20 @@ The isolation command list and the self-test indirect buffer are headers that th
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
 
+## 2026-11-10 - The picture compare uses two chosen devices
+
+`--selftest` no longer compares the first frame with the last frame of one device. It renders the same frame once on the device whose Vulkan driver id is `VK_DRIVER_ID_MESA_RADV` (3) and once on `VK_DRIVER_ID_MESA_LLVMPIPE` (13), then compares those two pictures. When only one of those ids is present, that device is selected for both renders. The line is `compared driverID <n> <name> and driverID <n> <name>`. A machine with neither id fails instead of picking some other device. The 100-frame median is still printed, as `gpu ms per frame` for RADV and `lavapipe ms per frame` for Lavapipe. `distro/BUILD` is unchanged.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`, 8393 targets, at 11:10 Europe/Amsterdam on 10 Nov 2026. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because of CRLF; that one line was skipped for the apply and the script in the tree was not changed.
+
+VirtualBox, new VDI, bridged. Terminal ran both self-tests. No panic was on screen. The guest was then shut down.
+
+Teapot: `compared driverID 13 llvmpipe (LLVM 21.1.8, 256 bits) and driverID 13 llvmpipe (LLVM 21.1.8, 256 bits)`, 100 frames, `lavapipe ms per frame 2.302`, `gpu ms per frame none`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)` and `(192,80)` `262e38ff`, `(192,192)` `853b16ff`, `(192,134)` `a64a1cff`, `(90,192)` `873c17ff`, `(280,192)` `692e11ff`.
+
+Cube: the same compared line, 100 frames, `lavapipe ms per frame 2.187`, `gpu ms per frame none`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)`, `(192,80)`, `(90,192)` and `(280,192)` `262e38ff`, `(192,192)` and `(192,134)` `5a280fff`.
+
+The 5625U was not used. RADV was not in the guest, so both sides of the compare are Lavapipe. The RADV side of the same selection has not run.
+
 ## 2026-11-10 - A cube is drawn and compared
 
 `vkcube` from Vulkan-Tools 1.4.367 draws into a window system this image does not have. It has no offscreen path. The cube is VulkanTeapot `--cube`: a unit cube through the same shader and the same view as the teapot. `--selftest` draws 100 frames, prints the median time as `gpu ms per frame`, and compares the first frame with the last. A pixel fails when any channel differs by more than 2. The line is `pixels ok` or `pixels MISMATCH n%`. When the device is a CPU device the same number is also printed as `lavapipe ms per frame`. If timestamps are missing the line is `gpu ms per frame none`. On a machine with only Lavapipe the two frames are both Lavapipe. When a GPU device is also present, the program still picks that device and compares two frames of it. It does not draw the second device. The stored six-pixel reference is no longer the pass test. The six sample pixels are still printed.
@@ -68,7 +82,7 @@ Teapot, device `llvmpipe (LLVM 21.1.8, 256 bits)`, device type 4, 100 frames: `g
 
 Cube, same device, 100 frames: `gpu ms per frame 2.213`, `lavapipe ms per frame 2.213`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)`, `(192,80)`, `(90,192)` and `(280,192)` `262e38ff`, `(192,192)` and `(192,134)` `5a280fff`.
 
-The 5625U was not used. RADV was not started. A run with both devices still does not compare them.
+The 5625U was not used. RADV was not started. That boot compared the first frame with the last frame of Lavapipe. The next section is the two-device compare.
 
 ## 2026-11-10 - The graphics card reports its own clocks
 
