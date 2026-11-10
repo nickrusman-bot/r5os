@@ -57,6 +57,7 @@ FILES = (
     "headers/private/r5gpu/r5_gpu.h",
     "headers/private/r5gpu/r5_span.h",
     "headers/private/r5gpu/r5_wait.h",
+    "headers/private/r5gpu/r5_vram_pool.h",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/Jamfile",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd_private.h",
     "headers/private/graphics/radeon_hd/radeon_hd.h",
