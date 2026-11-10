@@ -25,15 +25,29 @@ esac
 "$prog" "$@" >"$OUT" 2>&1 &
 pid=$!
 ready=0
+driver=
 i=0
 while [ "$i" -lt 30 ]; do
-	if hey "$APP" get Title of Window 0 >/dev/null 2>&1; then
+	if [ "$ready" -eq 0 ] && hey "$APP" get Title of Window 0 >/dev/null 2>&1; then
 		ready=1
+	fi
+	if [ -z "$driver" ] && [ -f "$OUT" ]; then
+		driver=$(sed -n 's/^window driver //p' "$OUT" | head -n 1)
+		if [ -z "$driver" ]; then
+			driver=$(sed -n 's/^Selected GPU [0-9]*: \(.*\), type: .*/\1/p' "$OUT" | head -n 1)
+		fi
+	fi
+	if [ "$ready" -eq 1 ] && [ -n "$driver" ]; then
 		break
 	fi
 	i=$((i + 1))
 	sleep 1
 done
+if [ -n "$driver" ]; then
+	echo "window driver $driver"
+else
+	echo "window driver FAIL"
+fi
 
 act() {
 	name=$1

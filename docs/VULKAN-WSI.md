@@ -88,7 +88,7 @@ FIFO waits for the display on the present thread, not on the window thread. The 
 
 ## 5. The fallback
 
-Lavapipe always reports that it can present to a view surface. That answer is true only for a software device. RADV's answer stays false until step 5 reads the `radeon_hd` setting `gpu_present` and the present path can be built. The query is `vkGetPhysicalDeviceSurfaceSupportKHR`. A program that picks a device by that query, which is what VulkanTeapot, `vkcube` and `r5-wsi-test` do, then opens Lavapipe.
+Lavapipe always reports that it can present to a view surface. That answer is true only for a software device. RADV's answer stays false until step 5 reads the `radeon_hd` setting `gpu_present` and the present path can be built. The query is `vkGetPhysicalDeviceSurfaceSupportKHR`. `r5-wsi-test` and `VulkanTeapot --window` then pick a device that supports the surface, in vkcube's order: discrete, integrated, virtual, then CPU. `vkcube` already uses that order.
 
 `gpu_present` defaults to false, so a window is on Lavapipe until the setting is turned on. `gpu_present_fail true` forces the RADV answer to false, so the fallback can be tested. It stays off except in that test.
 
@@ -281,6 +281,8 @@ Both keys live in the `radeon_hd` driver settings, with the other GPU keys. Both
 
 - `gpu_present true` lets RADV present into a window. Off, a program that asks for a view surface gets Lavapipe.
 - `gpu_present_fail true` makes the RADV present path fail, so the fallback can be shown. It is never on outside that test.
+
+The stick file is `distro/graphics/boot/radeon_hd`. It keeps the M6 lines `gfx9_vmids true`, `gfx9_vmid_per_file true` and `gfx9_pasid_map true`. `boot2.sh` writes those three lines again, then `gpu_present true` and `gpu_present_fail true`. Stick 34 left them out. The isolation stage then refused `VA_MAP` and `vkCreateDevice` returned -2.
 
 ## Before step 5
 

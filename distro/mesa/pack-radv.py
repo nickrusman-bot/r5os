@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Replace libvulkan_radeon.so in the RADV package. Same package name."""
+"""Replace libvulkan_radeon.so and bump the package revision.
+
+The previous file kept the name mesa_radv-25.3.6-1. An older copy of that
+same name, from 9 Nov, could be the one the image installed. The new name
+is mesa_radv-25.3.6-2, the same step Lavapipe took.
+"""
 import shutil
 import subprocess
 import sys
@@ -34,11 +39,12 @@ def drop_build_path(path: Path) -> None:
 def main() -> None:
     root = Path(sys.argv[1])
     out_dir = root / "distro" / "packages" / "x86_64"
-    dest = out_dir / "mesa_radv-25.3.6-1-x86_64.hpkg"
+    previous = out_dir / "mesa_radv-25.3.6-1-x86_64.hpkg"
+    dest = out_dir / "mesa_radv-25.3.6-2-x86_64.hpkg"
     stage = Path("/tmp/r5-radv-pkg")
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
-    subprocess.check_call([str(PKG), "extract", "-C", str(stage), str(dest)])
+    subprocess.check_call([str(PKG), "extract", "-C", str(stage), str(previous)])
     so = stage / "lib" / "libvulkan_radeon.so"
     shutil.copy2(SRC, so)
     subprocess.check_call([str(STRIP), "--strip-unneeded", str(so)])
@@ -52,9 +58,17 @@ def main() -> None:
         text = (boot / name).read_text(encoding="utf-8").replace("\r\n", "\n")
         (bindir / name).write_text(text, encoding="utf-8", newline="\n")
         (bindir / name).chmod(0o755)
-    dest.unlink()
+    info = stage / ".PackageInfo"
+    text = info.read_text(encoding="utf-8")
+    text = text.replace("version\t\t\t25.3.6-1", "version\t\t\t25.3.6-2")
+    text = text.replace("mesa_radv = 25.3.6-1", "mesa_radv = 25.3.6-2")
+    if "25.3.6-2" not in text:
+        raise SystemExit("package version was not bumped")
+    info.write_text(text, encoding="utf-8")
+    if dest.exists():
+        dest.unlink()
     subprocess.check_call([str(PKG), "create", "-C", str(stage), str(dest)])
-    print("updated", dest, dest.stat().st_size)
+    print("created", dest, dest.stat().st_size)
 
 
 if __name__ == "__main__":

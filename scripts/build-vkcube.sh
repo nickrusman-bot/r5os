@@ -50,6 +50,28 @@ if strings "$STAGE/vkcube" | grep -F -q /home/nickr; then
 	exit 1
 fi
 
+TEA="$REPO/distro/apps/vulkanteapot"
+"$CXX" -std=c++17 -O2 -DVK_USE_PLATFORM_VIEW_RFIVE \
+	-fmacro-prefix-map="$REPO/"= \
+	-I"$HEADERS" -I"$SYS/develop/headers" -I"$TEA" \
+	-c -o "$STAGE/VulkanTeapot.o" "$TEA/VulkanTeapot.cpp"
+"$CXX" -std=c++17 -O2 -DVK_USE_PLATFORM_VIEW_RFIVE \
+	-fmacro-prefix-map="$REPO/"= \
+	-I"$HEADERS" -I"$SYS/develop/headers" -I"$TEA" \
+	-c -o "$STAGE/VulkanWindow.o" "$TEA/VulkanWindow.cpp"
+"$CXX" -std=c++17 -O2 \
+	-fmacro-prefix-map="$REPO/"= \
+	-I"$SYS/develop/headers" -I"$TEA" \
+	-c -o "$STAGE/r5_pixels.o" "$TEA/r5_pixels.c"
+"$CXX" -o "$STAGE/VulkanTeapot" \
+	"$STAGE/VulkanTeapot.o" "$STAGE/VulkanWindow.o" "$STAGE/r5_pixels.o" \
+	-L"$SYS/develop/lib" -lvulkan -lbe
+"$STRIP" "$STAGE/VulkanTeapot"
+if strings "$STAGE/VulkanTeapot" | grep -F -q /home/nickr; then
+	echo "VulkanTeapot contains a host path" >&2
+	exit 1
+fi
+
 repack() {
 	local hpkg="$1"
 	local root="$2"
@@ -83,6 +105,8 @@ PY
 
 add_script() {
 	mkdir -p "$1/bin"
+	cp -a "$STAGE/VulkanTeapot" "$1/bin/VulkanTeapot"
+	chmod 755 "$1/bin/VulkanTeapot"
 	python3 - "$REPO/distro/graphics/src/bin/r5-wsi-window-test/r5-wsi-window-test.sh" "$1/bin/r5-wsi-window-test.sh" <<'PY'
 import pathlib, sys
 text = pathlib.Path(sys.argv[1]).read_text().replace("\r\n", "\n").replace("\r", "\n")

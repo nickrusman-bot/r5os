@@ -1,0 +1,11 @@
+gfx9_ring true
+gfx9_kernel true
+gfx9_irq true
+gfx9_gart true
+gpu_render true
+gpu_selftest true
+gfx9_wc_gtt false
+gfx9_vmids true
+gfx9_vmid_per_file true
+gfx9_pasid_map true
+gpu_present true

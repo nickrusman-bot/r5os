@@ -60,6 +60,19 @@ windows() {
 windows VulkanTeapot "$tea"
 windows vkcube "$cube"
 
+if [ "$boot" -eq 1 ]; then
+	if grep "window driver" "$tea" | grep -q "RADV"; then
+		say 0 "window driver VulkanTeapot"
+	else
+		say 1 "window driver VulkanTeapot"
+	fi
+	if grep "window driver" "$cube" | grep -q "RADV"; then
+		say 0 "window driver vkcube"
+	else
+		say 1 "window driver vkcube"
+	fi
+fi
+
 span_fail=0
 spans=0
 while read -r line; do

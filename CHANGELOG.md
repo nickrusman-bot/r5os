@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The image installs the RADV that offers a Vulkan window
+
+Stick 34, boot 1 (`generated/boot-5625u-34`), ran `wsi clear ok` on llvmpipe. With `VK_LOADER_DRIVERS_SELECT='*radeon*'`, `r5-wsi-test` printed `wsi clear FAIL instance`. `vkcube` listed RADV and still drew with llvmpipe. The syslog has no `RADV view surface` line. The RADV package was still named `mesa_radv-25.3.6-1`, so the image could install the 9 Nov copy, which does not export `VK_RFIVE_view_surface`. The package is now `mesa_radv-25.3.6-2`, the same revision step Lavapipe took. `pack-radv.py` extracts the old package, replaces `libvulkan_radeon.so`, and writes the new name. The pin and the image check require that name and reject `mesa_radv-25.3.6-1`.
+
+`r5-wsi-test` and `VulkanTeapot --window` pick a device that supports the surface in vkcube's order: discrete, integrated, virtual, then CPU. `r5-wsi-window-test.sh` prints `window driver <name>` before the window lines. Boot 1 of `check.sh` requires that line to contain RADV for VulkanTeapot and for vkcube.
+
+The stick settings file is `distro/graphics/boot/radeon_hd`. It keeps the M6 lines `gfx9_vmids true`, `gfx9_vmid_per_file true` and `gfx9_pasid_map true`. Stick 34 omitted them. The isolation stage then refused `VA_MAP` and `vkCreateDevice` returned -2. `boot2.sh` writes those three lines again, then `gpu_present true` and `gpu_present_fail true`.
+
+`jam -q @r5-raw` from `cursor/m7-stick-35` finished at 22:18 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 1193 targets, `mesa_exit=0`. The image's `system/packages` contains `mesa_radv-25.3.6-2-x86_64.hpkg` and does not contain `mesa_radv-25.3.6-1`. `libvulkan_radeon.so` from that package contains `VK_RFIVE_view_surface`, and the package version is `25.3.6-2`. VirtualBox has not been booted. The stick is not written. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - Vulkan windows can use the GPU
 
 RADV presents a view surface by drawing into a device image and copying into a host-visible buffer. That is Mesa's buffer image (`wsi_configure_buffer_image`), which the existing CPU image parameters select because RADV does not set `wants_linear`. The M6 write-combining boot never passed, so the buffer is ordinary host-coherent memory. It is not a write-combined mapping, and there is no second mapping. The present waits for RADV's blit queue before it reads that buffer. Lavapipe still uses a CPU image.
