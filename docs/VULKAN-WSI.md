@@ -54,7 +54,7 @@ The patch adds the platform the way Metal is added in that tag. Metal is the pat
 
 `copy_surface_create_info` stays as it is. The new terminator passes `VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE` in its type list, the way Metal passes its own type at line 1737.
 
-That name list is a filter. Lavapipe does not export `VK_RFIVE_view_surface` until the Mesa surface exists, so the loader also adds the name, revision 1, to the instance extensions it reports itself. That is `loader_get_icd_loader_instance_extensions` in `loader/loader.c`, the same way the loader reports an extension it implements. `vulkaninfo` then prints the name for Lavapipe.
+That name list is a filter. The loader passes on the names a driver reports. It does not add `VK_RFIVE_view_surface` itself. Lavapipe does not export the name until the Mesa surface exists, so `vulkaninfo` does not print it until that step.
 
 Until Khronos publishes the enum, R5's copy of `vk_icd.h` carries `VK_ICD_WSI_PLATFORM_VIEW_RFIVE` after `VK_ICD_WSI_PLATFORM_UBM`, and `VkIcdSurfaceViewRFIVE` next to `VkIcdSurfaceMetal`. The loader and Mesa are built against that same header so the number matches. The public structure type in `vulkan_r5.h` is the other placeholder. Both go away together when the registered values exist. A release does not ship either placeholder.
 

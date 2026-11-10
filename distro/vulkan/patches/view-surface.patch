@@ -193,46 +193,6 @@ diff -ruN a/loader/generated/vk_loader_extensions.h b/loader/generated/vk_loader
      uint8_t ext_validation_features;
      uint8_t ext_headless_surface;
      uint8_t ext_surface_maintenance1;
-diff -ruN a/loader/loader.c b/loader/loader.c
---- a/loader/loader.c	2026-10-30 15:54:36.000000000 +0100
-+++ b/loader/loader.c	2026-11-10 16:53:03.113794448 +0100
-@@ -29,6 +29,13 @@
-  */
- 
- #include "loader.h"
-+// SPDX-SnippetBegin
-+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-+// SPDX-License-Identifier: Apache-2.0
-+#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
-+#include <vulkan/vulkan_r5.h>
-+#endif
-+// SPDX-SnippetEnd
- 
- #include <errno.h>
- #include <inttypes.h>
-@@ -1474,6 +1481,22 @@
-         goto out;
-     }
- 
-+#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
-+    // SPDX-SnippetBegin
-+    // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-+    // SPDX-License-Identifier: Apache-2.0
-+    // Lavapipe does not export this name until the view surface exists in Mesa.
-+    // The loader reports it, the same way it reports an extension it implements.
-+    const VkExtensionProperties view_surface_extension_info[] = {
-+        {VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME, VK_RFIVE_VIEW_SURFACE_SPEC_VERSION}};
-+    res = loader_add_to_ext_list(inst, inst_exts, sizeof(view_surface_extension_info) / sizeof(VkExtensionProperties),
-+                                 view_surface_extension_info);
-+    if (res == VK_ERROR_OUT_OF_HOST_MEMORY) {
-+        goto out;
-+    }
-+    // SPDX-SnippetEnd
-+#endif
-+
- out:
-     return res;
- }
 diff -ruN a/loader/wsi.c b/loader/wsi.c
 --- a/loader/wsi.c	2026-10-30 15:54:36.000000000 +0100
 +++ b/loader/wsi.c	2026-11-10 16:53:03.112392735 +0100
