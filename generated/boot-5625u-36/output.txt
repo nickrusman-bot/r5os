@@ -1,0 +1,41 @@
+
+Welcome to the Haiku shell.
+
+~> cat /boot/home/wsi.txt /boot/home/win-teapot.txt /boot/home/win-vkcube.txt
+wsi clear ok llvmpipe (LLVM 21.1.8, 256 bits) 64x64 frames 100
+window driver llvmpipe (LLVM 21.1.8, 256 bits)
+window resize ok
+window resize ok
+window resize ok
+window workspace ok
+window workspace ok
+window minimise ok
+window restore ok
+window close ok
+device lost no
+window driver llvmpipe (LLVM 21.1.8, 256 bits)
+window resize ok
+window resize ok
+window resize ok
+window workspace ok
+window workspace ok
+window minimise ok
+window restore ok
+window close ok
+device lost no
+~> check.sh
+boot 1
+FAIL wsi clear ok AMD Radeon Graphics
+PASS window VulkanTeapot
+PASS window vkcube
+FAIL window driver VulkanTeapot
+FAIL window driver vkcube
+PASS cpu span ms under 2000
+PASS eop 955
+PASS GFX9 ring contract verified
+PASS GFX9 scratch 0xdeadbeef
+PASS fence landed
+PASS k2 ok gart
+PASS gpu lost before window tests
+FAIL
+~> 
