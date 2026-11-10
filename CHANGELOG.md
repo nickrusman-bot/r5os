@@ -6,7 +6,7 @@
 
 The view-surface code no longer keeps one process-wide device or one process-wide visible swapchain. The queue mask is stored per device. The view bitmap is read and written under the surface lock.
 
-Not yet: the VirtualBox lines from `r5-wsi-window-test.sh`. RADV in a window, the Ryzen 5 5625U, and `vkcube` stay later steps. There is no What's new section and `distro/BUILD` stays the same.
+The first VirtualBox boot of the combined image reached `VulkanTeapot --window` and stopped in the debugger: `base == NULL || base->type == obj_type`, stack `run_window + 0xa9c` inside `vkCreateGraphicsPipelines`. `swap_create` read the render pass before the `Swap` was cleared, so the first pipeline was given stack garbage. The struct is cleared before that first call. The installed `r5-wsi-window-test.sh` also had CR line endings and bash rejected it (`$'\r': command not found`). The script in the package is LF. The window lines are still not in. RADV in a window, the Ryzen 5 5625U, and `vkcube` stay later steps. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-10 - Lavapipe draws a Vulkan window
 

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: GPL-3.0-or-late
  *
  * VulkanTeapot --window. The picture is a swapchain in an ordinary
  * window. --selftest does not call this file.
@@ -407,6 +407,7 @@ run_window(int cube)
 	vkGetDeviceQueue(device, family, 0, &queue);
 
 	Swap swap;
+	swap_clear(&swap);
 	if (swap_create(device, gpu, surface, &swap) != VK_SUCCESS) {
 		vkDestroyDevice(device, NULL);
 		vkDestroySurfaceKHR(instance, surface, NULL);

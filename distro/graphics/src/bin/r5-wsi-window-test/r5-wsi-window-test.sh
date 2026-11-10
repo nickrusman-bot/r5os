@@ -2,7 +2,8 @@
 # Drives VulkanTeapot --window with hey. One line per action.
 APP=application/x-vnd.R5OS-VulkanTeapot
 OUT=/tmp/r5-wsi-window-app.txt
-VulkanTeapot --window >"$OUT" 2>&1 &
+TEAPOT=${TEAPOT:-VulkanTeapot}
+"$TEAPOT" --window >"$OUT" 2>&1 &
 pid=$!
 ready=0
 i=0
