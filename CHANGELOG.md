@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - The indirect-buffer headers are copied into the build
+
+`scripts/apply-radeon.py` copies `r5_selftest_ib.h` and `r5_isolation_ib.h`. This branch adds those headers, so the copy belongs here: without it a jam of this branch stops because the self-test cannot include its header. The copy was first made on `cursor/gpu-m6-workload` and moved here so that each pull request builds on its own, in merge order.
+
 ## 2026-11-10 - The command-list check follows the function, not the line
 
 A packet site is now the file, the function, and the order of packet lines in that function. Adding a comment above a packet no longer makes the checker say the packet was not emitted. The three words that already ran are back as they were: the stage `DMA_DATA` control is `0x60200000`, and the two chained indirect buffers in stage P are `6` and `0x68` without bit 23. Linux `soc15d.h` does not name destination select 2. The checker allows that one word and rejects any other select 2. Whether select 2 should be 3 waits for its own boot. Bit 23 stays allowed on an indirect buffer and is no longer required when the VMID field is 0, because the chained buffers ran without it and no cited line requires it there. The ring contents are unchanged.

@@ -63,6 +63,8 @@ FILES = (
     "src/bin/r5gpuinfo/r5gpuinfo.cpp",
     "src/bin/r5-gpu-selftest/Jamfile",
     "src/bin/r5-gpu-selftest/r5-gpu-selftest.cpp",
+    "src/bin/r5-gpu-selftest/r5_selftest_ib.h",
+    "src/bin/r5-gpu-isolation/r5_isolation_ib.h",
     "src/bin/r5-gpu-isolation/Jamfile",
     "src/bin/r5-gpu-isolation/r5-gpu-isolation.cpp",
 )
