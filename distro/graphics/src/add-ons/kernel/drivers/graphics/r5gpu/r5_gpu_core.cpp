@@ -342,7 +342,7 @@ gpu_retire_thread(void* data)
 }
 
 
-static vint32 sRetireWakes = 0;
+static int32 sRetireWakes = 0;
 
 
 extern "C" void
