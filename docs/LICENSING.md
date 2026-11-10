@@ -178,6 +178,7 @@ Checked file by file on 2026-10-31. A header was added only where the file is on
 |---|---|---|
 | `distro/ui/` | MIT | `libr5ui.so` and `<R5UI.h>`. Copyright 2026 R5OS Contributors. Applications link this library, so the C++ is MIT |
 | `distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/` (`r5_gpu_core.cpp`, `r5_gpu_backend.h`, `r5_gpu_internal.h`) | MIT | The GPU core and the backend interface. Copyright 2026 R5OS Contributors. See `docs/GPU-ARCHITECTURE.md`, "GPU Driver Kit". The AMD file `radeon_hd/r5_gpu.cpp` stays GPL-3.0-or-later |
+| `distro/graphics/headers/private/r5gpu/r5_vram_pool.h` | MIT | The visible-VRAM bump and the reserved-range check. Copyright 2026 R5OS Contributors |
 | `distro/icons/` except `standard_icons.inc`, `lock_icons.inc`, `TRACKER_ICON_NOTICE.txt`, and `HAIKU_ICON_NOTICE.txt` | MIT | `libr5icons.so` and `<R5Icons.h>`. Copyright 2026 R5OS Contributors. Applications link this library, so the C++ is MIT. The picture bytes are not relicensed |
 | `distro/icons/standard_icons.inc`, `TRACKER_ICON_NOTICE.txt` | Open Tracker | Unmodified Tracker HVIF. The notice file stays |
 | `distro/icons/lock_icons.inc`, `HAIKU_ICON_NOTICE.txt` | MIT | Unmodified Haiku `Action_Login` and `Action_Logout`. The notice file stays |

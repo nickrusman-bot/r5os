@@ -297,6 +297,10 @@ struct radeon_shared_info {
 	uint32			gfx9_text_used;
 	/* gfxhub aperture high + 1. Copied from the device table. */
 	uint8			aperturePlus;
+	/* Ranges the VRAM bump skips. 0 is the PSP TMR, 1 is discovery,
+	 * 2 is AtomBIOS vram_usagebyfirmware. A zero byte count is unused. */
+	uint64			vram_hole_offset[3];
+	uint64			vram_hole_bytes[3];
 // SPDX-SnippetEnd
 };
 

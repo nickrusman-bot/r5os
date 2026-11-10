@@ -10,6 +10,12 @@ A packet site is now the file, the function, and the order of packet lines in th
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
 
+## 2026-11-10 - The VRAM pool stays out of the reserved ranges
+
+The visible-VRAM bump skips three holes. The PSP trusted-memory region stays the 4 MiB page at window offset `0xc00000`. A request of exactly that size and alignment may take it, which is the existing `SETUP_TMR` claim, so that command still names the same page. Every other request, including one that would have started inside it, continues at `0x1000000`. Discovery is the top 74 KiB of real VRAM (Linux `DISCOVERY_TMR_OFFSET` 64 KiB plus `DISCOVERY_TMR_SIZE` 10 KiB). On Raven `CONFIG_MEMSIZE` is unused, so that hole is recorded only when the register was read and it is larger than the BAR. The 5625U window is the 256 MiB BAR and does not contain the discovery region at the top of the larger carveout. `vram_usagebyfirmware` is the AtomBIOS master-data index 11 (format 2): `start_address_in_kb` and `used_by_firmware_in_kb`. The ring order, the registers and the PSP command bytes are unchanged.
+
+Host, 10 Nov 2026: the same check, compiled with `g++ -std=c++17 -Wall -Wextra -Werror`, printed `ok vram holes`. It walks 2000 pages from `0x7e9000` on a 256 MiB pool, refuses a 4 MiB allocation that would cover the PSP page, accepts the 4 MiB claim at `0xc00000`, skips a firmware range parsed from a built AtomBIOS image, and refuses a page in the discovery hole of a 32 MiB card. `scripts/test-r5-gpu.cpp` carries that check. The rest of that program still stops because `generated/gpu-m4/HARDCODE.md` is not in this tree. Not booted.
+
 ## 2026-11-10 - The GPU bookkeeping lives in the core
 
 `gpu_free`, the end-of-pipe retire, the wait, the fault retire, buffer mapping, and the empty read and write hooks moved from `r5_gpu.cpp` into `r5_gpu_core.cpp`. The backend table no longer has `bo_map`. `fault_take` and `map_vram` were added at the end. The comments that the split had dropped are back on the functions they describe, including the lock rule above `gpu_ibs_mapped` and the render-node paragraph. `docs/LICENSING.md` lists the three MIT files in `r5gpu/`. The ring contract is unchanged.
