@@ -39,8 +39,14 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - MIDI 2.0 support
 
 ### Graphics
-- OpenGL through Mesa, and Vulkan through Lavapipe, on the CPU.
-- On AMD Renoir laptops (such as the Ryzen 5 5625U), Vulkan programs can run on the GPU through RADV, as an experimental opt-in. On the reference laptop the GPU draws the same picture as the software renderer, pixel for pixel, and several programs can use it at once, each in its own address space. Programs still draw offscreen; Vulkan in a window is the next step. The desktop itself is still drawn by the CPU. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md) and [`docs/GPU-ARCHITECTURE.md`](docs/GPU-ARCHITECTURE.md).
+**Not just any port.** We've done it the Haiku and BeOS way: a native layer between Vulkan and R5.
+
+- Native Vulkan support \*
+- Native OpenGL, running on top of Vulkan \*
+- Your existing Haiku apps keep working, unchanged
+- Software rendering as a fallback
+
+\* In active development. Hardware support is still limited. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
@@ -49,7 +55,7 @@ The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`
 
 ## Not there yet
 
-- No GPU acceleration for the desktop. The desktop is still drawn by the CPU, and Vulkan cannot draw in a window yet.
+- No GPU acceleration for the desktop. The desktop is still drawn by the CPU, and Vulkan in a window runs on the CPU, not yet on the GPU.
 - One graphical session at a time. There is no fast user switching and no guest account.
 - The bundled browser (WebPositive) is weak for today's web.
 - Sleep, backlight and HiDPI on the reference laptop are still open.

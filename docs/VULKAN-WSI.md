@@ -67,7 +67,7 @@ A successful present makes the image appear in the view, and stay there when app
 - Lavapipe renders into a CPU image (`wsi_configure_cpu_image`).
 - RADV renders into a device image and copies into a host-visible buffer (`wsi_configure_buffer_image`), the blit Mesa already uses for software presentation. Write-combined memory for that buffer is used only if the M6 write-combining boot has passed. Otherwise the buffer is ordinary memory, and the step 5 report says so.
 
-Each swapchain image has its own `BBitmap`. Present copies that image's pixels into its bitmap. It does not share one bitmap across images, so a later present does not overwrite pixels app_server is still reading. Acquire hands out the image after the last one presented, and it does not hand out the bitmap that is currently the view bitmap. Present checks that before the copy.
+Each swapchain image has its own `BBitmap`. Present copies that image's pixels into its bitmap. It does not share one bitmap across images, so a later present does not overwrite pixels app_server is still reading. Acquire hands out the image after the last one presented, and it does not hand out the bitmap that is currently the view bitmap. Present checks that before the copy. The graphics-queue mask is kept per device, and the view bitmap is read and written under the surface lock.
 
 The present thread is whichever thread called `vkQueuePresentKHR`. That thread locks the window with `BMessenger::LockTargetWithTimeout` for at most one frame. The messenger was taken at surface creation. The window thread is not asked to wait. If the caller is already the window thread, the lock succeeds at once, which is how Haiku's looper works. The view is touched only after that lock has succeeded.
 
