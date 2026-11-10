@@ -88,7 +88,7 @@ FIFO waits for the display on the present thread, not on the window thread. The 
 
 ## 5. The fallback
 
-Lavapipe always reports that it can present to a view surface. That answer is true only for a software device. RADV's answer stays false until step 5 reads the `radeon_hd` setting `gpu_present` and the present path can be built. The query is `vkGetPhysicalDeviceSurfaceSupportKHR`. `r5-wsi-test` and `VulkanTeapot --window` then pick a device that supports the surface, in vkcube's order: discrete, integrated, virtual, then CPU. `vkcube` already uses that order.
+Lavapipe always reports that it can present to a view surface. That answer is true only for a software device. RADV lists `VK_KHR_surface` only when `RADV_USE_WSI_PLATFORM` is set. That define includes `VK_USE_PLATFORM_VIEW_RFIVE`, the same way Lavapipe does. RADV's answer stays false until step 5 reads the `radeon_hd` setting `gpu_present` and the present path can be built. The query is `vkGetPhysicalDeviceSurfaceSupportKHR`. `r5-wsi-test` and `VulkanTeapot --window` then pick a device that supports the surface, in vkcube's order: discrete, integrated, virtual, then CPU. `vkcube` already uses that order.
 
 `gpu_present` defaults to false, so a window is on Lavapipe until the setting is turned on. `gpu_present_fail true` forces the RADV answer to false, so the fallback can be tested. It stays off except in that test.
 
