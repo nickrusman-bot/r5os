@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - Interrupt counts reject a kernel address
+
+`R5_GPU_IH_COUNTS` and `R5_GPU_RING_FILL` copied the caller buffer with `user_memcpy` and did not check `is_user_address_range`. A program could pass a kernel address. Both calls now use `gpu_copy_in` and `gpu_copy_out`, the same path as the other GPU calls. The structs are unchanged.
+
+An empty visit of `ih_handler` still writes `IH_RB_RPTR`. When both reads find nothing and `sMsi` is false, the handler returns `B_UNHANDLED_INTERRUPT` so a shared legacy line can reach another device. An MSI empty visit stays handled.
+
+Not yet proven. VirtualBox has no Radeon. `jam -q @r5-raw` from `cursor/gpu-frame-wait` finished at 20:16 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 1193 targets, `mesa_exit=0`. That image was not booted. The proof is still step 5, boot 1, on the Ryzen 5 5625U: `cpu span ms` for 100 frames under 2000, the end-of-pipe count at least 100, and the K2 lines. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-10 - The interrupt handler rearms when the ring looks empty
 
 An empty visit of `ih_handler` used to return before it wrote `IH_RB_RPTR`. With `RPTR_REARM` the interrupt unit then sends no further interrupt, and the retire thread wakes from its one-second poll. The handler now writes that register even when the first read shows nothing, then reads the write pointer once more. If the writeback word still matches the read pointer, it reads `IH_RB_WPTR` over MMIO. The user fence and the interrupt writeback are read through the carve-out (`r5_gfx9_vram_cpu`). Until `map_carveout` has run, those reads use the previous mapping. No second mapping of that page is added. The fence packet, the ring words, and the GPU addresses are unchanged. The one-second semaphore is unchanged.

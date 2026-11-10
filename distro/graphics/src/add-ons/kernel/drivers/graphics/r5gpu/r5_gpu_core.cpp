@@ -2067,12 +2067,10 @@ static status_t
 gpu_ring_fill(void* buffer, size_t length)
 {
 	r5_gpu_ring_fill out;
-	if (buffer == NULL || length < sizeof(out))
-		return B_BAD_VALUE;
-	memset(&out, 0, sizeof(out));
-	if (user_memcpy(&out, buffer, sizeof(out)) != B_OK)
-		return B_BAD_ADDRESS;
-	if (out.version != 1 || out.size < sizeof(out))
+	status_t status = gpu_copy_in(buffer, length, &out, sizeof(out));
+	if (status != B_OK)
+		return status;
+	if (out.version != 1)
 		return B_BAD_VALUE;
 	out.waits = 0;
 	out.max_fill = 0;
@@ -2085,9 +2083,7 @@ gpu_ring_fill(void* buffer, size_t length)
 			(unsigned long)out.waits, (unsigned long)out.max_fill,
 			(unsigned long)out.dwords);
 	}
-	if (user_memcpy(buffer, &out, sizeof(out)) != B_OK)
-		return B_BAD_ADDRESS;
-	return B_OK;
+	return gpu_copy_out(buffer, length, &out, sizeof(out));
 }
 
 
@@ -2098,18 +2094,14 @@ static status_t
 gpu_ih_counts(void* buffer, size_t length)
 {
 	r5_gpu_ih_counts out;
-	if (buffer == NULL || length < sizeof(out))
-		return B_BAD_VALUE;
-	memset(&out, 0, sizeof(out));
-	if (user_memcpy(&out, buffer, sizeof(out)) != B_OK)
-		return B_BAD_ADDRESS;
-	if (out.version != 1 || out.size < sizeof(out))
+	status_t status = gpu_copy_in(buffer, length, &out, sizeof(out));
+	if (status != B_OK)
+		return status;
+	if (out.version != 1)
 		return B_BAD_VALUE;
 	r5_gfx9_ih_counts(&out.msi, &out.early, &out.eop);
 	out.wake = r5_gpu_retire_wakes();
-	if (user_memcpy(buffer, &out, sizeof(out)) != B_OK)
-		return B_BAD_ADDRESS;
-	return B_OK;
+	return gpu_copy_out(buffer, length, &out, sizeof(out));
 }
 
 

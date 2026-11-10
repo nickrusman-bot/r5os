@@ -457,6 +457,7 @@ ih_handler(void* data)
 	sMsiCount++;
 	uint32 rptr = sIhRptr;
 	bool woke = false;
+	bool found = false;
 	/* Pass 0 walks what the writeback already shows. An empty pass still
 	 * writes IH_RB_RPTR, because RPTR_REARM sends the next interrupt only
 	 * after that write. Pass 1 reads the write pointer once more. */
@@ -471,8 +472,13 @@ ih_handler(void* data)
 			ih_set_rptr(rptr);
 			continue;
 		}
+		/* Shared legacy line. The read pointer is already written.
+		 * Another device on this line still needs the interrupt. */
+		if (!found && !sMsi)
+			return B_UNHANDLED_INTERRUPT;
 		return woke ? B_INVOKE_SCHEDULER : B_HANDLED_INTERRUPT;
 	}
+	found = true;
 	uint32 walked = 0;
 	while (rptr != wptr && walked < (kIhBytes / 32)) {
 		r5_gfx9_ih_entry entry = r5_gfx9_ih_parse(sIhRing + rptr);
