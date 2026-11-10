@@ -15,6 +15,8 @@
 #include <string.h>
 #include <syslog.h>
 
+#include <OS.h>
+
 #include <Autolock.h>
 
 #include <AutoDeleter.h>
@@ -121,9 +123,19 @@ AppServer::MessageReceived(BMessage* message)
 			const char* targetScreen = message->GetString("target");
 
 			if (version != AS_PROTOCOL_VERSION) {
+				// SPDX-SnippetBegin
+				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+				// SPDX-License-Identifier: GPL-3.0-or-later
+				// Name the sender, so a refused program can be found in the log.
+				team_id team = message->ReturnAddress().Team();
+				team_info info;
+				if (get_team_info(team, &info) != B_OK)
+					strlcpy(info.args, "?", sizeof(info.args));
 				syslog(LOG_ERR, "Application for user %" B_PRId32 " does not "
-					"support the current server protocol (%" B_PRId32 ").\n",
-					userID, version);
+					"support the current server protocol (%" B_PRId32 "), "
+					"team %" B_PRId32 " (%s).\n", userID, version, team,
+					info.args);
+				// SPDX-SnippetEnd
 			} else {
 				desktop = _FindDesktop(userID, targetScreen);
 				if (desktop == NULL) {

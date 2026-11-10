@@ -32,6 +32,12 @@ Host test, 10 Nov 2026: `python3 scripts/check-pm4.py` printed `ok pm4 48 stream
 
 VirtualBox, same image, new VDI, bridged. The welcome window came up, Try R5 reached Sign in, and Sign in reached the desktop: Tracker, Deskbar, and the home icons. No panic was on screen. Not a GPU test. Lavapipe was not started. The 5625U was not used.
 
+## 2026-11-10 - app_server names a program it refuses
+
+On the first boot of a fresh VirtualBox disk, the desktop hung after Sign in. The syslog showed `Application for user 0 does not support the current server protocol (0)` twenty times right after the VirtualBox share was mounted, and once to three times on later boots that worked. The line did not say which program it was; the start order points at VBoxTray, not proven. The line now adds the sender's team id and command line. No other change.
+
+Tested: `jam -q app_server` built. Not booted; the next VirtualBox first boot shows the name.
+
 ## 2026-11-09 - The boot disk no longer shows the ladybug under the R5 mark
 
 The boot volume still asked for `R_BootVolumeIcon`, the nightly drive with the ladybug, and the R5 mark only covered part of it; the ladybug showed around the mark. The well-known boot disk in `IconCache.cpp` now uses `kR5DriveIcon`, the same drive without the ladybug that other disks already use, and falls back to the resource only when the vector fails. The mark in `Pose.cpp` is a square from (4, 36) to (26, 58) in the 64-unit icon, on the front of the drive, in place of the stretched 14×16 rectangle at (10, 40). The Get Info header has the drive without a mark, as before only the pose draws it. `distro/BUILD` stays 10052.
