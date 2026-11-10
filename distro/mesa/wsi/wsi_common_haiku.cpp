@@ -41,6 +41,7 @@
 
 #include <OS.h>
 
+#include <assert.h>
 #include <new>
 #include <pthread.h>
 #include <string.h>
@@ -53,13 +54,15 @@ struct r5_surface {
 	uint32_t width;
 	uint32_t height;
 	bigtime_t refresh;
+	BBitmap *view_bitmap;
 
 	r5_surface()
 		: window(),
 		  view(NULL),
 		  width(1),
 		  height(1),
-		  refresh(16667)
+		  refresh(16667),
+		  view_bitmap(NULL)
 	{
 		icd.base.platform = VK_ICD_WSI_PLATFORM_VIEW_RFIVE;
 		icd.view = NULL;
@@ -86,6 +89,8 @@ struct r5_swapchain {
 	bigtime_t refresh;
 	bigtime_t last_present;
 	bool retrace_failed;
+	/* The image after the last one presented. Zero until the first present. */
+	uint32_t next_image;
 };
 
 static struct wsi_device *g_wsi;
@@ -175,7 +180,12 @@ static VkResult
 r5_get_support(VkIcdSurfaceBase *icd, struct wsi_device *wsi,
 	uint32_t queueFamilyIndex, VkBool32 *supported)
 {
-	bool graphics = wsi == g_wsi && queueFamilyIndex < 64
+	/*
+	 * Lavapipe sets wsi->sw. RADV does not. RADV stays false until step 5
+	 * reads gpu_present. A graphics queue on the software device is the
+	 * only yes this step gives.
+	 */
+	bool graphics = wsi->sw && wsi == g_wsi && queueFamilyIndex < 64
 		&& (g_graphics & ((uint64_t)1 << queueFamilyIndex)) != 0;
 	*supported = graphics ? VK_TRUE : VK_FALSE;
 	return VK_SUCCESS;
@@ -319,13 +329,20 @@ r5_acquire_next_image(struct wsi_swapchain *wsi_chain,
 			pthread_mutex_unlock(&chain->mu);
 			return VK_ERROR_SURFACE_LOST_KHR;
 		}
-		for (uint32_t i = 0; i < chain->base.image_count; i++) {
-			if (!chain->images[i].held) {
-				chain->images[i].held = true;
-				*image_index = i;
-				pthread_mutex_unlock(&chain->mu);
-				return VK_SUCCESS;
-			}
+		uint32_t count = chain->base.image_count;
+		uint32_t start = chain->next_image;
+		for (uint32_t n = 0; n < count; n++) {
+			uint32_t i = (start + n) % count;
+			if (chain->images[i].held)
+				continue;
+			/* Still on screen. The next present must not write this bitmap. */
+			if (chain->images[i].bitmap != NULL
+				&& chain->images[i].bitmap == chain->surface->view_bitmap)
+				continue;
+			chain->images[i].held = true;
+			*image_index = i;
+			pthread_mutex_unlock(&chain->mu);
+			return VK_SUCCESS;
 		}
 		if (info->timeout == 0) {
 			pthread_mutex_unlock(&chain->mu);
@@ -425,6 +442,17 @@ r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 		return VK_ERROR_SURFACE_LOST_KHR;
 	}
 
+	/*
+	 * The bitmap on the view is the one app_server is reading. Copying into
+	 * it would replace the frame that is still on screen.
+	 */
+	assert(image->bitmap != surface->view_bitmap);
+	if (image->bitmap == surface->view_bitmap) {
+		r5_release_image(chain, image_index);
+		pthread_mutex_unlock(&chain->present_mu);
+		return VK_SUCCESS;
+	}
+
 	r5_copy_rows(&image->base, image->bitmap, chain->width, chain->height);
 
 	BWindow *window = NULL;
@@ -480,6 +508,8 @@ r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 	BRect dst = surface->view->Bounds();
 	surface->view->SetViewBitmap(image->bitmap, src, dst, B_FOLLOW_ALL, 0);
 	surface->view->Invalidate();
+	surface->view_bitmap = image->bitmap;
+	chain->next_image = (image_index + 1) % chain->base.image_count;
 	g_visible = chain;
 	/*
 	 * BView::Sync() calls CheckOwnerLock() and stops in the debugger if the
@@ -512,6 +542,7 @@ r5_swapchain_destroy(struct wsi_swapchain *wsi_chain,
 	BWindow *window = NULL;
 	if (g_visible == chain && r5_lock_window(surface, chain->refresh, &window)) {
 		surface->view->ClearViewBitmap();
+		surface->view_bitmap = NULL;
 		window->Unlock();
 		g_visible = NULL;
 	} else if (g_visible == chain) {

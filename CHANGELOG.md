@@ -8,7 +8,11 @@ The first present unlocked the window and then called `BView::Sync`. That stops 
 
 `jam -q @r5-raw` from `cursor/m7-lavapipe-window` finished at 18:52 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 1160 targets, `mesa_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. No jam was running while the image was copied. VirtualBox, one fresh boot of that image. `vulkaninfo --summary | grep RFIVE` printed `VK_RFIVE_view_surface                  : extension revision 1` on the earlier boot of this branch, which already had the same extension. `r5-wsi-test` printed `wsi clear ok llvmpipe (LLVM 21.1.8, 256 bits) 64x64 frames 100`.
 
-Not yet: RADV presenting into a window, the Ryzen 5 5625U, resize and workspace changes, and `vkcube`. The structure-type number is still the placeholder `1000999000`. Nothing is released with it. The Khronos request stays unposted. There is no What's new section and `distro/BUILD` stays the same.
+Support is true only when `wsi->sw` is set, which Lavapipe sets and RADV does not. RADV stays false until step 5 reads `gpu_present`. Acquire returns the image after the last one presented, and it skips the bitmap that is the view bitmap. Present asserts that its bitmap is not that view bitmap before it copies. The 18:52 image still acquired the lowest free image, so each present rewrote bitmap 0 while that bitmap was still on screen.
+
+`jam -q @r5-raw` from the same branch finished at 19:09 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 1160 targets, `mesa_exit=0`, with `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. No jam was running while the image was copied. VirtualBox, one fresh boot. `r5-wsi-test` printed `wsi clear ok llvmpipe (LLVM 21.1.8, 256 bits) 64x64 frames 100`.
+
+Not yet: RADV presenting into a window, the Ryzen 5 5625U, resize and workspace changes, and `vkcube`. The structure-type number is still the placeholder `1000999000`. Nothing is released with it. The Khronos request is posted as KhronosGroup/Vulkan-Docs#2851 (author ID `RFIVE`, extension 732) and is not merged. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-10 - Vulkan lists the view surface extension
 
