@@ -156,7 +156,7 @@ The DMA packet and the check both use `kK2Pattern` (`0xA5A5A5A5`). The CPU first
 
 The ring is 1024 dwords. The write pointer keeps counting. Dword `i` of a submission is stored at `(wptr + i) & (dwords - 1)`. The doorbell and the poll slot receive that continuing write pointer. Space is `ringDwords - (wptr - rptr) - 1`. The read pointer is the 64-bit writeback at the fence page plus 256 when that word is not zero, otherwise `CP_RB0_RPTR`. The first fill of 914 dwords is not rewritten. The host test checks the twelve indexes from 1022: 1022, 1023, then 0 through 9.
 
-`radeon_hd_uninit` calls `r5_gfx9_kernel_stop` before any `delete_area`. Stop halts the command processor (ME, PFP and CE) and the MEC, writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the same TLB invalidate, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the system area and the pool mapping.
+`radeon_hd_uninit` calls `r5_gfx9_kernel_stop` before any `delete_area`. Stop halts the command processor (ME, PFP and CE) and the MEC, writes the saved `VM_CONTEXT0_CNTL` when K2 stored one, issues the same TLB invalidate, clears `IH_RB_CNTL` and `CP_INT_CNTL_RING0`, removes the interrupt handler, turns MSI off, and then deletes the system area and the pool mapping. Linux v6.18 also stops the RLC, disables all 16 VM contexts, and asks the PSP to release the TMR and its ring. That comparison is `docs/GPU-M6.md`. The stop order here is unchanged.
 
 These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not the default.
 

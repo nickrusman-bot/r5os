@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-10 - VirtualBox ran both frame checks on Lavapipe
+
+`jam -q @r5-raw` from `cursor/gpu-m6-workload` `bdad93130f` finished at 13:07 Europe/Amsterdam on 10 Nov 2026, `jam_exit=0`, 6254 targets, `mesa_exit=0`. The same run printed `mesa_packages_ok`, `ok package paths` and `ok egl vendor`. Two earlier jams of this tree stopped: the first because `r5_vram_pool.h` was not in the apply list, the second because `r5_gpu_core.cpp` did not include `r5_wait.h`. A third jam stopped because `r5_selftest_ib.h` was not copied. The header copy is now on `cursor/gpu-m6-tools` and the wait include on `cursor/gpu-m6-core`, so each pull request builds on its own in merge order.
+
+VirtualBox booted that image once, bridged, and reached the desktop. `VulkanTeapot --selftest` printed `scene teapot`, `compared driverID 13 llvmpipe` twice, `frames 100`, `lavapipe ms per frame 3.504`, `gpu span ms 550.942 cpu span ms 555.129`, `radeon ms per frame none`, `pixel delta max 0`, `pixels ok lavapipe only` and `pixels ok max 2 share 0.0% limit 1%`. `VulkanTeapot --cube --selftest` printed `scene cube`, the same driver pair, `frames 100`, `lavapipe ms per frame 3.420`, `gpu span ms 55.034 cpu span ms 456.030`, `radeon ms per frame none`, `pixel delta max 0`, `pixels ok lavapipe only` and `pixels ok max 2 share 0.0% limit 1%`. The guest was shut down afterwards. This is Lavapipe against Lavapipe. The 5625U was not used, and there is no RADV number. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-10 - The frame compare states its tolerance and its time
+
+A pixel may differ by 2 in a channel. At most 1% of the pixels may be over that. The line is `pixels ok max 2 share 0.3% limit 1%`. Lavapipe compared with itself also prints `pixels ok lavapipe only`. `radeon ms per frame` and `lavapipe ms per frame` are each printed once. `gpu span ms` is the first top-of-pipe timestamp to the last bottom-of-pipe timestamp over the 100 frames, beside the CPU time of that same loop. A GPU span larger than the CPU span means the timestamp frequency is wrong. The timestamps are masked with the queue's `timestampValidBits`. The pool is reset with `vkCmdResetQueryPool` in the first command buffer. `docs/GPU-M6.md` records that Haiku `system_shutdown()` does not call the driver, so `r5_gfx9_kernel_stop()` does not run on shutdown or reboot. No stop code was added. The package `vulkanteapot-1.0.0-1-x86_64.hpkg` was rebuilt from `distro/apps/vulkanteapot/VulkanTeapot.cpp` and `r5_pixels.c` with the Haiku cross compiler and stripped. It contains no `/home/nickr`.
+
+Host, 10 Nov 2026, Europe/Amsterdam: `g++ -std=c++17 scripts/test-r5-pixels.cpp` printed `ok pixels`. `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
 ## 2026-11-10 - The page-type flush uses the physical map
 
 `vm_set_area_page_memory_type()` looks up each page and runs `clflush` on that page in the kernel physical map. It does not flush the area's own address, so a user clone is not a user pointer under SMAP. The line size is CPUID leaf 1, EBX bits 15:8, times 8. Linux tag v6.12 was read for the two passport facts: `soc15.c` `soc15_get_xclk()` lines 326-330 return 10000 for MP1 12.0.0 and 12.0.1, and `amdgpu_kms.c` line 863 stores that times 10. `amdgpu_discovery_set_ip_blocks()` (line 2425) has no `CHIP_RENOIR` case. `generated/gpu-m4/HARDCODE.md` row 5 names the same clock lines. Not booted. QEMU with SMAP was not run.
@@ -51,6 +63,38 @@ The isolation command list and the self-test indirect buffer are headers that th
 `scripts/read-stick-logs.py` reads the General UDisk and copies the self-test, syslog, session log and radeon_hd settings into `generated/boot-5625u-<n>/`. It does not write the stick. The reader was checked against the raw image on 10 Nov 2026: the volume root lists `home` and `system`, and `system/settings/bashrc` reads back. No stick was plugged in, so it did not copy a boot log.
 
 Host test, 10 Nov 2026, Europe/Amsterdam: `python3 scripts/check-pm4.py` printed `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
+## 2026-11-10 - The picture compare uses two chosen devices
+
+`--selftest` no longer compares the first frame with the last frame of one device. It renders the same frame once on the device whose Vulkan driver id is `VK_DRIVER_ID_MESA_RADV` (3) and once on `VK_DRIVER_ID_MESA_LLVMPIPE` (13), then compares those two pictures. When only one of those ids is present, that device is selected for both renders. The line is `compared driverID <n> <name> and driverID <n> <name>`. A machine with neither id fails instead of picking some other device. The 100-frame median is still printed, as `gpu ms per frame` for RADV and `lavapipe ms per frame` for Lavapipe. `distro/BUILD` is unchanged.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`, 8393 targets, at 11:10 Europe/Amsterdam on 10 Nov 2026. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because of CRLF; that one line was skipped for the apply and the script in the tree was not changed.
+
+VirtualBox, new VDI, bridged. Terminal ran both self-tests. No panic was on screen. The guest was then shut down.
+
+Teapot: `compared driverID 13 llvmpipe (LLVM 21.1.8, 256 bits) and driverID 13 llvmpipe (LLVM 21.1.8, 256 bits)`, 100 frames, `lavapipe ms per frame 2.302`, `gpu ms per frame none`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)` and `(192,80)` `262e38ff`, `(192,192)` `853b16ff`, `(192,134)` `a64a1cff`, `(90,192)` `873c17ff`, `(280,192)` `692e11ff`.
+
+Cube: the same compared line, 100 frames, `lavapipe ms per frame 2.187`, `gpu ms per frame none`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)`, `(192,80)`, `(90,192)` and `(280,192)` `262e38ff`, `(192,192)` and `(192,134)` `5a280fff`.
+
+The 5625U was not used. RADV was not in the guest, so both sides of the compare are Lavapipe. The RADV side of the same selection has not run.
+
+## 2026-11-10 - A cube is drawn and compared
+
+`vkcube` from Vulkan-Tools 1.4.367 draws into a window system this image does not have. It has no offscreen path. The cube is VulkanTeapot `--cube`: a unit cube through the same shader and the same view as the teapot. `--selftest` draws 100 frames, prints the median time as `gpu ms per frame`, and compares the first frame with the last. A pixel fails when any channel differs by more than 2. The line is `pixels ok` or `pixels MISMATCH n%`. When the device is a CPU device the same number is also printed as `lavapipe ms per frame`. If timestamps are missing the line is `gpu ms per frame none`. On a machine with only Lavapipe the two frames are both Lavapipe. When a GPU device is also present, the program still picks that device and compares two frames of it. It does not draw the second device. The stored six-pixel reference is no longer the pass test. The six sample pixels are still printed.
+
+The host check `g++ -std=c++17 scripts/test-r5-pixels.cpp` printed `ok pixels` on 10 Nov 2026. Equal frames pass. A channel delta of 2 passes. One pixel of four that differs by 3 fails at 25 percent. The package `vulkanteapot-1.0.0-1-x86_64.hpkg` was rebuilt with the Haiku cross compiler and stripped. It contains no `/home/nickr`. `distro/BUILD` is unchanged. The GFX9 ring stays 1024 dwords. The stop order is unchanged.
+
+Shutdown against Linux v6.18 is written in `docs/GPU-M6.md` and is not code. `amdgpu_device_fini_hw` disables every interrupt, then each block's `hw_fini`. For GC 9.3 that halts the command processor and the MEC, stops the RLC, and the GMC and PSP blocks disable all 16 VM contexts and release the TMR and the PSP ring. `r5_gfx9_kernel_stop` already halts ME, PFP, CE and the MEC, clears the interrupt registers, and unmaps the carveout. It does not stop the RLC, it does not zero every VM context, and it does not send the PSP a destroy-TMR command. Those steps stay out until a 5625U boot.
+
+`jam -q @r5-raw` finished with `jam_exit=0` and `mesa_exit=0`, 8393 targets, at about 10:36 Europe/Amsterdam on 10 Nov 2026. The artwork check in `apply-overlay.sh` still fails on this Windows checkout because of CRLF; that one line was skipped for the apply and the script in the tree was not changed.
+
+VirtualBox, new VDI, bridged. Try R5, then Sign in as `user` with an empty password, reached the desktop. Terminal ran both self-tests. The Deskbar listed Tracker and Terminal. The guest clock read 9:54 AM, about an hour behind this machine. No panic was on screen. The guest was then shut down (`poweroff`).
+
+Teapot, device `llvmpipe (LLVM 21.1.8, 256 bits)`, device type 4, 100 frames: `gpu ms per frame 2.307`, `lavapipe ms per frame 2.307`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)` and `(192,80)` `262e38ff`, `(192,192)` `853b16ff`, `(192,134)` `a64a1cff`, `(90,192)` `873c17ff`, `(280,192)` `692e11ff`.
+
+Cube, same device, 100 frames: `gpu ms per frame 2.213`, `lavapipe ms per frame 2.213`, `pixel delta max 0`, `pixels ok`. Samples `(24,24)`, `(192,80)`, `(90,192)` and `(280,192)` `262e38ff`, `(192,192)` and `(192,134)` `5a280fff`.
+
+The 5625U was not used. RADV was not started. That boot compared the first frame with the last frame of Lavapipe. The next section is the two-device compare.
 
 ## 2026-11-10 - The graphics card reports its own clocks
 
