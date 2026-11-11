@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The lock screen has the Sign in look
+
+The lock screen (`LockWindow.cpp`) still had the old Haiku form: a plain password field, a gray Unlock button, buttons without symbols, and the plain desktop color behind it. It now has the Sign in look: the R5 waves behind it (`SignInBackground`), the pebble with "Locked" and "Your apps stay open.", the signed-in account with the People picture and "@login · role", the password field with the eye and "Enter password", the blue Unlock button, and the clock, Log out, Restart and Shut down on the bottom row. The helpers both windows use (mockup pixels, fonts, the account picture) are in `distro/login/SignInLook.h`.
+
+Also fixed:
+
+- `R5_GLYPH_LOG_OUT` (6) is new in `libr5icons.so`, for Log out.
+- The stem of the power symbol was not in the middle of its ring: `StrokeArc()` places an arc half a pixel off from a line. Every ring in the glyphs is now one open polygon in the same coordinates as the lines.
+- Showing the password with the eye kept the dots: Haiku's `BTextView::HideTyping(false)` does not redraw the text, and `HideTyping(true)` deletes it. `BPasswordControl::SetPasswordRevealed()` puts the text and the selection back after the switch.
+
+Tested in QEMU (KVM, headless, the image as a snapshot), image built with `jam -q @r5-raw` at 19:30 on 11 Nov 2026: signing in as `user` with an empty password reaches the desktop; Deskbar, Lock screen opens the new lock screen; typing "abc" and clicking the eye shows "abc" and the crossed-out eye; the power stem is centered. Not tested: Unlock, Log out from the lock screen, a wrong password, dark mode, VirtualBox, the 5625U.
+
 ## 2026-11-11 - Sign in looks like the mockup
 
 The sign-in window after Cursor's round still differed from `docs/design/login-mockup/sign-in.html`: a plain blue desktop behind it, a gray Sign in button, Restart and Shut down without symbols, and a jagged R5 pebble. The pebble was jagged because `LogoView` rendered it at `44 * unit` pixels and then drew it into a view one pixel larger, which stretches it without smoothing. The avatars were stretched the same way.
