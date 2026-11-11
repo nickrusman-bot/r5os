@@ -305,12 +305,15 @@ LoginApp::TryLogin(BMessage* message)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-		if (status == B_PERMISSION_DENIED
-			&& (password == NULL || password[0] == '\0')) {
-			reply.AddString("text", "Please enter your password.");
+		if (status == B_PERMISSION_DENIED) {
+			const char* entered = message->GetString("password");
+			if (entered == NULL || entered[0] == '\0') {
+				reply.AddString("text", "Please enter your password.");
+			} else
+				reply.AddString("text", "That password is not right.");
 		} else
 // SPDX-SnippetEnd
-		if (status == B_PERMISSION_DENIED || status == ENOENT)
+		if (status == ENOENT)
 			reply.AddString("text", "That password is not right.");
 		else if (status == B_NAME_NOT_FOUND || status == B_TIMED_OUT)
 			reply.AddString("text", "Could not start the desktop.");
