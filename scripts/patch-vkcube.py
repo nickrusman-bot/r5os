@@ -336,6 +336,32 @@ static void demo_run(struct demo *demo) {
         """        exit(1);
 """,
     )
+    once(
+        CUBE,
+        """    if (!demo->initialized) {
+        return;
+    }
+
+    // Don't do anything if the surface has zero size""",
+        """    if (!demo->initialized) {
+        return;
+    }
+#if defined(VK_USE_PLATFORM_VIEW_RFIVE)
+    /* Quitting, or a view of size 0, does not build another swapchain. */
+    if (demo->quit)
+        return;
+    {
+        VkSurfaceCapabilitiesKHR r5Caps;
+        VkResult r5Cap = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+            demo->gpu, demo->surface, &r5Caps);
+        if (r5Cap != VK_SUCCESS || r5Caps.currentExtent.width == 0
+            || r5Caps.currentExtent.height == 0)
+            return;
+    }
+#endif
+
+    // Don't do anything if the surface has zero size""",
+    )
     text = CUBE.read_text(encoding="utf-8")
     if "demo_r5_create" not in text:
         text += r"""

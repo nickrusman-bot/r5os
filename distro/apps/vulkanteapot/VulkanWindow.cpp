@@ -646,6 +646,18 @@ window_draw(void* data)
 		VkResult acquired = vkAcquireNextImageKHR(device, swap->chain,
 			UINT64_C(1000000000), loop->imageReady, VK_NULL_HANDLE, &index);
 		if (acquired == VK_ERROR_OUT_OF_DATE_KHR || acquired == VK_SUBOPTIMAL_KHR) {
+			if (!host->Lock())
+				break;
+			bool stop = host->Stopping();
+			host->Unlock();
+			if (stop)
+				break;
+			VkSurfaceCapabilitiesKHR again;
+			if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &again)
+					!= VK_SUCCESS)
+				break;
+			if (again.currentExtent.width == 0 || again.currentExtent.height == 0)
+				continue;
 			swap_destroy(device, swap);
 			if (swap_create(device, gpu, surface, swap) != VK_SUCCESS)
 				break;
@@ -723,6 +735,18 @@ window_draw(void* data)
 			break;
 		}
 		if (presented == VK_SUBOPTIMAL_KHR || presented == VK_ERROR_OUT_OF_DATE_KHR) {
+			if (!host->Lock())
+				break;
+			bool stop = host->Stopping();
+			host->Unlock();
+			if (stop)
+				break;
+			VkSurfaceCapabilitiesKHR again;
+			if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &again)
+					!= VK_SUCCESS)
+				break;
+			if (again.currentExtent.width == 0 || again.currentExtent.height == 0)
+				continue;
 			swap_destroy(device, swap);
 			if (swap_create(device, gpu, surface, swap) != VK_SUCCESS)
 				break;

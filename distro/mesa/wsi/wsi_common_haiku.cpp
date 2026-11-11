@@ -740,6 +740,20 @@ r5_create_swapchain(VkIcdSurfaceBase *icd, VkDevice device,
 		return result;
 	}
 
+	/*
+	 * RADV rounds a buffer's memory requirement up to 16 bytes
+	 * (radv_get_buffer_memory_requirements). The CPU image path asks
+	 * for stride 1 and size 1, so a size that is not a multiple of 16
+	 * asserts in wsi_create_buffer_blit_context. The prime path in
+	 * wsi_common_drm.c uses a 256-byte row stride and a 4096-byte
+	 * size. 4096 is a multiple of 16, so linear_size is at least the
+	 * requirement for every extent.
+	 */
+	if (chain->base.blit.type == WSI_SWAPCHAIN_BUFFER_BLIT) {
+		wsi_configure_buffer_image(&chain->base, info, 256, 4096,
+			&chain->base.image_info);
+	}
+
 	chain->images = (struct r5_image *)vk_zalloc(allocator,
 		sizeof(chain->images[0]) * count, 8,
 		VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);

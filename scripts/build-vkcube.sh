@@ -17,8 +17,10 @@ SYS="$SRCROOT/sysroot"
 HEADERS="$SRCROOT/vulkan-headers-r5/install/include"
 WORK="$SRCROOT/vkcube-r5"
 STAGE="$SRCROOT/vkcube-out"
-TOOLS="$REPO/distro/packages/x86_64/vulkan_tools-1.4.367-1-x86_64.hpkg"
-TEAPOT="$REPO/distro/packages/x86_64/vulkanteapot-1.0.0-1-x86_64.hpkg"
+TOOLS_SRC="$REPO/distro/packages/x86_64/vulkan_tools-1.4.367-1-x86_64.hpkg"
+TEAPOT_SRC="$REPO/distro/packages/x86_64/vulkanteapot-1.0.0-1-x86_64.hpkg"
+TOOLS="$REPO/distro/packages/x86_64/vulkan_tools-1.4.367-2-x86_64.hpkg"
+TEAPOT="$REPO/distro/packages/x86_64/vulkanteapot-1.0.0-2-x86_64.hpkg"
 
 if [[ ! -f "$CUBE_SRC/cube.c" ]]; then
 	if [[ ! -f "$TARBALL" ]]; then
@@ -73,15 +75,16 @@ if strings "$STAGE/VulkanTeapot" | grep -F -q /home/nickr; then
 fi
 
 repack() {
-	local hpkg="$1"
-	local root="$2"
-	local hook="$3"
+	local src="$1"
+	local dest="$2"
+	local root="$3"
+	local hook="$4"
 	rm -rf "$root"
 	mkdir -p "$root"
-	"$PKG" extract -C "$root" "$hpkg"
+	"$PKG" extract -C "$root" "$src"
 	"$hook" "$root"
-	rm -f "$hpkg"
-	"$PKG" create -C "$root" "$hpkg"
+	rm -f "$dest"
+	"$PKG" create -C "$root" "$dest"
 }
 
 add_vkcube() {
@@ -99,6 +102,7 @@ if old in text:
 if "cmd:vkcube" not in text:
     text = text.replace("\tcmd:vulkaninfo = 1.4.367\n",
                         "\tcmd:vulkaninfo = 1.4.367\n\tcmd:vkcube = 1.4.367\n", 1)
+text = text.replace("version\t\t\t1.4.367-1", "version\t\t\t1.4.367-2")
 path.write_text(text)
 PY
 }
@@ -113,8 +117,16 @@ text = pathlib.Path(sys.argv[1]).read_text().replace("\r\n", "\n").replace("\r",
 pathlib.Path(sys.argv[2]).write_text(text)
 PY
 	chmod 755 "$1/bin/r5-wsi-window-test.sh"
+	python3 - "$1/.PackageInfo" <<'PY'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+text = text.replace("version\t\t\t1.0.0-1", "version\t\t\t1.0.0-2")
+text = text.replace("vulkanteapot = 1.0.0-1", "vulkanteapot = 1.0.0-2")
+path.write_text(text)
+PY
 }
 
-repack "$TOOLS" "$SRCROOT/vulkan-tools-pkg" add_vkcube
-repack "$TEAPOT" "$SRCROOT/teapot-pkg" add_script
+repack "$TOOLS_SRC" "$TOOLS" "$SRCROOT/vulkan-tools-pkg" add_vkcube
+repack "$TEAPOT_SRC" "$TEAPOT" "$SRCROOT/teapot-pkg" add_script
 echo "packed vkcube and the window script"
