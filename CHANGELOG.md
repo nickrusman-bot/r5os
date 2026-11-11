@@ -19,7 +19,7 @@ Already in R5, so not applied again:
 - `7637e637e4` and `ca923659b4` (bandwidth arithmetic). `Transfer.cpp` in the tree already uses a 32-bit count and adds the high-speed term. The file was not copied.
 - `b6060b0ddb` (half a second, and a last success must not panic). `Object::WaitForIdle` already waits half a second and checks the reference count after the loop. The two-second wait was not taken.
 
-Not tested yet in this section. QEMU has no USB audio interface and no camera.
+Tested in QEMU (TCG, no KVM, window) at 21:24 on 11 Nov 2026. The controller is qemu-xhci. A USB keyboard (0627:0001), a USB mouse (0627:0001) and a USB storage stick (46f4:0001, 8 MiB, empty) enumerated. QEMU listed them at 480 Mb/s, 480 Mb/s and 5000 Mb/s. They were removed and added again. The serial log probed them a second time, including the stick, and it has no panic. Tracker and Deskbar started. `usb_audiotest` was not run: QEMU has no USB audio interface and no camera. Not tested on the 5625U or the X1 Carbon. No extra stick.
 
 ## 2026-11-11 - The lock screen has the Sign in look
 
