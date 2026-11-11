@@ -10,7 +10,7 @@ Also fixed:
 - The stem of the power symbol was not in the middle of its ring: `StrokeArc()` places an arc half a pixel off from a line. Every ring in the glyphs is now one open polygon in the same coordinates as the lines.
 - Showing the password with the eye kept the dots: Haiku's `BTextView::HideTyping(false)` does not redraw the text, and `HideTyping(true)` deletes it. `BPasswordControl::SetPasswordRevealed()` puts the text and the selection back after the switch.
 
-Tested in QEMU (KVM, headless, the image as a snapshot), image built with `jam -q @r5-raw` at 19:30 on 11 Nov 2026: signing in as `user` with an empty password reaches the desktop; Deskbar, Lock screen opens the new lock screen; typing "abc" and clicking the eye shows "abc" and the crossed-out eye; the power stem is centered. Not tested: Unlock, Log out from the lock screen, a wrong password, dark mode, VirtualBox, the 5625U.
+Tested in QEMU (KVM, headless, the image as a snapshot), image built with `jam -q @r5-raw` at 19:30 on 11 Nov 2026: signing in as `user` with an empty password reaches the desktop; Deskbar, Lock screen opens the new lock screen; typing "abc" and clicking the eye shows "abc" and the crossed-out eye; the power stem is centered. The owner then tested by hand in QEMU (window, TCG, the 20:23 image as a snapshot): Unlock, a wrong password, and Log out from the lock screen work. Not tested: dark mode, VirtualBox, the 5625U.
 
 ## 2026-11-11 - Sign in looks like the mockup
 
