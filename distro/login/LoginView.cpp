@@ -393,19 +393,14 @@ LoginView::_AttemptLogin()
 	}
 
 	const char* pw = fPasswordControl->Text();
-	if (pw == NULL || pw[0] == '\0') {
-		fInfoView->SetText("Please enter your password.");
-		fInfoView->SetHighColor(ui_color(B_FAILURE_COLOR));
-		fPasswordControl->MakeFocus(true);
-		return;
-	}
+	if (pw == NULL)
+		pw = "";
 
 	BMessage* message = new BMessage(kAttemptLogin);
 	message->AddString("login", fSelectedLogin.String());
 	message->AddString("password", pw);
 	_EnableControls(false);
-	fInfoView->SetText("Verifying credentials...");
-	fInfoView->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+	fInfoView->SetText("");
 	be_app->PostMessage(message, NULL, this);
 }
 

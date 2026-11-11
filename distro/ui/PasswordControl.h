@@ -37,6 +37,7 @@ public:
 	void						SetPasswordRevealed(bool revealed);
 
 	virtual	void				AttachedToWindow();
+	virtual	void				FrameResized(float newWidth, float newHeight);
 	virtual	void				Draw(BRect updateRect);
 	virtual	void				MouseDown(BPoint where);
 	virtual	void				MakeFocus(bool focus = true);

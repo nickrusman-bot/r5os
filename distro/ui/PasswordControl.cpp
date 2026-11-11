@@ -36,8 +36,13 @@ public:
 			B_FOLLOW_NONE, B_WILL_DRAW | B_NAVIGABLE),
 		fParent(parent)
 	{
+		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		rgb_color tc = ui_color(B_DOCUMENT_TEXT_COLOR);
+		SetFontAndColor(be_plain_font, B_FONT_ALL, &tc);
+		SetWordWrap(false);
 		HideTyping(true);
-		MakeResizable(false);
+		MakeResizable(true);
 	}
 
 	virtual void KeyDown(const char* bytes, int32 numBytes)
@@ -201,6 +206,16 @@ void
 BPasswordControl::AttachedToWindow()
 {
 	BControl::AttachedToWindow();
+	_LayoutChildren();
+}
+
+
+void
+BPasswordControl::FrameResized(float newWidth, float newHeight)
+{
+	(void)newWidth;
+	(void)newHeight;
+	BControl::FrameResized(newWidth, newHeight);
 	_LayoutChildren();
 }
 
