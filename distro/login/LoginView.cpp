@@ -420,6 +420,7 @@ LoginView::MessageReceived(BMessage* message)
 			break;
 		}
 		case kLoginOk:
+			fPasswordControl->SetText("");
 			if (Window() != NULL)
 				Window()->Hide();
 			break;
@@ -603,6 +604,7 @@ LoginView::_AttemptLogin()
 	BMessage* message = new BMessage(kAttemptLogin);
 	message->AddString("login", fSelectedLogin.String());
 	message->AddString("password", password);
+	fPasswordControl->SetText("");
 	_EnableControls(false);
 	fInfoView->SetText("");
 	be_app->PostMessage(message, NULL, this);

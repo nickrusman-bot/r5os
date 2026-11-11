@@ -257,7 +257,7 @@ listView->AddItem(new BAppearanceKit::BUserListItem(
 
 ## Password control
 
-`BAppearanceKit::BPasswordControl` is a password field with an integrated show/hide eye toggle button. The header is `<PasswordControl.h>`.
+`BAppearanceKit::BPasswordControl` is a password field with an integrated show/hide eye toggle button. The header is `<PasswordControl.h>`. `Archive()` and `Instantiate()` keep whether the password is shown. They do not keep the password. The archived class name is `BAppearanceKit::BPasswordControl`.
 
 ```cpp
 #include <PasswordControl.h>

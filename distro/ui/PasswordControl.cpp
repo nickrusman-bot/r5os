@@ -157,13 +157,11 @@ BPasswordControl::BPasswordControl(BMessage* archive)
 	for (int32 index = 0; index < 4; index++)
 		_reserved[index] = 0;
 
-	const char* text = NULL;
 	bool revealed = false;
-	if (archive != NULL) {
-		archive->FindString("r5:text", &text);
+	if (archive != NULL)
 		archive->FindBool("r5:revealed", &revealed);
-	}
-	_Init(text);
+	// The password is never taken from an archive.
+	_Init(NULL);
 	if (revealed)
 		SetPasswordRevealed(true);
 }
@@ -187,14 +185,15 @@ BPasswordControl::Instantiate(BMessage* archive)
 status_t
 BPasswordControl::Archive(BMessage* archive, bool deep) const
 {
-	status_t status = BControl::Archive(archive, deep);
+	// deep would archive the child text control, and that control stores
+	// its text. The password stays out of every archive.
+	(void)deep;
+	status_t status = BControl::Archive(archive, false);
 	if (status != B_OK || fData == NULL)
 		return status;
 
 	if (archive->ReplaceString("class", kPasswordControlClassName) != B_OK)
 		status = archive->AddString("class", kPasswordControlClassName);
-	if (status == B_OK)
-		status = archive->AddString("r5:text", Text());
 	if (status == B_OK)
 		status = archive->AddBool("r5:revealed", fData->revealed);
 
@@ -337,8 +336,8 @@ BPasswordControl::_Init(const char* text)
 		BLayoutBuilder::Group<>(this, B_HORIZONTAL, 4)
 			.Add(fData->textControl)
 			.Add(fData->eyeButton);
-	} else if (text != NULL) {
-		fData->textControl->SetText(text);
+	} else {
+		fData->textControl->SetText("");
 	}
 
 	if (fData->textControl->TextView() != NULL)
