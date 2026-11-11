@@ -192,8 +192,9 @@ The first choice of source per area:
 | Wi-Fi | air/OS, RenkuOS | the Wi-Fi preferences panel and Deskbar applet, auto-join (air/OS); MediaTek, QCA6174 and OpenBSD wlan fixes (RenkuOS); AX210 and MT7922 (air/OS) | choose per driver |
 | Bluetooth | air/OS | Low Energy, HID keyboards and mice, A2DP, preferences | |
 | USB audio and MIDI | RenkuOS | `usb_audio`, `multi_audio`, `usb_midi` fixes | compare with R5's own USB audio and MIDI 2.0 work first |
+| Audio device in the Deskbar, USB webcams | air/OS | choosing the output and input from the Deskbar volume control; the UVC part of `usb_webcam` | RenkuOS has neither; it only has Haiku's own groundwork |
 | Touchpads and touch screens | RenkuOS | `i2c_hid`, `i2c_elan`, `i2c_goodix`, `pch_i2c` | |
-| USB host controllers, TCP | RenkuOS | EHCI, UHCI, OHCI and xHCI fixes; TCP fixes | |
+| USB host controllers, TCP | RenkuOS | EHCI, UHCI, OHCI and xHCI fixes; TCP fixes | the first USB round is in R5 (9 Nov 2026); see "Import state" |
 | Interface Kit and Tracker | RenkuOS | public `BAboutWindow`, live control-look switch, live file-type icons in Tracker | additive, the BeOS way |
 | Security | RenkuOS | `restrict_syscalls()`, a per-team syscall filter | |
 | GPU | reference only | V3D and the Vulkan window path (haiku-pi), the Mali, Adreno and NVIDIA drivers (air/OS) | input for M7, the Graphics Kit and later vendors. R5 keeps its own GPU interface |
@@ -209,7 +210,7 @@ The user went through the features of air/OS and RenkuOS.
   - display: per-monitor scaling, several monitors in one desktop, tear-free output, dark mode;
   - kits and Tracker: public `BAboutWindow`, switching the control look without a restart, live file-type icons in Tracker;
   - networking: the Wi-Fi panel with auto-join and its Deskbar applet, the extra Wi-Fi drivers, Bluetooth (Low Energy, HID, A2DP), SMB network shares, the TCP fixes;
-  - audio and video: the USB audio and USB MIDI fixes, choosing the audio device from the Deskbar volume control, USB webcams (UVC);
+  - audio and video: the USB audio and USB MIDI fixes (RenkuOS), choosing the audio device from the Deskbar volume control (air/OS), USB webcams (UVC, air/OS);
   - laptop and hardware: power management (`power_daemon`, lid, battery and AC, suspend to idle), deep CPU idle states, I2C touchpads and touch screens, the USB improvements;
   - system: the per-team syscall filter, and kernel debugger capture to a file;
   - boot: starting a 64-bit kernel from 32-bit EFI, Apple EFI firmware, a faster boot, and IO-APICs with more than 64 pins;
@@ -231,6 +232,7 @@ The user went through RenkuOS's own commits since mid-September 2026. Added to "
    - TrackPoint middle-button scrolling and button fixes (`e126f76b75`, `04fdaf98e4`, `29e452e51d`) for the X1 Carbon;
    - the native Elan I2C protocol, clickpad buttons and finger tracking (`a9f23126d3`, `cb22fd5cfe`, `17bb2a0c3e`).
    Tested on the next hardware stick that is made anyway.
+   `dd62b72f0f` builds on `5153bac807` (the input-ready line) and `b37a078925` (`i2c_hid` in the package); both come along. The 5625U's touchpad (ELAN2513) runs through `i2c_hid`, and the X1 has a Synaptics touchpad, so the Elan commits do not reach either test laptop.
 2. **Audio devices that come and go:**
    - nodes for devices that appear later (`c864a45947`);
    - back to the saved default output when it appears, restored by name (`e95a210256`, `d1028141c2`);
@@ -238,6 +240,7 @@ The user went through RenkuOS's own commits since mid-September 2026. Added to "
    - Media preferences follow the device list (`917e0e9e30`);
    - the mix to more than one output (`0903682eaa`), and a buffer size the user chooses (`6ed1b63f79`).
    Compare with R5's own USB audio work first, as for the other audio imports.
+   The other RenkuOS USB audio and MIDI fixes (UAC2 streams, 64 to 128 channels, capture across transfers, the MIDI error cap) are judged with them: first an inventory per commit against `distro/media`, then only the items the user approves. `183073129f`, which replaces the whole driver, is not taken as a whole.
 3. **Buttons in notifications:** `BNotification` actions (`ade5789ad1`, `28b2c9a4c2`). It is an additive API. Network shares are the first user ("not reachable – Try again").
 4. **Cleaning up packages:** removing dependencies nobody needs on uninstall, `pkgman autoremove`, `mark-auto` and `mark-explicit` (`47eaecbfd8`, `a66a779566`, `64c4b84e96`, `347c732de1`, `04b3721f7a`). Before the R5 Store.
 5. **Bluetooth stability:** atomozero's `l2cap`, `h2generic` and SDP fixes, before air/OS's Low Energy, HID and A2DP work.
@@ -251,6 +254,20 @@ The user went through RenkuOS's own commits since mid-September 2026. Added to "
    - the launch_daemon environment pipe (`2f00aa816a`);
    - the VM randomisation underflow (`f1967012d9`);
    - no driver scan while the node tree is built (`c039b25536`).
+
+#### Import state (11 Nov 2026)
+
+One branch per track, in this order. Each is built and booted in QEMU; the hardware check rides on the next stick.
+
+| Track | Source | Branch | State |
+|---|---|---|---|
+| Input: `i2c_hid` input-ready line, TrackPoint, Elan | RenkuOS | `cursor/input-renku` | brief written |
+| USB audio and MIDI | RenkuOS | `cursor/audio-renku` | inventory first, then the user picks per item |
+| USB webcams (UVC) | air/OS `6d877da057`, `a314c835a9`, `d0df427f16` | `cursor/webcam-airos` | in progress; the xHCI high-bandwidth isochronous part is in |
+| USB host controllers | RenkuOS | `cursor/usb-renku` | in progress. xHCI and USB stack fixes (STALL reset, contiguous isochronous packets, descriptor checks, allocator race) now; EHCI, UHCI and OHCI only after the user agrees; arm64, Bay Trail and 32-bit skipped |
+| Audio device in the Deskbar | air/OS `122b4ad42e` and follow-ups | none yet | touches `multi_audio`, HDA and `media_server`, where R5 has its own code |
+
+The USB host fixes come before the USB audio imports, which rely on them.
 
 **Not taken from RenkuOS:**
 - its dark mode: air/OS's is chosen, because it sits in Screen and Appearance;
