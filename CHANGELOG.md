@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The CPU copy is measured with debug alone
+
+The plan now says `gpu_debug true` records the CPU copy even when `gpu_app_server` is off. VirtualBox is double buffered, so moving a window runs that copy. This branch is still the design only. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Only app_server may ask for the screen buffer
 
 The plan no longer gives the scanout call to whichever team opened `/dev/graphics/radeon_hd` first. The kernel checks the calling team's info and allows the call only when that team's executable is `/system/servers/app_server`, or `/boot/system/servers/app_server` after `/system` is resolved. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`. This branch is still the design only. There is no What's new section and `distro/BUILD` stays the same.

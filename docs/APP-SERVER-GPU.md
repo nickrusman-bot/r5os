@@ -46,7 +46,7 @@ The words are built by one function, `r5_copy_bands_pm4` in `distro/app_server/G
 
 ## Measurement
 
-`gpu_debug true` turns the counters on. Each copy records its duration. Every 10 seconds app_server logs the median and the CPU time spent copying:
+`gpu_debug true` turns the counters on even when `gpu_app_server` is off. VirtualBox is double buffered: app_server keeps a software back buffer and `_CopyBackToFront` runs when a window moves, so the CPU line below appears. Each copy records its duration. Every 10 seconds app_server logs the median and the CPU time spent copying:
 
 `app_server: copy cpu median <n> us cpu <n> ms per 10 s`
 
