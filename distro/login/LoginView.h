@@ -1,51 +1,68 @@
 /*
  * Copyright 2008, François Revol, <revol@free.fr>. All rights reserved.
- * Distributed under the terms of the MIT License.
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: MIT
  */
 #ifndef _LOGINVIEW_H_
 #define _LOGINVIEW_H_
 
 
 #include <Button.h>
+#include <GroupView.h>
 #include <ListView.h>
 #include <ScrollView.h>
 #include <String.h>
 #include <StringView.h>
-#include <TextControl.h>
 #include <View.h>
+
+#include <Card.h>
+#include <PasswordControl.h>
+#include <UserCard.h>
+#include <UserListItem.h>
 
 
 const uint32 kUserSelected = 'usel';
 const uint32 kUserInvoked = 'uinv';
+const uint32 kCardSelected = 'csel';
 
 
 class LoginView : public BView {
 public:
-					LoginView();
-	virtual			~LoginView();
-	virtual void	AttachedToWindow();
-	virtual void	MessageReceived(BMessage* message);
-	virtual void	Pulse();
-	void			PrepareForSignIn();
+								LoginView();
+	virtual						~LoginView();
+
+	virtual void				AttachedToWindow();
+	virtual void				MessageReceived(BMessage* message);
+	virtual void				Pulse();
+	void						PrepareForSignIn();
 
 private:
-	void			_FillUsers();
-	void			_ShowSelected();
-	void			_AttemptLogin();
-	void			_EnableControls(bool enable);
+	void						_FillUsers();
+	void						_ShowSelected(const char* login);
+	void						_AttemptLogin();
+	void						_EnableControls(bool enable);
 
-	BListView*		fUserList;
-	BStringView*	fWelcomeView;
-	BStringView*	fHintView;
-	BStringView*	fLoginView;
-	BTextControl*	fPasswordControl;
-	BButton*		fLoginButton;
-	BStringView*	fInfoView;
-	BStringView*	fClockView;
-	BButton*		fHaltButton;
-	BButton*		fRebootButton;
-	BScrollView*	fUserScroll;
-	BString			fSelectedLogin;
+	BAppearanceKit::BCard*		fHeaderCard;
+	BStringView*				fWelcomeView;
+	BStringView*				fSubtitleView;
+
+	BGroupView*					fUserSection;
+	BStringView*				fSelectPersonLabel;
+	BGroupView*					fUserCardsRow;
+	BListView*					fUserList;
+	BScrollView*				fUserScroll;
+
+	BAppearanceKit::BCard*		fFormCard;
+	BStringView*				fActiveUserLabel;
+	BAppearanceKit::BPasswordControl* fPasswordControl;
+	BButton*					fLoginButton;
+	BStringView*				fInfoView;
+
+	BStringView*				fClockView;
+	BButton*					fRebootButton;
+	BButton*					fHaltButton;
+
+	BString						fSelectedLogin;
 };
 
 

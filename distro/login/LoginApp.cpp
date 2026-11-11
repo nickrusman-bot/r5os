@@ -739,7 +739,7 @@ LoginApp::_OpenLoginWindow()
 			old->Quit();
 	}
 
-	fLoginWindow = new LoginWindow(BRect(0, 0, 360, 320));
+	fLoginWindow = new LoginWindow(BRect(0, 0, 440, 380));
 	fLoginWindow->Show();
 }
 

@@ -231,3 +231,38 @@ screens->SetScreens(&tile, 1);
 screens->SetDraggable(false);
 screens->SetCaption(NULL);
 ```
+
+## User card
+
+`BAppearanceKit::BUserCard` is a compact account card with an avatar, display name, and role badge. The header is `<UserCard.h>`. It is a `BControl` that sends a message when clicked or activated with Space or Enter.
+
+```cpp
+#include <UserCard.h>
+
+BAppearanceKit::BUserCard* card = new BAppearanceKit::BUserCard(
+	"user", "user", "User", "Administrator", avatarBitmap,
+	new BMessage('usel'));
+```
+
+## User list item
+
+`BAppearanceKit::BUserListItem` is a two-line item for `BListView` adhering to `docs/STYLE.md`. The header is `<UserListItem.h>`. It draws a circular avatar, the display name in bold on the first line, and `@login · role` on the second line.
+
+```cpp
+#include <UserListItem.h>
+
+listView->AddItem(new BAppearanceKit::BUserListItem(
+	"user", "User", "Administrator", avatarBitmap));
+```
+
+## Password control
+
+`BAppearanceKit::BPasswordControl` is a password field with an integrated show/hide eye toggle button. The header is `<PasswordControl.h>`.
+
+```cpp
+#include <PasswordControl.h>
+
+BAppearanceKit::BPasswordControl* password = new BAppearanceKit::BPasswordControl(
+	"password", "Password", "", new BMessage('sign'));
+```
+

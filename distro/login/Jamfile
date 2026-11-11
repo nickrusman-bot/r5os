@@ -16,7 +16,7 @@ Application Login :
 	LoginWindow.cpp
 	LoginView.cpp
 	main.cpp
-	: be tracker [ TargetLibstdc++ ] localestub
+	: be tracker libr5ui.so libr5icons.so [ TargetLibstdc++ ] localestub
 	: Login.rdef
 ;
 

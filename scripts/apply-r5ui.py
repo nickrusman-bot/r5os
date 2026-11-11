@@ -25,6 +25,12 @@ FILES = (
     "PageHeader.h",
     "ScreenArrangement.cpp",
     "ScreenArrangement.h",
+    "UserCard.cpp",
+    "UserCard.h",
+    "UserListItem.cpp",
+    "UserListItem.h",
+    "PasswordControl.cpp",
+    "PasswordControl.h",
 )
 
 
@@ -52,7 +58,8 @@ def apply_r5ui(haiku: pathlib.Path | None = None) -> None:
 
     headers = tree / "headers" / "os" / "interface"
     for name in ("R5UI.h", "Card.h", "SidebarItem.h", "Sidebar.h",
-            "ActionCard.h", "PageHeader.h", "ScreenArrangement.h"):
+            "ActionCard.h", "PageHeader.h", "ScreenArrangement.h",
+            "UserCard.h", "UserListItem.h", "PasswordControl.h"):
         shutil.copy2(SRC / name, headers / name)
         print(f"copied {name} into the public headers")
 
