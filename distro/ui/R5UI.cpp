@@ -24,9 +24,12 @@
 
 #include "R5UI.h"
 
+#include <Bitmap.h>
 #include <InterfaceDefs.h>
 #include <View.h>
 
+#include <math.h>
+#include <new>
 #include <string.h>
 
 
@@ -83,4 +86,90 @@ r5_screen_caption(BView* view, BRect content, const char* text,
 		content.left + (content.Width() - textWidth) / 2.0f,
 		content.top + fontHeight.ascent
 			+ (content.Height() - height) / 2.0f));
+}
+
+
+float
+r5_avatar_icon_side(float circleSide)
+{
+	return floorf(circleSide * 0.78f + 0.5f);
+}
+
+
+void
+r5_avatar_draw(BView* view, BRect circle, const BBitmap* icon,
+	bool highlighted)
+{
+	if (view == NULL || !circle.IsValid())
+		return;
+
+	view->PushState();
+
+	rgb_color document = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	rgb_color panel = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color accent = ui_color(B_STATUS_BAR_COLOR);
+	rgb_color plate;
+	rgb_color ring;
+	if (highlighted) {
+		plate = mix_color(accent, document, 30);
+		ring = mix_color(accent, document, 80);
+	} else {
+		plate = mix_color(panel, document, 90);
+		ring = mix_color(panel, document, 200);
+	}
+
+	view->SetDrawingMode(B_OP_OVER);
+	view->SetHighColor(plate);
+	view->FillEllipse(circle);
+	view->SetHighColor(ring);
+	view->StrokeEllipse(circle);
+
+	float side = r5_avatar_icon_side(circle.Width() + 1);
+	BRect target(0, 0, side - 1, side - 1);
+	target.OffsetTo(
+		floorf(circle.left + (circle.Width() + 1 - side) / 2 + 0.5f),
+		floorf(circle.top + (circle.Height() + 1 - side) / 2 + 0.5f));
+
+	if (icon != NULL && icon->IsValid()) {
+		view->SetDrawingMode(B_OP_ALPHA);
+		view->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+		BRect source = icon->Bounds();
+		BBitmap* gray = NULL;
+		if (!highlighted && icon->ColorSpace() == B_RGBA32) {
+			// Anyone but an administrator gets a gray picture, as in the
+			// mockup.
+			gray = new(std::nothrow) BBitmap(icon);
+			if (gray != NULL && gray->IsValid()) {
+				uint8* bits = (uint8*)gray->Bits();
+				int32 length = gray->BitsLength();
+				for (int32 i = 0; i + 3 < length; i += 4) {
+					uint8 luma = (uint8)((bits[i + 2] * 30 + bits[i + 1] * 59
+						+ bits[i] * 11) / 100);
+					bits[i + 0] = (uint8)((luma * 4 + bits[i + 0]) / 5);
+					bits[i + 1] = (uint8)((luma * 4 + bits[i + 1]) / 5);
+					bits[i + 2] = (uint8)((luma * 4 + bits[i + 2]) / 5);
+				}
+				icon = gray;
+			}
+		}
+		if (source.Width() == target.Width()
+			&& source.Height() == target.Height()) {
+			view->DrawBitmap(icon, target.LeftTop());
+		} else {
+			view->DrawBitmap(icon, source, target,
+				B_FILTER_BITMAP_BILINEAR);
+		}
+		delete gray;
+	} else {
+		float s = target.Width();
+		view->SetHighColor(tint_color(plate, B_DARKEN_2_TINT));
+		view->FillEllipse(BRect(target.left + s * 0.32f,
+			target.top + s * 0.12f, target.right - s * 0.32f,
+			target.top + s * 0.48f));
+		view->FillRoundRect(BRect(target.left + s * 0.18f,
+			target.top + s * 0.56f, target.right - s * 0.18f,
+			target.bottom), s * 0.12f, s * 0.12f);
+	}
+
+	view->PopState();
 }

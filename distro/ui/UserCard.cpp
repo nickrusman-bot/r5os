@@ -30,7 +30,10 @@
 #include <Message.h>
 #include <String.h>
 
+#include <math.h>
 #include <new>
+
+#include "R5UI.h"
 
 
 namespace BAppearanceKit {
@@ -39,7 +42,8 @@ namespace BAppearanceKit {
 static float
 unit()
 {
-	return be_plain_font->Size() / 13.0f;
+	// One mockup pixel. The mockup is drawn for a 12 point system font.
+	return be_plain_font->Size() / 12.0f;
 }
 
 
@@ -282,41 +286,20 @@ BUserCard::Draw(BRect updateRect)
 		SetDrawingMode(B_OP_COPY);
 	}
 
-	float avatarSize = 34.0f * u;
-	float padding = 8.0f * u;
+	float avatarSize = floorf(38.0f * u);
+	float padding = 10.0f * u;
 	float avatarTop = bounds.top + (bounds.Height() - avatarSize) / 2.0f;
 	BRect avatarRect(bounds.left + padding, avatarTop,
 		bounds.left + padding + avatarSize, avatarTop + avatarSize);
 
-	rgb_color avatarBackground = mix_color(accent, document, 40);
-	SetHighColor(avatarBackground);
-	FillEllipse(avatarRect);
-
-	if (fData->avatar != NULL && fData->avatar->IsValid()) {
-		BRect iconRect = avatarRect.InsetByCopy(3.0f * u, 3.0f * u);
-		SetDrawingMode(B_OP_ALPHA);
-		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		DrawBitmap(fData->avatar, fData->avatar->Bounds(), iconRect);
-		SetDrawingMode(B_OP_COPY);
-	} else {
-		SetHighColor(tint_color(avatarBackground, B_DARKEN_2_TINT));
-		BRect head(avatarRect.left + avatarSize * 0.32f,
-			avatarRect.top + avatarSize * 0.18f,
-			avatarRect.right - avatarSize * 0.32f,
-			avatarRect.top + avatarSize * 0.52f);
-		FillEllipse(head);
-
-		BRect body(avatarRect.left + avatarSize * 0.2f,
-			avatarRect.top + avatarSize * 0.58f,
-			avatarRect.right - avatarSize * 0.2f, avatarRect.bottom);
-		FillRoundRect(body, 4.0f * u, 4.0f * u);
-	}
+	r5_avatar_draw(this, avatarRect, fData->avatar,
+		fData->role.ICompare("Administrator") == 0);
 
 	float textLeft = avatarRect.right + 10.0f * u;
 	float maxWidth = bounds.right - padding - textLeft;
 	if (maxWidth > 4.0f) {
 		BFont boldFont(be_bold_font);
-		boldFont.SetSize(be_plain_font->Size() * 1.05f);
+		boldFont.SetSize(13.0f * u);
 		SetFont(&boldFont);
 		SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 
@@ -327,7 +310,7 @@ BUserCard::Draw(BRect updateRect)
 		boldFont.GetHeight(&nameHeight);
 
 		BFont plainFont(be_plain_font);
-		plainFont.SetSize(be_plain_font->Size() * 0.88f);
+		plainFont.SetSize(11.0f * u);
 		font_height roleHeight;
 		plainFont.GetHeight(&roleHeight);
 
@@ -338,8 +321,15 @@ BUserCard::Draw(BRect updateRect)
 			+ nameHeight.ascent;
 		DrawString(name.String(), BPoint(textLeft, nameY));
 
+		bool admin = fData->role.ICompare("Administrator") == 0;
+		if (admin) {
+			// The administrator role is bold and blue, as in the mockup.
+			BFont roleFont(be_bold_font);
+			roleFont.SetSize(plainFont.Size());
+			plainFont = roleFont;
+		}
 		SetFont(&plainFont);
-		if (fData->role.ICompare("Administrator") == 0)
+		if (admin)
 			SetHighColor(accent);
 		else {
 			SetHighColor(mix_color(ui_color(B_DOCUMENT_TEXT_COLOR),
@@ -413,7 +403,7 @@ BUserCard::GetPreferredSize(float* width, float* height)
 	if (width != NULL)
 		*width = 170.0f * u;
 	if (height != NULL)
-		*height = 54.0f * u;
+		*height = floorf(54.0f * u);
 }
 
 
@@ -421,14 +411,14 @@ BSize
 BUserCard::MinSize()
 {
 	float u = unit();
-	return BSize(130.0f * u, 50.0f * u);
+	return BSize(130.0f * u, floorf(54.0f * u));
 }
 
 
 BSize
 BUserCard::MaxSize()
 {
-	return BSize(B_SIZE_UNLIMITED, MinSize().height + 8.0f * unit());
+	return BSize(B_SIZE_UNLIMITED, MinSize().height);
 }
 
 

@@ -13,6 +13,8 @@
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
+class AvatarView;
+class BadgeView;
 class BBitmap;
 class BButton;
 class BGridView;
@@ -23,7 +25,9 @@ class BStringView;
 
 
 namespace BAppearanceKit {
+class BAccentButton;
 class BCard;
+class BIconView;
 class BPasswordControl;
 }
 
@@ -49,9 +53,11 @@ private:
 			void				_ShowSelected(const char* login,
 									const char* displayName,
 									const char* role);
+			void				_SetFeedback(const char* text, bool error);
 			void				_AttemptLogin();
 			void				_EnableControls(bool enable);
 			void				_ApplyColors();
+			void				_ApplyGlyphs();
 			void				_SetVisible(BView* view, bool visible);
 
 	BAppearanceKit::BCard*		fHeaderCard;
@@ -60,23 +66,34 @@ private:
 
 	BGroupView*					fUserSection;
 	BStringView*				fSelectPersonLabel;
+	BStringView*				fAccountCountLabel;
 	BGridView*					fUserCardsGrid;
 	BListView*					fUserList;
 	BScrollView*				fUserScroll;
 
 	BAppearanceKit::BCard*		fFormCard;
-	BStringView*				fActiveUserLabel;
-	BStringView*				fActiveRoleLabel;
+	BGroupView*					fSingleBanner;
+	AvatarView*					fBannerAvatar;
+	BStringView*				fBannerName;
+	BStringView*				fBannerRole;
+	BGroupView*					fActiveLine;
+	BStringView*				fActiveCaption;
+	BStringView*				fActiveName;
+	BadgeView*					fActiveBadge;
 	BStringView*				fPasswordLabel;
 	BAppearanceKit::BPasswordControl* fPasswordControl;
-	BButton*					fLoginButton;
+	BAppearanceKit::BAccentButton* fLoginButton;
 	BStringView*				fInfoView;
+	bool						fInfoIsError;
 
+	BAppearanceKit::BIconView*	fClockIcon;
 	BStringView*				fClockView;
 	BButton*					fRebootButton;
 	BButton*					fHaltButton;
 
-	BBitmap*					fPersonAvatar;
+	BBitmap*					fCardAvatar;
+	BBitmap*					fListAvatar;
+	BBitmap*					fBannerIcon;
 	BString						fSelectedLogin;
 };
 // SPDX-SnippetEnd

@@ -11,9 +11,12 @@
 #include <Font.h>
 #include <InterfaceDefs.h>
 #include <Message.h>
+#include <R5Icons.h>
+#include <String.h>
 #include <TextView.h>
 #include <Window.h>
 
+#include <math.h>
 #include <new>
 
 
@@ -23,7 +26,27 @@ namespace BAppearanceKit {
 static float
 unit()
 {
-	return be_plain_font->Size() / 13.0f;
+	// One mockup pixel. The mockup is drawn for a 12 point system font.
+	return be_plain_font->Size() / 12.0f;
+}
+
+
+// The field text is one step larger than body text, as in the mockup
+// (14 on 12).
+static BFont
+field_font()
+{
+	BFont font(be_plain_font);
+	font.SetSize(floorf(be_plain_font->Size() * 14.0f / 12.0f + 0.5f));
+	return font;
+}
+
+
+// The edge of the blue focus ring around the field.
+static float
+ring_width()
+{
+	return floorf(2.0f * unit() + 0.5f);
 }
 
 
@@ -39,7 +62,8 @@ public:
 		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 		SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
 		rgb_color tc = ui_color(B_DOCUMENT_TEXT_COLOR);
-		SetFontAndColor(be_plain_font, B_FONT_ALL, &tc);
+		BFont font = field_font();
+		SetFontAndColor(&font, B_FONT_ALL, &tc);
 		SetWordWrap(false);
 		HideTyping(true);
 		MakeResizable(true);
@@ -60,6 +84,42 @@ public:
 		BTextView::KeyDown(bytes, numBytes);
 	}
 
+	virtual void Draw(BRect updateRect)
+	{
+		BTextView::Draw(updateRect);
+		if (TextLength() > 0 || fParent == NULL)
+			return;
+		const char* placeholder = fParent->Placeholder();
+		if (placeholder == NULL || placeholder[0] == '\0')
+			return;
+
+		BFont font = field_font();
+		font_height height;
+		font.GetHeight(&height);
+		BRect text = TextRect();
+		PushState();
+		SetFont(&font);
+		SetDrawingMode(B_OP_OVER);
+		SetHighColor(mix_color(ui_color(B_DOCUMENT_TEXT_COLOR),
+			ui_color(B_DOCUMENT_BACKGROUND_COLOR), 120));
+		DrawString(placeholder, BPoint(text.left + 1,
+			text.top + height.ascent));
+		PopState();
+	}
+
+	virtual void InsertText(const char* text, int32 length, int32 offset,
+		const text_run_array* runs)
+	{
+		BTextView::InsertText(text, length, offset, runs);
+		Invalidate();
+	}
+
+	virtual void DeleteText(int32 fromOffset, int32 toOffset)
+	{
+		BTextView::DeleteText(fromOffset, toOffset);
+		Invalidate();
+	}
+
 	virtual void MakeFocus(bool focus = true)
 	{
 		BTextView::MakeFocus(focus);
@@ -75,6 +135,7 @@ private:
 struct BPasswordControl::Data {
 	PasswordTextView*	textView;
 	bool				revealed;
+	BString				placeholder;
 
 	Data()
 		:
@@ -123,6 +184,11 @@ BPasswordControl::BPasswordControl(BMessage* archive)
 	// The password is never taken from an archive.
 	if (archive != NULL)
 		archive->FindBool("r5:revealed", &fData->revealed);
+	if (archive != NULL) {
+		const char* placeholder = NULL;
+		if (archive->FindString("r5:placeholder", &placeholder) == B_OK)
+			fData->placeholder = placeholder;
+	}
 	fData->textView->HideTyping(!fData->revealed);
 }
 
@@ -155,6 +221,8 @@ BPasswordControl::Archive(BMessage* archive, bool deep) const
 		status = archive->AddString("class", kPasswordControlClassName);
 	if (status == B_OK)
 		status = archive->AddBool("r5:revealed", fData->revealed);
+	if (status == B_OK && fData->placeholder.Length() > 0)
+		status = archive->AddString("r5:placeholder", fData->placeholder);
 
 	return status;
 }
@@ -203,6 +271,24 @@ BPasswordControl::SetPasswordRevealed(bool revealed)
 		fData->textView->HideTyping(!revealed);
 
 	Invalidate(_EyeButtonRect());
+}
+
+
+void
+BPasswordControl::SetPlaceholder(const char* text)
+{
+	if (fData == NULL)
+		return;
+	fData->placeholder = text;
+	if (fData->textView != NULL)
+		fData->textView->Invalidate();
+}
+
+
+const char*
+BPasswordControl::Placeholder() const
+{
+	return fData != NULL ? fData->placeholder.String() : NULL;
 }
 
 
@@ -259,8 +345,8 @@ BPasswordControl::_EyeButtonRect() const
 	if (bounds.Width() <= 0 || bounds.Height() <= 0)
 		return BRect();
 	float u = unit();
-	float btnSize = 22.0f * u;
-	float pad = 4.0f * u;
+	float btnSize = floorf(26.0f * u);
+	float pad = ring_width() + 6.0f * u;
 
 	return BRect(bounds.right - btnSize - pad,
 		bounds.top + (bounds.Height() - btnSize) / 2.0f,
@@ -282,11 +368,12 @@ BPasswordControl::_LayoutChildren()
 	BRect eye = _EyeButtonRect();
 
 	// Inset text view so text doesn't overlap the eye icon
-	float leftPad = 8.0f * u;
+	float leftPad = ring_width() + 10.0f * u;
 	float rightPad = (bounds.right - eye.left) + 4.0f * u;
 
 	font_height fh;
-	be_plain_font->GetHeight(&fh);
+	BFont font = field_font();
+	font.GetHeight(&fh);
 	float textHeight = fh.ascent + fh.descent + fh.leading;
 
 	float topPad = (bounds.Height() - textHeight) / 2.0f;
@@ -309,24 +396,45 @@ BPasswordControl::Draw(BRect updateRect)
 		return;
 	float u = unit();
 	float radius = 4.0f * u;
+	float ring = ring_width();
+	BRect field = bounds.InsetByCopy(ring, ring);
 
 	rgb_color bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	rgb_color accent = ui_color(B_STATUS_BAR_COLOR);
 	rgb_color border = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		B_DARKEN_2_TINT);
+		B_DARKEN_3_TINT);
 
 	bool hasFocus = fData != NULL && fData->textView != NULL
-		&& fData->textView->IsFocus();
+		&& fData->textView->IsFocus() && Window() != NULL
+		&& Window()->IsActive();
 
-	if (hasFocus)
-		border = ui_color(B_STATUS_BAR_COLOR);
+	SetDrawingMode(B_OP_ALPHA);
+	SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_OVERLAY);
+	if (hasFocus && IsEnabled()) {
+		// The soft blue ring outside the field.
+		border = accent;
+		rgb_color halo = accent;
+		halo.alpha = 56;
+		SetHighColor(halo);
+		SetPenSize(ring);
+		BRect haloRect = bounds.InsetByCopy(ring / 2, ring / 2);
+		StrokeRoundRect(haloRect, radius + ring / 2, radius + ring / 2);
+		SetPenSize(1.0f);
+	}
 
-	SetHighColor(bg);
-	FillRoundRect(bounds, radius, radius);
+	SetHighColor(IsEnabled() ? bg : mix_color(bg,
+		ui_color(B_PANEL_BACKGROUND_COLOR), 128));
+	FillRoundRect(field, radius, radius);
+
+	// The faint inner shadow along the top.
+	SetHighColor(0, 0, 0, 20);
+	StrokeLine(BPoint(field.left + radius, field.top + 1),
+		BPoint(field.right - radius, field.top + 1));
 
 	SetHighColor(border);
-	StrokeRoundRect(bounds, radius, radius);
+	StrokeRoundRect(field, radius, radius);
+	SetDrawingMode(B_OP_COPY);
 
-	// Eye icon
 	_DrawEyeButton();
 }
 
@@ -335,32 +443,20 @@ void
 BPasswordControl::_DrawEyeButton()
 {
 	BRect eye = _EyeButtonRect();
-	float u = unit();
+	if (!eye.IsValid())
+		return;
 
-	rgb_color iconColor = mix_color(ui_color(B_DOCUMENT_TEXT_COLOR),
-		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 140);
-	SetHighColor(iconColor);
-
-	// Outline of eye
-	float cx = eye.left + eye.Width() / 2.0f;
-	float cy = eye.top + eye.Height() / 2.0f;
-	float rx = 7.0f * u;
-	float ry = 4.5f * u;
-
-	BRect eyeOval(cx - rx, cy - ry, cx + rx, cy + ry);
-	StrokeEllipse(eyeOval);
-
-	// Pupil
-	BRect pupil(cx - 2.5f * u, cy - 2.5f * u, cx + 2.5f * u, cy + 2.5f * u);
-	FillEllipse(pupil);
-
-	// If slashed (not revealed), draw slash across eye
-	if (fData == NULL || !fData->revealed) {
-		SetPenSize(1.5f * u);
-		StrokeLine(BPoint(eye.left + 3.0f * u, eye.bottom - 3.0f * u),
-			BPoint(eye.right - 3.0f * u, eye.top + 3.0f * u));
-		SetPenSize(1.0f);
-	}
+	// The open eye means "show the password", as in the mockup. Once
+	// the password is shown, the crossed-out eye hides it again.
+	float side = floorf(18.0f * unit());
+	BRect glyph(0, 0, side, side);
+	glyph.OffsetTo(floorf(eye.left + (eye.Width() - side) / 2),
+		floorf(eye.top + (eye.Height() - side) / 2));
+	bool revealed = fData != NULL && fData->revealed;
+	rgb_color color = mix_color(ui_color(B_DOCUMENT_TEXT_COLOR),
+		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 120);
+	r5_glyph_draw(this, revealed ? R5_GLYPH_EYE_OFF : R5_GLYPH_EYE, glyph,
+		color);
 }
 
 
@@ -393,7 +489,7 @@ BPasswordControl::GetPreferredSize(float* width, float* height)
 	if (width != NULL)
 		*width = 240.0f * u;
 	if (height != NULL)
-		*height = 36.0f * u;
+		*height = floorf(38.0f * u) + 2 * ring_width() - 1;
 }
 
 
@@ -401,7 +497,7 @@ BSize
 BPasswordControl::MinSize()
 {
 	float u = unit();
-	return BSize(140.0f * u, 34.0f * u);
+	return BSize(140.0f * u, floorf(38.0f * u) + 2 * ring_width() - 1);
 }
 
 

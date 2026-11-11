@@ -53,6 +53,11 @@ public:
 			bool				IsPasswordRevealed() const;
 			void				SetPasswordRevealed(bool revealed);
 
+			// Gray text shown while the field is empty, such as
+			// "Enter password".
+			void				SetPlaceholder(const char* text);
+			const char*			Placeholder() const;
+
 	virtual	void				AttachedToWindow();
 	virtual	void				FrameResized(float newWidth, float newHeight);
 	virtual	void				Draw(BRect updateRect);

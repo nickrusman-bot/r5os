@@ -31,7 +31,10 @@
 #include <String.h>
 #include <View.h>
 
+#include <math.h>
 #include <new>
+
+#include "R5UI.h"
 
 
 namespace BAppearanceKit {
@@ -41,7 +44,8 @@ static float
 unit(const BFont* font)
 {
 	float size = font != NULL ? font->Size() : be_plain_font->Size();
-	return size / 13.0f;
+	// One mockup pixel. The mockup is drawn for a 12 point system font.
+	return size / 12.0f;
 }
 
 
@@ -244,41 +248,20 @@ BUserListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 	owner->StrokeLine(BPoint(itemRect.left, itemRect.bottom),
 		BPoint(itemRect.right, itemRect.bottom));
 
-	float avatarSize = 28.0f * u;
-	float padding = 8.0f * u;
+	float avatarSize = floorf(32.0f * u);
+	float padding = 12.0f * u;
 	float avatarTop = itemRect.top + (itemRect.Height() - avatarSize) / 2.0f;
 	BRect avatarRect(itemRect.left + padding, avatarTop,
 		itemRect.left + padding + avatarSize, avatarTop + avatarSize);
 
-	rgb_color avatarBackground = mix_color(accent, document, 35);
-	owner->SetHighColor(avatarBackground);
-	owner->FillEllipse(avatarRect);
-
-	if (fData->avatar != NULL && fData->avatar->IsValid()) {
-		BRect iconRect = avatarRect.InsetByCopy(2.5f * u, 2.5f * u);
-		owner->SetDrawingMode(B_OP_ALPHA);
-		owner->SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
-		owner->DrawBitmap(fData->avatar, fData->avatar->Bounds(), iconRect);
-		owner->SetDrawingMode(B_OP_COPY);
-	} else {
-		owner->SetHighColor(tint_color(avatarBackground, B_DARKEN_2_TINT));
-		BRect head(avatarRect.left + avatarSize * 0.32f,
-			avatarRect.top + avatarSize * 0.18f,
-			avatarRect.right - avatarSize * 0.32f,
-			avatarRect.top + avatarSize * 0.52f);
-		owner->FillEllipse(head);
-
-		BRect body(avatarRect.left + avatarSize * 0.2f,
-			avatarRect.top + avatarSize * 0.58f,
-			avatarRect.right - avatarSize * 0.2f, avatarRect.bottom);
-		owner->FillRoundRect(body, 3.0f * u, 3.0f * u);
-	}
+	r5_avatar_draw(owner, avatarRect, fData->avatar,
+		fData->role.ICompare("Administrator") == 0);
 
 	float textLeft = avatarRect.right + 10.0f * u;
 	float maxWidth = itemRect.right - padding - textLeft;
 	if (maxWidth > 4.0f) {
 		BFont boldFont(be_bold_font);
-		boldFont.SetSize(savedFont.Size());
+		boldFont.SetSize(12.5f * u);
 		owner->SetFont(&boldFont);
 		owner->SetHighColor(textColor);
 
@@ -289,7 +272,7 @@ BUserListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 		boldFont.GetHeight(&nameHeight);
 
 		BFont plainFont(be_plain_font);
-		plainFont.SetSize(savedFont.Size() * 0.88f);
+		plainFont.SetSize(11.0f * u);
 		font_height subHeight;
 		plainFont.GetHeight(&subHeight);
 
@@ -300,19 +283,28 @@ BUserListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 			+ nameHeight.ascent;
 		owner->DrawString(name.String(), BPoint(textLeft, nameY));
 
-		owner->SetFont(&plainFont);
-		if (fData->role.ICompare("Administrator") == 0)
-			owner->SetHighColor(accent);
-		else
-			owner->SetHighColor(mix_color(textColor, document, 140));
-
-		BString subtitle;
-		subtitle.SetToFormat("@%s \xc2\xb7 %s", fData->login.String(),
-			fData->role.String());
-		plainFont.TruncateString(&subtitle, B_TRUNCATE_END, maxWidth);
-
+		// "@login · " in gray, then the role: bold and blue for an
+		// administrator, gray for anyone else.
+		bool admin = fData->role.ICompare("Administrator") == 0;
 		float roleY = nameY + nameHeight.descent + gap + subHeight.ascent;
-		owner->DrawString(subtitle.String(), BPoint(textLeft, roleY));
+		rgb_color gray = mix_color(textColor, document, 120);
+
+		BString login;
+		login.SetToFormat("@%s Â· ", fData->login.String());
+		plainFont.TruncateString(&login, B_TRUNCATE_END, maxWidth);
+		owner->SetFont(&plainFont);
+		owner->SetHighColor(gray);
+		owner->DrawString(login.String(), BPoint(textLeft, roleY));
+
+		float roleLeft = textLeft + plainFont.StringWidth(login.String());
+		BFont roleFont(admin ? be_bold_font : be_plain_font);
+		roleFont.SetSize(plainFont.Size());
+		BString role(fData->role);
+		roleFont.TruncateString(&role, B_TRUNCATE_END,
+			itemRect.right - padding - roleLeft);
+		owner->SetFont(&roleFont);
+		owner->SetHighColor(admin ? accent : gray);
+		owner->DrawString(role.String(), BPoint(roleLeft, roleY));
 	}
 
 	owner->SetFont(&savedFont);
@@ -323,7 +315,7 @@ void
 BUserListItem::Update(BView* owner, const BFont* font)
 {
 	BListItem::Update(owner, font);
-	SetHeight(44.0f * unit(font));
+	SetHeight(floorf(46.0f * unit(font)));
 }
 
 
