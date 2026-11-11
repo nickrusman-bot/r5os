@@ -6,7 +6,7 @@ VirtualBox round 2 had only `gpu_debug true`. Dragging a window for more than 10
 
 `r5-gpu-selftest` started at every sign-in, including a VirtualBox boot with no settings file, and opened the M7 windows. Login starts it only when the radeon_hd settings contain `gpu_selftest true`.
 
-No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-app-server` copied this branch, then `jam -q @r5-raw` finished at 13:25 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 13:25. app_server and Login in the image match that build. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-app-server` copied this branch, then `jam -q @r5-raw` finished at 13:25 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 13:25. app_server and Login in the image match that build. VirtualBox, 11 Nov 2026: with only `gpu_debug true`, after the last boot the syslog showed `app_server: copy cpu median 2 us cpu 24 ms per 10 s` and four more of that line, and no `r5 window tests`. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-11 - Only app_server may map the screen buffer
 
