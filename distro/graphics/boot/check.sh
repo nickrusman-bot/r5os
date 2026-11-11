@@ -76,10 +76,11 @@ on=$(count_of "gpu copy on scanout")
 off=$(count_of "gpu copy off")
 compared=$(count_of "copy compare ok")
 mismatch=$(count_of "copy compare MISMATCH")
+compareOff=$(count_of "gpu copy off: compare")
 if [ ! -s "$bootlog" ]; then
 	say 1 "no copy compare MISMATCH"
 	say 1 "no gpu copy off"
-elif [ "$mismatch" -eq 0 ]; then
+elif [ "$mismatch" -eq 0 ] && [ "$compareOff" -eq 0 ]; then
 	say 0 "no copy compare MISMATCH"
 else
 	say 1 "no copy compare MISMATCH"

@@ -127,6 +127,7 @@ extern int sErrorLines;
 extern int sOnceBits;
 extern int sDebugOn;
 extern int sSelftestOn;
+extern int sSubmitLogOn;
 extern int sDeferred;
 extern gpu_bo sBo[kMaxBo];
 extern gpu_job sJobs[kMaxJob];
@@ -147,6 +148,7 @@ extern gpu_client* sClientList;
 
 void gpu_cache_log_settings();
 bool gpu_debug_enabled();
+bool gpu_submit_log_enabled();
 bool gpu_dump_begin();
 bool gpu_dump_line();
 bool gpu_render_enabled();

@@ -53,6 +53,7 @@ int sErrorLines;
 int sOnceBits;
 int sDebugOn = -1;
 int sSelftestOn = -1;
+int sSubmitLogOn = -1;
 int sDeferred = 0;
 static r5_defer sDefer[256];
 
@@ -187,6 +188,15 @@ gpu_debug_enabled()
 	if (sDebugOn < 0)
 		gpu_cache_log_settings();
 	return sDebugOn != 0;
+}
+
+
+bool
+gpu_submit_log_enabled()
+{
+	if (sSubmitLogOn < 0)
+		gpu_cache_log_settings();
+	return sSubmitLogOn != 0;
 }
 
 
@@ -1477,7 +1487,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		|| gR5GpuOps.touch_root == NULL)
 		return gpu_refuse("CS_SUBMIT", "ring", B_NOT_SUPPORTED, in.context, 0,
 			in.ib_count, ibs[0].gpu_va, 0, in.ring, 0);
-	gR5GpuOps.set_debug(gpu_debug_enabled() ? 1 : 0);
+	gR5GpuOps.set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	gR5GpuOps.set_job_pasid(client->pasid, (uint64)(addr_t)client);
 	if (client->contexts <= 0 || client->fenceCtx == 0)
 		return gpu_refuse("CS_SUBMIT", "context", B_BAD_VALUE, in.context, 0,

@@ -74,7 +74,8 @@ bool r5_gfx9_fence_offset(uint64* offset);
 uint64 r5_gfx9_user_fence_mc();
 /* fenceCtx is the value handed out at AMDGPU_CTX create. preambleSeen
  * is that context's preamble_presented flag. The kernel jobs use 0.
- * gpu_debug is the radeon_hd setting. */
+ * gpu_submit_log is the radeon_hd setting for the per-submit line.
+ * gpu_debug does not print every job. */
 void r5_gfx9_set_debug(int on);
 bool r5_gfx9_user_submit(const r5_gfx9_user_ib* ibs, uint32 count,
 	uint64 fenceCtx, int32* preambleSeen, uint64* _sequence);

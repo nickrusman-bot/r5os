@@ -15,6 +15,7 @@
 #include <OS.h>
 
 #include <new>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,6 +54,7 @@ bool sForceFail = false;
 bool sDebug = false;
 bool sOff = false;
 const char* sOffReason = NULL;
+char sCompareDetail[160];
 bool sLoggedOn = false;
 bool sCompared = false;
 uint32 sFrame = 0;
@@ -236,10 +238,12 @@ report()
 		if (sOff) {
 			syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
 				" us cpu %" B_PRId64
-				" ms per 10 s, gpu copy off: %s\n",
+				" ms per 10 s, gpu copy off: %s%s%s\n",
 				(int64)median_of(&sCpuTimes),
 				(int64)(sCpuTimes.cpu / 1000),
-				sOffReason != NULL ? sOffReason : "unknown");
+				sOffReason != NULL ? sOffReason : "unknown",
+				sCompareDetail[0] != '\0' ? " " : "",
+				sCompareDetail);
 		} else {
 			syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
 				" us cpu %" B_PRId64 " ms per 10 s\n",
@@ -263,6 +267,49 @@ report()
 }
 
 
+void
+flush_front(const void* address, size_t bytes)
+{
+#if defined(__x86_64__)
+	uintptr_t start = (uintptr_t)address & ~(uintptr_t)63;
+	uintptr_t end = ((uintptr_t)address + bytes + 63u) & ~(uintptr_t)63;
+	for (uintptr_t line = start; line < end; line += 64)
+		asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
+	asm volatile("sfence" ::: "memory");
+#else
+	(void)address;
+	(void)bytes;
+#endif
+}
+
+
+void
+note_mismatch(uint32 y, uint32 byte, const uint8* back, const uint8* front,
+	uint32 rowBytes)
+{
+	uint32 n = 0;
+	if (byte < rowBytes)
+		n = rowBytes - byte;
+	if (n > 8u)
+		n = 8u;
+	int used = snprintf(sCompareDetail, sizeof(sCompareDetail),
+		"at %" B_PRIu32 " byte %" B_PRIu32 " back", y, byte);
+	if (used < 0 || (size_t)used >= sizeof(sCompareDetail)) {
+		sCompareDetail[0] = '\0';
+		return;
+	}
+	for (uint32 i = 0; i < n && (size_t)used + 3 < sizeof(sCompareDetail); i++)
+		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" %02x", back[byte + i]);
+	if ((size_t)used + 7 < sizeof(sCompareDetail))
+		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" front");
+	for (uint32 i = 0; i < n && (size_t)used + 3 < sizeof(sCompareDetail); i++)
+		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" %02x", front[byte + i]);
+}
+
+
 bool
 same_picture(RenderingBuffer* back, RenderingBuffer* front,
 	const r5_copy_band* bands, int count)
@@ -279,8 +326,14 @@ same_picture(RenderingBuffer* back, RenderingBuffer* front,
 		const uint8* srcRow = src + offset;
 		const uint8* dstRow = dst + offset;
 		for (uint32 row = 0; row < bands[i].rows; row++) {
-			if (memcmp(srcRow, dstRow, rowBytes) != 0)
+			flush_front(dstRow, rowBytes);
+			if (memcmp(srcRow, dstRow, rowBytes) != 0) {
+				uint32 byte = 0;
+				while (byte < rowBytes && srcRow[byte] == dstRow[byte])
+					byte++;
+				note_mismatch(bands[i].y + row, byte, srcRow, dstRow, rowBytes);
 				return false;
+			}
 			srcRow += pitch;
 			dstRow += pitch;
 		}
@@ -489,7 +542,8 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 	note(&sGpuTimes, system_time() - started);
 	if (sDebug && ++sFrame % 100u == 0) {
 		if (!same_picture(back, front, bands, bandCount)) {
-			syslog(LOG_INFO, "app_server: copy compare MISMATCH\n");
+			syslog(LOG_INFO, "app_server: copy compare MISMATCH %s\n",
+				sCompareDetail);
 			off("compare");
 			return false;
 		}

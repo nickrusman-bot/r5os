@@ -54,7 +54,7 @@ After a fallback, that same line also carries `gpu copy off: <reason>`, so a rot
 
 `app_server: copy gpu median <n> us cpu <n> ms per 10 s`
 
-Every 100th GPU frame, app_server reads the copied rows back from the front buffer and compares them with the back buffer. A match logs `app_server: copy compare ok` once per 10 seconds. A mismatch logs `app_server: copy compare MISMATCH` and falls back for the session.
+Every 100th GPU frame, app_server flushes the write-combining lines of the copied rows and reads them back from the front buffer. A match logs `app_server: copy compare ok` once per 10 seconds. A mismatch logs `app_server: copy compare MISMATCH` with the row, the first different byte, and eight bytes from each side, and falls back for the session. The median line repeats that text.
 
 The GPU path is better only if the CPU time spent copying drops by at least half and the median copy time is not worse. Otherwise the path can still be correct, and the setting stays opt-in.
 

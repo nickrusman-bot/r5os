@@ -62,11 +62,14 @@ gpu_cache_log_settings()
 {
 	bool debugOn = false;
 	bool selftestOn = false;
+	bool submitLogOn = false;
 	void* settings = load_driver_settings("radeon_hd");
 	if (settings != NULL) {
 		debugOn = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);
 		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
+			false, true);
+		submitLogOn = get_driver_boolean_parameter(settings, "gpu_submit_log",
 			false, true);
 		r5_gfx9_set_flush_fence(get_driver_boolean_parameter(settings,
 			"gfx9_flush_fence", false, true) ? 1 : 0);
@@ -92,6 +95,7 @@ gpu_cache_log_settings()
 	r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
 	sDebugOn = debugOn ? 1 : 0;
 	sSelftestOn = selftestOn ? 1 : 0;
+	sSubmitLogOn = submitLogOn ? 1 : 0;
 }
 
 
@@ -858,7 +862,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	sLastIbVa = ibPage->va;
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
-	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&ib, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
@@ -1046,7 +1050,7 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	sLastIbVa = ib.va;
 	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
 	uint64 sequence = 0;
-	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
@@ -1121,7 +1125,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 			gpu_lost(info, "p");
 		return R5_GPU_P_ROOM;
 	}
-	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		if (step == 0)
