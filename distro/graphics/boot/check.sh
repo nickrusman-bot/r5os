@@ -72,6 +72,12 @@ for line in "GFX9 scratch 0xdeadbeef" "fence landed" "k2 ok gart"; do
 	fi
 done
 
+if grep -q "b5 ok" "$bootlog"; then
+	say 0 "b5 ok"
+else
+	say 1 "b5 ok"
+fi
+
 on=$(count_of "gpu copy on scanout")
 off=$(count_of "gpu copy off")
 compared=$(count_of "copy compare ok")
