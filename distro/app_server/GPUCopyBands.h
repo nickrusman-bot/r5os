@@ -123,7 +123,9 @@ r5_copy_bands_pm4(const r5_copy_band* bands, int count, uint32_t bytesPerRow,
 			uint64_t dst = dstVa + (uint64_t)row * bytesPerRow;
 			uint32_t bytes = take * bytesPerRow;
 			words[n++] = 0xc0055000u;
-			words[n++] = 0x60200000u;
+			/* CP_SYNC, source select 0, destination select 0, engine 0.
+			 * Stick 43: select 2 (0x60200000) writes nothing. */
+			words[n++] = 0x80000000u;
 			words[n++] = (uint32_t)src;
 			words[n++] = (uint32_t)(src >> 32);
 			words[n++] = (uint32_t)dst;

@@ -1,0 +1,72 @@
+#!/bin/sh
+# Open Tracker and Terminal, move and resize them, then check this boot.
+settings=/boot/home/config/settings/kernel/drivers/radeon_hd
+boot=2
+if grep -q "^gpu_app_server true" "$settings" 2>/dev/null; then
+	boot=1
+fi
+keep=/boot/home/boot$boot
+mkdir -p "$keep"
+: > "$keep/m8-run.txt"
+say() {
+	printf '%s\n' "$1" | tee -a "$keep/m8-run.txt"
+}
+
+/boot/system/Tracker /boot/home >/dev/null 2>&1 &
+say "m8-run: open Tracker"
+/boot/system/apps/Terminal >/dev/null 2>&1 &
+say "m8-run: open Terminal"
+
+ready=0
+i=0
+while [ "$i" -lt 20 ]; do
+	if hey application/x-vnd.Be-TRAK get Title of Window 0 >/dev/null 2>&1 \
+		&& hey application/x-vnd.Haiku-Terminal get Title of Window 0 \
+			>/dev/null 2>&1; then
+		ready=1
+		break
+	fi
+	i=$((i + 1))
+	sleep 1
+done
+if [ "$ready" -ne 1 ]; then
+	say FAIL
+	exit 1
+fi
+
+say "m8-run: move windows for 45 s"
+moved=0
+n=0
+while [ "$n" -lt 45 ]; do
+	if [ $((n % 2)) -eq 0 ]; then
+		tr="BRect(48.0, 48.0, 640.0, 460.0)"
+		tm="BRect(80.0, 96.0, 760.0, 520.0)"
+	else
+		tr="BRect(180.0, 120.0, 900.0, 640.0)"
+		tm="BRect(220.0, 64.0, 980.0, 560.0)"
+	fi
+	if hey application/x-vnd.Be-TRAK set Frame of Window "home" to "$tr" \
+			>/dev/null 2>&1 \
+		|| hey application/x-vnd.Be-TRAK set Frame of Window 0 to "$tr" \
+			>/dev/null 2>&1; then
+		moved=$((moved + 1))
+	fi
+	if hey application/x-vnd.Haiku-Terminal set Frame of Window 0 to "$tm" \
+			>/dev/null 2>&1; then
+		moved=$((moved + 1))
+	fi
+	n=$((n + 1))
+	sleep 1
+done
+
+say "m8-run: check"
+if [ ! -f /boot/home/check.sh ]; then
+	say FAIL
+	exit 1
+fi
+sh /boot/home/check.sh | tee -a "$keep/m8-run.txt"
+if [ "$moved" -eq 0 ]; then
+	say FAIL
+	exit 1
+fi
+exit 0

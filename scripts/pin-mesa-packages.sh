@@ -18,7 +18,7 @@ needed=(
 	mesa-25.3.6-2-x86_64.hpkg
 	mesa_devel-25.3.6-1-x86_64.hpkg
 	mesa_lavapipe-25.3.6-3-x86_64.hpkg
-	mesa_radv-25.3.6-4-x86_64.hpkg
+	mesa_radv-25.3.6-5-x86_64.hpkg
 	vulkan_loader-1.4.367-3-x86_64.hpkg
 	vulkan_tools-1.4.367-2-x86_64.hpkg
 	vulkanteapot-1.0.0-2-x86_64.hpkg
@@ -33,7 +33,8 @@ for name in "${needed[@]}"; do
 done
 rm -f "$DL/mesa-25.3.6-1-x86_64.hpkg" "$DL/mesa_zink-25.3.6-1-x86_64.hpkg" \
 	"$DL/mesa_radv-25.3.6-1-x86_64.hpkg" "$DL/mesa_radv-25.3.6-2-x86_64.hpkg" \
-	"$DL/mesa_radv-25.3.6-3-x86_64.hpkg" "$DL/mesa_lavapipe-25.3.6-2-x86_64.hpkg" \
+	"$DL/mesa_radv-25.3.6-3-x86_64.hpkg" "$DL/mesa_radv-25.3.6-4-x86_64.hpkg" \
+	"$DL/mesa_lavapipe-25.3.6-2-x86_64.hpkg" \
 	"$DL/vulkan_loader-1.4.367-2-x86_64.hpkg" \
 	"$DL/vulkan_tools-1.4.367-1-x86_64.hpkg" \
 	"$DL/vulkanteapot-1.0.0-1-x86_64.hpkg"
@@ -54,7 +55,7 @@ new = (
     "\tmesa-25.3.6-2\n"
     "\tmesa_devel-25.3.6-1\n"
     "\tmesa_lavapipe-25.3.6-3\n"
-    "\tmesa_radv-25.3.6-4\n"
+    "\tmesa_radv-25.3.6-5\n"
     "\tvulkan_loader-1.4.367-3\n"
     "\tvulkan_tools-1.4.367-2\n"
     "\tvulkanteapot-1.0.0-2\n"
@@ -64,7 +65,7 @@ if old in text:
 elif "\tmesa-25.3.6-1\n" in text and "\tmesa_zink-25.3.6-1\n" not in text:
     text = text.replace(
         "\tmesa-25.3.6-1\n",
-        "\tlibdrm-2.4.124-1\n\tmesa_zink-25.3.6-1\n\tmesa_radv-25.3.6-4\n",
+        "\tlibdrm-2.4.124-1\n\tmesa_zink-25.3.6-1\n\tmesa_radv-25.3.6-5\n",
         1,
     )
 elif "\tvulkan_tools-1.4.367-2\n" not in text and "\tvulkan_tools-1.4.367-1\n" not in text:
@@ -86,11 +87,12 @@ if "mesa-22.0.5-3" in text or "mesa_swpipe-22" in text:
     sys.exit("mesa 22 still in the pin")
 text = text.replace("\tmesa_lavapipe-25.3.6-1\n", "\tmesa_lavapipe-25.3.6-3\n")
 text = text.replace("\tmesa_lavapipe-25.3.6-2\n", "\tmesa_lavapipe-25.3.6-3\n")
-text = text.replace("\tmesa_radv-25.3.6-1\n", "\tmesa_radv-25.3.6-4\n")
-text = text.replace("\tmesa_radv-25.3.6-2\n", "\tmesa_radv-25.3.6-4\n")
-text = text.replace("\tmesa_radv-25.3.6-3\n", "\tmesa_radv-25.3.6-4\n")
-if "\tmesa_radv-25.3.6-4\n" not in text:
-    sys.exit("mesa_radv 25.3.6-4 missing from the pin")
+text = text.replace("\tmesa_radv-25.3.6-1\n", "\tmesa_radv-25.3.6-5\n")
+text = text.replace("\tmesa_radv-25.3.6-2\n", "\tmesa_radv-25.3.6-5\n")
+text = text.replace("\tmesa_radv-25.3.6-3\n", "\tmesa_radv-25.3.6-5\n")
+text = text.replace("\tmesa_radv-25.3.6-4\n", "\tmesa_radv-25.3.6-5\n")
+if "\tmesa_radv-25.3.6-5\n" not in text:
+    sys.exit("mesa_radv 25.3.6-5 missing from the pin")
 text = text.replace("\tvulkan_loader-1.4.367-1\n", "\tvulkan_loader-1.4.367-3\n")
 text = text.replace("\tvulkan_loader-1.4.367-2\n", "\tvulkan_loader-1.4.367-3\n")
 text = text.replace("\tvulkan_tools-1.4.367-1\n", "\tvulkan_tools-1.4.367-2\n")
@@ -107,6 +109,7 @@ if [[ -f "$CACHE" ]]; then
 		| sed -n 's/^[[:space:]]*\(.*\.hpkg\)$/\1/p' \
 		| grep -v -E '^(mesa|mesa_devel|mesa_swpipe|mesa_source)-22\.0\.5-3-' \
 		| grep -v -E '^vulkan_loader-1\.4\.367-1-' \
+		| grep -v -E '^mesa_radv-25\.3\.6-4-' \
 		> "$list"
 	cat > "$DL/r5-haikuports.repo.info" <<'EOF'
 name HaikuPorts-BuildPackages

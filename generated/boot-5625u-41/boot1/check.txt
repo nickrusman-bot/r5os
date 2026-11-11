@@ -1,0 +1,12 @@
+boot 1
+FAIL boot marker
+FAIL GFX9 scratch 0xdeadbeef
+FAIL fence landed
+FAIL k2 ok gart
+PASS no copy compare MISMATCH
+PASS no gpu copy off
+FAIL gpu copy on scanout
+FAIL copy compare ok
+FAIL copy gpu median three times
+FAIL speed rule needs the cpu boot
+FAIL

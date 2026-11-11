@@ -288,8 +288,9 @@ r5_stage_p_build(uint32_t step, uint64_t page, uint32_t* out, uint32_t cap,
 			uint32_t srcLo = (uint32_t)(page + 128u);
 			uint32_t dstLo = (uint32_t)(page + 192u);
 			const uint32_t src[] = {
-				/* DST_SEL 3 is L2. The dump had 2, which soc15d.h does not name. */
-				0xc0055000u, 0x60200000u, srcLo, hi, dstLo, hi, 0x80000040u
+				/* Stick 43: destination select 2 writes nothing.
+				 * Select 0 is the K2 fill. CP_SYNC, engine 0. */
+				0xc0055000u, 0x80000000u, srcLo, hi, dstLo, hi, 0x80000040u
 			};
 			n = r5_p_words(out, cap, src, 7);
 			break;

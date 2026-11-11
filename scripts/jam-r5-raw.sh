@@ -5,6 +5,10 @@ WIN="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH=/usr/bin:/bin:/home/nickr/bin:$PATH
 
 "$WIN/scripts/pin-mesa-packages.sh" || exit 1
+for name in check.sh m8-run m8-boot2 m8-show; do
+	sh -n "$WIN/distro/graphics/boot/$name" || exit 1
+	echo "sh -n $name"
+done
 
 ver="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/VERSION" | head -1 | tr -d '\r' | tr -d '[:space:]')"
 build="$(sed -n '/^[[:space:]]*[^#[:space:]]/p' "$WIN/distro/BUILD" | head -1 | tr -d '\r' | tr -d '[:space:]')"
