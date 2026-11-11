@@ -552,14 +552,17 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		return false;
 	}
 	note(&sGpuTimes, system_time() - started);
-	if (sDebug && ++sFrame % 100u == 0) {
-		if (!same_picture(back, front, bands, bandCount)) {
-			syslog(LOG_INFO, "app_server: copy compare MISMATCH %s\n",
-				sCompareDetail);
-			off("compare");
-			return false;
+	if (sDebug) {
+		sFrame++;
+		if (sFrame == 1 || sFrame % 100u == 0) {
+			if (!same_picture(back, front, bands, bandCount)) {
+				syslog(LOG_INFO, "app_server: copy compare MISMATCH %s\n",
+					sCompareDetail);
+				off("compare");
+				return false;
+			}
+			sCompared = true;
 		}
-		sCompared = true;
 	}
 	report();
 	if (!sLoggedOn) {
