@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10054 - Vulkan in a window
+Vulkan programs can draw in an ordinary window. On AMD Ryzen laptops this uses the GPU, as an experimental option, with software as the fallback.
+
 R5 2026.1-dev Build 10053 - Your screen at a glance
 Display shows your screen and your workspaces at a glance. Resolution still waits for Apply, and asks you to keep the picture. The workspace columns and rows change right away.
 
