@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Stick 43 boot 1 wrote nothing to the screen
+
+Stick 43 is the 15:39 anyboot, boot 1. The stick sha256 is `a1836a23…`. Logs: `C:\Users\nickr\Desktop\Logs\m8 43`. Boot 2 did not run. There is no speed-rule result.
+
+The scanout and the pitch are right: `scanout bar+0x0 1920 x 1080 pitch 7680` and `gpu copy on scanout 1920x1080 pitch 7680`. One hundred submits of 7 dwords each came back. The compare then read `at 1078 byte 0 back 98 66 33 ff front ff ff ff 00`: the screen was still the white boot picture. The same boot's `b5` uses that packet and logged `b5 miss` with `word 00000000`. `b1` and `b3` wrote into the carve-out, and the K2 fill (`k2 dma pattern 262144 cafe 0 other 0`) uses destination select 0. Destination select 2 writes nothing. The control word was `0x60200000`.
+
+The fallback copied only the dirty region of the call that failed. The earlier frames were never copied, so the boot picture stayed and the mouse left a trail of desktop blue. The photo is that trail.
+
+The copy, stage `b5`, and stage P now use `0x80000000`: CP_SYNC, source select 0, destination select 0, engine 0. The checker rejects destination select 2 everywhere. The call that turns the GPU copy off copies the whole back buffer once, and that copy is not a median sample. With `gpu_debug`, frame 1 is compared, then every 100th. `check.sh` prints `PASS b5 ok` only when the syslog has `b5 ok`. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The screen compare read the old bytes
 
 Stick 42 boot 1 copied through the GPU, then stopped. The kept log says `gpu copy off: compare`. The one-shot `copy compare MISMATCH` and `gpu copy on scanout` lines were already rotated out. The check still passed `no copy compare MISMATCH`, because that exact text was gone and `gpu copy off: compare` did not count. Moving the mouse painted the sign-in screen through the firmware picture in small boxes: only the dirty rows are copied, so the rest of the boot picture stays until something redraws it. After the compare failed, the CPU copy ran and the self-test looked normal. Vulkan still reported `wsi clear ok AMD Radeon Graphics (RADV RENOIR)`, and both window files say `device lost no`.
