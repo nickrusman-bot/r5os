@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The scanout fix is on a stick
+
+`scripts/apply-overlay.sh` stopped before copying anything: the artwork generator does not match `r5-symbol.svg` and the disk-badge header. The graphics sources and app_server were copied with `apply-radeon.py` and `apply-app-server.py`. No other jam was running. `jam -q @r5-raw` then `jam -q @r5-anyboot` finished with `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`, `anyboot_exit=0`. The anyboot is 2156724224 bytes at 15:00 Europe/Amsterdam. Boot 1 is planted after that: `gpu_app_server true`, `gpu_debug true`, and the same other lines as stick 41, plus `m8-run`, `m8-boot2`, `m8-show` and `check.sh` in `/boot/home`. The RADV package in the image carries those same scripts. `write-stick.py` wrote disk 1, the General UDisk, and left disk 0 alone. The read-back matched at 15:06. sha256 `e8204a97944f9f1762c35405353ca3a05d4e14a38d510f17d52a76530c1d932a`. The 5625U has not booted this image. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The GPU back buffer uses the scanout pitch
 
 The GPU back buffer reported `width * 4` bytes per row. On DCE 2 and later the framebuffer pitch is the width rounded up to a multiple of 64 pixels. A 1366-wide screen is 1408 pixels of stride, 5632 bytes against 5464. `GPUCopy::Copy` then latched `gpu copy off: pitch` for the session. The 5625U boots at 1920x1080, and 1920 is already a multiple of 64, so stick 41 did not take this path. The back buffer now takes the front buffer's bytes per row. The read-back compares the visible pixels and leaves the padding out. Not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
