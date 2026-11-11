@@ -16,6 +16,7 @@ FILES = (
     "src/kits/media/MediaNode.cpp",
     "src/servers/media/media_server.cpp",
     "src/servers/media/DefaultManager.cpp",
+    "src/servers/media/DefaultManager.h",
     "src/servers/media_addon/MediaAddonServer.cpp",
     "src/servers/media_addon/MediaFilePlayer.cpp",
     "src/servers/media_addon/MediaFilePlayer.h",
