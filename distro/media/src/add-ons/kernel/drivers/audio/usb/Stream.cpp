@@ -117,6 +117,11 @@ Stream::_ChooseAlternate()
 			continue;
 		}
 
+		if (fAlternates[i]->Endpoint() == 0) {
+			TRACE(ERR, "Ignore alternate %d - zero endpoint description.\n", i);
+			continue;
+		}
+
 		if (fAlternates[i]->Format()->fFormatType
 				!= USB_AUDIO_FORMAT_TYPE_I) {
 			TRACE(ERR, "Ignore alternate %d - format type %#02x "
@@ -472,10 +477,21 @@ Stream::OnSetConfiguration(usb_device device,
 		return B_ERROR;
 	}
 
+	// The replugged configuration may not have this interface or alternate.
+	// Indexing a missing alt[] is a small non-NULL pointer, so a NULL check
+	// on that address does not catch it. RenkuOS 428e08cd07.
+	if (fInterface >= config->interface_count
+		|| fActiveAlternate >= config->interface[fInterface].alt_count
+		|| config->interface[fInterface].alt == NULL) {
+		TRACE(ERR, "No alternate %" B_PRIuSIZE " of interface %" B_PRIuSIZE
+			" in this configuration. Not set.\n", fActiveAlternate, fInterface);
+		return B_ERROR;
+	}
+
 	usb_interface_info* interface
 		= &config->interface[fInterface].alt[fActiveAlternate];
-	if (interface == NULL) {
-		TRACE(ERR, "NULL interface. Not set.\n");
+	if (fAlternates[fActiveAlternate]->Endpoint() == NULL) {
+		TRACE(ERR, "NULL endpoint. Not set.\n");
 		return B_ERROR;
 	}
 

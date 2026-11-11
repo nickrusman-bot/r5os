@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A short USB audio configuration does not panic
+
+Replug indexed the remembered interface and alternate without checking that the new configuration has them. A missing alternate is a small non-NULL pointer, so the old NULL check never fired. The indexes are checked first. An alternate with no endpoint is skipped, the same way an alternate with no format already was. Adapted from RenkuOS `428e08cd07` (David Beckman, MIT). Not reproduced with a truncated descriptor. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Notices for the RenkuOS audio ports
 
 `THIRD_PARTY_NOTICES.md` names the RenkuOS commits ported onto `usb_midi`, `multi_audio`, and `usb_audio`, and their authors. The files stay MIT. There is no What's new section and `distro/BUILD` stays the same.
