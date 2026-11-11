@@ -14,6 +14,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### USB audio and MIDI behavior from RenkuOS
+
+Location: `distro/media/` `usb_midi`, `multi_audio`, and `usb_audio`.
+
+The files stay Haiku's, MIT, copyright the authors named in each file. The added behavior is ported from RenkuOS commits `fe2de4aa60`, `cb61494f02`, `7405980fad`, `303b85eae5`, `bd571637d2`, `cf885a005b`, `8db4b0d1b4`, and `8d3c445d68`. Authors: David Beckman and rations. The Roland cable table is facts about the hardware. No ALSA code is included. The product-name read is the same idea as the Media-OS `usb_audio` driver and is written on our file. The Haiku MIT headers stay. The R5 snippets that were already in these files stay GPL-3.0-or-later.
+
 ### PCI segments
 
 The x86 PCI host files are Haiku's. Copyright 2022 Haiku, Inc., and the earlier authors named in `pci.cpp`. License: MIT. The code that keeps a firmware segment other than segment 0 is copyright 2026 R5OS Contributors. Those snippets are GPL-3.0-or-later. The Haiku headers stay.

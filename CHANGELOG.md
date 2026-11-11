@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Notices for the RenkuOS audio ports
+
+`THIRD_PARTY_NOTICES.md` names the RenkuOS commits ported onto `usb_midi`, `multi_audio`, and `usb_audio`, and their authors. The files stay MIT. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - A USB audio device uses its product name
 
 Media listed every USB interface as "USB Audio". The description now uses the USB product string, and "USB Audio" when the device has none. Two units of the same model still share that name. Taken from the naming idea in the Media-OS driver, on our `Device`. No device was attached. There is no What's new section and `distro/BUILD` stays the same.
