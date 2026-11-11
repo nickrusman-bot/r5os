@@ -28,7 +28,7 @@ If that allocation fails, the `MallocBuffer` is used and the session falls back.
 
 `R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. The struct is added at the end of `headers/private/r5gpu/r5_gpu.h`. The kernel fills width, height, bytes per row, the color space, the byte size, a buffer handle, and a GPU address in the caller's address space. The numbers come from the driver's `shared_info`: `current_mode`, `bytes_per_row`, and the framebuffer's place in the carveout (`MC_VM_FB_OFFSET` plus the byte offset of `frame_buffer_phys`). They are not constants.
 
-The first open of `/dev/graphics/radeon_hd` records that team's id. The call requires the same team. Anyone else gets `B_NOT_ALLOWED`. The last close clears the record. The handle refers to that existing framebuffer. Freeing it unmaps the GPU pages and does not free the framebuffer.
+The kernel allows the call only when the calling team is app_server. It reads the executable from that team's info, not from a value the caller passes. The path is `/system/servers/app_server`, or `/boot/system/servers/app_server` after `/system` is resolved. Anyone else gets `B_NOT_ALLOWED`. The handle refers to that existing framebuffer. Freeing it unmaps the GPU pages and does not free the framebuffer.
 
 `docs/GPU-ARCHITECTURE.md` names the call in the same change as the header.
 
