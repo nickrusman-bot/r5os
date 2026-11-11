@@ -349,6 +349,9 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 	fStack(stack),
 	fIRQ(0),
 	fUseMSI(false),
+	fTrbPad(info != NULL && info->vendor_id == PCI_VENDOR_VIA
+		&& info->device_id == PCI_DEVICE_VIA_VL805 ? XHCI_TRB_OVERFETCH : 0),
+	fRingStride(XHCI_ENDPOINT_RING_SIZE + fTrbPad),
 	fErstArea(-1),
 	fDcbaArea(-1),
 	fCmdCompSem(-1),
@@ -1628,7 +1631,7 @@ XHCI::CreateDescriptor(uint32 trbCount, uint32 bufferCount, size_t bufferSize)
 	// _LinkDescriptorForPipe() has room to insert a link TRB.
 	trbCount++;
 	// Leave empty slots after the link. A VL805 reads past the doorbell.
-	uint32 padded = trbCount + XHCI_TRB_OVERFETCH;
+	uint32 padded = trbCount + fTrbPad;
 	if (fStack->AllocateChunk((void**)&result->trbs, &result->trb_addr,
 			(padded * sizeof(xhci_trb))) < B_OK) {
 		TRACE_ERROR("failed to allocate TRBs\n");
@@ -1722,7 +1725,7 @@ XHCI::FreeDescriptor(xhci_td* descriptor)
 
 	if (descriptor->trbs != NULL) {
 		fStack->FreeChunk(descriptor->trbs, descriptor->trb_addr,
-			((descriptor->trb_count + XHCI_TRB_OVERFETCH) * sizeof(xhci_trb)));
+			((descriptor->trb_count + fTrbPad) * sizeof(xhci_trb)));
 	}
 	if (descriptor->buffers != NULL) {
 		size_t totalSize = descriptor->buffer_size * descriptor->buffer_count;
@@ -1979,14 +1982,14 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 
 	device->trb_area = fStack->AllocateArea((void**)&device->trbs,
 		&device->trb_addr, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
-			* XHCI_ENDPOINT_RING_STRIDE, "XHCI endpoint trbs");
+			* fRingStride, "XHCI endpoint trbs");
 	if (device->trb_area < B_OK) {
 		TRACE_ERROR("unable to create a device trbs area\n");
 		CleanupDevice(device);
 		return NULL;
 	}
 	memset(device->trbs, 0, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
-		* XHCI_ENDPOINT_RING_STRIDE);
+		* fRingStride);
 
 	// set up slot pointer to device context
 	fDcba->baseAddress[slot] = device->device_ctx_addr;
@@ -2268,11 +2271,10 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 		endpoint->next = 0;
 		endpoint->recovering = false;
 
-		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_STRIDE;
+		endpoint->trbs = device->trbs + id * fRingStride;
 		endpoint->trb_addr = device->trb_addr
-			+ id * XHCI_ENDPOINT_RING_STRIDE * sizeof(xhci_trb);
-		memset(endpoint->trbs, 0,
-			sizeof(xhci_trb) * XHCI_ENDPOINT_RING_STRIDE);
+			+ id * fRingStride * sizeof(xhci_trb);
+		memset(endpoint->trbs, 0, sizeof(xhci_trb) * fRingStride);
 
 		TRACE("insert endpoint for pipe: trbs, device %p endpoint %p\n",
 			device->trbs, endpoint->trbs);
