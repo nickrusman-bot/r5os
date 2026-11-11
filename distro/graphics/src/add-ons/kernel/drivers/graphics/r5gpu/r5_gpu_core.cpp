@@ -481,7 +481,7 @@ gpu_bo_release(gpu_bo* bo)
 	if (!bo->live)
 		return;
 	gpu_bo_unmap(bo);
-	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+	if (bo->domain == R5_GPU_DOMAIN_VRAM && !bo->borrowed) {
 		if (!sDeferred || !r5_defer_add(sDefer, 256, bo->vramOffset))
 			gpu_hw_vram_free(bo->vramOffset);
 	}
@@ -2106,6 +2106,97 @@ gpu_ih_counts(void* buffer, size_t length)
 
 
 static status_t
+gpu_scanout(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_scanout in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return status;
+	if (in.version != 1)
+		return B_BAD_VALUE;
+	if (gR5GpuOps.scanout == NULL)
+		return B_NOT_SUPPORTED;
+	uint32 width = 0;
+	uint32 height = 0;
+	uint32 pitch = 0;
+	uint32 format = 0;
+	uint64 offset = 0;
+	uint64 bytes = 0;
+	int32 team = -1;
+	if (gR5GpuOps.scanout(client->info, &width, &height, &pitch, &format,
+			&offset, &bytes, &team) != B_OK)
+		return B_ERROR;
+	if (team < 0 || team != team_get_current_team_id())
+		return B_NOT_ALLOWED;
+	if (client->handleCount >= kMaxClientBo)
+		return B_NO_MEMORY;
+	int slot = -1;
+	for (uint32 i = 0; i < kMaxBo; i++) {
+		if (!sBo[i].live) {
+			slot = (int)i;
+			break;
+		}
+	}
+	if (slot < 0)
+		return B_NO_MEMORY;
+	gpu_bo* bo = &sBo[slot];
+	memset(bo, 0, sizeof(*bo));
+	bo->area = -1;
+	bo->mapTeam = -1;
+	bo->kernelArea = -1;
+	bo->domain = R5_GPU_DOMAIN_VRAM;
+	bo->bytes = bytes;
+	bo->vramOffset = offset;
+	bo->borrowed = true;
+	bo->live = true;
+	bo->owner = client;
+
+	uint64 va = 0x100000000ull;
+	bool freeVa = false;
+	for (int n = 0; n < 16; n++) {
+		if (gpu_va_fits(va, bytes) && !gpu_hw_lookup(gpu_vm(client), va)) {
+			freeVa = true;
+			break;
+		}
+		va += 0x4000000ull;
+	}
+	if (!freeVa) {
+		bo->live = false;
+		return B_NO_MEMORY;
+	}
+	r5_gpu_va map;
+	memset(&map, 0, sizeof(map));
+	map.size = sizeof(map);
+	map.version = 1;
+	map.context = 1;
+	map.handle = (uint32)slot + 1u;
+	map.gpu_va = va;
+	map.map_bytes = bytes;
+	map.flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
+	status = gpu_va_map_copied(client, &map);
+	if (status != B_OK) {
+		bo->live = false;
+		bo->owner = NULL;
+		return status;
+	}
+	client->handles[client->handleCount++] = map.handle;
+	in.handle = map.handle;
+	in.width = width;
+	in.height = height;
+	in.bytes_per_row = pitch;
+	in.format = format;
+	in.gpu_va = va;
+	in.bytes = bytes;
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK) {
+		client->handleCount--;
+		gpu_bo_release(bo);
+	}
+	return status;
+}
+
+
+static status_t
 gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	gpu_client* client = (gpu_client*)cookie;
@@ -2189,6 +2280,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		}
 	} else if (op == R5_GPU_BO_CREATE)
 		status = gpu_bo_create(client, buffer, length);
+	else if (op == R5_GPU_SCANOUT_BO)
+		status = gpu_scanout(client, buffer, length);
 	else if (op == R5_GPU_BO_FREE)
 		status = gpu_bo_free(client, buffer, length);
 	else if (op == R5_GPU_BO_MAP)

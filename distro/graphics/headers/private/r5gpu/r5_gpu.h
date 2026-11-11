@@ -58,7 +58,10 @@ enum {
 	/* Ring fill. Logging only. Older callers never send this opcode. */
 	R5_GPU_RING_FILL = R5_GPU_OP_BASE + 29,
 	/* Interrupt counts. Logging only. Older callers never send this opcode. */
-	R5_GPU_IH_COUNTS = R5_GPU_OP_BASE + 30
+	R5_GPU_IH_COUNTS = R5_GPU_OP_BASE + 30,
+	/* The framebuffer on screen. Only the display team. Older callers
+	 * never send this opcode. */
+	R5_GPU_SCANOUT_BO = R5_GPU_OP_BASE + 31
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -511,6 +514,23 @@ typedef struct {
 	uint32_t	eop;
 	uint32_t	wake;
 } r5_gpu_ih_counts;
+
+/* The scanout surface, mapped into the caller's GPU address space.
+ * The kernel fills every field except size and version. handle is the
+ * existing framebuffer, not a new allocation. A team that does not own
+ * the display gets B_NOT_ALLOWED. */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;
+	uint32_t	width;
+	uint32_t	height;
+	uint32_t	bytes_per_row;
+	uint32_t	format;
+	uint64_t	gpu_va;
+	uint64_t	bytes;
+} r5_gpu_scanout;
+
 
 static inline int
 r5_gpu_counters_match(const r5_gpu_counters* before,

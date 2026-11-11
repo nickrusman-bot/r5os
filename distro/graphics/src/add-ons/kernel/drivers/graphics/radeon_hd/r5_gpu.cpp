@@ -1903,6 +1903,11 @@ amd_dump(const char* why)
 }
 
 
+static int amd_scanout(void* info, uint32* width, uint32* height,
+	uint32* bytesPerRow, uint32* format, uint64* vramOffset, uint64* bytes,
+	int32* team);
+
+
 r5_gpu_backend_ops gR5GpuOps = {
 	amd_device,
 	amd_read_reg,
@@ -1939,5 +1944,65 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_fault_take,
 	amd_map_vram,
 	amd_ring_waited,
-	amd_ring_fill
+	amd_ring_fill,
+	amd_scanout
 };
+
+
+static int32 sDisplayTeam = -1;
+
+
+extern "C" team_id team_get_current_team_id(void);
+
+
+extern "C" void
+r5_gpu_note_display_team(void)
+{
+	sDisplayTeam = team_get_current_team_id();
+}
+
+
+extern "C" void
+r5_gpu_clear_display_team(void)
+{
+	if (sDisplayTeam == team_get_current_team_id())
+		sDisplayTeam = -1;
+}
+
+
+static int
+amd_scanout(void* info, uint32* width, uint32* height, uint32* bytesPerRow,
+	uint32* format, uint64* vramOffset, uint64* bytes, int32* team)
+{
+	radeon_info* device = (radeon_info*)info;
+	if (device == NULL || device->shared_info == NULL || width == NULL
+		|| height == NULL || bytesPerRow == NULL || format == NULL
+		|| vramOffset == NULL || bytes == NULL || team == NULL)
+		return B_ERROR;
+	radeon_shared_info* shared = device->shared_info;
+	uint32 w = shared->current_mode.virtual_width;
+	uint32 h = shared->current_mode.virtual_height;
+	uint32 pitch = shared->bytes_per_row;
+	if (w == 0 || h == 0 || pitch < w * 4u || (pitch & 3u) != 0)
+		return B_ERROR;
+	uint64 picture = (uint64)pitch * h;
+	uint64 mapped = (picture + 4095ull) & ~4095ull;
+	uint32 fb = gpu_mmio(device, kGcSegment, 0x096b) & 0x00ffffffu;
+	uint64 base = (uint64)fb << 24;
+	uint64 phys = (uint64)shared->frame_buffer_phys;
+	if (phys < base || (phys & 4095ull) != 0)
+		return B_ERROR;
+	uint64 offset = phys - base;
+	uint64 vram = 0;
+	if (amd_vram_bytes(info, &vram) != B_OK || offset > vram
+		|| mapped > vram - offset)
+		return B_ERROR;
+	*width = w;
+	*height = h;
+	*bytesPerRow = pitch;
+	*format = (uint32)shared->current_mode.space;
+	*vramOffset = offset;
+	*bytes = mapped;
+	*team = sDisplayTeam;
+	return B_OK;
+}

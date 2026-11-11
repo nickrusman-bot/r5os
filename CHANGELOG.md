@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The screen buffer can be mapped for the display team
+
+`R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. It returns the width, height, bytes per row and color space from the driver's framebuffer, plus a handle and a GPU address in the caller's address space. The pages are the framebuffer that is already on screen. Freeing the handle unmaps them and does not free the framebuffer. The team is the one that opened `/dev/graphics/radeon_hd`. Any other team gets `B_NOT_ALLOWED`. With no open graphics device the team is unset, so the call is refused.
+
+A dirty region becomes bands of whole rows. `DMA_DATA` holds at most 2097151 bytes, so a longer band is several packets. The control word is `0x60200000`, the word the DMA stage already ran. `scripts/check-copy-bands.cpp` prints `ok band builder 7 cases`. `scripts/check-pm4.py` checks those streams. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Stick 40 presents Vulkan in a window
 
 Stick 40 is the 10:23 anyboot. The stick sha256 is `87df047a…`. Logs: `generated/boot-5625u-40`.
