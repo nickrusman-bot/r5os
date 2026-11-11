@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Stick 38 opens a RADV window, then the blit buffer asserts
+
+Stick 38 is the 01:40 anyboot, boot 1 (`generated/boot-5625u-38`). The GPU stayed up. `check.sh` (the transcript is `920.txt`; `~/check.sh` was not there, `check.sh` on the path was) passed the clear, both driver lines, the cpu span, `eop 1163`, the ring contract, scratch `0xdeadbeef`, the fence, k2, and `gpu lost before window tests`. It failed the two window lines, so the run is `FAIL`.
+
+`wsi.txt` is `wsi clear ok AMD Radeon Graphics (RADV RENOIR) 64x64 frames 100`. Off screen, RADV compared with Lavapipe and printed `pixels ok` (`radeon ms per frame 0.105`). Both window files say `window driver AMD Radeon Graphics (RADV RENOIR)`, then resize, workspace, minimise and restore `ok`, then `window close FAIL` and `device lost yes`.
+
+That last pair is the test script. The draw thread hit the debugger, `debug_server` killed team 760 (VulkanTeapot) and team 819 (vkcube), and the script prints `device lost yes` when the program does not exit 0. The GPU was still answering afterwards: `fence ok`, `gpu read deadbeef`, `eop 1163`. This is not a device-lost reset.
+
+The debugger text is `reqs.size <= info->linear_size`. The library is the stick 38 `libvulkan_radeon.so`, build-id `4929c886c8861fb44524ed92ce4fd43ffe4963d7`. The five offsets from `vk_icdGetInstanceProcAddr` resolve on that library to `wsi_common.c:2017` (the assert), `wsi_create_cpu_buffer_image_mem` (`wsi_common.c:2476`), `wsi_create_image` (`:797`), `r5_create_swapchain` (`wsi_common_haiku.cpp:776`) and `wsi_CreateSwapchainKHR` (`wsi_common.c:1073`). The stack is a swapchain create, which the window does again when present comes back out of date after a resize.
+
+The buffer is created at `info->linear_size`. RADV then reports that buffer's memory size rounded up to 16 bytes (`radv_buffer.c`, alignment 16). `wsi_configure_cpu_image` passes size alignment 1, and RADV's row-pitch alignment is 1, so the size is `width * 4 * height`. When that is not a multiple of 16, the requirement is larger than the size and the assert fires. The stick 37 SDMA assert is gone. `DRM_IOCTL_PRIME` is still logged once during the clear and the clear still passes. The old hardware lines and the lines in `generated/AFTER-M7.md` are unchanged. Not fixed in this commit. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The Vulkan window blit stays on the graphics queue
 
 Stick 37, boot 1 (`generated/boot-5625u-37`), kept the GPU. Off screen, RADV compared with Lavapipe and printed `pixels ok`. `r5-wsi-test` and VulkanTeapot then died in the debugger: `util_is_power_of_two_nonzero(ib_alignment)` at `radv_amdgpu_cs.c:299`, and the self-test printed `exit 149`. `wsi.txt` is empty because that process died before it flushed. `win-teapot.txt` has `window driver AMD Radeon Graphics (RADV RENOIR)` and then `window resize FAIL` / `window workspace FAIL`, because the debugger killed team 765 before the later lines. The crash report `VulkanTeapot-765-debug-11-11-2026-00-38-36.report` is the same assert under `terminator_CreateSwapchainKHR`.
