@@ -36,10 +36,6 @@
 #define ERROR(x...) dprintf("radeon_hd: " x)
 
 
-extern "C" void r5_gpu_note_display_team(void);
-extern "C" void r5_gpu_clear_display_team(void);
-
-
 /* device hooks prototypes */
 
 static status_t device_open(const char* name, uint32 flags, void** _cookie);
@@ -142,11 +138,6 @@ device_open(const char* name, uint32 /*flags*/, void** _cookie)
 	if (info->init_status == B_OK) {
 		info->open_count++;
 		*_cookie = info;
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-		r5_gpu_note_display_team();
-// SPDX-SnippetEnd
 	} else
 		ERROR("%s: initialization failed!\n", __func__);
 
@@ -172,11 +163,6 @@ device_free(void* data)
 	mutex_lock(&gLock);
 
 	if (info->open_count-- == 1) {
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-		r5_gpu_clear_display_team();
-// SPDX-SnippetEnd
 		// release info structure
 		info->init_status = B_NO_INIT;
 		radeon_hd_uninit(*info);

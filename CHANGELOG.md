@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Only app_server may map the screen buffer
+
+`R5_GPU_SCANOUT_BO` no longer allows whichever team opened `/dev/graphics/radeon_hd` first. The kernel reads the calling team's info and allows the call only when that team's executable is `/system/servers/app_server`, or `/boot/system/servers/app_server` after `/system` is resolved. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`.
+
+Host checks: `ok band builder 7 cases`. `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
+No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-app-server` copied this branch into the shared tree, then `jam -q @r5-raw` finished at 11:22 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 11:22. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The desktop image was built, and not booted
 
 The second jam wrote `r5-os.image` at 02:06 CET, 2147483648 bytes, from `cursor/m8-app-server`. The packaged app_server has the copy, median, and compare lines, and the driver has the scanout call. `home/config/settings/kernel/drivers/radeon_hd` is not in the image, so the copy stays on the CPU and nothing is logged. The shared package directory supplied `mesa_radv-25.3.6-3`; this branch's package check still looks for `-1` and reported it missing. That check does not change the image. Not booted. There is no What's new section and `distro/BUILD` stays the same.
@@ -22,7 +30,7 @@ Asking for the screen buffer on every copy filled the 16 address slots, then the
 
 ## 2026-11-11 - The screen buffer can be mapped for the display team
 
-`R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. It returns the width, height, bytes per row and color space from the driver's framebuffer, plus a handle and a GPU address in the caller's address space. The pages are the framebuffer that is already on screen. Freeing the handle unmaps them and does not free the framebuffer. The team is the one that opened `/dev/graphics/radeon_hd`. Any other team gets `B_NOT_ALLOWED`. With no open graphics device the team is unset, so the call is refused.
+`R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. It returns the width, height, bytes per row and color space from the driver's framebuffer, plus a handle and a GPU address in the caller's address space. The pages are the framebuffer that is already on screen. Freeing the handle unmaps them and does not free the framebuffer. Only app_server may call it. The kernel reads the calling team's info and allows `/system/servers/app_server` or `/boot/system/servers/app_server`. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`.
 
 A dirty region becomes bands of whole rows. `DMA_DATA` holds at most 2097151 bytes, so a longer band is several packets. The control word is `0x60200000`, the word the DMA stage already ran. `scripts/check-copy-bands.cpp` prints `ok band builder 7 cases`. `scripts/check-pm4.py` checks those streams. Not booted. There is no What's new section and `distro/BUILD` stays the same.
 

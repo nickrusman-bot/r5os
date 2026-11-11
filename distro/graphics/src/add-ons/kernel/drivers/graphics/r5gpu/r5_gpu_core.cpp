@@ -23,6 +23,7 @@
 #include "r5_wait.h"
 
 #include <KernelExport.h>
+#include <OS.h>
 #include <kernel.h>
 #include <Drivers.h>
 
@@ -2106,6 +2107,28 @@ gpu_ih_counts(void* buffer, size_t length)
 }
 
 
+/* The path is the one load_image stored in the team info. It is not a
+ * value from the ioctl. Roster resolves /system to /boot/system. */
+static bool
+gpu_caller_is_app_server()
+{
+	team_info info;
+	if (_get_team_info(B_CURRENT_TEAM, &info, sizeof(info)) != B_OK)
+		return false;
+	static const char* kPaths[] = {
+		"/system/servers/app_server",
+		"/boot/system/servers/app_server"
+	};
+	for (uint32 i = 0; i < sizeof(kPaths) / sizeof(kPaths[0]); i++) {
+		size_t length = strlen(kPaths[i]);
+		if (strncmp(info.args, kPaths[i], length) == 0
+			&& (info.args[length] == '\0' || info.args[length] == ' '))
+			return true;
+	}
+	return false;
+}
+
+
 static status_t
 gpu_scanout(gpu_client* client, void* buffer, size_t length)
 {
@@ -2115,6 +2138,8 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 		return status;
 	if (in.version != 1)
 		return B_BAD_VALUE;
+	if (!gpu_caller_is_app_server())
+		return B_NOT_ALLOWED;
 	if (gR5GpuOps.scanout == NULL)
 		return B_NOT_SUPPORTED;
 	uint32 width = 0;
@@ -2123,12 +2148,9 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 	uint32 format = 0;
 	uint64 offset = 0;
 	uint64 bytes = 0;
-	int32 team = -1;
 	if (gR5GpuOps.scanout(client->info, &width, &height, &pitch, &format,
-			&offset, &bytes, &team) != B_OK)
+			&offset, &bytes) != B_OK)
 		return B_ERROR;
-	if (team < 0 || team != team_get_current_team_id())
-		return B_NOT_ALLOWED;
 	if (client->handleCount >= kMaxClientBo)
 		return B_NO_MEMORY;
 	int slot = -1;

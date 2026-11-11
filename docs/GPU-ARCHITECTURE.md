@@ -187,7 +187,7 @@ A **compatibility table** in this document (or a separate `distro/gpu/COMPAT` fi
 
 Haiku applications draw through app_server. The steps:
 
-1. **Last copy through the GPU.** app_server's back buffer goes to the screen through a DMA copy (the `DMA_DATA` path from `GRAPHICS.md` has already been shown to work). Painter keeps drawing on the CPU. The risk is small and the result is easy to measure. The scanout call is `R5_GPU_SCANOUT_BO` (`R5_GPU_OP_BASE + 31`). It returns the framebuffer the driver is already scanning out, mapped into the caller's GPU address space. Only the team that opened the graphics device may call it. The design of the copy is `docs/APP-SERVER-GPU.md`.
+1. **Last copy through the GPU.** app_server's back buffer goes to the screen through a DMA copy (the `DMA_DATA` path from `GRAPHICS.md` has already been shown to work). Painter keeps drawing on the CPU. The risk is small and the result is easy to measure. The scanout call is `R5_GPU_SCANOUT_BO` (`R5_GPU_OP_BASE + 31`). It returns the framebuffer the driver is already scanning out, mapped into the caller's GPU address space. Only app_server may call it. The kernel reads the calling team's info and allows the call when that team's executable is `/system/servers/app_server` or `/boot/system/servers/app_server`. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`. The design of the copy is `docs/APP-SERVER-GPU.md`.
 2. **Compositing on the GPU.** Windows as GPU buffers, combined on the GPU.
 3. **A GPU drawing engine** behind the same `DrawingEngine` interface, for example through Vulkan. Only if measurements show it is faster. Ordinary buttons and text often stay faster on the CPU (`GRAPHICS.md`, step 7).
 

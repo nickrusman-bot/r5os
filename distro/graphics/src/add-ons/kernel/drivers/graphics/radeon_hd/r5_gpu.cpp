@@ -1904,8 +1904,7 @@ amd_dump(const char* why)
 
 
 static int amd_scanout(void* info, uint32* width, uint32* height,
-	uint32* bytesPerRow, uint32* format, uint64* vramOffset, uint64* bytes,
-	int32* team);
+	uint32* bytesPerRow, uint32* format, uint64* vramOffset, uint64* bytes);
 
 
 r5_gpu_backend_ops gR5GpuOps = {
@@ -1949,35 +1948,14 @@ r5_gpu_backend_ops gR5GpuOps = {
 };
 
 
-static int32 sDisplayTeam = -1;
-
-
-extern "C" team_id team_get_current_team_id(void);
-
-
-extern "C" void
-r5_gpu_note_display_team(void)
-{
-	sDisplayTeam = team_get_current_team_id();
-}
-
-
-extern "C" void
-r5_gpu_clear_display_team(void)
-{
-	if (sDisplayTeam == team_get_current_team_id())
-		sDisplayTeam = -1;
-}
-
-
 static int
 amd_scanout(void* info, uint32* width, uint32* height, uint32* bytesPerRow,
-	uint32* format, uint64* vramOffset, uint64* bytes, int32* team)
+	uint32* format, uint64* vramOffset, uint64* bytes)
 {
 	radeon_info* device = (radeon_info*)info;
 	if (device == NULL || device->shared_info == NULL || width == NULL
 		|| height == NULL || bytesPerRow == NULL || format == NULL
-		|| vramOffset == NULL || bytes == NULL || team == NULL)
+		|| vramOffset == NULL || bytes == NULL)
 		return B_ERROR;
 	radeon_shared_info* shared = device->shared_info;
 	uint32 w = shared->current_mode.virtual_width;
@@ -2003,6 +1981,5 @@ amd_scanout(void* info, uint32* width, uint32* height, uint32* bytesPerRow,
 	*format = (uint32)shared->current_mode.space;
 	*vramOffset = offset;
 	*bytes = mapped;
-	*team = sDisplayTeam;
 	return B_OK;
 }

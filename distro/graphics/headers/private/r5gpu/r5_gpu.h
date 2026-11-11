@@ -59,7 +59,7 @@ enum {
 	R5_GPU_RING_FILL = R5_GPU_OP_BASE + 29,
 	/* Interrupt counts. Logging only. Older callers never send this opcode. */
 	R5_GPU_IH_COUNTS = R5_GPU_OP_BASE + 30,
-	/* The framebuffer on screen. Only the display team. Older callers
+	/* The framebuffer on screen. Only app_server. Older callers
 	 * never send this opcode. */
 	R5_GPU_SCANOUT_BO = R5_GPU_OP_BASE + 31
 };
@@ -517,8 +517,9 @@ typedef struct {
 
 /* The scanout surface, mapped into the caller's GPU address space.
  * The kernel fills every field except size and version. handle is the
- * existing framebuffer, not a new allocation. A team that does not own
- * the display gets B_NOT_ALLOWED. */
+ * existing framebuffer, not a new allocation. The kernel allows the call
+ * only when the calling team's executable, from the team info, is
+ * app_server. Anyone else gets B_NOT_ALLOWED. */
 typedef struct {
 	uint32_t	size;
 	uint32_t	version;
