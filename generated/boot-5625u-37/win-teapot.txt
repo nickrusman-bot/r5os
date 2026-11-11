@@ -1,0 +1,6 @@
+window driver AMD Radeon Graphics (RADV RENOIR)
+window resize FAIL
+window resize FAIL
+window resize FAIL
+window workspace FAIL
+window workspace FAIL

@@ -1,0 +1,10 @@
+window driver AMD Radeon Graphics (RADV RENOIR)
+window resize ok
+window resize ok
+window resize ok
+window workspace ok
+window workspace ok
+window minimise ok
+window restore ok
+window close FAIL
+device lost yes

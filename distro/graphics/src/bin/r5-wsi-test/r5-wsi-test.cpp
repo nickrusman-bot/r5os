@@ -136,6 +136,27 @@ load_instance(struct vk *v, VkInstance instance)
 	return 0;
 }
 
+/* Same order as vkcube: discrete, integrated, virtual, then CPU. */
+static int
+device_rank(VkPhysicalDeviceType type)
+{
+	switch (type) {
+		case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+			return 5;
+		case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+			return 4;
+		case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+			return 3;
+		case VK_PHYSICAL_DEVICE_TYPE_CPU:
+			return 2;
+		case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+			return 1;
+		default:
+			return -1;
+	}
+}
+
+
 static int
 run_clear(BView *view, BWindow *window)
 {
@@ -185,6 +206,7 @@ run_clear(BView *view, BWindow *window)
 	v.enumerate(instance, &ndev, devs);
 	VkPhysicalDevice gpu = VK_NULL_HANDLE;
 	uint32_t family = 0;
+	int best = 0;
 	for (uint32_t i = 0; i < ndev; i++) {
 		uint32_t nq = 0;
 		v.queues(devs[i], &nq, NULL);
@@ -192,17 +214,27 @@ run_clear(BView *view, BWindow *window)
 		if (nq > 8)
 			nq = 8;
 		v.queues(devs[i], &nq, props);
+		int have = 0;
+		uint32_t found = 0;
 		for (uint32_t q = 0; q < nq; q++) {
 			VkBool32 ok = VK_FALSE;
 			v.support(devs[i], q, surface, &ok);
 			if (ok && (props[q].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
-				gpu = devs[i];
-				family = q;
+				found = q;
+				have = 1;
 				break;
 			}
 		}
-		if (gpu != VK_NULL_HANDLE)
-			break;
+		if (!have)
+			continue;
+		VkPhysicalDeviceProperties rankProps;
+		v.properties(devs[i], &rankProps);
+		int rank = device_rank(rankProps.deviceType);
+		if (rank > best) {
+			best = rank;
+			gpu = devs[i];
+			family = found;
+		}
 	}
 	if (gpu == VK_NULL_HANDLE) {
 		v.destroy_surface(instance, surface, NULL);

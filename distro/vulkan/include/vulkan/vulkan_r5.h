@@ -36,8 +36,8 @@ typedef struct BView BView;
 #define VK_RFIVE_VIEW_SURFACE_SPEC_VERSION 1
 #define VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME "VK_RFIVE_view_surface"
 
-/* R5 placeholder, replace with the registered value. */
-#define VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE ((VkStructureType)1000999000)
+/* KhronosGroup/Vulkan-Docs#2851, author ID RFIVE, extension 732. */
+#define VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE ((VkStructureType)1000731000)
 
 typedef VkFlags VkViewSurfaceCreateFlagsRFIVE;   /* reserved, must be 0 */
 
@@ -52,9 +52,11 @@ typedef VkResult (VKAPI_PTR *PFN_vkCreateViewSurfaceRFIVE)(VkInstance instance,
 	const VkViewSurfaceCreateInfoRFIVE* pCreateInfo,
 	const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 
+#ifndef VK_NO_PROTOTYPES
 VKAPI_ATTR VkResult VKAPI_CALL vkCreateViewSurfaceRFIVE(VkInstance instance,
 	const VkViewSurfaceCreateInfoRFIVE* pCreateInfo,
 	const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+#endif
 
 #ifdef __cplusplus
 }

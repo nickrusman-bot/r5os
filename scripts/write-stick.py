@@ -10,7 +10,8 @@ The one tool for writing a stick on Windows. Run it from Windows Python:
 
 It asks for elevation itself (UAC) when it is not elevated, waits, and
 prints the log. The log is also written next to the image
-(<image>.write.log).
+(<image>.write.log). Before it writes, check-pre-stick.py requires the
+image to be built from this branch. --no-source-check skips that.
 
 Safety:
 - It writes only to a disk whose FriendlyName is the stick name (default
@@ -444,6 +445,8 @@ def main():
 		help="FriendlyName of the stick (default: General UDisk)")
 	parser.add_argument("--keep-old", action="store_true",
 		help="do not remove older stick images after the write")
+	parser.add_argument("--no-source-check", action="store_true",
+		help="write even when the image was not built from this branch")
 	args = parser.parse_args()
 	image_path = os.path.abspath(args.image)
 	if not os.path.isfile(image_path):
@@ -453,6 +456,13 @@ def main():
 		check_bootable(image_path)
 	if not is_admin():
 		relaunch_elevated(log_path)
+
+	if not args.no_source_check:
+		checker = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+			"check-pre-stick.py")
+		checked = subprocess.run([sys.executable, checker, image_path])
+		if checked.returncode != 0:
+			die("pre-stick check failed")
 
 	log = open(log_path, "w", encoding="utf-8", buffering=1)
 	sys.stdout = sys.stderr = log

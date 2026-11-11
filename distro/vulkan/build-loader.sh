@@ -24,7 +24,7 @@ fi
 export PATH="$SRCROOT/cmake-3.31.8-linux-x86_64/bin:$SRCROOT:$PATH"
 PKG="$HAIKU/generated.x86_64/objects/linux/x86_64/release/tools/package/package"
 STAGE="$SRCROOT/vulkan-loader-pkg"
-OUT="$ROOT/distro/packages/x86_64/vulkan_loader-1.4.367-2-x86_64.hpkg"
+OUT="$ROOT/distro/packages/x86_64/vulkan_loader-1.4.367-3-x86_64.hpkg"
 
 if [[ ! -f "$TARBALL" ]]; then
 	curl -L --fail -o "$TARBALL" "$URL"
@@ -102,10 +102,10 @@ cp -a "$ROOT/distro/vulkan/include/vulkan/vk_icd.h" "$STAGE/develop/headers/vulk
 
 cat > "$STAGE/.PackageInfo" <<'EOF'
 name			vulkan_loader
-version			1.4.367-2
+version			1.4.367-3
 architecture		x86_64
 summary			"Vulkan loader with the view surface"
-description		"The Khronos Vulkan loader 1.4.367, built by R5, with VK_RFIVE_view_surface. The structure type is a placeholder until Khronos assigns it."
+description		"The Khronos Vulkan loader 1.4.367, built by R5, with VK_RFIVE_view_surface. The structure type is the Khronos value for extension 732."
 packager		"R5OS <r5os@localhost>"
 vendor			"R5OS"
 copyrights {

@@ -1,0 +1,213 @@
+--- a/src/amd/vulkan/radv_wsi.h	2026-11-11 01:13:12.970729760 +0100
++++ b/src/amd/vulkan/radv_wsi.h	2026-11-11 01:14:44.361620460 +0100
+@@ -14,7 +14,8 @@
+ #include "radv_physical_device.h"
+ 
+ #if defined(VK_USE_PLATFORM_WAYLAND_KHR) || defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR) ||   \
+-   defined(VK_USE_PLATFORM_DISPLAY_KHR)
++   defined(VK_USE_PLATFORM_DISPLAY_KHR) || \
++   defined(VK_USE_PLATFORM_VIEW_RFIVE)
+ #define RADV_USE_WSI_PLATFORM
+ #endif
+ 
+--- a/src/amd/vulkan/radv_instance.h	2026-11-11 01:13:13.441060141 +0100
++++ b/src/amd/vulkan/radv_instance.h	2026-11-11 01:14:44.361953993 +0100
+@@ -102,6 +102,9 @@
+    struct radv_drirc drirc;
+ 
+    FILE *pso_history_logfile;
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   bool view_r5;
++#endif
+ };
+ 
+ VK_DEFINE_HANDLE_CASTS(radv_instance, vk.base, VkInstance, VK_OBJECT_TYPE_INSTANCE)
+--- a/src/amd/vulkan/radv_instance.c	2026-11-11 01:13:13.633404080 +0100
++++ b/src/amd/vulkan/radv_instance.c	2026-11-11 01:14:44.362512043 +0100
+@@ -20,6 +20,13 @@
+ #include "radv_entrypoints.h"
+ #include "radv_instance.h"
+ #include "radv_wsi.h"
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++#include <string.h>
++#include "vulkan/vulkan_r5.h"
++VKAPI_ATTR VkResult VKAPI_CALL wsi_CreateViewSurfaceRFIVE(
++   VkInstance instance, const VkViewSurfaceCreateInfoRFIVE *pCreateInfo,
++   const VkAllocationCallbacks *pAllocator, VkSurfaceKHR *pSurface);
++#endif
+ 
+ #include "util/driconf.h"
+ 
+@@ -384,14 +391,40 @@
+    vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &radv_instance_entrypoints, true);
+    vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &wsi_instance_entrypoints, false);
+ 
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   const char *view_names[64];
++   uint32_t view_count = 0;
++   bool view_r5 = false;
++   uint32_t enabled = pCreateInfo->enabledExtensionCount;
++   if (enabled > 64) {
++      vk_free(pAllocator, instance);
++      return vk_error(NULL, VK_ERROR_OUT_OF_HOST_MEMORY);
++   }
++   for (uint32_t i = 0; i < enabled; i++) {
++      const char *name = pCreateInfo->ppEnabledExtensionNames[i];
++      if (strcmp(name, VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME) == 0)
++         view_r5 = true;
++      else
++         view_names[view_count++] = name;
++   }
++   VkInstanceCreateInfo view_info = *pCreateInfo;
++   view_info.enabledExtensionCount = view_count;
++   view_info.ppEnabledExtensionNames = view_count ? view_names : NULL;
++   result =
++      vk_instance_init(&instance->vk, &radv_instance_extensions_supported, &dispatch_table, &view_info, pAllocator);
++#else
+    result =
+       vk_instance_init(&instance->vk, &radv_instance_extensions_supported, &dispatch_table, pCreateInfo, pAllocator);
++#endif
+    if (result != VK_SUCCESS) {
+       vk_free(pAllocator, instance);
+       return vk_error(NULL, result);
+    }
+ 
+    vk_instance_add_driver_trace_modes(&instance->vk, trace_options);
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   instance->view_r5 = view_r5;
++#endif
+ 
+    simple_mtx_init(&instance->shader_dump_mtx, mtx_plain);
+ 
+@@ -504,7 +537,29 @@
+    if (pLayerName)
+       return vk_error(NULL, VK_ERROR_LAYER_NOT_PRESENT);
+ 
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   uint32_t view_capacity = *pPropertyCount;
++   VkResult result = vk_enumerate_instance_extension_properties(
++      &radv_instance_extensions_supported, pPropertyCount, pProperties);
++   if (pProperties == NULL) {
++      *pPropertyCount += 1;
++      return VK_SUCCESS;
++   }
++   if (result != VK_SUCCESS && result != VK_INCOMPLETE)
++      return result;
++   if (*pPropertyCount < view_capacity) {
++      VkExtensionProperties *extra = &pProperties[*pPropertyCount];
++      memset(extra, 0, sizeof(*extra));
++      strncpy(extra->extensionName, VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME,
++         sizeof(extra->extensionName) - 1);
++      extra->specVersion = VK_RFIVE_VIEW_SURFACE_SPEC_VERSION;
++      *pPropertyCount += 1;
++      return VK_SUCCESS;
++   }
++   return VK_INCOMPLETE;
++#else
+    return vk_enumerate_instance_extension_properties(&radv_instance_extensions_supported, pPropertyCount, pProperties);
++#endif
+ }
+ 
+ VKAPI_ATTR VkResult VKAPI_CALL
+@@ -529,6 +584,16 @@
+ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
+ radv_GetInstanceProcAddr(VkInstance _instance, const char *pName)
+ {
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   if (strcmp(pName, "vkCreateViewSurfaceRFIVE") == 0) {
++      if (_instance == VK_NULL_HANDLE)
++         return (PFN_vkVoidFunction)wsi_CreateViewSurfaceRFIVE;
++      VK_FROM_HANDLE(radv_instance, radv, _instance);
++      if (!radv->view_r5)
++         return NULL;
++      return (PFN_vkVoidFunction)wsi_CreateViewSurfaceRFIVE;
++   }
++#endif
+    VK_FROM_HANDLE(vk_instance, instance, _instance);
+    return vk_instance_get_proc_addr(instance, &radv_instance_entrypoints, pName);
+ }
+--- a/src/amd/vulkan/radv_wsi.c	2026-11-11 01:13:13.163581774 +0100
++++ b/src/amd/vulkan/radv_wsi.c	2026-11-11 01:14:44.362852350 +0100
+@@ -14,6 +14,12 @@
+ #include "vk_semaphore.h"
+ #include "vk_util.h"
+ #include "wsi_common.h"
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++#include <string.h>
++VKAPI_ATTR void VKAPI_CALL radv_GetPhysicalDeviceQueueFamilyProperties2(
++   VkPhysicalDevice physicalDevice, uint32_t *pCount,
++   VkQueueFamilyProperties2 *pQueueFamilyProperties);
++#endif
+ 
+ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
+ radv_wsi_proc_addr(VkPhysicalDevice physicalDevice, const char *pName)
+@@ -34,6 +40,7 @@
+    }
+ }
+ 
++#ifndef VK_USE_PLATFORM_VIEW_RFIVE
+ static struct vk_queue *
+ radv_wsi_get_prime_blit_queue(VkDevice _device)
+ {
+@@ -73,6 +80,7 @@
+    simple_mtx_unlock(&device->blit_queue_mtx);
+    return NULL;
+ }
++#endif
+ 
+ VkResult
+ radv_init_wsi(struct radv_physical_device *pdev)
+@@ -87,7 +95,27 @@
+ 
+    pdev->wsi_device.supports_modifiers = pdev->info.gfx_level >= GFX9;
+    pdev->wsi_device.set_memory_ownership = radv_wsi_set_memory_ownership;
++#ifndef VK_USE_PLATFORM_VIEW_RFIVE
+    pdev->wsi_device.get_blit_queue = radv_wsi_get_prime_blit_queue;
++#endif
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   {
++      VkPhysicalDevice handle = radv_physical_device_to_handle(pdev);
++      VkQueueFamilyProperties2 props[6];
++      memset(props, 0, sizeof(props));
++      for (uint32_t i = 0; i < 6; i++)
++         props[i].sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
++      uint32_t count = 6;
++      radv_GetPhysicalDeviceQueueFamilyProperties2(handle, &count, props);
++      uint64_t graphics = 0;
++      for (uint32_t i = 0; i < count && i < 6; i++) {
++         if (props[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
++            graphics |= (uint64_t)1 << i;
++      }
++      void wsi_view_r5_init_wsi(struct wsi_device *wsi, uint64_t mask);
++      wsi_view_r5_init_wsi(&pdev->wsi_device, graphics);
++   }
++#endif
+ 
+    wsi_device_setup_syncobj_fd(&pdev->wsi_device, pdev->local_fd);
+ 
+@@ -99,6 +127,10 @@
+ void
+ radv_finish_wsi(struct radv_physical_device *pdev)
+ {
++#ifdef VK_USE_PLATFORM_VIEW_RFIVE
++   void wsi_view_r5_finish_wsi(struct wsi_device *wsi);
++   wsi_view_r5_finish_wsi(&pdev->wsi_device);
++#endif
+    const struct radv_instance *instance = radv_physical_device_instance(pdev);
+ 
+    pdev->vk.wsi_device = NULL;
+--- a/src/amd/vulkan/meson.build	2026-11-11 01:13:13.885286911 +0100
++++ b/src/amd/vulkan/meson.build	2026-11-11 01:14:44.363173660 +0100
+@@ -243,6 +243,12 @@
+   radv_flags += '-DRADV_BUILD_ID_OVERRIDE="' + radv_build_id + '"'
+ endif
+ 
++if host_machine.system() == 'haiku'
++  libradv_files += files('../../vulkan/wsi/wsi_common_haiku.cpp')
++  radv_deps += cpp.find_library('be')
++  radv_deps += cpp.find_library('stdc++')
++endif
++
+ libvulkan_radeon = shared_library(
+   'vulkan_radeon',
+   [libradv_files, radv_entrypoints, sha1_h, radix_sort_spv, bvh_spv, radv_annotate_layer],

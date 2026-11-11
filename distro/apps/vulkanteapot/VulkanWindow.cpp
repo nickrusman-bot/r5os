@@ -310,6 +310,26 @@ struct Loop {
 
 static int32 window_draw(void* data);
 
+/* Same order as vkcube: discrete, integrated, virtual, then CPU. */
+static int
+device_rank(VkPhysicalDeviceType type)
+{
+	switch (type) {
+		case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+			return 5;
+		case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+			return 4;
+		case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+			return 3;
+		case VK_PHYSICAL_DEVICE_TYPE_CPU:
+			return 2;
+		case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+			return 1;
+		default:
+			return -1;
+	}
+}
+
 int
 run_window(int cube)
 {
@@ -356,24 +376,37 @@ run_window(int cube)
 	vkEnumeratePhysicalDevices(instance, &count, gpus);
 	VkPhysicalDevice gpu = VK_NULL_HANDLE;
 	uint32_t family = 0;
-	for (uint32_t i = 0; i < count && gpu == VK_NULL_HANDLE; i++) {
+	int best = 0;
+	for (uint32_t i = 0; i < count; i++) {
 		uint32_t families = 0;
 		vkGetPhysicalDeviceQueueFamilyProperties(gpus[i], &families, NULL);
 		VkQueueFamilyProperties* info =
 			(VkQueueFamilyProperties*)calloc(families ? families : 1, sizeof(*info));
 		vkGetPhysicalDeviceQueueFamilyProperties(gpus[i], &families, info);
+		int have = 0;
+		uint32_t found = 0;
 		for (uint32_t q = 0; q < families; q++) {
 			if ((info[q].queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
 				continue;
 			VkBool32 supported = VK_FALSE;
 			vkGetPhysicalDeviceSurfaceSupportKHR(gpus[i], q, surface, &supported);
 			if (supported == VK_TRUE) {
-				gpu = gpus[i];
-				family = q;
+				found = q;
+				have = 1;
 				break;
 			}
 		}
 		free(info);
+		if (!have)
+			continue;
+		VkPhysicalDeviceProperties rankProps;
+		vkGetPhysicalDeviceProperties(gpus[i], &rankProps);
+		int rank = device_rank(rankProps.deviceType);
+		if (rank > best) {
+			best = rank;
+			gpu = gpus[i];
+			family = found;
+		}
 	}
 	free(gpus);
 	if (gpu == VK_NULL_HANDLE) {
@@ -382,6 +415,10 @@ run_window(int cube)
 		finish("no device");
 		return 1;
 	}
+	VkPhysicalDeviceProperties picked;
+	vkGetPhysicalDeviceProperties(gpu, &picked);
+	printf("window driver %s\n", picked.deviceName);
+	fflush(stdout);
 
 	float priority = 1;
 	VkDeviceQueueCreateInfo queueInfo = {};
@@ -609,6 +646,18 @@ window_draw(void* data)
 		VkResult acquired = vkAcquireNextImageKHR(device, swap->chain,
 			UINT64_C(1000000000), loop->imageReady, VK_NULL_HANDLE, &index);
 		if (acquired == VK_ERROR_OUT_OF_DATE_KHR || acquired == VK_SUBOPTIMAL_KHR) {
+			if (!host->Lock())
+				break;
+			bool stop = host->Stopping();
+			host->Unlock();
+			if (stop)
+				break;
+			VkSurfaceCapabilitiesKHR again;
+			if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &again)
+					!= VK_SUCCESS)
+				break;
+			if (again.currentExtent.width == 0 || again.currentExtent.height == 0)
+				continue;
 			swap_destroy(device, swap);
 			if (swap_create(device, gpu, surface, swap) != VK_SUCCESS)
 				break;
@@ -686,6 +735,18 @@ window_draw(void* data)
 			break;
 		}
 		if (presented == VK_SUBOPTIMAL_KHR || presented == VK_ERROR_OUT_OF_DATE_KHR) {
+			if (!host->Lock())
+				break;
+			bool stop = host->Stopping();
+			host->Unlock();
+			if (stop)
+				break;
+			VkSurfaceCapabilitiesKHR again;
+			if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &again)
+					!= VK_SUCCESS)
+				break;
+			if (again.currentExtent.width == 0 || again.currentExtent.height == 0)
+				continue;
 			swap_destroy(device, swap);
 			if (swap_create(device, gpu, surface, swap) != VK_SUCCESS)
 				break;

@@ -24,6 +24,11 @@ sed -i 's/\r$//' "$MESA/include/vulkan/vk_icd.h" \
 if ! grep -q 'VK_ICD_WSI_PLATFORM_VIEW_RFIVE + 1' "$MESA/src/vulkan/wsi/wsi_common.h"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-view-surface.patch"
 fi
+if ! grep -q 'wsi_view_r5_init_wsi' "$MESA/src/amd/vulkan/radv_wsi.c" \
+	|| ! grep -q 'defined(VK_USE_PLATFORM_VIEW_RFIVE)' "$MESA/src/amd/vulkan/radv_wsi.h" \
+	|| ! grep -q 'ifndef VK_USE_PLATFORM_VIEW_RFIVE' "$MESA/src/amd/vulkan/radv_wsi.c"; then
+	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-radv-view-surface.patch"
+fi
 
 cd "$MESA"
 setup="python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup build-radv"
@@ -49,5 +54,7 @@ python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup --reconfigure bui
 	-Dvulkan-drivers=amd,swrast -Dllvm=enabled \
 	-Dprefix=/home/nickr/r5os/mesa-build/sysroot -Dlibdir=lib \
 	-Dbuildtype=debugoptimized
-ninja -C build-radv src/gallium/targets/lavapipe/libvulkan_lvp.so
+ninja -C build-radv src/gallium/targets/lavapipe/libvulkan_lvp.so \
+	src/amd/vulkan/libvulkan_radeon.so
 python3 "$ROOT/distro/mesa/pack-lavapipe.py" "$ROOT"
+python3 "$ROOT/distro/mesa/pack-radv.py" "$ROOT"

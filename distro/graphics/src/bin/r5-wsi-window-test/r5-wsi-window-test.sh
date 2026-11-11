@@ -1,20 +1,53 @@
 #!/bin/sh
-# Drives VulkanTeapot --window with hey. One line per action.
-APP=application/x-vnd.R5OS-VulkanTeapot
+# Drives one Vulkan window with hey. The argument is the program.
+# VulkanTeapot is the default. vkcube is the other program.
 OUT=/tmp/r5-wsi-window-app.txt
-TEAPOT=${TEAPOT:-VulkanTeapot}
-"$TEAPOT" --window >"$OUT" 2>&1 &
+if [ $# -ge 1 ]; then
+	prog=$1
+else
+	prog=${TEAPOT:-VulkanTeapot}
+fi
+base=$(basename "$prog")
+case "$base" in
+VulkanTeapot)
+	APP=application/x-vnd.R5OS-VulkanTeapot
+	set -- --window
+	;;
+vkcube)
+	APP=application/x-vnd.R5OS-vkcube
+	set --
+	;;
+*)
+	echo "window program FAIL"
+	exit 1
+	;;
+esac
+"$prog" "$@" >"$OUT" 2>&1 &
 pid=$!
 ready=0
+driver=
 i=0
 while [ "$i" -lt 30 ]; do
-	if hey "$APP" get Title of Window 0 >/dev/null 2>&1; then
+	if [ "$ready" -eq 0 ] && hey "$APP" get Title of Window 0 >/dev/null 2>&1; then
 		ready=1
+	fi
+	if [ -z "$driver" ] && [ -f "$OUT" ]; then
+		driver=$(sed -n 's/^window driver //p' "$OUT" | head -n 1)
+		if [ -z "$driver" ]; then
+			driver=$(sed -n 's/^Selected GPU [0-9]*: \(.*\), type: .*/\1/p' "$OUT" | head -n 1)
+		fi
+	fi
+	if [ "$ready" -eq 1 ] && [ -n "$driver" ]; then
 		break
 	fi
 	i=$((i + 1))
 	sleep 1
 done
+if [ -n "$driver" ]; then
+	echo "window driver $driver"
+else
+	echo "window driver FAIL"
+fi
 
 act() {
 	name=$1

@@ -1,0 +1,25 @@
+
+Welcome to the Haiku shell.
+
+~> sh ~/check.sh
+sh: /boot/home/check.sh: No such file or directory
+~> check.sh
+boot 1
+PASS wsi clear ok AMD Radeon Graphics
+FAIL window VulkanTeapot
+FAIL window vkcube
+PASS window driver VulkanTeapot
+PASS window driver vkcube
+PASS cpu span ms under 2000
+PASS eop 1163
+PASS GFX9 ring contract verified
+PASS GFX9 scratch 0xdeadbeef
+PASS fence landed
+PASS k2 ok gart
+PASS gpu lost before window tests
+FAIL
+~> 
+
+
+
+

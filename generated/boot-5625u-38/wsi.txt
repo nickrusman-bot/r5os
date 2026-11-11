@@ -1,0 +1,1 @@
+wsi clear ok AMD Radeon Graphics (RADV RENOIR) 64x64 frames 100

@@ -1,0 +1,1 @@
+wsi clear ok llvmpipe (LLVM 21.1.8, 256 bits) 64x64 frames 100
