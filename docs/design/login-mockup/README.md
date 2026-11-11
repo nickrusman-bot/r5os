@@ -13,23 +13,33 @@ This design adapts the visual language established in the Settings window mockup
 
 2. **Window Body & Framing**:
    - Neutral panel gray (`#ededed`) with an authentic `inset 1px 1px 0 #ffffff` highlight.
-   - 1px border (`#8c8c8c`) and subtle modern drop shadow (`box-shadow: 0 24px 48px rgba(15,23,42,0.22), 0 6px 16px rgba(15,23,42,0.1)`).
+   - 1px border (`#8c8c8c`) and subtle modern drop shadow.
    - Softened bottom corners (6px radius).
 
-3. **User Selection & Account Card**:
-   - Multi-user selection cards displaying the user avatar (`people.svg`), display name, and role badge (`Administrator` / `Standard`).
-   - Active account selection with clear blue focus indicator (`#0084ff`).
+3. **Logo & Header**:
+   - Free-standing R5 wave symbol (`r5-symbol.svg`) without any artificial circular wrapper.
+   - Bold "Welcome to R5" header and subtle subtitle.
 
-4. **Credential Input**:
+4. **Multi-User Scenarios (Interactive Preview)**:
+   - **1 User (Single-user workstation)**: The user selector row is completely hidden (matching `LoginView.cpp`'s `fUserList->CountItems() <= 1`). The user profile banner and password field are directly presented.
+   - **2–4 Users (Small team / home)**: Compact horizontal account cards side-by-side with avatars and badges.
+   - **> 4 Users (Enterprise / multi-user)**: Two-line scrollable user list with authentic Haiku scrollbar, displaying avatar, bold name, username, and role badge (`docs/STYLE.md`).
+
+5. **Desktop & System Environment**:
+   - Fullscreen scalable R5 wave desktop wallpaper (`100vw` x `100vh`).
+   - No Deskbar or Tracker HDD icon, reflecting real OS boot state (Tracker and Deskbar launch only *after* successful sign-in).
+
+6. **Credential Input**:
    - Inset password field with subtle shadow and crisp border.
    - Password reveal eye toggle button (interactive show/hide with `eye.svg` and `eye-off.svg`).
-   - High-contrast blue primary action button (`#0084ff` / `#0070db`).
-   - Informative status line for feedback (empty password, authentication status, error messages).
+   - High-contrast blue primary action button (`#0084ff`).
+   - Status feedback line (validates empty password, simulated authentication).
 
-5. **Bottom Status & Power Bar**:
-   - Live system clock on the left (matches `LoginView.cpp`'s `fClockView`).
-   - BeOS-styled "Restart" and "Shut down" buttons with vector icons and authentic bevels.
+7. **Bottom Status & Power Bar**:
+   - Live system clock on the left (updating every second).
+   - BeOS-styled "Restart" and "Shut down" buttons with vector icons and bevels.
+   - No divider line above the buttons, keeping the panel cohesive and uncluttered.
 
 ## How to View
 
-Open `sign-in.html` directly in any modern web browser (Edge, Chrome, Firefox, Safari). No web server is required.
+Open `sign-in.html` directly in any modern web browser (Edge, Chrome, Firefox, Safari). Use the top pill toolbar to switch between **1 User**, **2 Users**, and **> 4 Users** scenarios.
