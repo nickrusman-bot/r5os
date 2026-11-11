@@ -27,6 +27,21 @@ The sign-in window is the new screen: one account goes straight to the password 
 `BPasswordControl::Archive()` does not store the password, and a deep archive does not store the child text either. Sign in clears the field after the attempt, whether it succeeded or not. `account_password_matches()` refuses an empty field when the account has a password, and still accepts an empty field when the account has none. The refusal says "Please enter your password." and the cursor returns to the field. The password is not written to the session log or to a program argument.
 
 `scripts/apply-overlay.sh` from `cursor/login-mockup` copied this branch into the shared tree. The artwork check in that script did not run: this Windows checkout stores the symbol files with CR LF, so the hash does not match the generator. The copy itself ran. `jam -q @r5-raw` then finished at 18:30 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 18:30. The Login binary in that image contains "Please enter your password." and `libr5ui.so` does not contain `r5:text`. Not booted in VirtualBox. There is no What's new section and `distro/BUILD` stays the same.
+## 2026-11-11 - Touchpads and TrackPoint from RenkuOS
+
+The image built `i2c_hid` and did not install it. These commits are RenkuOS, MIT, signed off by their authors. The Haiku file headers stay. No name was added to `elan_iic_devs`. Goodix (`4f32e08ca6`) was not needed for the later commits and was not taken. No What's new section, and `distro/BUILD` stays where it is, until a stick confirms the hardware.
+
+- `5153bac807`, duncanmcqueen: `i2c_hid` reads an input report only while the device's input-ready line is asserted. Without a line it can read, the driver still polls. The first controller is Intel Sunrise Point-LP (`INT344B`).
+- `b37a078925`, duncanmcqueen: `i2c_hid` is installed next to `i2c_elan`. A compatible-ID match (`PNP0C50`) returns 0.5, so a driver that matches the hardware ID comes first.
+- `dd62b72f0f`, idumych: the same line is read on AMD GPIO `AMD0030` and `AMDI0030`, the controller in the 5625U. One 32-bit register per pin, level in bit 16. A pin whose output driver is on is not used.
+- `29e452e51d`, Felipe De Bene: a TrackPoint behind a Synaptics pass-through port gets its replies from the interrupt handler, instead of from the short window after the last command.
+- `e126f76b75`, Felipe De Bene: those buttons stay down for a drag, and when the stick is published they are reported through the stick. The finger-count bitmask in that commit was already in this Haiku tree, so that part was not applied again. This tree still cleared the buttons when a packet had no change flag; that clear is removed.
+- `04fdaf98e4`, Felipe De Bene: while the middle button of a trackpoint is held, stick motion scrolls. A press and release with no motion is still a middle click.
+- `a9f23126d3`, idumych: `i2c_elan` speaks the native Elan I2C protocol and uses the same input-ready line. The 5625U touchpad (ELAN2513) stays on `i2c_hid`.
+- `cb22fd5cfe`, idumych: an Elan clickpad reports a right click for two fingers or the bottom-right corner, and a middle click for three fingers.
+- `17bb2a0c3e`, idumych: the driver follows the fingers that stay down, so a second finger does not end a drag and a lift does not throw the pointer.
+
+Tested: jam `jam_exit=0` on 11 Nov 2026 (the translator headers `avif.h`, `jpeglib.h`, `png.h` and the rest are the same missing build packages as before; they are not from this change). One QEMU boot (TCG, GTK, guest `screendump`) the same evening, Europe/Amsterdam. The serial log published `input/mouse/ps2/intelli_0` and `input/keyboard/at/0`, then Tracker and Deskbar. The picture is the desktop with the pointer on it. No kernel panic and no `input_server` crash in that log. The virtio input add-on is still missing (`No such file or directory`); that was already the case. QEMU has no I2C touchpad and no TrackPoint, so `i2c_hid` does not run there. Not yet tested on hardware. The hardware check rides on the next stick: on the 5625U the touchpad moves and syslog shows `i2c_hid` using the input-ready line; on the X1 Carbon the TrackPoint buttons and middle-button scrolling.
 
 ## 2026-11-11 - Stick 46 copied the desktop through the GPU
 
