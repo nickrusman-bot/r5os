@@ -1296,7 +1296,7 @@ main()
 		if (n != 3 || words[1] != 0x20000243u)
 			return fail("p index");
 		n = r5_stage_p_build(R5_P_DMA_DATA, 0x50000ull, words, 32, 0);
-		if (n != 7 || words[1] != 0x60200000u || words[6] != 0x80000040u)
+		if (n != 7 || words[1] != 0x80000000u || words[6] != 0x80000040u)
 			return fail("p dma");
 		n = r5_stage_p_build(R5_P_COHER, 0x50000ull, words, 32, 0);
 		if (n != 3 || words[1] != 0x7bu)

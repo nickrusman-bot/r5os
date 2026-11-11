@@ -36,7 +36,7 @@ The kernel allows the call only when the calling team is app_server. It reads th
 
 A band is the full bytes-per-row of a contiguous run of dirty rows. Rectangles on the same rows, or on rows that touch, are one band. An empty region is no band. One row is one band. A full screen is one band.
 
-`DMA_DATA` carries the byte count in 21 bits, so a band longer than 2097151 bytes is several packets. Each packet is a whole number of rows. The control word is `0x60200000`, the word the DMA stage already ran. The header is `0xc0055000`. The last word sets bit 31 and the byte count, as `r5_stage_p.h` does.
+`DMA_DATA` carries the byte count in 21 bits, so a band longer than 2097151 bytes is several packets. Each packet is a whole number of rows. The control word is `0x80000000`: CP_SYNC, source select 0, destination select 0, engine 0. Stick 43 boot 1 showed that `0x60200000` (destination select 2) writes nothing. `b5` logged `miss` and `word 00000000`, and the screen compare still read the white boot pixel. Select 0 is the select the K2 fill uses. Source select 0 reads memory directly, because the back buffer is snooped GTT that the CPU rewrites every frame and a read through L2 could return the previous copy. Destination select 3 is not used: the fence would have to write L2 back before the compare or the display sees the data, and that is not proven on this machine. The header is `0xc0055000`. The last word sets bit 31 and the byte count, as `r5_stage_p.h` does.
 
 One indirect buffer is submitted per `CopyBackToFront`. app_server waits on `R5_GPU_FENCE_WAIT` for 100000 microseconds. A timeout is the fallback above.
 

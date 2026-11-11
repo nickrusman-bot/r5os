@@ -1028,12 +1028,13 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	asm volatile("sfence" ::: "memory");
 	r5_gfx9_stage_bytes(src.cpu, 128);
 	uint32* words = (uint32*)ib.cpu;
-	/* DMA_DATA control 0x60200000. This is the word the stage ran.
-	 * Linux soc15d.h names DST_SEL 0, 1 and 3 and does not name 2.
-	 * The checker allows this word and rejects any other DST_SEL 2.
-	 * Whether 2 should be 3 waits for its own diagnostic boot. */
+	/* DMA_DATA control 0x80000000: CP_SYNC, source select 0,
+	 * destination select 0, engine 0. Stick 43 boot 1 used
+	 * 0x60200000 (destination select 2). b5 logged miss and word
+	 * 00000000, and the screen compare still read the white boot
+	 * pixel. Select 0 is the select the K2 fill uses. */
 	words[0] = 0xc0055000u;
-	words[1] = 0x60200000u;
+	words[1] = 0x80000000u;
 	words[2] = (uint32)src.va;
 	words[3] = (uint32)(src.va >> 32);
 	words[4] = (uint32)dest.va;

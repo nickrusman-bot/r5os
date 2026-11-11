@@ -286,18 +286,17 @@ def check_packet(opcode, body, where, errors):
         else:
             # Linux soc15d.h: SRC_SEL is bits 30:29, DST_SEL is bits 21:20
             # (0 DAS, 1 GDS, 3 L2). The header does not name DST_SEL 2.
-            # The engine is bit 27 and CP_SYNC is bit 31.
-            # 0x60200000 is the DMA_DATA control word the stage ran
-            # (stick logs, gpu_stage_dma and R5_P_DMA_DATA). DST_SEL is 2
-            # in that word. It stays until a diagnostic boot tries 3.
-            # Any other DST_SEL 2 fails.
+            # Older Mesa names 2 V_411_DST_NOWHERE. Stick 43 boot 1
+            # ran 0x60200000: b5 logged miss and word 00000000, and the
+            # screen compare still read the white boot pixel. DST_SEL 2
+            # fails everywhere. The engine is bit 27 and CP_SYNC is bit 31.
             allowed = (3 << 20) | (1 << 27) | (3 << 29) | (1 << 31)
             if bits_outside(body[0], allowed):
                 fail(errors, where, "DMA_DATA control %08x" % body[0])
             dst = (body[0] >> 20) & 3
-            if dst == 2 and body[0] != 0x60200000:
-                fail(errors, where, "DMA_DATA DST_SEL 2 is only the word that ran, 0x60200000")
-            elif dst not in (0, 1, 2, 3):
+            if dst == 2:
+                fail(errors, where, "DMA_DATA DST_SEL 2 writes nothing")
+            elif dst not in (0, 1, 3):
                 fail(errors, where, "DMA_DATA DST_SEL %u" % dst)
     elif opcode == 0x58:
         check_acquire(body, where, errors)
