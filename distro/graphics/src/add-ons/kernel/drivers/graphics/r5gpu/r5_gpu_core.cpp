@@ -35,6 +35,7 @@
 extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
 extern "C" bool team_is_valid(team_id id);
 extern "C" status_t vm_set_area_page_memory_type(area_id id, uint32 type);
+extern "C" team_id team_get_current_team_id(void);
 
 static void r5_gpu_eop();
 static void gpu_fault_retire();

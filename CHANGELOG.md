@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The scanout call compiles
+
+The first image build stopped in `r5_gpu_core.cpp`: `team_get_current_team_id` is declared in the kernel team header, and the core file did not include that declaration. The declaration is now next to the other kernel calls. The image from that build was not written. `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The screen mapping is kept
 
 Asking for the screen buffer on every copy filled the 16 address slots, then the 256 buffer slots, and the GPU copy would stop. The mapping is kept until the width, height, or pitch changes. Not booted. There is no What's new section and `distro/BUILD` stays the same.
