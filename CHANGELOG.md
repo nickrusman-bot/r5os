@@ -1,5 +1,26 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - USB isochronous transfers on xHCI
+
+RenkuOS group A, applied onto our copies. Group B (EHCI, UHCI, and the rest of OHCI) is not in this change.
+
+Taken:
+
+- `3f4ee2d0facb1d8cd0a04a3938f4185358408d26` (David Beckman). An isochronous transfer used one buffer per packet, each the size of the largest packet, while each TRB only sent that packet's own length. A short packet left a gap, and the next packet read the wrong bytes. 44.1 kHz alternates packet sizes. The packets now share one buffer, and each TRB starts where the previous one ended. Bulk and interrupt transfers are unchanged.
+- `942e51e6d6295bf24c28ec0c36806a5256509ebf` and `dc8872b9823656b7b323821cffc4d998970735d2` (Bryan Irvine), as one change. A VIA VL805 reads past the last TRB. We already left 4 empty TRBs on every controller (haiku-pi `c65ac5a2e6`). That is now 32 empty TRBs, and only when the controller is a VL805 (PCI 1106:3483). Other controllers, including both test laptops, get no pad. The kernel debugger still hands out 128-byte chunks: the pad is off on these machines, so a TD still fits. The ACPI `_CCA` test in `dc8872b982` was not added. This driver is the PCI driver, and the VL805 id is in the PCI header. A VL805 on AMD64 would not fit a padded TD in the kernel debugger.
+- `8d6303031ecf2800fdcef718646644ec1b674b67` (David Beckman). When a queued isochronous transfer names a frame that has already passed, xHCI and OHCI used that frame anyway, and the next transfer chained from it, so the stream stayed late. If the frame is not safely ahead, the driver now starts from the controller's frame plus a margin and writes that frame back. OHCI uses the 16-bit frame and a margin of 5. xHCI uses the isochronous scheduling threshold and a margin of at least 5. The message is logged at most once every 10 seconds. `ohci.cpp` is now one of our copies. UHCI already had this guard.
+
+Already in R5, so not applied again:
+
+- `5b6210a165` (reset a stalled endpoint). `FinishTransfers` already resets a control pipe on any error and a bulk or interrupt pipe on a stall, through air/OS `bdad03ac62`.
+- `4214bdbe4b` and `300b6c30de` (descriptor length). `Device.cpp` already rejects a descriptor shorter than 2 bytes or past the buffer, and shortens `total_length` when the configuration is shorter than that field. `300b6c30de` is Haiku `d1111656df`.
+- `0a6da2e43c` (SuperSpeed companion before an endpoint). `Device.cpp` already drops that companion.
+- `80c55f2ef4` (allocator waiter count and a slot check). Our allocator has no waiter count, and it checks the slot while holding its lock.
+- `7637e637e4` and `ca923659b4` (bandwidth arithmetic). `Transfer.cpp` in the tree already uses a 32-bit count and adds the high-speed term. The file was not copied.
+- `b6060b0ddb` (half a second, and a last success must not panic). `Object::WaitForIdle` already waits half a second and checks the reference count after the loop. The two-second wait was not taken.
+
+Not tested yet in this section. QEMU has no USB audio interface and no camera.
+
 ## 2026-11-11 - The lock screen has the Sign in look
 
 The lock screen (`LockWindow.cpp`) still had the old Haiku form: a plain password field, a gray Unlock button, buttons without symbols, and the plain desktop color behind it. It now has the Sign in look: the R5 waves behind it (`SignInBackground`), the pebble with "Locked" and "Your apps stay open.", the signed-in account with the People picture and "@login · role", the password field with the eye and "Enter password", the blue Unlock button, and the clock, Log out, Restart and Shut down on the bottom row. The helpers both windows use (mockup pixels, fonts, the account picture) are in `distro/login/SignInLook.h`.

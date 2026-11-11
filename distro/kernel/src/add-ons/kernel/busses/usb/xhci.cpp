@@ -1135,6 +1135,33 @@ XHCI::SubmitNormalRequest(Transfer* transfer)
 		} else {
 			// TODO: We likely to apply FRIDs to each TD. (XHCI 1.2 § 4.11.2.5 p219.)
 			frame = *isochronousData->starting_frame_number;
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 David Beckman
+			// SPDX-License-Identifier: MIT
+			// A frame that has already passed makes the next one late too.
+			// RenkuOS 8d6303031e.
+			uint32 ist = ReadCapReg32(XHCI_HCSPARAMS2) & 0xf;
+			uint32 istFrames = (ist & 0x8) != 0 ? (ist & 0x7) : 1;
+			uint32 hcFrame = ((ReadRunReg32(XHCI_MFINDEX) + 1) >> 3) & 0x7ff;
+			uint32 ahead = (frame - hcFrame) & 0x7ff;
+			if (ahead <= istFrames || ahead > 0x400) {
+				static int32 sChainFallbacks = 0;
+				static bigtime_t sChainFallbackLastLog = 0;
+				int32 count = atomic_add(&sChainFallbacks, 1) + 1;
+				bigtime_t now = system_time();
+				if (now - sChainFallbackLastLog >= 10000000) {
+					sChainFallbackLastLog = now;
+					dprintf("xhci: iso chain fallback #%" B_PRId32
+						" (requested frame %" B_PRIu32 ", hc frame %" B_PRIu32
+						", ahead %" B_PRIu32 ", ist %#" B_PRIx32 ")\n",
+						count, frame & 0x7ff, hcFrame, ahead, ist);
+				}
+				uint32 margin = istFrames + 2;
+				if (margin < 5)
+					margin = 5;
+				frame = (hcFrame + margin) & 0x7ff;
+			}
+			// SPDX-SnippetEnd
 			td->trbs[0].flags |= TRB_3_FRID(frame);
 		}
 		if (isochronousData->starting_frame_number != NULL)

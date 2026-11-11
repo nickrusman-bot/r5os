@@ -176,6 +176,7 @@ def install_usb_stability() -> None:
     source_root = root / "distro" / "kernel"
     files = (
         "src/add-ons/kernel/busses/usb/ehci.cpp",
+        "src/add-ons/kernel/busses/usb/ohci.cpp",
         "src/add-ons/kernel/busses/usb/xhci.cpp",
         "src/add-ons/kernel/busses/usb/xhci.h",
         "src/add-ons/kernel/busses/usb/xhci_hardware.h",

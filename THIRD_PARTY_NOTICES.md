@@ -37,11 +37,11 @@ Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/kernel_interface.cp
 The file is Haiku's BFS interface. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `44cc183c0c` (star row 57): the last reference from a finished I/O is released through `vfs_put_vnode()`. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 ### USB controller
 
-Location: `distro/kernel/src/add-ons/kernel/busses/usb/xhci.cpp`, `xhci.h`, `xhci_hardware.h`, `ehci.cpp`, `distro/kernel/src/add-ons/kernel/bus_managers/usb/Device.cpp`, `Hub.cpp`, `usb_private.h`, `Object.cpp`, `BusManager.cpp`, `Stack.cpp`, and `distro/kernel/src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp`.
+Location: `distro/kernel/src/add-ons/kernel/busses/usb/xhci.cpp`, `xhci.h`, `xhci_hardware.h`, `ehci.cpp`, `ohci.cpp`, `distro/kernel/src/add-ons/kernel/bus_managers/usb/Device.cpp`, `Hub.cpp`, `usb_private.h`, `Object.cpp`, `BusManager.cpp`, `Stack.cpp`, and `distro/kernel/src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp`.
 
 The files are Haiku's. Copyright the Haiku authors named in each file. License: MIT. The headers stay. The added blocks stay MIT. They are not relicensed.
 
-haiku-pi `c65ac5a2e6a6383be3e6630ded05b1a29d506166` clears a finished transfer on a VIA VL805 and leaves four empty slots after it. Copyright 2026 Witold Bołt.
+haiku-pi `c65ac5a2e6a6383be3e6630ded05b1a29d506166` clears a finished transfer on a VIA VL805 and left four empty slots after every ring. Copyright 2026 Witold Bołt. RenkuOS `942e51e6d6` and `dc8872b982` replace that pad.
 
 air/OS (airos-works/haiku), copyright jmgasper, unless another author is named:
 
@@ -65,6 +65,13 @@ RenkuOS, copyright David Beckman:
 - `9abfa5e06e0c9f381f1c1e532e6d82003c3a1858` enables that port cap on 64-bit x86.
 - `42ea6ba8c967dd79c4c3196fbf02f7304d9aba2d` looks again as soon as a high-speed controller hands a port to its companion.
 - `cdd493103a956a90295deb22ace647ab9df1f019` explores a controller that starts after the boot volume is mounted from the explore thread.
+- `3f4ee2d0facb1d8cd0a04a3938f4185358408d26` puts the packets of one isochronous transfer in a single buffer, so a short packet does not shift the next one.
+- `8d6303031ecf2800fdcef718646644ec1b674b67` starts an isochronous chain again when the frame it asked for has already passed, on xHCI and on OHCI.
+
+RenkuOS, copyright Bryan Irvine:
+
+- `942e51e6d6295bf24c28ec0c36806a5256509ebf` leaves 32 unused TRBs after a transfer and after an endpoint ring, so a controller that reads ahead does not act on a TRB that gets rewritten.
+- `dc8872b9823656b7b323821cffc4d998970735d2` keeps that space only on the VIA VL805 (PCI 1106:3483). The kernel debugger's allocation size was not changed. The ACPI `_CCA` path in that commit was not added: this driver always has the PCI id.
 
 `scripts/apply-kernel-bugs.py` copies these files.
 
