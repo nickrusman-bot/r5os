@@ -2165,6 +2165,21 @@ MultiAudioNode::_UpdateTimeSource(multi_buffer_info& info, node_input& input)
 	if (info.played_real_time == 0 || info.played_real_time < fTimeComputer.RealTime())
 		return;
 
+	// A stream start retires its first buffers a few microseconds apart.
+	// Those pairs make the drift jump, and the mixer can sleep past the
+	// sound. Real pairs are one buffer apart. RenkuOS 303b85eae5.
+	bigtime_t bufferDuration = BufferDuration();
+	if (bufferDuration <= 0) {
+		const multi_buffer_list& list = fDevice->BufferList();
+		float rate = fOutputPreferredFormat.u.raw_audio.frame_rate;
+		if (rate > 0 && list.return_playback_buffer_size > 0) {
+			bufferDuration = bigtime_t(
+				list.return_playback_buffer_size * 1000000LL / rate);
+		}
+	}
+	if (info.played_real_time - fTimeComputer.RealTime() < bufferDuration / 2)
+		return;
+
 	fTimeComputer.AddTimeStamp(info.played_real_time,
 		info.played_frames_count);
 	PublishTime(fTimeComputer.PerformanceTime(), fTimeComputer.RealTime(),
