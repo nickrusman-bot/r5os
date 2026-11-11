@@ -188,10 +188,15 @@ A **compatibility table** in this document (or a separate `distro/gpu/COMPAT` fi
 Haiku applications draw through app_server. The steps:
 
 1. **Last copy through the GPU.** app_server's back buffer goes to the screen through a DMA copy (the `DMA_DATA` path from `GRAPHICS.md` has already been shown to work). Painter keeps drawing on the CPU. The risk is small and the result is easy to measure. The scanout call is `R5_GPU_SCANOUT_BO` (`R5_GPU_OP_BASE + 31`). It returns the framebuffer the driver is already scanning out, mapped into the caller's GPU address space. Only app_server may call it. The kernel reads the calling team's info and allows the call when that team's executable is `/system/servers/app_server` or `/boot/system/servers/app_server`. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`. The design of the copy is `docs/APP-SERVER-GPU.md`.
-2. **Compositing on the GPU.** Windows as GPU buffers, combined on the GPU.
-3. **A GPU drawing engine** behind the same `DrawingEngine` interface, for example through Vulkan. Only if measurements show it is faster. Ordinary buttons and text often stay faster on the CPU (`GRAPHICS.md`, step 7).
+2. **Compositing on the GPU (M11).** Every window gets its own GPU buffer, and app_server composes the screen with Vulkan (RADV; Lavapipe only for development). The compositor is a layer inside app_server, not a separate process. Vulkan and OpenGL windows are shown without a copy through the CPU (`BO_EXPORT` / `BO_IMPORT`). This brings the R5 window look: rounded corners, a soft shadow, and a frosted body where the decorator asks for it. Users turn the effects off with "Window effects" in Appearance, Look and feel. While a program has direct access to the screen (`BDirectWindow`, `BWindowScreen`), composing pauses. Existing decorators keep working; the R5 decorator interface adds hooks for shape, shadow and blur at the end.
+3. **The GPU draws everything (M12).** A Skia drawing engine (BSD-3-Clause, Vulkan backend) behind the same `DrawingEngine` interface draws every operation, text included (Skia's glyph cache on FreeType, with `ServerFont` metrics so layout is identical). Skia is built from R5's own recipe at a pinned version, like Mesa, and is linked only by app_server: it never appears in a public header, `libbe` or a `libr5*` library. A missing operation blocks this step; it is never drawn on the CPU instead.
 
-Painter stays in every step. With an unavailable GPU, app_server uses it exactly as it does today.
+**Two modes, never mixed.** The whole desktop runs in one mode per session:
+
+- **GPU mode:** steps 2 and 3. It is the default where the GPU is available and the family has passed "From opt-in to default", and it is the reference for what R5 can do.
+- **CPU mode:** app_server as Haiku has it, with Painter (AGG) and the step 1 copy when that is on. The same decorator, shapes and colours, an opaque body, and no shadow or blur.
+
+The mode is chosen at session start. If the GPU fails during a session (lost device, failed submit, fence timeout), the desktop switches to the CPU mode for the rest of that session, redraws every window, and logs one line. It does not switch back in that session. `gpu_compositor false` in the `radeon_hd` settings is the opt-out. Painter stays in every release: with an unavailable GPU, app_server uses it exactly as it does today.
 
 ## Milestones
 
@@ -208,6 +213,8 @@ Painter stays in every step. With an unavailable GPU, app_server uses it exactly
 | M8 | app_server uses the GPU for the last copy | Measured gain; Painter fallback works | |
 | M9 | Zink for OpenGL | GLTeapot on the GPU; llvmpipe as fallback | |
 | M10 | GC 9.3 `release-supported` | GPU is the default on that family; opt-out works; hang policy tested | |
+| M11 | app_server composes on the GPU | Composed screen equals the CPU mode with effects off; Vulkan windows without a CPU copy; shadow and frosted body; switch to the CPU mode without a freeze | |
+| M12 | The GPU draws everything | Every drawing operation passes the compare set against Painter; text layout identical; both modes measured | |
 
 M4 in more detail, in the order of the work: the vendor-neutral R5 GPU interface v1 with the render node; VMID 1 with multi-level page tables; `CS_SUBMIT` with an interrupt-driven fence; the R5 DRM library with the AMD front end; the Mesa recipe with RADV and Zink; VulkanTeapot. The proof is a self-test after Sign in that writes one result file: the interface, `vulkaninfo`, and VulkanTeapot with checked pixels.
 
