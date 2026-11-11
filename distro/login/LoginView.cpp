@@ -288,7 +288,8 @@ LoginView::LoginView()
 		.AddGlue();
 
 	fPasswordLabel = new BStringView("pwLabel", "Password");
-	fPasswordLabel->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	fPasswordLabel->SetViewColor(B_TRANSPARENT_COLOR);
+	fPasswordLabel->SetFlags(fPasswordLabel->Flags() | B_TRANSPARENT_BACKGROUND);
 	BFont passwordFont(be_bold_font);
 	passwordFont.SetSize(be_plain_font->Size() * 0.9f);
 	fPasswordLabel->SetFont(&passwordFont);
@@ -303,7 +304,8 @@ LoginView::LoginView()
 	fLoginButton->SetExplicitMinSize(BSize(B_SIZE_UNSET, 34.0f * u));
 
 	fInfoView = new BStringView("info", "");
-	fInfoView->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	fInfoView->SetViewColor(B_TRANSPARENT_COLOR);
+	fInfoView->SetFlags(fInfoView->Flags() | B_TRANSPARENT_BACKGROUND);
 	fInfoView->SetAlignment(B_ALIGN_CENTER);
 	fInfoView->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 

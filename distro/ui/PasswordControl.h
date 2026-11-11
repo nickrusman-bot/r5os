@@ -54,12 +54,24 @@ public:
 			void				SetPasswordRevealed(bool revealed);
 
 	virtual	void				AttachedToWindow();
-	virtual	void				MessageReceived(BMessage* message);
+	virtual	void				FrameResized(float newWidth, float newHeight);
+	virtual	void				Draw(BRect updateRect);
+	virtual	void				MouseDown(BPoint where);
 	virtual	void				MakeFocus(bool focus = true);
 	virtual	void				SetEnabled(bool enabled);
+	virtual	void				WindowActivated(bool active);
+
+	virtual	void				GetPreferredSize(float* width, float* height);
+	virtual	BSize				MinSize();
+	virtual	BSize				MaxSize();
+	virtual	BSize				PreferredSize();
+
+	virtual	void				MessageReceived(BMessage* message);
 
 private:
-			void				_Init(const char* text);
+			void				_LayoutChildren();
+			BRect				_EyeButtonRect() const;
+			void				_DrawEyeButton();
 
 	virtual	void				_ReservedPasswordControl1();
 	virtual	void				_ReservedPasswordControl2();
