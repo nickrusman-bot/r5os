@@ -13,9 +13,9 @@
 	whichever is faster at that size. What arrives is converted to B_RGB32
 	and, should the camera not have the size asked for, cropped and scaled.
 
-	Isochronous cameras are read through an isochronous stream of the USB
-	Kit: a camera sends a packet every 125 µs, and one transfer at a time
-	from userland would lose those in between.
+	Isochronous cameras are read with BUSBEndpoint::IsochronousTransfer().
+	R5's USB kit has no isochronous stream, so each call is one group of
+	packets and what the camera sends between calls can be missed.
 */
 
 
@@ -1113,13 +1113,14 @@ UVCCamDevice::StartTransfer()
 		status = B_NO_MEMORY;
 
 	if (status == B_OK && !fIsBulk) {
-		// Transfers of 4 ms at high speed (a packet per 125 µs), of 8 ms at
-		// full speed (a packet per ms); four of them queued.
-		const uint32 packets = fDevice->USBVersion() >= 0x0200 ? 32 : 8;
-		status = fIsoIn->StartIsochronousStream(fPacketSize, packets, 4,
-			4 * 1024 * 1024);
-		if (status != B_OK)
-			ERROR("starting the stream failed: %s\n", strerror(status));
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		// The air/OS stream (0af4c0889e) is not in this tree. One
+		// IsochronousTransfer covers 4 ms at high speed, 8 ms at full speed.
+		if (fPacketSize == 0 || fPacketSize > 8192)
+			status = B_BAD_VALUE;
+		// SPDX-SnippetEnd
 	}
 
 	if (status == B_OK)
@@ -1153,8 +1154,6 @@ UVCCamDevice::StopTransfer()
 			if (fBulkIn != NULL)
 				fBulkIn->ClearStall();
 		} else {
-			if (fIsoIn != NULL)
-				fIsoIn->StopIsochronousStream();
 			BUSBInterface* streaming = _StreamingInterface();
 			if (streaming != NULL)
 				streaming->SetAlternate(0);
@@ -1250,13 +1249,30 @@ UVCCamDevice::DataPumpThread()
 		return B_OK;
 	}
 
-	const size_t size = 256 * 1024;
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// One group at a time. Packets the camera sends while this call is not
+	// queued are missed; an incomplete frame is dropped below.
+	const uint32 packetCount = fDevice->USBVersion() >= 0x0200 ? 32 : 8;
+	const size_t size = packetCount * fPacketSize;
 	uint8* buffer = (uint8*)malloc(size);
-	if (buffer == NULL)
+	usb_iso_packet_descriptor* packets
+		= new(std::nothrow) usb_iso_packet_descriptor[packetCount];
+	if (buffer == NULL || packets == NULL) {
+		free(buffer);
+		delete[] packets;
 		return B_NO_MEMORY;
+	}
 
 	while (fTransferEnabled) {
-		ssize_t length = fIsoIn->ReadIsochronousStream(buffer, size, 100000);
+		for (uint32 i = 0; i < packetCount; i++) {
+			packets[i].request_length = (int16)fPacketSize;
+			packets[i].actual_length = 0;
+			packets[i].status = B_OK;
+		}
+		ssize_t length = fIsoIn->IsochronousTransfer(buffer, size, packets,
+			packetCount);
 		if (length == B_TIMED_OUT || length == B_INTERRUPTED)
 			continue;
 		if (length < 0) {
@@ -1264,22 +1280,22 @@ UVCCamDevice::DataPumpThread()
 			break;
 		}
 
-		// every packet is a payload
 		size_t offset = 0;
-		while (offset + sizeof(usb_stream_packet_header) <= (size_t)length) {
-			usb_stream_packet_header header;
-			memcpy(&header, buffer + offset, sizeof(header));
-			offset += sizeof(header);
-			if (offset + header.length > (size_t)length)
+		for (uint32 i = 0; i < packetCount; i++) {
+			const int16 actual = packets[i].actual_length;
+			if (actual < 0 || offset + (size_t)actual > (size_t)length)
 				break;
-
-			if ((header.flags & B_USB_STREAM_PACKET_GAP) != 0)
+			if (packets[i].status != B_OK)
 				fFrameBad = true;
-			_HandlePayload(buffer + offset, header.length,
-				(header.flags & B_USB_STREAM_PACKET_ERROR) != 0);
-			offset += header.length;
+			if (actual > 0) {
+				_HandlePayload(buffer + offset, (size_t)actual,
+					packets[i].status != B_OK);
+			}
+			offset += (size_t)actual;
 		}
 	}
+	delete[] packets;
+	// SPDX-SnippetEnd
 
 	free(buffer);
 	return B_OK;
