@@ -54,6 +54,7 @@ FILES = (
     "src/preferences/media/MediaViews.cpp",
     "src/preferences/media/MediaViews.h",
     "src/preferences/media/MediaWindow.cpp",
+    "src/preferences/media/MediaWindow.h",
     "src/kits/interface/MenuField.cpp",
     "headers/os/midi2/Midi2Defs.h",
     "headers/os/midi2/Midi2Property.h",

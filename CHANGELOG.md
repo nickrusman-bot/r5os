@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Media refreshes its device lists when a card appears
+
+The Media preferences built the device lists when the window opened and when the media server started. A sound card plugged in while the window was open stayed invisible until Media was opened again. The window now watches flavor changes and rebuilds the lists. A restarted media server drops that watch, so it is renewed each time the server starts. A device that the driver still lists after it is unplugged stays in the list. Ported from RenkuOS `917e0e9e30` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Media messages are copied before they are used
 
 The node, source, destination and format in a media message are not aligned. The notification server and the parameter controls used them in place, which faults on ARM. They are copied out first. Ported from RenkuOS `cf12459a32` (atomozero, MIT). Not booted on ARM64. There is no What's new section and `distro/BUILD` stays the same.
