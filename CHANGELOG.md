@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Roland and Edirol Advanced mode is a table
+
+Those interfaces have no USB-MIDI descriptors, so the driver matches vendor 0x0582 and a per-model table of interface number and cable masks. A composite unit is found by its non-isochronous IN and OUT pair. An interrupt IN endpoint is queued as an interrupt transfer. The driver scans every endpoint for the first IN and the first OUT. A missing port in the middle of the cable list is skipped instead of ending the scan. Standard mode still uses the class descriptors. Ported from RenkuOS `cb61494f02` (David Beckman, MIT). No Roland device was attached. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Yamaha USB-MIDI uses a vendor-specific interface
 
 A Yamaha interface such as the UX-256 carries a normal MIDI header inside a vendor-specific interface, so `usb_midi` never matched it. Vendor 0x0499 is now accepted, and a non-audio interface with a MIDIStreaming header is used. When the endpoint descriptors do not name the cables, the jack descriptors are counted, at most 16 each. A class-compliant device still matches first. An audio-only Yamaha device is still rejected. Ported from RenkuOS `fe2de4aa60` (David Beckman, MIT) onto the R5 driver. No Yamaha device was attached. There is no What's new section and `distro/BUILD` stays the same.
