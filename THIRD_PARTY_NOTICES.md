@@ -74,6 +74,28 @@ RenkuOS, copyright David Beckman:
 
 `scripts/apply-kernel-bugs.py` copies these files.
 
+### Touchpads and TrackPoint
+
+The image built `i2c_hid` and did not install it. RenkuOS `b37a078925` adds it next to `i2c_elan`.
+
+Location: `distro/kernel/src/add-ons/kernel/drivers/input/i2c_hid/`, `distro/kernel/src/add-ons/kernel/drivers/input/i2c_elan/`, `distro/kernel/src/add-ons/kernel/bus_managers/ps2/`, and `distro/rest/src/add-ons/input_server/devices/mouse/MouseInputDevice.cpp`.
+
+The copied files are Haiku's. Copyright the Haiku authors named in each file. License: MIT. The headers stay. `InputReadyLine.cpp` and `InputReadyLine.h` are new in RenkuOS and keep the header that commit wrote: Copyright 2026, Haiku, Inc., MIT. The RenkuOS changes stay MIT. They are not relicensed. No name was added to `elan_iic_devs`. Goodix (`4f32e08ca6`) was not taken. Each commit below is signed off by its author (DCO).
+
+RenkuOS (RenkuOS/Source):
+
+- `5153bac8073787ba8bedc7ac126de57c646fb946`, duncanmcqueen: read an I2C HID report only while the input-ready line is asserted. Intel Sunrise Point-LP (`INT344B`).
+- `b37a078925df647ead39f487159acf61234cd6e0`, duncanmcqueen: install `i2c_hid`, and return 0.5 for a compatible-ID match so a hardware-ID driver comes first.
+- `dd62b72f0fc8e91179c6c76a9283b55020ed0d5c`, idumych: read that line on AMD GPIO `AMD0030` and `AMDI0030`.
+- `29e452e51dfe669b42251c54623125752e948e9f`, Felipe De Bene: collect Synaptics pass-through replies in the interrupt handler.
+- `e126f76b753ead750a0387d2250777b99bf1a356`, Felipe De Bene: keep TrackPoint buttons held, and report them through the stick when a pass-through device is published. The finger-count bitmask in that commit was already in this tree. The branch that cleared those buttons when a packet had no change flag is removed here.
+- `04fdaf98e4ecdd4ce976b01481736dd3de023e96`, Felipe De Bene: the middle button of a trackpoint scrolls.
+- `a9f23126d3e6d0a19d5caa6de856ce916e47cf37`, idumych: the Elan touchpad speaks its own I2C protocol and uses the same input-ready line.
+- `cb22fd5cfecf93f5f52e188d2cb985e37fddd8ea`, idumych: a right or middle click on an Elan clickpad.
+- `17bb2a0c3e7842996acf3602c55c56f9e76c64a6`, idumych: follow the fingers that stay down, so a drag or a scroll does not jump.
+
+`scripts/apply-kernel-bugs.py` copies the kernel files and adds `i2c_hid` to the package. `scripts/apply-rest-native.py` copies the mouse add-on.
+
 ### USB disk unplug
 
 Location: `distro/kernel/src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp`.

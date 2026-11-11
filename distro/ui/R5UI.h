@@ -28,6 +28,7 @@
 #include <Rect.h>
 
 
+class BBitmap;
 class BView;
 
 
@@ -55,5 +56,18 @@ BRect r5_screen_draw(BView* view, BRect bounds, rgb_color contentColor);
 void r5_screen_caption(BView* view, BRect content, const char* text,
 	rgb_color textColor);
 
+
+// Draws an account picture: a round plate with a thin ring, and `icon`
+// centered inside it. A bitmap whose side is the inner size is drawn
+// pixel for pixel; any other size is filtered, never stretched with
+// nearest-neighbor. `highlighted` gives the accent plate, used for an
+// administrator or the selected account. Without an icon a plain person
+// silhouette is drawn. The inner size is r5_avatar_icon_side(circle).
+void r5_avatar_draw(BView* view, BRect circle, const BBitmap* icon,
+	bool highlighted);
+
+// The icon side, in pixels, that r5_avatar_draw() draws without
+// filtering inside a plate of `circleSide` pixels.
+float r5_avatar_icon_side(float circleSide);
 
 #endif

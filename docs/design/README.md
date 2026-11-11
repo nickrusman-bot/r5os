@@ -35,3 +35,8 @@ How R5 gets there:
 ## `settings-mockup/`
 
 The design for the Settings window, chosen by the user on 9 Nov 2026. It uses the look of the About R5 window, not the round Sign in reference above. It has the real Haiku icons, and a list where each category folds open. Home and Back are not in the bottom row. `settings-mockup/README.md` says what it decides. Settings is rebuilt to match it.
+
+## `login-mockup/`
+
+Interactive mockup for the Sign in window (`sign-in.html`), adapting the Settings window aesthetic (yellow tab, square BeOS close/zoom boxes, panel gray body, R5 wave desktop, authentic icons) to the login screen with multi-user selection, password reveal toggle, live clock, and power actions. Addresses issue [#71](https://github.com/r5-operating-system/r5os/issues/71).
+

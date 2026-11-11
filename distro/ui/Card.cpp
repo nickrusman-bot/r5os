@@ -52,6 +52,23 @@ card_fill(card_style style)
 }
 
 
+// The view color is the card's own face, so a child that adopts its
+// parent's colors (BStringView does) gets the card face, not gray. The
+// B_TRANSPARENT_BACKGROUND flag keeps the rounded corners showing the
+// parent.
+static void
+apply_card_view_color(BView* view, card_style style)
+{
+	if (style == B_CARD_PANEL) {
+		view->SetViewUIColor(B_PANEL_BACKGROUND_COLOR, B_DARKEN_1_TINT);
+		view->SetLowUIColor(B_PANEL_BACKGROUND_COLOR, B_DARKEN_1_TINT);
+	} else {
+		view->SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+		view->SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+	}
+}
+
+
 static rgb_color
 card_border()
 {
@@ -143,6 +160,7 @@ BCard::SetStyle(card_style style)
 	if (fStyle == style)
 		return;
 	fStyle = style;
+	apply_card_view_color(this, fStyle);
 	Invalidate();
 }
 
@@ -160,7 +178,7 @@ BCard::_Init()
 	fData = new(std::nothrow) Data;
 	for (int32 index = 0; index < 4; index++)
 		_reserved[index] = 0;
-	SetViewColor(B_TRANSPARENT_COLOR);
+	apply_card_view_color(this, fStyle);
 	BGroupLayout* layout = dynamic_cast<BGroupLayout*>(GetLayout());
 	if (layout != NULL)
 		layout->SetInsets(B_USE_BIG_SPACING);

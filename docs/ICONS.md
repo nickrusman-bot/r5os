@@ -91,4 +91,28 @@ Each returns `B_OK` when the icon was set. The button is still resized to the sq
 
 Settings links `libr5icons.so` and calls `r5_button_set_lock()` for the lock, after the plain font is applied, so the height matches Revert and Defaults. The lock, Revert, and Defaults do not get the preferences wrench.
 
+## Line glyphs
+
+Haiku's icon set has no power symbol, no circular arrow, no clock face for a small label, and no eye. For those, `libr5icons.so` draws a line glyph in code. A glyph has one color, given by the caller, so it follows the text color and dark mode. It is drawn on a 24 by 24 grid with round line ends. A ring is drawn as one line through the same coordinates as a straight line, so the stem of the power symbol sits exactly in the middle of its ring. These are small symbols beside text, not icons in the Haiku style; a full icon still comes from Haiku's HVIF set.
+
+| Glyph | Number | Picture |
+|---|---|---|
+| `R5_GLYPH_POWER` | 1 | A ring open at the top, with a short stem |
+| `R5_GLYPH_RESTART` | 2 | A ring open at the right, with an arrow head at the top |
+| `R5_GLYPH_CLOCK` | 3 | A clock face with two hands |
+| `R5_GLYPH_EYE` | 4 | An open eye (show the password) |
+| `R5_GLYPH_EYE_OFF` | 5 | The eye with a line through it (hide the password) |
+| `R5_GLYPH_LOG_OUT` | 6 | An open door frame with an arrow out to the right |
+
+The numbers are part of the contract, the same as `r5_icon`. A new glyph is added at the end of `enum r5_glyph`, with a row in this table.
+
+- `r5_glyph_draw(view, which, frame, color)` draws into a view. The view's state is the same afterwards.
+- `r5_glyph_bitmap(which, side, color)` returns a new `B_RGBA32` bitmap with the glyph on a transparent background. The caller deletes it.
+- `r5_button_set_glyph(button, which)` puts the glyph before the label, in `B_CONTROL_TEXT_COLOR`, at the size of the button's font. Unlike `r5_button_set_icon()`, it does not make the button square. Call it again after `B_COLORS_UPDATED`.
+
+```cpp
+restart->SetFont(&font);
+r5_button_set_glyph(restart, R5_GLYPH_RESTART);
+```
+
 The Settings application icon is the R5 wave pebble from About R5, with the preferences wrench (the last two shapes of Tracker's preferences-folder icon) drawn on it. `scripts/join-settings-icon.py` builds that HVIF into `Settings.rdef`. The Home row in the list uses the pebble alone. The wrench on a page icon is still drawn by Settings when the page is shown.

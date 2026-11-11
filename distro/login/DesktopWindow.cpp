@@ -19,6 +19,12 @@
 #include "LoginApp.h"
 #include "DesktopWindow.h"
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "SignInBackground.h"
+// SPDX-SnippetEnd
+
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Desktop Window"
 
@@ -33,10 +39,13 @@ DesktopWindow::DesktopWindow(BRect frame, bool editMode)
 		editMode?B_CURRENT_WORKSPACE:B_ALL_WORKSPACES),
 	  fEditShelfMode(editMode)
 {
-	BScreen screen;
-	BView *desktop = new BView(Bounds(), "desktop", B_FOLLOW_NONE, 0);
-	desktop->SetViewColor(screen.DesktopColor());
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The R5 Sign in background instead of the plain desktop color.
+	BView *desktop = new SignInBackground(Bounds());
 	AddChild(desktop);
+// SPDX-SnippetEnd
 
 	// load the shelf
 	BPath path;

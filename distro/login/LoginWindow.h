@@ -11,9 +11,15 @@
 
 class LoginWindow : public BWindow {
 public:
-					LoginWindow(BRect frame);
-	virtual			~LoginWindow();
-	void			PrepareForSignIn();
+								LoginWindow(BRect frame);
+	virtual						~LoginWindow();
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	virtual	void				ScreenChanged(BRect frame, color_space mode);
+// SPDX-SnippetEnd
+			void				PrepareForSignIn();
 };
 
 

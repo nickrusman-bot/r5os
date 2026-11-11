@@ -88,6 +88,61 @@ Those interfaces have no USB-MIDI descriptors, so the driver matches vendor 0x05
 
 A Yamaha interface such as the UX-256 carries a normal MIDI header inside a vendor-specific interface, so `usb_midi` never matched it. Vendor 0x0499 is now accepted, and a non-audio interface with a MIDIStreaming header is used. When the endpoint descriptors do not name the cables, the jack descriptors are counted, at most 16 each. A class-compliant device still matches first. An audio-only Yamaha device is still rejected. Ported from RenkuOS `fe2de4aa60` (David Beckman, MIT) onto the R5 driver. No Yamaha device was attached. There is no What's new section and `distro/BUILD` stays the same.
 
+## 2026-11-11 - The lock screen has the Sign in look
+
+The lock screen (`LockWindow.cpp`) still had the old Haiku form: a plain password field, a gray Unlock button, buttons without symbols, and the plain desktop color behind it. It now has the Sign in look: the R5 waves behind it (`SignInBackground`), the pebble with "Locked" and "Your apps stay open.", the signed-in account with the People picture and "@login · role", the password field with the eye and "Enter password", the blue Unlock button, and the clock, Log out, Restart and Shut down on the bottom row. The helpers both windows use (mockup pixels, fonts, the account picture) are in `distro/login/SignInLook.h`.
+
+Also fixed:
+
+- `R5_GLYPH_LOG_OUT` (6) is new in `libr5icons.so`, for Log out.
+- The stem of the power symbol was not in the middle of its ring: `StrokeArc()` places an arc half a pixel off from a line. Every ring in the glyphs is now one open polygon in the same coordinates as the lines.
+- Showing the password with the eye kept the dots: Haiku's `BTextView::HideTyping(false)` does not redraw the text, and `HideTyping(true)` deletes it. `BPasswordControl::SetPasswordRevealed()` puts the text and the selection back after the switch.
+
+Tested in QEMU (KVM, headless, the image as a snapshot), image built with `jam -q @r5-raw` at 19:30 on 11 Nov 2026: signing in as `user` with an empty password reaches the desktop; Deskbar, Lock screen opens the new lock screen; typing "abc" and clicking the eye shows "abc" and the crossed-out eye; the power stem is centered. Not tested: Unlock, Log out from the lock screen, a wrong password, dark mode, VirtualBox, the 5625U.
+
+## 2026-11-11 - Sign in looks like the mockup
+
+The sign-in window after Cursor's round still differed from `docs/design/login-mockup/sign-in.html`: a plain blue desktop behind it, a gray Sign in button, Restart and Shut down without symbols, and a jagged R5 pebble. The pebble was jagged because `LogoView` rendered it at `44 * unit` pixels and then drew it into a view one pixel larger, which stretches it without smoothing. The avatars were stretched the same way.
+
+What changed:
+
+- `libr5icons.so`: line glyphs (`R5_GLYPH_POWER`, `RESTART`, `CLOCK`, `EYE`, `EYE_OFF`), `r5_glyph_draw()`, `r5_glyph_bitmap()` and `r5_button_set_glyph()`. Haiku's icon set has none of these symbols. They are drawn in code in the text color. `docs/ICONS.md`.
+- `libr5ui.so`: `BIconView` (an icon at its own pixel size, never scaled), `BAccentButton` (the blue main button), `r5_avatar_draw()` and `r5_avatar_icon_side()`, and `BPasswordControl::SetPlaceholder()`. `docs/LIBR5.md`, `docs/APPEARANCE-KIT.md`.
+- `BPasswordControl`: the open eye now means "show the password", as in the mockup; it was the other way round. Manrope 14, the blue focus ring, the "Enter password" placeholder.
+- `BUserCard` and `BUserListItem`: mockup sizes; the administrator role is bold and blue, and a standard account's picture is gray. In the list only the role is blue; "@login ·" stays gray.
+- Login: the R5 waves of the mockup behind the window (`SignInBackground.cpp`, which replaces the plain desktop color in `DesktopWindow`). The colors, the curves and an optional picture file are at the top of that file. The window is 440 mockup pixels wide; all sizes are mockup pixels at the 12 point system font. The People icon is the account picture. One account shows the picture, name and role; two or more show "Signing in as: Name @login".
+
+Limits: Manrope ships Regular and Bold only, so the mockup's 800 and 600 weights are Bold. The window body stays the system panel gray (`#D8D8D8`), darker than the mockup's `#EDEDED`. The window frame and tab are the decorator's; the mockup's rounded bottom corners and shadow are not part of this change.
+
+Mistakes found in the first QEMU boot and fixed: the text in the white cards had gray boxes behind it, because `BCard` set its view color to `B_TRANSPARENT_COLOR` and `BStringView` adopts its parent's colors. `BCard` now uses its card face as view color (document or panel, darkened); the `B_TRANSPARENT_BACKGROUND` flag still keeps the rounded corners. This also applies to About and Settings. The eye was only its pupil: a stroked `BShape` was not drawn, so the eye is two arcs. The selected row, the `@user` pill and the administrator plate were full blue, because `mix_color()` was used the wrong way round (the amount moves toward the second color). `IconView.h` is `R5IconView.h`, because Haiku's private `IconView.h` is found first.
+
+Tested: `libr5icons.so`, `libr5ui.so` and Login build with `-Werror`. `scripts/jam-r5-raw.sh` finished at 19:27 on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`; after the fixes `jam -q @r5-raw` rebuilt `r5-os.image` at 19:51 (2147483648 bytes), without test accounts. QEMU (KVM, VESA 1280 x 800, headless, the image as a snapshot): screendumps of Sign in with 1, 2 and 6 accounts match the mockup in layout, fonts, colors, the waves, the blue button, the glyphs and the smooth pebble. The 2 and 6 account images were built with test accounts added only to the tree's `build/jam/UserBuildConfig`, and those lines were removed again. Not tested: the crossed-out eye (the monitor click did not reach the eye), signing in, dark mode, VirtualBox, the 5625U.
+
+The sources were copied with `scripts/apply-overlay.sh` without its artwork check (CR LF in this Windows checkout, the same as below). `scripts/jam-r5-raw.sh` also stops on CR LF: its `sh -n` check of `distro/graphics/boot/m8-run` fails. For this jam those four files were converted to LF in the working copy only; they are not part of this change.
+
+## 2026-11-11 - Sign in clears the password and refuses an empty one
+
+The sign-in window is the new screen: one account goes straight to the password field, two to four accounts are cards, and five or more are a two-line list. The password field has a show/hide control. Haiku's icon set has no eye to pass to `r5_vector_icon_bitmap()`, so the control still draws the eye.
+
+`BPasswordControl::Archive()` does not store the password, and a deep archive does not store the child text either. Sign in clears the field after the attempt, whether it succeeded or not. `account_password_matches()` refuses an empty field when the account has a password, and still accepts an empty field when the account has none. The refusal says "Please enter your password." and the cursor returns to the field. The password is not written to the session log or to a program argument.
+
+`scripts/apply-overlay.sh` from `cursor/login-mockup` copied this branch into the shared tree. The artwork check in that script did not run: this Windows checkout stores the symbol files with CR LF, so the hash does not match the generator. The copy itself ran. `jam -q @r5-raw` then finished at 18:30 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 18:30. The Login binary in that image contains "Please enter your password." and `libr5ui.so` does not contain `r5:text`. Not booted in VirtualBox. There is no What's new section and `distro/BUILD` stays the same.
+## 2026-11-11 - Touchpads and TrackPoint from RenkuOS
+
+The image built `i2c_hid` and did not install it. These commits are RenkuOS, MIT, signed off by their authors. The Haiku file headers stay. No name was added to `elan_iic_devs`. Goodix (`4f32e08ca6`) was not needed for the later commits and was not taken. No What's new section, and `distro/BUILD` stays where it is, until a stick confirms the hardware.
+
+- `5153bac807`, duncanmcqueen: `i2c_hid` reads an input report only while the device's input-ready line is asserted. Without a line it can read, the driver still polls. The first controller is Intel Sunrise Point-LP (`INT344B`).
+- `b37a078925`, duncanmcqueen: `i2c_hid` is installed next to `i2c_elan`. A compatible-ID match (`PNP0C50`) returns 0.5, so a driver that matches the hardware ID comes first.
+- `dd62b72f0f`, idumych: the same line is read on AMD GPIO `AMD0030` and `AMDI0030`, the controller in the 5625U. One 32-bit register per pin, level in bit 16. A pin whose output driver is on is not used.
+- `29e452e51d`, Felipe De Bene: a TrackPoint behind a Synaptics pass-through port gets its replies from the interrupt handler, instead of from the short window after the last command.
+- `e126f76b75`, Felipe De Bene: those buttons stay down for a drag, and when the stick is published they are reported through the stick. The finger-count bitmask in that commit was already in this Haiku tree, so that part was not applied again. This tree still cleared the buttons when a packet had no change flag; that clear is removed.
+- `04fdaf98e4`, Felipe De Bene: while the middle button of a trackpoint is held, stick motion scrolls. A press and release with no motion is still a middle click.
+- `a9f23126d3`, idumych: `i2c_elan` speaks the native Elan I2C protocol and uses the same input-ready line. The 5625U touchpad (ELAN2513) stays on `i2c_hid`.
+- `cb22fd5cfe`, idumych: an Elan clickpad reports a right click for two fingers or the bottom-right corner, and a middle click for three fingers.
+- `17bb2a0c3e`, idumych: the driver follows the fingers that stay down, so a second finger does not end a drag and a lift does not throw the pointer.
+
+Tested: jam `jam_exit=0` on 11 Nov 2026 (the translator headers `avif.h`, `jpeglib.h`, `png.h` and the rest are the same missing build packages as before; they are not from this change). One QEMU boot (TCG, GTK, guest `screendump`) the same evening, Europe/Amsterdam. The serial log published `input/mouse/ps2/intelli_0` and `input/keyboard/at/0`, then Tracker and Deskbar. The picture is the desktop with the pointer on it. No kernel panic and no `input_server` crash in that log. The virtio input add-on is still missing (`No such file or directory`); that was already the case. QEMU has no I2C touchpad and no TrackPoint, so `i2c_hid` does not run there. Not yet tested on hardware. The hardware check rides on the next stick: on the 5625U the touchpad moves and syslog shows `i2c_hid` using the input-ready line; on the X1 Carbon the TrackPoint buttons and middle-button scrolling.
+
 ## 2026-11-11 - Stick 46 copied the desktop through the GPU
 
 Stick 46 is the 17:43 anyboot, sha256 `6965416a…`. Logs: `C:\Users\nickr\Desktop\Logs\m8-46`. The branch is `cursor/m8-stick` `ee8da208`.
