@@ -30,6 +30,16 @@
 
 const char* kSettingsName = "Media/multi_audio_settings";
 
+/* A flavor index is the list index. Removing a slot would point a later
+ * device at an old index. A gone device stays, with present clear, and a
+ * replug gets a new slot. RenkuOS cf885a005b, adapted to the watcher
+ * this tree already has.
+ */
+struct MultiAudioSlot {
+	MultiAudioDevice*	device;
+	bool				present;
+};
+
 
 //! instantiation function
 class DeviceWatch : public BLooper {
@@ -116,9 +126,12 @@ MultiAudioAddOn::~MultiAudioAddOn()
 		fDeviceWatch = NULL;
 	}
 
-	void *device = NULL;
-	for (int32 i = 0; (device = fDevices.ItemAt(i)); i++)
-		delete (MultiAudioDevice*)device;
+	for (int32 i = 0; i < fDevices.CountItems(); i++) {
+		MultiAudioSlot* slot = (MultiAudioSlot*)fDevices.ItemAt(i);
+		if (slot != NULL)
+			delete slot->device;
+		delete slot;
+	}
 
 	_SaveSettings();
 }
@@ -147,9 +160,10 @@ MultiAudioAddOn::GetFlavorAt(int32 index, const flavor_info** _info)
 	CALLED();
 
 	BAutolock _(fLock);
-	MultiAudioDevice* device = (MultiAudioDevice*)fDevices.ItemAt(index);
-	if (device == NULL)
+	MultiAudioSlot* slot = (MultiAudioSlot*)fDevices.ItemAt(index);
+	if (slot == NULL || !slot->present || slot->device == NULL)
 		return B_BAD_INDEX;
+	MultiAudioDevice* device = slot->device;
 
 	flavor_info* info = new (std::nothrow) flavor_info;
 	if (info == NULL)
@@ -177,8 +191,9 @@ MultiAudioAddOn::InstantiateNodeFor(const flavor_info* info, BMessage* config,
 	CALLED();
 
 	fLock.Lock();
-	MultiAudioDevice* device = (MultiAudioDevice*)fDevices.ItemAt(
-		info->internal_id);
+	MultiAudioSlot* slot = (MultiAudioSlot*)fDevices.ItemAt(info->internal_id);
+	MultiAudioDevice* device = slot != NULL && slot->present
+		? slot->device : NULL;
 	fLock.Unlock();
 	if (device == NULL) {
 		*_error = B_ERROR;
@@ -280,12 +295,17 @@ MultiAudioAddOn::_RecursiveScan(const char* rootPath, BEntry* rootEntry, uint32 
 			MultiAudioDevice *device = 
 				new(std::nothrow) MultiAudioDevice(path.Path()
 					+ strlen(rootPath), path.Path());
-			if (device) {
-				if (device->InitCheck() == B_OK)
-					fDevices.AddItem(device);
-				else
+			if (device != NULL && device->InitCheck() == B_OK) {
+				MultiAudioSlot* slot = new(std::nothrow) MultiAudioSlot;
+				if (slot == NULL) {
 					delete device;
-			}
+				} else {
+					slot->device = device;
+					slot->present = true;
+					fDevices.AddItem(slot);
+				}
+			} else
+				delete device;
 		}
 	}
 
@@ -296,16 +316,28 @@ MultiAudioAddOn::_RecursiveScan(const char* rootPath, BEntry* rootEntry, uint32 
 void
 MultiAudioAddOn::DevicesChanged()
 {
-	int32 before;
+	bool changed = false;
 	{
 		BAutolock _(fLock);
-		before = fDevices.CountItems();
+		int32 before = fDevices.CountItems();
 		_RecursiveScan("/dev/audio/hmulti/");
-		if (fDevices.CountItems() == before)
-			return;
+		if (fDevices.CountItems() != before)
+			changed = true;
+
+		for (int32 i = 0; i < fDevices.CountItems(); i++) {
+			MultiAudioSlot* slot = (MultiAudioSlot*)fDevices.ItemAt(i);
+			if (slot == NULL || !slot->present || slot->device == NULL)
+				continue;
+			BEntry entry(slot->device->Path());
+			if (entry.Exists())
+				continue;
+			slot->present = false;
+			changed = true;
+		}
 	}
 
-	NotifyFlavorChange();
+	if (changed)
+		NotifyFlavorChange();
 }
 
 
@@ -313,8 +345,9 @@ bool
 MultiAudioAddOn::_HasDevice(const char* path) const
 {
 	for (int32 i = 0; i < fDevices.CountItems(); i++) {
-		MultiAudioDevice* device = (MultiAudioDevice*)fDevices.ItemAt(i);
-		if (device != NULL && strcmp(device->Path(), path) == 0)
+		MultiAudioSlot* slot = (MultiAudioSlot*)fDevices.ItemAt(i);
+		if (slot != NULL && slot->present && slot->device != NULL
+			&& strcmp(slot->device->Path(), path) == 0)
 			return true;
 	}
 	return false;

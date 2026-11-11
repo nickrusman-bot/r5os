@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - An unplugged sound card keeps its place in the list
+
+`multi_audio` already watches `/dev/audio/hmulti`. Removing a card used to leave it listed as if it were still there, and deleting the slot would renumber the others. A card that disappears stays in the list with its presence cleared, and plugging it in again takes a new slot. The flavor index does not move. Adapted from RenkuOS `cf885a005b` (David Beckman, MIT). Not checked by unplugging a device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - A sound card is only the directions it has
 
 `multi_audio` listed every card as both an input and an output. A card with no capture channels is no longer an input, and a card with no playback channels is no longer an output. Ported from RenkuOS `bd571637d2` (David Beckman, MIT). Not checked in Media. There is no What's new section and `distro/BUILD` stays the same.
