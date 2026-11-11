@@ -302,7 +302,10 @@ LoginApp::TryLogin(BMessage* message)
 		message->SendReply(&reply);
 	} else {
 		reply.AddInt32("error", status);
-		if (status == B_PERMISSION_DENIED || status == ENOENT)
+		if (status == B_PERMISSION_DENIED
+			&& (password == NULL || password[0] == '\0')) {
+			reply.AddString("text", "Please enter your password.");
+		} else if (status == B_PERMISSION_DENIED || status == ENOENT)
 			reply.AddString("text", "That password is not right.");
 		else if (status == B_NAME_NOT_FOUND || status == B_TIMED_OUT)
 			reply.AddString("text", "Could not start the desktop.");
@@ -358,8 +361,12 @@ LoginApp::Unlock(BMessage* message)
 		status = ValidateLogin(name.String(), password);
 
 	BMessage reply(status == B_OK ? kLoginOk : kLoginBad);
-	if (status != B_OK)
-		reply.AddString("text", "That password is not right.");
+	if (status != B_OK) {
+		if (password == NULL || password[0] == '\0')
+			reply.AddString("text", "Please enter your password.");
+		else
+			reply.AddString("text", "That password is not right.");
+	}
 	message->SendReply(&reply);
 	if (status != B_OK)
 		return;
