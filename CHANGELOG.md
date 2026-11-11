@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The desktop can copy through the GPU, and falls back
+
+`gpu_app_server true` in the `radeon_hd` settings makes app_server allocate the back buffer as a cached GTT buffer and copy dirty rows with `DMA_DATA`. The setting is absent on the image, so the copy stays the CPU one and nothing is logged. The first failure logs `app_server: gpu copy off: <reason>` and the CPU copy is used for the rest of the session. The wait is 100 ms. `gpu_app_server_fail true` fails the first submit on purpose. A region of more than 256 rectangles, or more than 64 bands, uses the CPU for that call and does not turn the GPU off. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The screen buffer can be mapped for the display team
 
 `R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. It returns the width, height, bytes per row and color space from the driver's framebuffer, plus a handle and a GPU address in the caller's address space. The pages are the framebuffer that is already on screen. Freeing the handle unmaps them and does not free the framebuffer. The team is the one that opened `/dev/graphics/radeon_hd`. Any other team gets `B_NOT_ALLOWED`. With no open graphics device the team is unset, so the call is refused.

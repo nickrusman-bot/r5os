@@ -11,15 +11,23 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC = ROOT / "distro" / "app_server"
 
 
+def copy(name: str, dest: pathlib.Path) -> None:
+    shutil.copy2(SRC / name, dest)
+    dest.touch()
+    print(f"copied {name} -> {dest}")
+
+
 def main() -> int:
     dest = HAIKU / "src" / "servers" / "app" / "AppServer.cpp"
-    shutil.copy2(SRC / "AppServer.cpp", dest)
-    dest.touch()
-    print(f"copied AppServer.cpp -> {dest}")
+    copy("AppServer.cpp", dest)
     config = HAIKU / "src" / "servers" / "app" / "ServerConfig.h"
-    shutil.copy2(SRC / "ServerConfig.h", config)
-    config.touch()
-    print(f"copied ServerConfig.h -> {config}")
+    copy("ServerConfig.h", config)
+    local = HAIKU / "src" / "servers" / "app" / "drawing" / "interface" / "local"
+    copy("AccelerantHWInterface.cpp", local / "AccelerantHWInterface.cpp")
+    copy("GPUCopy.cpp", local / "GPUCopy.cpp")
+    copy("GPUCopy.h", local / "GPUCopy.h")
+    copy("GPUCopyBands.h", local / "GPUCopyBands.h")
+    copy("local-Jamfile", local / "Jamfile")
     return 0
 
 
