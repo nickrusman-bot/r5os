@@ -8,6 +8,8 @@
 
 #include "Device.h"
 
+#include <string.h>
+
 #include <kernel.h>
 #include <usb/USB_audio.h>
 
@@ -21,6 +23,8 @@
 // Upper bounds for counts that come from a caller of the ioctls.
 static const int32 kMaxMixItems = 1024;
 static const int32 kMaxBufferDescs = 32;
+static const int32 kMaxDescribedChannels = 128;
+static const size_t kEnableBitBytes = 16;
 // SPDX-SnippetEnd
 
 
@@ -140,7 +144,6 @@ Device::Control(uint32 op, void* buffer, size_t length)
 		case B_MULTI_GET_DESCRIPTION:
 		{
 			multi_description description;
-			multi_channel_info channels[16];
 			multi_channel_info* originalChannels;
 
 			if (user_memcpy(&description, buffer, sizeof(multi_description))
@@ -148,9 +151,8 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 
 			originalChannels = description.channels;
-			description.channels = channels;
-			if (description.request_channel_count > 16)
-				description.request_channel_count = 16;
+			if (description.request_channel_count > kMaxDescribedChannels)
+				description.request_channel_count = kMaxDescribedChannels;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -164,16 +166,32 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			}
 // SPDX-SnippetEnd
 
-			status_t status = _MultiGetDescription(&description);
-			if (status != B_OK)
-				return status;
+			multi_channel_info* channels = NULL;
+			if (description.request_channel_count > 0) {
+				channels = (multi_channel_info*)malloc(
+					sizeof(multi_channel_info)
+						* description.request_channel_count);
+				if (channels == NULL)
+					return B_NO_MEMORY;
+			}
+			description.channels = channels;
 
+			status_t status = _MultiGetDescription(&description);
 			description.channels = originalChannels;
+			if (status != B_OK) {
+				free(channels);
+				return status;
+			}
+
 			if (user_memcpy(buffer, &description, sizeof(multi_description))
-					!= B_OK)
+					!= B_OK) {
+				free(channels);
 				return B_BAD_ADDRESS;
-			return user_memcpy(originalChannels, channels,
+			}
+			status = user_memcpy(originalChannels, channels,
 				sizeof(multi_channel_info) * description.request_channel_count);
+			free(channels);
+			return status;
 		}
 		case B_MULTI_GET_EVENT_INFO:
 			TRACE(ERR, "B_MULTI_GET_EVENT_INFO n/i\n");
@@ -190,8 +208,9 @@ Device::Control(uint32 op, void* buffer, size_t length)
 		case B_MULTI_GET_ENABLED_CHANNELS:
 		{
 			multi_channel_enable enable;
-			uint32 enable_bits;
+			uchar enable_bits[kEnableBitBytes];
 			uchar* orig_enable_bits;
+			memset(enable_bits, 0, sizeof(enable_bits));
 
 			if (user_memcpy(&enable, buffer, sizeof(enable)) != B_OK
 					|| !IS_USER_ADDRESS(enable.enable_bits)) {
@@ -199,13 +218,13 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			}
 
 			orig_enable_bits = enable.enable_bits;
-			enable.enable_bits = (uchar*)&enable_bits;
+			enable.enable_bits = enable_bits;
 			status_t status = _MultiGetEnabledChannels(&enable);
 			if (status != B_OK)
 				return status;
 
 			enable.enable_bits = orig_enable_bits;
-			if (user_memcpy(enable.enable_bits, &enable_bits,
+			if (user_memcpy(enable.enable_bits, enable_bits,
 					sizeof(enable_bits)) != B_OK
 				|| user_memcpy(buffer, &enable,
 					sizeof(multi_channel_enable)) != B_OK) {
@@ -217,8 +236,9 @@ Device::Control(uint32 op, void* buffer, size_t length)
 		case B_MULTI_SET_ENABLED_CHANNELS:
 		{
 			multi_channel_enable enable;
-			uint32 enable_bits;
+			uchar enable_bits[kEnableBitBytes];
 			uchar* orig_enable_bits;
+			memset(enable_bits, 0, sizeof(enable_bits));
 
 			if (user_memcpy(&enable, buffer, sizeof(enable)) != B_OK
 				|| !IS_USER_ADDRESS(enable.enable_bits)) {
@@ -226,13 +246,16 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			}
 
 			orig_enable_bits = enable.enable_bits;
-			enable.enable_bits = (uchar*)&enable_bits;
+			if (user_memcpy(enable_bits, orig_enable_bits,
+					sizeof(enable_bits)) != B_OK)
+				return B_BAD_ADDRESS;
+			enable.enable_bits = enable_bits;
 			status_t status = _MultiSetEnabledChannels(&enable);
 			if (status != B_OK)
 				return status;
 
 			enable.enable_bits = orig_enable_bits;
-			if (user_memcpy(enable.enable_bits, &enable_bits,
+			if (user_memcpy(enable.enable_bits, enable_bits,
 					sizeof(enable_bits)) < B_OK
 				|| user_memcpy(buffer, &enable, sizeof(multi_channel_enable))
 					< B_OK) {

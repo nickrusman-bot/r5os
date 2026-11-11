@@ -140,7 +140,8 @@ Stream::_ChooseAlternate()
 		TypeIFormatDescriptor* format
 			= static_cast<TypeIFormatDescriptor*>(fAlternates[i]->Format());
 
-		if (format->fNumChannels < 1 || format->fNumChannels > 16) {
+		if (format->fNumChannels < 1
+			|| format->fNumChannels > kUsbAudioMaxChannels) {
 			TRACE(ERR, "Ignore alternate %d - channel count %d "
 				"is not supported.\n", i, format->fNumChannels);
 			continue;

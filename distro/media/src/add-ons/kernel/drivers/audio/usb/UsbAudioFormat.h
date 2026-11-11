@@ -15,6 +15,9 @@
 #include <string.h>
 
 
+// 18 is only how many speaker names exist. A stream may carry 64.
+static const uint8_t kUsbAudioMaxChannels = 64;
+
 static const uint32_t kUsbAudioRates[] = {
 	8000, 11025, 12000, 16000, 22050, 24000, 32000,
 	44100, 48000, 88200, 96000, 176400, 192000
@@ -184,7 +187,8 @@ usb_audio_parse_format_i(const uint8_t* bytes, size_t length, uint16_t version,
 		format->subframeSize = bytes[4];
 		format->bitResolution = bytes[5];
 		usb_audio_rates_between(44100, 96000, format);
-		return format->channels > 0 && format->channels <= 16
+		return format->channels > 0
+			&& format->channels <= kUsbAudioMaxChannels
 			&& format->subframeSize >= 1 && format->subframeSize <= 4;
 	}
 	if (length < 8)
@@ -205,7 +209,7 @@ usb_audio_parse_format_i(const uint8_t* bytes, size_t length, uint16_t version,
 			format->rates[format->rateCount++]
 				= usb_audio_read24(bytes + 8 + i * 3);
 	}
-	return format->channels > 0 && format->channels <= 16
+	return format->channels > 0 && format->channels <= kUsbAudioMaxChannels
 		&& format->subframeSize >= 1 && format->subframeSize <= 4;
 }
 
@@ -218,7 +222,7 @@ usb_audio_choose_channels(uint8_t wanted, const uint8_t* available,
 	uint8_t bestDistance = 255;
 	for (size_t i = 0; i < count; i++) {
 		uint8_t channels = available[i];
-		if (channels == 0 || channels > 16)
+		if (channels == 0 || channels > kUsbAudioMaxChannels)
 			continue;
 		if (wanted == 0) {
 			if (channels > best)
