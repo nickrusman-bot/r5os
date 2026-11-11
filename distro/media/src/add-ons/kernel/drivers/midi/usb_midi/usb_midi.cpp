@@ -531,6 +531,21 @@ usb_midi_added(const usb_device* dev, void** cookie)
 			if (devclass == USB_AUDIO_DEVICE_CLASS
 				&& subclass == USB_AUDIO_INTERFACE_MIDISTREAMING_SUBCLASS)
 				goto got_one;
+
+			/* Yamaha puts standard USB-MIDI descriptors in a vendor-specific
+			 * interface (RenkuOS fe2de4aa60, David Beckman, MIT). Skip audio
+			 * class: a UAC header is also CS_INTERFACE subtype 0x01 and would
+			 * match before the real MIDIStreaming interface.
+			 */
+			if (devclass == USB_AUDIO_DEVICE_CLASS)
+				continue;
+			for (uint16 g = 0; g < intf->generic_count; g++) {
+				usb_generic_descriptor* gd = &intf->generic[g]->generic;
+				if (gd->length >= 3
+					&& gd->descriptor_type == USB_DESCRIPTOR_CS_INTERFACE
+					&& gd->data[0] == USB_MS_HEADER_DESCRIPTOR)
+					goto got_one;
+			}
 		}
 	}
 
@@ -603,6 +618,28 @@ got_one:
 					midiDevice->outMaxPkt = intf->endpoint[i].descr->max_packet_size;
 			}
 		}
+	}
+
+	/* No CS_ENDPOINT cable count: count MIDI IN and OUT jack descriptors.
+	 * Yamaha marks them EXTERNAL. Cap at 16. RenkuOS fe2de4aa60.
+	 */
+	if (in_cables == 0 && out_cables == 0) {
+		for (uint16 i = 0; i < intf->generic_count; i++) {
+			usb_generic_descriptor* gd = &intf->generic[i]->generic;
+			if (gd->length < 3
+				|| gd->descriptor_type != USB_DESCRIPTOR_CS_INTERFACE)
+				continue;
+			if (gd->data[0] == USB_MS_MIDI_IN_JACK_DESCRIPTOR)
+				in_cables++;
+			else if (gd->data[0] == USB_MS_MIDI_OUT_JACK_DESCRIPTOR)
+				out_cables++;
+		}
+		if (in_cables > 16)
+			in_cables = 16;
+		if (out_cables > 16)
+			out_cables = 16;
+		DPRINTF_INFO((MY_ID "jack-counted cables: in=%d out=%d\n",
+			in_cables, out_cables));
 	}
 
 	midiDevice->timestamp = system_time();	/* This never seems to be used */
@@ -679,7 +716,7 @@ static usb_notify_hooks my_notify_hooks = {
 	usb_midi_removed
 };
 
-#define	SUPPORTED_DEVICES	1
+#define	SUPPORTED_DEVICES	2
 usb_support_descriptor my_supported_devices[SUPPORTED_DEVICES] =
 {
 	{
@@ -687,6 +724,10 @@ usb_support_descriptor my_supported_devices[SUPPORTED_DEVICES] =
 		USB_AUDIO_INTERFACE_MIDISTREAMING_SUBCLASS,
 		0, 0, 0
 	},
+	/* Yamaha 0x0499. usb_midi_added() still requires a MIDI header, so a
+	 * Yamaha device that is only audio is rejected there.
+	 */
+	{ 0, 0, 0, 0x0499, 0 },
 };
 
 
