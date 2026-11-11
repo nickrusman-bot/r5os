@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The desktop copy is designed, and not built yet
+
+`docs/APP-SERVER-GPU.md` records the copy app_server uses today and the GPU copy that would replace it. The hook is `AccelerantHWInterface::_CopyBackToFront`. The back buffer would be a cached GTT buffer. `R5_GPU_SCANOUT_BO` would be `R5_GPU_OP_BASE + 31` and only the display team could call it. A dirty band is the full bytes per row of those rows. A band longer than 2097151 bytes is several `DMA_DATA` packets because the packet's byte count is 21 bits. The copy runs only when both buffers are 32-bit and have the same bytes per row. The setting stays off. This branch has no code for that copy. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Stick 40 presents Vulkan in a window
 
 Stick 40 is the 10:23 anyboot. The stick sha256 is `87df047a…`. Logs: `generated/boot-5625u-40`.
