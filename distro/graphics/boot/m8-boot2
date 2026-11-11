@@ -21,10 +21,10 @@ mkdir -p "$(dirname "$file")"
 	echo "gfx9_vmid_per_file true"
 	echo "gfx9_pasid_map true"
 	echo "gpu_present true"
-	echo "gpu_debug true"
+	echo "gpu_copy_debug true"
 } > "$file"
 if [ ! -f "$file" ] || grep -q "^gpu_app_server true" "$file" \
-	|| ! grep -q "^gpu_debug true" "$file"; then
+	|| ! grep -q "^gpu_copy_debug true" "$file"; then
 	echo FAIL
 	exit 1
 fi

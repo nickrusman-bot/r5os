@@ -118,7 +118,7 @@ load_settings()
 			sWant = true;
 		if (strncmp(line, "gpu_app_server_fail true", 24) == 0)
 			sForceFail = true;
-		if (strncmp(line, "gpu_debug true", 14) == 0)
+		if (strncmp(line, "gpu_copy_debug true", 19) == 0)
 			sDebug = true;
 	}
 	fclose(file);

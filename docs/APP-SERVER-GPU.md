@@ -46,7 +46,7 @@ The words are built by one function, `r5_copy_bands_pm4` in `distro/app_server/G
 
 ## Measurement
 
-`gpu_debug true` turns the counters on even when `gpu_app_server` is off. VirtualBox is double buffered: app_server keeps a software back buffer and `_CopyBackToFront` runs when a window moves, so the CPU line below appears. Each copy records its duration. Every 10 seconds app_server logs the median and the CPU time spent copying:
+`gpu_copy_debug true` turns the counters on even when `gpu_app_server` is off. It does not turn on the kernel submit line. VirtualBox is double buffered: app_server keeps a software back buffer and `_CopyBackToFront` runs when a window moves, so the CPU line below appears. Each copy records its duration. Every 10 seconds app_server logs the median and the CPU time spent copying:
 
 `app_server: copy cpu median <n> us cpu <n> ms per 10 s`
 
@@ -54,7 +54,7 @@ After a fallback, that same line also carries `gpu copy off: <reason>`, so a rot
 
 `app_server: copy gpu median <n> us cpu <n> ms per 10 s`
 
-With `gpu_debug`, app_server compares the first GPU frame, then every 100th. The compare reads the rectangles of the region that was copied, not the full-width bands. Another window can draw on the same rows, outside those rectangles, while the copy runs. It flushes the write-combining lines of those rectangles and reads them back from the front buffer. A match logs `app_server: copy compare ok` once per 10 seconds. A mismatch logs `app_server: copy compare MISMATCH` with the row, the first different byte, eight bytes from each side, and `in rect l,t-r,b`, and falls back for the session. The median line repeats that text.
+With `gpu_copy_debug`, app_server compares the first GPU frame, then every 100th. The compare reads the rectangles of the region that was copied, not the full-width bands. Another window can draw on the same rows, outside those rectangles, while the copy runs. It flushes the write-combining lines of those rectangles and reads them back from the front buffer. A match logs `app_server: copy compare ok` once per 10 seconds. A mismatch logs `app_server: copy compare MISMATCH` with the row, the first different byte, eight bytes from each side, and `in rect l,t-r,b`, and falls back for the session. The median line repeats that text.
 
 The GPU path is better only if the CPU time spent copying drops by at least half and the median copy time is not worse. Otherwise the path can still be correct, and the setting stays opt-in.
 

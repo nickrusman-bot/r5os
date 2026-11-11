@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The desktop copy has its own debug key
+
+Stick 45 kept `gpu_debug true`. That prints one kernel line per submit. The syslog rotated, so the boot marker, the scratch line, the fence, `k2 ok gart` and `gpu copy on scanout` were gone, and one ten-second window recorded 860 ms inside the timed copy. `gpu_copy_debug true` is read by app_server only. It turns on the compare and the measurement. The kernel submit line stays on `gpu_debug`. The M8 boot files use `gpu_copy_debug` and no longer set `gpu_debug`. `m8-boot2` checks for the new key. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The GPU copy redraws the pointer
 
 A GPU copy writes full-width bands. Haiku takes the pointer out of the dirty region and draws it back only over that region, so a pointer on the same rows but outside the region disappeared until the mouse moved. After a successful copy, `_DrawCursor` runs for the bounding rectangle of the bands. Callers that do not ask for the bounds behave as before. Not booted. There is no What's new section and `distro/BUILD` stays the same.
