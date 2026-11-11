@@ -1,7 +1,8 @@
 #!/bin/sh
 # PASS or FAIL for one stick boot. Reads syslog only, plus the self-test
 # file and the three Terminal captures. Boot 2 is the file that contains
-# gpu_present_fail true.
+# gpu_present_fail true. Each boot keeps its own copies under ~/boot1 or
+# ~/boot2, so a later boot does not replace them.
 log=/boot/system/var/log/syslog
 test=/boot/home/config/cache/r5-gpu-selftest.txt
 settings=/boot/home/config/settings/kernel/drivers/radeon_hd
@@ -9,6 +10,25 @@ wsi=/boot/home/wsi.txt
 tea=/boot/home/win-teapot.txt
 cube=/boot/home/win-vkcube.txt
 fail=0
+
+boot=1
+driver="AMD Radeon Graphics"
+if grep -q "^gpu_present_fail true" "$settings" 2>/dev/null; then
+	boot=2
+	driver="llvmpipe"
+fi
+keep=/boot/home/boot$boot
+mkdir -p "$keep"
+report=$keep/check.txt
+: > "$report"
+emit() {
+	printf '%s\n' "$1" | tee -a "$report"
+}
+copy_keep() {
+	if [ -f "$1" ]; then
+		cp "$1" "$keep/$(basename "$1")"
+	fi
+}
 
 i=0
 while [ "$i" -lt 180 ]; do
@@ -22,20 +42,30 @@ done
 
 say() {
 	if [ "$1" -eq 0 ]; then
-		echo "PASS $2"
+		emit "PASS $2"
 	else
-		echo "FAIL $2"
+		emit "FAIL $2"
 		fail=1
 	fi
 }
 
-boot=1
-driver="AMD Radeon Graphics"
-if grep -q "^gpu_present_fail true" "$settings" 2>/dev/null; then
-	boot=2
-	driver="llvmpipe"
+copy_keep "$wsi"
+copy_keep "$tea"
+copy_keep "$cube"
+copy_keep "$test"
+if [ -f "$keep/wsi.txt" ]; then
+	wsi=$keep/wsi.txt
 fi
-echo "boot $boot"
+if [ -f "$keep/win-teapot.txt" ]; then
+	tea=$keep/win-teapot.txt
+fi
+if [ -f "$keep/win-vkcube.txt" ]; then
+	cube=$keep/win-vkcube.txt
+fi
+if [ -f "$keep/r5-gpu-selftest.txt" ]; then
+	test=$keep/r5-gpu-selftest.txt
+fi
+emit "boot $boot"
 
 if grep -q "wsi clear ok" "$wsi" && grep -q "$driver" "$wsi"; then
 	say 0 "wsi clear ok $driver"
@@ -131,7 +161,7 @@ if [ "$boot" -eq 2 ]; then
 fi
 
 if [ "$fail" -eq 0 ]; then
-	echo PASS
+	emit PASS
 else
-	echo FAIL
+	emit FAIL
 fi
