@@ -52,5 +52,5 @@ This mockup defines three reusable components that belong in `libr5ui.so` (names
 3. `BPasswordControl`: Password text box with integrated show/hide eye toggle (Login + Users & Accounts + Wi-Fi dialog).
 
 Full architectural C++ API and layout specifications are documented in:
-📄 [LIBR5UI-ELEMENTS.md](file:///C:/Users/nickr/Projects/R5OS-loginmockup/docs/design/login-mockup/LIBR5UI-ELEMENTS.md).
+📄 [LIBR5UI-ELEMENTS.md](LIBR5UI-ELEMENTS.md).
 
