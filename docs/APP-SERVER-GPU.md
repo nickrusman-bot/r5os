@@ -26,7 +26,7 @@ If that allocation fails, the `MallocBuffer` is used and the session falls back.
 
 ## The scanout buffer
 
-`R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. The struct is added at the end of `headers/private/r5gpu/r5_gpu.h`. The kernel fills width, height, bytes per row, the color space, the byte size, a buffer handle, and a GPU address in the caller's address space. The numbers come from the driver's `shared_info`: `current_mode`, `bytes_per_row`, and the framebuffer's place in the carveout (`MC_VM_FB_OFFSET` plus the byte offset of `frame_buffer_phys`). They are not constants.
+`R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. The struct is added at the end of `headers/private/r5gpu/r5_gpu.h`. The kernel fills width, height, bytes per row, the color space, the byte size, a buffer handle, and a GPU address in the caller's address space. The numbers come from the driver's `shared_info`: `current_mode`, `bytes_per_row`, and the byte offset of the framebuffer inside the PCI BAR (`frame_buffer_phys - vram_bar_phys`). The page tables add `MC_VM_FB_OFFSET << 24` when they map that offset. On the 5625U the BAR is `0xfce0000000` and the carveout is `0x810000000`, so those bases are not subtracted from each other. The numbers are not constants.
 
 The kernel allows the call only when the calling team is app_server. It reads the executable from that team's info, not from a value the caller passes. The path is `/system/servers/app_server`, or `/boot/system/servers/app_server` after `/system` is resolved. Anyone else gets `B_NOT_ALLOWED`. The handle refers to that existing framebuffer. Freeing it unmaps the GPU pages and does not free the framebuffer.
 
@@ -49,6 +49,8 @@ The words are built by one function, `r5_copy_bands_pm4` in `distro/app_server/G
 `gpu_debug true` turns the counters on even when `gpu_app_server` is off. VirtualBox is double buffered: app_server keeps a software back buffer and `_CopyBackToFront` runs when a window moves, so the CPU line below appears. Each copy records its duration. Every 10 seconds app_server logs the median and the CPU time spent copying:
 
 `app_server: copy cpu median <n> us cpu <n> ms per 10 s`
+
+After a fallback, that same line also carries `gpu copy off: <reason>`, so a rotated one-shot line is not the only copy of the reason.
 
 `app_server: copy gpu median <n> us cpu <n> ms per 10 s`
 

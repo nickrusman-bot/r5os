@@ -1961,25 +1961,37 @@ amd_scanout(void* info, uint32* width, uint32* height, uint32* bytesPerRow,
 	uint32 w = shared->current_mode.virtual_width;
 	uint32 h = shared->current_mode.virtual_height;
 	uint32 pitch = shared->bytes_per_row;
-	if (w == 0 || h == 0 || pitch < w * 4u || (pitch & 3u) != 0)
+	if (w == 0 || h == 0 || pitch < w * 4u || (pitch & 3u) != 0) {
+		dprintf("radeon_hd: scanout refused mode %lu x %lu pitch %lu\n",
+			(unsigned long)w, (unsigned long)h, (unsigned long)pitch);
 		return B_ERROR;
+	}
 	uint64 picture = (uint64)pitch * h;
 	uint64 mapped = (picture + 4095ull) & ~4095ull;
-	uint32 fb = gpu_mmio(device, kGcSegment, 0x096b) & 0x00ffffffu;
-	uint64 base = (uint64)fb << 24;
+	/* The CPU sees the firmware picture through the PCI BAR. The GPU
+	 * page tables add MC_VM_FB_OFFSET << 24 to an offset in that BAR.
+	 * On the 5625U the BAR is 0xfce0000000 and the carveout is
+	 * 0x810000000. Subtracting those from each other is not an offset. */
+	uint64 bar = shared->vram_bar_phys;
+	uint64 window = shared->vram_bar_bytes;
 	uint64 phys = (uint64)shared->frame_buffer_phys;
-	if (phys < base || (phys & 4095ull) != 0)
+	if (bar == 0 || window == 0 || phys < bar || (phys & 4095ull) != 0
+		|| phys - bar > window || mapped > window - (phys - bar)) {
+		dprintf("radeon_hd: scanout refused phys 0x%llx bar 0x%llx"
+			" size 0x%llx pitch %lu mode %lu x %lu\n",
+			(unsigned long long)phys, (unsigned long long)bar,
+			(unsigned long long)window, (unsigned long)pitch,
+			(unsigned long)w, (unsigned long)h);
 		return B_ERROR;
-	uint64 offset = phys - base;
-	uint64 vram = 0;
-	if (amd_vram_bytes(info, &vram) != B_OK || offset > vram
-		|| mapped > vram - offset)
-		return B_ERROR;
+	}
 	*width = w;
 	*height = h;
 	*bytesPerRow = pitch;
 	*format = (uint32)shared->current_mode.space;
-	*vramOffset = offset;
+	*vramOffset = phys - bar;
 	*bytes = mapped;
+	dprintf("radeon_hd: scanout bar+0x%llx %lu x %lu pitch %lu\n",
+		(unsigned long long)(phys - bar), (unsigned long)w,
+		(unsigned long)h, (unsigned long)pitch);
 	return B_OK;
 }

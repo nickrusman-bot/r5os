@@ -37,14 +37,23 @@ median_field() {
 	'
 }
 
-if [ -f "$log" ]; then
+# syslog_daemon keeps one older file. A long gpu_debug boot rotates the
+# welcome line out of the current file. Read both, and keep the text
+# after the last welcome. With no welcome, keep everything that is left.
+: > "$keep/syslog.txt"
+for part in "$log.1" "$log.old" "$log"; do
+	if [ -f "$part" ]; then
+		cat "$part" >> "$keep/syslog.txt"
+	fi
+done
+if [ -s "$keep/syslog.txt" ]; then
 	awk '
 		/Welcome to the Haiku boot loader!/ { buf = ""; seen = 1 }
+		{ all = all $0 "\n" }
 		seen { buf = buf $0 "\n" }
-		END { printf "%s", buf }
-	' "$log" > "$keep/syslog.txt"
-else
-	: > "$keep/syslog.txt"
+		END { if (seen) printf "%s", buf; else printf "%s", all }
+	' "$keep/syslog.txt" > "$keep/syslog.part"
+	mv "$keep/syslog.part" "$keep/syslog.txt"
 fi
 bootlog=$keep/syslog.txt
 emit "boot $boot"
@@ -67,15 +76,20 @@ on=$(count_of "gpu copy on scanout")
 off=$(count_of "gpu copy off")
 compared=$(count_of "copy compare ok")
 mismatch=$(count_of "copy compare MISMATCH")
-if [ "$mismatch" -eq 0 ]; then
+if [ ! -s "$bootlog" ]; then
+	say 1 "no copy compare MISMATCH"
+	say 1 "no gpu copy off"
+elif [ "$mismatch" -eq 0 ]; then
 	say 0 "no copy compare MISMATCH"
 else
 	say 1 "no copy compare MISMATCH"
 fi
-if [ "$off" -eq 0 ]; then
-	say 0 "no gpu copy off"
-else
-	say 1 "no gpu copy off"
+if [ -s "$bootlog" ]; then
+	if [ "$off" -eq 0 ]; then
+		say 0 "no gpu copy off"
+	else
+		say 1 "no gpu copy off"
+	fi
 fi
 
 if [ "$boot" -eq 1 ]; then

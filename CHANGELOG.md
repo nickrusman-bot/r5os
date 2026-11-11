@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The screen offset was the BAR, not the carveout
+
+Stick 41 kept the desktop copy on the CPU. `R5_GPU_SCANOUT_BO` treated `frame_buffer_phys` as an address inside the carveout: it subtracted `MC_VM_FB_OFFSET << 24` and rejected the result when it fell outside the visible window. On the 5625U those are different bases. Earlier boots recorded the PCI BAR at `0xfce0000000` and `MC_VM_FB_OFFSET` `0x810`, so the carveout is `0x810000000`. The picture sits at the start of the BAR (`window +0x0`). The difference of the two bases is far past the 256 MiB window, so the call returned `B_ERROR` once. app_server logged `gpu copy off: scanout refused` and then stayed on the CPU. That one line was already rotated out of `syslog` and `syslog.1` by the `user job fence` lines `gpu_debug` prints for every submit. VirtualBox never opens `/dev/gpu/radeon_hd/0`, so this refusal cannot show up there.
+
+The offset is now `frame_buffer_phys - vram_bar_phys`. The page tables still add the carveout base. A refusal logs the physical address, the BAR, and the mode. A success logs `scanout bar+<offset>`. While the copy stays off, each `copy cpu median` line repeats `gpu copy off: <reason>`. `check.sh` reads `syslog.1` and `syslog.old` as well as `syslog`. It keeps the text after the last boot welcome, and when that welcome is already gone it keeps the remaining log instead of an empty file. An empty excerpt no longer passes the negative lines. `gpu_debug` still logs every user submit, so a long session can still rotate the boot banner away. Not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Stick 41 boot 1 checked an empty log
 
 The 5625U booted the 13:56 anyboot. `m8-run` opened Tracker and Terminal and moved them. `check.sh` then printed FAIL. `~/boot1/syslog.txt` is empty, and `~/boot1/gpu.txt` is empty. The script keeps only the text after `Welcome to the Haiku boot loader!`. That line is in neither `syslog` nor `syslog.1`; the boot start was rotated away before the check. The negative lines passed because the excerpt had nothing to find.

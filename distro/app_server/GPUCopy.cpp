@@ -51,6 +51,7 @@ bool sWant = false;
 bool sForceFail = false;
 bool sDebug = false;
 bool sOff = false;
+const char* sOffReason = NULL;
 bool sLoggedOn = false;
 bool sCompared = false;
 uint32 sFrame = 0;
@@ -83,6 +84,7 @@ off(const char* reason)
 {
 	if (!sOff) {
 		sOff = true;
+		sOffReason = reason;
 		fprintf(stderr, "app_server: gpu copy off: %s\n", reason);
 		syslog(LOG_INFO, "app_server: gpu copy off: %s\n", reason);
 	}
@@ -230,9 +232,18 @@ report()
 	if (start == 0 || system_time() - start < 10000000)
 		return;
 	if (sCpuTimes.count > 0) {
-		syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
-			" us cpu %" B_PRId64 " ms per 10 s\n",
-			(int64)median_of(&sCpuTimes), (int64)(sCpuTimes.cpu / 1000));
+		if (sOff) {
+			syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
+				" us cpu %" B_PRId64
+				" ms per 10 s, gpu copy off: %s\n",
+				(int64)median_of(&sCpuTimes),
+				(int64)(sCpuTimes.cpu / 1000),
+				sOffReason != NULL ? sOffReason : "unknown");
+		} else {
+			syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
+				" us cpu %" B_PRId64 " ms per 10 s\n",
+				(int64)median_of(&sCpuTimes), (int64)(sCpuTimes.cpu / 1000));
+		}
 	}
 	if (sGpuTimes.count > 0) {
 		syslog(LOG_INFO, "app_server: copy gpu median %" B_PRId64
