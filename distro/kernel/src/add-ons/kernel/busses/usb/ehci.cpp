@@ -6,6 +6,12 @@
  *		Michael Lotz <mmlr@mlotz.ch>
  *		Jérôme Duval <korli@users.berlios.de>
  */
+// SPDX-SnippetBegin
+// SPDX-License-Identifier: MIT
+// RenkuOS group B on this copy: isochronous OUT, the per-pipe anchor, the
+// callback outside the lock, and the data toggle after an error. Authors
+// and commits: THIRD_PARTY_NOTICES.md. The Haiku header stays.
+// SPDX-SnippetEnd
 
 
 #include <stdio.h>
@@ -343,6 +349,7 @@ EHCI::EHCI(pci_info *info, pci_device_module_info* pci, pci_device* device, Stac
 		fCleanupThread(-1),
 		fStopThreads(false),
 		fNextStartingFrame(-1),
+		fIsoAnchorEvict(0),
 		fFrameBandwidth(NULL),
 		fFirstIsochronousTransfer(NULL),
 		fLastIsochronousTransfer(NULL),
@@ -357,7 +364,12 @@ EHCI::EHCI(pci_info *info, pci_device_module_info* pci, pci_device* device, Stac
 		fIRQ(0),
 		fUseMSI(false)
 {
+	// Initialized here rather than in the member list because
+	// B_SPINLOCK_INITIALIZER is a brace initializer whose shape changes
+	// with B_DEBUG_SPINLOCK_CONTENTION.
 	B_INITIALIZE_SPINLOCK(&fInterruptLock);
+
+	memset(fIsoAnchors, 0, sizeof(fIsoAnchors));
 
 	// Create a lock for the isochronous transfer list
 	mutex_init(&fIsochronousLock, "EHCI isochronous lock");
@@ -1155,6 +1167,21 @@ EHCI::SubmitTransfer(Transfer *transfer)
 }
 
 
+// Microframe slots between consecutive packets within an iTD, derived from the
+// endpoint's bInterval (2^(bInterval-1) microframes, capped at the 8 an iTD
+// spans). Every walk over an iTD's tokens must use the same stride the fill
+// used, or unprogrammed slots are mapped onto packet descriptors and reported
+// as failed packets.
+static inline uint32
+itd_slot_stride(Pipe *pipe)
+{
+	uint32 stride = 1;
+	if (pipe != NULL && pipe->Interval() > 1)
+		stride = 1u << (pipe->Interval() - 1);
+	return stride > 8 ? 8 : stride;
+}
+
+
 status_t
 EHCI::SubmitIsochronous(Transfer *transfer)
 {
@@ -1174,6 +1201,33 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 		return B_BAD_VALUE;
 	}
 
+	// Honour the caller's per-packet request_length values instead of
+	// flattening the transfer into packet_count equal slices. Variable-length
+	// packets are how USB audio reaches a fractional data rate -- 44.1 kHz
+	// over 1 ms service intervals is 44 frames in some packets and 45 in
+	// others -- and slicing uniformly shifts the device's frame alignment on
+	// every such transfer. The sizes are only trusted when they are
+	// consistent: each within wMaxPacketSize, and together covering exactly
+	// the data being sent. Anything else keeps the uniform behaviour.
+	// OUT only: ReadIsochronousDescriptorChain() still walks the buffer in
+	// uniform packetSize steps, so an IN transfer laid out by request_length
+	// would be read back from the wrong offsets.
+	const usb_iso_packet_descriptor *packetDescriptors
+		= isochronousData->packet_descriptors;
+	bool usePacketLengths = false;
+	if (!directionIn && packetDescriptors != NULL) {
+		size_t lengthSum = 0;
+		size_t maxLength = 0;
+		for (uint32 i = 0; i < isochronousData->packet_count; i++) {
+			size_t length = packetDescriptors[i].request_length;
+			lengthSum += length;
+			if (length > maxLength)
+				maxLength = length;
+		}
+		usePacketLengths = lengthSum == transfer->DataLength()
+			&& lengthSum > 0 && maxLength <= pipe->MaxPacketSize();
+	}
+
 	status_t result = transfer->InitKernelAccess();
 	if (result != B_OK)
 		return result;
@@ -1188,8 +1242,21 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 	// isochronous request. It is used to quickly remove all the isochronous
 	// descriptors from the frame list, as descriptors are not link to each
 	// other in a queue like for every other transfer.
+	// Size this by the descriptors the fill loop below will actually create,
+	// not by packet_count. packetSize is an integer division, so a length that
+	// is not a multiple of packet_count leaves a remainder that becomes one
+	// extra short packet -- and with one packet per service interval that
+	// extra packet needs an extra iTD. (Stock placed 8 packets per iTD, where
+	// the spare slots absorbed it.)
+	const uint32 packetsPerItd = 8 / itd_slot_stride(pipe);
+	const size_t packetsNeeded = packetSize > 0
+		? (transfer->DataLength() + packetSize - 1) / packetSize
+		: isochronousData->packet_count;
+	const uint32 itdCount
+		= (uint32)((packetsNeeded + packetsPerItd - 1) / packetsPerItd);
+
 	ehci_itd **isoRequest
-		= new(std::nothrow) ehci_itd *[isochronousData->packet_count];
+		= new(std::nothrow) ehci_itd *[itdCount];
 	if (isoRequest == NULL) {
 		TRACE("failed to create isoRequest array!\n");
 		return B_NO_MEMORY;
@@ -1205,8 +1272,11 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 	if ((isochronousData->flags & USB_ISO_ASAP) != 0 ||
 		isochronousData->starting_frame_number == NULL) {
 
-		if (fFirstIsochronousTransfer != NULL && fNextStartingFrame != -1)
-			currentFrame = fNextStartingFrame;
+		// Chain off THIS pipe's previous transfer, not a controller-global
+		// anchor: see the iso_anchor comment in the header.
+		int32 anchor = GetIsoAnchor(pipe);
+		if (fFirstIsochronousTransfer != NULL && anchor != -1)
+			currentFrame = anchor;
 		else {
 			uint32 threshold = fThreshold;
 			TRACE("threshold: %" B_PRIu32 "\n", threshold);
@@ -1245,9 +1315,66 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 
 	memset(bufferLog, 0, dataLength);
 
+	// Copy the caller's payload into the bounce buffer before any descriptor
+	// goes live in the periodic schedule. The iTDs below point only at this
+	// buffer, and nothing else ever fills it for an OUT transfer:
+	// WriteIsochronousDescriptorChain(), which is meant to, returns 0 without
+	// doing anything. Every isochronous OUT transfer has therefore sent the
+	// zeros from the memset above.
+	if (!directionIn) {
+		// Make the caller's vectors reachable from kernel space before
+		// copying: a user-space isochronous OUT (via usb_raw, say) is
+		// otherwise an unmapped source address. usb_audio hands over kernel
+		// buffers, where this is a no-op, but the copy has to be correct for
+		// any submitter.
+		status_t accessStatus = transfer->PrepareKernelAccess();
+		if (accessStatus != B_OK) {
+			TRACE_ERROR("failed to prepare kernel access for isochronous "
+				"out data\n");
+			fStack->FreeChunk(bufferLog, bufferPhy, dataLength);
+			delete[] isoRequest;
+			return accessStatus;
+		}
+
+		generic_io_vec *vector = transfer->Vector();
+		size_t vectorCount = transfer->VectorCount();
+		const bool physical = transfer->IsPhysical();
+		size_t bufferOffset = 0;
+		for (size_t i = 0; i < vectorCount && bufferOffset < dataLength; i++) {
+			size_t length = min_c((size_t)vector[i].length,
+				dataLength - bufferOffset);
+			status_t copyStatus = generic_memcpy(
+				(generic_addr_t)bufferLog + bufferOffset, false,
+				vector[i].base, physical, length);
+			if (copyStatus != B_OK) {
+				TRACE_ERROR("failed to copy isochronous out data\n");
+				fStack->FreeChunk(bufferLog, bufferPhy, dataLength);
+				delete[] isoRequest;
+				return copyStatus;
+			}
+			bufferOffset += length;
+		}
+	}
+
 	phys_addr_t currentPhy = bufferPhy;
+	// Place one packet per SERVICE INTERVAL rather than one per microframe. An
+	// iTD spans 8 microframes, so an endpoint with bInterval 4 (2^3 = 8
+	// microframes = 1 ms) gets a single packet in slot 0 and its next packet
+	// goes in the next frame-list frame. Filling all 8 slots regardless hands
+	// such a device eight packets per service interval and leaves its clock
+	// recovery to reassemble them. bInterval 0 or 1 keeps all 8 slots, which is
+	// byte-identical to the previous behaviour.
+	uint32 uframeStride = itd_slot_stride(pipe);
+	uint32 frameStride = 1;
+	if (pipe->Interval() > 1 && (1u << (pipe->Interval() - 1)) > 8) {
+		// Longer than one frame-list frame: one packet per iTD, and whole
+		// frames are skipped between descriptors.
+		frameStride = (1u << (pipe->Interval() - 1)) / 8;
+	}
+
 	uint32 frameCount = 0;
-	while (dataLength > 0) {
+	uint32 packetIndex = 0;
+	while (dataLength > 0 && itdIndex < itdCount) {
 		ehci_itd* itd = CreateItdDescriptor();
 		isoRequest[itdIndex++] = itd;
 		uint16 pg = 0;
@@ -1255,8 +1382,14 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 		uint32 offset = currentPhy & 0xfff;
 		TRACE("isochronous created itd, filling it with phy %" B_PRIxPHYSADDR
 			"\n", currentPhy);
-		for (int32 i = 0; i < 8 && dataLength > 0; i++) {
-			size_t length = min_c(dataLength, packetSize);
+		for (int32 i = 0; i < 8 && dataLength > 0;
+				i += (int32)uframeStride) {
+			size_t length = usePacketLengths
+				&& packetIndex < isochronousData->packet_count
+				? min_c(dataLength,
+					(size_t)packetDescriptors[packetIndex].request_length)
+				: min_c(dataLength, packetSize);
+			packetIndex++;
 			itd->token[i] = EHCI_ITD_STATUS(EHCI_ITD_STATUS_ACTIVE)
 				| EHCI_ITD_TLENGTH(length) | EHCI_ITD_PG(pg) | EHCI_ITD_TOFFSET(offset);
 			itd->last_token = i;
@@ -1288,10 +1421,12 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 
 		if (!LockIsochronous())
 			continue;
+		itd->frame = currentFrame;
 		LinkITDescriptors(itd, &fItdEntries[currentFrame]);
 		UnlockIsochronous();
 		fFrameBandwidth[currentFrame] -= bandwidth;
-		currentFrame = (currentFrame + 1) & (EHCI_VFRAMELIST_ENTRIES_COUNT - 1);
+		currentFrame = (currentFrame + frameStride)
+			& (EHCI_VFRAMELIST_ENTRIES_COUNT - 1);
 		frameCount++;
 	}
 
@@ -1311,7 +1446,15 @@ EHCI::SubmitIsochronous(Transfer *transfer)
 
 	TRACE("appended isochronous transfer by starting at frame number %d\n",
 		currentFrame);
-	fNextStartingFrame = currentFrame + 1;
+	// currentFrame already names the first frame this transfer did not use:
+	// the fill loop advances it after linking each descriptor. Stock added a
+	// further +1 here, which left one idle frame between consecutive
+	// transfers. That was invisible while every transfer was packed eight
+	// packets to an iTD and spanned only a few frames, but once packets are
+	// placed one per service interval a transfer spans exactly as many frames
+	// as it has packets, and the extra frame becomes a permanent rate error:
+	// 20 ms of audio delivered every 21 ms, i.e. 44.1 kHz played at 42 kHz.
+	SetIsoAnchor(pipe, currentFrame);
 
 	// Wake up the isochronous finisher thread
 	release_sem_etc(fFinishIsochronousTransfersSem, 1 /*frameCount*/,
@@ -1806,22 +1949,95 @@ EHCI::CancelQueuedTransfers(Pipe *pipe, bool force)
 status_t
 EHCI::CancelQueuedIsochronousTransfers(Pipe *pipe, bool force)
 {
+	// This used to clear is_active and nothing else. The cancelled transfers'
+	// iTDs stayed linked in the periodic schedule and kept the controller
+	// reading out of buffers the caller frees right after cancelling, the
+	// transfer and descriptor memory leaked, and no B_CANCELED notification
+	// was ever delivered. Detach everything under the isochronous lock, then
+	// notify and free outside it -- the same rule FinishIsochronousTransfers
+	// follows.
+	if (!LockIsochronous())
+		return B_ERROR;
+
+	isochronous_transfer_data *canceledList = NULL;
+	isochronous_transfer_data **canceledTail = &canceledList;
+
 	isochronous_transfer_data *current = fFirstIsochronousTransfer;
+	isochronous_transfer_data *previous = NULL;
+	while (current != NULL) {
+		isochronous_transfer_data *next = current->link;
+		if (current->transfer != NULL
+				&& current->transfer->TransferPipe() == pipe) {
+			// Unlink every descriptor of this transfer still in the periodic
+			// schedule. Retiring a descriptor clears its prev, so a non-NULL
+			// prev means it is still chained to the frame it recorded at
+			// submit time.
+			for (uint32 i = 0; i <= current->last_to_process; i++) {
+				ehci_itd *itd = current->descriptors[i];
+				if (itd != NULL && itd->prev != NULL) {
+					UnlinkITDescriptors(itd,
+						&fItdEntries[itd->frame
+							& (EHCI_VFRAMELIST_ENTRIES_COUNT - 1)]);
+					itd->prev = NULL;
+					itd->next = NULL;
+				}
+			}
 
-	while (current) {
-		if (current->transfer->TransferPipe() == pipe) {
-			// TODO implement
+			if (previous != NULL)
+				previous->link = next;
+			else
+				fFirstIsochronousTransfer = next;
+			if (fLastIsochronousTransfer == current)
+				fLastIsochronousTransfer = previous;
 
-			// TODO: Use the force paramater in order to avoid calling
-			// invalid callbacks
 			current->is_active = false;
-		}
+			current->link = NULL;
+			*canceledTail = current;
+			canceledTail = &current->link;
+		} else
+			previous = current;
 
-		current = current->link;
+		current = next;
 	}
 
-	TRACE_ERROR("no isochronous transfer found!\n");
-	return B_ERROR;
+	// The pipe's stream is over: its next submit must find a fresh slot near
+	// the controller rather than chaining off a stale frame.
+	ClearIsoAnchor(pipe);
+
+	UnlockIsochronous();
+
+	if (canceledList == NULL)
+		return B_OK;
+
+	// Give the controller time to move past any frame whose chain it may have
+	// been traversing while we unlinked -- it looks at most one frame ahead.
+	// Only then is it safe to free the descriptors and buffers below, or for
+	// the caller to reuse its own data buffers.
+	snooze(2000);
+
+	isochronous_transfer_data *transfer = canceledList;
+	while (transfer != NULL) {
+		isochronous_transfer_data *next = transfer->link;
+
+		// The driver sees B_CANCELED and must not touch the pipe from the
+		// callback. force suppresses the callback entirely, for callers that
+		// can no longer guarantee it is safe.
+		if (!force)
+			transfer->transfer->Finished(B_CANCELED, 0);
+
+		for (uint32 i = 0; i <= transfer->last_to_process; i++)
+			FreeDescriptor(transfer->descriptors[i]);
+
+		delete [] transfer->descriptors;
+		delete transfer->transfer;
+		fStack->FreeChunk(transfer->buffer_log,
+			(phys_addr_t)transfer->buffer_phy, transfer->buffer_size);
+		delete transfer;
+
+		transfer = next;
+	}
+
+	return B_OK;
 }
 
 
@@ -2027,6 +2243,22 @@ EHCI::FinishTransfers()
 
 					transfer->transfer->TransferPipe()->SetDataToggle(
 						nextDataToggle);
+				} else if (transfer->data_descriptor != NULL) {
+					// The packets that went through before the error moved the
+					// toggle on the device too: the next transfer, with a queue
+					// head of its own, starts from the pipe's. Left behind, the
+					// device took its first packet for a repeated one and threw
+					// it away. A stall is different: clearing it resets both.
+					bool nextDataToggle = false;
+					size_t length = ReadActualLength(transfer->data_descriptor,
+						&nextDataToggle);
+					// what was sent; what came in was not copied out
+					if (!transfer->incoming)
+						actualLength = length;
+					if (callbackStatus != B_DEV_STALLED) {
+						transfer->transfer->TransferPipe()->SetDataToggle(
+							nextDataToggle);
+					}
 				}
 
 				if (callbackStatus == B_OK && transfer->transfer->IsFragmented()) {
@@ -2159,6 +2391,14 @@ EHCI::FinishIsochronousTransfers()
 			if (!LockIsochronous())
 				continue;
 
+			// Transfers that complete in this pass are collected here and
+			// finished after the lock is released; see the loop below.
+			static const uint32 kMaxFinished = 64;
+			isochronous_transfer_data *finished[kMaxFinished];
+			status_t finishedStatus[kMaxFinished];
+			size_t finishedLength[kMaxFinished];
+			uint32 finishedCount = 0;
+
 			// Process the frame till it has isochronous descriptors in it.
 			// frameLocked is false while the callback runs. That callback
 			// queues the next packet and takes this same lock (Haiku #19472).
@@ -2193,6 +2433,12 @@ EHCI::FinishIsochronousTransfers()
 						status = transfer->transfer->PrepareKernelAccess();
 						if (status == B_OK)
 							actualLength = ReadIsochronousDescriptorChain(transfer);
+					} else {
+						// Report what the controller did with an OUT transfer
+						// too; nothing used to touch the packet descriptors in
+						// this direction.
+						actualLength
+							= WriteIsochronousDescriptorChain(transfer);
 					}
 
 					// Remove the transfer
@@ -2213,29 +2459,22 @@ EHCI::FinishIsochronousTransfers()
 					}
 					transfer->link = NULL;
 
-					// The callback queues the next isochronous packet.
-					// SubmitIsochronous takes this lock. Holding it here is
-					// the double-lock KDL (Haiku #19472) and the hang that
-					// follows (Haiku #18842).
-					UnlockIsochronous();
-					frameLocked = false;
-					transfer->transfer->Finished(status, actualLength);
-					if (LockIsochronous())
-						frameLocked = true;
+					// Do not call back from here: the callback runs
+					// after UnlockIsochronous() below.
+					if (finishedCount < kMaxFinished) {
+						finished[finishedCount] = transfer;
+						finishedStatus[finishedCount] = status;
+						finishedLength[finishedCount] = actualLength;
+						finishedCount++;
+					} else {
+						// Never expected: it would take kMaxFinished streams
+						// completing in one frame. Leave it linked; the next
+						// pass over this frame picks it up.
+						TRACE_ERROR("FinishIsochronousTransfers: more than %"
+							B_PRIu32 " transfers in one frame\n", kMaxFinished);
+					}
 
 					itd = itd->prev;
-
-					for (uint32 i = 0; i <= transfer->last_to_process; i++)
-						FreeDescriptor(transfer->descriptors[i]);
-
-					TRACE("FinishIsochronousTransfers descriptors freed\n");
-
-					delete [] transfer->descriptors;
-					delete transfer->transfer;
-					fStack->FreeChunk(transfer->buffer_log,
-						(phys_addr_t)transfer->buffer_phy,
-						transfer->buffer_size);
-					delete transfer;
 					transferDone = true;
 					if (!frameLocked)
 						break;
@@ -2245,8 +2484,56 @@ EHCI::FinishIsochronousTransfers()
 				}
 			}
 
-			if (frameLocked)
-				UnlockIsochronous();
+			// The finisher is time-based: each wakeup it starts a few frames
+			// behind the controller and stops after finalising one transfer,
+			// so over a long stream it can land mid-transfer and leave
+			// earlier descriptors of a finished transfer still chained in
+			// frames this pass never walked. Freeing one of those below would
+			// return its memory to the pool while fItdEntries[frame], or a
+			// neighbour's next pointer, still refers to it; the next
+			// CreateItdDescriptor() recycles it and the next
+			// UnlinkITDescriptors() walks a garbage prev. Detach them here,
+			// while the lock is still held. A non-NULL prev means the
+			// descriptor is still chained, because retiring one clears it.
+			for (uint32 f = 0; f < finishedCount; f++) {
+				isochronous_transfer_data *ft = finished[f];
+				for (uint32 i = 0; i <= ft->last_to_process; i++) {
+					ehci_itd *desc = ft->descriptors[i];
+					if (desc != NULL && desc->prev != NULL) {
+						UnlinkITDescriptors(desc,
+							&fItdEntries[desc->frame
+								& (EHCI_VFRAMELIST_ENTRIES_COUNT - 1)]);
+						desc->prev = NULL;
+						desc->next = NULL;
+					}
+				}
+			}
+
+			UnlockIsochronous();
+
+			// The callbacks run with the isochronous lock released. A driver
+			// may queue its next transfer from the completion callback --
+			// audio drivers do exactly that -- and SubmitIsochronous() takes
+			// this same non-recursive lock, so calling out while holding it
+			// double-locks and panics the finish thread.
+			for (uint32 f = 0; f < finishedCount; f++) {
+				isochronous_transfer_data *transfer = finished[f];
+
+				transfer->transfer->Finished(finishedStatus[f],
+					finishedLength[f]);
+
+				for (uint32 i = 0; i <= transfer->last_to_process; i++)
+					FreeDescriptor(transfer->descriptors[i]);
+
+				TRACE("FinishIsochronousTransfers descriptors freed\n");
+
+				delete [] transfer->descriptors;
+				delete transfer->transfer;
+				fStack->FreeChunk(transfer->buffer_log,
+					(phys_addr_t)transfer->buffer_phy,
+					transfer->buffer_size);
+				delete transfer;
+			}
 
 			TRACE("FinishIsochronousTransfers next frame\n");
 
@@ -2545,6 +2832,10 @@ EHCI::FillQueueWithData(Transfer *transfer, ehci_qh *queueHead,
 
 	if (result != B_OK)
 		return result;
+	if (firstDescriptor == NULL) {
+		// no data, so no descriptor: there is nothing to queue
+		return B_BAD_VALUE;
+	}
 
 	if (!directionIn) {
 		if (prepareKernelAccess) {
@@ -3049,11 +3340,102 @@ EHCI::ReadActualLength(ehci_qtd *topDescriptor, bool *nextDataToggle)
 }
 
 
+int32
+EHCI::GetIsoAnchor(Pipe *pipe)
+{
+	for (int i = 0; i < kIsoAnchorCount; i++) {
+		if (fIsoAnchors[i].pipe == pipe)
+			return fIsoAnchors[i].next_frame;
+	}
+	return -1;
+}
+
+
+void
+EHCI::SetIsoAnchor(Pipe *pipe, int32 frame)
+{
+	int free = -1;
+	for (int i = 0; i < kIsoAnchorCount; i++) {
+		if (fIsoAnchors[i].pipe == pipe) {
+			fIsoAnchors[i].next_frame = frame;
+			return;
+		}
+		if (fIsoAnchors[i].pipe == NULL && free < 0)
+			free = i;
+	}
+
+	if (free < 0) {
+		free = fIsoAnchorEvict;
+		fIsoAnchorEvict = (fIsoAnchorEvict + 1) % kIsoAnchorCount;
+	}
+
+	fIsoAnchors[free].pipe = pipe;
+	fIsoAnchors[free].next_frame = frame;
+}
+
+
+void
+EHCI::ClearIsoAnchor(Pipe *pipe)
+{
+	for (int i = 0; i < kIsoAnchorCount; i++) {
+		if (fIsoAnchors[i].pipe == pipe) {
+			fIsoAnchors[i].pipe = NULL;
+			fIsoAnchors[i].next_frame = -1;
+		}
+	}
+}
+
+
 size_t
 EHCI::WriteIsochronousDescriptorChain(isochronous_transfer_data *transfer)
 {
-	// TODO implement
-	return 0;
+	// An isochronous OUT transfer used to complete with every packet
+	// descriptor exactly as the submitter filled it in -- actual_length 0 and
+	// an untouched status -- because this was a stub. A driver watching those
+	// fields therefore saw a flawless stream whatever the controller did on
+	// the wire, which is how a device that is playing nothing can be "ruled
+	// out" as healthy.
+	//
+	// The controller does not write back a transmitted byte count for OUT
+	// transactions: the transaction length field keeps the value we
+	// programmed. It does clear the Active bit once the transaction has run,
+	// and it records babble, transaction and data-buffer errors. So report the
+	// programmed length for every packet that came back clean, and zero with
+	// an error status for the rest.
+	usb_isochronous_data *isochronousData
+		= transfer->transfer->IsochronousData();
+	uint32 packet = 0;
+	size_t totalLength = 0;
+
+	// Walk the slots the fill actually programmed (see itd_slot_stride).
+	const uint32 slotStride
+		= itd_slot_stride(transfer->transfer->TransferPipe());
+
+	for (uint32 i = 0; i <= transfer->last_to_process; i++) {
+		ehci_itd *itd = transfer->descriptors[i];
+		for (uint32 j = 0; j <= itd->last_token
+			&& packet < isochronousData->packet_count;
+			j += slotStride, packet++) {
+
+			size_t length = EHCI_ITD_TLENGTH_GET(itd->token[j]);
+			uint32 status = EHCI_ITD_STATUS_GET(itd->token[j]);
+			if (status != 0) {
+				// Still active means the controller never reached this
+				// transaction before its frame passed.
+				isochronousData->packet_descriptors[packet].actual_length = 0;
+				isochronousData->packet_descriptors[packet].status
+					= (status & EHCI_ITD_STATUS_ACTIVE) != 0
+						? B_DEV_TIMEOUT : B_DEV_CRC_ERROR;
+				continue;
+			}
+
+			isochronousData->packet_descriptors[packet].actual_length = length;
+			isochronousData->packet_descriptors[packet].status = B_OK;
+			totalLength += length;
+		}
+	}
+
+	return totalLength;
 }
 
 
@@ -3074,10 +3456,14 @@ EHCI::ReadIsochronousDescriptorChain(isochronous_transfer_data *transfer)
 	size_t packetSize = transfer->transfer->DataLength();
 	packetSize /= isochronousData->packet_count;
 
+	// Walk the slots the fill actually programmed (see itd_slot_stride).
+	const uint32 slotStride
+		= itd_slot_stride(transfer->transfer->TransferPipe());
+
 	for (uint32 i = 0; i <= transfer->last_to_process; i++) {
 		ehci_itd *itd = transfer->descriptors[i];
 		for (uint32 j = 0; j <= itd->last_token
-			&& packet < isochronousData->packet_count; j++) {
+			&& packet < isochronousData->packet_count; j += slotStride) {
 
 			size_t bufferSize = EHCI_ITD_TLENGTH_GET(itd->token[j]);
 			if (EHCI_ITD_STATUS_GET(itd->token[j]) != 0)

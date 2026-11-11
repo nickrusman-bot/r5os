@@ -349,6 +349,9 @@ XHCI::XHCI(pci_info* info, pci_device_module_info* pci, pci_device* device,
 	fStack(stack),
 	fIRQ(0),
 	fUseMSI(false),
+	fTrbPad(info != NULL && info->vendor_id == PCI_VENDOR_VIA
+		&& info->device_id == PCI_DEVICE_VIA_VL805 ? XHCI_TRB_OVERFETCH : 0),
+	fRingStride(XHCI_ENDPOINT_RING_SIZE + fTrbPad),
 	fErstArea(-1),
 	fDcbaArea(-1),
 	fCmdCompSem(-1),
@@ -1032,22 +1035,38 @@ XHCI::SubmitNormalRequest(Transfer* transfer)
 		}
 	}
 
-	xhci_td* td = CreateDescriptor(trbCount, trbCount, trbSize);
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 David Beckman
+	// SPDX-License-Identifier: MIT
+	// Packets of different sizes must sit in one buffer. One buffer per
+	// packet, each the size of the largest, makes WriteDescriptor skip the
+	// tail of a short packet and the next packet reads the wrong bytes.
+	// RenkuOS 3f4ee2d0fa.
+	xhci_td* td;
+	if (isochronousData != NULL)
+		td = CreateDescriptor(trbCount, 1, transfer->FragmentLength());
+	else
+		td = CreateDescriptor(trbCount, trbCount, trbSize);
+	// SPDX-SnippetEnd
 	if (td == NULL)
 		return B_NO_MEMORY;
 
 	// Normal Stage
 	const size_t maxPacketSize = pipe->MaxPacketSize();
 	size_t remaining = transfer->FragmentLength();
+	size_t isochronousOffset = 0;
 	for (int32 i = 0; i < trbCount; i++) {
 		phys_addr_t address;
 		generic_size_t trbLength;
 		if (!transfer->IsPhysical()) {
-			address = td->buffer_addrs[i];
-			if (isochronousData != NULL)
+			if (isochronousData != NULL) {
+				address = td->buffer_addrs[0] + isochronousOffset;
 				trbLength = isochronousData->packet_descriptors[i].request_length;
-			else
+				isochronousOffset += trbLength;
+			} else {
+				address = td->buffer_addrs[i];
 				trbLength = (remaining < trbSize) ? remaining : trbSize;
+			}
 		} else {
 			address = transferVec->base + transferVecOffset;
 			trbLength = transferVec->length - transferVecOffset;
@@ -1116,6 +1135,33 @@ XHCI::SubmitNormalRequest(Transfer* transfer)
 		} else {
 			// TODO: We likely to apply FRIDs to each TD. (XHCI 1.2 § 4.11.2.5 p219.)
 			frame = *isochronousData->starting_frame_number;
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 David Beckman
+			// SPDX-License-Identifier: MIT
+			// A frame that has already passed makes the next one late too.
+			// RenkuOS 8d6303031e.
+			uint32 ist = ReadCapReg32(XHCI_HCSPARAMS2) & 0xf;
+			uint32 istFrames = (ist & 0x8) != 0 ? (ist & 0x7) : 1;
+			uint32 hcFrame = ((ReadRunReg32(XHCI_MFINDEX) + 1) >> 3) & 0x7ff;
+			uint32 ahead = (frame - hcFrame) & 0x7ff;
+			if (ahead <= istFrames || ahead > 0x400) {
+				static int32 sChainFallbacks = 0;
+				static bigtime_t sChainFallbackLastLog = 0;
+				int32 count = atomic_add(&sChainFallbacks, 1) + 1;
+				bigtime_t now = system_time();
+				if (now - sChainFallbackLastLog >= 10000000) {
+					sChainFallbackLastLog = now;
+					dprintf("xhci: iso chain fallback #%" B_PRId32
+						" (requested frame %" B_PRIu32 ", hc frame %" B_PRIu32
+						", ahead %" B_PRIu32 ", ist %#" B_PRIx32 ")\n",
+						count, frame & 0x7ff, hcFrame, ahead, ist);
+				}
+				uint32 margin = istFrames + 2;
+				if (margin < 5)
+					margin = 5;
+				frame = (hcFrame + margin) & 0x7ff;
+			}
+			// SPDX-SnippetEnd
 			td->trbs[0].flags |= TRB_3_FRID(frame);
 		}
 		if (isochronousData->starting_frame_number != NULL)
@@ -1612,7 +1658,7 @@ XHCI::CreateDescriptor(uint32 trbCount, uint32 bufferCount, size_t bufferSize)
 	// _LinkDescriptorForPipe() has room to insert a link TRB.
 	trbCount++;
 	// Leave empty slots after the link. A VL805 reads past the doorbell.
-	uint32 padded = trbCount + XHCI_TRB_OVERFETCH;
+	uint32 padded = trbCount + fTrbPad;
 	if (fStack->AllocateChunk((void**)&result->trbs, &result->trb_addr,
 			(padded * sizeof(xhci_trb))) < B_OK) {
 		TRACE_ERROR("failed to allocate TRBs\n");
@@ -1706,7 +1752,7 @@ XHCI::FreeDescriptor(xhci_td* descriptor)
 
 	if (descriptor->trbs != NULL) {
 		fStack->FreeChunk(descriptor->trbs, descriptor->trb_addr,
-			((descriptor->trb_count + XHCI_TRB_OVERFETCH) * sizeof(xhci_trb)));
+			((descriptor->trb_count + fTrbPad) * sizeof(xhci_trb)));
 	}
 	if (descriptor->buffers != NULL) {
 		size_t totalSize = descriptor->buffer_size * descriptor->buffer_count;
@@ -1963,14 +2009,14 @@ XHCI::AllocateDevice(Hub* parent, int8 hubAddress, uint8 hubPort, usb_speed spee
 
 	device->trb_area = fStack->AllocateArea((void**)&device->trbs,
 		&device->trb_addr, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
-			* XHCI_ENDPOINT_RING_STRIDE, "XHCI endpoint trbs");
+			* fRingStride, "XHCI endpoint trbs");
 	if (device->trb_area < B_OK) {
 		TRACE_ERROR("unable to create a device trbs area\n");
 		CleanupDevice(device);
 		return NULL;
 	}
 	memset(device->trbs, 0, sizeof(xhci_trb) * (XHCI_MAX_ENDPOINTS - 1)
-		* XHCI_ENDPOINT_RING_STRIDE);
+		* fRingStride);
 
 	// set up slot pointer to device context
 	fDcba->baseAddress[slot] = device->device_ctx_addr;
@@ -2252,11 +2298,10 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 		endpoint->next = 0;
 		endpoint->recovering = false;
 
-		endpoint->trbs = device->trbs + id * XHCI_ENDPOINT_RING_STRIDE;
+		endpoint->trbs = device->trbs + id * fRingStride;
 		endpoint->trb_addr = device->trb_addr
-			+ id * XHCI_ENDPOINT_RING_STRIDE * sizeof(xhci_trb);
-		memset(endpoint->trbs, 0,
-			sizeof(xhci_trb) * XHCI_ENDPOINT_RING_STRIDE);
+			+ id * fRingStride * sizeof(xhci_trb);
+		memset(endpoint->trbs, 0, sizeof(xhci_trb) * fRingStride);
 
 		TRACE("insert endpoint for pipe: trbs, device %p endpoint %p\n",
 			device->trbs, endpoint->trbs);

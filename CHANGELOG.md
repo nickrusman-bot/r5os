@@ -1,5 +1,50 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - USB isochronous transfers on EHCI, UHCI and OHCI
+
+RenkuOS group B, the whole list, on our copies. `uhci.cpp`, `uhci.h`, `ehci.h`, `ehci_hardware.h` and `ohci.h` are now copies too. The Haiku headers stay. The added blocks stay MIT.
+
+EHCI, David Beckman unless noted:
+
+- `698d1c3159e09ea0245c6756e5c987f12baa6390` gives EHCI and UHCI each their own interrupt lock. Our copies already initialized that lock; the comment from the commit is kept.
+- `eae629d59a211e6161eeefd6c4f6bace3e3f4f06` runs the isochronous callback after releasing the lock. Our earlier unlock around the callback (Haiku #19472) is this same fix; the callback is now collected and run once, after the unlock.
+- `c43a4a2f562fc274c7c50949e57117dac95e56f8` transmits an isochronous OUT payload. `0c200ef849a202bac121c5777aaae29cb01aba10` maps the caller's buffers before that copy.
+- `6bdbffb6a85400294f7b8bae64aca459c420d86f` keeps the chaining anchor per pipe. `d57fdde9ded70c0e6599e0d9b28805fdfb92f99a` places packets per service interval. `f69ee0331005449c26d361aecebb3777469cf8fb` starts the next transfer in the next free frame. `0473f845745184b09b126f065bb8ae3e57a5c0c0` reports what an isochronous OUT actually did. `4512333a5d9ef34bd38c5316f5d9f1474c380bb0` uses the caller's length per packet. `c15045f9749b91b736b82fc94c8a2d8e2f0a7d22` reclaims an isochronous transfer on cancel.
+- `676e5cffa0e27e20aad2aba5e9e4e2d22848bfcf` detaches a descriptor that is still linked before freeing it.
+- `e28b91f5e8663bbf56ae6c35759ee8e46b777fca` (atomozero) keeps the data toggle of a transfer that failed, except a stall.
+- `925977a925a7378abb0acf65f434db5f7772f85a` (atomozero) refuses a transfer with no data instead of queueing a NULL descriptor.
+
+UHCI:
+
+- `03c6ae617edf54bd5b6d8662755042138144fa5d` and `9c3906bb98ea605152f2cd0ac37f9756162ab670` (rainygirl) recover from a host-controller halt, and do not finish a transfer that was already cancelled.
+- `599f04372363519958501400c5649624f1df15bc` (David Beckman) survives the halt instead of panicking. `bb6e0a2b4d807d031835e876c80384f65a00f82b` reschedules isochronous transfers for audio. `bba308447a8da5fedb587d2df3d03d3fff5434dd` restarts the finisher at the stream's first frame after idle.
+
+OHCI, David Beckman. The frame fallback from group A stays.
+
+- `d38c595a49ecfd4a6b0482ee8e9c40d9ee4eee32` uses the length per packet and reports the start frame. `6011739554cbf747d50f0a9aa9db5a2740d97f00` frees an isochronous descriptor at the size it was allocated. `5ed8a3e4c59b9060ef4ad416dbc22849156f7189` unlinks an isochronous transfer before walking its descriptors.
+
+Neither test laptop has EHCI, UHCI or OHCI. Tested in QEMU (TCG, window) at 21:47 on 11 Nov 2026. `pci-ohci`, `usb-ehci` and `ich9-usb-uhci1` each started, and a USB keyboard or mouse on each (`0627:0001`) was probed. The serial log has no panic. Tracker and Deskbar started. No USB audio device was attached, so an isochronous payload was not played. Not tested on the 5625U or the X1 Carbon.
+
+## 2026-11-11 - USB isochronous transfers on xHCI
+
+RenkuOS group A, applied onto our copies. Group B is the section above.
+
+Taken:
+
+- `3f4ee2d0facb1d8cd0a04a3938f4185358408d26` (David Beckman). An isochronous transfer used one buffer per packet, each the size of the largest packet, while each TRB only sent that packet's own length. A short packet left a gap, and the next packet read the wrong bytes. 44.1 kHz alternates packet sizes. The packets now share one buffer, and each TRB starts where the previous one ended. Bulk and interrupt transfers are unchanged.
+- `942e51e6d6295bf24c28ec0c36806a5256509ebf` and `dc8872b9823656b7b323821cffc4d998970735d2` (Bryan Irvine), as one change. A VIA VL805 reads past the last TRB. We already left 4 empty TRBs on every controller (haiku-pi `c65ac5a2e6`). That is now 32 empty TRBs, and only when the controller is a VL805 (PCI 1106:3483). Other controllers, including both test laptops, get no pad. The kernel debugger still hands out 128-byte chunks: the pad is off on these machines, so a TD still fits. The ACPI `_CCA` test in `dc8872b982` was not added. This driver is the PCI driver, and the VL805 id is in the PCI header. A VL805 on AMD64 would not fit a padded TD in the kernel debugger.
+- `8d6303031ecf2800fdcef718646644ec1b674b67` (David Beckman). When a queued isochronous transfer names a frame that has already passed, xHCI and OHCI used that frame anyway, and the next transfer chained from it, so the stream stayed late. If the frame is not safely ahead, the driver now starts from the controller's frame plus a margin and writes that frame back. OHCI uses the 16-bit frame and a margin of 5. xHCI uses the isochronous scheduling threshold and a margin of at least 5. The message is logged at most once every 10 seconds. `ohci.cpp` is now one of our copies. UHCI already had this guard.
+
+Already in R5, so not applied again:
+
+- `5b6210a165` (reset a stalled endpoint). `FinishTransfers` already resets a control pipe on any error and a bulk or interrupt pipe on a stall, through air/OS `bdad03ac62`.
+- `4214bdbe4b` and `300b6c30de` (descriptor length). `Device.cpp` already rejects a descriptor shorter than 2 bytes or past the buffer, and shortens `total_length` when the configuration is shorter than that field. `300b6c30de` is Haiku `d1111656df`.
+- `0a6da2e43c` (SuperSpeed companion before an endpoint). `Device.cpp` already drops that companion.
+- `80c55f2ef4` (allocator waiter count and a slot check). Our allocator has no waiter count, and it checks the slot while holding its lock.
+- `7637e637e4` and `ca923659b4` (bandwidth arithmetic). `Transfer.cpp` in the tree already uses a 32-bit count and adds the high-speed term. The file was not copied.
+- `b6060b0ddb` (half a second, and a last success must not panic). `Object::WaitForIdle` already waits half a second and checks the reference count after the loop. The two-second wait was not taken.
+
+Tested in QEMU (TCG, no KVM, window) at 21:24 on 11 Nov 2026. The controller is qemu-xhci. A USB keyboard (0627:0001), a USB mouse (0627:0001) and a USB storage stick (46f4:0001, 8 MiB, empty) enumerated. QEMU listed them at 480 Mb/s, 480 Mb/s and 5000 Mb/s. They were removed and added again. The serial log probed them a second time, including the stick, and it has no panic. Tracker and Deskbar started. `usb_audiotest` was not run: QEMU has no USB audio interface and no camera. Not tested on the 5625U or the X1 Carbon. No extra stick.
 ## 2026-11-11 - Review of the audio branch: overflow and build fixes
 
 The audio branch had not been built. A review found: `Stream::GetEnabledChannels()` set bits past the 16-byte kernel bitmap once all streams of a device had more than 128 channels (64 per stream is allowed), so a large device overwrote the kernel stack. The streams now stop at `kMaxEnabledChannels` (128). The driver copied all 16 bytes of the bitmap to and from the caller; a Haiku caller sizes it for its own channels, so it now copies `(channels + 7) / 8` bytes. The playback feedback error had no limit and could wrap its `int32` after about an hour with a fast device clock; it is capped at four frames. With the 8-frame carry full, holding one more frame back dropped one; that step now waits. The starting frame of the feedback transfer is a member instead of a stack variable.
