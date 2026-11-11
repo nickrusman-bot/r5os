@@ -66,6 +66,11 @@
 typedef std::vector<media_node> NodeVector;
 
 
+// The control thread posts this to the application looper, which owns
+// fInfoMap, for every node it instantiated on request. RenkuOS bc165f5613.
+static const uint32 kMsgNodeInstantiated = 'mnin';
+
+
 struct AddOnInfo {
 			media_addon_id		id;
 			bool				wants_autostart;
@@ -362,6 +367,27 @@ MediaAddonServer::MessageReceived(BMessage* message)
 			return;
 		}
 
+		case kMsgNodeInstantiated:
+		{
+			// QuitRequested() only releases nodes in active_flavors. A node
+			// created because an application asked for it has to be on that
+			// list, or the add-on is unloaded under its control thread.
+			media_addon_id addOnID;
+			media_node node;
+			if (message->FindInt32("add_on_id", &addOnID) != B_OK
+				|| message->FindInt32("node", &node.node) != B_OK
+				|| message->FindInt32("port", &node.port) != B_OK
+				|| message->FindUInt32("kind", &node.kind) != B_OK)
+				break;
+
+			InfoMap::iterator found = fInfoMap.find(addOnID);
+			if (found == fInfoMap.end())
+				break;
+
+			found->second.active_flavors.push_back(node);
+			break;
+		}
+
 		default:
 			BApplication::MessageReceived(message);
 			break;
@@ -386,6 +412,15 @@ MediaAddonServer::_HandleMessage(int32 code, const void* data, size_t size)
 					request->add_on_id, request->flavor_id,
 					request->creator_team, &reply.node);
 			request->SendReply(status, &reply, sizeof(reply));
+
+			if (status == B_OK) {
+				BMessage instantiated(kMsgNodeInstantiated);
+				instantiated.AddInt32("add_on_id", request->add_on_id);
+				instantiated.AddInt32("node", reply.node.node);
+				instantiated.AddInt32("port", reply.node.port);
+				instantiated.AddUInt32("kind", reply.node.kind);
+				PostMessage(&instantiated);
+			}
 			break;
 		}
 

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A node created on request is released at quit
+
+The Media preferences can ask the add-on server to create a sound-card node. That node was not on the list the server releases when it quits, so restarting the media services unloaded the add-on under the node's thread. The control thread now tells the application looper, and the looper records the node with the others. A node that was already released is skipped, because stopping it fails. A node created while the quit is already running is still not recorded. Ported from RenkuOS `bc165f5613` (rations, MIT). Creating nodes for a card that appears later was already in this file. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Media flavor data is copied before it is used
 
 Flattened flavor info is packed, so the numbers after the strings are not aligned. On ARM the media server died at start with SIGBUS. The numbers are copied with `memcpy`, and the request buffers in the media server, the add-on server and `BMediaNode` are aligned to 8 bytes. Ported from RenkuOS `4b157fb134` (atomozero, MIT). Not booted on ARM64. There is no What's new section and `distro/BUILD` stays the same.
