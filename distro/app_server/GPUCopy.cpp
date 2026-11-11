@@ -485,7 +485,7 @@ void
 GPUCopy::NoteCpu(bigtime_t microseconds)
 {
 	load_settings();
-	if (!sWant)
+	if (!sDebug)
 		return;
 	note(&sCpuTimes, microseconds);
 	report();

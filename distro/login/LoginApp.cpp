@@ -14,6 +14,7 @@
 #include "SessionLog.h"
 
 #include <Alert.h>
+#include <FindDirectory.h>
 #include <LaunchRoster.h>
 #include <List.h>
 #include <OS.h>
@@ -527,6 +528,35 @@ LoginApp::_StartVirtualBoxGuest()
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static bool
+gpu_selftest_requested()
+{
+	char path[B_PATH_NAME_LENGTH];
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,
+			sizeof(path)) != B_OK)
+		return false;
+	if (strlcat(path, "/kernel/drivers/radeon_hd", sizeof(path))
+			>= sizeof(path))
+		return false;
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return false;
+	bool on = false;
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		if (strncmp(line, "gpu_selftest true", 17) == 0)
+			on = true;
+	}
+	fclose(file);
+	return on;
+}
+// SPDX-SnippetEnd
+
+
+
 void
 LoginApp::_LaunchSessionHooks()
 {
@@ -534,9 +564,15 @@ LoginApp::_LaunchSessionHooks()
 	if (status != B_OK)
 		r5_session_log("dstcheck: %s", strerror(status));
 
-	status = _LaunchSessionApp("/system/bin/r5-gpu-selftest");
-	if (status != B_OK)
-		r5_session_log("r5-gpu-selftest: %s", strerror(status));
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (gpu_selftest_requested()) {
+		status = _LaunchSessionApp("/system/bin/r5-gpu-selftest");
+		if (status != B_OK)
+			r5_session_log("r5-gpu-selftest: %s", strerror(status));
+	}
+// SPDX-SnippetEnd
 
 	BPath home;
 	if (_SessionHome(home) != B_OK)
