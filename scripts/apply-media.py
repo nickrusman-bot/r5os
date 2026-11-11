@@ -38,6 +38,7 @@ FILES = (
     "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.cpp",
     "src/add-ons/kernel/drivers/audio/usb/AudioStreamingInterface.h",
     "src/add-ons/kernel/drivers/audio/usb/Device.cpp",
+    "src/add-ons/kernel/drivers/audio/usb/Device.h",
     "src/add-ons/kernel/drivers/audio/hda/hda_codec.cpp",
     "src/add-ons/kernel/drivers/audio/hda/hda_codec_defs.h",
     "src/add-ons/kernel/drivers/audio/hda/hda_controller.cpp",

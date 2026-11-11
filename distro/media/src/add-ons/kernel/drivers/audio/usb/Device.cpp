@@ -38,6 +38,7 @@ Device::Device(usb_device device)
 	fAudioControl(this),
 	fBuffersReadySem(-1)
 {
+	fProductName[0] = '\0';
 	const usb_device_descriptor* deviceDescriptor
 		= gUSBModule->get_device_descriptor(device);
 
@@ -49,6 +50,11 @@ Device::Device(usb_device device)
 	fVendorID = deviceDescriptor->vendor_id;
 	fProductID = deviceDescriptor->product_id;
 	fUSBVersion = deviceDescriptor->usb_version;
+	fProductName[0] = '\0';
+	if (deviceDescriptor->product != 0) {
+		_ReadProductString(device, deviceDescriptor->product, fProductName,
+			sizeof(fProductName));
+	}
 
 	fBuffersReadySem = create_sem(0, DRIVER_NAME "_buffers_ready");
 	if (fBuffersReadySem < B_OK) {
@@ -540,6 +546,48 @@ Device::CompareAndReattach(usb_device device)
 }
 
 
+void
+Device::_ReadProductString(usb_device device, uint8 index, char* output,
+	size_t outputMax)
+{
+	output[0] = '\0';
+	if (device == NULL || index == 0 || outputMax < 2)
+		return;
+
+	size_t actualLength = 0;
+	uint8 tmp[4];
+	status_t status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING,
+		0, 0, tmp, 4, &actualLength);
+	if (status < B_OK || actualLength != 4 || tmp[1] != USB_DESCRIPTOR_STRING)
+		return;
+
+	uint16 langID = tmp[2] | (tmp[3] << 8);
+	status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING, index,
+		langID, tmp, 2, &actualLength);
+	if (status < B_OK || actualLength != 2 || tmp[1] != USB_DESCRIPTOR_STRING)
+		return;
+
+	uint8 length = tmp[0];
+	if (length < 2)
+		return;
+
+	uint8 raw[256];
+	if (length > sizeof(raw))
+		length = sizeof(raw);
+	status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING, index,
+		langID, raw, length, &actualLength);
+	if (status < B_OK || actualLength < 2)
+		return;
+
+	size_t chars = (actualLength - 2) / 2;
+	if (chars > outputMax - 1)
+		chars = outputMax - 1;
+	for (size_t i = 0; i < chars; i++)
+		output[i] = raw[2 + i * 2];
+	output[chars] = '\0';
+}
+
+
 status_t
 Device::_MultiGetDescription(multi_description* multiDescription)
 {
@@ -551,7 +599,8 @@ Device::_MultiGetDescription(multi_description* multiDescription)
 	Description.interface_version = B_CURRENT_INTERFACE_VERSION;
 	Description.interface_minimum = B_CURRENT_INTERFACE_VERSION;
 
-	strlcpy(Description.friendly_name, "USB Audio",
+	strlcpy(Description.friendly_name,
+		fProductName[0] != '\0' ? fProductName : "USB Audio",
 		sizeof(Description.friendly_name));
 
 	strlcpy(Description.vendor_info, "S.Zharski",

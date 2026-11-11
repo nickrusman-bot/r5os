@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A USB audio device uses its product name
+
+Media listed every USB interface as "USB Audio". The description now uses the USB product string, and "USB Audio" when the device has none. Two units of the same model still share that name. Taken from the naming idea in the Media-OS driver, on our `Device`. No device was attached. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A USB audio stream may carry 64 channels
+
+The parser, the alternate choice and the channel list stopped at 16. A stream may now carry 64. Channels past the eight named positions are stereo pairs. The description ioctl copies up to 128 channel entries from the heap, and the enable bitmap is 16 bytes so a channel past 31 is not written off a `uint32`. Set-enabled reads the caller's bits before it uses them. Adapted from RenkuOS `8d3c445d68` (rations, MIT). The description bound from `6dfd2fbc30` is included so the higher count does not overflow. Not opened on an 18-input interface. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - multi_audio holds 128 channels
 
 The add-on stored 32 channels and built the enable mask with a shift of the channel count, which is undefined from 32. It now holds 128, refuses a device that does not fit, and uses one bit per channel in a byte map. A buffer list with more rows than the tables is refused. Adapted from RenkuOS `8db4b0d1b4` (rations, MIT). The driver still describes at most 16 channels until the next change. Not opened on a wide interface. There is no What's new section and `distro/BUILD` stays the same.
