@@ -9,3 +9,5 @@ gfx9_vmids true
 gfx9_vmid_per_file true
 gfx9_pasid_map true
 gpu_present true
+gpu_app_server true
+gpu_debug true

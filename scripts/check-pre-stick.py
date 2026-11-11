@@ -30,7 +30,7 @@ OFFSET = "6291456"
 
 PACKAGES = (
     "mesa_lavapipe-25.3.6-3-x86_64.hpkg",
-    "mesa_radv-25.3.6-4-x86_64.hpkg",
+    "mesa_radv-25.3.6-5-x86_64.hpkg",
     "vulkan_loader-1.4.367-3-x86_64.hpkg",
     "vulkan_tools-1.4.367-2-x86_64.hpkg",
     "vulkanteapot-1.0.0-2-x86_64.hpkg",
@@ -46,12 +46,26 @@ BUILT = {
         f"{GENERATED}/objects/haiku/x86_64/release/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd",
         "add-ons/kernel/drivers/dev/graphics/radeon_hd",
     ),
+    "app_server": (
+        f"{GENERATED}/objects/haiku/x86_64/release/servers/app/app_server",
+        "servers/app_server",
+    ),
 }
 
 SCRIPTS = {
     "check.sh": "distro/graphics/boot/check.sh",
     "boot2.sh": "distro/graphics/boot/boot2.sh",
+    "m8-run": "distro/graphics/boot/m8-run",
+    "m8-boot2": "distro/graphics/boot/m8-boot2",
+    "m8-show": "distro/graphics/boot/m8-show",
 }
+
+HOME = (
+    "m8-run",
+    "m8-boot2",
+    "m8-show",
+    "check.sh",
+)
 
 STRINGS = (b"gpu_isolation_test", b"window vkcube")
 
@@ -162,12 +176,22 @@ def extract(iso_wsl: str, out: str) -> None:
         f"'{BFS}' --start-offset {OFFSET} '{iso_wsl}' <<EOF\n"
         + "\n".join(gets) + "\nquit\nEOF\n"
         f"'{PKG}' extract -C {out}/haiku {out}/{HAIKU_PKG}\n"
-        f"'{PKG}' extract -C {out}/radv {out}/mesa_radv-25.3.6-4-x86_64.hpkg\n"
+        f"'{PKG}' extract -C {out}/radv {out}/mesa_radv-25.3.6-5-x86_64.hpkg\n"
         f"'{PKG}' extract -C {out}/teapot {out}/vulkanteapot-1.0.0-2-x86_64.hpkg\n"
         f"test -s {out}/haiku/bin/r5-gpu-selftest\n"
+        f"test -s {out}/haiku/servers/app_server\n"
         f"test -s {out}/haiku/add-ons/kernel/drivers/dev/graphics/radeon_hd\n"
         f"test -s {out}/radv/bin/check.sh\ntest -s {out}/radv/bin/boot2.sh\n"
-        f"test -s {out}/teapot/bin/r5-wsi-window-test.sh\n",
+        f"test -s {out}/radv/bin/m8-run\n"
+        f"test -s {out}/radv/bin/m8-boot2\n"
+        f"test -s {out}/radv/bin/m8-show\n"
+        f"test -s {out}/teapot/bin/r5-wsi-window-test.sh\n"
+        f"mkdir -p {out}/home\n"
+        f"'{BFS}' --start-offset {OFFSET} '{iso_wsl}' <<EOF\n"
+        + "".join(
+            f"get myfs/home/{name} {out}/home/{name}\n" for name in HOME)
+        + f"get myfs/home/config/settings/kernel/drivers/radeon_hd {out}/home/radeon_hd\n"
+        "quit\nEOF\n",
         encoding="utf-8", newline="\n")
     wsl_script = wsl(f"wslpath -u '{script}'").strip()
     wsl(f"sed -i 's/\\r$//' '{wsl_script}' && bash '{wsl_script}'")
@@ -220,6 +244,21 @@ def check_image(commit: str, iso: str) -> None:
         if image_sha != disk:
             die(f"{package} in the image is {image_sha}, the branch copy is {disk}")
         print(f"package {package} {image_sha}")
+    for name in HOME:
+        image_sha = file_sha_wsl(f"{out}/home/{name}")
+        committed = sha256(blob(commit, f"distro/graphics/boot/{name}"))
+        if image_sha != committed:
+            die(
+                f"home {name} is not {commit}: "
+                f"image {image_sha} branch {committed}")
+        print(f"home {name} {image_sha}")
+    settings = file_sha_wsl(f"{out}/home/radeon_hd")
+    wanted = sha256(blob(commit, "distro/graphics/boot/radeon_hd"))
+    if settings != wanted:
+        die(
+            f"boot 1 settings are not {commit}: "
+            f"image {settings} branch {wanted}")
+    print(f"home radeon_hd {settings}")
 
 
 def main() -> int:

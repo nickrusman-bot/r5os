@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The stick measures the desktop copy
+
+Boot 1 keeps the M7 settings (`gpu_present true`, no `gpu_isolation_test`) and adds `gpu_app_server true` and `gpu_debug true`. Boot 2 is the same file with `gpu_debug true` and without `gpu_app_server`. `m8-run` opens Tracker and Terminal and moves them for 45 seconds, then `check.sh` prints PASS or FAIL per line and keeps that boot's files in `~/boot1` or `~/boot2`. The speed line passes only when the GPU copy's CPU time is at most half the CPU copy's and its median is not slower. On boot 1 that line fails with `needs the cpu boot`; any other FAIL is a stop. `m8-boot2` rewrites the file, shows it, and restarts on `y`. `m8-show` prints the check and the copy lines after the last boot marker. The scripts are in `/boot/home` and on the path. `mesa_radv` is `25.3.6-5` so the image cannot keep the previous package. No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-stick` copied this branch. The jam log shows `sh -n check.sh`, `sh -n m8-run`, `sh -n m8-boot2` and `sh -n m8-show`. `jam -q @r5-raw` then `jam -q @r5-anyboot` finished at 13:56 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`, `anyboot_exit=0`. The anyboot is 2156724224 bytes. Boot 1 settings are planted after that. No VirtualBox. The 5625U has not run this image. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The CPU copy time is recorded without the GPU copy
 
 VirtualBox round 2 had only `gpu_debug true`. Dragging a window for more than 10 seconds produced no `app_server: copy cpu median` line. app_server does read `gpu_debug`. VirtualBox loads vboxvideo and keeps a software back buffer, so `_CopyBackToFront` runs. `GPUCopy::NoteCpu` dropped every sample unless `gpu_app_server` was also on. It now keeps the sample when `gpu_debug` is on.
