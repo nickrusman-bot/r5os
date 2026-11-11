@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Opening Media does not save the fallback device
+
+Showing the current input or output also told the media server to set it. The server treats that as a choice, so a fallback for a missing USB card became the saved device, and choosing an output could put the input back on the built-in card. The menus now only mark the current default. A choice in the menu sets it, and creates the node first when the card appeared after the media services started. A failure is reported and the menus show the default in use. The latency menu and the USB layout menu are unchanged. Ported from RenkuOS `2aee4b6c3c` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Media refreshes its device lists when a card appears
 
 The Media preferences built the device lists when the window opened and when the media server started. A sound card plugged in while the window was open stayed invisible until Media was opened again. The window now watches flavor changes and rebuilds the lists. A restarted media server drops that watch, so it is renewed each time the server starts. A device that the driver still lists after it is unplugged stays in the list. Ported from RenkuOS `917e0e9e30` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
