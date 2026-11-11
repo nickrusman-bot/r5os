@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The desktop copy can be timed and compared
+
+`gpu_debug true` makes app_server keep the copy times. Every 10 seconds it logs `app_server: copy cpu median <n> us cpu <n> ms per 10 s` and, when the GPU copy ran, the same line with `gpu`. Every 100th GPU copy it compares the copied rows. A match is `app_server: copy compare ok` on that 10 second line. A mismatch is `app_server: copy compare MISMATCH` and the CPU copy for the rest of the session. With `gpu_debug` absent, nothing is logged. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The desktop can copy through the GPU, and falls back
 
 `gpu_app_server true` in the `radeon_hd` settings makes app_server allocate the back buffer as a cached GTT buffer and copy dirty rows with `DMA_DATA`. The setting is absent on the image, so the copy stays the CPU one and nothing is logged. The first failure logs `app_server: gpu copy off: <reason>` and the CPU copy is used for the rest of the session. The wait is 100 ms. `gpu_app_server_fail true` fails the first submit on purpose. A region of more than 256 rectangles, or more than 64 bands, uses the CPU for that call and does not turn the GPU off. Not booted. There is no What's new section and `distro/BUILD` stays the same.

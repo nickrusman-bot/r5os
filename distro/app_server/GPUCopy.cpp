@@ -49,8 +49,11 @@ int sFd = -1;
 bool sLoaded = false;
 bool sWant = false;
 bool sForceFail = false;
+bool sDebug = false;
 bool sOff = false;
 bool sLoggedOn = false;
+bool sCompared = false;
+uint32 sFrame = 0;
 void* sBits = NULL;
 uint32 sBackHandle = 0;
 uint64 sBackVa = 0;
@@ -103,6 +106,8 @@ load_settings()
 			sWant = true;
 		if (strncmp(line, "gpu_app_server_fail true", 24) == 0)
 			sForceFail = true;
+		if (strncmp(line, "gpu_debug true", 14) == 0)
+			sDebug = true;
 	}
 	fclose(file);
 }
@@ -185,6 +190,78 @@ note(copy_times* times, bigtime_t microseconds)
 	times->cpu += microseconds;
 	if (times->window == 0)
 		times->window = system_time();
+}
+
+
+bigtime_t
+median_of(const copy_times* times)
+{
+	if (times->count <= 0)
+		return 0;
+	bigtime_t sorted[128];
+	for (int i = 0; i < times->count; i++)
+		sorted[i] = times->samples[i];
+	for (int i = 1; i < times->count; i++) {
+		bigtime_t value = sorted[i];
+		int j = i;
+		while (j > 0 && sorted[j - 1] > value) {
+			sorted[j] = sorted[j - 1];
+			j--;
+		}
+		sorted[j] = value;
+	}
+	return sorted[times->count / 2];
+}
+
+
+void
+report()
+{
+	if (!sDebug)
+		return;
+	bigtime_t start = sCpuTimes.window;
+	if (start == 0 || (sGpuTimes.window != 0 && sGpuTimes.window < start))
+		start = sGpuTimes.window;
+	if (start == 0 || system_time() - start < 10000000)
+		return;
+	if (sCpuTimes.count > 0) {
+		syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
+			" us cpu %" B_PRId64 " ms per 10 s\n",
+			(int64)median_of(&sCpuTimes), (int64)(sCpuTimes.cpu / 1000));
+	}
+	if (sGpuTimes.count > 0) {
+		syslog(LOG_INFO, "app_server: copy gpu median %" B_PRId64
+			" us cpu %" B_PRId64 " ms per 10 s\n",
+			(int64)median_of(&sGpuTimes), (int64)(sGpuTimes.cpu / 1000));
+	}
+	if (sCompared)
+		syslog(LOG_INFO, "app_server: copy compare ok\n");
+	sCpuTimes.count = 0;
+	sCpuTimes.cpu = 0;
+	sCpuTimes.window = 0;
+	sGpuTimes.count = 0;
+	sGpuTimes.cpu = 0;
+	sGpuTimes.window = 0;
+	sCompared = false;
+}
+
+
+bool
+same_picture(RenderingBuffer* back, RenderingBuffer* front,
+	const r5_copy_band* bands, int count)
+{
+	const uint8* src = (const uint8*)back->Bits();
+	const uint8* dst = (const uint8*)front->Bits();
+	uint32 pitch = back->BytesPerRow();
+	if (src == NULL || dst == NULL)
+		return false;
+	for (int i = 0; i < count; i++) {
+		size_t bytes = (size_t)bands[i].rows * pitch;
+		size_t offset = (size_t)bands[i].y * pitch;
+		if (memcmp(src + offset, dst + offset, bytes) != 0)
+			return false;
+	}
+	return true;
 }
 
 } // namespace
@@ -357,6 +434,15 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		return false;
 	}
 	note(&sGpuTimes, system_time() - started);
+	if (sDebug && ++sFrame % 100u == 0) {
+		if (!same_picture(back, front, bands, bandCount)) {
+			syslog(LOG_INFO, "app_server: copy compare MISMATCH\n");
+			off("compare");
+			return false;
+		}
+		sCompared = true;
+	}
+	report();
 	if (!sLoggedOn) {
 		sLoggedOn = true;
 		syslog(LOG_INFO, "app_server: gpu copy on scanout %" B_PRIu32
@@ -374,4 +460,5 @@ GPUCopy::NoteCpu(bigtime_t microseconds)
 	if (!sWant)
 		return;
 	note(&sCpuTimes, microseconds);
+	report();
 }
