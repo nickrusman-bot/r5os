@@ -4,11 +4,14 @@
 """Fail if an anyboot was built from a different tree than this branch.
 
 The shared Haiku tree can still hold another branch's overlay. This compares
-three things, and stops on the first mismatch:
+the radeon sources, the Login sources, and the built programs, and stops on
+the first mismatch:
 
 - every radeon source at this commit, the worktree, and the Haiku tree
-- the built r5-gpu-selftest and radeon_hd against the same files in the image
+- every Login source apply-login.py copies, the same three ways
+- the built r5-gpu-selftest, radeon_hd, app_server and Login against the image
 - check.sh and boot2.sh in the image against this commit
+- Login in the image does not contain the unmerged Sign in screen
 
 write-stick.py runs this before it writes. A mix exits 1.
 """
@@ -50,7 +53,37 @@ BUILT = {
         f"{GENERATED}/objects/haiku/x86_64/release/servers/app/app_server",
         "servers/app_server",
     ),
+    "Login": (
+        f"{GENERATED}/objects/haiku/x86_64/release/apps/login/Login",
+        "apps/Login",
+    ),
 }
+
+# Haiku path, worktree path. apply-login.py copies these into src/apps/login.
+LOGIN_SOURCES = (
+    ("src/apps/login/DesktopWindow.cpp", "distro/login/DesktopWindow.cpp"),
+    ("src/apps/login/DesktopWindow.h", "distro/login/DesktopWindow.h"),
+    ("src/apps/login/Jamfile", "distro/login/Jamfile"),
+    ("src/apps/login/Login.rdef", "distro/login/Login.rdef"),
+    ("src/apps/login/LockWindow.cpp", "distro/login/LockWindow.cpp"),
+    ("src/apps/login/LockWindow.h", "distro/login/LockWindow.h"),
+    ("src/apps/login/LoginApp.cpp", "distro/login/LoginApp.cpp"),
+    ("src/apps/login/LoginApp.h", "distro/login/LoginApp.h"),
+    ("src/apps/login/LoginView.cpp", "distro/login/LoginView.cpp"),
+    ("src/apps/login/LoginView.h", "distro/login/LoginView.h"),
+    ("src/apps/login/LoginWindow.cpp", "distro/login/LoginWindow.cpp"),
+    ("src/apps/login/LoginWindow.h", "distro/login/LoginWindow.h"),
+    ("src/apps/login/R5Desktop.cpp", "distro/login/R5Desktop.cpp"),
+    ("src/apps/login/SessionLog.h", "distro/login/SessionLog.h"),
+    ("src/apps/login/TrayApp.cpp", "distro/login/TrayApp.cpp"),
+    ("src/apps/login/main.cpp", "distro/login/main.cpp"),
+    ("src/apps/login/AccountAdmin.cpp", "distro/users/AccountAdmin.cpp"),
+    ("src/apps/login/AccountAdmin.h", "distro/users/AccountAdmin.h"),
+    ("src/apps/login/HomeLock.cpp", "distro/users/HomeLock.cpp"),
+    ("src/apps/login/HomeLock.h", "distro/users/HomeLock.h"),
+)
+
+UNMERGED_LOGIN = b"Sign in to start your session"
 
 SCRIPTS = {
     "check.sh": "distro/graphics/boot/check.sh",
@@ -163,6 +196,24 @@ def check_sources(commit: str) -> None:
     print(f"sources {matched} match {commit}")
     for relative in loose:
         at_head(commit, relative)
+    check_login_sources(commit)
+
+
+def check_login_sources(commit: str) -> None:
+    tree = tree_hashes([haiku_rel for haiku_rel, _work in LOGIN_SOURCES])
+    matched = 0
+    for haiku_rel, relative in LOGIN_SOURCES:
+        at_head(commit, relative)
+        work = ROOT / relative
+        if not work.is_file():
+            die(f"{relative} is missing in the worktree at {commit}")
+        digest = sha256(work.read_bytes())
+        if tree.get(haiku_rel) != digest:
+            die(
+                f"{haiku_rel} in the Haiku tree is not the worktree copy at {commit}: "
+                f"tree {tree.get(haiku_rel)} worktree {digest}")
+        matched += 1
+    print(f"login sources {matched} match {commit}")
 
 
 def extract(iso_wsl: str, out: str) -> None:
@@ -180,6 +231,7 @@ def extract(iso_wsl: str, out: str) -> None:
         f"'{PKG}' extract -C {out}/teapot {out}/vulkanteapot-1.0.0-2-x86_64.hpkg\n"
         f"test -s {out}/haiku/bin/r5-gpu-selftest\n"
         f"test -s {out}/haiku/servers/app_server\n"
+        f"test -s {out}/haiku/apps/Login\n"
         f"test -s {out}/haiku/add-ons/kernel/drivers/dev/graphics/radeon_hd\n"
         f"test -s {out}/radv/bin/check.sh\ntest -s {out}/radv/bin/boot2.sh\n"
         f"test -s {out}/radv/bin/m8-run\n"
@@ -222,6 +274,9 @@ def check_image(commit: str, iso: str) -> None:
                 f"{name} in the image is not the build from {commit}: "
                 f"image {image_sha} build {built_sha}")
         print(f"binary {name} {image_sha}")
+        if name == "Login" and UNMERGED_LOGIN in Path(
+                wsl(f"wslpath -w {out}/haiku/{image}").strip()).read_bytes():
+            die("Login in the image is the unmerged Sign in screen")
     for name, relative in SCRIPTS.items():
         image_sha = file_sha_wsl(f"{out}/radv/bin/{name}")
         committed = sha256(blob(commit, relative))
