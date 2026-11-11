@@ -1,17 +1,34 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  * SPDX-License-Identifier: MIT
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
 
 
 #include "UserCard.h"
 
 #include <Bitmap.h>
-#include <ControlLook.h>
 #include <Font.h>
 #include <InterfaceDefs.h>
 #include <Message.h>
-#include <Window.h>
+#include <String.h>
 
 #include <new>
 
@@ -56,14 +73,17 @@ BUserCard::BUserCard(const char* name, const char* login,
 	const char* displayName, const char* role, const BBitmap* avatar,
 	BMessage* message)
 	:
-	BControl(name, NULL, message, B_WILL_DRAW | B_NAVIGABLE),
-	fData(new(std::nothrow) Data)
+	BControl(name, NULL, message,
+		B_WILL_DRAW | B_FULL_UPDATE_ON_RESIZE | B_NAVIGABLE),
+	fData(NULL)
 {
+	_Init();
 	if (fData == NULL)
 		return;
 
 	fData->login = login != NULL ? login : "";
-	fData->displayName = displayName != NULL ? displayName : fData->login.String();
+	fData->displayName = displayName != NULL
+		? displayName : fData->login.String();
 	fData->role = role != NULL ? role : "";
 
 	if (avatar != NULL)
@@ -74,19 +94,26 @@ BUserCard::BUserCard(const char* name, const char* login,
 BUserCard::BUserCard(BMessage* archive)
 	:
 	BControl(archive),
-	fData(new(std::nothrow) Data)
+	fData(NULL)
 {
-	if (fData == NULL)
+	_Init();
+	if (fData == NULL || archive == NULL)
 		return;
 
-	const char* str = NULL;
-	if (archive->FindString("r5:login", &str) == B_OK)
-		fData->login = str;
-	if (archive->FindString("r5:displayName", &str) == B_OK)
-		fData->displayName = str;
-	if (archive->FindString("r5:role", &str) == B_OK)
-		fData->role = str;
+	const char* text = NULL;
+	if (archive->FindString("r5:login", &text) == B_OK)
+		fData->login = text;
+	if (archive->FindString("r5:displayName", &text) == B_OK)
+		fData->displayName = text;
+	if (archive->FindString("r5:role", &text) == B_OK)
+		fData->role = text;
 	archive->FindBool("r5:selected", &fData->selected);
+
+	BMessage avatarMessage;
+	if (archive->FindMessage("r5:avatar", &avatarMessage) == B_OK) {
+		fData->avatar = dynamic_cast<BBitmap*>(
+			BBitmap::Instantiate(&avatarMessage));
+	}
 }
 
 
@@ -99,9 +126,9 @@ BUserCard::~BUserCard()
 BArchivable*
 BUserCard::Instantiate(BMessage* archive)
 {
-	if (validate_instantiation(archive, kUserCardClassName))
-		return new(std::nothrow) BUserCard(archive);
-	return NULL;
+	if (!validate_instantiation(archive, kUserCardClassName))
+		return NULL;
+	return new(std::nothrow) BUserCard(archive);
 }
 
 
@@ -112,7 +139,8 @@ BUserCard::Archive(BMessage* archive, bool deep) const
 	if (status != B_OK || fData == NULL)
 		return status;
 
-	status = archive->AddString("class", kUserCardClassName);
+	if (archive->ReplaceString("class", kUserCardClassName) != B_OK)
+		status = archive->AddString("class", kUserCardClassName);
 	if (status == B_OK)
 		status = archive->AddString("r5:login", fData->login);
 	if (status == B_OK)
@@ -121,6 +149,11 @@ BUserCard::Archive(BMessage* archive, bool deep) const
 		status = archive->AddString("r5:role", fData->role);
 	if (status == B_OK)
 		status = archive->AddBool("r5:selected", fData->selected);
+	if (status == B_OK && fData->avatar != NULL) {
+		BMessage avatarMessage;
+		if (fData->avatar->Archive(&avatarMessage) == B_OK)
+			status = archive->AddMessage("r5:avatar", &avatarMessage);
+	}
 
 	return status;
 }
@@ -180,7 +213,8 @@ BUserCard::SetAvatar(const BBitmap* avatar)
 	if (fData == NULL)
 		return;
 	delete fData->avatar;
-	fData->avatar = avatar != NULL ? new(std::nothrow) BBitmap(avatar) : NULL;
+	fData->avatar = avatar != NULL
+		? new(std::nothrow) BBitmap(avatar) : NULL;
 	Invalidate();
 }
 
@@ -214,26 +248,26 @@ BUserCard::Draw(BRect updateRect)
 	float u = unit();
 	float radius = 5.0f * u;
 
-	rgb_color bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
-	rgb_color border = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		B_DARKEN_2_TINT);
+	rgb_color document = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
+	rgb_color panel = ui_color(B_PANEL_BACKGROUND_COLOR);
+	rgb_color border = tint_color(panel, B_DARKEN_2_TINT);
 	rgb_color accent = ui_color(B_STATUS_BAR_COLOR);
+	rgb_color background = document;
 
 	if (fData->selected) {
-		bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 		border = accent;
 	} else if (fData->hover) {
-		bg = mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-			ui_color(B_PANEL_BACKGROUND_COLOR), 40);
+		background = mix_color(document, panel, 40);
 	} else {
-		bg = mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-			ui_color(B_PANEL_BACKGROUND_COLOR), 20);
+		background = mix_color(document, panel, 20);
 	}
 
-	SetHighColor(bg);
+	if (IsFocus() && !fData->selected)
+		border = ui_color(B_KEYBOARD_NAVIGATION_COLOR);
+
+	SetHighColor(background);
 	FillRoundRect(bounds, radius, radius);
 
-	// Border
 	SetHighColor(border);
 	StrokeRoundRect(bounds, radius, radius);
 
@@ -248,62 +282,84 @@ BUserCard::Draw(BRect updateRect)
 		SetDrawingMode(B_OP_COPY);
 	}
 
-	// Avatar circle
-	float avSize = 34.0f * u;
-	float pad = 8.0f * u;
-	BRect avRect(bounds.left + pad, bounds.top + (bounds.Height() - avSize) / 2.0f,
-		bounds.left + pad + avSize,
-		bounds.top + (bounds.Height() - avSize) / 2.0f + avSize);
+	float avatarSize = 34.0f * u;
+	float padding = 8.0f * u;
+	float avatarTop = bounds.top + (bounds.Height() - avatarSize) / 2.0f;
+	BRect avatarRect(bounds.left + padding, avatarTop,
+		bounds.left + padding + avatarSize, avatarTop + avatarSize);
 
-	rgb_color avBg = mix_color(accent, ui_color(B_DOCUMENT_BACKGROUND_COLOR), 40);
-	SetHighColor(avBg);
-	FillEllipse(avRect);
+	rgb_color avatarBackground = mix_color(accent, document, 40);
+	SetHighColor(avatarBackground);
+	FillEllipse(avatarRect);
 
 	if (fData->avatar != NULL && fData->avatar->IsValid()) {
+		BRect iconRect = avatarRect.InsetByCopy(3.0f * u, 3.0f * u);
 		SetDrawingMode(B_OP_ALPHA);
-		DrawBitmap(fData->avatar, fData->avatar->Bounds(), avRect);
+		SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_OVERLAY);
+		DrawBitmap(fData->avatar, fData->avatar->Bounds(), iconRect);
 		SetDrawingMode(B_OP_COPY);
 	} else {
-		// Simple silhouette fallback
-		SetHighColor(tint_color(avBg, B_DARKEN_2_TINT));
-		BRect head(avRect.left + avSize * 0.32f, avRect.top + avSize * 0.18f,
-			avRect.right - avSize * 0.32f, avRect.top + avSize * 0.52f);
+		SetHighColor(tint_color(avatarBackground, B_DARKEN_2_TINT));
+		BRect head(avatarRect.left + avatarSize * 0.32f,
+			avatarRect.top + avatarSize * 0.18f,
+			avatarRect.right - avatarSize * 0.32f,
+			avatarRect.top + avatarSize * 0.52f);
 		FillEllipse(head);
-		BRect body(avRect.left + avSize * 0.2f, avRect.top + avSize * 0.58f,
-			avRect.right - avSize * 0.2f, avRect.bottom);
+
+		BRect body(avatarRect.left + avatarSize * 0.2f,
+			avatarRect.top + avatarSize * 0.58f,
+			avatarRect.right - avatarSize * 0.2f, avatarRect.bottom);
 		FillRoundRect(body, 4.0f * u, 4.0f * u);
 	}
 
-	// Text area
-	float textLeft = avRect.right + 10.0f * u;
-	float textRight = bounds.right - pad;
-	if (textLeft < textRight) {
+	float textLeft = avatarRect.right + 10.0f * u;
+	float maxWidth = bounds.right - padding - textLeft;
+	if (maxWidth > 4.0f) {
 		BFont boldFont(be_bold_font);
 		boldFont.SetSize(be_plain_font->Size() * 1.05f);
 		SetFont(&boldFont);
 		SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
 
-		font_height fh;
-		boldFont.GetHeight(&fh);
-		float nameY = bounds.top + bounds.Height() * 0.45f;
-		DrawString(fData->displayName.String(), BPoint(textLeft, nameY));
+		BString name(fData->displayName);
+		boldFont.TruncateString(&name, B_TRUNCATE_END, maxWidth);
 
-		// Role text
+		font_height nameHeight;
+		boldFont.GetHeight(&nameHeight);
+
 		BFont plainFont(be_plain_font);
 		plainFont.SetSize(be_plain_font->Size() * 0.88f);
-		SetFont(&plainFont);
+		font_height roleHeight;
+		plainFont.GetHeight(&roleHeight);
 
+		float gap = 2.0f * u;
+		float blockHeight = nameHeight.ascent + nameHeight.descent
+			+ gap + roleHeight.ascent + roleHeight.descent;
+		float nameY = bounds.top + (bounds.Height() - blockHeight) / 2.0f
+			+ nameHeight.ascent;
+		DrawString(name.String(), BPoint(textLeft, nameY));
+
+		SetFont(&plainFont);
 		if (fData->role.ICompare("Administrator") == 0)
 			SetHighColor(accent);
 		else {
 			SetHighColor(mix_color(ui_color(B_DOCUMENT_TEXT_COLOR),
-				ui_color(B_DOCUMENT_BACKGROUND_COLOR), 140));
+				document, 140));
 		}
 
-		plainFont.GetHeight(&fh);
-		float roleY = nameY + fh.ascent + 4.0f * u;
-		DrawString(fData->role.String(), BPoint(textLeft, roleY));
+		BString role(fData->role);
+		plainFont.TruncateString(&role, B_TRUNCATE_END, maxWidth);
+		float roleY = nameY + nameHeight.descent + gap + roleHeight.ascent;
+		DrawString(role.String(), BPoint(textLeft, roleY));
 	}
+}
+
+
+void
+BUserCard::MessageReceived(BMessage* message)
+{
+	if (message->what == B_COLORS_UPDATED || message->what == B_FONTS_UPDATED)
+		Invalidate();
+	BControl::MessageReceived(message);
 }
 
 
@@ -323,8 +379,10 @@ void
 BUserCard::KeyDown(const char* bytes, int32 numBytes)
 {
 	if (numBytes == 1 && (bytes[0] == B_SPACE || bytes[0] == B_ENTER)) {
-		SetSelected(true);
-		Invoke();
+		if (IsEnabled()) {
+			SetSelected(true);
+			Invoke();
+		}
 		return;
 	}
 	BControl::KeyDown(bytes, numBytes);
@@ -332,14 +390,15 @@ BUserCard::KeyDown(const char* bytes, int32 numBytes)
 
 
 void
-BUserCard::MouseMoved(BPoint where, uint32 transit, const BMessage* dragMessage)
+BUserCard::MouseMoved(BPoint where, uint32 transit,
+	const BMessage* dragMessage)
 {
 	(void)where;
 	(void)dragMessage;
 	if (fData == NULL)
 		return;
 
-	bool hover = (transit == B_ENTERED_VIEW || transit == B_INSIDE_VIEW);
+	bool hover = transit == B_ENTERED_VIEW || transit == B_INSIDE_VIEW;
 	if (fData->hover != hover) {
 		fData->hover = hover;
 		Invalidate();
@@ -376,10 +435,46 @@ BUserCard::MaxSize()
 BSize
 BUserCard::PreferredSize()
 {
-	float w, h;
-	GetPreferredSize(&w, &h);
-	return BSize(w, h);
+	float width;
+	float height;
+	GetPreferredSize(&width, &height);
+	return BSize(width, height);
 }
 
 
-} // namespace BAppearanceKit
+void
+BUserCard::_Init()
+{
+	fData = new(std::nothrow) Data;
+	for (int32 index = 0; index < 4; index++)
+		_reserved[index] = 0;
+	SetFlags(Flags() | B_TRANSPARENT_BACKGROUND);
+	SetViewColor(B_TRANSPARENT_COLOR);
+}
+
+
+void
+BUserCard::_ReservedUserCard1()
+{
+}
+
+
+void
+BUserCard::_ReservedUserCard2()
+{
+}
+
+
+void
+BUserCard::_ReservedUserCard3()
+{
+}
+
+
+void
+BUserCard::_ReservedUserCard4()
+{
+}
+
+
+}	// namespace BAppearanceKit
