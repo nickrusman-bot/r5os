@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Review of the audio branch: overflow and build fixes
+
+The audio branch had not been built. A review found: `Stream::GetEnabledChannels()` set bits past the 16-byte kernel bitmap once all streams of a device had more than 128 channels (64 per stream is allowed), so a large device overwrote the kernel stack. The streams now stop at `kMaxEnabledChannels` (128). The driver copied all 16 bytes of the bitmap to and from the caller; a Haiku caller sizes it for its own channels, so it now copies `(channels + 7) / 8` bytes. The playback feedback error had no limit and could wrap its `int32` after about an hour with a fast device clock; it is capped at four frames. With the 8-frame carry full, holding one more frame back dropped one; that step now waits. The starting frame of the feedback transfer is a member instead of a stack variable.
+
+Build fixes: `Device.cpp` compared a `uint8` with 256 and `NULL` with a `usb_device` id; `memcpy` into Media Kit classes needs a `void*` cast under GCC 13. The R5 UAC 2.0 clock code moved into `ProgramClock()` without its SPDX snippet; the snippet is back. The ported RenkuOS changes keep their MIT credit lines and are not marked as R5 snippets.
+
+Tested: every changed `.cpp` compiles with the command line `jam -n` prints, `-Werror` included, from a copy outside the shared tree (Cursor was building there). Not jammed into an image, not booted, no USB audio or MIDI device.
+
 ## 2026-11-11 - Playback follows an explicit USB feedback endpoint
 
 A playback interface that has a feedback endpoint now reads it and moves one frame per buffer into or out of a small carry, so the packets follow the device clock. The client's buffer is still one exact buffer; the extra frame comes from the carry, or one frame is held back. A device without that endpoint is queued as before, at the nominal packet size. Implicit feedback, using the capture stream as the clock, is not done. High speed is read as 16.16 frames per microframe, full speed as 10.14 frames per frame. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
