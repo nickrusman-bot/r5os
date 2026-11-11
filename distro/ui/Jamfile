@@ -31,5 +31,10 @@ SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
 	ActionCard.cpp
 	PageHeader.cpp
 	ScreenArrangement.cpp
+	UserCard.cpp
+	UserListItem.cpp
+	PasswordControl.cpp
+	IconView.cpp
+	AccentButton.cpp
 	: be libr5icons.so [ TargetLibstdc++ ]
 	;

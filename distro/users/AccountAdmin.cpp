@@ -118,6 +118,9 @@ account_password_matches(const struct passwd* pwd, const char* plain)
 	if (pwd == NULL)
 		return false;
 
+	if (plain == NULL)
+		plain = "";
+
 	const char* required = pwd->pw_passwd;
 	if (required != NULL && strcmp(required, "x") == 0) {
 		struct spwd* shadow = getspnam(pwd->pw_name);
@@ -126,13 +129,15 @@ account_password_matches(const struct passwd* pwd, const char* plain)
 		required = shadow->sp_pwdp;
 	}
 
+	// No password is set. Only an empty field matches.
 	if (required == NULL || required[0] == '\0')
-		return plain == NULL || plain[0] == '\0';
-	if (required[0] == '!')
+		return plain[0] == '\0';
+
+	// A locked account refuses every field. An account with a password
+	// refuses an empty field before the hash is checked.
+	if (required[0] == '!' || plain[0] == '\0')
 		return false;
 
-	if (plain == NULL)
-		plain = "";
 	char* encrypted = crypt(plain, required);
 	return encrypted != NULL && strcmp(encrypted, required) == 0;
 }

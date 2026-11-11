@@ -24,11 +24,14 @@
 #define R5_ICONS_H
 
 
+#include <GraphicsDefs.h>
+#include <Rect.h>
 #include <SupportDefs.h>
 
 
 class BBitmap;
 class BButton;
+class BView;
 
 
 // Public icon helpers in libr5icons.so. The long description for
@@ -95,6 +98,34 @@ status_t r5_button_set_mime_icon(BButton* button, const char* type,
 // The label is left as the caller set it. No preferences wrench.
 status_t r5_button_set_lock(BButton* button, bool locked,
 	float buttonHeight);
+
+// Line glyphs: small one-color symbols for which Haiku has no icon (the
+// power symbol, a circular arrow, a clock face, an eye). They are drawn
+// in code, in the color the caller passes, so they follow the text color
+// and dark mode. The numbers are part of the call contract, the same as
+// r5_icon. Add a new glyph at the end. docs/ICONS.md lists them.
+enum r5_glyph {
+	R5_GLYPH_POWER = 1,
+	R5_GLYPH_RESTART = 2,
+	R5_GLYPH_CLOCK = 3,
+	R5_GLYPH_EYE = 4,
+	R5_GLYPH_EYE_OFF = 5
+};
+
+// Draws the glyph inside `frame` of `view`, in `color`. The view's
+// drawing state is the same afterwards.
+void r5_glyph_draw(BView* view, r5_glyph which, BRect frame,
+	rgb_color color);
+
+// A new B_RGBA32 bitmap of side x side pixels with the glyph on a
+// transparent background, or NULL. The caller deletes it.
+BBitmap* r5_glyph_bitmap(r5_glyph which, float side, rgb_color color);
+
+// Puts the glyph before the label of `button`, in the control text
+// color, at the size of the button's font. Unlike r5_button_set_icon(),
+// the button keeps its own width and height. Call it again after
+// B_COLORS_UPDATED so the glyph takes the new text color.
+status_t r5_button_set_glyph(BButton* button, r5_glyph which);
 
 
 #endif

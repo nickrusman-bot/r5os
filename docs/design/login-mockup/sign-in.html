@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5 Operating System – Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #c9dbf6;
+  font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  color: #141414;
+}
+
+/* Fullscreen Scalable Desktop Background */
+.desktop-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Scenario Switcher Toolbar (Demo helper) */
+.scenario-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid #b5b5b5;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12), inset 0 1px 0 #ffffff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 100;
+  user-select: none;
+}
+.scenario-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+}
+.scenario-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.scenario-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.scenario-btn.active {
+  background: #0084ff;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 132, 255, 0.35);
+}
+
+/* Centered Sign-in Window */
+.window-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  filter: drop-shadow(0 28px 56px rgba(15, 23, 42, 0.28)) drop-shadow(0 8px 18px rgba(15, 23, 42, 0.12));
+}
+
+/* BeOS Tab */
+.window-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 16px 0 8px;
+  background: #f8cc26;
+  border: 1px solid #a88200;
+  border-bottom: none;
+  font-size: 13px;
+  font-weight: 700;
+  user-select: none;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+.tab-close-box {
+  width: 11px;
+  height: 11px;
+  background: #ffe88a;
+  border: 1px solid #a88200;
+}
+.tab-zoom-box {
+  position: relative;
+  width: 14px;
+  height: 13px;
+}
+.tab-zoom-outer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 8px;
+  background: #ffe88a;
+  border: 1px solid #a88200;
+}
+.tab-zoom-inner {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 9px;
+  height: 8px;
+  background: #ffe88a;
+  border: 1px solid #a88200;
+}
+
+/* Window Frame */
+.window-frame {
+  width: 440px;
+  background: #ededed;
+  border: 1px solid #8c8c8c;
+  box-shadow: inset 1px 1px 0 #ffffff;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Header with R5 Logo */
+.header-box {
+  background: #ffffff;
+  border: 1px solid #c4c4c4;
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Multi-user: Horizontal Cards (2-4 users) */
+.user-grid {
+  display: flex;
+  gap: 8px;
+}
+.user-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #dbe3ef;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.user-option:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.user-option.active {
+  background: #ffffff;
+  border-color: #0084ff;
+  box-shadow: 0 0 0 2px rgba(0,132,255,0.18), 0 2px 4px rgba(15,23,42,0.06);
+}
+
+/* Multi-user: Scrollable List (>4 users) */
+.user-scroll-container {
+  background: #ffffff;
+  border: 1px solid #c4c4c4;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.user-scroll-list {
+  max-height: 148px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.user-scroll-list::-webkit-scrollbar {
+  width: 10px;
+}
+.user-scroll-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-left: 1px solid #d5d5d5;
+}
+.user-scroll-list::-webkit-scrollbar-thumb {
+  background: #c8c8c8;
+  border: 1px solid #a8a8a8;
+  border-radius: 2px;
+}
+.user-scroll-list::-webkit-scrollbar-thumb:hover {
+  background: #adadad;
+}
+
+.user-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.user-list-row:last-child {
+  border-bottom: none;
+}
+.user-list-row:hover {
+  background: #f8fafc;
+}
+.user-list-row.active {
+  background: #eef6ff;
+  border-left: 3px solid #0084ff;
+}
+
+/* Single-user Hero Header (1 user scenario) */
+.single-user-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+/* Credential Form Card */
+.form-card {
+  background: #ffffff;
+  border: 1px solid #c4c4c4;
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Password Input */
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  background: #ffffff;
+  border: 1px solid #aaaaaa;
+  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.08);
+  border-radius: 4px;
+  padding: 0 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-wrapper:focus-within {
+  border-color: #0084ff;
+  box-shadow: 0 0 0 2px rgba(0,132,255,0.22), inset 1px 1px 2px rgba(0,0,0,0.08);
+}
+.text-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  color: #141414;
+}
+.eye-toggle-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.65;
+  transition: opacity 0.1s;
+  cursor: pointer;
+}
+.eye-toggle-btn:hover {
+  opacity: 1;
+}
+
+/* Primary Button */
+.primary-btn {
+  height: 38px;
+  background: #0084ff;
+  border: 1px solid #0070db;
+  border-radius: 4px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+  width: 100%;
+}
+.primary-btn:hover {
+  background: #0077e6;
+}
+.primary-btn:active {
+  background: #0066cc;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Feedback message */
+.feedback-msg {
+  min-height: 18px;
+  font-size: 12.5px;
+  text-align: center;
+  color: #64748b;
+  transition: color 0.15s;
+}
+.feedback-msg.error {
+  color: #e11d48;
+  font-weight: 600;
+}
+.feedback-msg.success {
+  color: #059669;
+  font-weight: 600;
+}
+
+/* Bottom Bar: Clock & Power Buttons (no top divider line) */
+.bottom-bar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.beos-btn {
+  height: 32px;
+  padding: 0 12px;
+  background: #f6f6f6;
+  border: 1px solid #b5b5b5;
+  box-shadow: inset 1px 1px 0 #ffffff;
+  border-radius: 3px;
+  color: #141414;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.beos-btn:hover {
+  background: #eaeaea;
+  border-color: #999999;
+}
+.beos-btn:active {
+  background: #dedede;
+  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Dialog Toast */
+.action-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  z-index: 1000;
+}
+</style>
+</head>
+<body>
+
+<!-- Fullscreen Responsive Desktop Wallpaper -->
+<svg class="desktop-background" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#dbe8fa"/>
+      <stop offset="45%" stop-color="#c6dcfa"/>
+      <stop offset="100%" stop-color="#b1cef6"/>
+    </linearGradient>
+    <linearGradient id="wave1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9fc4f5"/>
+      <stop offset="100%" stop-color="#81aee9"/>
+    </linearGradient>
+    <linearGradient id="wave2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7ea6e3"/>
+      <stop offset="100%" stop-color="#648ed6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bgGrad)"/>
+  <path d="M0,420 C380,280 740,390 1100,540 C1460,690 1720,680 1920,600 L1920,1080 L0,1080 Z" fill="url(#wave1Grad)" opacity="0.85"/>
+  <path d="M0,700 C430,590 800,700 1180,840 C1510,960 1760,950 1920,910 L1920,1080 L0,1080 Z" fill="url(#wave2Grad)" opacity="0.95"/>
+</svg>
+
+<!-- Scenario Switcher Bar (Demo helper to preview 1 user, 2 users, and >4 users) -->
+<div class="scenario-bar">
+  <span class="scenario-label">Scenario:</span>
+  <button class="scenario-btn" id="btnScen1" onclick="setScenario(1)">1 User</button>
+  <button class="scenario-btn active" id="btnScen2" onclick="setScenario(2)">2 Users (Default)</button>
+  <button class="scenario-btn" id="btnScen6" onclick="setScenario(6)">&gt; 4 Users (Scrollable)</button>
+</div>
+
+<!-- Centered Sign-in Window Container -->
+<div class="window-container">
+  <!-- Yellow BeOS Tab -->
+  <div class="window-tab">
+    <div class="tab-close-box" title="Close"></div>
+    <span>Sign in</span>
+    <span style="width: 28px"></span>
+    <div class="tab-zoom-box" title="Zoom">
+      <div class="tab-zoom-outer"></div>
+      <div class="tab-zoom-inner"></div>
+    </div>
+  </div>
+
+  <!-- Window Frame -->
+  <div class="window-frame">
+    <!-- Header with clean R5 Logo (no circle wrapper) -->
+    <div class="header-box">
+      <img src="icons/r5-symbol.svg" alt="R5 Operating System" width="44" height="44" style="flex-shrink: 0;">
+      <div>
+        <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2">Welcome to R5</div>
+        <div style="font-size: 12.5px; color: #475569; margin-top: 2px">Sign in to start your session</div>
+      </div>
+    </div>
+
+    <!-- Scenario: 2 Users (Horizontal Cards) -->
+    <div id="section2Users" style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 11.5px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em;">Select Person</div>
+      <div class="user-grid">
+        <!-- User 1: Administrator (user) -->
+        <div id="cardUser" class="user-option active" onclick="selectUser('user', 'User', 'Administrator')">
+          <div style="width: 38px; height: 38px; border-radius: 50%; background: #e0f2fe; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #bae6fd;">
+            <img src="icons/people.svg" alt="" width="30" height="30">
+          </div>
+          <div style="display: flex; flex-direction: column; min-width: 0;">
+            <span style="font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">User</span>
+            <span style="font-size: 11px; color: #0284c7; font-weight: 600;">Administrator</span>
+          </div>
+        </div>
+
+        <!-- User 2: Standard (guest) -->
+        <div id="cardGuest" class="user-option" onclick="selectUser('guest', 'Guest', 'Standard user')">
+          <div style="width: 38px; height: 38px; border-radius: 50%; background: #f1f5f9; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #e2e8f0;">
+            <img src="icons/people.svg" alt="" width="30" height="30" style="filter: grayscale(80%); opacity: 0.75;">
+          </div>
+          <div style="display: flex; flex-direction: column; min-width: 0;">
+            <span style="font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Guest</span>
+            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Standard</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scenario: > 4 Users (Scrollable Haiku-style List) -->
+    <div id="section6Users" style="display: none; flex-direction: column; gap: 6px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 11.5px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em;">Select Person</span>
+        <span style="font-size: 11px; color: #64748b;">6 accounts available</span>
+      </div>
+      <div class="user-scroll-container">
+        <div class="user-scroll-list">
+          <!-- Row 1: user -->
+          <div class="user-list-row active" id="listRow_user" onclick="selectUser('user', 'User', 'Administrator')">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0f2fe; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #bae6fd;">
+              <img src="icons/people.svg" alt="" width="26" height="26">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">User</span>
+              <span style="font-size: 11px; color: #64748b;">@user · <strong style="color: #0284c7;">Administrator</strong></span>
+            </div>
+          </div>
+          <!-- Row 2: nicky -->
+          <div class="user-list-row" id="listRow_nicky" onclick="selectUser('nicky', 'Nicky', 'Administrator')">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #e0f2fe; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #bae6fd;">
+              <img src="icons/people.svg" alt="" width="26" height="26">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Nicky</span>
+              <span style="font-size: 11px; color: #64748b;">@nicky · <strong style="color: #0284c7;">Administrator</strong></span>
+            </div>
+          </div>
+          <!-- Row 3: alex -->
+          <div class="user-list-row" id="listRow_alex" onclick="selectUser('alex', 'Alex', 'Standard user')">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #e2e8f0;">
+              <img src="icons/people.svg" alt="" width="26" height="26" style="filter: grayscale(60%);">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Alex</span>
+              <span style="font-size: 11px; color: #64748b;">@alex · Standard</span>
+            </div>
+          </div>
+          <!-- Row 4: sarah -->
+          <div class="user-list-row" id="listRow_sarah" onclick="selectUser('sarah', 'Sarah', 'Standard user')">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #e2e8f0;">
+              <img src="icons/people.svg" alt="" width="26" height="26" style="filter: grayscale(60%);">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Sarah</span>
+              <span style="font-size: 11px; color: #64748b;">@sarah · Standard</span>
+            </div>
+          </div>
+          <!-- Row 5: guest -->
+          <div class="user-list-row" id="listRow_guest" onclick="selectUser('guest', 'Guest', 'Standard user')">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #e2e8f0;">
+              <img src="icons/people.svg" alt="" width="26" height="26" style="filter: grayscale(80%);">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Guest</span>
+              <span style="font-size: 11px; color: #64748b;">@guest · Standard</span>
+            </div>
+          </div>
+          <!-- Row 6: kiosk -->
+          <div class="user-list-row" id="listRow_kiosk" onclick="selectUser('kiosk', 'Kiosk', 'Restricted')">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #f1f5f9; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #e2e8f0;">
+              <img src="icons/people.svg" alt="" width="26" height="26" style="filter: grayscale(90%);">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Kiosk</span>
+              <span style="font-size: 11px; color: #64748b;">@kiosk · Restricted</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Credential Form Card -->
+    <div class="form-card">
+      <!-- 1-User Scenario Profile Banner -->
+      <div id="singleUserBanner" class="single-user-banner" style="display: none;">
+        <div style="width: 44px; height: 44px; border-radius: 50%; background: #e0f2fe; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #bae6fd;">
+          <img src="icons/people.svg" alt="" width="34" height="34">
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <span style="font-size: 15px; font-weight: 800; color: #0f172a;">User</span>
+          <span style="font-size: 11.5px; color: #0284c7; font-weight: 600;">@user · Administrator</span>
+        </div>
+      </div>
+
+      <!-- Multi-User Active User Line -->
+      <div id="multiUserActiveLine" style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 12px; color: #64748b;">Signing in as:</span>
+        <span id="activeUserName" style="font-size: 13px; font-weight: 700; color: #0f172a;">User</span>
+        <span id="activeUserBadge" style="font-size: 10.5px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 1px 7px; border-radius: 999px;">@user</span>
+      </div>
+
+      <!-- Password Input -->
+      <div style="display: flex; flex-direction: column; gap: 5px;">
+        <label for="passwordInput" style="font-size: 12px; font-weight: 700; color: #334155;">Password</label>
+        <div class="input-wrapper">
+          <input type="password" id="passwordInput" class="text-input" placeholder="Enter password" autocomplete="current-password" onkeydown="handleKey(event)">
+          <button type="button" class="eye-toggle-btn" id="eyeToggleBtn" onclick="togglePasswordVisibility()" title="Show password" aria-label="Show password">
+            <img id="eyeIcon" src="icons/eye.svg" alt="" width="18" height="18">
+          </button>
+        </div>
+      </div>
+
+      <!-- Sign In Button -->
+      <button type="button" id="signInBtn" class="primary-btn" onclick="attemptSignIn()">
+        <span>Sign in</span>
+      </button>
+
+      <!-- Feedback / Info Line -->
+      <div id="feedbackMsg" class="feedback-msg">Press Enter or click Sign in</div>
+    </div>
+
+    <!-- Bottom Bar: Live Time and Power Buttons (NO top divider line) -->
+    <div class="bottom-bar">
+      <!-- Window Live Clock -->
+      <div style="display: flex; align-items: center; gap: 6px; padding: 0 4px; color: #334155;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span id="windowClock" style="font-size: 12.5px; font-weight: 700;">14:30</span>
+      </div>
+
+      <span style="flex: 1"></span>
+
+      <!-- Restart Button -->
+      <button type="button" class="beos-btn" onclick="showToast('System Restart requested')">
+        <img src="icons/restart.svg" alt="" width="14" height="14">
+        <span>Restart</span>
+      </button>
+
+      <!-- Shut down Button -->
+      <button type="button" class="beos-btn" onclick="showToast('System Shut down requested')">
+        <img src="icons/power.svg" alt="" width="14" height="14">
+        <span>Shut down</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Notification Toast for Power Actions -->
+<div id="actionToast" class="action-toast">
+  <span id="toastText">Action initiated</span>
+</div>
+
+<script>
+let currentAccount = 'user';
+let currentScenario = 2;
+let isPasswordVisible = false;
+
+// Update Live Clock
+function updateClocks() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const timeString = `${hours}:${minutes}`;
+  
+  const windowClock = document.getElementById('windowClock');
+  if (windowClock) windowClock.textContent = timeString;
+}
+setInterval(updateClocks, 1000);
+updateClocks();
+
+// Scenario Switcher (1 User, 2 Users, 6 Users)
+function setScenario(scen) {
+  currentScenario = scen;
+  document.querySelectorAll('.scenario-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(`btnScen${scen}`).classList.add('active');
+
+  const sec2 = document.getElementById('section2Users');
+  const sec6 = document.getElementById('section6Users');
+  const singleBanner = document.getElementById('singleUserBanner');
+  const multiLine = document.getElementById('multiUserActiveLine');
+
+  if (scen === 1) {
+    // 1 user only: hide picker row completely
+    sec2.style.display = 'none';
+    sec6.style.display = 'none';
+    singleBanner.style.display = 'flex';
+    multiLine.style.display = 'none';
+    selectUser('user', 'User', 'Administrator');
+  } else if (scen === 2) {
+    // 2 users: horizontal cards
+    sec2.style.display = 'flex';
+    sec6.style.display = 'none';
+    singleBanner.style.display = 'none';
+    multiLine.style.display = 'flex';
+    selectUser(currentAccount === 'user' ? 'user' : 'guest', currentAccount === 'user' ? 'User' : 'Guest', currentAccount === 'user' ? 'Administrator' : 'Standard user');
+  } else if (scen === 6) {
+    // > 4 users: scrollable list
+    sec2.style.display = 'none';
+    sec6.style.display = 'flex';
+    singleBanner.style.display = 'none';
+    multiLine.style.display = 'flex';
+    selectUser(currentAccount, currentAccount.charAt(0).toUpperCase() + currentAccount.slice(1), currentAccount === 'user' || currentAccount === 'nicky' ? 'Administrator' : 'Standard user');
+  }
+}
+
+// User selection handler
+function selectUser(login, displayName, role) {
+  currentAccount = login;
+
+  // Update card active states
+  const cardUser = document.getElementById('cardUser');
+  const cardGuest = document.getElementById('cardGuest');
+  if (cardUser && cardGuest) {
+    cardUser.classList.toggle('active', login === 'user');
+    cardGuest.classList.toggle('active', login === 'guest');
+  }
+
+  // Update list active states
+  document.querySelectorAll('.user-list-row').forEach(row => {
+    row.classList.remove('active');
+  });
+  const activeRow = document.getElementById(`listRow_${login}`);
+  if (activeRow) activeRow.classList.add('active');
+
+  // Update form header
+  document.getElementById('activeUserName').textContent = displayName;
+  const badge = document.getElementById('activeUserBadge');
+  badge.textContent = '@' + login;
+
+  // Clear password & reset feedback
+  const pwInput = document.getElementById('passwordInput');
+  pwInput.value = '';
+  pwInput.focus();
+
+  const feedback = document.getElementById('feedbackMsg');
+  feedback.className = 'feedback-msg';
+  feedback.textContent = `Ready to sign in as ${displayName}`;
+}
+
+// Password show/hide toggle
+function togglePasswordVisibility() {
+  const pwInput = document.getElementById('passwordInput');
+  const eyeIcon = document.getElementById('eyeIcon');
+  isPasswordVisible = !isPasswordVisible;
+
+  if (isPasswordVisible) {
+    pwInput.type = 'text';
+    eyeIcon.src = 'icons/eye-off.svg';
+    document.getElementById('eyeToggleBtn').title = 'Hide password';
+  } else {
+    pwInput.type = 'password';
+    eyeIcon.src = 'icons/eye.svg';
+    document.getElementById('eyeToggleBtn').title = 'Show password';
+  }
+}
+
+// Key handler
+function handleKey(e) {
+  if (e.key === 'Enter') {
+    attemptSignIn();
+  }
+}
+
+// Simulated sign-in
+function attemptSignIn() {
+  const pwInput = document.getElementById('passwordInput');
+  const feedback = document.getElementById('feedbackMsg');
+  const signInBtn = document.getElementById('signInBtn');
+  const val = pwInput.value.trim();
+
+  if (!val) {
+    feedback.className = 'feedback-msg error';
+    feedback.textContent = 'Please enter your password.';
+    pwInput.focus();
+    return;
+  }
+
+  signInBtn.disabled = true;
+  signInBtn.style.opacity = '0.7';
+  feedback.className = 'feedback-msg';
+  feedback.textContent = 'Verifying credentials...';
+
+  setTimeout(() => {
+    signInBtn.disabled = false;
+    signInBtn.style.opacity = '1';
+    feedback.className = 'feedback-msg success';
+    feedback.textContent = `Welcome, ${currentAccount}! Launching desktop session...`;
+
+    showToast(`Signing in as ${currentAccount}...`);
+  }, 600);
+}
+
+// Toast notification
+let toastTimer = null;
+function showToast(msg) {
+  const toast = document.getElementById('actionToast');
+  const text = document.getElementById('toastText');
+  text.textContent = msg;
+  toast.style.display = 'inline-flex';
+
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.style.display = 'none';
+  }, 2400);
+}
+</script>
+
+</body>
+</html>
