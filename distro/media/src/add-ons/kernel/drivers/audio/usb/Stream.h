@@ -86,6 +86,7 @@ protected:
 			usb_pipe		fFeedbackPipe;	// explicit feedback, or 0
 			int32			fFeedbackSample;// 16.16 frames per packet, 0 if none
 			int32			fFeedbackError;
+			uint32			fFeedbackFrame;
 			usb_iso_packet_descriptor fFeedbackPacket;
 			uint8			fFeedbackBytes[4];
 			uint8*			fPlayScratch;

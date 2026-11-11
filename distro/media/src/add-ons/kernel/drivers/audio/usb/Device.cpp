@@ -24,7 +24,7 @@
 static const int32 kMaxMixItems = 1024;
 static const int32 kMaxBufferDescs = 32;
 static const int32 kMaxDescribedChannels = 128;
-static const size_t kEnableBitBytes = 16;
+static const size_t kEnableBitBytes = kMaxEnabledChannels / 8;
 // SPDX-SnippetEnd
 
 
@@ -225,17 +225,24 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 			orig_enable_bits = enable.enable_bits;
 			enable.enable_bits = enable_bits;
-			status_t status = _MultiGetEnabledChannels(&enable);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			uint32 channels = 0;
+			status_t status = _MultiGetEnabledChannels(&enable, &channels);
 			if (status != B_OK)
 				return status;
 
+			// The caller's bitmap is sized for this card's channels, as in
+			// Haiku. Write only those bytes, not the whole kernel bitmap.
 			enable.enable_bits = orig_enable_bits;
 			if (user_memcpy(enable.enable_bits, enable_bits,
-					sizeof(enable_bits)) != B_OK
+					(channels + 7) / 8) != B_OK
 				|| user_memcpy(buffer, &enable,
 					sizeof(multi_channel_enable)) != B_OK) {
 				return B_BAD_ADDRESS;
 			}
+// SPDX-SnippetEnd
 
 			return B_OK;
 		}
@@ -251,10 +258,24 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 			}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// Read only the bytes this card's channels use: a caller sized
+			// for 8 channels passes one byte.
+			multi_channel_enable count;
+			uchar scratch[kEnableBitBytes];
+			memset(scratch, 0, sizeof(scratch));
+			uint32 channels = 0;
+			count.enable_bits = scratch;
+			if (_MultiGetEnabledChannels(&count, &channels) != B_OK)
+				return B_ERROR;
+
 			orig_enable_bits = enable.enable_bits;
 			if (user_memcpy(enable_bits, orig_enable_bits,
-					sizeof(enable_bits)) != B_OK)
+					(channels + 7) / 8) != B_OK)
 				return B_BAD_ADDRESS;
+// SPDX-SnippetEnd
 			enable.enable_bits = enable_bits;
 			status_t status = _MultiSetEnabledChannels(&enable);
 			if (status != B_OK)
@@ -551,7 +572,7 @@ Device::_ReadProductString(usb_device device, uint8 index, char* output,
 	size_t outputMax)
 {
 	output[0] = '\0';
-	if (device == NULL || index == 0 || outputMax < 2)
+	if (device == 0 || index == 0 || outputMax < 2)
 		return;
 
 	size_t actualLength = 0;
@@ -571,9 +592,8 @@ Device::_ReadProductString(usb_device device, uint8 index, char* output,
 	if (length < 2)
 		return;
 
+	// A descriptor length is one byte, so it always fits in raw.
 	uint8 raw[256];
-	if (length > sizeof(raw))
-		length = sizeof(raw);
 	status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING, index,
 		langID, raw, length, &actualLength);
 	if (status < B_OK || actualLength < 2)
@@ -700,7 +720,8 @@ Device::TraceMultiDescription(multi_description* Description,
 
 
 status_t
-Device::_MultiGetEnabledChannels(multi_channel_enable* Enable)
+Device::_MultiGetEnabledChannels(multi_channel_enable* Enable,
+	uint32* count)
 {
 	status_t status = B_OK;
 
@@ -710,6 +731,12 @@ Device::_MultiGetEnabledChannels(multi_channel_enable* Enable)
 	for (int i = 0; i < fStreams.Count() && status == B_OK; i++)
 		status = fStreams[i]->GetEnabledChannels(offset, Enable);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (count != NULL)
+		*count = offset;
+// SPDX-SnippetEnd
 	return status;
 }
 

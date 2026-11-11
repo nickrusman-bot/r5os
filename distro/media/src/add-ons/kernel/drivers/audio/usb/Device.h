@@ -12,6 +12,16 @@
 #include "Stream.h"
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// The enable bitmap of B_MULTI_GET/SET_ENABLED_CHANNELS holds this many
+// channels (16 bytes). A stream stops at this channel, so several
+// 64-channel streams cannot write past it.
+static const uint32 kMaxEnabledChannels = 128;
+// SPDX-SnippetEnd
+
+
 class Device {
 	friend	class			Stream;
 
@@ -71,7 +81,8 @@ private:
 
 // protected:
 			status_t		_MultiGetDescription(multi_description* Description);
-			status_t		_MultiGetEnabledChannels(multi_channel_enable* Enable);
+			status_t		_MultiGetEnabledChannels(multi_channel_enable* Enable,
+								uint32* count = NULL);
 			status_t		_MultiSetEnabledChannels(multi_channel_enable* Enable);
 			status_t		_MultiGetBuffers(multi_buffer_list* List);
 			status_t		_MultiGetGlobalFormat(multi_format_info* Format);

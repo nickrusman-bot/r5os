@@ -93,7 +93,7 @@ NotificationManager::RequestNotifications(BMessage *msg)
 	msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize);
 	ASSERT(nodeSize == sizeof(media_node));
 	// The node in the message is not aligned.
-	memcpy(&nodeCopy, nodeData, sizeof(nodeCopy));
+	memcpy((void*)&nodeCopy, nodeData, sizeof(nodeCopy));
 	node = &nodeCopy;
 
 	Notification n;
@@ -133,7 +133,7 @@ NotificationManager::CancelNotifications(BMessage *msg)
 	msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize);
 	ASSERT(nodeSize == sizeof(media_node));
 	// The node in the message is not aligned.
-	memcpy(&nodeCopy, nodeData, sizeof(nodeCopy));
+	memcpy((void*)&nodeCopy, nodeData, sizeof(nodeCopy));
 	node = &nodeCopy;
 
 	TRACE("NotificationManager::CancelNotifications node %ld, team %ld, what "
@@ -223,7 +223,7 @@ NotificationManager::SendNotifications(BMessage *msg)
 				if (msg->FindData("node", B_RAW_TYPE, &data, &size) != B_OK
 					|| size != sizeof(media_node))
 					continue;
-				memcpy(&nodeCopy, data, sizeof(nodeCopy));
+				memcpy((void*)&nodeCopy, data, sizeof(nodeCopy));
 				if (n->node != nodeCopy)
 					continue;
 				break;
@@ -237,12 +237,12 @@ NotificationManager::SendNotifications(BMessage *msg)
 				if (msg->FindData("source", B_RAW_TYPE, &data, &size) != B_OK
 					|| size != sizeof(media_source))
 					continue;
-				memcpy(&sourceCopy, data, sizeof(sourceCopy));
+				memcpy((void*)&sourceCopy, data, sizeof(sourceCopy));
 				if (msg->FindData("destination", B_RAW_TYPE, &data, &size)
 						!= B_OK
 					|| size != sizeof(media_destination))
 					continue;
-				memcpy(&destinationCopy, data, sizeof(destinationCopy));
+				memcpy((void*)&destinationCopy, data, sizeof(destinationCopy));
 
 				if (n->node.port != sourceCopy.port
 					&& n->node.port != destinationCopy.port)

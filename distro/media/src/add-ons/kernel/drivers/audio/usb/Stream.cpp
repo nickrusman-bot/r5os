@@ -61,6 +61,7 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fFeedbackPipe(0),
 	fFeedbackSample(0),
 	fFeedbackError(0),
+	fFeedbackFrame(0),
 	fPlayScratch(NULL),
 	fPlayCarry(NULL),
 	fPlayCarryFrames(0)
@@ -570,6 +571,9 @@ Stream::ProgramClock()
 	size_t actualLength = 0;
 	status_t status = B_OK;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
 		uint8 clock = fClockId;
 		if (clock == 0) {
@@ -592,6 +596,7 @@ Stream::ProgramClock()
 			samplingRate, clock, strerror(status));
 		return status;
 	}
+// SPDX-SnippetEnd
 
 	usb_audio_sampling_freq freq = _ASFormatDescriptor::GetSamFreq(samplingRate);
 	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
@@ -693,13 +698,30 @@ Stream::_QueuePlayback(size_t queuedBuffer)
 		int32 nominal = (int32)(((uint64)fPlan.rate << 16)
 			/ fPlan.packetsPerSecond);
 		fFeedbackError += (sample - nominal) * (int32)fPlan.packetsPerBuffer;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// A device that runs fast can only be followed while frames are
+		// held back. Cap the error so it cannot grow for an hour and wrap
+		// the int32 round to the other sign.
+		if (fFeedbackError > 4 * 65536)
+			fFeedbackError = 4 * 65536;
+		else if (fFeedbackError < -4 * 65536)
+			fFeedbackError = -4 * 65536;
+// SPDX-SnippetEnd
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// fPlayCarry holds 8 frames. Hold one more back only while there is
+	// room, or the frame past the eighth would be dropped.
 	int32 adjust = 0;
 	if (fFeedbackError > 65536 && fPlayCarryFrames > 0)
 		adjust = 1;
-	else if (fFeedbackError < -65536 && want > 1)
+	else if (fFeedbackError < -65536 && want > 1 && fPlayCarryFrames < 8)
 		adjust = -1;
+// SPDX-SnippetEnd
 
 	uint32 sent = (uint32)((int32)want + adjust);
 	uint32 have = fPlayCarryFrames + want;
@@ -759,9 +781,15 @@ Stream::_QueueFeedback()
 	fFeedbackPacket.request_length = 4;
 	fFeedbackPacket.actual_length = 0;
 	fFeedbackPacket.status = B_OK;
-	uint32 frame = 0;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The stack may write the starting frame after this call returns, so
+	// it is a member, not a local.
+	fFeedbackFrame = 0;
+// SPDX-SnippetEnd
 	gUSBModule->queue_isochronous(fFeedbackPipe, fFeedbackBytes, 4,
-		&fFeedbackPacket, 1, &frame, USB_ISO_ASAP,
+		&fFeedbackPacket, 1, &fFeedbackFrame, USB_ISO_ASAP,
 		Stream::_FeedbackCallback, this);
 }
 
@@ -941,6 +969,12 @@ Stream::GetEnabledChannels(uint32& offset, multi_channel_enable* Enable)
 		return B_ERROR;
 
 	for (size_t i = 0; i < cluster->ChannelsCount(); i++) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (offset >= kMaxEnabledChannels)
+			break;
+// SPDX-SnippetEnd
 		B_SET_CHANNEL(Enable->enable_bits, offset++, true);
 		TRACE(INF, "Report channel %d as enabled.\n", offset);
 	}
@@ -956,7 +990,13 @@ Stream::SetEnabledChannels(uint32& offset, multi_channel_enable* Enable)
 	if (cluster == 0)
 		return B_ERROR;
 
-	for (size_t i = 0; i < cluster->ChannelsCount(); i++, offset++) {
+	for (size_t i = 0; i < cluster->ChannelsCount()
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			&& offset < kMaxEnabledChannels;
+// SPDX-SnippetEnd
+			i++, offset++) {
 		TRACE(INF, "%s channel %d.\n",
 			(B_TEST_CHANNEL(Enable->enable_bits, offset)
 			? "Enable" : "Disable"), offset + 1);

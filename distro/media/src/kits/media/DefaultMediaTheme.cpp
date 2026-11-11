@@ -45,7 +45,7 @@ find_node(BMessage* message, media_node& node)
 		|| size != sizeof(media_node)) {
 		return false;
 	}
-	memcpy(&node, data, sizeof(media_node));
+	memcpy((void*)&node, data, sizeof(media_node));
 	return true;
 }
 

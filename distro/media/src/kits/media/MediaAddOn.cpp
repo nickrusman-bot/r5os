@@ -51,7 +51,7 @@ static inline Type
 read_flat(const char* buffer)
 {
 	Type value;
-	memcpy(&value, buffer, sizeof(Type));
+	memcpy((void*)&value, buffer, sizeof(Type));
 	return value;
 }
 

@@ -396,7 +396,7 @@ update_media_formats()
 		if (reply.FindData("formats", MEDIA_META_FORMAT_TYPE, index,
 				&newItem, &size) == B_OK && size == sizeof(meta_format)) {
 			meta_format aligned;
-			memcpy(&aligned, newItem, sizeof(aligned));
+			memcpy((void*)&aligned, newItem, sizeof(aligned));
 			*item = aligned;
 		}
 	}
@@ -409,7 +409,7 @@ update_media_formats()
 		if (reply.FindData("formats", MEDIA_META_FORMAT_TYPE, index,
 				&newItem, &size) == B_OK && size == sizeof(meta_format)) {
 			meta_format aligned;
-			memcpy(&aligned, newItem, sizeof(aligned));
+			memcpy((void*)&aligned, newItem, sizeof(aligned));
 			sFormats.AddItem(new meta_format(aligned));
 		}
 	}
