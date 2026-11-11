@@ -231,7 +231,7 @@ BUserListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 	rgb_color background = owner->LowColor();
 
 	if (IsSelected()) {
-		background = mix_color(accent, document, 30);
+		background = mix_color(document, accent, 28);
 		owner->SetHighColor(background);
 		owner->FillRect(itemRect);
 
@@ -283,14 +283,14 @@ BUserListItem::DrawItem(BView* owner, BRect itemRect, bool complete)
 			+ nameHeight.ascent;
 		owner->DrawString(name.String(), BPoint(textLeft, nameY));
 
-		// "@login · " in gray, then the role: bold and blue for an
+		// "@login - " in gray, then the role: bold and blue for an
 		// administrator, gray for anyone else.
 		bool admin = fData->role.ICompare("Administrator") == 0;
 		float roleY = nameY + nameHeight.descent + gap + subHeight.ascent;
 		rgb_color gray = mix_color(textColor, document, 120);
 
 		BString login;
-		login.SetToFormat("@%s Â· ", fData->login.String());
+		login.SetToFormat("@%s · ", fData->login.String());
 		plainFont.TruncateString(&login, B_TRUNCATE_END, maxWidth);
 		owner->SetFont(&plainFont);
 		owner->SetHighColor(gray);

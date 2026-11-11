@@ -14,7 +14,11 @@ What changed:
 
 Limits: Manrope ships Regular and Bold only, so the mockup's 800 and 600 weights are Bold. The window body stays the system panel gray (`#D8D8D8`), darker than the mockup's `#EDEDED`. The window frame and tab are the decorator's; the mockup's rounded bottom corners and shadow are not part of this change.
 
-Tested: nothing yet. Not compiled, not booted. The sources were copied into the shared tree with `scripts/apply-overlay.sh` without its artwork check (CR LF in this Windows checkout, the same as below).
+Mistakes found in the first QEMU boot and fixed: the text in the white cards had gray boxes behind it, because `BCard` set its view color to `B_TRANSPARENT_COLOR` and `BStringView` adopts its parent's colors. `BCard` now uses its card face as view color (document or panel, darkened); the `B_TRANSPARENT_BACKGROUND` flag still keeps the rounded corners. This also applies to About and Settings. The eye was only its pupil: a stroked `BShape` was not drawn, so the eye is two arcs. The selected row, the `@user` pill and the administrator plate were full blue, because `mix_color()` was used the wrong way round (the amount moves toward the second color). `IconView.h` is `R5IconView.h`, because Haiku's private `IconView.h` is found first.
+
+Tested: `libr5icons.so`, `libr5ui.so` and Login build with `-Werror`. `scripts/jam-r5-raw.sh` finished at 19:27 on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`; after the fixes `jam -q @r5-raw` rebuilt `r5-os.image` at 19:51 (2147483648 bytes), without test accounts. QEMU (KVM, VESA 1280 x 800, headless, the image as a snapshot): screendumps of Sign in with 1, 2 and 6 accounts match the mockup in layout, fonts, colors, the waves, the blue button, the glyphs and the smooth pebble. The 2 and 6 account images were built with test accounts added only to the tree's `build/jam/UserBuildConfig`, and those lines were removed again. Not tested: the crossed-out eye (the monitor click did not reach the eye), signing in, dark mode, VirtualBox, the 5625U.
+
+The sources were copied with `scripts/apply-overlay.sh` without its artwork check (CR LF in this Windows checkout, the same as below). `scripts/jam-r5-raw.sh` also stops on CR LF: its `sh -n` check of `distro/graphics/boot/m8-run` fails. For this jam those four files were converted to LF in the working copy only; they are not part of this change.
 
 ## 2026-11-11 - Sign in clears the password and refuses an empty one
 

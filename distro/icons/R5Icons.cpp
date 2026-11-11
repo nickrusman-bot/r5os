@@ -291,28 +291,13 @@ glyph_line(BView* view, const glyph_space& space, float x1, float y1,
 static void
 glyph_eye(BView* view, const glyph_space& space)
 {
-	// The outline is two curves, from the left corner over the top to
-	// the right corner and back under the bottom.
-	BShape shape;
-	shape.MoveTo(space.Map(1, 12));
-	BPoint upLeft[3] = { space.Map(1, 12), space.Map(5, 4),
-		space.Map(12, 4) };
-	shape.BezierTo(upLeft);
-	BPoint upRight[3] = { space.Map(19, 4), space.Map(23, 12),
-		space.Map(23, 12) };
-	shape.BezierTo(upRight);
-	BPoint downRight[3] = { space.Map(23, 12), space.Map(19, 20),
-		space.Map(12, 20) };
-	shape.BezierTo(downRight);
-	BPoint downLeft[3] = { space.Map(5, 20), space.Map(1, 12),
-		space.Map(1, 12) };
-	shape.BezierTo(downLeft);
-	shape.Close();
-	view->StrokeShape(&shape);
+	// The outline is two arcs that meet at the corners (1, 12) and
+	// (23, 12): the upper lid reaches y 4.5, the lower lid y 19.5. Arcs,
+	// because a stroked BShape is not drawn on every app_server path.
+	glyph_arc(view, space, 12, 16.32f, 11.82f, 21.4f, 137.2f);
+	glyph_arc(view, space, 12, 7.68f, 11.82f, 201.4f, 137.2f);
 
-	BPoint center = space.Map(12, 12);
-	float pupil = space.Size(3);
-	view->StrokeEllipse(center, pupil, pupil);
+	glyph_arc(view, space, 12, 12, 3, 0, 360);
 }
 
 

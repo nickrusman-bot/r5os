@@ -111,8 +111,8 @@ r5_avatar_draw(BView* view, BRect circle, const BBitmap* icon,
 	rgb_color plate;
 	rgb_color ring;
 	if (highlighted) {
-		plate = mix_color(accent, document, 30);
-		ring = mix_color(accent, document, 80);
+		plate = mix_color(document, accent, 40);
+		ring = mix_color(document, accent, 100);
 	} else {
 		plate = mix_color(panel, document, 90);
 		ring = mix_color(panel, document, 200);

@@ -162,7 +162,7 @@ public:
 		rgb_color accent = ui_color(B_STATUS_BAR_COLOR);
 		rgb_color document = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
 		float radius = bounds.Height() / 2;
-		SetHighColor(mix_color(accent, document, 30));
+		SetHighColor(mix_color(document, accent, 40));
 		FillRoundRect(bounds, radius, radius);
 
 		BFont font;
