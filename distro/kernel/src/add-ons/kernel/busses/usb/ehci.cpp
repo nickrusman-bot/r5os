@@ -6,6 +6,12 @@
  *		Michael Lotz <mmlr@mlotz.ch>
  *		Jérôme Duval <korli@users.berlios.de>
  */
+// SPDX-SnippetBegin
+// SPDX-License-Identifier: MIT
+// RenkuOS group B on this copy: isochronous OUT, the per-pipe anchor, the
+// callback outside the lock, and the data toggle after an error. Authors
+// and commits: THIRD_PARTY_NOTICES.md. The Haiku header stays.
+// SPDX-SnippetEnd
 
 
 #include <stdio.h>

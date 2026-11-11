@@ -7,6 +7,11 @@
  *		Niels S. Reedijk
  *		Salvatore Benedetto <salvatore.benedetto@gmail.com>
  */
+// SPDX-SnippetBegin
+// SPDX-License-Identifier: MIT
+// RenkuOS group B on this copy: halt recovery and isochronous scheduling.
+// Authors and commits: THIRD_PARTY_NOTICES.md. The Haiku header stays.
+// SPDX-SnippetEnd
 
 
 #include <stdio.h>

@@ -1,8 +1,33 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - USB isochronous transfers on EHCI, UHCI and OHCI
+
+RenkuOS group B, the whole list, on our copies. `uhci.cpp`, `uhci.h`, `ehci.h`, `ehci_hardware.h` and `ohci.h` are now copies too. The Haiku headers stay. The added blocks stay MIT.
+
+EHCI, David Beckman unless noted:
+
+- `698d1c3159e09ea0245c6756e5c987f12baa6390` gives EHCI and UHCI each their own interrupt lock. Our copies already initialized that lock; the comment from the commit is kept.
+- `eae629d59a211e6161eeefd6c4f6bace3e3f4f06` runs the isochronous callback after releasing the lock. Our earlier unlock around the callback (Haiku #19472) is this same fix; the callback is now collected and run once, after the unlock.
+- `c43a4a2f562fc274c7c50949e57117dac95e56f8` transmits an isochronous OUT payload. `0c200ef849a202bac121c5777aaae29cb01aba10` maps the caller's buffers before that copy.
+- `6bdbffb6a85400294f7b8bae64aca459c420d86f` keeps the chaining anchor per pipe. `d57fdde9ded70c0e6599e0d9b28805fdfb92f99a` places packets per service interval. `f69ee0331005449c26d361aecebb3777469cf8fb` starts the next transfer in the next free frame. `0473f845745184b09b126f065bb8ae3e57a5c0c0` reports what an isochronous OUT actually did. `4512333a5d9ef34bd38c5316f5d9f1474c380bb0` uses the caller's length per packet. `c15045f9749b91b736b82fc94c8a2d8e2f0a7d22` reclaims an isochronous transfer on cancel.
+- `676e5cffa0e27e20aad2aba5e9e4e2d22848bfcf` detaches a descriptor that is still linked before freeing it.
+- `e28b91f5e8663bbf56ae6c35759ee8e46b777fca` (atomozero) keeps the data toggle of a transfer that failed, except a stall.
+- `925977a925a7378abb0acf65f434db5f7772f85a` (atomozero) refuses a transfer with no data instead of queueing a NULL descriptor.
+
+UHCI:
+
+- `03c6ae617edf54bd5b6d8662755042138144fa5d` and `9c3906bb98ea605152f2cd0ac37f9756162ab670` (rainygirl) recover from a host-controller halt, and do not finish a transfer that was already cancelled.
+- `599f04372363519958501400c5649624f1df15bc` (David Beckman) survives the halt instead of panicking. `bb6e0a2b4d807d031835e876c80384f65a00f82b` reschedules isochronous transfers for audio. `bba308447a8da5fedb587d2df3d03d3fff5434dd` restarts the finisher at the stream's first frame after idle.
+
+OHCI, David Beckman. The frame fallback from group A stays.
+
+- `d38c595a49ecfd4a6b0482ee8e9c40d9ee4eee32` uses the length per packet and reports the start frame. `6011739554cbf747d50f0a9aa9db5a2740d97f00` frees an isochronous descriptor at the size it was allocated. `5ed8a3e4c59b9060ef4ad416dbc22849156f7189` unlinks an isochronous transfer before walking its descriptors.
+
+Neither test laptop has EHCI, UHCI or OHCI. QEMU can emulate them. No USB audio device is attached, so the isochronous payload itself is not exercised here.
+
 ## 2026-11-11 - USB isochronous transfers on xHCI
 
-RenkuOS group A, applied onto our copies. Group B (EHCI, UHCI, and the rest of OHCI) is not in this change.
+RenkuOS group A, applied onto our copies. Group B is the section above.
 
 Taken:
 

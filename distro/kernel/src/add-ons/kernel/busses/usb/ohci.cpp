@@ -8,6 +8,13 @@
  *		Michael Lotz <mmlr@mlotz.ch>
  *		Siarzhuk Zharski <imker@gmx.li>
  */
+// SPDX-SnippetBegin
+// SPDX-License-Identifier: MIT
+// RenkuOS group B on this copy: per-packet isochronous lengths, and freeing
+// a descriptor at the size it was allocated. The frame fallback in the
+// isochronous submit is RenkuOS 8d6303031e. Authors and commits:
+// THIRD_PARTY_NOTICES.md. The Haiku header stays.
+// SPDX-SnippetEnd
 
 
 #include <stdio.h>
