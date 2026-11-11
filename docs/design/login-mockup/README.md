@@ -43,3 +43,14 @@ This design adapts the visual language established in the Settings window mockup
 ## How to View
 
 Open `sign-in.html` directly in any modern web browser (Edge, Chrome, Firefox, Safari). Use the top pill toolbar to switch between **1 User**, **2 Users**, and **> 4 Users** scenarios.
+
+## Appearance Kit / LibR5UI Impact
+
+This mockup defines three reusable components that belong in `libr5ui.so` (namespace `BAppearanceKit`) because they are needed across multiple R5 applications:
+1. `BUserCard`: Compact account tile with avatar, name, and role badge (Login + Users & Accounts).
+2. `BUserListItem`: 2-line list item for user lists adhering to `docs/STYLE.md` (Login + Users & Accounts).
+3. `BPasswordControl`: Password text box with integrated show/hide eye toggle (Login + Users & Accounts + Wi-Fi dialog).
+
+Full architectural C++ API and layout specifications are documented in:
+📄 [LIBR5UI-ELEMENTS.md](file:///C:/Users/nickr/Projects/R5OS-loginmockup/docs/design/login-mockup/LIBR5UI-ELEMENTS.md).
+
