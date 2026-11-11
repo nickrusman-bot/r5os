@@ -55,7 +55,7 @@ bool sDebug = false;
 bool sOff = false;
 bool sTookOff = false;
 const char* sOffReason = NULL;
-char sCompareDetail[160];
+char sCompareDetail[192];
 bool sLoggedOn = false;
 bool sCompared = false;
 uint32 sFrame = 0;
@@ -287,7 +287,7 @@ flush_front(const void* address, size_t bytes)
 
 void
 note_mismatch(uint32 y, uint32 byte, const uint8* back, const uint8* front,
-	uint32 rowBytes)
+	uint32 rowBytes, int32 left, int32 top, int32 right, int32 bottom)
 {
 	uint32 n = 0;
 	if (byte < rowBytes)
@@ -309,12 +309,17 @@ note_mismatch(uint32 y, uint32 byte, const uint8* back, const uint8* front,
 	for (uint32 i = 0; i < n && (size_t)used + 3 < sizeof(sCompareDetail); i++)
 		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
 			" %02x", front[byte + i]);
+	if ((size_t)used + 16 < sizeof(sCompareDetail)) {
+		snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" in rect %" B_PRId32 ",%" B_PRId32 "-%" B_PRId32 ",%" B_PRId32,
+			left, top, right, bottom);
+	}
 }
 
 
 bool
 same_picture(RenderingBuffer* back, RenderingBuffer* front,
-	const r5_copy_band* bands, int count)
+	const BRegion& region)
 {
 	const uint8* src = (const uint8*)back->Bits();
 	const uint8* dst = (const uint8*)front->Bits();
@@ -323,21 +328,41 @@ same_picture(RenderingBuffer* back, RenderingBuffer* front,
 	if (src == NULL || dst == NULL || front->BytesPerRow() != pitch
 		|| rowBytes == 0 || rowBytes > pitch)
 		return false;
-	for (int i = 0; i < count; i++) {
-		size_t offset = (size_t)bands[i].y * pitch;
-		const uint8* srcRow = src + offset;
-		const uint8* dstRow = dst + offset;
-		for (uint32 row = 0; row < bands[i].rows; row++) {
-			flush_front(dstRow, rowBytes);
-			if (memcmp(srcRow, dstRow, rowBytes) != 0) {
+	int rects = region.CountRects();
+	for (int i = 0; i < rects; i++) {
+		clipping_rect rect = region.RectAtInt(i);
+		int32 left = rect.left;
+		int32 right = rect.right;
+		int32 top = rect.top;
+		int32 bottom = rect.bottom;
+		if (left < 0)
+			left = 0;
+		if (top < 0)
+			top = 0;
+		if (right >= (int32)back->Width())
+			right = (int32)back->Width() - 1;
+		if (bottom >= (int32)back->Height())
+			bottom = (int32)back->Height() - 1;
+		if (left > right || top > bottom)
+			continue;
+		uint32 byte0 = (uint32)left * 4u;
+		uint32 span = (uint32)(right - left + 1) * 4u;
+		if (byte0 >= rowBytes || span > rowBytes - byte0)
+			continue;
+		for (int32 y = top; y <= bottom; y++) {
+			size_t offset = (size_t)y * pitch + byte0;
+			const uint8* srcRow = src + offset;
+			const uint8* dstRow = dst + offset;
+			flush_front(dstRow, span);
+			if (memcmp(srcRow, dstRow, span) != 0) {
 				uint32 byte = 0;
-				while (byte < rowBytes && srcRow[byte] == dstRow[byte])
+				while (byte < span && srcRow[byte] == dstRow[byte])
 					byte++;
-				note_mismatch(bands[i].y + row, byte, srcRow, dstRow, rowBytes);
+				note_mismatch((uint32)y, byte0 + byte, src + (size_t)y * pitch,
+					dst + (size_t)y * pitch, rowBytes, rect.left, rect.top,
+					rect.right, rect.bottom);
 				return false;
 			}
-			srcRow += pitch;
-			dstRow += pitch;
 		}
 	}
 	return true;
@@ -555,7 +580,7 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 	if (sDebug) {
 		sFrame++;
 		if (sFrame == 1 || sFrame % 100u == 0) {
-			if (!same_picture(back, front, bands, bandCount)) {
+			if (!same_picture(back, front, region)) {
 				syslog(LOG_INFO, "app_server: copy compare MISMATCH %s\n",
 					sCompareDetail);
 				off("compare");
