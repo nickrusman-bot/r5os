@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The CPU copy is measured with debug alone
+
+The plan now says `gpu_debug true` records the CPU copy even when `gpu_app_server` is off. VirtualBox is double buffered, so moving a window runs that copy. This branch is still the design only. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Only app_server may ask for the screen buffer
+
+The plan no longer gives the scanout call to whichever team opened `/dev/graphics/radeon_hd` first. The kernel checks the calling team's info and allows the call only when that team's executable is `/system/servers/app_server`, or `/boot/system/servers/app_server` after `/system` is resolved. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`. This branch is still the design only. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The desktop copy is designed, and not built yet
+
+`docs/APP-SERVER-GPU.md` records the copy app_server uses today and the GPU copy that would replace it. The hook is `AccelerantHWInterface::_CopyBackToFront`. The back buffer would be a cached GTT buffer. `R5_GPU_SCANOUT_BO` would be `R5_GPU_OP_BASE + 31` and only app_server may call it. The kernel checks that the calling team's executable is `/system/servers/app_server` or `/boot/system/servers/app_server`. A dirty band is the full bytes per row of those rows. A band longer than 2097151 bytes is several `DMA_DATA` packets because the packet's byte count is 21 bits. The copy runs only when both buffers are 32-bit and have the same bytes per row. The setting stays off. This branch has no code for that copy. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Stick 40 presents Vulkan in a window
 
 Stick 40 is the 10:23 anyboot. The stick sha256 is `87df047a…`. Logs: `generated/boot-5625u-40`.
