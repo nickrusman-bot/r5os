@@ -1,9 +1,6 @@
 /*
  * Copyright 2008, François Revol, <revol@free.fr>. All rights reserved.
  * Distributed under the terms of the MIT License.
- *
- * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: MIT
  */
 #ifndef _LOGINVIEW_H_
 #define _LOGINVIEW_H_
@@ -13,6 +10,9 @@
 #include <View.h>
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 class BBitmap;
 class BButton;
 class BGridView;
@@ -79,6 +79,7 @@ private:
 	BBitmap*					fPersonAvatar;
 	BString						fSelectedLogin;
 };
+// SPDX-SnippetEnd
 
 
 #endif	// _LOGINVIEW_H_

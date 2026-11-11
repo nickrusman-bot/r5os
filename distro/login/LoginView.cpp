@@ -1,16 +1,17 @@
 /*
  * Copyright 2008, François Revol, <revol@free.fr>. All rights reserved.
  * Distributed under the terms of the MIT License.
- *
- * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: MIT
  */
 
 
 #include "LoginView.h"
 
-#include "AccountAdmin.h"
 #include "LoginApp.h"
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "AccountAdmin.h"
 #include "r5_pebble.inc"
 
 #include <Bitmap.h>
@@ -433,6 +434,7 @@ LoginView::MessageReceived(BMessage* message)
 			break;
 	}
 }
+// SPDX-SnippetEnd
 
 
 void
@@ -458,6 +460,9 @@ LoginView::Pulse()
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 void
 LoginView::_FillUsers()
 {
@@ -609,6 +614,7 @@ LoginView::_AttemptLogin()
 	fInfoView->SetText("");
 	be_app->PostMessage(message, NULL, this);
 }
+// SPDX-SnippetEnd
 
 
 void
@@ -621,6 +627,9 @@ LoginView::_EnableControls(bool enable)
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 void
 LoginView::_ApplyColors()
 {
@@ -649,3 +658,4 @@ LoginView::_SetVisible(BView* view, bool visible)
 			view->Hide();
 	}
 }
+// SPDX-SnippetEnd

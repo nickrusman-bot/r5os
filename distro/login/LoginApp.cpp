@@ -302,10 +302,15 @@ LoginApp::TryLogin(BMessage* message)
 		message->SendReply(&reply);
 	} else {
 		reply.AddInt32("error", status);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 		if (status == B_PERMISSION_DENIED
 			&& (password == NULL || password[0] == '\0')) {
 			reply.AddString("text", "Please enter your password.");
-		} else if (status == B_PERMISSION_DENIED || status == ENOENT)
+		} else
+// SPDX-SnippetEnd
+		if (status == B_PERMISSION_DENIED || status == ENOENT)
 			reply.AddString("text", "That password is not right.");
 		else if (status == B_NAME_NOT_FOUND || status == B_TIMED_OUT)
 			reply.AddString("text", "Could not start the desktop.");
@@ -362,9 +367,13 @@ LoginApp::Unlock(BMessage* message)
 
 	BMessage reply(status == B_OK ? kLoginOk : kLoginBad);
 	if (status != B_OK) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 		if (password == NULL || password[0] == '\0')
 			reply.AddString("text", "Please enter your password.");
 		else
+// SPDX-SnippetEnd
 			reply.AddString("text", "That password is not right.");
 	}
 	message->SendReply(&reply);
@@ -746,7 +755,11 @@ LoginApp::_OpenLoginWindow()
 			old->Quit();
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	fLoginWindow = new LoginWindow(BRect(0, 0, 440, 380));
+// SPDX-SnippetEnd
 	fLoginWindow->Show();
 }
 
