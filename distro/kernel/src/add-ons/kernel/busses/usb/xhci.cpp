@@ -998,8 +998,15 @@ XHCI::SubmitNormalRequest(Transfer* transfer)
 		size_t totalLength = 0;
 		for (uint32 i = 0; i < isochronousData->packet_count; i++) {
 			size_t packetLength = isochronousData->packet_descriptors[i].request_length;
-			if (packetLength == 0 || packetLength > pipe->MaxPacketSize())
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 jmgasper
+// SPDX-License-Identifier: MIT
+			// A packet may be as large as one service interval: several
+			// transactions on a high-bandwidth endpoint. air/OS 6d877da057.
+			if (packetLength == 0
+				|| packetLength > endpoint->max_burst_payload)
 				return B_BAD_VALUE;
+// SPDX-SnippetEnd
 
 			totalLength += packetLength;
 			trbSize = max_c(trbSize, packetLength);
@@ -1037,7 +1044,7 @@ XHCI::SubmitNormalRequest(Transfer* transfer)
 		return B_NO_MEMORY;
 
 	// Normal Stage
-	const size_t maxPacketSize = pipe->MaxPacketSize();
+	const size_t maxPacketSize = endpoint->max_packet_size;
 	size_t remaining = transfer->FragmentLength();
 	for (int32 i = 0; i < trbCount; i++) {
 		phys_addr_t address;
@@ -1099,8 +1106,34 @@ XHCI::SubmitNormalRequest(Transfer* transfer)
 			}
 		}
 
-		// TODO: We do not currently take Mult into account at all!
-		// How are we supposed to do that here?
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 jmgasper
+// SPDX-License-Identifier: MIT
+		// Bursts in each TD, and packets in the last burst. Without this a
+		// high-bandwidth endpoint is asked for one packet per microframe.
+		// (XHCI 1.2 § 4.11.2.3.) SuperSpeed Mult is still not applied.
+		// air/OS 6d877da057.
+		if (endpoint->max_packet_size == 0) {
+			FreeDescriptor(td);
+			return B_BAD_VALUE;
+		}
+		const uint32 packetsPerBurst
+			= endpoint->max_burst_payload / endpoint->max_packet_size;
+		for (uint32 i = 0; i < isochronousData->packet_count; i++) {
+			const uint32 length
+				= isochronousData->packet_descriptors[i].request_length;
+			uint32 packets = (length + endpoint->max_packet_size - 1)
+				/ endpoint->max_packet_size;
+			if (packets == 0)
+				packets = 1;
+			const uint32 bursts
+				= (packets + packetsPerBurst - 1) / packetsPerBurst;
+			const uint32 residue = packets % packetsPerBurst;
+			td->trbs[i].flags |= TRB_3_TBC(bursts - 1)
+				| TRB_3_TLBPC(residue == 0
+					? packetsPerBurst - 1 : residue - 1);
+		}
+// SPDX-SnippetEnd
 
 		// Determine the (starting) frame number: if ISO_ASAP is set,
 		// we are queueing this "right away", and so want to reset
@@ -2544,6 +2577,17 @@ XHCI::ConfigureEndpoint(xhci_endpoint* ep, uint8 slot, uint8 number, uint8 type,
 
 	// Assign maximum burst size. (XHCI 1.2 § 4.8.2 p161.)
 	dwendpoint1 |= ENDPOINT_1_MAXBURST(maxBurst);
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 jmgasper
+// SPDX-License-Identifier: MIT
+	// Bits 11 and 12 of a USB 2 wMaxPacketSize are extra transactions per
+	// microframe, already taken as the burst size, not part of the packet
+	// size. air/OS 6d877da057.
+	if (speed < USB_SPEED_SUPERSPEED)
+		maxPacketSize &= 0x7ff;
+	ep->max_packet_size = maxPacketSize;
+// SPDX-SnippetEnd
 
 	// Assign maximum packet size, set the ring address, and set the
 	// "Dequeue Cycle State" bit. (XHCI 1.2 § 6.2.3 Table 6-10 p453.)

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - xHCI asks a high-bandwidth camera for every packet
+
+Bits 11 and 12 of a high-speed `wMaxPacketSize` are extra transactions per microframe. They were left in the packet size, and an isochronous transfer was refused when one packet was larger than a single transaction, so a camera on xHCI delivered one packet per microframe. The packet size written to the endpoint is now only bits 0-10, and each isochronous TD tells the controller how many bursts it contains. SuperSpeed Mult is still not applied. The existing stall recovery in this file is unchanged. From air/OS `6d877da057` (jmgasper, MIT). Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Sign in looks like the mockup
 
 The sign-in window after Cursor's round still differed from `docs/design/login-mockup/sign-in.html`: a plain blue desktop behind it, a gray Sign in button, Restart and Shut down without symbols, and a jagged R5 pebble. The pebble was jagged because `LogoView` rendered it at `44 * unit` pixels and then drew it into a view one pixel larger, which stretches it without smoothing. The avatars were stretched the same way.
