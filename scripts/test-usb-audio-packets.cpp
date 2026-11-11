@@ -88,8 +88,7 @@ check_record(uint32_t rate, bool highSpeed, uint16_t maxPacket, int drift)
 	}
 
 	std::vector<uint8_t> region(plan.regionBytes);
-	std::vector<uint8_t> carry(
-		(size_t)(usb_audio_carry_capacity(&plan) + 1) * fb);
+	std::vector<uint8_t> carry((size_t)(plan.framesPerBuffer + 1) * fb);
 	std::vector<uint32_t> actual(plan.packetsPerBuffer);
 	uint32_t carryFrames = 0;
 	uint32_t padded = 0;
@@ -119,13 +118,15 @@ check_record(uint32_t rate, bool highSpeed, uint16_t maxPacket, int drift)
 			actual[i] = frames * fb;
 		}
 
-		uint32_t padBefore = padded;
 		uint32_t dropBefore = dropped;
-		usb_audio_compact_record(&plan, region.data(), actual.data(),
-			carry.data(), &carryFrames, &padded, &dropped);
+		bool ready = usb_audio_compact_record(&plan, region.data(),
+			actual.data(), carry.data(), &carryFrames, &padded, &dropped);
+		CHECK(padded == 0, "%u Hz: a short capture must not be repeated", rate);
+		if (!ready)
+			continue;
 
 		// The reader takes framesPerBuffer frames. Frames run on in order,
-		// except where the join padded or dropped some.
+		// except where the join dropped some that would not fit in the carry.
 		for (uint32_t f = 0; f < plan.framesPerBuffer; f++) {
 			uint32_t value;
 			memcpy(&value, region.data() + (size_t)f * fb, fb);
@@ -133,8 +134,6 @@ check_record(uint32_t rate, bool highSpeed, uint16_t maxPacket, int drift)
 				expect++;
 				continue;
 			}
-			if (padded > padBefore && value + 1 == expect)
-				continue;	// a repeated last frame
 			if (dropped > dropBefore && value > expect) {
 				expect = value + 1;
 				continue;

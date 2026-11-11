@@ -112,6 +112,10 @@ typedef struct usbmidi_device_info
 
 	bigtime_t timestamp;	/* Is this needed? Currently set but never read */
 	uint flags;				/* set to 0 but never used */
+	bool in_is_interrupt;
+		/* IN endpoint is interrupt, so the driver uses queue_interrupt.
+		 * Some Roland Advanced-mode devices do this. RenkuOS cb61494f02.
+		 */
 
 	uint16 vendor_id;
 	uint16 product_id;

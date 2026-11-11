@@ -45,6 +45,101 @@ Already in R5, so not applied again:
 - `b6060b0ddb` (half a second, and a last success must not panic). `Object::WaitForIdle` already waits half a second and checks the reference count after the loop. The two-second wait was not taken.
 
 Tested in QEMU (TCG, no KVM, window) at 21:24 on 11 Nov 2026. The controller is qemu-xhci. A USB keyboard (0627:0001), a USB mouse (0627:0001) and a USB storage stick (46f4:0001, 8 MiB, empty) enumerated. QEMU listed them at 480 Mb/s, 480 Mb/s and 5000 Mb/s. They were removed and added again. The serial log probed them a second time, including the stick, and it has no panic. Tracker and Deskbar started. `usb_audiotest` was not run: QEMU has no USB audio interface and no camera. Not tested on the 5625U or the X1 Carbon. No extra stick.
+## 2026-11-11 - Review of the audio branch: overflow and build fixes
+
+The audio branch had not been built. A review found: `Stream::GetEnabledChannels()` set bits past the 16-byte kernel bitmap once all streams of a device had more than 128 channels (64 per stream is allowed), so a large device overwrote the kernel stack. The streams now stop at `kMaxEnabledChannels` (128). The driver copied all 16 bytes of the bitmap to and from the caller; a Haiku caller sizes it for its own channels, so it now copies `(channels + 7) / 8` bytes. The playback feedback error had no limit and could wrap its `int32` after about an hour with a fast device clock; it is capped at four frames. With the 8-frame carry full, holding one more frame back dropped one; that step now waits. The starting frame of the feedback transfer is a member instead of a stack variable.
+
+Build fixes: `Device.cpp` compared a `uint8` with 256 and `NULL` with a `usb_device` id; `memcpy` into Media Kit classes needs a `void*` cast under GCC 13. The R5 UAC 2.0 clock code moved into `ProgramClock()` without its SPDX snippet; the snippet is back. The ported RenkuOS changes keep their MIT credit lines and are not marked as R5 snippets.
+
+Tested: every changed `.cpp` compiles with the command line `jam -n` prints, `-Werror` included, from a copy outside the shared tree (Cursor was building there). Not jammed into an image, not booted, no USB audio or MIDI device.
+
+## 2026-11-11 - Playback follows an explicit USB feedback endpoint
+
+A playback interface that has a feedback endpoint now reads it and moves one frame per buffer into or out of a small carry, so the packets follow the device clock. The client's buffer is still one exact buffer; the extra frame comes from the carry, or one frame is held back. A device without that endpoint is queued as before, at the nominal packet size. Implicit feedback, using the capture stream as the clock, is not done. High speed is read as 16.16 frames per microframe, full speed as 10.14 frames per frame. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A short USB recording waits for a full buffer
+
+Each capture transfer used to become exactly one record buffer. What the device sent beyond that was dropped, and a short transfer was filled by repeating the last frame, so recording followed the host clock while playback followed the device. The extra frames now start the next buffer, and a short transfer is not published until the buffer is full. An empty packet, a service interval the host missed, is nominal silence, so the audio after it stays in time. The host test `scripts/test-usb-audio-packets.cpp` passed on this machine. Ported from RenkuOS `b3dc1212e4` (rations, MIT) onto the existing carry. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - USB audio arms every stream before one starts
+
+A UAC 2.0 device with playback and capture used to program each stream on its own. The second interface was then switched while the first was already running on the same clock, and a UMC204HD stays silent for as long as capture runs. On a fresh run the driver now parks every streaming interface, programs each clock once, selects the active alternates, and only then queues a transfer. A clock is not rewritten while another stream of that device is running. UAC 1.0 is unchanged. Ported from RenkuOS `a842555ed6` (rations, MIT) onto this driver's clock write. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Buffer length stays on the Latency page
+
+RenkuOS `6ed1b63f79` adds a Buffer size menu on the sound card and asks the driver for that many frames. That menu is not added. Media already writes `play_buffer_frames` and `record_buffer_frames`, and the USB driver reads them. HD Audio already reads the same file. A live control that sends a short buffer to HD Audio stops its interrupts, which is why that commit left HD Audio out. The request fields in `multi_audio` stay 0, so a driver keeps its own default unless it reads the Latency file itself. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A plugged-in sound card replaces the fallback
+
+While a fallback stands in for a saved input or output, a rescan looks for that saved device again. When it has a node, the media server uses it and reconnects the mixer to the new output. The saved name is not overwritten. Ported from RenkuOS `e95a210256` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Opening Media does not save the fallback device
+
+Showing the current input or output also told the media server to set it. The server treats that as a choice, so a fallback for a missing USB card became the saved device, and choosing an output could put the input back on the built-in card. The menus now only mark the current default. A choice in the menu sets it, and creates the node first when the card appeared after the media services started. A failure is reported and the menus show the default in use. The latency menu and the USB layout menu are unchanged. Ported from RenkuOS `2aee4b6c3c` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Media refreshes its device lists when a card appears
+
+The Media preferences built the device lists when the window opened and when the media server started. A sound card plugged in while the window was open stayed invisible until Media was opened again. The window now watches flavor changes and rebuilds the lists. A restarted media server drops that watch, so it is renewed each time the server starts. A device that the driver still lists after it is unplugged stays in the list. Ported from RenkuOS `917e0e9e30` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Media messages are copied before they are used
+
+The node, source, destination and format in a media message are not aligned. The notification server and the parameter controls used them in place, which faults on ARM. They are copied out first. Ported from RenkuOS `cf12459a32` (atomozero, MIT). Not booted on ARM64. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A missing sound card does not erase the saved default
+
+The media server matched a saved input or output on flavor id, name and add-on path together. The flavor id is only the device's place in the list, so one USB card that is absent at boot renumbers the others and the saved card was missed. A miss then left no output, and the next save stored the fallback in place of the preference. The server now matches the name from the same add-on when the id moved, and otherwise uses the first real device for this session while keeping the saved entry. An explicit choice in the Media preferences replaces that fallback. Plugging the card in later does not switch the mixer back yet. Ported from RenkuOS `d1028141c2` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A node created on request is released at quit
+
+The Media preferences can ask the add-on server to create a sound-card node. That node was not on the list the server releases when it quits, so restarting the media services unloaded the add-on under the node's thread. The control thread now tells the application looper, and the looper records the node with the others. A node that was already released is skipped, because stopping it fails. A node created while the quit is already running is still not recorded. Ported from RenkuOS `bc165f5613` (rations, MIT). Creating nodes for a card that appears later was already in this file. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Media flavor data is copied before it is used
+
+Flattened flavor info is packed, so the numbers after the strings are not aligned. On ARM the media server died at start with SIGBUS. The numbers are copied with `memcpy`, and the request buffers in the media server, the add-on server and `BMediaNode` are aligned to 8 bytes. Ported from RenkuOS `4b157fb134` (atomozero, MIT). Not booted on ARM64. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A short USB audio configuration does not panic
+
+Replug indexed the remembered interface and alternate without checking that the new configuration has them. A missing alternate is a small non-NULL pointer, so the old NULL check never fired. The indexes are checked first. An alternate with no endpoint is skipped, the same way an alternate with no format already was. Adapted from RenkuOS `428e08cd07` (David Beckman, MIT). Not reproduced with a truncated descriptor. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Notices for the RenkuOS audio ports
+
+`THIRD_PARTY_NOTICES.md` names the RenkuOS commits ported onto `usb_midi`, `multi_audio`, and `usb_audio`, and their authors. The files stay MIT. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A USB audio device uses its product name
+
+Media listed every USB interface as "USB Audio". The description now uses the USB product string, and "USB Audio" when the device has none. Two units of the same model still share that name. Taken from the naming idea in the Media-OS driver, on our `Device`. No device was attached. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A USB audio stream may carry 64 channels
+
+The parser, the alternate choice and the channel list stopped at 16. A stream may now carry 64. Channels past the eight named positions are stereo pairs. The description ioctl copies up to 128 channel entries from the heap, and the enable bitmap is 16 bytes so a channel past 31 is not written off a `uint32`. Set-enabled reads the caller's bits before it uses them. Adapted from RenkuOS `8d3c445d68` (rations, MIT). The description bound from `6dfd2fbc30` is included so the higher count does not overflow. Not opened on an 18-input interface. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - multi_audio holds 128 channels
+
+The add-on stored 32 channels and built the enable mask with a shift of the channel count, which is undefined from 32. It now holds 128, refuses a device that does not fit, and uses one bit per channel in a byte map. A buffer list with more rows than the tables is refused. Adapted from RenkuOS `8db4b0d1b4` (rations, MIT). The driver still describes at most 16 channels until the next change. Not opened on a wide interface. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - An unplugged sound card keeps its place in the list
+
+`multi_audio` already watches `/dev/audio/hmulti`. Removing a card used to leave it listed as if it were still there, and deleting the slot would renumber the others. A card that disappears stays in the list with its presence cleared, and plugging it in again takes a new slot. The flavor index does not move. Adapted from RenkuOS `cf885a005b` (David Beckman, MIT). Not checked by unplugging a device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - A sound card is only the directions it has
+
+`multi_audio` listed every card as both an input and an output. A card with no capture channels is no longer an input, and a card with no playback channels is no longer an output. Ported from RenkuOS `bd571637d2` (David Beckman, MIT). Not checked in Media. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The sound card ignores a burst of clock samples
+
+At the start of a stream the driver reports several buffers a few microseconds apart. The time estimate jumped, and the mixer could wait until nothing played. Pairs closer than half a buffer period are ignored. The period comes from the playback buffer when nothing is recording. Ported from RenkuOS `303b85eae5` (David Beckman, MIT). Not played through a device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - multi_audio queues four input buffers
+
+Each playback input held one buffer. A buffer that arrived while that slot was full was dropped, and the next beat was silence. The slot is now a queue of four. A full queue still waits 100 µs once and then drops the new buffer. Stopping the thread recycles what is still queued. Ported from RenkuOS `7405980fad` (David Beckman, MIT). Not played through a device. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Roland and Edirol Advanced mode is a table
+
+Those interfaces have no USB-MIDI descriptors, so the driver matches vendor 0x0582 and a per-model table of interface number and cable masks. A composite unit is found by its non-isochronous IN and OUT pair. An interrupt IN endpoint is queued as an interrupt transfer. The driver scans every endpoint for the first IN and the first OUT. A missing port in the middle of the cable list is skipped instead of ending the scan. Standard mode still uses the class descriptors. Ported from RenkuOS `cb61494f02` (David Beckman, MIT). No Roland device was attached. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Yamaha USB-MIDI uses a vendor-specific interface
+
+A Yamaha interface such as the UX-256 carries a normal MIDI header inside a vendor-specific interface, so `usb_midi` never matched it. Vendor 0x0499 is now accepted, and a non-audio interface with a MIDIStreaming header is used. When the endpoint descriptors do not name the cables, the jack descriptors are counted, at most 16 each. A class-compliant device still matches first. An audio-only Yamaha device is still rejected. Ported from RenkuOS `fe2de4aa60` (David Beckman, MIT) onto the R5 driver. No Yamaha device was attached. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-11 - The lock screen has the Sign in look
 
