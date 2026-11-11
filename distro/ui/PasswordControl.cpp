@@ -252,6 +252,8 @@ BRect
 BPasswordControl::_EyeButtonRect() const
 {
 	BRect bounds = Bounds();
+	if (bounds.Width() <= 0 || bounds.Height() <= 0)
+		return BRect();
 	float u = unit();
 	float btnSize = 22.0f * u;
 	float pad = 4.0f * u;
@@ -270,6 +272,8 @@ BPasswordControl::_LayoutChildren()
 		return;
 
 	BRect bounds = Bounds();
+	if (bounds.Width() <= 0 || bounds.Height() <= 0)
+		return;
 	float u = unit();
 	BRect eye = _EyeButtonRect();
 
@@ -297,6 +301,8 @@ BPasswordControl::Draw(BRect updateRect)
 {
 	(void)updateRect;
 	BRect bounds = Bounds();
+	if (bounds.Width() <= 0 || bounds.Height() <= 0)
+		return;
 	float u = unit();
 	float radius = 4.0f * u;
 
@@ -361,6 +367,9 @@ BPasswordControl::MouseDown(BPoint where)
 		SetPasswordRevealed(!IsPasswordRevealed());
 		return;
 	}
+
+	if (fData != NULL && fData->textView != NULL)
+		fData->textView->MakeFocus(true);
 
 	BControl::MouseDown(where);
 }
