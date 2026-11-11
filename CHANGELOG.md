@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The desktop image was built, and not booted
+
+The second jam wrote `r5-os.image` at 02:06 CET, 2147483648 bytes, from `cursor/m8-app-server`. The packaged app_server has the copy, median, and compare lines, and the driver has the scanout call. `home/config/settings/kernel/drivers/radeon_hd` is not in the image, so the copy stays on the CPU and nothing is logged. The shared package directory supplied `mesa_radv-25.3.6-3`; this branch's package check still looks for `-1` and reported it missing. That check does not change the image. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The scanout call compiles
 
 The first image build stopped in `r5_gpu_core.cpp`: `team_get_current_team_id` is declared in the kernel team header, and the core file did not include that declaration. The declaration is now next to the other kernel calls. The image from that build was not written. `distro/BUILD` stays the same.
