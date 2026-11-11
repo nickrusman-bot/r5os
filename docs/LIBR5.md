@@ -257,7 +257,7 @@ listView->AddItem(new BAppearanceKit::BUserListItem(
 
 ## Password control
 
-`BAppearanceKit::BPasswordControl` is a password field with an integrated show/hide eye toggle button. The header is `<PasswordControl.h>`. `Archive()` and `Instantiate()` keep whether the password is shown. They do not keep the password. The archived class name is `BAppearanceKit::BPasswordControl`.
+`BAppearanceKit::BPasswordControl` is a password field with an integrated show/hide eye toggle button. The header is `<PasswordControl.h>`. The eye is `R5_GLYPH_EYE` while the password is hidden (a click shows it) and `R5_GLYPH_EYE_OFF` while it is shown. `SetPlaceholder("Enter password")` sets the gray text shown while the field is empty. The field text is Manrope one step larger than body text (14 on 12), and the blue focus ring is drawn inside the control's own bounds. `Archive()` and `Instantiate()` keep whether the password is shown and the placeholder. They do not keep the password. The archived class name is `BAppearanceKit::BPasswordControl`.
 
 ```cpp
 #include <PasswordControl.h>
@@ -266,3 +266,36 @@ BAppearanceKit::BPasswordControl* password = new BAppearanceKit::BPasswordContro
 	"password", "Password", "", new BMessage('sign'));
 ```
 
+## Icon view
+
+`BAppearanceKit::BIconView` shows one bitmap at its own pixel size. The header is `<IconView.h>`. The view is exactly as large as the bitmap and never scales it, so a vector icon rendered at the size it is shown stays sharp. Render the bitmap at that size, for example with `r5_vector_icon_bitmap()`, and do not stretch it with `DrawBitmap(bitmap, rect)`: a stretch of even one pixel makes the edges jagged. `SetIcon()` keeps a copy. The background is the parent's color.
+
+```cpp
+#include <IconView.h>
+
+BBitmap* pebble = r5_vector_icon_bitmap(data, size, 44);
+BAppearanceKit::BIconView* logo = new BAppearanceKit::BIconView("logo", pebble);
+delete pebble;
+```
+
+## Accent button
+
+`BAppearanceKit::BAccentButton` is the main action of a window: a button filled with the selection blue (`B_STATUS_BAR_COLOR`) with a bold label, white on a dark accent and black on a light one. The header is `<AccentButton.h>`. It is a `BButton`, so the message, the target, `MakeDefault()` and Enter work as before. It is 38 pixels high at a 12 point system font, and the label is one step larger than body text. It is as wide as its label; for the full row width set an explicit maximum width of `B_SIZE_UNLIMITED`. Use one per window. The other buttons stay plain `BButton`s.
+
+```cpp
+#include <AccentButton.h>
+
+BAppearanceKit::BAccentButton* signIn = new BAppearanceKit::BAccentButton(
+	"signin", "Sign in", new BMessage('sign'));
+signIn->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+```
+
+## Account picture
+
+`r5_avatar_draw(view, circle, icon, highlighted)` in `<R5UI.h>` draws a round plate with a thin ring and the icon in the middle. `highlighted` gives the light accent plate (an administrator, as on Sign in); otherwise the plate is gray and the picture is drawn in gray. Without an icon it draws a plain person outline. `r5_avatar_icon_side(circleSide)` is the icon size that is drawn pixel for pixel; any other size is filtered. `BUserCard`, `BUserListItem` and the Sign in window use it.
+
+```cpp
+float side = r5_avatar_icon_side(44);
+BBitmap* people = r5_mime_icon_bitmap("application/x-vnd.Be-PEPL", side);
+r5_avatar_draw(this, BRect(0, 0, 43, 43), people, true);
+```

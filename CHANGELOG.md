@@ -1,5 +1,21 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Sign in looks like the mockup
+
+The sign-in window after Cursor's round still differed from `docs/design/login-mockup/sign-in.html`: a plain blue desktop behind it, a gray Sign in button, Restart and Shut down without symbols, and a jagged R5 pebble. The pebble was jagged because `LogoView` rendered it at `44 * unit` pixels and then drew it into a view one pixel larger, which stretches it without smoothing. The avatars were stretched the same way.
+
+What changed:
+
+- `libr5icons.so`: line glyphs (`R5_GLYPH_POWER`, `RESTART`, `CLOCK`, `EYE`, `EYE_OFF`), `r5_glyph_draw()`, `r5_glyph_bitmap()` and `r5_button_set_glyph()`. Haiku's icon set has none of these symbols. They are drawn in code in the text color. `docs/ICONS.md`.
+- `libr5ui.so`: `BIconView` (an icon at its own pixel size, never scaled), `BAccentButton` (the blue main button), `r5_avatar_draw()` and `r5_avatar_icon_side()`, and `BPasswordControl::SetPlaceholder()`. `docs/LIBR5.md`, `docs/APPEARANCE-KIT.md`.
+- `BPasswordControl`: the open eye now means "show the password", as in the mockup; it was the other way round. Manrope 14, the blue focus ring, the "Enter password" placeholder.
+- `BUserCard` and `BUserListItem`: mockup sizes; the administrator role is bold and blue, and a standard account's picture is gray. In the list only the role is blue; "@login ·" stays gray.
+- Login: the R5 waves of the mockup behind the window (`SignInBackground.cpp`, which replaces the plain desktop color in `DesktopWindow`). The colors, the curves and an optional picture file are at the top of that file. The window is 440 mockup pixels wide; all sizes are mockup pixels at the 12 point system font. The People icon is the account picture. One account shows the picture, name and role; two or more show "Signing in as: Name @login".
+
+Limits: Manrope ships Regular and Bold only, so the mockup's 800 and 600 weights are Bold. The window body stays the system panel gray (`#D8D8D8`), darker than the mockup's `#EDEDED`. The window frame and tab are the decorator's; the mockup's rounded bottom corners and shadow are not part of this change.
+
+Tested: nothing yet. Not compiled, not booted. The sources were copied into the shared tree with `scripts/apply-overlay.sh` without its artwork check (CR LF in this Windows checkout, the same as below).
+
 ## 2026-11-11 - Sign in clears the password and refuses an empty one
 
 The sign-in window is the new screen: one account goes straight to the password field, two to four accounts are cards, and five or more are a two-line list. The password field has a show/hide control. Haiku's icon set has no eye to pass to `r5_vector_icon_bitmap()`, so the control still draws the eye.

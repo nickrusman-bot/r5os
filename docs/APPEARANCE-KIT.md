@@ -22,6 +22,8 @@ The R5 interface classes: what exists, and when to use it. The exact calls, colo
 | `BUserCard` | `<UserCard.h>` | A compact account card with an avatar, display name, and role badge | Large forms | Sign in. Users & Accounts is the second user |
 | `BUserListItem` | `<UserListItem.h>` | A two-line user list item with avatar, bold display name, and username/role subtitle | Single-line plain text items | Sign in. Users & Accounts is the second user |
 | `BPasswordControl` | `<PasswordControl.h>` | A password text field with an integrated show/hide eye toggle button | Plain text controls | Sign in. Users & Accounts and Network are future users |
+| `BIconView` | `<IconView.h>` | One icon at its own pixel size, such as a logo beside a heading | An icon that has to grow or shrink with the view. Render a new bitmap instead | Sign in, for the R5 pebble and the clock |
+| `BAccentButton` | `<AccentButton.h>` | The one main action of a window, in the accent blue | Every button in a row. Restart, Cancel and the like stay plain `BButton`s | Sign in, for Sign in |
 
 ## Adding a class
 
