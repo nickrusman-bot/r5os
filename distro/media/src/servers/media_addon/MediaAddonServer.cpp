@@ -448,7 +448,8 @@ MediaAddonServer::_ControlThread(void* _server)
 {
 	MediaAddonServer* server = (MediaAddonServer*)_server;
 
-	char data[B_MEDIA_MESSAGE_SIZE];
+	// The request is read in place. ARM faults on an unaligned multi-word load.
+	char data[B_MEDIA_MESSAGE_SIZE] __attribute__((aligned(8)));
 	ssize_t size;
 	int32 code;
 	while ((size = read_port_etc(server->_ControlPort(), &code, data,

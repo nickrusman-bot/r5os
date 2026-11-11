@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Media flavor data is copied before it is used
+
+Flattened flavor info is packed, so the numbers after the strings are not aligned. On ARM the media server died at start with SIGBUS. The numbers are copied with `memcpy`, and the request buffers in the media server, the add-on server and `BMediaNode` are aligned to 8 bytes. Ported from RenkuOS `4b157fb134` (atomozero, MIT). Not booted on ARM64. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - A short USB audio configuration does not panic
 
 Replug indexed the remembered interface and alternate without checking that the new configuration has them. A missing alternate is a small non-NULL pointer, so the old NULL check never fired. The indexes are checked first. An alternate with no endpoint is skipped, the same way an alternate with no format already was. Adapted from RenkuOS `428e08cd07` (David Beckman, MIT). Not reproduced with a truncated descriptor. There is no What's new section and `distro/BUILD` stays the same.
