@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Sign in clears the password and refuses an empty one
+
+The sign-in window is the new screen: one account goes straight to the password field, two to four accounts are cards, and five or more are a two-line list. The password field has a show/hide control. Haiku's icon set has no eye to pass to `r5_vector_icon_bitmap()`, so the control still draws the eye.
+
+`BPasswordControl::Archive()` does not store the password, and a deep archive does not store the child text either. Sign in clears the field after the attempt, whether it succeeded or not. `account_password_matches()` refuses an empty field when the account has a password, and still accepts an empty field when the account has none. The refusal says "Please enter your password." and the cursor returns to the field. The password is not written to the session log or to a program argument.
+
+`scripts/apply-overlay.sh` from `cursor/login-mockup` copied this branch into the shared tree. The artwork check in that script did not run: this Windows checkout stores the symbol files with CR LF, so the hash does not match the generator. The copy itself ran. `jam -q @r5-raw` then finished at 18:30 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 18:30. The Login binary in that image contains "Please enter your password." and `libr5ui.so` does not contain `r5:text`. Not booted in VirtualBox. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Stick 46 copied the desktop through the GPU
 
 Stick 46 is the 17:43 anyboot, sha256 `6965416a…`. Logs: `C:\Users\nickr\Desktop\Logs\m8-46`. The branch is `cursor/m8-stick` `ee8da208`.
