@@ -58,6 +58,7 @@ def copy_sources() -> None:
         "SessionLog.h",
         "TrayApp.cpp",
         "main.cpp",
+        "r5_pebble.inc",
     ):
         shutil.copy2(SRC / name, dest / name)
         (dest / name).touch()

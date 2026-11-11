@@ -26,6 +26,9 @@ const uint32 kUserInvoked = 'uinv';
 const uint32 kCardSelected = 'csel';
 
 
+class BBitmap;
+
+
 class LoginView : public BView {
 public:
 								LoginView();
@@ -38,7 +41,9 @@ public:
 
 private:
 	void						_FillUsers();
-	void						_ShowSelected(const char* login);
+	void						_ShowSelected(const char* login,
+									const char* displayName,
+									const char* role);
 	void						_AttemptLogin();
 	void						_EnableControls(bool enable);
 
@@ -54,6 +59,8 @@ private:
 
 	BAppearanceKit::BCard*		fFormCard;
 	BStringView*				fActiveUserLabel;
+	BStringView*				fActiveRoleLabel;
+	BStringView*				fPasswordLabel;
 	BAppearanceKit::BPasswordControl* fPasswordControl;
 	BButton*					fLoginButton;
 	BStringView*				fInfoView;
@@ -62,6 +69,7 @@ private:
 	BButton*					fRebootButton;
 	BButton*					fHaltButton;
 
+	BBitmap*					fPersonAvatar;
 	BString						fSelectedLogin;
 };
 

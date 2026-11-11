@@ -7,10 +7,12 @@
 #include "PasswordControl.h"
 
 #include <Button.h>
-#include <ControlLook.h>
 #include <Font.h>
+#include <GroupLayout.h>
 #include <InterfaceDefs.h>
+#include <LayoutBuilder.h>
 #include <Message.h>
+#include <TextControl.h>
 #include <TextView.h>
 #include <Window.h>
 
@@ -20,6 +22,10 @@
 namespace BAppearanceKit {
 
 
+static const uint32 kMsgToggleReveal = 'prvl';
+static const uint32 kMsgPasswordEnter = 'pent';
+
+
 static float
 unit()
 {
@@ -27,58 +33,73 @@ unit()
 }
 
 
-// Inner text view to handle Enter and navigation
-class PasswordTextView : public BTextView {
+class EyeButton : public BButton {
 public:
-	PasswordTextView(BRect frame, const char* name, BPasswordControl* parent)
+	EyeButton(BMessage* message)
 		:
-		BTextView(frame, name, frame.OffsetToCopy(B_ORIGIN),
-			B_FOLLOW_NONE, B_WILL_DRAW | B_NAVIGABLE),
-		fParent(parent)
+		BButton("eye", "", message),
+		fRevealed(false)
 	{
-		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-		SetLowUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-		rgb_color tc = ui_color(B_DOCUMENT_TEXT_COLOR);
-		SetFontAndColor(be_plain_font, B_FONT_ALL, &tc);
-		SetWordWrap(false);
-		HideTyping(true);
-		MakeResizable(true);
+		float u = unit();
+		float side = 28.0f * u;
+		SetExplicitMinSize(BSize(side, side));
+		SetExplicitMaxSize(BSize(side, side));
 	}
 
-	virtual void KeyDown(const char* bytes, int32 numBytes)
+	void SetRevealed(bool revealed)
 	{
-		if (numBytes == 1 && bytes[0] == B_ENTER) {
-			if (fParent != NULL) {
-				BMessage* msg = fParent->Message();
-				if (msg != NULL)
-					fParent->Invoke();
-				else if (Window() != NULL && Window()->DefaultButton() != NULL)
-					Window()->DefaultButton()->Invoke();
-			}
-			return;
+		if (fRevealed != revealed) {
+			fRevealed = revealed;
+			Invalidate();
 		}
-		BTextView::KeyDown(bytes, numBytes);
 	}
 
-	virtual void MakeFocus(bool focus = true)
+	virtual void Draw(BRect updateRect)
 	{
-		BTextView::MakeFocus(focus);
-		if (fParent != NULL)
-			fParent->Invalidate();
+		BButton::Draw(updateRect);
+
+		BRect bounds = Bounds();
+		float u = unit();
+
+		rgb_color iconColor = ui_color(B_CONTROL_TEXT_COLOR);
+		if (!IsEnabled())
+			iconColor = tint_color(iconColor, B_LIGHTEN_1_TINT);
+
+		SetHighColor(iconColor);
+
+		float cx = bounds.left + bounds.Width() / 2.0f;
+		float cy = bounds.top + bounds.Height() / 2.0f;
+		float rx = 6.5f * u;
+		float ry = 4.0f * u;
+
+		BRect eyeOval(cx - rx, cy - ry, cx + rx, cy + ry);
+		StrokeEllipse(eyeOval);
+
+		BRect pupil(cx - 2.2f * u, cy - 2.2f * u, cx + 2.2f * u, cy + 2.2f * u);
+		FillEllipse(pupil);
+
+		if (!fRevealed) {
+			SetPenSize(1.5f * u);
+			StrokeLine(BPoint(cx - rx, cy + ry + 1.5f * u),
+				BPoint(cx + rx, cy - ry - 1.5f * u));
+			SetPenSize(1.0f);
+		}
 	}
 
 private:
-	BPasswordControl* fParent;
+	bool fRevealed;
 };
 
 
 struct BPasswordControl::Data {
-	PasswordTextView*	textView;
-	bool				revealed;
+	BTextControl*	textControl;
+	EyeButton*		eyeButton;
+	bool			revealed;
 
 	Data()
 		:
-		textView(NULL),
+		textControl(NULL),
+		eyeButton(NULL),
 		revealed(false)
 	{
 	}
@@ -91,16 +112,10 @@ static const char* kPasswordControlClassName = "BAppearanceKit::BPasswordControl
 BPasswordControl::BPasswordControl(const char* name, const char* label,
 	const char* text, BMessage* message)
 	:
-	BControl(name, label, message, B_WILL_DRAW | B_FRAME_EVENTS),
+	BControl(name, label, message, B_WILL_DRAW | B_SUPPORTS_LAYOUT),
 	fData(new(std::nothrow) Data)
 {
-	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-
-	BRect dummy(0, 0, 100, 20);
-	fData->textView = new PasswordTextView(dummy, "password_tv", this);
-	if (text != NULL)
-		fData->textView->SetText(text);
-	AddChild(fData->textView);
+	_Init(text);
 }
 
 
@@ -109,18 +124,36 @@ BPasswordControl::BPasswordControl(BMessage* archive)
 	BControl(archive),
 	fData(new(std::nothrow) Data)
 {
-	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-
-	BRect dummy(0, 0, 100, 20);
-	fData->textView = new PasswordTextView(dummy, "password_tv", this);
-	AddChild(fData->textView);
-
 	const char* text = NULL;
-	if (archive->FindString("r5:text", &text) == B_OK)
-		fData->textView->SetText(text);
+	archive->FindString("r5:text", &text);
+	_Init(text);
 
-	archive->FindBool("r5:revealed", &fData->revealed);
-	fData->textView->HideTyping(!fData->revealed);
+	bool revealed = false;
+	if (archive->FindBool("r5:revealed", &revealed) == B_OK)
+		SetPasswordRevealed(revealed);
+}
+
+
+void
+BPasswordControl::_Init(const char* text)
+{
+	if (fData == NULL)
+		return;
+
+	SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
+
+	fData->textControl = new BTextControl("password_input", Label(),
+		text != NULL ? text : "", new BMessage(kMsgPasswordEnter));
+	fData->textControl->TextView()->HideTyping(true);
+	fData->textControl->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+	if (Label() == NULL || Label()[0] == '\0')
+		fData->textControl->SetDivider(0.0f);
+
+	fData->eyeButton = new EyeButton(new BMessage(kMsgToggleReveal));
+
+	BLayoutBuilder::Group<>(this, B_HORIZONTAL, 4)
+		.Add(fData->textControl)
+		.Add(fData->eyeButton);
 }
 
 
@@ -159,25 +192,24 @@ BPasswordControl::Archive(BMessage* archive, bool deep) const
 const char*
 BPasswordControl::Text() const
 {
-	return (fData != NULL && fData->textView != NULL) ?
-		fData->textView->Text() : "";
+	return (fData != NULL && fData->textControl != NULL) ?
+		fData->textControl->Text() : "";
 }
 
 
 void
 BPasswordControl::SetText(const char* text)
 {
-	if (fData != NULL && fData->textView != NULL) {
-		fData->textView->SetText(text);
-		fData->textView->SelectAll();
-	}
+	if (fData != NULL && fData->textControl != NULL)
+		fData->textControl->SetText(text);
 }
 
 
 BTextView*
 BPasswordControl::TextView() const
 {
-	return fData != NULL ? fData->textView : NULL;
+	return (fData != NULL && fData->textControl != NULL) ?
+		fData->textControl->TextView() : NULL;
 }
 
 
@@ -195,10 +227,12 @@ BPasswordControl::SetPasswordRevealed(bool revealed)
 		return;
 
 	fData->revealed = revealed;
-	if (fData->textView != NULL)
-		fData->textView->HideTyping(!revealed);
-
-	Invalidate(_EyeButtonRect());
+	if (fData->textControl != NULL && fData->textControl->TextView() != NULL) {
+		fData->textControl->TextView()->HideTyping(!revealed);
+		fData->textControl->TextView()->Invalidate();
+	}
+	if (fData->eyeButton != NULL)
+		fData->eyeButton->SetRevealed(revealed);
 }
 
 
@@ -206,33 +240,46 @@ void
 BPasswordControl::AttachedToWindow()
 {
 	BControl::AttachedToWindow();
-	_LayoutChildren();
+
+	if (Parent() != NULL)
+		SetViewColor(Parent()->ViewColor());
+
+	if (fData != NULL) {
+		if (fData->eyeButton != NULL)
+			fData->eyeButton->SetTarget(this);
+		if (fData->textControl != NULL)
+			fData->textControl->SetTarget(this);
+	}
 }
 
 
 void
-BPasswordControl::FrameResized(float newWidth, float newHeight)
+BPasswordControl::MessageReceived(BMessage* message)
 {
-	(void)newWidth;
-	(void)newHeight;
-	BControl::FrameResized(newWidth, newHeight);
-	_LayoutChildren();
-}
-
-
-void
-BPasswordControl::WindowActivated(bool active)
-{
-	BControl::WindowActivated(active);
-	Invalidate();
+	switch (message->what) {
+		case kMsgToggleReveal:
+			SetPasswordRevealed(!IsPasswordRevealed());
+			if (fData != NULL && fData->textControl != NULL)
+				fData->textControl->MakeFocus(true);
+			break;
+		case kMsgPasswordEnter:
+			if (Message() != NULL)
+				Invoke();
+			else if (Window() != NULL && Window()->DefaultButton() != NULL)
+				Window()->DefaultButton()->Invoke();
+			break;
+		default:
+			BControl::MessageReceived(message);
+			break;
+	}
 }
 
 
 void
 BPasswordControl::MakeFocus(bool focus)
 {
-	if (fData != NULL && fData->textView != NULL)
-		fData->textView->MakeFocus(focus);
+	if (fData != NULL && fData->textControl != NULL)
+		fData->textControl->MakeFocus(focus);
 	else
 		BControl::MakeFocus(focus);
 }
@@ -242,178 +289,12 @@ void
 BPasswordControl::SetEnabled(bool enabled)
 {
 	BControl::SetEnabled(enabled);
-	if (fData != NULL && fData->textView != NULL)
-		fData->textView->MakeEditable(enabled);
-	Invalidate();
-}
-
-
-BRect
-BPasswordControl::_EyeButtonRect() const
-{
-	BRect bounds = Bounds();
-	if (bounds.Width() <= 0 || bounds.Height() <= 0)
-		return BRect();
-	float u = unit();
-	float btnSize = 22.0f * u;
-	float pad = 4.0f * u;
-
-	return BRect(bounds.right - btnSize - pad,
-		bounds.top + (bounds.Height() - btnSize) / 2.0f,
-		bounds.right - pad,
-		bounds.top + (bounds.Height() - btnSize) / 2.0f + btnSize);
-}
-
-
-void
-BPasswordControl::_LayoutChildren()
-{
-	if (fData == NULL || fData->textView == NULL)
-		return;
-
-	BRect bounds = Bounds();
-	if (bounds.Width() <= 0 || bounds.Height() <= 0)
-		return;
-	float u = unit();
-	BRect eye = _EyeButtonRect();
-
-	// Inset text view so text doesn't overlap the eye icon
-	float leftPad = 8.0f * u;
-	float rightPad = (bounds.right - eye.left) + 4.0f * u;
-
-	font_height fh;
-	be_plain_font->GetHeight(&fh);
-	float textHeight = fh.ascent + fh.descent + fh.leading;
-
-	float topPad = (bounds.Height() - textHeight) / 2.0f;
-	BRect textRect(leftPad, topPad, bounds.Width() - rightPad, topPad + textHeight);
-
-	fData->textView->MoveTo(textRect.LeftTop());
-	fData->textView->ResizeTo(textRect.Width(), textRect.Height());
-
-	BRect textBounds(0, 0, textRect.Width(), textRect.Height());
-	fData->textView->SetTextRect(textBounds);
-}
-
-
-void
-BPasswordControl::Draw(BRect updateRect)
-{
-	(void)updateRect;
-	BRect bounds = Bounds();
-	if (bounds.Width() <= 0 || bounds.Height() <= 0)
-		return;
-	float u = unit();
-	float radius = 4.0f * u;
-
-	rgb_color bg = ui_color(B_DOCUMENT_BACKGROUND_COLOR);
-	rgb_color border = tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
-		B_DARKEN_2_TINT);
-
-	bool hasFocus = fData != NULL && fData->textView != NULL
-		&& fData->textView->IsFocus();
-
-	if (hasFocus)
-		border = ui_color(B_STATUS_BAR_COLOR);
-
-	SetHighColor(bg);
-	FillRoundRect(bounds, radius, radius);
-
-	SetHighColor(border);
-	StrokeRoundRect(bounds, radius, radius);
-
-	// Eye icon
-	_DrawEyeButton();
-}
-
-
-void
-BPasswordControl::_DrawEyeButton()
-{
-	BRect eye = _EyeButtonRect();
-	float u = unit();
-
-	rgb_color iconColor = mix_color(ui_color(B_DOCUMENT_TEXT_COLOR),
-		ui_color(B_DOCUMENT_BACKGROUND_COLOR), 140);
-	SetHighColor(iconColor);
-
-	// Outline of eye
-	float cx = eye.left + eye.Width() / 2.0f;
-	float cy = eye.top + eye.Height() / 2.0f;
-	float rx = 7.0f * u;
-	float ry = 4.5f * u;
-
-	BRect eyeOval(cx - rx, cy - ry, cx + rx, cy + ry);
-	StrokeEllipse(eyeOval);
-
-	// Pupil
-	BRect pupil(cx - 2.5f * u, cy - 2.5f * u, cx + 2.5f * u, cy + 2.5f * u);
-	FillEllipse(pupil);
-
-	// If slashed (not revealed), draw slash across eye
-	if (fData == NULL || !fData->revealed) {
-		SetPenSize(1.5f * u);
-		StrokeLine(BPoint(eye.left + 3.0f * u, eye.bottom - 3.0f * u),
-			BPoint(eye.right - 3.0f * u, eye.top + 3.0f * u));
-		SetPenSize(1.0f);
+	if (fData != NULL) {
+		if (fData->textControl != NULL)
+			fData->textControl->SetEnabled(enabled);
+		if (fData->eyeButton != NULL)
+			fData->eyeButton->SetEnabled(enabled);
 	}
-}
-
-
-void
-BPasswordControl::MouseDown(BPoint where)
-{
-	if (_EyeButtonRect().Contains(where)) {
-		SetPasswordRevealed(!IsPasswordRevealed());
-		return;
-	}
-
-	if (fData != NULL && fData->textView != NULL)
-		fData->textView->MakeFocus(true);
-
-	BControl::MouseDown(where);
-}
-
-
-void
-BPasswordControl::MessageReceived(BMessage* message)
-{
-	BControl::MessageReceived(message);
-}
-
-
-void
-BPasswordControl::GetPreferredSize(float* width, float* height)
-{
-	float u = unit();
-	if (width != NULL)
-		*width = 240.0f * u;
-	if (height != NULL)
-		*height = 36.0f * u;
-}
-
-
-BSize
-BPasswordControl::MinSize()
-{
-	float u = unit();
-	return BSize(140.0f * u, 34.0f * u);
-}
-
-
-BSize
-BPasswordControl::MaxSize()
-{
-	return BSize(B_SIZE_UNLIMITED, MinSize().height);
-}
-
-
-BSize
-BPasswordControl::PreferredSize()
-{
-	float w, h;
-	GetPreferredSize(&w, &h);
-	return BSize(w, h);
 }
 
 

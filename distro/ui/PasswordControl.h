@@ -10,6 +10,7 @@
 #include <String.h>
 
 
+class BTextControl;
 class BTextView;
 
 
@@ -37,24 +38,12 @@ public:
 	void						SetPasswordRevealed(bool revealed);
 
 	virtual	void				AttachedToWindow();
-	virtual	void				FrameResized(float newWidth, float newHeight);
-	virtual	void				Draw(BRect updateRect);
-	virtual	void				MouseDown(BPoint where);
+	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				MakeFocus(bool focus = true);
 	virtual	void				SetEnabled(bool enabled);
-	virtual	void				WindowActivated(bool active);
-
-	virtual	void				GetPreferredSize(float* width, float* height);
-	virtual	BSize				MinSize();
-	virtual	BSize				MaxSize();
-	virtual	BSize				PreferredSize();
-
-	virtual	void				MessageReceived(BMessage* message);
 
 private:
-			void				_LayoutChildren();
-			BRect				_EyeButtonRect() const;
-			void				_DrawEyeButton();
+			void				_Init(const char* text);
 
 			struct Data;
 			Data*				fData;
