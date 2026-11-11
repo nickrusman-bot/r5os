@@ -40,6 +40,24 @@ def install_kernel_sources() -> None:
         "src/add-ons/kernel/file_systems/bfs/Volume.cpp",
         "src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp",
         "src/add-ons/kernel/file_systems/bfs/kernel_interface.cpp",
+        "src/add-ons/kernel/drivers/input/i2c_hid/Driver.cpp",
+        "src/add-ons/kernel/drivers/input/i2c_hid/HIDDevice.cpp",
+        "src/add-ons/kernel/drivers/input/i2c_hid/HIDDevice.h",
+        "src/add-ons/kernel/drivers/input/i2c_hid/InputReadyLine.cpp",
+        "src/add-ons/kernel/drivers/input/i2c_hid/InputReadyLine.h",
+        "src/add-ons/kernel/drivers/input/i2c_hid/Jamfile",
+        "src/add-ons/kernel/drivers/input/i2c_elan/Driver.cpp",
+        "src/add-ons/kernel/drivers/input/i2c_elan/ELANDevice.cpp",
+        "src/add-ons/kernel/drivers/input/i2c_elan/ELANDevice.h",
+        "src/add-ons/kernel/drivers/input/i2c_elan/Jamfile",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_dev.cpp",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_dev.h",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_service.cpp",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_service.h",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_standard_mouse.cpp",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_synaptics.cpp",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_synaptics.h",
+        "src/add-ons/kernel/bus_managers/ps2/ps2_trackpoint.cpp",
     )
     for relative in files:
         install_file(
@@ -179,11 +197,24 @@ def install_usb_stability() -> None:
         print(f"copied {relative}")
 
 
+def install_i2c_hid_package() -> None:
+    # The driver is built and was not installed. RenkuOS b37a078925 adds it
+    # next to i2c_elan.
+    insert_once(
+        HAIKU / "build/jam/packages/Haiku",
+        "\ti2c_elan\n",
+        "\ti2c_elan\n\ti2c_hid\n",
+        "\ti2c_hid\n",
+        "i2c_hid package",
+    )
+
+
 def main() -> int:
     install_smp_boot()
     install_kernel_sources()
     install_pstate()
     install_usb_stability()
+    install_i2c_hid_package()
     return 0
 
 
