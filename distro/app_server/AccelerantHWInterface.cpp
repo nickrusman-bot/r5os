@@ -1403,6 +1403,14 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 // SPDX-License-Identifier: GPL-3.0-or-later
 	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get()))
 		return;
+	if (GPUCopy::TookOff() && fFrontBuffer.Get() != NULL
+		&& fFrontBuffer->Width() > 0 && fFrontBuffer->Height() > 0) {
+		BRegion whole;
+		whole.Set(BRect(0, 0, fFrontBuffer->Width() - 1,
+			fFrontBuffer->Height() - 1));
+		HWInterface::_CopyBackToFront(whole);
+		return;
+	}
 	bigtime_t started = system_time();
 	HWInterface::_CopyBackToFront(region);
 	GPUCopy::NoteCpu(system_time() - started);

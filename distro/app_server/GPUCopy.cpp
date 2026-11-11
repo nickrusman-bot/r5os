@@ -53,6 +53,7 @@ bool sWant = false;
 bool sForceFail = false;
 bool sDebug = false;
 bool sOff = false;
+bool sTookOff = false;
 const char* sOffReason = NULL;
 char sCompareDetail[160];
 bool sLoggedOn = false;
@@ -87,6 +88,7 @@ off(const char* reason)
 {
 	if (!sOff) {
 		sOff = true;
+		sTookOff = true;
 		sOffReason = reason;
 		fprintf(stderr, "app_server: gpu copy off: %s\n", reason);
 		syslog(LOG_INFO, "app_server: gpu copy off: %s\n", reason);
@@ -429,6 +431,16 @@ GPUCopy::BackBuffer(uint32 width, uint32 height, uint32 bytesPerRow)
 	sBackVa = 0x200000000ull;
 	memset(bits, 255, (size_t)bytes);
 	return new(std::nothrow) GpuBackBuffer(width, height, bytesPerRow, bits);
+}
+
+
+bool
+GPUCopy::TookOff()
+{
+	if (!sTookOff)
+		return false;
+	sTookOff = false;
+	return true;
 }
 
 

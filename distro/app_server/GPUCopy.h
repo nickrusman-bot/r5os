@@ -22,6 +22,7 @@ public:
 	static	bool				Copy(const BRegion& region,
 									RenderingBuffer* back,
 									RenderingBuffer* front);
+	static	bool				TookOff();
 	static	void				NoteCpu(bigtime_t microseconds);
 };
 

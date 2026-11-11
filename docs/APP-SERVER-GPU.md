@@ -14,7 +14,7 @@ A view invalidates a rectangle. `HWInterface::Invalidate` (`src/servers/app/draw
 
 The hook is `AccelerantHWInterface::_CopyBackToFront`, not the base class. A software screen never enters it. With `gpu_app_server` absent or false, the function calls the base and returns. Nothing is logged.
 
-With the setting on, `GPUCopy` tries the GPU copy for that region. Success skips the CPU copy. Any failure logs one line, `app_server: gpu copy off: <reason>`, and the base copy runs for that call and for every later call in the session. The reasons are `no render node`, `scanout refused`, `pitch`, `format`, `submit`, `fence timeout`, and `forced failure`.
+With the setting on, `GPUCopy` tries the GPU copy for that region. Success skips the CPU copy. Any failure logs one line, `app_server: gpu copy off: <reason>`. The call that logs it copies the whole back buffer with the CPU, once. That copy is not a median sample. Later calls copy the dirty region. The reasons are `no render node`, `scanout refused`, `pitch`, `format`, `submit`, `fence timeout`, `compare`, and `forced failure`.
 
 `gpu false` turns the GPU off with everything else. The kernel then refuses the new call.
 
