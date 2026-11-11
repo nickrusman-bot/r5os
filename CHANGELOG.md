@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The screen mapping is kept
+
+Asking for the screen buffer on every copy filled the 16 address slots, then the 256 buffer slots, and the GPU copy would stop. The mapping is kept until the width, height, or pitch changes. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The desktop copy can be timed and compared
 
 `gpu_debug true` makes app_server keep the copy times. Every 10 seconds it logs `app_server: copy cpu median <n> us cpu <n> ms per 10 s` and, when the GPU copy ran, the same line with `gpu`. Every 100th GPU copy it compares the copied rows. A match is `app_server: copy compare ok` on that 10 second line. A mismatch is `app_server: copy compare MISMATCH` and the CPU copy for the rest of the session. With `gpu_debug` absent, nothing is logged. Not booted. There is no What's new section and `distro/BUILD` stays the same.

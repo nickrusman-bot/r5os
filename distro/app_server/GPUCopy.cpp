@@ -60,6 +60,11 @@ uint64 sBackVa = 0;
 uint32 sIbHandle = 0;
 uint64 sIbVa = 0;
 void* sIbBits = NULL;
+uint32 sScanHandle = 0;
+uint64 sScanVa = 0;
+uint32 sScanWidth = 0;
+uint32 sScanHeight = 0;
+uint32 sScanPitch = 0;
 const uint32 kIbBytes = 65536;
 
 struct copy_times {
@@ -384,13 +389,36 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		return false;
 	if (bandCount == 0)
 		return true;
+	if (sScanHandle != 0 && (sScanWidth != back->Width()
+			|| sScanHeight != back->Height()
+			|| sScanPitch != back->BytesPerRow())) {
+		r5_gpu_bo gone;
+		memset(&gone, 0, sizeof(gone));
+		gone.size = (uint32)sizeof(gone);
+		gone.version = 1;
+		gone.handle = sScanHandle;
+		ioctl(sFd, R5_GPU_BO_FREE, &gone, sizeof(gone));
+		sScanHandle = 0;
+	}
 	r5_gpu_scanout scan;
 	memset(&scan, 0, sizeof(scan));
-	scan.size = (uint32)sizeof(scan);
-	scan.version = 1;
-	if (ioctl(sFd, R5_GPU_SCANOUT_BO, &scan, sizeof(scan)) != 0) {
-		off("scanout refused");
-		return false;
+	if (sScanHandle == 0) {
+		scan.size = (uint32)sizeof(scan);
+		scan.version = 1;
+		if (ioctl(sFd, R5_GPU_SCANOUT_BO, &scan, sizeof(scan)) != 0) {
+			off("scanout refused");
+			return false;
+		}
+		sScanHandle = scan.handle;
+		sScanVa = scan.gpu_va;
+		sScanWidth = scan.width;
+		sScanHeight = scan.height;
+		sScanPitch = scan.bytes_per_row;
+	} else {
+		scan.width = sScanWidth;
+		scan.height = sScanHeight;
+		scan.bytes_per_row = sScanPitch;
+		scan.gpu_va = sScanVa;
 	}
 	if (scan.bytes_per_row != back->BytesPerRow()
 		|| scan.width != back->Width() || scan.height != back->Height()) {
