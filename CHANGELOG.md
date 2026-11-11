@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A dead consumer frees the camera
+
+A program that dies while it is showing the camera never disconnects, so the camera stayed on until the media services restarted. The producer now sees that the consumer's control port is gone and releases the camera. From air/OS `d0df427f16` (jmgasper, MIT), `Producer.cpp` and `Producer.h` only. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - USB Video Class cameras
 
 Haiku's `usb_webcam` add-on was copied into `distro/media` and the USB Video Class path was replaced with air/OS `a314c835a9` (jmgasper, MIT). YUY2, UYVY, NV12, I420 and Motion-JPEG become `B_RGB32`. Frames go out as the camera sends them, at the size asked for, and the controls are parameters. One node per camera. The old `UVCDeframer` and `USB_video.h` are gone. The add-on uses the active USB configuration and does not set it again, so a camera microphone stays with `usb_audio`. Motion-JPEG is built when the jpeg feature is on; the AMD64 package list has `libjpeg_turbo_devel`, and without that feature only the uncompressed formats work. The regular image already installed the add-on. The minimum image now does too. `camtest` lists video inputs, takes frames for five seconds, prints the count and the size, and saves the last frame. QEMU has no camera. Not built yet. There is no What's new section and `distro/BUILD` stays the same.
