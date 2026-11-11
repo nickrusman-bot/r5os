@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Buffer length stays on the Latency page
+
+RenkuOS `6ed1b63f79` adds a Buffer size menu on the sound card and asks the driver for that many frames. That menu is not added. Media already writes `play_buffer_frames` and `record_buffer_frames`, and the USB driver reads them. HD Audio already reads the same file. A live control that sends a short buffer to HD Audio stops its interrupts, which is why that commit left HD Audio out. The request fields in `multi_audio` stay 0, so a driver keeps its own default unless it reads the Latency file itself. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - A plugged-in sound card replaces the fallback
 
 While a fallback stands in for a saved input or output, a rescan looks for that saved device again. When it has a node, the media server uses it and reconnects the mixer to the new output. The saved name is not overwritten. Ported from RenkuOS `e95a210256` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
