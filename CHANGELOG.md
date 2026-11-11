@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - multi_audio holds 128 channels
+
+The add-on stored 32 channels and built the enable mask with a shift of the channel count, which is undefined from 32. It now holds 128, refuses a device that does not fit, and uses one bit per channel in a byte map. A buffer list with more rows than the tables is refused. Adapted from RenkuOS `8db4b0d1b4` (rations, MIT). The driver still describes at most 16 channels until the next change. Not opened on a wide interface. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - An unplugged sound card keeps its place in the list
 
 `multi_audio` already watches `/dev/audio/hmulti`. Removing a card used to leave it listed as if it were still there, and deleting the slot would renumber the others. A card that disappears stays in the list with its presence cleared, and plugging it in again takes a new slot. The flavor index does not move. Adapted from RenkuOS `cf885a005b` (David Beckman, MIT). Not checked by unplugging a device. There is no What's new section and `distro/BUILD` stays the same.

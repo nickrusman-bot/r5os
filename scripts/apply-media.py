@@ -26,6 +26,7 @@ FILES = (
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioAddOn.cpp",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioAddOn.h",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioDevice.h",
+    "src/add-ons/media/media-add-ons/multi_audio/MultiAudioDevice.cpp",
     "src/add-ons/media/media-add-ons/multi_audio/MultiAudioNode.cpp",
     "src/add-ons/media/media-add-ons/multi_audio/Resampler.cpp",
     "src/add-ons/kernel/drivers/audio/usb/Stream.cpp",
