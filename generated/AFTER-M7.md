@@ -1,10 +1,9 @@
 # After M7
 
-Open after the window. Pending stick 39.
+Open after the window. Stick 40 passed the window on RADV.
 
-- The isolation stage hangs the GPU until the M10 reset. Detail below.
-- An offscreen cube takes 3.5 s.
-- `DRM_IOCTL_PRIME` returns ENOSYS. The blit uses a host pointer. Detail below.
+- The isolation stage hangs the GPU until the M10 reset. Stick 40 did not run that stage. Detail below.
+- `DRM_IOCTL_PRIME` returns ENOSYS. Stick 40 boot 1 logged it during the clear, and the clear still passed. The blit uses a host pointer. Detail below.
 
 One line each. These showed up in sticks 35, 35-b, 36, 37 and 38 and are outside the Vulkan window. Known hardware lines are listed so they are not treated as new.
 
