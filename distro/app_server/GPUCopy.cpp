@@ -471,8 +471,14 @@ GPUCopy::TookOff()
 
 bool
 GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
-	RenderingBuffer* front)
+	RenderingBuffer* front, clipping_rect* bandBounds)
 {
+	if (bandBounds != NULL) {
+		bandBounds->left = 0;
+		bandBounds->top = 0;
+		bandBounds->right = -1;
+		bandBounds->bottom = -1;
+	}
 	load_settings();
 	if (!sWant || sOff || back == NULL || front == NULL)
 		return false;
@@ -595,6 +601,22 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		syslog(LOG_INFO, "app_server: gpu copy on scanout %" B_PRIu32
 			"x%" B_PRIu32 " pitch %" B_PRIu32 "\n",
 			scan.width, scan.height, scan.bytes_per_row);
+	}
+	if (bandBounds != NULL && back->Width() > 0) {
+		int32 top = (int32)bands[0].y;
+		int32 bottom = top + (int32)bands[0].rows - 1;
+		for (int i = 1; i < bandCount; i++) {
+			int32 bandTop = (int32)bands[i].y;
+			int32 bandBottom = bandTop + (int32)bands[i].rows - 1;
+			if (bandTop < top)
+				top = bandTop;
+			if (bandBottom > bottom)
+				bottom = bandBottom;
+		}
+		bandBounds->left = 0;
+		bandBounds->top = top;
+		bandBounds->right = (int32)back->Width() - 1;
+		bandBounds->bottom = bottom;
 	}
 	return true;
 }

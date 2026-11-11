@@ -21,7 +21,8 @@ public:
 									uint32 bytesPerRow);
 	static	bool				Copy(const BRegion& region,
 									RenderingBuffer* back,
-									RenderingBuffer* front);
+									RenderingBuffer* front,
+									clipping_rect* bandBounds = NULL);
 	static	bool				TookOff();
 	static	void				NoteCpu(bigtime_t microseconds);
 };

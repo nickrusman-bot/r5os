@@ -1401,8 +1401,14 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get()))
+	clipping_rect bounds;
+	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get(),
+			&bounds)) {
+		if (bounds.left <= bounds.right && bounds.top <= bounds.bottom)
+			_DrawCursor(IntRect(bounds.left, bounds.top, bounds.right,
+				bounds.bottom));
 		return;
+	}
 	if (GPUCopy::TookOff() && fFrontBuffer.Get() != NULL
 		&& fFrontBuffer->Width() > 0 && fFrontBuffer->Height() > 0) {
 		BRegion whole;

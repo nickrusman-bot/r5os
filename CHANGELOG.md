@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The GPU copy redraws the pointer
+
+A GPU copy writes full-width bands. Haiku takes the pointer out of the dirty region and draws it back only over that region, so a pointer on the same rows but outside the region disappeared until the mouse moved. After a successful copy, `_DrawCursor` runs for the bounding rectangle of the bands. Callers that do not ask for the bounds behave as before. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The screen compare stays inside the copied rectangles
 
 Stick 45 boot 1, logs `C:\Users\nickr\Desktop\Logs\m8-44`. `b5 ok` wrote `deadbeef` with control word `0x80000000`. The first compare matched. A later one logged `at 92 byte 412 back 33 33 33 33 33 33 33 33 front 70 70 70 e6 70 70 70 e6`, and the GPU copy turned off. The desktop looked right after the CPU repaint. The compare walked every byte of the full-width bands. Drawing only takes the shared lock, so another window can change those rows outside the copied rectangles during the fence wait. The compare now reads the rectangles of the region. The mismatch line adds `in rect l,t-r,b`. No cache flush was added. Not booted. There is no What's new section and `distro/BUILD` stays the same.
