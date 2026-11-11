@@ -58,7 +58,7 @@ BUserListItem::BUserListItem(const char* login, const char* displayName,
 		return;
 
 	fData->login = login != NULL ? login : "";
-	fData->displayName = displayName != NULL ? displayName : fData->login;
+	fData->displayName = displayName != NULL ? displayName : fData->login.String();
 	fData->role = role != NULL ? role : "";
 
 	if (avatar != NULL)

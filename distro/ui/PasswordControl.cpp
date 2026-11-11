@@ -6,6 +6,7 @@
 
 #include "PasswordControl.h"
 
+#include <Button.h>
 #include <ControlLook.h>
 #include <Font.h>
 #include <InterfaceDefs.h>
@@ -47,7 +48,7 @@ public:
 				if (msg != NULL)
 					fParent->Invoke();
 				else if (Window() != NULL && Window()->DefaultButton() != NULL)
-					Window()->DefaultButton()->SimulatePress();
+					Window()->DefaultButton()->Invoke();
 			}
 			return;
 		}
