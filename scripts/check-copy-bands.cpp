@@ -41,6 +41,11 @@ print_stream(const char* name, const r5_copy_band* bands, int count,
 		fprintf(stderr, "%s pm4 failed\n", name);
 		return;
 	}
+	if (n < 2 || words[1] != 0x80000000u) {
+		fprintf(stderr, "%s control %08x\n", name,
+			n >= 2 ? words[1] : 0u);
+		return;
+	}
 	printf("# %s\n", name);
 	for (int i = 0; i < n; i++) {
 		printf("%08x", words[i]);

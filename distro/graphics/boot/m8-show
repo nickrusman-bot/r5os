@@ -1,0 +1,32 @@
+#!/bin/sh
+# Print this boot's check and the copy lines after the last boot marker.
+settings=/boot/home/config/settings/kernel/drivers/radeon_hd
+boot=2
+if grep -q "^gpu_app_server true" "$settings" 2>/dev/null; then
+	boot=1
+fi
+keep=/boot/home/boot$boot
+echo "m8-show: check"
+if [ ! -f "$keep/check.txt" ]; then
+	echo "FAIL no check"
+	echo FAIL
+	exit 1
+fi
+grep -v -e '^PASS$' -e '^FAIL$' "$keep/check.txt"
+echo "m8-show: copy lines"
+if [ -f "$keep/syslog.txt" ]; then
+	src=$keep/syslog.txt
+else
+	src=/boot/system/var/log/syslog
+fi
+grep -E 'copy cpu median|copy gpu median|copy compare|gpu copy' "$src" || true
+last=$(tail -n 1 "$keep/check.txt")
+case "$last" in
+PASS|FAIL)
+	printf '%s\n' "$last"
+	;;
+*)
+	echo FAIL
+	exit 1
+	;;
+esac

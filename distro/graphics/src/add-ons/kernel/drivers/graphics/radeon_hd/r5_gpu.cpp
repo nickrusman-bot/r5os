@@ -62,11 +62,14 @@ gpu_cache_log_settings()
 {
 	bool debugOn = false;
 	bool selftestOn = false;
+	bool submitLogOn = false;
 	void* settings = load_driver_settings("radeon_hd");
 	if (settings != NULL) {
 		debugOn = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);
 		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
+			false, true);
+		submitLogOn = get_driver_boolean_parameter(settings, "gpu_submit_log",
 			false, true);
 		r5_gfx9_set_flush_fence(get_driver_boolean_parameter(settings,
 			"gfx9_flush_fence", false, true) ? 1 : 0);
@@ -92,6 +95,7 @@ gpu_cache_log_settings()
 	r5_gfx9_set_defer_stamp(sDeferred ? gpu_defer_stamp : 0);
 	sDebugOn = debugOn ? 1 : 0;
 	sSelftestOn = selftestOn ? 1 : 0;
+	sSubmitLogOn = submitLogOn ? 1 : 0;
 }
 
 
@@ -858,7 +862,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 	sLastIbVa = ibPage->va;
 	gpu_stage_words(name, ibPage->va, ibPage->cpu, ibPage->phys);
 	uint64 sequence = 0;
-	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&ib, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
@@ -1024,12 +1028,13 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	asm volatile("sfence" ::: "memory");
 	r5_gfx9_stage_bytes(src.cpu, 128);
 	uint32* words = (uint32*)ib.cpu;
-	/* DMA_DATA control 0x60200000. This is the word the stage ran.
-	 * Linux soc15d.h names DST_SEL 0, 1 and 3 and does not name 2.
-	 * The checker allows this word and rejects any other DST_SEL 2.
-	 * Whether 2 should be 3 waits for its own diagnostic boot. */
+	/* DMA_DATA control 0x80000000: CP_SYNC, source select 0,
+	 * destination select 0, engine 0. Stick 43 boot 1 used
+	 * 0x60200000 (destination select 2). b5 logged miss and word
+	 * 00000000, and the screen compare still read the white boot
+	 * pixel. Select 0 is the select the K2 fill uses. */
 	words[0] = 0xc0055000u;
-	words[1] = 0x60200000u;
+	words[1] = 0x80000000u;
 	words[2] = (uint32)src.va;
 	words[3] = (uint32)(src.va >> 32);
 	words[4] = (uint32)dest.va;
@@ -1046,7 +1051,7 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 	sLastIbVa = ib.va;
 	gpu_stage_words(name, ib.va, ib.cpu, ib.phys);
 	uint64 sequence = 0;
-	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		dprintf("radeon_hd: %s submit\n", name);
@@ -1121,7 +1126,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 			gpu_lost(info, "p");
 		return R5_GPU_P_ROOM;
 	}
-	r5_gfx9_set_debug(gpu_debug_enabled() ? 1 : 0);
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
 	r5_gfx9_set_job_pasid(0, 0);
 	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &sequence)) {
 		if (step == 0)
@@ -1961,25 +1966,37 @@ amd_scanout(void* info, uint32* width, uint32* height, uint32* bytesPerRow,
 	uint32 w = shared->current_mode.virtual_width;
 	uint32 h = shared->current_mode.virtual_height;
 	uint32 pitch = shared->bytes_per_row;
-	if (w == 0 || h == 0 || pitch < w * 4u || (pitch & 3u) != 0)
+	if (w == 0 || h == 0 || pitch < w * 4u || (pitch & 3u) != 0) {
+		dprintf("radeon_hd: scanout refused mode %lu x %lu pitch %lu\n",
+			(unsigned long)w, (unsigned long)h, (unsigned long)pitch);
 		return B_ERROR;
+	}
 	uint64 picture = (uint64)pitch * h;
 	uint64 mapped = (picture + 4095ull) & ~4095ull;
-	uint32 fb = gpu_mmio(device, kGcSegment, 0x096b) & 0x00ffffffu;
-	uint64 base = (uint64)fb << 24;
+	/* The CPU sees the firmware picture through the PCI BAR. The GPU
+	 * page tables add MC_VM_FB_OFFSET << 24 to an offset in that BAR.
+	 * On the 5625U the BAR is 0xfce0000000 and the carveout is
+	 * 0x810000000. Subtracting those from each other is not an offset. */
+	uint64 bar = shared->vram_bar_phys;
+	uint64 window = shared->vram_bar_bytes;
 	uint64 phys = (uint64)shared->frame_buffer_phys;
-	if (phys < base || (phys & 4095ull) != 0)
+	if (bar == 0 || window == 0 || phys < bar || (phys & 4095ull) != 0
+		|| phys - bar > window || mapped > window - (phys - bar)) {
+		dprintf("radeon_hd: scanout refused phys 0x%llx bar 0x%llx"
+			" size 0x%llx pitch %lu mode %lu x %lu\n",
+			(unsigned long long)phys, (unsigned long long)bar,
+			(unsigned long long)window, (unsigned long)pitch,
+			(unsigned long)w, (unsigned long)h);
 		return B_ERROR;
-	uint64 offset = phys - base;
-	uint64 vram = 0;
-	if (amd_vram_bytes(info, &vram) != B_OK || offset > vram
-		|| mapped > vram - offset)
-		return B_ERROR;
+	}
 	*width = w;
 	*height = h;
 	*bytesPerRow = pitch;
 	*format = (uint32)shared->current_mode.space;
-	*vramOffset = offset;
+	*vramOffset = phys - bar;
 	*bytes = mapped;
+	dprintf("radeon_hd: scanout bar+0x%llx %lu x %lu pitch %lu\n",
+		(unsigned long long)(phys - bar), (unsigned long)w,
+		(unsigned long)h, (unsigned long)pitch);
 	return B_OK;
 }

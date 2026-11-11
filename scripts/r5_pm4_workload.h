@@ -32,8 +32,8 @@ static const uint32_t kFenceTsEnd = 1216;
 static const uint32_t kDmaChunk = 0x100000;
 static const uint32_t kWlSubmitDwords = 12;
 static const uint32_t kK2Pattern = 0xA5A5A5A5;
-/* DST_SEL 3 (L2), SRC_SEL 3. See the comment on the kernel copy. */
-static const uint32_t kStageDmaCtrl = 0x60200000u;
+/* CP_SYNC, source select 0, destination select 0. Stick 43. */
+static const uint32_t kStageDmaCtrl = 0x80000000u;
 
 
 static inline uint32_t
@@ -140,7 +140,7 @@ r5_pm4_switch_pair(uint32_t* packets)
 }
 
 
-/* gpu_stage_dma. Seven dwords. DST_SEL is 3. */
+/* gpu_stage_dma. Seven dwords. Destination select 0. */
 static inline void
 r5_pm4_stage_dma(uint32_t* words, uint64_t src, uint64_t dest)
 {

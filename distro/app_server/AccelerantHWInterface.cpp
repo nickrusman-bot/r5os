@@ -642,9 +642,16 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	_UpdateHooksAfterModeChange();
 
 	// update backbuffer if necessary
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	bool r5PitchChanged = fBackBuffer.IsSet()
+		&& fFrontBuffer->BytesPerRow() != fBackBuffer->BytesPerRow();
+// SPDX-SnippetEnd
 	if (!fBackBuffer.IsSet()
 		|| fBackBuffer->Width() != fFrontBuffer->Width()
 		|| fBackBuffer->Height() != fFrontBuffer->Height()
+		|| r5PitchChanged
 		|| (fFrontBuffer->ColorSpace() == B_RGB32 && fBackBuffer.IsSet())) {
 		// NOTE: backbuffer is always B_RGBA32, this simplifies the
 		// drawing backend implementation tremendously for the time
@@ -656,7 +663,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 		RenderingBuffer* gpuBack = GPUCopy::BackBuffer(fFrontBuffer->Width(),
-			fFrontBuffer->Height());
+			fFrontBuffer->Height(), fFrontBuffer->BytesPerRow());
 		if (gpuBack != NULL)
 			fBackBuffer.SetTo(gpuBack);
 		else
@@ -1394,8 +1401,22 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get()))
+	clipping_rect bounds;
+	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get(),
+			&bounds)) {
+		if (bounds.left <= bounds.right && bounds.top <= bounds.bottom)
+			_DrawCursor(IntRect(bounds.left, bounds.top, bounds.right,
+				bounds.bottom));
 		return;
+	}
+	if (GPUCopy::TookOff() && fFrontBuffer.Get() != NULL
+		&& fFrontBuffer->Width() > 0 && fFrontBuffer->Height() > 0) {
+		BRegion whole;
+		whole.Set(BRect(0, 0, fFrontBuffer->Width() - 1,
+			fFrontBuffer->Height() - 1));
+		HWInterface::_CopyBackToFront(whole);
+		return;
+	}
 	bigtime_t started = system_time();
 	HWInterface::_CopyBackToFront(region);
 	GPUCopy::NoteCpu(system_time() - started);

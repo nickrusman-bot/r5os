@@ -1,21 +1,13 @@
 #!/bin/sh
-# PASS or FAIL for one stick boot. Reads syslog only, plus the self-test
-# file and the three Terminal captures. Boot 2 is the file that contains
-# gpu_present_fail true. Each boot keeps its own copies under ~/boot1 or
-# ~/boot2, so a later boot does not replace them.
+# M8 stick. Boot 1 is the file with gpu_app_server true. Boot 2 is the
+# CPU copy. Each boot keeps its own files under ~/boot1 or ~/boot2.
 log=/boot/system/var/log/syslog
-test=/boot/home/config/cache/r5-gpu-selftest.txt
 settings=/boot/home/config/settings/kernel/drivers/radeon_hd
-wsi=/boot/home/wsi.txt
-tea=/boot/home/win-teapot.txt
-cube=/boot/home/win-vkcube.txt
-fail=0
+other=0
 
-boot=1
-driver="AMD Radeon Graphics"
-if grep -q "^gpu_present_fail true" "$settings" 2>/dev/null; then
-	boot=2
-	driver="llvmpipe"
+boot=2
+if grep -q "^gpu_app_server true" "$settings" 2>/dev/null; then
+	boot=1
 fi
 keep=/boot/home/boot$boot
 mkdir -p "$keep"
@@ -24,143 +16,156 @@ report=$keep/check.txt
 emit() {
 	printf '%s\n' "$1" | tee -a "$report"
 }
-copy_keep() {
-	if [ -f "$1" ]; then
-		cp "$1" "$keep/$(basename "$1")"
-	fi
-}
-
-i=0
-while [ "$i" -lt 180 ]; do
-	if [ -f "$test" ] && grep -q "selftest done" "$test" \
-		&& [ -f "$wsi" ] && [ -f "$tea" ] && [ -f "$cube" ]; then
-		break
-	fi
-	i=$((i + 1))
-	sleep 2
-done
-
 say() {
 	if [ "$1" -eq 0 ]; then
 		emit "PASS $2"
 	else
 		emit "FAIL $2"
-		fail=1
+		other=1
 	fi
 }
+count_of() {
+	grep -c "$1" "$bootlog" 2>/dev/null || true
+}
+median_field() {
+	if [ ! -s "$1" ]; then
+		return
+	fi
+	cut -d' ' -f"$2" "$1" | sort -n | awk '
+		{ a[NR] = $1 }
+		END { if (NR > 0) print a[int((NR + 1) / 2)] }
+	'
+}
 
-copy_keep "$wsi"
-copy_keep "$tea"
-copy_keep "$cube"
-copy_keep "$test"
-if [ -f "$keep/wsi.txt" ]; then
-	wsi=$keep/wsi.txt
+# syslog_daemon keeps one older file. A long gpu_debug boot rotates the
+# welcome line out of the current file. Read both, and keep the text
+# after the last welcome. With no welcome, keep everything that is left.
+: > "$keep/syslog.txt"
+for part in "$log.1" "$log.old" "$log"; do
+	if [ -f "$part" ]; then
+		cat "$part" >> "$keep/syslog.txt"
+	fi
+done
+if [ -s "$keep/syslog.txt" ]; then
+	awk '
+		/Welcome to the Haiku boot loader!/ { buf = ""; seen = 1 }
+		{ all = all $0 "\n" }
+		seen { buf = buf $0 "\n" }
+		END { if (seen) printf "%s", buf; else printf "%s", all }
+	' "$keep/syslog.txt" > "$keep/syslog.part"
+	mv "$keep/syslog.part" "$keep/syslog.txt"
 fi
-if [ -f "$keep/win-teapot.txt" ]; then
-	tea=$keep/win-teapot.txt
-fi
-if [ -f "$keep/win-vkcube.txt" ]; then
-	cube=$keep/win-vkcube.txt
-fi
-if [ -f "$keep/r5-gpu-selftest.txt" ]; then
-	test=$keep/r5-gpu-selftest.txt
-fi
+bootlog=$keep/syslog.txt
 emit "boot $boot"
 
-if grep -q "wsi clear ok" "$wsi" && grep -q "$driver" "$wsi"; then
-	say 0 "wsi clear ok $driver"
+if grep -q "Welcome to the Haiku boot loader!" "$bootlog"; then
+	say 0 "boot marker"
 else
-	say 1 "wsi clear ok $driver"
+	say 1 "boot marker"
+fi
+for line in "GFX9 scratch 0xdeadbeef" "fence landed" "k2 ok gart"; do
+	n=$(count_of "$line")
+	if [ "$n" -ge 1 ]; then
+		say 0 "$line"
+	else
+		say 1 "$line"
+	fi
+done
+
+if grep -q "b5 ok" "$bootlog"; then
+	say 0 "b5 ok"
+else
+	say 1 "b5 ok"
 fi
 
-windows() {
-	name=$1
-	file=$2
-	if grep -q "window .* FAIL" "$file" || ! grep -q "window resize ok" "$file" \
-		|| ! grep -q "window workspace ok" "$file" \
-		|| ! grep -q "window minimise ok" "$file" \
-		|| ! grep -q "window restore ok" "$file" \
-		|| ! grep -q "window close ok" "$file" \
-		|| ! grep -q "device lost no" "$file"; then
-		say 1 "window $name"
+on=$(count_of "gpu copy on scanout")
+off=$(count_of "gpu copy off")
+compared=$(count_of "copy compare ok")
+mismatch=$(count_of "copy compare MISMATCH")
+compareOff=$(count_of "gpu copy off: compare")
+if [ ! -s "$bootlog" ]; then
+	say 1 "no copy compare MISMATCH"
+	say 1 "no gpu copy off"
+elif [ "$mismatch" -eq 0 ] && [ "$compareOff" -eq 0 ]; then
+	say 0 "no copy compare MISMATCH"
+else
+	say 1 "no copy compare MISMATCH"
+fi
+if [ -s "$bootlog" ]; then
+	if [ "$off" -eq 0 ]; then
+		say 0 "no gpu copy off"
 	else
-		say 0 "window $name"
+		say 1 "no gpu copy off"
 	fi
-}
-windows VulkanTeapot "$tea"
-windows vkcube "$cube"
+fi
 
 if [ "$boot" -eq 1 ]; then
-	if grep "window driver" "$tea" | grep -q "RADV"; then
-		say 0 "window driver VulkanTeapot"
+	if [ "$on" -ge 1 ]; then
+		say 0 "gpu copy on scanout"
 	else
-		say 1 "window driver VulkanTeapot"
+		say 1 "gpu copy on scanout"
 	fi
-	if grep "window driver" "$cube" | grep -q "RADV"; then
-		say 0 "window driver vkcube"
+	if [ "$compared" -ge 1 ]; then
+		say 0 "copy compare ok"
 	else
-		say 1 "window driver vkcube"
+		say 1 "copy compare ok"
 	fi
-fi
-
-span_fail=0
-spans=0
-prev=
-while read -r line; do
-	case "$prev" in
-	"radeon ms per frame "[0-9]*)
-		case "$line" in
-		*"cpu span ms "*)
-			spans=$((spans + 1))
-			num=$(printf '%s\n' "$line" | sed 's/.*cpu span ms //')
-			int=${num%%.*}
-			if [ -z "$int" ] || [ "$int" -ge 2000 ]; then
-				span_fail=1
-			fi
-			;;
-		esac
-		;;
-	esac
-	prev=$line
-done < "$test"
-if [ "$spans" -gt 0 ] && [ "$span_fail" -eq 0 ]; then
-	say 0 "cpu span ms under 2000"
-else
-	say 1 "cpu span ms under 2000"
-fi
-
-eop=$(sed -n 's/.*ih msi [0-9]* early [0-9]* eop \([0-9]*\).*/\1/p' "$test" | tail -n 1)
-if [ -n "$eop" ] && [ "$eop" -ge 100 ]; then
-	say 0 "eop $eop"
-else
-	say 1 "eop ${eop:-missing}"
-fi
-
-need() {
-	if grep -q "$1" "$log"; then
-		say 0 "$1"
+	grep "copy gpu median" "$bootlog" | sed -n \
+		's/.*median \([0-9][0-9]*\) us cpu \([0-9][0-9]*\) ms.*/\1 \2/p' \
+		> "$keep/gpu.txt"
+	samples=$(wc -l < "$keep/gpu.txt" | tr -d ' ')
+	if [ "$samples" -ge 3 ]; then
+		say 0 "copy gpu median three times"
 	else
-		say 1 "$1"
+		say 1 "copy gpu median three times"
 	fi
-}
-need "GFX9 ring contract verified"
-need "GFX9 scratch 0xdeadbeef"
-need "fence landed"
-need "k2 ok gart"
-
-lost=$(grep -n "gpu lost" "$log" | head -n 1 | cut -d: -f1)
-mark=$(grep -n "r5 window tests" "$log" | head -n 1 | cut -d: -f1)
-if [ -n "$lost" ] && { [ -z "$mark" ] || [ "$lost" -lt "$mark" ]; }; then
-	say 1 "gpu lost before window tests"
+	if [ ! -s /boot/home/boot2/cpu.txt ]; then
+		emit "FAIL speed rule needs the cpu boot"
+	else
+		gus=$(median_field "$keep/gpu.txt" 1)
+		gms=$(median_field "$keep/gpu.txt" 2)
+		cus=$(median_field /boot/home/boot2/cpu.txt 1)
+		cms=$(median_field /boot/home/boot2/cpu.txt 2)
+		text="speed rule gpu ${gus} us / ${gms} ms against cpu ${cus} us / ${cms} ms"
+		if [ -n "$gus" ] && [ -n "$gms" ] && [ -n "$cus" ] && [ -n "$cms" ] \
+			&& [ $((gms * 2)) -le "$cms" ] && [ "$gus" -le "$cus" ]; then
+			emit "PASS $text"
+		else
+			emit "FAIL $text"
+		fi
+	fi
 else
-	say 0 "gpu lost before window tests"
+	if [ "$on" -eq 0 ]; then
+		say 0 "no gpu copy on"
+	else
+		say 1 "no gpu copy on"
+	fi
+	grep "copy cpu median" "$bootlog" | sed -n \
+		's/.*median \([0-9][0-9]*\) us cpu \([0-9][0-9]*\) ms.*/\1 \2/p' \
+		> "$keep/cpu.txt"
+	samples=$(wc -l < "$keep/cpu.txt" | tr -d ' ')
+	if [ "$samples" -ge 3 ]; then
+		say 0 "copy cpu median three times"
+	else
+		say 1 "copy cpu median three times"
+	fi
+	gus=$(median_field /boot/home/boot1/gpu.txt 1)
+	gms=$(median_field /boot/home/boot1/gpu.txt 2)
+	cus=$(median_field "$keep/cpu.txt" 1)
+	cms=$(median_field "$keep/cpu.txt" 2)
+	text="speed rule gpu ${gus} us / ${gms} ms against cpu ${cus} us / ${cms} ms"
+	if [ -n "$gus" ] && [ -n "$gms" ] && [ -n "$cus" ] && [ -n "$cms" ] \
+		&& [ $((gms * 2)) -le "$cms" ] && [ "$gus" -le "$cus" ]; then
+		emit "RESULT gpu faster"
+	else
+		emit "RESULT stays opt-in"
+	fi
+	if [ -n "$gus" ] && [ -n "$cms" ]; then
+		emit "$text"
+	fi
 fi
 
-if [ "$boot" -eq 2 ]; then
-	need "RADV view surface: no, window through Lavapipe"
-fi
-
-if [ "$fail" -eq 0 ]; then
+if [ "$other" -eq 0 ]; then
 	emit PASS
 else
 	emit FAIL

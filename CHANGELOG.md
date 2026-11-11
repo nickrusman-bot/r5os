@@ -1,5 +1,69 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Stick 46 copied the desktop through the GPU
+
+Stick 46 is the 17:43 anyboot, sha256 `6965416a…`. Logs: `C:\Users\nickr\Desktop\Logs\m8-46`. The branch is `cursor/m8-stick` `ee8da208`.
+
+Boot 1 (`gpu_app_server true`, `gpu_copy_debug true`) passed `gpu copy on scanout`, `copy compare ok`, no `copy compare MISMATCH`, no `gpu copy off`, and eleven `copy gpu median` lines. The closing line was PASS. `FAIL speed rule needs the cpu boot` was printed because boot 2 had not run, and that line did not change the closing result.
+
+Boot 2 passed its copy lines, including eleven `copy cpu median` lines. The speed rule was `gpu 112 us / 217 ms against cpu 0 us / 8 ms`. The CPU time spent copying did not drop by half, and the median was slower, so there is no gain. Decision 7 of the M8 brief says the path still passes when it works and the numbers are recorded, and `gpu_app_server` stays opt-in. The check printed FAIL for that comparison and then a closing FAIL. That closing FAIL was the speed rule alone.
+
+In boot 1 the marker self-test stopped after 5 s (`mark selftest timeout 5000 ms`, `mark selftest bad`, `skipped, gpu lost`) while the copies kept landing. In boot 2 it passed in 1 ms (`mark selftest ok 1 ms`). The boot with `gpu_app_server_fail true` did not run.
+
+Boot 2 of `check.sh` now prints `RESULT gpu faster` or `RESULT stays opt-in` and no longer lets that comparison change the closing line. That change is not on stick 46. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The desktop copy has its own debug key
+
+Stick 45 kept `gpu_debug true`. That prints one kernel line per submit. The syslog rotated, so the boot marker, the scratch line, the fence, `k2 ok gart` and `gpu copy on scanout` were gone, and one ten-second window recorded 860 ms inside the timed copy. `gpu_copy_debug true` is read by app_server only. It turns on the compare and the measurement. The kernel submit line stays on `gpu_debug`. The M8 boot files use `gpu_copy_debug` and no longer set `gpu_debug`. `m8-boot2` checks for the new key. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The GPU copy redraws the pointer
+
+A GPU copy writes full-width bands. Haiku takes the pointer out of the dirty region and draws it back only over that region, so a pointer on the same rows but outside the region disappeared until the mouse moved. After a successful copy, `_DrawCursor` runs for the bounding rectangle of the bands. Callers that do not ask for the bounds behave as before. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The screen compare stays inside the copied rectangles
+
+Stick 45 boot 1, logs `C:\Users\nickr\Desktop\Logs\m8-44`. `b5 ok` wrote `deadbeef` with control word `0x80000000`. The first compare matched. A later one logged `at 92 byte 412 back 33 33 33 33 33 33 33 33 front 70 70 70 e6 70 70 70 e6`, and the GPU copy turned off. The desktop looked right after the CPU repaint. The compare walked every byte of the full-width bands. Drawing only takes the shared lock, so another window can change those rows outside the copied rectangles during the fence wait. The compare now reads the rectangles of the region. The mismatch line adds `in rect l,t-r,b`. No cache flush was added. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Stick 43 boot 1 wrote nothing to the screen
+
+Stick 43 is the 15:39 anyboot, boot 1. The stick sha256 is `a1836a23…`. Logs: `C:\Users\nickr\Desktop\Logs\m8 43`. Boot 2 did not run. There is no speed-rule result.
+
+The scanout and the pitch are right: `scanout bar+0x0 1920 x 1080 pitch 7680` and `gpu copy on scanout 1920x1080 pitch 7680`. One hundred submits of 7 dwords each came back. The compare then read `at 1078 byte 0 back 98 66 33 ff front ff ff ff 00`: the screen was still the white boot picture. The same boot's `b5` uses that packet and logged `b5 miss` with `word 00000000`. `b1` and `b3` wrote into the carve-out, and the K2 fill (`k2 dma pattern 262144 cafe 0 other 0`) uses destination select 0. Destination select 2 writes nothing. The control word was `0x60200000`.
+
+The fallback copied only the dirty region of the call that failed. The earlier frames were never copied, so the boot picture stayed and the mouse left a trail of desktop blue. The photo is that trail.
+
+The copy, stage `b5`, and stage P now use `0x80000000`: CP_SYNC, source select 0, destination select 0, engine 0. The checker rejects destination select 2 everywhere. The call that turns the GPU copy off copies the whole back buffer once, and that copy is not a median sample. With `gpu_debug`, frame 1 is compared, then every 100th. `check.sh` prints `PASS b5 ok` only when the syslog has `b5 ok`. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The screen compare read the old bytes
+
+Stick 42 boot 1 copied through the GPU, then stopped. The kept log says `gpu copy off: compare`. The one-shot `copy compare MISMATCH` and `gpu copy on scanout` lines were already rotated out. The check still passed `no copy compare MISMATCH`, because that exact text was gone and `gpu copy off: compare` did not count. Moving the mouse painted the sign-in screen through the firmware picture in small boxes: only the dirty rows are copied, so the rest of the boot picture stays until something redraws it. After the compare failed, the CPU copy ran and the self-test looked normal. Vulkan still reported `wsi clear ok AMD Radeon Graphics (RADV RENOIR)`, and both window files say `device lost no`.
+
+The front buffer is write-combining. The panel sees a GPU write while a CPU read can still return the old line. The compare now flushes those lines before it reads them. A mismatch records the row, the first different byte, and eight bytes from each side, and the median line repeats that text. `check.sh` treats `gpu copy off: compare` as a mismatch. `gpu_debug` no longer logs every user submit. That line is `gpu_submit_log`, which this stick does not set, so the boot banner stays in the log. Not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The scanout fix is on a stick
+
+`scripts/apply-overlay.sh` stopped before copying anything: the artwork generator does not match `r5-symbol.svg` and the disk-badge header. The graphics sources and app_server were copied with `apply-radeon.py` and `apply-app-server.py`. No other jam was running. `jam -q @r5-raw` then `jam -q @r5-anyboot` finished with `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`, `anyboot_exit=0`. The anyboot is 2156724224 bytes at 15:00 Europe/Amsterdam. Boot 1 is planted after that: `gpu_app_server true`, `gpu_debug true`, and the same other lines as stick 41, plus `m8-run`, `m8-boot2`, `m8-show` and `check.sh` in `/boot/home`. The RADV package in the image carries those same scripts. `write-stick.py` wrote disk 1, the General UDisk, and left disk 0 alone. The read-back matched at 15:06. sha256 `e8204a97944f9f1762c35405353ca3a05d4e14a38d510f17d52a76530c1d932a`. The 5625U has not booted this image. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The GPU back buffer uses the scanout pitch
+
+The GPU back buffer reported `width * 4` bytes per row. On DCE 2 and later the framebuffer pitch is the width rounded up to a multiple of 64 pixels. A 1366-wide screen is 1408 pixels of stride, 5632 bytes against 5464. `GPUCopy::Copy` then latched `gpu copy off: pitch` for the session. The 5625U boots at 1920x1080, and 1920 is already a multiple of 64, so stick 41 did not take this path. The back buffer now takes the front buffer's bytes per row. The read-back compares the visible pixels and leaves the padding out. Not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The screen offset was the BAR, not the carveout
+
+Stick 41 kept the desktop copy on the CPU. `R5_GPU_SCANOUT_BO` treated `frame_buffer_phys` as an address inside the carveout: it subtracted `MC_VM_FB_OFFSET << 24` and rejected the result when it fell outside the visible window. On the 5625U those are different bases. Earlier boots recorded the PCI BAR at `0xfce0000000` and `MC_VM_FB_OFFSET` `0x810`, so the carveout is `0x810000000`. The picture sits at the start of the BAR (`window +0x0`). The difference of the two bases is far past the 256 MiB window, so the call returned `B_ERROR` once. app_server logged `gpu copy off: scanout refused` and then stayed on the CPU. That one line was already rotated out of `syslog` and `syslog.1` by the `user job fence` lines `gpu_debug` prints for every submit. VirtualBox never opens `/dev/gpu/radeon_hd/0`, so this refusal cannot show up there.
+
+The offset is now `frame_buffer_phys - vram_bar_phys`. The page tables still add the carveout base. A refusal logs the physical address, the BAR, and the mode. A success logs `scanout bar+<offset>`. While the copy stays off, each `copy cpu median` line repeats `gpu copy off: <reason>`. `check.sh` reads `syslog.1` and `syslog.old` as well as `syslog`. It keeps the text after the last boot welcome, and when that welcome is already gone it keeps the remaining log instead of an empty file. An empty excerpt no longer passes the negative lines. `gpu_debug` still logs every user submit, so a long session can still rotate the boot banner away. Not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Stick 41 boot 1 checked an empty log
+
+The 5625U booted the 13:56 anyboot. `m8-run` opened Tracker and Terminal and moved them. `check.sh` then printed FAIL. `~/boot1/syslog.txt` is empty, and `~/boot1/gpu.txt` is empty. The script keeps only the text after `Welcome to the Haiku boot loader!`. That line is in neither `syslog` nor `syslog.1`; the boot start was rotated away before the check. The negative lines passed because the excerpt had nothing to find.
+
+The kept `syslog` has thirteen `app_server: copy cpu median` lines and no `gpu copy on`, no `gpu copy off`, and no `copy gpu median`. The windows did copy, on the CPU. The M7 captures passed: `wsi clear ok AMD Radeon Graphics (RADV RENOIR)`, both window files `window driver AMD Radeon Graphics (RADV RENOIR)` with the actions ok and `device lost no`. The self-test ends `fence ok`, `gpu read deadbeef`, `selftest done`. Logs are `generated/boot-5625u-41`. Boot 2 was not run. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The stick measures the desktop copy
+
+Boot 1 keeps the M7 settings (`gpu_present true`, no `gpu_isolation_test`) and adds `gpu_app_server true` and `gpu_debug true`. Boot 2 is the same file with `gpu_debug true` and without `gpu_app_server`. `m8-run` opens Tracker and Terminal and moves them for 45 seconds, then `check.sh` prints PASS or FAIL per line and keeps that boot's files in `~/boot1` or `~/boot2`. The speed line passes only when the GPU copy's CPU time is at most half the CPU copy's and its median is not slower. On boot 1 that line fails with `needs the cpu boot`; any other FAIL is a stop. `m8-boot2` rewrites the file, shows it, and restarts on `y`. `m8-show` prints the check and the copy lines after the last boot marker. The scripts are in `/boot/home` and on the path. `mesa_radv` is `25.3.6-5` so the image cannot keep the previous package. No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-stick` copied this branch. The jam log shows `sh -n check.sh`, `sh -n m8-run`, `sh -n m8-boot2` and `sh -n m8-show`. `jam -q @r5-raw` then `jam -q @r5-anyboot` finished at 13:56 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`, `anyboot_exit=0`. The anyboot is 2156724224 bytes. Boot 1 settings are planted after that. No VirtualBox. The 5625U has not run this image. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The CPU copy time is recorded without the GPU copy
 
 VirtualBox round 2 had only `gpu_debug true`. Dragging a window for more than 10 seconds produced no `app_server: copy cpu median` line. app_server does read `gpu_debug`. VirtualBox loads vboxvideo and keeps a software back buffer, so `_CopyBackToFront` runs. `GPUCopy::NoteCpu` dropped every sample unless `gpu_app_server` was also on. It now keeps the sample when `gpu_debug` is on.

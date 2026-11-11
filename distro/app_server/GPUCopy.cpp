@@ -15,6 +15,7 @@
 #include <OS.h>
 
 #include <new>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,7 +27,7 @@
 class GpuBackBuffer : public RenderingBuffer {
 public:
 								GpuBackBuffer(uint32 width, uint32 height,
-									void* bits);
+									uint32 bytesPerRow, void* bits);
 	virtual						~GpuBackBuffer();
 
 	virtual	status_t			InitCheck() const;
@@ -40,6 +41,7 @@ private:
 			void*				fBits;
 			uint32				fWidth;
 			uint32				fHeight;
+			uint32				fBytesPerRow;
 };
 
 
@@ -51,6 +53,9 @@ bool sWant = false;
 bool sForceFail = false;
 bool sDebug = false;
 bool sOff = false;
+bool sTookOff = false;
+const char* sOffReason = NULL;
+char sCompareDetail[192];
 bool sLoggedOn = false;
 bool sCompared = false;
 uint32 sFrame = 0;
@@ -83,6 +88,8 @@ off(const char* reason)
 {
 	if (!sOff) {
 		sOff = true;
+		sTookOff = true;
+		sOffReason = reason;
 		fprintf(stderr, "app_server: gpu copy off: %s\n", reason);
 		syslog(LOG_INFO, "app_server: gpu copy off: %s\n", reason);
 	}
@@ -111,7 +118,7 @@ load_settings()
 			sWant = true;
 		if (strncmp(line, "gpu_app_server_fail true", 24) == 0)
 			sForceFail = true;
-		if (strncmp(line, "gpu_debug true", 14) == 0)
+		if (strncmp(line, "gpu_copy_debug true", 19) == 0)
 			sDebug = true;
 	}
 	fclose(file);
@@ -230,9 +237,20 @@ report()
 	if (start == 0 || system_time() - start < 10000000)
 		return;
 	if (sCpuTimes.count > 0) {
-		syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
-			" us cpu %" B_PRId64 " ms per 10 s\n",
-			(int64)median_of(&sCpuTimes), (int64)(sCpuTimes.cpu / 1000));
+		if (sOff) {
+			syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
+				" us cpu %" B_PRId64
+				" ms per 10 s, gpu copy off: %s%s%s\n",
+				(int64)median_of(&sCpuTimes),
+				(int64)(sCpuTimes.cpu / 1000),
+				sOffReason != NULL ? sOffReason : "unknown",
+				sCompareDetail[0] != '\0' ? " " : "",
+				sCompareDetail);
+		} else {
+			syslog(LOG_INFO, "app_server: copy cpu median %" B_PRId64
+				" us cpu %" B_PRId64 " ms per 10 s\n",
+				(int64)median_of(&sCpuTimes), (int64)(sCpuTimes.cpu / 1000));
+		}
 	}
 	if (sGpuTimes.count > 0) {
 		syslog(LOG_INFO, "app_server: copy gpu median %" B_PRId64
@@ -251,20 +269,101 @@ report()
 }
 
 
+void
+flush_front(const void* address, size_t bytes)
+{
+#if defined(__x86_64__)
+	uintptr_t start = (uintptr_t)address & ~(uintptr_t)63;
+	uintptr_t end = ((uintptr_t)address + bytes + 63u) & ~(uintptr_t)63;
+	for (uintptr_t line = start; line < end; line += 64)
+		asm volatile("clflush (%0)" :: "r"((void*)line) : "memory");
+	asm volatile("sfence" ::: "memory");
+#else
+	(void)address;
+	(void)bytes;
+#endif
+}
+
+
+void
+note_mismatch(uint32 y, uint32 byte, const uint8* back, const uint8* front,
+	uint32 rowBytes, int32 left, int32 top, int32 right, int32 bottom)
+{
+	uint32 n = 0;
+	if (byte < rowBytes)
+		n = rowBytes - byte;
+	if (n > 8u)
+		n = 8u;
+	int used = snprintf(sCompareDetail, sizeof(sCompareDetail),
+		"at %" B_PRIu32 " byte %" B_PRIu32 " back", y, byte);
+	if (used < 0 || (size_t)used >= sizeof(sCompareDetail)) {
+		sCompareDetail[0] = '\0';
+		return;
+	}
+	for (uint32 i = 0; i < n && (size_t)used + 3 < sizeof(sCompareDetail); i++)
+		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" %02x", back[byte + i]);
+	if ((size_t)used + 7 < sizeof(sCompareDetail))
+		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" front");
+	for (uint32 i = 0; i < n && (size_t)used + 3 < sizeof(sCompareDetail); i++)
+		used += snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" %02x", front[byte + i]);
+	if ((size_t)used + 16 < sizeof(sCompareDetail)) {
+		snprintf(sCompareDetail + used, sizeof(sCompareDetail) - used,
+			" in rect %" B_PRId32 ",%" B_PRId32 "-%" B_PRId32 ",%" B_PRId32,
+			left, top, right, bottom);
+	}
+}
+
+
 bool
 same_picture(RenderingBuffer* back, RenderingBuffer* front,
-	const r5_copy_band* bands, int count)
+	const BRegion& region)
 {
 	const uint8* src = (const uint8*)back->Bits();
 	const uint8* dst = (const uint8*)front->Bits();
 	uint32 pitch = back->BytesPerRow();
-	if (src == NULL || dst == NULL)
+	uint32 rowBytes = back->Width() * 4u;
+	if (src == NULL || dst == NULL || front->BytesPerRow() != pitch
+		|| rowBytes == 0 || rowBytes > pitch)
 		return false;
-	for (int i = 0; i < count; i++) {
-		size_t bytes = (size_t)bands[i].rows * pitch;
-		size_t offset = (size_t)bands[i].y * pitch;
-		if (memcmp(src + offset, dst + offset, bytes) != 0)
-			return false;
+	int rects = region.CountRects();
+	for (int i = 0; i < rects; i++) {
+		clipping_rect rect = region.RectAtInt(i);
+		int32 left = rect.left;
+		int32 right = rect.right;
+		int32 top = rect.top;
+		int32 bottom = rect.bottom;
+		if (left < 0)
+			left = 0;
+		if (top < 0)
+			top = 0;
+		if (right >= (int32)back->Width())
+			right = (int32)back->Width() - 1;
+		if (bottom >= (int32)back->Height())
+			bottom = (int32)back->Height() - 1;
+		if (left > right || top > bottom)
+			continue;
+		uint32 byte0 = (uint32)left * 4u;
+		uint32 span = (uint32)(right - left + 1) * 4u;
+		if (byte0 >= rowBytes || span > rowBytes - byte0)
+			continue;
+		for (int32 y = top; y <= bottom; y++) {
+			size_t offset = (size_t)y * pitch + byte0;
+			const uint8* srcRow = src + offset;
+			const uint8* dstRow = dst + offset;
+			flush_front(dstRow, span);
+			if (memcmp(srcRow, dstRow, span) != 0) {
+				uint32 byte = 0;
+				while (byte < span && srcRow[byte] == dstRow[byte])
+					byte++;
+				note_mismatch((uint32)y, byte0 + byte, src + (size_t)y * pitch,
+					dst + (size_t)y * pitch, rowBytes, rect.left, rect.top,
+					rect.right, rect.bottom);
+				return false;
+			}
+		}
 	}
 	return true;
 }
@@ -272,11 +371,13 @@ same_picture(RenderingBuffer* back, RenderingBuffer* front,
 } // namespace
 
 
-GpuBackBuffer::GpuBackBuffer(uint32 width, uint32 height, void* bits)
+GpuBackBuffer::GpuBackBuffer(uint32 width, uint32 height,
+	uint32 bytesPerRow, void* bits)
 	:
 	fBits(bits),
 	fWidth(width),
-	fHeight(height)
+	fHeight(height),
+	fBytesPerRow(bytesPerRow)
 {
 }
 
@@ -310,7 +411,7 @@ GpuBackBuffer::Bits() const
 uint32
 GpuBackBuffer::BytesPerRow() const
 {
-	return fWidth * 4;
+	return fBytesPerRow;
 }
 
 
@@ -329,12 +430,16 @@ GpuBackBuffer::Height() const
 
 
 RenderingBuffer*
-GPUCopy::BackBuffer(uint32 width, uint32 height)
+GPUCopy::BackBuffer(uint32 width, uint32 height, uint32 bytesPerRow)
 {
 	load_settings();
 	if (!sWant || sOff || width == 0 || height == 0)
 		return NULL;
-	uint64 bytes = (uint64)width * 4u * height;
+	if (bytesPerRow < width * 4u || (bytesPerRow & 3u) != 0) {
+		off("pitch");
+		return NULL;
+	}
+	uint64 bytes = (uint64)bytesPerRow * height;
 	if (bytes > 64ull * 1024ull * 1024ull) {
 		off("submit");
 		return NULL;
@@ -350,14 +455,30 @@ GPUCopy::BackBuffer(uint32 width, uint32 height)
 	sBits = bits;
 	sBackVa = 0x200000000ull;
 	memset(bits, 255, (size_t)bytes);
-	return new(std::nothrow) GpuBackBuffer(width, height, bits);
+	return new(std::nothrow) GpuBackBuffer(width, height, bytesPerRow, bits);
+}
+
+
+bool
+GPUCopy::TookOff()
+{
+	if (!sTookOff)
+		return false;
+	sTookOff = false;
+	return true;
 }
 
 
 bool
 GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
-	RenderingBuffer* front)
+	RenderingBuffer* front, clipping_rect* bandBounds)
 {
+	if (bandBounds != NULL) {
+		bandBounds->left = 0;
+		bandBounds->top = 0;
+		bandBounds->right = -1;
+		bandBounds->bottom = -1;
+	}
 	load_settings();
 	if (!sWant || sOff || back == NULL || front == NULL)
 		return false;
@@ -462,13 +583,17 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		return false;
 	}
 	note(&sGpuTimes, system_time() - started);
-	if (sDebug && ++sFrame % 100u == 0) {
-		if (!same_picture(back, front, bands, bandCount)) {
-			syslog(LOG_INFO, "app_server: copy compare MISMATCH\n");
-			off("compare");
-			return false;
+	if (sDebug) {
+		sFrame++;
+		if (sFrame == 1 || sFrame % 100u == 0) {
+			if (!same_picture(back, front, region)) {
+				syslog(LOG_INFO, "app_server: copy compare MISMATCH %s\n",
+					sCompareDetail);
+				off("compare");
+				return false;
+			}
+			sCompared = true;
 		}
-		sCompared = true;
 	}
 	report();
 	if (!sLoggedOn) {
@@ -476,6 +601,22 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		syslog(LOG_INFO, "app_server: gpu copy on scanout %" B_PRIu32
 			"x%" B_PRIu32 " pitch %" B_PRIu32 "\n",
 			scan.width, scan.height, scan.bytes_per_row);
+	}
+	if (bandBounds != NULL && back->Width() > 0) {
+		int32 top = (int32)bands[0].y;
+		int32 bottom = top + (int32)bands[0].rows - 1;
+		for (int i = 1; i < bandCount; i++) {
+			int32 bandTop = (int32)bands[i].y;
+			int32 bandBottom = bandTop + (int32)bands[i].rows - 1;
+			if (bandTop < top)
+				top = bandTop;
+			if (bandBottom > bottom)
+				bottom = bandBottom;
+		}
+		bandBounds->left = 0;
+		bandBounds->top = top;
+		bandBounds->right = (int32)back->Width() - 1;
+		bandBounds->bottom = bottom;
 	}
 	return true;
 }

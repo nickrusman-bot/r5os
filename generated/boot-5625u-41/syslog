@@ -1,0 +1,1326 @@
+KERN: radeon_hd: t 61936318 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 61936562 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 61936899 user job fence e flush 1 cntx 80000000 seq 2609 c0053c00 00000113 007ea800 000000f4 00000a30 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 61951818 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 61952073 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 61952428 user job fence e flush 1 cntx 80000000 seq 2610 c0053c00 00000113 007ea800 000000f4 00000a31 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 61953025 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 61953268 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 61953604 user job fence e flush 1 cntx 80000000 seq 2611 c0053c00 00000113 007ea800 000000f4 00000a32 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 61968507 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 61968763 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 61969107 user job fence e flush 1 cntx 80000000 seq 2612 c0053c00 00000113 007ea800 000000f4 00000a33 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 61969683 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 61969927 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 61970264 user job fence e flush 1 cntx 80000000 seq 2613 c0053c00 00000113 007ea800 000000f4 00000a34 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 61985206 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 61985463 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 61985818 user job fence e flush 1 cntx 80000000 seq 2614 c0053c00 00000113 007ea800 000000f4 00000a35 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 61986400 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 61986643 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 61986981 user job fence e flush 1 cntx 80000000 seq 2615 c0053c00 00000113 007ea800 000000f4 00000a36 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62001910 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62002167 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62002522 user job fence e flush 1 cntx 80000000 seq 2616 c0053c00 00000113 007ea800 000000f4 00000a37 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62003119 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62003362 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62003699 user job fence e flush 1 cntx 80000000 seq 2617 c0053c00 00000113 007ea800 000000f4 00000a38 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62018603 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62018860 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62019204 user job fence e flush 1 cntx 80000000 seq 2618 c0053c00 00000113 007ea800 000000f4 00000a39 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62019781 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62020024 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62020361 user job fence e flush 1 cntx 80000000 seq 2619 c0053c00 00000113 007ea800 000000f4 00000a3a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62035302 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62035559 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62035913 user job fence e flush 1 cntx 80000000 seq 2620 c0053c00 00000113 007ea800 000000f4 00000a3b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62036496 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62036739 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62037076 user job fence e flush 1 cntx 80000000 seq 2621 c0053c00 00000113 007ea800 000000f4 00000a3c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62052007 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62052263 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62052618 user job fence e flush 1 cntx 80000000 seq 2622 c0053c00 00000113 007ea800 000000f4 00000a3d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62053214 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62053458 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62053794 user job fence e flush 1 cntx 80000000 seq 2623 c0053c00 00000113 007ea800 000000f4 00000a3e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62068704 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62068960 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62069303 user job fence e flush 1 cntx 80000000 seq 2624 c0053c00 00000113 007ea800 000000f4 00000a3f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62069879 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62070122 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62070460 user job fence e flush 1 cntx 80000000 seq 2625 c0053c00 00000113 007ea800 000000f4 00000a40 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62085400 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62085655 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62086011 user job fence e flush 1 cntx 80000000 seq 2626 c0053c00 00000113 007ea800 000000f4 00000a41 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62086594 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62086837 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62087174 user job fence e flush 1 cntx 80000000 seq 2627 c0053c00 00000113 007ea800 000000f4 00000a42 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62102104 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62102360 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62102715 user job fence e flush 1 cntx 80000000 seq 2628 c0053c00 00000113 007ea800 000000f4 00000a43 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62103309 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62103552 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62103889 user job fence e flush 1 cntx 80000000 seq 2629 c0053c00 00000113 007ea800 000000f4 00000a44 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62118795 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62119052 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62119397 user job fence e flush 1 cntx 80000000 seq 2630 c0053c00 00000113 007ea800 000000f4 00000a45 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62119971 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62120214 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62120551 user job fence e flush 1 cntx 80000000 seq 2631 c0053c00 00000113 007ea800 000000f4 00000a46 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62135489 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62135747 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62136101 user job fence e flush 1 cntx 80000000 seq 2632 c0053c00 00000113 007ea800 000000f4 00000a47 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62136684 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62136927 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62137264 user job fence e flush 1 cntx 80000000 seq 2633 c0053c00 00000113 007ea800 000000f4 00000a48 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62152200 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62152457 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62152811 user job fence e flush 1 cntx 80000000 seq 2634 c0053c00 00000113 007ea800 000000f4 00000a49 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62153406 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62153649 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62153988 user job fence e flush 1 cntx 80000000 seq 2635 c0053c00 00000113 007ea800 000000f4 00000a4a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62168904 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62169160 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62169503 user job fence e flush 1 cntx 80000000 seq 2636 c0053c00 00000113 007ea800 000000f4 00000a4b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62170080 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62170323 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62170660 user job fence e flush 1 cntx 80000000 seq 2637 c0053c00 00000113 007ea800 000000f4 00000a4c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62185556 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62185797 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62186119 user job fence e flush 1 cntx 80000000 seq 2638 c0053c00 00000113 007ea800 000000f4 00000a4d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62186679 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62186922 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62187262 user job fence e flush 1 cntx 80000000 seq 2639 c0053c00 00000113 007ea800 000000f4 00000a4e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62202300 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62202558 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62202913 user job fence e flush 1 cntx 80000000 seq 2640 c0053c00 00000113 007ea800 000000f4 00000a4f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62203509 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62203752 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62204089 user job fence e flush 1 cntx 80000000 seq 2641 c0053c00 00000113 007ea800 000000f4 00000a50 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62218992 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62219249 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62219593 user job fence e flush 1 cntx 80000000 seq 2642 c0053c00 00000113 007ea800 000000f4 00000a51 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62220168 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62220411 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62220748 user job fence e flush 1 cntx 80000000 seq 2643 c0053c00 00000113 007ea800 000000f4 00000a52 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62235689 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62235945 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62236299 user job fence e flush 1 cntx 80000000 seq 2644 c0053c00 00000113 007ea800 000000f4 00000a53 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62236882 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62237125 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62237464 user job fence e flush 1 cntx 80000000 seq 2645 c0053c00 00000113 007ea800 000000f4 00000a54 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62252399 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62252655 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62253010 user job fence e flush 1 cntx 80000000 seq 2646 c0053c00 00000113 007ea800 000000f4 00000a55 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62253606 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62253850 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62254187 user job fence e flush 1 cntx 80000000 seq 2647 c0053c00 00000113 007ea800 000000f4 00000a56 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62269090 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62269346 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62269690 user job fence e flush 1 cntx 80000000 seq 2648 c0053c00 00000113 007ea800 000000f4 00000a57 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62270265 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62270509 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62270806 user job fence e flush 1 cntx 80000000 seq 2649 c0053c00 00000113 007ea800 000000f4 00000a58 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62285789 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62286047 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62286407 user job fence e flush 1 cntx 80000000 seq 2650 c0053c00 00000113 007ea800 000000f4 00000a59 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62286991 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62287234 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62287571 user job fence e flush 1 cntx 80000000 seq 2651 c0053c00 00000113 007ea800 000000f4 00000a5a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62302486 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62302743 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62303098 user job fence e flush 1 cntx 80000000 seq 2652 c0053c00 00000113 007ea800 000000f4 00000a5b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62303693 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62303939 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62304275 user job fence e flush 1 cntx 80000000 seq 2653 c0053c00 00000113 007ea800 000000f4 00000a5c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62319184 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62319441 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62319785 user job fence e flush 1 cntx 80000000 seq 2654 c0053c00 00000113 007ea800 000000f4 00000a5d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62320360 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62320604 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62320941 user job fence e flush 1 cntx 80000000 seq 2655 c0053c00 00000113 007ea800 000000f4 00000a5e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62335880 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62336137 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62336492 user job fence e flush 1 cntx 80000000 seq 2656 c0053c00 00000113 007ea800 000000f4 00000a5f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62337074 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62337318 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62337654 user job fence e flush 1 cntx 80000000 seq 2657 c0053c00 00000113 007ea800 000000f4 00000a60 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62352581 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62352837 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62353192 user job fence e flush 1 cntx 80000000 seq 2658 c0053c00 00000113 007ea800 000000f4 00000a61 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62353789 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62354032 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62354369 user job fence e flush 1 cntx 80000000 seq 2659 c0053c00 00000113 007ea800 000000f4 00000a62 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62369282 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62369538 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62369881 user job fence e flush 1 cntx 80000000 seq 2660 c0053c00 00000113 007ea800 000000f4 00000a63 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62370456 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62370699 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62371037 user job fence e flush 1 cntx 80000000 seq 2661 c0053c00 00000113 007ea800 000000f4 00000a64 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62385976 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62386233 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62386588 user job fence e flush 1 cntx 80000000 seq 2662 c0053c00 00000113 007ea800 000000f4 00000a65 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62387168 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62387411 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62387748 user job fence e flush 1 cntx 80000000 seq 2663 c0053c00 00000113 007ea800 000000f4 00000a66 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62402672 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62402928 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62403284 user job fence e flush 1 cntx 80000000 seq 2664 c0053c00 00000113 007ea800 000000f4 00000a67 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62403880 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62404123 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62404460 user job fence e flush 1 cntx 80000000 seq 2665 c0053c00 00000113 007ea800 000000f4 00000a68 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62419376 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62419632 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62419975 user job fence e flush 1 cntx 80000000 seq 2666 c0053c00 00000113 007ea800 000000f4 00000a69 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62420550 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62420794 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62421131 user job fence e flush 1 cntx 80000000 seq 2667 c0053c00 00000113 007ea800 000000f4 00000a6a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62436012 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62436257 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62436598 user job fence e flush 1 cntx 80000000 seq 2668 c0053c00 00000113 007ea800 000000f4 00000a6b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62437173 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62437417 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62437756 user job fence e flush 1 cntx 80000000 seq 2669 c0053c00 00000113 007ea800 000000f4 00000a6c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62452767 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62453023 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62453379 user job fence e flush 1 cntx 80000000 seq 2670 c0053c00 00000113 007ea800 000000f4 00000a6d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62453975 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62454218 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62454557 user job fence e flush 1 cntx 80000000 seq 2671 c0053c00 00000113 007ea800 000000f4 00000a6e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62469460 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62469717 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62470062 user job fence e flush 1 cntx 80000000 seq 2672 c0053c00 00000113 007ea800 000000f4 00000a6f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62470638 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62470882 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62471218 user job fence e flush 1 cntx 80000000 seq 2673 c0053c00 00000113 007ea800 000000f4 00000a70 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62486154 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62486411 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62486764 user job fence e flush 1 cntx 80000000 seq 2674 c0053c00 00000113 007ea800 000000f4 00000a71 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62487348 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62487591 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62487928 user job fence e flush 1 cntx 80000000 seq 2675 c0053c00 00000113 007ea800 000000f4 00000a72 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62502860 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62503116 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62503471 user job fence e flush 1 cntx 80000000 seq 2676 c0053c00 00000113 007ea800 000000f4 00000a73 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62504067 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62504310 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62504647 user job fence e flush 1 cntx 80000000 seq 2677 c0053c00 00000113 007ea800 000000f4 00000a74 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62519553 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62519809 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62520155 user job fence e flush 1 cntx 80000000 seq 2678 c0053c00 00000113 007ea800 000000f4 00000a75 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62520730 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62520974 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62521310 user job fence e flush 1 cntx 80000000 seq 2679 c0053c00 00000113 007ea800 000000f4 00000a76 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62536248 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62536503 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62536858 user job fence e flush 1 cntx 80000000 seq 2680 c0053c00 00000113 007ea800 000000f4 00000a77 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62537440 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62537685 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62538022 user job fence e flush 1 cntx 80000000 seq 2681 c0053c00 00000113 007ea800 000000f4 00000a78 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62552954 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62553211 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62553566 user job fence e flush 1 cntx 80000000 seq 2682 c0053c00 00000113 007ea800 000000f4 00000a79 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62554164 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62554407 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62554744 user job fence e flush 1 cntx 80000000 seq 2683 c0053c00 00000113 007ea800 000000f4 00000a7a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62569646 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62569903 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62570247 user job fence e flush 1 cntx 80000000 seq 2684 c0053c00 00000113 007ea800 000000f4 00000a7b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62570822 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62571065 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62571404 user job fence e flush 1 cntx 80000000 seq 2685 c0053c00 00000113 007ea800 000000f4 00000a7c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62586348 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62586605 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62586960 user job fence e flush 1 cntx 80000000 seq 2686 c0053c00 00000113 007ea800 000000f4 00000a7d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62587541 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62587784 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62588121 user job fence e flush 1 cntx 80000000 seq 2687 c0053c00 00000113 007ea800 000000f4 00000a7e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62603049 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62603307 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62603660 user job fence e flush 1 cntx 80000000 seq 2688 c0053c00 00000113 007ea800 000000f4 00000a7f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62604254 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62604497 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62604834 user job fence e flush 1 cntx 80000000 seq 2689 c0053c00 00000113 007ea800 000000f4 00000a80 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62619737 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62619993 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62620338 user job fence e flush 1 cntx 80000000 seq 2690 c0053c00 00000113 007ea800 000000f4 00000a81 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62620913 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62621156 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62621493 user job fence e flush 1 cntx 80000000 seq 2691 c0053c00 00000113 007ea800 000000f4 00000a82 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62636443 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62636699 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62637055 user job fence e flush 1 cntx 80000000 seq 2692 c0053c00 00000113 007ea800 000000f4 00000a83 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62637640 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62637883 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62638219 user job fence e flush 1 cntx 80000000 seq 2693 c0053c00 00000113 007ea800 000000f4 00000a84 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62653138 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62653394 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62653749 user job fence e flush 1 cntx 80000000 seq 2694 c0053c00 00000113 007ea800 000000f4 00000a85 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62654345 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62654588 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62654928 user job fence e flush 1 cntx 80000000 seq 2695 c0053c00 00000113 007ea800 000000f4 00000a86 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62669835 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62670092 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62670437 user job fence e flush 1 cntx 80000000 seq 2696 c0053c00 00000113 007ea800 000000f4 00000a87 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62671011 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62671254 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62671591 user job fence e flush 1 cntx 80000000 seq 2697 c0053c00 00000113 007ea800 000000f4 00000a88 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62686474 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62686720 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62687061 user job fence e flush 1 cntx 80000000 seq 2698 c0053c00 00000113 007ea800 000000f4 00000a89 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62687636 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62687879 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62688216 user job fence e flush 1 cntx 80000000 seq 2699 c0053c00 00000113 007ea800 000000f4 00000a8a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62703232 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62703489 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62703844 user job fence e flush 1 cntx 80000000 seq 2700 c0053c00 00000113 007ea800 000000f4 00000a8b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62704439 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62704683 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62705019 user job fence e flush 1 cntx 80000000 seq 2701 c0053c00 00000113 007ea800 000000f4 00000a8c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62719923 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62720179 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62720523 user job fence e flush 1 cntx 80000000 seq 2702 c0053c00 00000113 007ea800 000000f4 00000a8d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62721097 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62721340 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62721677 user job fence e flush 1 cntx 80000000 seq 2703 c0053c00 00000113 007ea800 000000f4 00000a8e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62736640 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62736898 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62737253 user job fence e flush 1 cntx 80000000 seq 2704 c0053c00 00000113 007ea800 000000f4 00000a8f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62737836 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62738079 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62738417 user job fence e flush 1 cntx 80000000 seq 2705 c0053c00 00000113 007ea800 000000f4 00000a90 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62753329 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62753585 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62753941 user job fence e flush 1 cntx 80000000 seq 2706 c0053c00 00000113 007ea800 000000f4 00000a91 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62754538 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62754781 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62755117 user job fence e flush 1 cntx 80000000 seq 2707 c0053c00 00000113 007ea800 000000f4 00000a92 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62769998 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62770238 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62770549 user job fence e flush 1 cntx 80000000 seq 2708 c0053c00 00000113 007ea800 000000f4 00000a93 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62771122 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62771366 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62771671 user job fence e flush 1 cntx 80000000 seq 2709 c0053c00 00000113 007ea800 000000f4 00000a94 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62786718 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62786976 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62787331 user job fence e flush 1 cntx 80000000 seq 2710 c0053c00 00000113 007ea800 000000f4 00000a95 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62787915 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62788158 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62788495 user job fence e flush 1 cntx 80000000 seq 2711 c0053c00 00000113 007ea800 000000f4 00000a96 ffffffff 00000004 c0033700
+KERN: R5 interface: HaikuControlLook from distro
+KERN: radeon_hd: t 62803337 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62803582 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62803884 user job fence e flush 1 cntx 80000000 seq 2712 c0053c00 00000113 007ea800 000000f4 00000a97 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62804480 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62804696 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62804957 user job fence e flush 1 cntx 80000000 seq 2713 c0053c00 00000113 007ea800 000000f4 00000a98 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62820090 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62820347 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62820693 user job fence e flush 1 cntx 80000000 seq 2714 c0053c00 00000113 007ea800 000000f4 00000a99 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62821278 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62821521 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62821860 user job fence e flush 1 cntx 80000000 seq 2715 c0053c00 00000113 007ea800 000000f4 00000a9a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62836771 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62837028 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62837383 user job fence e flush 1 cntx 80000000 seq 2716 c0053c00 00000113 007ea800 000000f4 00000a9b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62837974 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62838218 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62838555 user job fence e flush 1 cntx 80000000 seq 2717 c0053c00 00000113 007ea800 000000f4 00000a9c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62853469 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62853725 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62854079 user job fence e flush 1 cntx 80000000 seq 2718 c0053c00 00000113 007ea800 000000f4 00000a9d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62854683 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62854926 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62855263 user job fence e flush 1 cntx 80000000 seq 2719 c0053c00 00000113 007ea800 000000f4 00000a9e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62870165 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62870423 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62870771 user job fence e flush 1 cntx 80000000 seq 2720 c0053c00 00000113 007ea800 000000f4 00000a9f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62871351 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62871595 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62871931 user job fence e flush 1 cntx 80000000 seq 2721 c0053c00 00000113 007ea800 000000f4 00000aa0 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62886863 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62887120 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62887475 user job fence e flush 1 cntx 80000000 seq 2722 c0053c00 00000113 007ea800 000000f4 00000aa1 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62888060 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62888306 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62888644 user job fence e flush 1 cntx 80000000 seq 2723 c0053c00 00000113 007ea800 000000f4 00000aa2 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62903565 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62903822 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62904176 user job fence e flush 1 cntx 80000000 seq 2724 c0053c00 00000113 007ea800 000000f4 00000aa3 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62904776 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62905021 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62905359 user job fence e flush 1 cntx 80000000 seq 2725 c0053c00 00000113 007ea800 000000f4 00000aa4 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62920263 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62920520 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62920867 user job fence e flush 1 cntx 80000000 seq 2726 c0053c00 00000113 007ea800 000000f4 00000aa5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62921446 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62921689 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62922026 user job fence e flush 1 cntx 80000000 seq 2727 c0053c00 00000113 007ea800 000000f4 00000aa6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62936968 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62937225 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62937580 user job fence e flush 1 cntx 80000000 seq 2728 c0053c00 00000113 007ea800 000000f4 00000aa7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62938167 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62938410 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62938747 user job fence e flush 1 cntx 80000000 seq 2729 c0053c00 00000113 007ea800 000000f4 00000aa8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62953663 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62953920 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62954275 user job fence e flush 1 cntx 80000000 seq 2730 c0053c00 00000113 007ea800 000000f4 00000aa9 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62954875 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62955118 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 62955455 user job fence e flush 1 cntx 80000000 seq 2731 c0053c00 00000113 007ea800 000000f4 00000aaa ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62970360 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62970618 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 62970965 user job fence e flush 1 cntx 80000000 seq 2732 c0053c00 00000113 007ea800 000000f4 00000aab ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62971542 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62971785 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 62972122 user job fence e flush 1 cntx 80000000 seq 2733 c0053c00 00000113 007ea800 000000f4 00000aac ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62987061 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 62987318 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 62987673 user job fence e flush 1 cntx 80000000 seq 2734 c0053c00 00000113 007ea800 000000f4 00000aad ffffffff 00000004 c0033700
+KERN: radeon_hd: t 62988259 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 62988502 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 62988838 user job fence e flush 1 cntx 80000000 seq 2735 c0053c00 00000113 007ea800 000000f4 00000aae ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63003763 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63004021 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63004377 user job fence e flush 1 cntx 80000000 seq 2736 c0053c00 00000113 007ea800 000000f4 00000aaf ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63004975 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63005219 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63005556 user job fence e flush 1 cntx 80000000 seq 2737 c0053c00 00000113 007ea800 000000f4 00000ab0 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63020464 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63020721 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63021068 user job fence e flush 1 cntx 80000000 seq 2738 c0053c00 00000113 007ea800 000000f4 00000ab1 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63021643 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63021887 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63022223 user job fence e flush 1 cntx 80000000 seq 2739 c0053c00 00000113 007ea800 000000f4 00000ab2 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63037161 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63037417 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63037772 user job fence e flush 1 cntx 80000000 seq 2740 c0053c00 00000113 007ea800 000000f4 00000ab3 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63038357 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63038601 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63038940 user job fence e flush 1 cntx 80000000 seq 2741 c0053c00 00000113 007ea800 000000f4 00000ab4 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63053863 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63054119 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63054473 user job fence e flush 1 cntx 80000000 seq 2742 c0053c00 00000113 007ea800 000000f4 00000ab5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63055072 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63055315 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63055652 user job fence e flush 1 cntx 80000000 seq 2743 c0053c00 00000113 007ea800 000000f4 00000ab6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63070561 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63070817 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63071165 user job fence e flush 1 cntx 80000000 seq 2744 c0053c00 00000113 007ea800 000000f4 00000ab7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63071740 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63071983 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63072320 user job fence e flush 1 cntx 80000000 seq 2745 c0053c00 00000113 007ea800 000000f4 00000ab8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63087263 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63087520 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63087874 user job fence e flush 1 cntx 80000000 seq 2746 c0053c00 00000113 007ea800 000000f4 00000ab9 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63088458 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63088701 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63089039 user job fence e flush 1 cntx 80000000 seq 2747 c0053c00 00000113 007ea800 000000f4 00000aba ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63103964 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63104220 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63104575 user job fence e flush 1 cntx 80000000 seq 2748 c0053c00 00000113 007ea800 000000f4 00000abb ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63105173 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63105417 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63105753 user job fence e flush 1 cntx 80000000 seq 2749 c0053c00 00000113 007ea800 000000f4 00000abc ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63120663 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63120920 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63121266 user job fence e flush 1 cntx 80000000 seq 2750 c0053c00 00000113 007ea800 000000f4 00000abd ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63121841 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63122084 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63122421 user job fence e flush 1 cntx 80000000 seq 2751 c0053c00 00000113 007ea800 000000f4 00000abe ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63137362 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63137619 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63137975 user job fence e flush 1 cntx 80000000 seq 2752 c0053c00 00000113 007ea800 000000f4 00000abf ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63138559 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63138802 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63139142 user job fence e flush 1 cntx 80000000 seq 2753 c0053c00 00000113 007ea800 000000f4 00000ac0 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63154066 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63154322 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63154677 user job fence e flush 1 cntx 80000000 seq 2754 c0053c00 00000113 007ea800 000000f4 00000ac1 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63155273 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63155516 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63155853 user job fence e flush 1 cntx 80000000 seq 2755 c0053c00 00000113 007ea800 000000f4 00000ac2 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63170767 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63171024 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63171370 user job fence e flush 1 cntx 80000000 seq 2756 c0053c00 00000113 007ea800 000000f4 00000ac3 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63171945 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63172189 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63172525 user job fence e flush 1 cntx 80000000 seq 2757 c0053c00 00000113 007ea800 000000f4 00000ac4 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63187397 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63187643 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63187984 user job fence e flush 1 cntx 80000000 seq 2758 c0053c00 00000113 007ea800 000000f4 00000ac5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63188560 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63188804 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63189143 user job fence e flush 1 cntx 80000000 seq 2759 c0053c00 00000113 007ea800 000000f4 00000ac6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63204160 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63204416 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63204771 user job fence e flush 1 cntx 80000000 seq 2760 c0053c00 00000113 007ea800 000000f4 00000ac7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63205369 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63205613 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63205950 user job fence e flush 1 cntx 80000000 seq 2761 c0053c00 00000113 007ea800 000000f4 00000ac8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63220859 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63221116 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63221461 user job fence e flush 1 cntx 80000000 seq 2762 c0053c00 00000113 007ea800 000000f4 00000ac9 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63222036 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63222279 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63222616 user job fence e flush 1 cntx 80000000 seq 2763 c0053c00 00000113 007ea800 000000f4 00000aca ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63237559 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63237816 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63238169 user job fence e flush 1 cntx 80000000 seq 2764 c0053c00 00000113 007ea800 000000f4 00000acb ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63238751 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63238994 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63239331 user job fence e flush 1 cntx 80000000 seq 2765 c0053c00 00000113 007ea800 000000f4 00000acc ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63254260 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63254517 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63254872 user job fence e flush 1 cntx 80000000 seq 2766 c0053c00 00000113 007ea800 000000f4 00000acd ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63255469 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63255712 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63256048 user job fence e flush 1 cntx 80000000 seq 2767 c0053c00 00000113 007ea800 000000f4 00000ace ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63270958 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63271216 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63271562 user job fence e flush 1 cntx 80000000 seq 2768 c0053c00 00000113 007ea800 000000f4 00000acf ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63272136 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63272380 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63272682 user job fence e flush 1 cntx 80000000 seq 2769 c0053c00 00000113 007ea800 000000f4 00000ad0 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63287661 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63287917 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63288273 user job fence e flush 1 cntx 80000000 seq 2770 c0053c00 00000113 007ea800 000000f4 00000ad1 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63288860 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63289103 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63289440 user job fence e flush 1 cntx 80000000 seq 2771 c0053c00 00000113 007ea800 000000f4 00000ad2 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63314372 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63314612 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63314929 user job fence e flush 1 cntx 80000000 seq 2772 c0053c00 00000113 007ea800 000000f4 00000ad3 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63315534 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63315749 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63316009 user job fence e flush 1 cntx 80000000 seq 2773 c0053c00 00000113 007ea800 000000f4 00000ad4 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63320902 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63321126 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63321422 user job fence e flush 1 cntx 80000000 seq 2774 c0053c00 00000113 007ea800 000000f4 00000ad5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63321993 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63322237 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63322567 user job fence e flush 1 cntx 80000000 seq 2775 c0053c00 00000113 007ea800 000000f4 00000ad6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63337736 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63337992 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63338346 user job fence e flush 1 cntx 80000000 seq 2776 c0053c00 00000113 007ea800 000000f4 00000ad7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63338931 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63339178 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63339515 user job fence e flush 1 cntx 80000000 seq 2777 c0053c00 00000113 007ea800 000000f4 00000ad8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63354440 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63354696 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63355050 user job fence e flush 1 cntx 80000000 seq 2778 c0053c00 00000113 007ea800 000000f4 00000ad9 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63355651 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63355894 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63356231 user job fence e flush 1 cntx 80000000 seq 2779 c0053c00 00000113 007ea800 000000f4 00000ada ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63371128 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63371368 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63371681 user job fence e flush 1 cntx 80000000 seq 2780 c0053c00 00000113 007ea800 000000f4 00000adb ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63372254 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63372497 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63372806 user job fence e flush 1 cntx 80000000 seq 2781 c0053c00 00000113 007ea800 000000f4 00000adc ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63387835 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63388092 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63388446 user job fence e flush 1 cntx 80000000 seq 2782 c0053c00 00000113 007ea800 000000f4 00000add ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63389033 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63389276 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63389613 user job fence e flush 1 cntx 80000000 seq 2783 c0053c00 00000113 007ea800 000000f4 00000ade ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63404537 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63404794 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63405149 user job fence e flush 1 cntx 80000000 seq 2784 c0053c00 00000113 007ea800 000000f4 00000adf ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63405745 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63405989 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63406326 user job fence e flush 1 cntx 80000000 seq 2785 c0053c00 00000113 007ea800 000000f4 00000ae0 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63421235 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63421492 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63421838 user job fence e flush 1 cntx 80000000 seq 2786 c0053c00 00000113 007ea800 000000f4 00000ae1 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63422413 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63422656 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63422992 user job fence e flush 1 cntx 80000000 seq 2787 c0053c00 00000113 007ea800 000000f4 00000ae2 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63437935 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63438192 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63438546 user job fence e flush 1 cntx 80000000 seq 2788 c0053c00 00000113 007ea800 000000f4 00000ae3 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63439129 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63439372 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63439709 user job fence e flush 1 cntx 80000000 seq 2789 c0053c00 00000113 007ea800 000000f4 00000ae4 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63454637 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63454894 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63455248 user job fence e flush 1 cntx 80000000 seq 2790 c0053c00 00000113 007ea800 000000f4 00000ae5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63455845 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63456088 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63456428 user job fence e flush 1 cntx 80000000 seq 2791 c0053c00 00000113 007ea800 000000f4 00000ae6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63471335 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63471591 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63471937 user job fence e flush 1 cntx 80000000 seq 2792 c0053c00 00000113 007ea800 000000f4 00000ae7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63472512 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63472755 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63473092 user job fence e flush 1 cntx 80000000 seq 2793 c0053c00 00000113 007ea800 000000f4 00000ae8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63488036 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63488293 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63488646 user job fence e flush 1 cntx 80000000 seq 2794 c0053c00 00000113 007ea800 000000f4 00000ae9 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63489229 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63489475 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63489812 user job fence e flush 1 cntx 80000000 seq 2795 c0053c00 00000113 007ea800 000000f4 00000aea ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63504735 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63504992 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63505347 user job fence e flush 1 cntx 80000000 seq 2796 c0053c00 00000113 007ea800 000000f4 00000aeb ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63505943 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63506186 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63506523 user job fence e flush 1 cntx 80000000 seq 2797 c0053c00 00000113 007ea800 000000f4 00000aec ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63521434 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63521689 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63522034 user job fence e flush 1 cntx 80000000 seq 2798 c0053c00 00000113 007ea800 000000f4 00000aed ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63522608 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63522852 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63523188 user job fence e flush 1 cntx 80000000 seq 2799 c0053c00 00000113 007ea800 000000f4 00000aee ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63538130 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63538386 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63538741 user job fence e flush 1 cntx 80000000 seq 2800 c0053c00 00000113 007ea800 000000f4 00000aef ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63539325 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63539568 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63539905 user job fence e flush 1 cntx 80000000 seq 2801 c0053c00 00000113 007ea800 000000f4 00000af0 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63554832 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63555090 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63555444 user job fence e flush 1 cntx 80000000 seq 2802 c0053c00 00000113 007ea800 000000f4 00000af1 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63556040 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63556284 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63556621 user job fence e flush 1 cntx 80000000 seq 2803 c0053c00 00000113 007ea800 000000f4 00000af2 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63571532 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63571788 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63572134 user job fence e flush 1 cntx 80000000 seq 2804 c0053c00 00000113 007ea800 000000f4 00000af3 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63572708 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63572952 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63573289 user job fence e flush 1 cntx 80000000 seq 2805 c0053c00 00000113 007ea800 000000f4 00000af4 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63588231 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63588487 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63588842 user job fence e flush 1 cntx 80000000 seq 2806 c0053c00 00000113 007ea800 000000f4 00000af5 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63589425 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63589668 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63590005 user job fence e flush 1 cntx 80000000 seq 2807 c0053c00 00000113 007ea800 000000f4 00000af6 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63604929 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63605186 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63605540 user job fence e flush 1 cntx 80000000 seq 2808 c0053c00 00000113 007ea800 000000f4 00000af7 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63606136 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63606379 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63606716 user job fence e flush 1 cntx 80000000 seq 2809 c0053c00 00000113 007ea800 000000f4 00000af8 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63621628 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63621884 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63622230 user job fence e flush 1 cntx 80000000 seq 2810 c0053c00 00000113 007ea800 000000f4 00000af9 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63622804 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63623047 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63623384 user job fence e flush 1 cntx 80000000 seq 2811 c0053c00 00000113 007ea800 000000f4 00000afa ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63638329 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63638585 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63638940 user job fence e flush 1 cntx 80000000 seq 2812 c0053c00 00000113 007ea800 000000f4 00000afb ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63639523 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63639767 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63640107 user job fence e flush 1 cntx 80000000 seq 2813 c0053c00 00000113 007ea800 000000f4 00000afc ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63655031 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63655288 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63655644 user job fence e flush 1 cntx 80000000 seq 2814 c0053c00 00000113 007ea800 000000f4 00000afd ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63656240 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63656483 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63656821 user job fence e flush 1 cntx 80000000 seq 2815 c0053c00 00000113 007ea800 000000f4 00000afe ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63671730 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63671985 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63672330 user job fence e flush 1 cntx 80000000 seq 2816 c0053c00 00000113 007ea800 000000f4 00000aff ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63672905 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63673148 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63673485 user job fence e flush 1 cntx 80000000 seq 2817 c0053c00 00000113 007ea800 000000f4 00000b00 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63688430 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63688686 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63689040 user job fence e flush 1 cntx 80000000 seq 2818 c0053c00 00000113 007ea800 000000f4 00000b01 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63689624 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63689870 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63690207 user job fence e flush 1 cntx 80000000 seq 2819 c0053c00 00000113 007ea800 000000f4 00000b02 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63705128 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63705386 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63705739 user job fence e flush 1 cntx 80000000 seq 2820 c0053c00 00000113 007ea800 000000f4 00000b03 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63706335 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63706578 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63706915 user job fence e flush 1 cntx 80000000 seq 2821 c0053c00 00000113 007ea800 000000f4 00000b04 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63721826 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63722081 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63722426 user job fence e flush 1 cntx 80000000 seq 2822 c0053c00 00000113 007ea800 000000f4 00000b05 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63723001 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63723244 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63723581 user job fence e flush 1 cntx 80000000 seq 2823 c0053c00 00000113 007ea800 000000f4 00000b06 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63738546 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63738804 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63739158 user job fence e flush 1 cntx 80000000 seq 2824 c0053c00 00000113 007ea800 000000f4 00000b07 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63739740 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63739984 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63740320 user job fence e flush 1 cntx 80000000 seq 2825 c0053c00 00000113 007ea800 000000f4 00000b08 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63755247 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63755496 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63755834 user job fence e flush 1 cntx 80000000 seq 2826 c0053c00 00000113 007ea800 000000f4 00000b09 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63756409 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63756652 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63756989 user job fence e flush 1 cntx 80000000 seq 2827 c0053c00 00000113 007ea800 000000f4 00000b0a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63771933 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63772190 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63772535 user job fence e flush 1 cntx 80000000 seq 2828 c0053c00 00000113 007ea800 000000f4 00000b0b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63773111 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63773354 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63773654 user job fence e flush 1 cntx 80000000 seq 2829 c0053c00 00000113 007ea800 000000f4 00000b0c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63788633 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63788890 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63789245 user job fence e flush 1 cntx 80000000 seq 2830 c0053c00 00000113 007ea800 000000f4 00000b0d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63789828 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63790072 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63790409 user job fence e flush 1 cntx 80000000 seq 2831 c0053c00 00000113 007ea800 000000f4 00000b0e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63805196 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63805423 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63805721 user job fence e flush 1 cntx 80000000 seq 2832 c0053c00 00000113 007ea800 000000f4 00000b0f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63806272 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63806489 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63806747 user job fence e flush 1 cntx 80000000 seq 2833 c0053c00 00000113 007ea800 000000f4 00000b10 ffffffff 00000004 c0033700
+KERN: R5 interface: HaikuControlLook from distro
+KERN: radeon_hd: t 63822100 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63822358 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63822700 user job fence e flush 1 cntx 80000000 seq 2834 c0053c00 00000113 007ea800 000000f4 00000b11 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63823280 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63823523 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63823860 user job fence e flush 1 cntx 80000000 seq 2835 c0053c00 00000113 007ea800 000000f4 00000b12 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63838793 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63839048 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63839403 user job fence e flush 1 cntx 80000000 seq 2836 c0053c00 00000113 007ea800 000000f4 00000b13 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63839990 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63840233 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63840570 user job fence e flush 1 cntx 80000000 seq 2837 c0053c00 00000113 007ea800 000000f4 00000b14 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63855492 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63855750 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63856104 user job fence e flush 1 cntx 80000000 seq 2838 c0053c00 00000113 007ea800 000000f4 00000b15 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63856703 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63856946 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63857283 user job fence e flush 1 cntx 80000000 seq 2839 c0053c00 00000113 007ea800 000000f4 00000b16 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63872186 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63872442 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63872784 user job fence e flush 1 cntx 80000000 seq 2840 c0053c00 00000113 007ea800 000000f4 00000b17 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63873364 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63873610 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63873947 user job fence e flush 1 cntx 80000000 seq 2841 c0053c00 00000113 007ea800 000000f4 00000b18 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63888884 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63889139 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63889496 user job fence e flush 1 cntx 80000000 seq 2842 c0053c00 00000113 007ea800 000000f4 00000b19 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63890081 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63890325 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63890662 user job fence e flush 1 cntx 80000000 seq 2843 c0053c00 00000113 007ea800 000000f4 00000b1a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63905581 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63905838 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63906192 user job fence e flush 1 cntx 80000000 seq 2844 c0053c00 00000113 007ea800 000000f4 00000b1b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63906792 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63907035 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63907372 user job fence e flush 1 cntx 80000000 seq 2845 c0053c00 00000113 007ea800 000000f4 00000b1c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63922281 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63922536 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63922878 user job fence e flush 1 cntx 80000000 seq 2846 c0053c00 00000113 007ea800 000000f4 00000b1d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63923456 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63923700 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63924037 user job fence e flush 1 cntx 80000000 seq 2847 c0053c00 00000113 007ea800 000000f4 00000b1e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63938976 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63939232 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63939586 user job fence e flush 1 cntx 80000000 seq 2848 c0053c00 00000113 007ea800 000000f4 00000b1f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63940170 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63940413 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63940750 user job fence e flush 1 cntx 80000000 seq 2849 c0053c00 00000113 007ea800 000000f4 00000b20 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63955678 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63955935 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63956289 user job fence e flush 1 cntx 80000000 seq 2850 c0053c00 00000113 007ea800 000000f4 00000b21 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63956884 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63957127 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 63957466 user job fence e flush 1 cntx 80000000 seq 2851 c0053c00 00000113 007ea800 000000f4 00000b22 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63972374 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63972631 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 63972973 user job fence e flush 1 cntx 80000000 seq 2852 c0053c00 00000113 007ea800 000000f4 00000b23 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63973550 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63973793 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 63974131 user job fence e flush 1 cntx 80000000 seq 2853 c0053c00 00000113 007ea800 000000f4 00000b24 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63989073 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 63989329 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 63989682 user job fence e flush 1 cntx 80000000 seq 2854 c0053c00 00000113 007ea800 000000f4 00000b25 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 63990263 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 63990507 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 63990843 user job fence e flush 1 cntx 80000000 seq 2855 c0053c00 00000113 007ea800 000000f4 00000b26 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64005770 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64006027 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64006382 user job fence e flush 1 cntx 80000000 seq 2856 c0053c00 00000113 007ea800 000000f4 00000b27 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64006977 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64007221 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64007558 user job fence e flush 1 cntx 80000000 seq 2857 c0053c00 00000113 007ea800 000000f4 00000b28 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64022472 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64022728 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64023071 user job fence e flush 1 cntx 80000000 seq 2858 c0053c00 00000113 007ea800 000000f4 00000b29 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64023648 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64023891 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64024228 user job fence e flush 1 cntx 80000000 seq 2859 c0053c00 00000113 007ea800 000000f4 00000b2a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64039163 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64039420 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64039775 user job fence e flush 1 cntx 80000000 seq 2860 c0053c00 00000113 007ea800 000000f4 00000b2b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64040356 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64040599 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64040936 user job fence e flush 1 cntx 80000000 seq 2861 c0053c00 00000113 007ea800 000000f4 00000b2c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64055872 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64056128 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64056487 user job fence e flush 1 cntx 80000000 seq 2862 c0053c00 00000113 007ea800 000000f4 00000b2d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64057081 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64057324 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64057664 user job fence e flush 1 cntx 80000000 seq 2863 c0053c00 00000113 007ea800 000000f4 00000b2e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64072567 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64072824 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64073167 user job fence e flush 1 cntx 80000000 seq 2864 c0053c00 00000113 007ea800 000000f4 00000b2f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64073744 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64073987 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64074327 user job fence e flush 1 cntx 80000000 seq 2865 c0053c00 00000113 007ea800 000000f4 00000b30 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64089266 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64089522 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64089877 user job fence e flush 1 cntx 80000000 seq 2866 c0053c00 00000113 007ea800 000000f4 00000b31 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64090457 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64090700 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64091040 user job fence e flush 1 cntx 80000000 seq 2867 c0053c00 00000113 007ea800 000000f4 00000b32 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64105964 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64106220 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64106574 user job fence e flush 1 cntx 80000000 seq 2868 c0053c00 00000113 007ea800 000000f4 00000b33 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64107172 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64107415 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64107752 user job fence e flush 1 cntx 80000000 seq 2869 c0053c00 00000113 007ea800 000000f4 00000b34 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64122657 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64122913 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64123254 user job fence e flush 1 cntx 80000000 seq 2870 c0053c00 00000113 007ea800 000000f4 00000b35 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64123830 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64124073 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64124410 user job fence e flush 1 cntx 80000000 seq 2871 c0053c00 00000113 007ea800 000000f4 00000b36 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64139360 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64139618 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64139974 user job fence e flush 1 cntx 80000000 seq 2872 c0053c00 00000113 007ea800 000000f4 00000b37 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64140555 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64140798 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64141135 user job fence e flush 1 cntx 80000000 seq 2873 c0053c00 00000113 007ea800 000000f4 00000b38 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64156057 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64156313 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64156668 user job fence e flush 1 cntx 80000000 seq 2874 c0053c00 00000113 007ea800 000000f4 00000b39 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64157261 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64157504 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64157841 user job fence e flush 1 cntx 80000000 seq 2875 c0053c00 00000113 007ea800 000000f4 00000b3a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64172756 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64173013 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64173355 user job fence e flush 1 cntx 80000000 seq 2876 c0053c00 00000113 007ea800 000000f4 00000b3b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64173930 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64174173 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64174512 user job fence e flush 1 cntx 80000000 seq 2877 c0053c00 00000113 007ea800 000000f4 00000b3c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64189446 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64189702 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64190057 user job fence e flush 1 cntx 80000000 seq 2878 c0053c00 00000113 007ea800 000000f4 00000b3d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64190640 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64190883 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64191220 user job fence e flush 1 cntx 80000000 seq 2879 c0053c00 00000113 007ea800 000000f4 00000b3e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64206152 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64206410 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64206764 user job fence e flush 1 cntx 80000000 seq 2880 c0053c00 00000113 007ea800 000000f4 00000b3f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64207360 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64207603 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64207940 user job fence e flush 1 cntx 80000000 seq 2881 c0053c00 00000113 007ea800 000000f4 00000b40 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64222847 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64223103 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64223446 user job fence e flush 1 cntx 80000000 seq 2882 c0053c00 00000113 007ea800 000000f4 00000b41 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64224023 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64224266 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64224603 user job fence e flush 1 cntx 80000000 seq 2883 c0053c00 00000113 007ea800 000000f4 00000b42 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64239550 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64239805 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64240160 user job fence e flush 1 cntx 80000000 seq 2884 c0053c00 00000113 007ea800 000000f4 00000b43 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64240741 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64240984 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64241321 user job fence e flush 1 cntx 80000000 seq 2885 c0053c00 00000113 007ea800 000000f4 00000b44 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64256245 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64256502 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64256857 user job fence e flush 1 cntx 80000000 seq 2886 c0053c00 00000113 007ea800 000000f4 00000b45 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64257450 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64257693 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64258030 user job fence e flush 1 cntx 80000000 seq 2887 c0053c00 00000113 007ea800 000000f4 00000b46 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64272945 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64273201 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64273544 user job fence e flush 1 cntx 80000000 seq 2888 c0053c00 00000113 007ea800 000000f4 00000b47 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64274120 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64274363 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64274700 user job fence e flush 1 cntx 80000000 seq 2889 c0053c00 00000113 007ea800 000000f4 00000b48 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64289643 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64289899 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64290253 user job fence e flush 1 cntx 80000000 seq 2890 c0053c00 00000113 007ea800 000000f4 00000b49 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64290836 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64291079 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64291416 user job fence e flush 1 cntx 80000000 seq 2891 c0053c00 00000113 007ea800 000000f4 00000b4a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64306335 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64306591 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64306946 user job fence e flush 1 cntx 80000000 seq 2892 c0053c00 00000113 007ea800 000000f4 00000b4b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64307541 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64307785 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64308121 user job fence e flush 1 cntx 80000000 seq 2893 c0053c00 00000113 007ea800 000000f4 00000b4c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64323033 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64323295 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64323638 user job fence e flush 1 cntx 80000000 seq 2894 c0053c00 00000113 007ea800 000000f4 00000b4d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64324214 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64324457 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64324794 user job fence e flush 1 cntx 80000000 seq 2895 c0053c00 00000113 007ea800 000000f4 00000b4e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64339739 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64339995 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64340350 user job fence e flush 1 cntx 80000000 seq 2896 c0053c00 00000113 007ea800 000000f4 00000b4f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64340931 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64341175 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64341511 user job fence e flush 1 cntx 80000000 seq 2897 c0053c00 00000113 007ea800 000000f4 00000b50 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64356436 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64356692 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64357047 user job fence e flush 1 cntx 80000000 seq 2898 c0053c00 00000113 007ea800 000000f4 00000b51 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64357650 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64357893 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64358230 user job fence e flush 1 cntx 80000000 seq 2899 c0053c00 00000113 007ea800 000000f4 00000b52 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64373134 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64373390 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64373733 user job fence e flush 1 cntx 80000000 seq 2900 c0053c00 00000113 007ea800 000000f4 00000b53 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64374313 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64374557 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64374893 user job fence e flush 1 cntx 80000000 seq 2901 c0053c00 00000113 007ea800 000000f4 00000b54 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64389835 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64390091 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64390447 user job fence e flush 1 cntx 80000000 seq 2902 c0053c00 00000113 007ea800 000000f4 00000b55 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64391030 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64391274 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64391610 user job fence e flush 1 cntx 80000000 seq 2903 c0053c00 00000113 007ea800 000000f4 00000b56 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64406534 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64406791 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64407147 user job fence e flush 1 cntx 80000000 seq 2904 c0053c00 00000113 007ea800 000000f4 00000b57 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64407740 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64407983 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64408320 user job fence e flush 1 cntx 80000000 seq 2905 c0053c00 00000113 007ea800 000000f4 00000b58 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64423228 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64423485 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64423827 user job fence e flush 1 cntx 80000000 seq 2906 c0053c00 00000113 007ea800 000000f4 00000b59 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64424409 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64424655 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64424991 user job fence e flush 1 cntx 80000000 seq 2907 c0053c00 00000113 007ea800 000000f4 00000b5a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64439934 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64440190 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64440544 user job fence e flush 1 cntx 80000000 seq 2908 c0053c00 00000113 007ea800 000000f4 00000b5b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64441126 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64441369 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64441706 user job fence e flush 1 cntx 80000000 seq 2909 c0053c00 00000113 007ea800 000000f4 00000b5c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64456631 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64456887 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64457242 user job fence e flush 1 cntx 80000000 seq 2910 c0053c00 00000113 007ea800 000000f4 00000b5d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64457834 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64458078 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64458415 user job fence e flush 1 cntx 80000000 seq 2911 c0053c00 00000113 007ea800 000000f4 00000b5e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64473326 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64473584 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64473927 user job fence e flush 1 cntx 80000000 seq 2912 c0053c00 00000113 007ea800 000000f4 00000b5f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64474502 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64474748 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64475085 user job fence e flush 1 cntx 80000000 seq 2913 c0053c00 00000113 007ea800 000000f4 00000b60 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64490025 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64490281 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64490636 user job fence e flush 1 cntx 80000000 seq 2914 c0053c00 00000113 007ea800 000000f4 00000b61 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64491216 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64491461 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64491798 user job fence e flush 1 cntx 80000000 seq 2915 c0053c00 00000113 007ea800 000000f4 00000b62 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64506732 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64506989 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64507344 user job fence e flush 1 cntx 80000000 seq 2916 c0053c00 00000113 007ea800 000000f4 00000b63 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64507938 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64508181 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64508518 user job fence e flush 1 cntx 80000000 seq 2917 c0053c00 00000113 007ea800 000000f4 00000b64 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64523415 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64523672 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64524014 user job fence e flush 1 cntx 80000000 seq 2918 c0053c00 00000113 007ea800 000000f4 00000b65 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64524588 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64524832 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64525168 user job fence e flush 1 cntx 80000000 seq 2919 c0053c00 00000113 007ea800 000000f4 00000b66 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64540116 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64540372 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64540726 user job fence e flush 1 cntx 80000000 seq 2920 c0053c00 00000113 007ea800 000000f4 00000b67 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64541307 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64541550 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64541887 user job fence e flush 1 cntx 80000000 seq 2921 c0053c00 00000113 007ea800 000000f4 00000b68 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64556821 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64557078 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64557432 user job fence e flush 1 cntx 80000000 seq 2922 c0053c00 00000113 007ea800 000000f4 00000b69 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64558026 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64558270 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64558606 user job fence e flush 1 cntx 80000000 seq 2923 c0053c00 00000113 007ea800 000000f4 00000b6a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64573515 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64573772 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64574115 user job fence e flush 1 cntx 80000000 seq 2924 c0053c00 00000113 007ea800 000000f4 00000b6b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64574690 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64574933 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64575272 user job fence e flush 1 cntx 80000000 seq 2925 c0053c00 00000113 007ea800 000000f4 00000b6c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64590214 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64590470 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64590824 user job fence e flush 1 cntx 80000000 seq 2926 c0053c00 00000113 007ea800 000000f4 00000b6d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64591405 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64591648 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64591985 user job fence e flush 1 cntx 80000000 seq 2927 c0053c00 00000113 007ea800 000000f4 00000b6e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64606917 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64607172 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64607527 user job fence e flush 1 cntx 80000000 seq 2928 c0053c00 00000113 007ea800 000000f4 00000b6f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64608122 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64608365 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64608702 user job fence e flush 1 cntx 80000000 seq 2929 c0053c00 00000113 007ea800 000000f4 00000b70 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64623611 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64623868 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64624210 user job fence e flush 1 cntx 80000000 seq 2930 c0053c00 00000113 007ea800 000000f4 00000b71 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64624785 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64625028 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64625366 user job fence e flush 1 cntx 80000000 seq 2931 c0053c00 00000113 007ea800 000000f4 00000b72 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64640305 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64640562 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64640916 user job fence e flush 1 cntx 80000000 seq 2932 c0053c00 00000113 007ea800 000000f4 00000b73 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64641497 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64641740 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64642077 user job fence e flush 1 cntx 80000000 seq 2933 c0053c00 00000113 007ea800 000000f4 00000b74 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64657011 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64657267 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64657623 user job fence e flush 1 cntx 80000000 seq 2934 c0053c00 00000113 007ea800 000000f4 00000b75 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64658215 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64658458 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64658794 user job fence e flush 1 cntx 80000000 seq 2935 c0053c00 00000113 007ea800 000000f4 00000b76 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64673709 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64673966 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64674309 user job fence e flush 1 cntx 80000000 seq 2936 c0053c00 00000113 007ea800 000000f4 00000b77 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64674884 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64675127 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64675464 user job fence e flush 1 cntx 80000000 seq 2937 c0053c00 00000113 007ea800 000000f4 00000b78 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64690408 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64690665 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64691022 user job fence e flush 1 cntx 80000000 seq 2938 c0053c00 00000113 007ea800 000000f4 00000b79 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64691603 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64691846 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64692183 user job fence e flush 1 cntx 80000000 seq 2939 c0053c00 00000113 007ea800 000000f4 00000b7a ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64707105 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64707361 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64707719 user job fence e flush 1 cntx 80000000 seq 2940 c0053c00 00000113 007ea800 000000f4 00000b7b ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64708311 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64708556 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64708893 user job fence e flush 1 cntx 80000000 seq 2941 c0053c00 00000113 007ea800 000000f4 00000b7c ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64723803 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64724060 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64724406 user job fence e flush 1 cntx 80000000 seq 2942 c0053c00 00000113 007ea800 000000f4 00000b7d ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64724980 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64725223 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64725560 user job fence e flush 1 cntx 80000000 seq 2943 c0053c00 00000113 007ea800 000000f4 00000b7e ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64740519 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64740776 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64741132 user job fence e flush 1 cntx 80000000 seq 2944 c0053c00 00000113 007ea800 000000f4 00000b7f ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64741712 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64741956 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64742292 user job fence e flush 1 cntx 80000000 seq 2945 c0053c00 00000113 007ea800 000000f4 00000b80 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64757079 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64757319 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64757618 user job fence e flush 1 cntx 80000000 seq 2946 c0053c00 00000113 007ea800 000000f4 00000b81 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64758158 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64758370 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64758631 user job fence e flush 1 cntx 80000000 seq 2947 c0053c00 00000113 007ea800 000000f4 00000b82 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64773889 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64774145 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64774488 user job fence e flush 1 cntx 80000000 seq 2948 c0053c00 00000113 007ea800 000000f4 00000b83 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64775064 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64775307 submit ib va ffff800100900000 dw 104 flags 0
+KERN: radeon_hd: t 64775603 user job fence e flush 1 cntx 80000000 seq 2949 c0053c00 00000113 007ea800 000000f4 00000b84 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64790582 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64790838 submit ib va ffff800100085000 dw 696 flags 0
+KERN: radeon_hd: t 64791193 user job fence e flush 1 cntx 80000000 seq 2950 c0053c00 00000113 007ea800 000000f4 00000b85 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64791777 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64792020 submit ib va ffff8001006c0000 dw 104 flags 0
+KERN: radeon_hd: t 64792357 user job fence e flush 1 cntx 80000000 seq 2951 c0053c00 00000113 007ea800 000000f4 00000b86 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64807282 submit ib va ffff8001000ad000 dw 24 flags 0
+KERN: radeon_hd: t 64807538 submit ib va ffff800100071000 dw 696 flags 0
+KERN: radeon_hd: t 64807893 user job fence e flush 1 cntx 80000000 seq 2952 c0053c00 00000113 007ea800 000000f4 00000b87 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 64808486 submit ib va ffff800100099000 dw 24 flags 0
+KERN: radeon_hd: t 64808730 submit ib va ffff8001007e0000 dw 104 flags 0
+KERN: radeon_hd: t 64809066 user job fence e flush 1 cntx 80000000 seq 2953 c0053c00 00000113 007ea800 000000f4 00000b88 ffffffff 00000004 c0033700
+KERN: R5 interface: HaikuControlLook from distro
+KERN: remove_memory_type_range(): no range known for area 32682
+KERN: remove_memory_type_range(): no range known for area 33422
+KERN: remove_memory_type_range(): no range known for area 33428
+KERN: remove_memory_type_range(): no range known for area 33434
+KERN: remove_memory_type_range(): no range known for area 33438
+KERN: remove_memory_type_range(): no range known for area 33436
+KERN: remove_memory_type_range(): no range known for area 33432
+KERN: remove_memory_type_range(): no range known for area 33430
+KERN: remove_memory_type_range(): no range known for area 33426
+KERN: remove_memory_type_range(): no range known for area 33424
+KERN: remove_memory_type_range(): no range known for area 32684
+KERN: remove_memory_type_range(): no range known for area 32686
+KERN: remove_memory_type_range(): no range known for area 32722
+KERN: remove_memory_type_range(): no range known for area 32692
+KERN: remove_memory_type_range(): no range known for area 32720
+KERN: remove_memory_type_range(): no range known for area 32690
+KERN: remove_memory_type_range(): no range known for area 32680
+KERN: remove_memory_type_range(): no range known for area 32678
+KERN: remove_memory_type_range(): no range known for area 32676
+KERN: remove_memory_type_range(): no range known for area 32696
+KERN: remove_memory_type_range(): no range known for area 32698
+KERN: remove_memory_type_range(): no range known for area 32700
+KERN: radeon_hd: t 65845112 regs selftest inv0 ffffffff 0000001f inv17 ffffffff 0000001f l1 00003d59 agp 00000000 00000000 aper 003d0000 003d0800 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 65846529 r1c before x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 65846990 r1c gtt x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 65847533 user job fence 0 flush 1 cntx 81018003 seq 2954 c0053c00 00000113 007ea800 000000f4 00000b89 ffffffff 00000004 c0033700
+KERN: radeon_hd: p1 r1c-gtt ok 0 ms
+KERN: radeon_hd: t 65848185 r1c vram x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 65848726 user job fence 0 flush 1 cntx 80000000 seq 2955 c0053c00 00000113 007ea800 000000f4 00000b8a ffffffff 00000004 c0033700
+KERN: radeon_hd: p1 r1c-vram ok 0 ms
+KERN: radeon_hd: t 65849371 r1c dest 44444444 x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: t 65849864 r1 free a x ffff800000500000 y ffff800000501000 inv 1 hub 0 vmids 1 fence 0 cond 0 gds 0 pasid 1 ce 0
+KERN: radeon_hd: mtrr before cap 0000000000000508 count 8
+KERN: radeon_hd: mtrr before 0 base 00000000ff000005 mask 0000ffffff000800
+KERN: radeon_hd: mtrr before 1 base 0000000000000006 mask 0000ffff80000800
+KERN: radeon_hd: mtrr before 2 base 0000000080000006 mask 0000ffffc0000800
+KERN: radeon_hd: mtrr before 3 base 00000000c0000006 mask 0000fffff0000800
+KERN: radeon_hd: mtrr before 4 base 00000000cf000000 mask 0000ffffff000800
+KERN: radeon_hd: mtrr before 5 base 0000000000000000 mask 0000000000000000
+KERN: radeon_hd: mtrr before 6 base 0000000000000000 mask 0000000000000000
+KERN: radeon_hd: mtrr before 7 base 0000000000000000 mask 0000000000000000
+KERN: radeon_hd: hdp off 00000000017d6000 now 00000000 00000000 a1000002 a1000003 a1000004 a1000005 a1000006 a1000007
+KERN: radeon_hd: hdp sfence a1000000 a1000001 a1000002 a1000003 a1000004 a1000005 a1000006 a1000007
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34081 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: b1 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34082 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: b1 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: b1 L3 off 0000000001096000 word 00000008110a9001
+KERN: radeon_hd: b1 L2 off 00000000010a9000 word 00000008110aa001
+KERN: radeon_hd: b1 L1 off 00000000010aa000 word 00000008110ab001
+KERN: radeon_hd: b1 L0 off 00000000010ab000 word 06000008110a1071
+KERN: radeon_hd: b1 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: b1 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: b1 L1 off 00000000010b2000 word 00000008110b3001
+KERN: radeon_hd: b1 L0 off 00000000010b3000 word 06000008110ac071
+KERN: radeon_hd: b1 ib 00007ffffffb0000 phys 00000008110a1000 c0033700 00100500 00041040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65857626 user job fence 0 flush 1 cntx 80000000 seq 2956 c0053c00 00000113 007ea800 000000f4 00000b8b ffffffff 00000004 c0033700
+KERN: radeon_hd: b1 ok 0 ms seq 2956 seen 2956 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34088 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: b2 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: b2 cpu phys 000000002e7b2000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: b2 L3 off 0000000001096000 word 00000008110a9001
+KERN: radeon_hd: b2 L2 off 00000000010a9000 word 00000008110aa001
+KERN: radeon_hd: b2 L1 off 00000000010aa000 word 00000008110ab001
+KERN: radeon_hd: b2 L0 off 00000000010ab000 word 06000008110a1071
+KERN: radeon_hd: b2 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: b2 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: b2 L1 off 00000000010b2000 word 00000008110b3001
+KERN: radeon_hd: b2 L0 off 00000000010b3000 word 000000002e7b2077
+KERN: radeon_hd: b2 ib 00007ffffffb1000 phys 00000008110a1000 c0033700 00100500 00041040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65862341 user job fence 0 flush 1 cntx 80000000 seq 2957 c0053c00 00000113 007ea800 000000f4 00000b8c ffffffff 00000004 c0033700
+KERN: radeon_hd: b2 ok 0 ms seq 2957 seen 2957 word deadbeef cp 00000000 phys 000000002e7b2000 pat 0
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34094 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: b3 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34095 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: b3 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: b3 L3 off 0000000001096000 word 00000008110a9001
+KERN: radeon_hd: b3 L2 off 00000000010a9000 word 00000008110aa001
+KERN: radeon_hd: b3 L1 off 00000000010aa000 word 00000008110ab001
+KERN: radeon_hd: b3 L0 off 00000000010ab000 word 06000008110a1071
+KERN: radeon_hd: b3 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: b3 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: b3 L1 off 00000000010b2000 word 00000008110b3001
+KERN: radeon_hd: b3 L0 off 00000000010b3000 word 06000008110ac071
+KERN: radeon_hd: b3 ib 00007ffffffb2000 phys 00000008110a1000 c0033700 00100500 00001040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65867478 user job fence 0 flush 1 cntx 80000000 seq 2958 c0053c00 00000113 007ea800 000000f4 00000b8d ffffffff 00000004 c0033700
+KERN: radeon_hd: b3 ok 0 ms seq 2958 seen 2958 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: radeon_hd: b5 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: b5 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: b5 L1 off 00000000010b2000 word 00000008110b3001
+KERN: radeon_hd: b5 L0 off 00000000010b3000 word 06000008110ac071
+KERN: radeon_hd: b5 L3 off 0000000001096000 word 00000008110a9001
+KERN: radeon_hd: b5 L2 off 00000000010a9000 word 00000008110aa001
+KERN: radeon_hd: b5 L1 off 00000000010aa000 word 00000008110ab001
+KERN: radeon_hd: b5 L0 off 00000000010ab000 word 06000008110c3071
+KERN: radeon_hd: b5 ib 00007ffffffb3000 phys 00000008110a1000 c0055000 60200000 00041000 ffff8000 fffb4000 00007fff 80000080 00000000
+KERN: radeon_hd: t 65870423 user job fence 0 flush 1 cntx 80000000 seq 2959 c0053c00 00000113 007ea800 000000f4 00000b8e ffffffff 00000004 c0033700
+KERN: radeon_hd: b5 miss 0 ms seq 2959 seen 2959 word 00000000 cp 00000000 phys 00000008110c3000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34104 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a2 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34105 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a2 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a2 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a2 L2 off 00000000010b1000 word 00000008117d7001
+KERN: radeon_hd: a2 L1 off 00000000017d7000 word 00000008117d8001
+KERN: radeon_hd: a2 L0 off 00000000017d8000 word 06000008110a1071
+KERN: radeon_hd: a2 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a2 L2 off 00000000010b1000 word 00000008117d7001
+KERN: radeon_hd: a2 L1 off 00000000017d7000 word 00000008117d8001
+KERN: radeon_hd: a2 L0 off 00000000017d8000 word 06000008110ac071
+KERN: radeon_hd: a2 ib ffff800100000000 phys 00000008110a1000 c0033700 00100500 00001040 ffff8001 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65875567 user job fence 0 flush 1 cntx 80000000 seq 2960 c0053c00 00000113 007ea800 000000f4 00000b8f ffffffff 00000004 c0033700
+KERN: radeon_hd: a2 ok 0 ms seq 2960 seen 2960 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34110 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a1 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34111 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a1 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a1 L3 off 0000000001096000 word 00000008117d9001
+KERN: radeon_hd: a1 L2 off 00000000017d9000 word 00000008117da001
+KERN: radeon_hd: a1 L1 off 00000000017da000 word 00000008117db001
+KERN: radeon_hd: a1 L0 off 00000000017db000 word 06000008110a1071
+KERN: radeon_hd: a1 L3 off 0000000001096000 word 00000008117d9001
+KERN: radeon_hd: a1 L2 off 00000000017d9000 word 00000008117da001
+KERN: radeon_hd: a1 L1 off 00000000017da000 word 00000008117db001
+KERN: radeon_hd: a1 L0 off 00000000017db000 word 06000008110ac071
+KERN: radeon_hd: a1 ib ffffffffffbfd000 phys 00000008110a1000 c0033700 00100500 ffbfc040 ffffffff deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65880698 user job fence 0 flush 1 cntx 80000000 seq 2961 c0053c00 00000113 007ea800 000000f4 00000b90 ffffffff 00000004 c0033700
+KERN: radeon_hd: a1 ok 0 ms seq 2961 seen 2961 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34116 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a3 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34117 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a3 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a3 L3 off 0000000001096000 word 00000008117dc001
+KERN: radeon_hd: a3 L2 off 00000000017dc000 word 00000008117dd001
+KERN: radeon_hd: a3 L1 off 00000000017dd000 word 00000008117de001
+KERN: radeon_hd: a3 L0 off 00000000017de000 word 06000008110a1071
+KERN: radeon_hd: a3 L3 off 0000000001096000 word 00000008117dc001
+KERN: radeon_hd: a3 L2 off 00000000017dc000 word 00000008117dd001
+KERN: radeon_hd: a3 L1 off 00000000017dd000 word 00000008117de001
+KERN: radeon_hd: a3 L0 off 00000000017de000 word 06000008110ac071
+KERN: radeon_hd: a3 ib ffff808000000000 phys 00000008110a1000 c0033700 00100500 00001040 ffff8080 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65885843 user job fence 0 flush 1 cntx 80000000 seq 2962 c0053c00 00000113 007ea800 000000f4 00000b91 ffffffff 00000004 c0033700
+KERN: radeon_hd: a3 ok 0 ms seq 2962 seen 2962 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34122 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a8 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34123 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a8 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a8 L3 off 0000000001096000 word 00000008117df001
+KERN: radeon_hd: a8 L2 off 00000000017df000 word 00000008117e0001
+KERN: radeon_hd: a8 L1 off 00000000017e0000 word 00000008117e1001
+KERN: radeon_hd: a8 L0 off 00000000017e1000 word 06000008110a1071
+KERN: radeon_hd: a8 L3 off 0000000001096000 word 00000008117df001
+KERN: radeon_hd: a8 L2 off 00000000017df000 word 00000008117e0001
+KERN: radeon_hd: a8 L1 off 00000000017e0000 word 00000008117e1001
+KERN: radeon_hd: a8 L0 off 00000000017e1000 word 06000008110ac071
+KERN: radeon_hd: a8 ib 0000000001000000 phys 00000008110a1000 c0033700 00100500 01001040 00000000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65890979 user job fence 0 flush 1 cntx 80000000 seq 2963 c0053c00 00000113 007ea800 000000f4 00000b92 ffffffff 00000004 c0033700
+KERN: radeon_hd: a8 ok 0 ms seq 2963 seen 2963 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34128 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a7 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34129 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a7 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a7 L3 off 0000000001096000 word 00000008117df001
+KERN: radeon_hd: a7 L2 off 00000000017df000 word 00000008117e0001
+KERN: radeon_hd: a7 L1 off 00000000017e0000 word 00000008117e2001
+KERN: radeon_hd: a7 L0 off 00000000017e2000 word 06000008110a1071
+KERN: radeon_hd: a7 L3 off 0000000001096000 word 00000008117df001
+KERN: radeon_hd: a7 L2 off 00000000017df000 word 00000008117e0001
+KERN: radeon_hd: a7 L1 off 00000000017e0000 word 00000008117e2001
+KERN: radeon_hd: a7 L0 off 00000000017e2000 word 06000008110ac071
+KERN: radeon_hd: a7 ib 0000000000100000 phys 00000008110a1000 c0033700 00100500 00101040 00000000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65896115 user job fence 0 flush 1 cntx 80000000 seq 2964 c0053c00 00000113 007ea800 000000f4 00000b93 ffffffff 00000004 c0033700
+KERN: radeon_hd: a7 ok 0 ms seq 2964 seen 2964 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34134 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a4 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34135 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a4 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a4 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a4 L2 off 00000000010b1000 word 00000008117e3001
+KERN: radeon_hd: a4 L1 off 00000000017e3000 word 00000008117e4001
+KERN: radeon_hd: a4 L0 off 00000000017e4000 word 06000008110a1071
+KERN: radeon_hd: a4 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a4 L2 off 00000000010b1000 word 00000008117e3001
+KERN: radeon_hd: a4 L1 off 00000000017e3000 word 00000008117e4001
+KERN: radeon_hd: a4 L0 off 00000000017e4000 word 06000008110ac071
+KERN: radeon_hd: a4 ib ffff8000c0000000 phys 00000008110a1000 c0033700 00100500 c0001040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65901254 user job fence 0 flush 1 cntx 80000000 seq 2965 c0053c00 00000113 007ea800 000000f4 00000b94 ffffffff 00000004 c0033700
+KERN: radeon_hd: a4 ok 0 ms seq 2965 seen 2965 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34140 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a5 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34141 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a5 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a5 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a5 L2 off 00000000010b1000 word 00000008117e5001
+KERN: radeon_hd: a5 L1 off 00000000017e5000 word 00000008117e6001
+KERN: radeon_hd: a5 L0 off 00000000017e6000 word 06000008110a1071
+KERN: radeon_hd: a5 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a5 L2 off 00000000010b1000 word 00000008117e5001
+KERN: radeon_hd: a5 L1 off 00000000017e5000 word 00000008117e6001
+KERN: radeon_hd: a5 L0 off 00000000017e6000 word 06000008110ac071
+KERN: radeon_hd: a5 ib ffff800040000000 phys 00000008110a1000 c0033700 00100500 40001040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65906390 user job fence 0 flush 1 cntx 80000000 seq 2966 c0053c00 00000113 007ea800 000000f4 00000b95 ffffffff 00000004 c0033700
+KERN: radeon_hd: a5 ok 0 ms seq 2966 seen 2966 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34146 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a6 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34147 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: a6 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: a6 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a6 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: a6 L1 off 00000000010b2000 word 00000008117e7001
+KERN: radeon_hd: a6 L0 off 00000000017e7000 word 06000008110a1071
+KERN: radeon_hd: a6 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: a6 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: a6 L1 off 00000000010b2000 word 00000008117e7001
+KERN: radeon_hd: a6 L0 off 00000000017e7000 word 06000008110ac071
+KERN: radeon_hd: a6 ib ffff800000200000 phys 00000008110a1000 c0033700 00100500 00201040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65911524 user job fence 0 flush 1 cntx 80000000 seq 2967 c0053c00 00000113 007ea800 000000f4 00000b96 ffffffff 00000004 c0033700
+KERN: radeon_hd: a6 ok 0 ms seq 2967 seen 2967 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: assuming memory type 20000000 for overlapping 0x8110a1000, 0x1000 area 34152 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: c1 cpu phys 00000008110a1000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: assuming memory type 20000000 for overlapping 0x8110ac000, 0x1000 area 34153 from existing 0x810000000, 0x10000000 area 20685
+KERN: radeon_hd: c1 cpu phys 00000008110ac000 same 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007 other 51550000 51550001 51550002 51550003 51550004 51550005 51550006 51550007
+KERN: radeon_hd: c1 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: c1 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: c1 L1 off 00000000010b2000 word 00000008110b3001
+KERN: radeon_hd: c1 L0 off 00000000010b3000 word 06000008110a1071
+KERN: radeon_hd: c1 L3 off 0000000001096000 word 00000008110b1001
+KERN: radeon_hd: c1 L2 off 00000000010b1000 word 00000008110b2001
+KERN: radeon_hd: c1 L1 off 00000000010b2000 word 00000008110b3001
+KERN: radeon_hd: c1 L0 off 00000000010b3000 word 06000008110ac071
+KERN: radeon_hd: c1 ib ffff800000001000 phys 00000008110a1000 c0033700 00100500 00002040 ffff8000 deadbeef ffff1000 ffff1000 ffff1000
+KERN: radeon_hd: t 65916653 user job fence 0 flush 1 cntx 80000000 seq 2968 c0053c00 00000113 007ea800 000000f4 00000b97 ffffffff 00000004 c0033700
+KERN: radeon_hd: c1 ok 0 ms seq 2968 seen 2968 word deadbeef cp 00000000 phys 00000008110ac000 pat 4
+KERN: radeon_hd: mtrr after cap 0000000000000508 count 8
+KERN: radeon_hd: mtrr after 0 base 00000000ff000005 mask 0000ffffff000800
+KERN: radeon_hd: mtrr after 1 base 0000000000000006 mask 0000ffff80000800
+KERN: radeon_hd: mtrr after 2 base 0000000080000006 mask 0000ffffc0000800
+KERN: radeon_hd: mtrr after 3 base 00000000c0000006 mask 0000fffff0000800
+KERN: radeon_hd: mtrr after 4 base 00000000cf000000 mask 0000ffffff000800
+KERN: radeon_hd: mtrr after 5 base 0000000000000000 mask 0000000000000000
+KERN: radeon_hd: mtrr after 6 base 0000000000000000 mask 0000000000000000
+KERN: radeon_hd: mtrr after 7 base 0000000000000000 mask 0000000000000000
+KERN: radeon_hd: t 65919851 gfx9 cu cc ff080000 user 00000000 active 7 bitmap 000000f7
+KERN: radeon_hd: t 65920142 gfx9 cu cc ff080000 user 00000000 active 7 bitmap 000000f7
+KERN: radeon_hd: t 65920435 gfx9 cu cc ff080000 user 00000000 active 7 bitmap 000000f7
+KERN: radeon_hd: bo domain 1 requested 00000000 used 00000000 bytes 4096 snooped 0
+KERN: radeon_hd: bo domain 2 requested 00000000 used 00000000 bytes 4096 snooped 1
+KERN: radeon_hd: t 65921418 va map 0000000000010000 bytes 4096 domain 1
+KERN: radeon_hd: t 65921660 va map ffff800000000000 bytes 4096 domain 2
+KERN: radeon_hd: t 65921915 vmid1 reused, clients 1
+KERN: radeon_hd: t 65922085 submit ib va ffff800000000000 dw 8 flags 0
+KERN: radeon_hd: t 65922374 user job fence f flush 1 cntx 81018003 seq 2969 c0053c00 00000113 007ea800 000000f4 00000b98 ffffffff 00000004 c0033700
+KERN: radeon_hd: t 65922896 va map ffff800000000000 bytes 4096 domain 2
+KERN: radeon_hd: ring waits 0 max 256 of 1024
+USER: app_server: copy cpu median 0 us cpu 21 ms per 10 s
+KERN: usb_disk: operation 0x35 failed at the SCSI level
+KERN: usb_disk: request_sense: key: 0x05; asc: 0x24; ascq: 0x00; Invalid field in CDB
+KERN: R5 interface: HaikuControlLook from distro
+KERN: Last message repeated 8 times.
+USER: app_server: copy cpu median 0 us cpu 4 ms per 10 s
+KERN: Last message repeated 8 times.
+Last message repeated 1 time
+USER: app_server: copy cpu median 1 us cpu 8 ms per 10 s
+KERN: Last message repeated 8 times.
+Last message repeated 2 times
+USER: app_server: copy cpu median 1 us cpu 8 ms per 10 s
+KERN: Last message repeated 8 times.
+Last message repeated 1 time
+USER: app_server: copy cpu median 0 us cpu 7 ms per 10 s
+KERN: Last message repeated 8 times.
+Last message repeated 1 time
+USER: app_server: copy cpu median 0 us cpu 8 ms per 10 s
+KERN: Last message repeated 8 times.
+KERN: Last message repeated 2 times.
+KERN: usb_disk: operation 0x35 failed at the SCSI level
+KERN: usb_disk: request_sense: key: 0x05; asc: 0x24; ascq: 0x00; Invalid field in CDB
+KERN: R5 interface: HaikuControlLook from distro
+Last message repeated 1 time
+USER: app_server: copy cpu median 0 us cpu 1 ms per 10 s
+USER: app_server: copy cpu median 0 us cpu 24 ms per 10 s
+USER: app_server: copy cpu median 0 us cpu 0 ms per 10 s
+KERN: usb_disk: operation 0x35 failed at the SCSI level
+KERN: usb_disk: request_sense: key: 0x05; asc: 0x24; ascq: 0x00; Invalid field in CDB
+USER: app_server: copy cpu median 0 us cpu 0 ms per 10 s
+USER: app_server: copy cpu median 0 us cpu 23 ms per 10 s
+USER: app_server: copy cpu median 0 us cpu 3 ms per 10 s
+KERN: R5 interface: HaikuControlLook from distro
+USER: app_server: copy cpu median 0 us cpu 3 ms per 10 s
