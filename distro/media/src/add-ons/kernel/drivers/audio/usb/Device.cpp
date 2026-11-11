@@ -8,6 +8,8 @@
 
 #include "Device.h"
 
+#include <string.h>
+
 #include <kernel.h>
 #include <usb/USB_audio.h>
 
@@ -21,6 +23,8 @@
 // Upper bounds for counts that come from a caller of the ioctls.
 static const int32 kMaxMixItems = 1024;
 static const int32 kMaxBufferDescs = 32;
+static const int32 kMaxDescribedChannels = 128;
+static const size_t kEnableBitBytes = kMaxEnabledChannels / 8;
 // SPDX-SnippetEnd
 
 
@@ -34,6 +38,7 @@ Device::Device(usb_device device)
 	fAudioControl(this),
 	fBuffersReadySem(-1)
 {
+	fProductName[0] = '\0';
 	const usb_device_descriptor* deviceDescriptor
 		= gUSBModule->get_device_descriptor(device);
 
@@ -45,6 +50,11 @@ Device::Device(usb_device device)
 	fVendorID = deviceDescriptor->vendor_id;
 	fProductID = deviceDescriptor->product_id;
 	fUSBVersion = deviceDescriptor->usb_version;
+	fProductName[0] = '\0';
+	if (deviceDescriptor->product != 0) {
+		_ReadProductString(device, deviceDescriptor->product, fProductName,
+			sizeof(fProductName));
+	}
 
 	fBuffersReadySem = create_sem(0, DRIVER_NAME "_buffers_ready");
 	if (fBuffersReadySem < B_OK) {
@@ -140,7 +150,6 @@ Device::Control(uint32 op, void* buffer, size_t length)
 		case B_MULTI_GET_DESCRIPTION:
 		{
 			multi_description description;
-			multi_channel_info channels[16];
 			multi_channel_info* originalChannels;
 
 			if (user_memcpy(&description, buffer, sizeof(multi_description))
@@ -148,9 +157,8 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 
 			originalChannels = description.channels;
-			description.channels = channels;
-			if (description.request_channel_count > 16)
-				description.request_channel_count = 16;
+			if (description.request_channel_count > kMaxDescribedChannels)
+				description.request_channel_count = kMaxDescribedChannels;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -164,16 +172,32 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			}
 // SPDX-SnippetEnd
 
-			status_t status = _MultiGetDescription(&description);
-			if (status != B_OK)
-				return status;
+			multi_channel_info* channels = NULL;
+			if (description.request_channel_count > 0) {
+				channels = (multi_channel_info*)malloc(
+					sizeof(multi_channel_info)
+						* description.request_channel_count);
+				if (channels == NULL)
+					return B_NO_MEMORY;
+			}
+			description.channels = channels;
 
+			status_t status = _MultiGetDescription(&description);
 			description.channels = originalChannels;
+			if (status != B_OK) {
+				free(channels);
+				return status;
+			}
+
 			if (user_memcpy(buffer, &description, sizeof(multi_description))
-					!= B_OK)
+					!= B_OK) {
+				free(channels);
 				return B_BAD_ADDRESS;
-			return user_memcpy(originalChannels, channels,
+			}
+			status = user_memcpy(originalChannels, channels,
 				sizeof(multi_channel_info) * description.request_channel_count);
+			free(channels);
+			return status;
 		}
 		case B_MULTI_GET_EVENT_INFO:
 			TRACE(ERR, "B_MULTI_GET_EVENT_INFO n/i\n");
@@ -190,8 +214,9 @@ Device::Control(uint32 op, void* buffer, size_t length)
 		case B_MULTI_GET_ENABLED_CHANNELS:
 		{
 			multi_channel_enable enable;
-			uint32 enable_bits;
+			uchar enable_bits[kEnableBitBytes];
 			uchar* orig_enable_bits;
+			memset(enable_bits, 0, sizeof(enable_bits));
 
 			if (user_memcpy(&enable, buffer, sizeof(enable)) != B_OK
 					|| !IS_USER_ADDRESS(enable.enable_bits)) {
@@ -199,40 +224,65 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			}
 
 			orig_enable_bits = enable.enable_bits;
-			enable.enable_bits = (uchar*)&enable_bits;
-			status_t status = _MultiGetEnabledChannels(&enable);
+			enable.enable_bits = enable_bits;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			uint32 channels = 0;
+			status_t status = _MultiGetEnabledChannels(&enable, &channels);
 			if (status != B_OK)
 				return status;
 
+			// The caller's bitmap is sized for this card's channels, as in
+			// Haiku. Write only those bytes, not the whole kernel bitmap.
 			enable.enable_bits = orig_enable_bits;
-			if (user_memcpy(enable.enable_bits, &enable_bits,
-					sizeof(enable_bits)) != B_OK
+			if (user_memcpy(enable.enable_bits, enable_bits,
+					(channels + 7) / 8) != B_OK
 				|| user_memcpy(buffer, &enable,
 					sizeof(multi_channel_enable)) != B_OK) {
 				return B_BAD_ADDRESS;
 			}
+// SPDX-SnippetEnd
 
 			return B_OK;
 		}
 		case B_MULTI_SET_ENABLED_CHANNELS:
 		{
 			multi_channel_enable enable;
-			uint32 enable_bits;
+			uchar enable_bits[kEnableBitBytes];
 			uchar* orig_enable_bits;
+			memset(enable_bits, 0, sizeof(enable_bits));
 
 			if (user_memcpy(&enable, buffer, sizeof(enable)) != B_OK
 				|| !IS_USER_ADDRESS(enable.enable_bits)) {
 				return B_BAD_ADDRESS;
 			}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// Read only the bytes this card's channels use: a caller sized
+			// for 8 channels passes one byte.
+			multi_channel_enable count;
+			uchar scratch[kEnableBitBytes];
+			memset(scratch, 0, sizeof(scratch));
+			uint32 channels = 0;
+			count.enable_bits = scratch;
+			if (_MultiGetEnabledChannels(&count, &channels) != B_OK)
+				return B_ERROR;
+
 			orig_enable_bits = enable.enable_bits;
-			enable.enable_bits = (uchar*)&enable_bits;
+			if (user_memcpy(enable_bits, orig_enable_bits,
+					(channels + 7) / 8) != B_OK)
+				return B_BAD_ADDRESS;
+// SPDX-SnippetEnd
+			enable.enable_bits = enable_bits;
 			status_t status = _MultiSetEnabledChannels(&enable);
 			if (status != B_OK)
 				return status;
 
 			enable.enable_bits = orig_enable_bits;
-			if (user_memcpy(enable.enable_bits, &enable_bits,
+			if (user_memcpy(enable.enable_bits, enable_bits,
 					sizeof(enable_bits)) < B_OK
 				|| user_memcpy(buffer, &enable, sizeof(multi_channel_enable))
 					< B_OK) {
@@ -517,6 +567,47 @@ Device::CompareAndReattach(usb_device device)
 }
 
 
+void
+Device::_ReadProductString(usb_device device, uint8 index, char* output,
+	size_t outputMax)
+{
+	output[0] = '\0';
+	if (device == 0 || index == 0 || outputMax < 2)
+		return;
+
+	size_t actualLength = 0;
+	uint8 tmp[4];
+	status_t status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING,
+		0, 0, tmp, 4, &actualLength);
+	if (status < B_OK || actualLength != 4 || tmp[1] != USB_DESCRIPTOR_STRING)
+		return;
+
+	uint16 langID = tmp[2] | (tmp[3] << 8);
+	status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING, index,
+		langID, tmp, 2, &actualLength);
+	if (status < B_OK || actualLength != 2 || tmp[1] != USB_DESCRIPTOR_STRING)
+		return;
+
+	uint8 length = tmp[0];
+	if (length < 2)
+		return;
+
+	// A descriptor length is one byte, so it always fits in raw.
+	uint8 raw[256];
+	status = gUSBModule->get_descriptor(device, USB_DESCRIPTOR_STRING, index,
+		langID, raw, length, &actualLength);
+	if (status < B_OK || actualLength < 2)
+		return;
+
+	size_t chars = (actualLength - 2) / 2;
+	if (chars > outputMax - 1)
+		chars = outputMax - 1;
+	for (size_t i = 0; i < chars; i++)
+		output[i] = raw[2 + i * 2];
+	output[chars] = '\0';
+}
+
+
 status_t
 Device::_MultiGetDescription(multi_description* multiDescription)
 {
@@ -528,7 +619,8 @@ Device::_MultiGetDescription(multi_description* multiDescription)
 	Description.interface_version = B_CURRENT_INTERFACE_VERSION;
 	Description.interface_minimum = B_CURRENT_INTERFACE_VERSION;
 
-	strlcpy(Description.friendly_name, "USB Audio",
+	strlcpy(Description.friendly_name,
+		fProductName[0] != '\0' ? fProductName : "USB Audio",
 		sizeof(Description.friendly_name));
 
 	strlcpy(Description.vendor_info, "S.Zharski",
@@ -628,7 +720,8 @@ Device::TraceMultiDescription(multi_description* Description,
 
 
 status_t
-Device::_MultiGetEnabledChannels(multi_channel_enable* Enable)
+Device::_MultiGetEnabledChannels(multi_channel_enable* Enable,
+	uint32* count)
 {
 	status_t status = B_OK;
 
@@ -638,6 +731,12 @@ Device::_MultiGetEnabledChannels(multi_channel_enable* Enable)
 	for (int i = 0; i < fStreams.Count() && status == B_OK; i++)
 		status = fStreams[i]->GetEnabledChannels(offset, Enable);
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (count != NULL)
+		*count = offset;
+// SPDX-SnippetEnd
 	return status;
 }
 
@@ -756,6 +855,8 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 		return B_BAD_ADDRESS;
 	}
 
+	_ArmStreams();
+
 	for (int i = 0; i < fStreams.Count(); i++) {
 		if (!fStreams[i]->IsRunning())
 			fStreams[i]->Start();
@@ -785,6 +886,46 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 		return B_BAD_ADDRESS;
 
 	return status;
+}
+
+
+void
+Device::_ArmStreams()
+{
+	// Park every UAC 2.0 interface, program each clock once, then select the
+	// active alternates, and only then does the caller queue a transfer.
+	// Doing this one stream at a time parks the second interface while the
+	// first is already streaming on the same clock. RenkuOS a842555ed6.
+	if (fAudioControl.SpecReleaseNumber() < 0x0200 || fStreams.Count() == 0)
+		return;
+
+	for (int i = 0; i < fStreams.Count(); i++) {
+		if (fStreams[i]->IsRunning())
+			return;
+	}
+
+	for (int i = 0; i < fStreams.Count(); i++)
+		fStreams[i]->SelectAlternate(0);
+
+	uint8 programmed[8];
+	int programmedCount = 0;
+	for (int i = 0; i < fStreams.Count(); i++) {
+		uint8 clockId = fStreams[i]->ClockId();
+		bool done = false;
+		for (int j = 0; j < programmedCount; j++)
+			done = done || programmed[j] == clockId;
+		if (done && clockId != 0)
+			continue;
+		if (clockId != 0 && programmedCount < 8)
+			programmed[programmedCount++] = clockId;
+		fStreams[i]->ProgramClock();
+	}
+
+	for (int i = 0; i < fStreams.Count(); i++) {
+		const usb_configuration_info* config = fStreams[i]->fConfig;
+		if (config != NULL)
+			fStreams[i]->OnSetConfiguration(fDevice, config);
+	}
 }
 
 

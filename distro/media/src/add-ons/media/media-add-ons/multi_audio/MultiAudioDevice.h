@@ -10,7 +10,7 @@
 
 
 #define MAX_CONTROLS	128
-#define MAX_CHANNELS	32
+#define MAX_CHANNELS	128
 #define MAX_BUFFERS		32
 
 

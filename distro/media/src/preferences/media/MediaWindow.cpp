@@ -197,6 +197,7 @@ MediaWindow::MediaWindow(BRect frame)
 		B_MEDIA_SERVER_STARTED);
 	roster->StartWatching(BMessenger(this, this),
 		B_MEDIA_SERVER_QUIT);
+	_WatchFlavors();
 }
 
 
@@ -221,6 +222,8 @@ MediaWindow::~MediaWindow()
 
 	BMediaRoster* roster = BMediaRoster::CurrentRoster();
 	if (roster != NULL) {
+		roster->StopWatching(BMessenger(this, this),
+			B_MEDIA_FLAVORS_CHANGED);
 		roster->StopWatching(BMessenger(this, this),
 			B_MEDIA_SERVER_STARTED);
 		roster->StopWatching(BMessenger(this, this),
@@ -368,6 +371,10 @@ MediaWindow::MessageReceived(BMessage* message)
 		}
 
 		case B_MEDIA_SERVER_STARTED:
+			_WatchFlavors();
+			// fall through
+		case B_MEDIA_FLAVORS_CHANGED:
+		case ML_UPDATE_DEFAULTS:
 		case B_MEDIA_SERVER_QUIT:
 		{
 			PRINT_OBJECT(*message);
@@ -499,7 +506,8 @@ MediaWindow::_InitMedia(bool first)
 	fListView->SortItems(&MediaListItem::Compare);
 	_UpdateListViewMinWidth();
 
-	// Set default nodes for our setting views
+	// Show the server's default nodes. Setting them again would save a
+	// fallback as the user's choice.
 	media_node defaultNode;
 	dormant_node_info nodeInfo;
 	int32 outputID;
@@ -540,6 +548,21 @@ MediaWindow::_InitMedia(bool first)
 	Unlock();
 
 	return B_OK;
+}
+
+
+void
+MediaWindow::_WatchFlavors()
+{
+	// media_server keeps the watch. A restarted server has lost it, so this
+	// runs again on B_MEDIA_SERVER_STARTED and cancels the old one first.
+	BMediaRoster* roster = BMediaRoster::CurrentRoster();
+	if (roster == NULL)
+		return;
+
+	BMessenger messenger(this, this);
+	roster->StopWatching(messenger, B_MEDIA_FLAVORS_CHANGED);
+	roster->StartWatching(messenger, B_MEDIA_FLAVORS_CHANGED);
 }
 
 

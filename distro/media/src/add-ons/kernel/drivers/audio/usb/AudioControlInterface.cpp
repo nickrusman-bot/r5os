@@ -1161,8 +1161,8 @@ AudioControlInterface::GetTerminalChannels(Vector<multi_channel_info>& Channels,
 
 	uint32 added = Channels.Count() - startCount;
 	uint8 wanted = cluster->ChannelsCount();
-	if (wanted > 16)
-		wanted = 16;
+	if (wanted > 64)
+		wanted = 64;
 	if (maxChannels > 0 && wanted > maxChannels)
 		wanted = maxChannels;
 	if (added >= wanted)
@@ -1184,8 +1184,12 @@ AudioControlInterface::GetTerminalChannels(Vector<multi_channel_info>& Channels,
 		multi_channel_info info;
 		info.channel_id = Channels.Count();
 		info.kind = kind;
-		info.designations = i < B_COUNT_OF(fallback)
-			? fallback[i] : B_CHANNEL_MONO_BUS;
+		if (i < B_COUNT_OF(fallback))
+			info.designations = fallback[i];
+		else if ((i % 2) == 0)
+			info.designations = B_CHANNEL_LEFT | B_CHANNEL_STEREO_BUS;
+		else
+			info.designations = B_CHANNEL_RIGHT | B_CHANNEL_STEREO_BUS;
 		info.connectors = connectors;
 		Channels.PushBack(info);
 	}

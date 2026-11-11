@@ -145,22 +145,24 @@ usb_audio_carry_capacity(const usb_audio_packet_plan* plan)
 
 
 // Recording. Packet i was written at offset i * requestFrames * frameBytes
-// and holds actualBytes[i]. A device sends one frame more or less per packet
-// as its clock needs, so the packets are joined at the start of the region,
-// frames carried over from the last buffer go in front, and exactly
-// framesPerBuffer frames are left at the start. Frames beyond that go to the
-// carry buffer for next time. A short buffer is padded by repeating the last
-// frame. padded and dropped count frames for the log.
-inline void
+// and holds actualBytes[i]. The packets are joined, frames carried from last
+// time go in front, and a record buffer is published only once it holds
+// framesPerBuffer frames. The rest starts the next one. A short transfer
+// publishes nothing and is not padded by repeating the last frame: capture
+// then follows the device clock instead of the host's. `carry` holds one
+// buffer of frames. Returns true when `region` starts with a whole buffer.
+// RenkuOS b3dc1212e4, on this join.
+inline bool
 usb_audio_compact_record(const usb_audio_packet_plan* plan, uint8_t* region,
 	const uint32_t* actualBytes, uint8_t* carry, uint32_t* carryFrames,
 	uint32_t* padded, uint32_t* dropped)
 {
+	(void)padded;
 	const uint32_t fb = plan->frameBytes;
 	const uint32_t slot = plan->requestFrames * fb;
 	const uint32_t capacity = plan->packetsPerBuffer * plan->requestFrames;
 	const uint32_t want = plan->framesPerBuffer;
-	const uint32_t carryCap = usb_audio_carry_capacity(plan);
+	const uint32_t carryCap = want;
 
 	uint32_t got = 0;
 	for (uint32_t i = 0; i < plan->packetsPerBuffer; i++) {
@@ -183,10 +185,13 @@ usb_audio_compact_record(const usb_audio_packet_plan* plan, uint8_t* region,
 	if (carried + got > capacity) {
 		uint32_t drop = carried + got - capacity;
 		*dropped += drop;
-		// Keep the newest carried frames.
-		memmove(carry, carry + (uint64_t)drop * fb,
-			(uint64_t)(carried - drop) * fb);
-		carried -= drop;
+		if (drop < carried) {
+			memmove(carry, carry + (uint64_t)drop * fb,
+				(uint64_t)(carried - drop) * fb);
+			carried -= drop;
+		} else {
+			carried = 0;
+		}
 	}
 	if (carried > 0) {
 		memmove(region + (uint64_t)carried * fb, region, (uint64_t)got * fb);
@@ -194,25 +199,26 @@ usb_audio_compact_record(const usb_audio_packet_plan* plan, uint8_t* region,
 	}
 
 	uint32_t total = carried + got;
-	if (total >= want) {
-		uint32_t rest = total - want;
-		if (rest > carryCap) {
-			*dropped += rest - carryCap;
-			rest = carryCap;
+	if (total < want) {
+		if (total > carryCap) {
+			*dropped += total - carryCap;
+			total = carryCap;
 		}
-		memcpy(carry, region + (uint64_t)want * fb, (uint64_t)rest * fb);
-		*carryFrames = rest;
-	} else {
-		*padded += want - total;
-		for (uint32_t f = total; f < want; f++) {
-			if (total > 0) {
-				memcpy(region + (uint64_t)f * fb,
-					region + (uint64_t)(total - 1) * fb, fb);
-			} else
-				memset(region + (uint64_t)f * fb, 0, fb);
-		}
-		*carryFrames = 0;
+		if (total > 0)
+			memcpy(carry, region, (uint64_t)total * fb);
+		*carryFrames = total;
+		return false;
 	}
+
+	uint32_t rest = total - want;
+	if (rest > carryCap) {
+		*dropped += rest - carryCap;
+		rest = carryCap;
+	}
+	if (rest > 0)
+		memcpy(carry, region + (uint64_t)want * fb, (uint64_t)rest * fb);
+	*carryFrames = rest;
+	return true;
 }
 
 
