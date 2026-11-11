@@ -55,7 +55,7 @@ The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`
 
 ## Not there yet
 
-- No GPU acceleration for the desktop. The desktop is still drawn by the CPU, and Vulkan in a window runs on the CPU, not yet on the GPU.
+- No GPU acceleration for the desktop. The desktop is still drawn by the CPU.
 - One graphical session at a time. There is no fast user switching and no guest account.
 - The bundled browser (WebPositive) is weak for today's web.
 - Sleep, backlight and HiDPI on the reference laptop are still open.
