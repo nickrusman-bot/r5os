@@ -93,7 +93,7 @@ Settings links `libr5icons.so` and calls `r5_button_set_lock()` for the lock, af
 
 ## Line glyphs
 
-Haiku's icon set has no power symbol, no circular arrow, no clock face for a small label, and no eye. For those, `libr5icons.so` draws a line glyph in code. A glyph has one color, given by the caller, so it follows the text color and dark mode. It is drawn on a 24 by 24 grid with round line ends. These are small symbols beside text, not icons in the Haiku style; a full icon still comes from Haiku's HVIF set.
+Haiku's icon set has no power symbol, no circular arrow, no clock face for a small label, and no eye. For those, `libr5icons.so` draws a line glyph in code. A glyph has one color, given by the caller, so it follows the text color and dark mode. It is drawn on a 24 by 24 grid with round line ends. A ring is drawn as one line through the same coordinates as a straight line, so the stem of the power symbol sits exactly in the middle of its ring. These are small symbols beside text, not icons in the Haiku style; a full icon still comes from Haiku's HVIF set.
 
 | Glyph | Number | Picture |
 |---|---|---|
@@ -102,6 +102,7 @@ Haiku's icon set has no power symbol, no circular arrow, no clock face for a sma
 | `R5_GLYPH_CLOCK` | 3 | A clock face with two hands |
 | `R5_GLYPH_EYE` | 4 | An open eye (show the password) |
 | `R5_GLYPH_EYE_OFF` | 5 | The eye with a line through it (hide the password) |
+| `R5_GLYPH_LOG_OUT` | 6 | An open door frame with an arrow out to the right |
 
 The numbers are part of the contract, the same as `r5_icon`. A new glyph is added at the end of `enum r5_glyph`, with a row in this table.
 

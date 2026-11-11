@@ -267,8 +267,19 @@ BPasswordControl::SetPasswordRevealed(bool revealed)
 		return;
 
 	fData->revealed = revealed;
-	if (fData->textView != NULL)
-		fData->textView->HideTyping(!revealed);
+	if (fData->textView != NULL) {
+		// HideTyping(true) deletes the text, and HideTyping(false) does not
+		// redraw it, so the text is put back after the switch.
+		BTextView* view = fData->textView;
+		BString text(view->Text());
+		int32 start;
+		int32 end;
+		view->GetSelection(&start, &end);
+		view->HideTyping(!revealed);
+		view->SetText(text.String());
+		view->Select(start, end);
+		text.SetTo('\0', text.Length());
+	}
 
 	Invalidate(_EyeButtonRect());
 }
