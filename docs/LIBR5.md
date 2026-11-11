@@ -268,10 +268,10 @@ BAppearanceKit::BPasswordControl* password = new BAppearanceKit::BPasswordContro
 
 ## Icon view
 
-`BAppearanceKit::BIconView` shows one bitmap at its own pixel size. The header is `<IconView.h>`. The view is exactly as large as the bitmap and never scales it, so a vector icon rendered at the size it is shown stays sharp. Render the bitmap at that size, for example with `r5_vector_icon_bitmap()`, and do not stretch it with `DrawBitmap(bitmap, rect)`: a stretch of even one pixel makes the edges jagged. `SetIcon()` keeps a copy. The background is the parent's color.
+`BAppearanceKit::BIconView` shows one bitmap at its own pixel size. The header is `<R5IconView.h>` (Haiku already has a private `IconView.h`). The view is exactly as large as the bitmap and never scales it, so a vector icon rendered at the size it is shown stays sharp. Render the bitmap at that size, for example with `r5_vector_icon_bitmap()`, and do not stretch it with `DrawBitmap(bitmap, rect)`: a stretch of even one pixel makes the edges jagged. `SetIcon()` keeps a copy. The background is the parent's color.
 
 ```cpp
-#include <IconView.h>
+#include <R5IconView.h>
 
 BBitmap* pebble = r5_vector_icon_bitmap(data, size, 44);
 BAppearanceKit::BIconView* logo = new BAppearanceKit::BIconView("logo", pebble);

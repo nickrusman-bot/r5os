@@ -22,7 +22,7 @@
  */
 
 
-#include "IconView.h"
+#include "R5IconView.h"
 
 #include <Bitmap.h>
 #include <Message.h>

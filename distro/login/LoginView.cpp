@@ -22,7 +22,7 @@
 #include <GridLayout.h>
 #include <GridView.h>
 #include <GroupView.h>
-#include <IconView.h>
+#include <R5IconView.h>
 #include <LayoutBuilder.h>
 #include <ListView.h>
 #include <PasswordControl.h>
@@ -288,9 +288,10 @@ LoginView::LoginView()
 	fSubtitleView = make_label("subtitle", "Sign in to start your session",
 		font_px(be_plain_font, 12.5f), document);
 
-	BLayoutBuilder::Group<>((BGroupLayout*)fHeaderCard->GetLayout())
+	BGroupLayout* headerLayout = (BGroupLayout*)fHeaderCard->GetLayout();
+	headerLayout->SetSpacing(px(14));
+	BLayoutBuilder::Group<>(headerLayout)
 		.SetInsets(px(16), px(14), px(16), px(14))
-		.SetSpacing(px(14))
 		.Add(logo)
 		.AddGroup(B_VERTICAL, px(2))
 			.Add(fWelcomeView)
@@ -380,9 +381,10 @@ LoginView::LoginView()
 	// The password field keeps room for its focus ring around the field.
 	// The button is inset by the same ring so both line up.
 	float ring = floorf(px(2) + 0.5f);
-	BLayoutBuilder::Group<>((BGroupLayout*)fFormCard->GetLayout())
+	BGroupLayout* formLayout = (BGroupLayout*)fFormCard->GetLayout();
+	formLayout->SetSpacing(px(12));
+	BLayoutBuilder::Group<>(formLayout)
 		.SetInsets(px(16), px(16), px(16), px(16))
-		.SetSpacing(px(12))
 		.Add(fSingleBanner)
 		.Add(fActiveLine)
 		.AddGroup(B_VERTICAL, px(5) - ring)

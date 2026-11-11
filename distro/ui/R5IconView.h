@@ -20,8 +20,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef _ICON_VIEW_H
-#define _ICON_VIEW_H
+#ifndef _R5_ICON_VIEW_H
+#define _R5_ICON_VIEW_H
 
 
 #include <View.h>
@@ -76,4 +76,4 @@ private:
 }	// namespace BAppearanceKit
 
 
-#endif	// _ICON_VIEW_H
+#endif	// _R5_ICON_VIEW_H
