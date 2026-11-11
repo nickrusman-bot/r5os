@@ -22,7 +22,7 @@
 static const bigtime_t kRunTime = 5000000;
 
 
-class Grabber : public BMediaNode, public BBufferConsumer {
+class Grabber : public BBufferConsumer {
 public:
 								Grabber();
 
@@ -32,12 +32,8 @@ public:
 			bool				SaveLast(const char* path) const;
 
 	virtual	BMediaAddOn*		AddOn(int32* id) const;
-	virtual	status_t			HandleMessage(int32 message, const void* data,
-									size_t size);
 
 protected:
-	virtual	status_t			HandleBuffer(const media_timed_event* event);
-
 	virtual	status_t			AcceptFormat(
 									const media_destination& destination,
 									media_format* format);
@@ -88,20 +84,6 @@ Grabber::AddOn(int32* id) const
 	if (id != NULL)
 		*id = 0;
 	return NULL;
-}
-
-
-status_t
-Grabber::HandleMessage(int32 message, const void* data, size_t size)
-{
-	return B_OK;
-}
-
-
-status_t
-Grabber::HandleBuffer(const media_timed_event* event)
-{
-	return BBufferConsumer::HandleBuffer(event);
 }
 
 
