@@ -1,6 +1,6 @@
---- a/src/amd/vulkan/radv_wsi.h
-+++ b/src/amd/vulkan/radv_wsi.h
-@@ -13,7 +13,8 @@
+--- a/src/amd/vulkan/radv_wsi.h	2026-11-11 01:13:12.970729760 +0100
++++ b/src/amd/vulkan/radv_wsi.h	2026-11-11 01:14:44.361620460 +0100
+@@ -14,7 +14,8 @@
  #include "radv_physical_device.h"
  
  #if defined(VK_USE_PLATFORM_WAYLAND_KHR) || defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR) ||   \
@@ -10,9 +10,9 @@
  #define RADV_USE_WSI_PLATFORM
  #endif
  
---- a/src/amd/vulkan/radv_instance.h
-+++ b/src/amd/vulkan/radv_instance.h
-@@ -102,6 +102,9 @@ struct radv_instance {
+--- a/src/amd/vulkan/radv_instance.h	2026-11-11 01:13:13.441060141 +0100
++++ b/src/amd/vulkan/radv_instance.h	2026-11-11 01:14:44.361953993 +0100
+@@ -102,6 +102,9 @@
     struct radv_drirc drirc;
  
     FILE *pso_history_logfile;
@@ -22,10 +22,9 @@
  };
  
  VK_DEFINE_HANDLE_CASTS(radv_instance, vk.base, VkInstance, VK_OBJECT_TYPE_INSTANCE)
---- a/src/amd/vulkan/radv_instance.c
-+++ b/src/amd/vulkan/radv_instance.c
-@@ -19,6 +19,13 @@
- #include "radv_debug.h"
+--- a/src/amd/vulkan/radv_instance.c	2026-11-11 01:13:13.633404080 +0100
++++ b/src/amd/vulkan/radv_instance.c	2026-11-11 01:14:44.362512043 +0100
+@@ -20,6 +20,13 @@
  #include "radv_entrypoints.h"
  #include "radv_instance.h"
  #include "radv_wsi.h"
@@ -38,9 +37,8 @@
 +#endif
  
  #include "util/driconf.h"
---- a/src/amd/vulkan/radv_instance.c
-+++ b/src/amd/vulkan/radv_instance.c
-@@ -384,8 +391,31 @@ radv_CreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationC
+ 
+@@ -384,14 +391,40 @@
     vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &radv_instance_entrypoints, true);
     vk_instance_dispatch_table_from_entrypoints(&dispatch_table, &wsi_instance_entrypoints, false);
  
@@ -63,33 +61,28 @@
 +   VkInstanceCreateInfo view_info = *pCreateInfo;
 +   view_info.enabledExtensionCount = view_count;
 +   view_info.ppEnabledExtensionNames = view_count ? view_names : NULL;
-    result =
--      vk_instance_init(&instance->vk, &radv_instance_extensions_supported, &dispatch_table, pCreateInfo, pAllocator);
++   result =
 +      vk_instance_init(&instance->vk, &radv_instance_extensions_supported, &dispatch_table, &view_info, pAllocator);
 +#else
-+   result =
-+      vk_instance_init(&instance->vk, &radv_instance_extensions_supported, &dispatch_table, pCreateInfo, pAllocator);
+    result =
+       vk_instance_init(&instance->vk, &radv_instance_extensions_supported, &dispatch_table, pCreateInfo, pAllocator);
 +#endif
     if (result != VK_SUCCESS) {
        vk_free(pAllocator, instance);
        return vk_error(NULL, result);
-@@ -393,6 +424,9 @@ radv_CreateInstance(const VkInstanceCreateInfo *pCreateInfo, const VkAllocationC
+    }
  
     vk_instance_add_driver_trace_modes(&instance->vk, trace_options);
- 
 +#ifdef VK_USE_PLATFORM_VIEW_RFIVE
 +   instance->view_r5 = view_r5;
 +#endif
+ 
     simple_mtx_init(&instance->shader_dump_mtx, mtx_plain);
  
-    instance->debug_flags = parse_debug_string(getenv("RADV_DEBUG"), radv_debug_options);
---- a/src/amd/vulkan/radv_instance.c
-+++ b/src/amd/vulkan/radv_instance.c
-@@ -504,7 +538,29 @@ radv_EnumerateInstanceExtensionProperties(const char *pLayerName, uint32_t *pPro
+@@ -504,7 +537,29 @@
     if (pLayerName)
        return vk_error(NULL, VK_ERROR_LAYER_NOT_PRESENT);
  
--   return vk_enumerate_instance_extension_properties(&radv_instance_extensions_supported, pPropertyCount, pProperties);
 +#ifdef VK_USE_PLATFORM_VIEW_RFIVE
 +   uint32_t view_capacity = *pPropertyCount;
 +   VkResult result = vk_enumerate_instance_extension_properties(
@@ -111,12 +104,12 @@
 +   }
 +   return VK_INCOMPLETE;
 +#else
-+   return vk_enumerate_instance_extension_properties(&radv_instance_extensions_supported, pPropertyCount, pProperties);
+    return vk_enumerate_instance_extension_properties(&radv_instance_extensions_supported, pPropertyCount, pProperties);
 +#endif
  }
  
  VKAPI_ATTR VkResult VKAPI_CALL
-@@ -529,6 +586,16 @@ radv_EnumerateInstanceLayerProperties(uint32_t *pPropertyCount, VkLayerProperti
+@@ -529,6 +584,16 @@
  VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
  radv_GetInstanceProcAddr(VkInstance _instance, const char *pName)
  {
@@ -133,8 +126,8 @@
     VK_FROM_HANDLE(vk_instance, instance, _instance);
     return vk_instance_get_proc_addr(instance, &radv_instance_entrypoints, pName);
  }
---- a/src/amd/vulkan/radv_wsi.c
-+++ b/src/amd/vulkan/radv_wsi.c
+--- a/src/amd/vulkan/radv_wsi.c	2026-11-11 01:13:13.163581774 +0100
++++ b/src/amd/vulkan/radv_wsi.c	2026-11-11 01:14:44.362852350 +0100
 @@ -14,6 +14,12 @@
  #include "vk_semaphore.h"
  #include "vk_util.h"
@@ -148,11 +141,29 @@
  
  static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL
  radv_wsi_proc_addr(VkPhysicalDevice physicalDevice, const char *pName)
-@@ -88,7 +94,26 @@ radv_init_wsi(struct radv_physical_device *pdev)
+@@ -34,6 +40,7 @@
+    }
+ }
+ 
++#ifndef VK_USE_PLATFORM_VIEW_RFIVE
+ static struct vk_queue *
+ radv_wsi_get_prime_blit_queue(VkDevice _device)
+ {
+@@ -73,6 +80,7 @@
+    simple_mtx_unlock(&device->blit_queue_mtx);
+    return NULL;
+ }
++#endif
+ 
+ VkResult
+ radv_init_wsi(struct radv_physical_device *pdev)
+@@ -87,7 +95,27 @@
+ 
     pdev->wsi_device.supports_modifiers = pdev->info.gfx_level >= GFX9;
     pdev->wsi_device.set_memory_ownership = radv_wsi_set_memory_ownership;
++#ifndef VK_USE_PLATFORM_VIEW_RFIVE
     pdev->wsi_device.get_blit_queue = radv_wsi_get_prime_blit_queue;
- 
++#endif
 +#ifdef VK_USE_PLATFORM_VIEW_RFIVE
 +   {
 +      VkPhysicalDevice handle = radv_physical_device_to_handle(pdev);
@@ -171,11 +182,10 @@
 +      wsi_view_r5_init_wsi(&pdev->wsi_device, graphics);
 +   }
 +#endif
-+
+ 
     wsi_device_setup_syncobj_fd(&pdev->wsi_device, pdev->local_fd);
  
-    pdev->vk.wsi_device = &pdev->wsi_device;
-@@ -101,6 +122,10 @@ radv_init_wsi(struct radv_physical_device *pdev)
+@@ -99,6 +127,10 @@
  void
  radv_finish_wsi(struct radv_physical_device *pdev)
  {
@@ -186,9 +196,9 @@
     const struct radv_instance *instance = radv_physical_device_instance(pdev);
  
     pdev->vk.wsi_device = NULL;
---- a/src/amd/vulkan/meson.build
-+++ b/src/amd/vulkan/meson.build
-@@ -243,6 +243,12 @@ if radv_build_id != ''
+--- a/src/amd/vulkan/meson.build	2026-11-11 01:13:13.885286911 +0100
++++ b/src/amd/vulkan/meson.build	2026-11-11 01:14:44.363173660 +0100
+@@ -243,6 +243,12 @@
    radv_flags += '-DRADV_BUILD_ID_OVERRIDE="' + radv_build_id + '"'
  endif
  

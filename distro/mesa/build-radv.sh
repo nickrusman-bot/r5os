@@ -25,7 +25,8 @@ if ! grep -q 'VK_ICD_WSI_PLATFORM_VIEW_RFIVE + 1' "$MESA/src/vulkan/wsi/wsi_comm
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-view-surface.patch"
 fi
 if ! grep -q 'wsi_view_r5_init_wsi' "$MESA/src/amd/vulkan/radv_wsi.c" \
-	|| ! grep -q 'defined(VK_USE_PLATFORM_VIEW_RFIVE)' "$MESA/src/amd/vulkan/radv_wsi.h"; then
+	|| ! grep -q 'defined(VK_USE_PLATFORM_VIEW_RFIVE)' "$MESA/src/amd/vulkan/radv_wsi.h" \
+	|| ! grep -q 'ifndef VK_USE_PLATFORM_VIEW_RFIVE' "$MESA/src/amd/vulkan/radv_wsi.c"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-radv-view-surface.patch"
 fi
 

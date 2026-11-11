@@ -65,7 +65,7 @@ The loader patch is Apache-2.0, like the loader. Each changed function keeps the
 A successful present makes the image appear in the view, and stay there when app_server asks the view to draw again. Lavapipe and RADV use the same bitmaps and the same present. They differ only in where the pixels are rendered:
 
 - Lavapipe renders into a CPU image (`wsi_configure_cpu_image`).
-- RADV renders into a device image and copies into a host-visible buffer (`wsi_configure_buffer_image`), the blit Mesa already uses for software presentation. The M6 write-combining boot did not pass, so that buffer is ordinary host-coherent memory. It is not a write-combined mapping, and there is no second mapping.
+- RADV renders into a device image and copies into a host-visible buffer (`wsi_configure_buffer_image`), the blit Mesa already uses for software presentation. The M6 write-combining boot did not pass, so that buffer is ordinary host-coherent memory. It is not a write-combined mapping, and there is no second mapping. The copy runs on the application's graphics queue. R5 does not report an SDMA engine, so RADV does not create Mesa's private transfer queue for this platform. That queue's indirect-buffer alignment is 0, and creating its command buffer asserts.
 
 Each swapchain image has its own `BBitmap`. Present copies that image's pixels into its bitmap. It does not share one bitmap across images, so a later present does not overwrite pixels app_server is still reading. Acquire hands out the image after the last one presented, and it does not hand out the bitmap that is currently the view bitmap. Present checks that before the copy. The graphics-queue mask is kept per device, and the view bitmap is read and written under the surface lock.
 
