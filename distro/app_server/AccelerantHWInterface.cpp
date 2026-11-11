@@ -642,9 +642,16 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	_UpdateHooksAfterModeChange();
 
 	// update backbuffer if necessary
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	bool r5PitchChanged = fBackBuffer.IsSet()
+		&& fFrontBuffer->BytesPerRow() != fBackBuffer->BytesPerRow();
+// SPDX-SnippetEnd
 	if (!fBackBuffer.IsSet()
 		|| fBackBuffer->Width() != fFrontBuffer->Width()
 		|| fBackBuffer->Height() != fFrontBuffer->Height()
+		|| r5PitchChanged
 		|| (fFrontBuffer->ColorSpace() == B_RGB32 && fBackBuffer.IsSet())) {
 		// NOTE: backbuffer is always B_RGBA32, this simplifies the
 		// drawing backend implementation tremendously for the time
@@ -656,7 +663,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 		RenderingBuffer* gpuBack = GPUCopy::BackBuffer(fFrontBuffer->Width(),
-			fFrontBuffer->Height());
+			fFrontBuffer->Height(), fFrontBuffer->BytesPerRow());
 		if (gpuBack != NULL)
 			fBackBuffer.SetTo(gpuBack);
 		else

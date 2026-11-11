@@ -26,7 +26,7 @@
 class GpuBackBuffer : public RenderingBuffer {
 public:
 								GpuBackBuffer(uint32 width, uint32 height,
-									void* bits);
+									uint32 bytesPerRow, void* bits);
 	virtual						~GpuBackBuffer();
 
 	virtual	status_t			InitCheck() const;
@@ -40,6 +40,7 @@ private:
 			void*				fBits;
 			uint32				fWidth;
 			uint32				fHeight;
+			uint32				fBytesPerRow;
 };
 
 
@@ -269,13 +270,20 @@ same_picture(RenderingBuffer* back, RenderingBuffer* front,
 	const uint8* src = (const uint8*)back->Bits();
 	const uint8* dst = (const uint8*)front->Bits();
 	uint32 pitch = back->BytesPerRow();
-	if (src == NULL || dst == NULL)
+	uint32 rowBytes = back->Width() * 4u;
+	if (src == NULL || dst == NULL || front->BytesPerRow() != pitch
+		|| rowBytes == 0 || rowBytes > pitch)
 		return false;
 	for (int i = 0; i < count; i++) {
-		size_t bytes = (size_t)bands[i].rows * pitch;
 		size_t offset = (size_t)bands[i].y * pitch;
-		if (memcmp(src + offset, dst + offset, bytes) != 0)
-			return false;
+		const uint8* srcRow = src + offset;
+		const uint8* dstRow = dst + offset;
+		for (uint32 row = 0; row < bands[i].rows; row++) {
+			if (memcmp(srcRow, dstRow, rowBytes) != 0)
+				return false;
+			srcRow += pitch;
+			dstRow += pitch;
+		}
 	}
 	return true;
 }
@@ -283,11 +291,13 @@ same_picture(RenderingBuffer* back, RenderingBuffer* front,
 } // namespace
 
 
-GpuBackBuffer::GpuBackBuffer(uint32 width, uint32 height, void* bits)
+GpuBackBuffer::GpuBackBuffer(uint32 width, uint32 height,
+	uint32 bytesPerRow, void* bits)
 	:
 	fBits(bits),
 	fWidth(width),
-	fHeight(height)
+	fHeight(height),
+	fBytesPerRow(bytesPerRow)
 {
 }
 
@@ -321,7 +331,7 @@ GpuBackBuffer::Bits() const
 uint32
 GpuBackBuffer::BytesPerRow() const
 {
-	return fWidth * 4;
+	return fBytesPerRow;
 }
 
 
@@ -340,12 +350,16 @@ GpuBackBuffer::Height() const
 
 
 RenderingBuffer*
-GPUCopy::BackBuffer(uint32 width, uint32 height)
+GPUCopy::BackBuffer(uint32 width, uint32 height, uint32 bytesPerRow)
 {
 	load_settings();
 	if (!sWant || sOff || width == 0 || height == 0)
 		return NULL;
-	uint64 bytes = (uint64)width * 4u * height;
+	if (bytesPerRow < width * 4u || (bytesPerRow & 3u) != 0) {
+		off("pitch");
+		return NULL;
+	}
+	uint64 bytes = (uint64)bytesPerRow * height;
 	if (bytes > 64ull * 1024ull * 1024ull) {
 		off("submit");
 		return NULL;
@@ -361,7 +375,7 @@ GPUCopy::BackBuffer(uint32 width, uint32 height)
 	sBits = bits;
 	sBackVa = 0x200000000ull;
 	memset(bits, 255, (size_t)bytes);
-	return new(std::nothrow) GpuBackBuffer(width, height, bits);
+	return new(std::nothrow) GpuBackBuffer(width, height, bytesPerRow, bits);
 }
 
 

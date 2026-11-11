@@ -40,7 +40,7 @@ A band is the full bytes-per-row of a contiguous run of dirty rows. Rectangles o
 
 One indirect buffer is submitted per `CopyBackToFront`. app_server waits on `R5_GPU_FENCE_WAIT` for 100000 microseconds. A timeout is the fallback above.
 
-The linear copy is valid when the front buffer is `B_RGB32` or `B_RGBA32` and its bytes per row equal the back buffer's (`width * 4`). A wider front pitch, or another color space, uses the CPU copy. The CPU path still converts those spaces. A raw byte copy would not.
+The GPU back buffer uses the front buffer's bytes per row, not `width * 4`. On DCE 2 and later a 32-bit scanout rounds the width up to a multiple of 64 pixels, so a 1366-wide screen has a stride of 1408. The DMA copies that stride. The compare reads `width * 4` bytes on each row and skips the padding. A pitch smaller than `width * 4`, a pitch that is not a multiple of 4, or another color space, uses the CPU copy. The CPU path still converts those spaces.
 
 The words are built by one function, `r5_copy_bands_pm4` in `distro/app_server/GPUCopyBands.h`. `scripts/check-copy-bands.cpp` prints `ok band builder N cases` and the streams. `scripts/check-pm4.py` checks every stream.
 

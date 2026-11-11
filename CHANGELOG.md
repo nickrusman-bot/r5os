@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The GPU back buffer uses the scanout pitch
+
+The GPU back buffer reported `width * 4` bytes per row. On DCE 2 and later the framebuffer pitch is the width rounded up to a multiple of 64 pixels. A 1366-wide screen is 1408 pixels of stride, 5632 bytes against 5464. `GPUCopy::Copy` then latched `gpu copy off: pitch` for the session. The 5625U boots at 1920x1080, and 1920 is already a multiple of 64, so stick 41 did not take this path. The back buffer now takes the front buffer's bytes per row. The read-back compares the visible pixels and leaves the padding out. Not jammed and not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The screen offset was the BAR, not the carveout
 
 Stick 41 kept the desktop copy on the CPU. `R5_GPU_SCANOUT_BO` treated `frame_buffer_phys` as an address inside the carveout: it subtracted `MC_VM_FB_OFFSET << 24` and rejected the result when it fell outside the visible window. On the 5625U those are different bases. Earlier boots recorded the PCI BAR at `0xfce0000000` and `MC_VM_FB_OFFSET` `0x810`, so the carveout is `0x810000000`. The picture sits at the start of the BAR (`window +0x0`). The difference of the two bases is far past the 256 MiB window, so the call returned `B_ERROR` once. app_server logged `gpu copy off: scanout refused` and then stayed on the CPU. That one line was already rotated out of `syslog` and `syslog.1` by the `user job fence` lines `gpu_debug` prints for every submit. VirtualBox never opens `/dev/gpu/radeon_hd/0`, so this refusal cannot show up there.
