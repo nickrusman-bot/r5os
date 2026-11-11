@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A sound card is only the directions it has
+
+`multi_audio` listed every card as both an input and an output. A card with no capture channels is no longer an input, and a card with no playback channels is no longer an output. Ported from RenkuOS `bd571637d2` (David Beckman, MIT). Not checked in Media. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The sound card ignores a burst of clock samples
 
 At the start of a stream the driver reports several buffers a few microseconds apart. The time estimate jumped, and the mixer could wait until nothing played. Pairs closer than half a buffer period are ignored. The period comes from the playback buffer when nothing is recording. Ported from RenkuOS `303b85eae5` (David Beckman, MIT). Not played through a device. There is no What's new section and `distro/BUILD` stays the same.
