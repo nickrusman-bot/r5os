@@ -8,8 +8,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STAGE=/tmp/m8-plant
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
+GIT="/mnt/c/Program Files/Git/bin/git.exe"
+WINROOT=$(wslpath -w "$ROOT")
 for name in m8-run m8-boot2 m8-show check.sh radeon_hd; do
-	git -C "$ROOT" show "HEAD:distro/graphics/boot/$name" > "$STAGE/$name"
+	"$GIT" -C "$WINROOT" show "HEAD:distro/graphics/boot/$name" > "$STAGE/$name"
 done
 "$BFS" --start-offset 6291456 "$IMG" <<EOF
 mkdir myfs/home/config
