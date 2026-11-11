@@ -78,6 +78,8 @@ struct gpu_bo {
 	uint64			parkSequence;
 	/* One hold on the file tree, taken when this buffer is parked. */
 	r5_file_tree*	hold;
+	/* The framebuffer. Release unmaps it and does not free the pages. */
+	bool			borrowed;
 	gpu_range		ranges[kMaxRange];
 };
 

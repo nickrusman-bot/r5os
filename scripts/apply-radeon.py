@@ -48,6 +48,7 @@ FILES = (
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h",
     "src/add-ons/accelerants/radeon_hd/pll.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/driver.cpp",
+    "src/add-ons/kernel/drivers/graphics/radeon_hd/device.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/gfx9_k12.cpp",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/r5_gpu.cpp",

@@ -1,5 +1,47 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - The CPU copy time is recorded without the GPU copy
+
+VirtualBox round 2 had only `gpu_debug true`. Dragging a window for more than 10 seconds produced no `app_server: copy cpu median` line. app_server does read `gpu_debug`. VirtualBox loads vboxvideo and keeps a software back buffer, so `_CopyBackToFront` runs. `GPUCopy::NoteCpu` dropped every sample unless `gpu_app_server` was also on. It now keeps the sample when `gpu_debug` is on.
+
+`r5-gpu-selftest` started at every sign-in, including a VirtualBox boot with no settings file, and opened the M7 windows. Login starts it only when the radeon_hd settings contain `gpu_selftest true`.
+
+No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-app-server` copied this branch, then `jam -q @r5-raw` finished at 13:25 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 13:25. app_server and Login in the image match that build. VirtualBox, 11 Nov 2026: with only `gpu_debug true`, after the last boot the syslog showed `app_server: copy cpu median 2 us cpu 24 ms per 10 s` and four more of that line, and no `r5 window tests`. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - Only app_server may map the screen buffer
+
+`R5_GPU_SCANOUT_BO` no longer allows whichever team opened `/dev/graphics/radeon_hd` first. The kernel reads the calling team's info and allows the call only when that team's executable is `/system/servers/app_server`, or `/boot/system/servers/app_server` after `/system` is resolved. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`.
+
+Host checks: `ok band builder 7 cases`. `ok pm4 57 streams, 89 opcodes, text check (R5_GPU_VA_EXEC is a text search, not a page-table check)`.
+
+No other jam was running. `scripts/apply-overlay.sh` from `cursor/m8-app-server` copied this branch into the shared tree, then `jam -q @r5-raw` finished at 11:22 Europe/Amsterdam on 11 Nov 2026, `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`. `r5-os.image` is 2147483648 bytes at 11:22. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The desktop image was built, and not booted
+
+The second jam wrote `r5-os.image` at 02:06 CET, 2147483648 bytes, from `cursor/m8-app-server`. The packaged app_server has the copy, median, and compare lines, and the driver has the scanout call. `home/config/settings/kernel/drivers/radeon_hd` is not in the image, so the copy stays on the CPU and nothing is logged. The shared package directory supplied `mesa_radv-25.3.6-3`; this branch's package check still looks for `-1` and reported it missing. That check does not change the image. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The scanout call compiles
+
+The first image build stopped in `r5_gpu_core.cpp`: `team_get_current_team_id` is declared in the kernel team header, and the core file did not include that declaration. The declaration is now next to the other kernel calls. The image from that build was not written. `distro/BUILD` stays the same.
+
+## 2026-11-11 - The screen mapping is kept
+
+Asking for the screen buffer on every copy filled the 16 address slots, then the 256 buffer slots, and the GPU copy would stop. The mapping is kept until the width, height, or pitch changes. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The desktop copy can be timed and compared
+
+`gpu_debug true` makes app_server keep the copy times. Every 10 seconds it logs `app_server: copy cpu median <n> us cpu <n> ms per 10 s` and, when the GPU copy ran, the same line with `gpu`. Every 100th GPU copy it compares the copied rows. A match is `app_server: copy compare ok` on that 10 second line. A mismatch is `app_server: copy compare MISMATCH` and the CPU copy for the rest of the session. With `gpu_debug` absent, nothing is logged. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The desktop can copy through the GPU, and falls back
+
+`gpu_app_server true` in the `radeon_hd` settings makes app_server allocate the back buffer as a cached GTT buffer and copy dirty rows with `DMA_DATA`. The setting is absent on the image, so the copy stays the CPU one and nothing is logged. The first failure logs `app_server: gpu copy off: <reason>` and the CPU copy is used for the rest of the session. The wait is 100 ms. `gpu_app_server_fail true` fails the first submit on purpose. A region of more than 256 rectangles, or more than 64 bands, uses the CPU for that call and does not turn the GPU off. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
+## 2026-11-11 - The screen buffer can be mapped for the display team
+
+`R5_GPU_SCANOUT_BO` is `R5_GPU_OP_BASE + 31`. It returns the width, height, bytes per row and color space from the driver's framebuffer, plus a handle and a GPU address in the caller's address space. The pages are the framebuffer that is already on screen. Freeing the handle unmaps them and does not free the framebuffer. Only app_server may call it. The kernel reads the calling team's info and allows `/system/servers/app_server` or `/boot/system/servers/app_server`. The caller does not pass the path. Anyone else gets `B_NOT_ALLOWED`.
+
+A dirty region becomes bands of whole rows. `DMA_DATA` holds at most 2097151 bytes, so a longer band is several packets. The control word is `0x60200000`, the word the DMA stage already ran. `scripts/check-copy-bands.cpp` prints `ok band builder 7 cases`. `scripts/check-pm4.py` checks those streams. Not booted. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The CPU copy is measured with debug alone
 
 The plan now says `gpu_debug true` records the CPU copy even when `gpu_app_server` is off. VirtualBox is double buffered, so moving a window runs that copy. This branch is still the design only. There is no What's new section and `distro/BUILD` stays the same.

@@ -605,6 +605,22 @@ def main():
             fail(errors, "emitter", "missing %s" % need)
     for name, words in streams:
         check_stream(words, name, known, errors)
+    band_src = ROOT / "scripts/check-copy-bands.cpp"
+    band_out = Path(tempfile.gettempdir()) / "check-copy-bands"
+    subprocess.check_call([
+        "g++", "-std=c++17", "-Wall", "-Wextra", "-Werror",
+        str(band_src), "-o", str(band_out),
+    ])
+    band_run = subprocess.run([str(band_out)], text=True, capture_output=True)
+    if band_run.returncode != 0 or "ok band builder " not in band_run.stderr:
+        fail(errors, "bands", band_run.stderr.strip() or "band builder failed")
+    else:
+        print(band_run.stderr.strip(), file=sys.stderr)
+    _sites, band_streams = parse_emit(band_run.stdout)
+    if len(band_streams) < 2:
+        fail(errors, "bands", "expected two packet streams")
+    for name, words in band_streams:
+        check_stream(words, "bands " + name, known, errors)
     for rel in SOURCES:
         text = (ROOT / rel).read_text(encoding="utf-8")
         for index, words in enumerate(brace_lists(text)):

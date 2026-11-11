@@ -57,6 +57,11 @@ typedef struct r5_gpu_backend_ops {
 	/* waits, highest used dwords, ring length. Logging only. */
 	void		(*ring_fill)(uint32_t* waits, uint32_t* maxFill,
 				uint32_t* dwords);
+	/* The picture on screen. A null function is "not supported".
+	 * The caller is checked in the core, not here. */
+	int			(*scanout)(void* info, uint32_t* width, uint32_t* height,
+				uint32_t* bytesPerRow, uint32_t* format, uint64_t* vramOffset,
+				uint64_t* bytes);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

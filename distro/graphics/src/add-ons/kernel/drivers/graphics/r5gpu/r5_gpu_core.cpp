@@ -23,6 +23,7 @@
 #include "r5_wait.h"
 
 #include <KernelExport.h>
+#include <OS.h>
 #include <kernel.h>
 #include <Drivers.h>
 
@@ -35,6 +36,7 @@
 extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
 extern "C" bool team_is_valid(team_id id);
 extern "C" status_t vm_set_area_page_memory_type(area_id id, uint32 type);
+extern "C" team_id team_get_current_team_id(void);
 
 static void r5_gpu_eop();
 static void gpu_fault_retire();
@@ -481,7 +483,7 @@ gpu_bo_release(gpu_bo* bo)
 	if (!bo->live)
 		return;
 	gpu_bo_unmap(bo);
-	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+	if (bo->domain == R5_GPU_DOMAIN_VRAM && !bo->borrowed) {
 		if (!sDeferred || !r5_defer_add(sDefer, 256, bo->vramOffset))
 			gpu_hw_vram_free(bo->vramOffset);
 	}
@@ -2105,6 +2107,118 @@ gpu_ih_counts(void* buffer, size_t length)
 }
 
 
+/* The path is the one load_image stored in the team info. It is not a
+ * value from the ioctl. Roster resolves /system to /boot/system. */
+static bool
+gpu_caller_is_app_server()
+{
+	team_info info;
+	if (_get_team_info(B_CURRENT_TEAM, &info, sizeof(info)) != B_OK)
+		return false;
+	static const char* kPaths[] = {
+		"/system/servers/app_server",
+		"/boot/system/servers/app_server"
+	};
+	for (uint32 i = 0; i < sizeof(kPaths) / sizeof(kPaths[0]); i++) {
+		size_t length = strlen(kPaths[i]);
+		if (strncmp(info.args, kPaths[i], length) == 0
+			&& (info.args[length] == '\0' || info.args[length] == ' '))
+			return true;
+	}
+	return false;
+}
+
+
+static status_t
+gpu_scanout(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_scanout in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return status;
+	if (in.version != 1)
+		return B_BAD_VALUE;
+	if (!gpu_caller_is_app_server())
+		return B_NOT_ALLOWED;
+	if (gR5GpuOps.scanout == NULL)
+		return B_NOT_SUPPORTED;
+	uint32 width = 0;
+	uint32 height = 0;
+	uint32 pitch = 0;
+	uint32 format = 0;
+	uint64 offset = 0;
+	uint64 bytes = 0;
+	if (gR5GpuOps.scanout(client->info, &width, &height, &pitch, &format,
+			&offset, &bytes) != B_OK)
+		return B_ERROR;
+	if (client->handleCount >= kMaxClientBo)
+		return B_NO_MEMORY;
+	int slot = -1;
+	for (uint32 i = 0; i < kMaxBo; i++) {
+		if (!sBo[i].live) {
+			slot = (int)i;
+			break;
+		}
+	}
+	if (slot < 0)
+		return B_NO_MEMORY;
+	gpu_bo* bo = &sBo[slot];
+	memset(bo, 0, sizeof(*bo));
+	bo->area = -1;
+	bo->mapTeam = -1;
+	bo->kernelArea = -1;
+	bo->domain = R5_GPU_DOMAIN_VRAM;
+	bo->bytes = bytes;
+	bo->vramOffset = offset;
+	bo->borrowed = true;
+	bo->live = true;
+	bo->owner = client;
+
+	uint64 va = 0x100000000ull;
+	bool freeVa = false;
+	for (int n = 0; n < 16; n++) {
+		if (gpu_va_fits(va, bytes) && !gpu_hw_lookup(gpu_vm(client), va)) {
+			freeVa = true;
+			break;
+		}
+		va += 0x4000000ull;
+	}
+	if (!freeVa) {
+		bo->live = false;
+		return B_NO_MEMORY;
+	}
+	r5_gpu_va map;
+	memset(&map, 0, sizeof(map));
+	map.size = sizeof(map);
+	map.version = 1;
+	map.context = 1;
+	map.handle = (uint32)slot + 1u;
+	map.gpu_va = va;
+	map.map_bytes = bytes;
+	map.flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
+	status = gpu_va_map_copied(client, &map);
+	if (status != B_OK) {
+		bo->live = false;
+		bo->owner = NULL;
+		return status;
+	}
+	client->handles[client->handleCount++] = map.handle;
+	in.handle = map.handle;
+	in.width = width;
+	in.height = height;
+	in.bytes_per_row = pitch;
+	in.format = format;
+	in.gpu_va = va;
+	in.bytes = bytes;
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK) {
+		client->handleCount--;
+		gpu_bo_release(bo);
+	}
+	return status;
+}
+
+
 static status_t
 gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 {
@@ -2189,6 +2303,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		}
 	} else if (op == R5_GPU_BO_CREATE)
 		status = gpu_bo_create(client, buffer, length);
+	else if (op == R5_GPU_SCANOUT_BO)
+		status = gpu_scanout(client, buffer, length);
 	else if (op == R5_GPU_BO_FREE)
 		status = gpu_bo_free(client, buffer, length);
 	else if (op == R5_GPU_BO_MAP)
