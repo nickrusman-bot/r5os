@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Playback follows an explicit USB feedback endpoint
+
+A playback interface that has a feedback endpoint now reads it and moves one frame per buffer into or out of a small carry, so the packets follow the device clock. The client's buffer is still one exact buffer; the extra frame comes from the carry, or one frame is held back. A device without that endpoint is queued as before, at the nominal packet size. Implicit feedback, using the capture stream as the clock, is not done. High speed is read as 16.16 frames per microframe, full speed as 10.14 frames per frame. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - A short USB recording waits for a full buffer
 
 Each capture transfer used to become exactly one record buffer. What the device sent beyond that was dropped, and a short transfer was filled by repeating the last frame, so recording followed the host clock while playback followed the device. The extra frames now start the next buffer, and a short transfer is not published until the buffer is full. An empty packet, a service interval the host missed, is nominal silence, so the audio after it stays in time. The host test `scripts/test-usb-audio-packets.cpp` passed on this machine. Ported from RenkuOS `b3dc1212e4` (rations, MIT) onto the existing carry. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.

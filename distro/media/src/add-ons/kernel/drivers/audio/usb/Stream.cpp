@@ -57,7 +57,13 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fActualBytes(NULL),
 	fPadded(0),
 	fDropped(0),
-	fClockId(0)
+	fClockId(0),
+	fFeedbackPipe(0),
+	fFeedbackSample(0),
+	fFeedbackError(0),
+	fPlayScratch(NULL),
+	fPlayCarry(NULL),
+	fPlayCarryFrames(0)
 {
 	memset(&fPlan, 0, sizeof(fPlan));
 }
@@ -74,6 +80,8 @@ Stream::~Stream()
 	delete[] fDescriptors;
 	free(fCarry);
 	free(fActualBytes);
+	free(fPlayScratch);
+	free(fPlayCarry);
 // SPDX-SnippetEnd
 }
 
@@ -308,6 +316,8 @@ Stream::OnRemove()
 		snooze(100);
 
 	gUSBModule->cancel_queued_transfers(fStreamEndpoint);
+	if (fFeedbackPipe != 0)
+		gUSBModule->cancel_queued_transfers(fFeedbackPipe);
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 }
@@ -391,7 +401,13 @@ Stream::_SetupBuffers()
 	fCarry = NULL;
 	free(fActualBytes);
 	fActualBytes = NULL;
+	free(fPlayScratch);
+	fPlayScratch = NULL;
+	free(fPlayCarry);
+	fPlayCarry = NULL;
 	fCarryFrames = 0;
+	fPlayCarryFrames = 0;
+	fFeedbackError = 0;
 	fPadded = fDropped = 0;
 
 	fPlan = plan;
@@ -439,6 +455,14 @@ Stream::_SetupBuffers()
 		fCarry = (uint8*)malloc(
 			((size_t)plan.framesPerBuffer + 1) * sampleSize);
 		if (fActualBytes == NULL || fCarry == NULL)
+			return B_NO_MEMORY;
+	} else {
+		// Room for the client's buffer plus a few frames held back or pulled
+		// forward when a feedback endpoint is pacing playback.
+		fPlayScratch = (uint8*)malloc(
+			(fRegionBytes + 8 * sampleSize) * kSamplesBufferCount);
+		fPlayCarry = (uint8*)malloc(8 * sampleSize);
+		if (fPlayScratch == NULL || fPlayCarry == NULL)
 			return B_NO_MEMORY;
 	}
 	TRACE(INF, "descriptorsCount:%d\n", fDescriptorsCount);
@@ -509,9 +533,14 @@ Stream::OnSetConfiguration(usb_device device,
 			fStreamEndpoint = interface->endpoint[i].handle;
 			TRACE(INF, "%s Stream Endpoint [address %#04x] handle is: %#010x.\n",
 				fIsInput ? "Input" : "Output", address, fStreamEndpoint);
-			return B_OK;
 		}
+		// Usage type feedback is bits 5:4 == 01.
+		if ((interface->endpoint[i].descr->attributes & 0x30) == 0x10)
+			fFeedbackPipe = interface->endpoint[i].handle;
 	}
+
+	if (fStreamEndpoint != 0)
+		return B_OK;
 
 	TRACE(INF, "%s Stream Endpoint [address %#04x] was not found.\n",
 		fIsInput ? "Input" : "Output", address);
@@ -595,6 +624,8 @@ Stream::Start()
 		for (size_t i = 0; i < kSamplesBufferCount; i++)
 			result = _QueueNextTransfer(i, i == 0);
 		fIsRunning = result == B_OK;
+		if (fIsRunning && !fIsInput)
+			_QueueFeedback();
 	}
 	return result;
 }
@@ -608,6 +639,8 @@ Stream::Stop()
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 	gUSBModule->cancel_queued_transfers(fStreamEndpoint);
+	if (fFeedbackPipe != 0)
+		gUSBModule->cancel_queued_transfers(fFeedbackPipe);
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 
@@ -631,6 +664,9 @@ Stream::_QueueNextTransfer(size_t queuedBuffer, bool start)
 		fKernelBuffers + bufferSize * queuedBuffer, bufferSize,
 		fDescriptors + queuedBuffer * packetsCount, packetsCount);
 
+	if (!fIsInput && fFeedbackPipe != 0 && fPlayScratch != NULL)
+		return _QueuePlayback(queuedBuffer);
+
 	status_t status = gUSBModule->queue_isochronous(fStreamEndpoint,
 		fKernelBuffers + bufferSize * queuedBuffer, bufferSize,
 		fDescriptors + queuedBuffer * packetsCount, packetsCount,
@@ -639,6 +675,127 @@ Stream::_QueueNextTransfer(size_t queuedBuffer, bool start)
 
 	TRACE(DTA, "frame:%#010x\n", fStartingFrame);
 	return status;
+}
+
+
+status_t
+Stream::_QueuePlayback(size_t queuedBuffer)
+{
+	// The client's buffer is one exact buffer of frames. A feedback sample
+	// moves one frame into or out of fPlayCarry so the packets follow the
+	// device clock without reading past that buffer.
+	const uint32 fb = fPlan.frameBytes;
+	const uint32 want = fPlan.framesPerBuffer;
+	uint8* client = fKernelBuffers + fRegionBytes * queuedBuffer;
+
+	int32 sample = atomic_get(&fFeedbackSample);
+	if (sample > 0 && fPlan.packetsPerSecond != 0) {
+		int32 nominal = (int32)(((uint64)fPlan.rate << 16)
+			/ fPlan.packetsPerSecond);
+		fFeedbackError += (sample - nominal) * (int32)fPlan.packetsPerBuffer;
+	}
+
+	int32 adjust = 0;
+	if (fFeedbackError > 65536 && fPlayCarryFrames > 0)
+		adjust = 1;
+	else if (fFeedbackError < -65536 && want > 1)
+		adjust = -1;
+
+	uint32 sent = (uint32)((int32)want + adjust);
+	uint32 have = fPlayCarryFrames + want;
+	if (sent > have)
+		sent = have;
+	if (adjust != 0)
+		fFeedbackError -= adjust * 65536;
+
+	const size_t stride = fRegionBytes + 8 * fb;
+	uint8* scratch = fPlayScratch + queuedBuffer * stride;
+	if (fPlayCarryFrames > 0)
+		memcpy(scratch, fPlayCarry, (size_t)fPlayCarryFrames * fb);
+	uint32 fromClient = sent > fPlayCarryFrames ? sent - fPlayCarryFrames : 0;
+	if (fromClient > want)
+		fromClient = want;
+	if (fromClient > 0) {
+		memcpy(scratch + (size_t)fPlayCarryFrames * fb,
+			client, (size_t)fromClient * fb);
+	}
+	uint32 left = want - fromClient;
+	if (left > 8)
+		left = 8;
+	if (left > 0)
+		memcpy(fPlayCarry, client + (size_t)fromClient * fb, (size_t)left * fb);
+	fPlayCarryFrames = left;
+
+	uint32 accounted = 0;
+	usb_iso_packet_descriptor* descriptors
+		= fDescriptors + queuedBuffer * fPlan.packetsPerBuffer;
+	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++) {
+		uint32 frames = usb_audio_packet_frames(&fPlan, i);
+		if (i + 1 == fPlan.packetsPerBuffer && sent > accounted)
+			frames = sent - accounted;
+		if (frames > fPlan.nominalMaxFrames)
+			frames = fPlan.nominalMaxFrames;
+		accounted += frames;
+		descriptors[i].request_length = (int16)(frames * fb);
+		descriptors[i].actual_length = 0;
+		descriptors[i].status = B_OK;
+	}
+
+	size_t queuedBytes = 0;
+	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++)
+		queuedBytes += (size_t)descriptors[i].request_length;
+
+	return gUSBModule->queue_isochronous(fStreamEndpoint, scratch,
+		queuedBytes, descriptors, fPlan.packetsPerBuffer,
+		&fStartingFrame, USB_ISO_ASAP, Stream::_TransferCallback, this);
+}
+
+
+void
+Stream::_QueueFeedback()
+{
+	if (fFeedbackPipe == 0 || fIsInput)
+		return;
+	fFeedbackPacket.request_length = 4;
+	fFeedbackPacket.actual_length = 0;
+	fFeedbackPacket.status = B_OK;
+	uint32 frame = 0;
+	gUSBModule->queue_isochronous(fFeedbackPipe, fFeedbackBytes, 4,
+		&fFeedbackPacket, 1, &frame, USB_ISO_ASAP,
+		Stream::_FeedbackCallback, this);
+}
+
+
+void
+Stream::_FeedbackCallback(void* cookie, status_t status, void* data,
+	size_t actualLength)
+{
+	Stream* stream = (Stream*)cookie;
+	atomic_add(&stream->fInsideNotify, 1);
+	if (status != B_OK || actualLength < 3 || data == NULL
+		|| atomic_get(&stream->fQueueStopped) != 0 || !stream->fIsRunning) {
+		atomic_add(&stream->fInsideNotify, -1);
+		return;
+	}
+
+	uint32 raw = 0;
+	memcpy(&raw, data, actualLength < 4 ? actualLength : 4);
+	int32 perPacket = 0;
+	if (stream->fPlan.packetsPerSecond > 1000) {
+		uint32 micros = 8000 / stream->fPlan.packetsPerSecond;
+		perPacket = (int32)(raw * micros);
+	} else {
+		uint32 frames = 1000 / stream->fPlan.packetsPerSecond;
+		if (frames == 0)
+			frames = 1;
+		perPacket = (int32)((raw & 0x00ffffff) << 2) * (int32)frames;
+	}
+	if (perPacket > 0)
+		atomic_set(&stream->fFeedbackSample, perPacket);
+
+	if (atomic_get(&stream->fQueueStopped) == 0 && stream->fIsRunning)
+		stream->_QueueFeedback();
+	atomic_add(&stream->fInsideNotify, -1);
 }
 
 

@@ -83,13 +83,25 @@ protected:
 			uint32			fPadded;
 			uint32			fDropped;
 			uint8			fClockId;		// UAC 2.0 clock source, 0 if none
+			usb_pipe		fFeedbackPipe;	// explicit feedback, or 0
+			int32			fFeedbackSample;// 16.16 frames per packet, 0 if none
+			int32			fFeedbackError;
+			usb_iso_packet_descriptor fFeedbackPacket;
+			uint8			fFeedbackBytes[4];
+			uint8*			fPlayScratch;
+			uint8*			fPlayCarry;
+			uint32			fPlayCarryFrames;
 // SPDX-SnippetEnd
 
 private:
 			status_t		_ChooseAlternate();
 			status_t		_SetupBuffers();
 			status_t		_QueueNextTransfer(size_t buffer, bool start);
+			status_t		_QueuePlayback(size_t buffer);
+			void			_QueueFeedback();
 	static	void			_TransferCallback(void* cookie, status_t status,
+								void* data, size_t actualLength);
+	static	void			_FeedbackCallback(void* cookie, status_t status,
 								void* data, size_t actualLength);
 			void			_DumpDescriptors();
 // SPDX-SnippetBegin
