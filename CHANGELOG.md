@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - Stick 46 copied the desktop through the GPU
+
+Stick 46 is the 17:43 anyboot, sha256 `6965416a…`. Logs: `C:\Users\nickr\Desktop\Logs\m8-46`. The branch is `cursor/m8-stick` `ee8da208`.
+
+Boot 1 (`gpu_app_server true`, `gpu_copy_debug true`) passed `gpu copy on scanout`, `copy compare ok`, no `copy compare MISMATCH`, no `gpu copy off`, and eleven `copy gpu median` lines. The closing line was PASS. `FAIL speed rule needs the cpu boot` was printed because boot 2 had not run, and that line did not change the closing result.
+
+Boot 2 passed its copy lines, including eleven `copy cpu median` lines. The speed rule was `gpu 112 us / 217 ms against cpu 0 us / 8 ms`. The CPU time spent copying did not drop by half, and the median was slower, so there is no gain. Decision 7 of the M8 brief says the path still passes when it works and the numbers are recorded, and `gpu_app_server` stays opt-in. The check printed FAIL for that comparison and then a closing FAIL. That closing FAIL was the speed rule alone.
+
+In boot 1 the marker self-test stopped after 5 s (`mark selftest timeout 5000 ms`, `mark selftest bad`, `skipped, gpu lost`) while the copies kept landing. In boot 2 it passed in 1 ms (`mark selftest ok 1 ms`). The boot with `gpu_app_server_fail true` did not run.
+
+Boot 2 of `check.sh` now prints `RESULT gpu faster` or `RESULT stays opt-in` and no longer lets that comparison change the closing line. That change is not on stick 46. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The desktop copy has its own debug key
 
 Stick 45 kept `gpu_debug true`. That prints one kernel line per submit. The syslog rotated, so the boot marker, the scratch line, the fence, `k2 ok gart` and `gpu copy on scanout` were gone, and one ten-second window recorded 860 ms inside the timed copy. `gpu_copy_debug true` is read by app_server only. It turns on the compare and the measurement. The kernel submit line stays on `gpu_debug`. The M8 boot files use `gpu_copy_debug` and no longer set `gpu_debug`. `m8-boot2` checks for the new key. Not booted. There is no What's new section and `distro/BUILD` stays the same.

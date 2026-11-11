@@ -156,10 +156,12 @@ else
 	text="speed rule gpu ${gus} us / ${gms} ms against cpu ${cus} us / ${cms} ms"
 	if [ -n "$gus" ] && [ -n "$gms" ] && [ -n "$cus" ] && [ -n "$cms" ] \
 		&& [ $((gms * 2)) -le "$cms" ] && [ "$gus" -le "$cus" ]; then
-		emit "PASS $text"
+		emit "RESULT gpu faster"
 	else
-		emit "FAIL $text"
-		other=1
+		emit "RESULT stays opt-in"
+	fi
+	if [ -n "$gus" ] && [ -n "$cms" ]; then
+		emit "$text"
 	fi
 fi
 

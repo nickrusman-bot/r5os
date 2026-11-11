@@ -56,7 +56,7 @@ After a fallback, that same line also carries `gpu copy off: <reason>`, so a rot
 
 With `gpu_copy_debug`, app_server compares the first GPU frame, then every 100th. The compare reads the rectangles of the region that was copied, not the full-width bands. Another window can draw on the same rows, outside those rectangles, while the copy runs. It flushes the write-combining lines of those rectangles and reads them back from the front buffer. A match logs `app_server: copy compare ok` once per 10 seconds. A mismatch logs `app_server: copy compare MISMATCH` with the row, the first different byte, eight bytes from each side, and `in rect l,t-r,b`, and falls back for the session. The median line repeats that text.
 
-The GPU path is better only if the CPU time spent copying drops by at least half and the median copy time is not worse. Otherwise the path can still be correct, and the setting stays opt-in.
+The GPU path is better only if the CPU time spent copying drops by at least half and the median copy time is not worse. Otherwise the path can still be correct, and the setting stays opt-in. On boot 2, `check.sh` prints `RESULT gpu faster` or `RESULT stays opt-in`. That line does not change the closing PASS or FAIL.
 
 ## What this does not do
 
