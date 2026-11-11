@@ -23,7 +23,7 @@ OHCI, David Beckman. The frame fallback from group A stays.
 
 - `d38c595a49ecfd4a6b0482ee8e9c40d9ee4eee32` uses the length per packet and reports the start frame. `6011739554cbf747d50f0a9aa9db5a2740d97f00` frees an isochronous descriptor at the size it was allocated. `5ed8a3e4c59b9060ef4ad416dbc22849156f7189` unlinks an isochronous transfer before walking its descriptors.
 
-Neither test laptop has EHCI, UHCI or OHCI. QEMU can emulate them. No USB audio device is attached, so the isochronous payload itself is not exercised here.
+Neither test laptop has EHCI, UHCI or OHCI. Tested in QEMU (TCG, window) at 21:47 on 11 Nov 2026. `pci-ohci`, `usb-ehci` and `ich9-usb-uhci1` each started, and a USB keyboard or mouse on each (`0627:0001`) was probed. The serial log has no panic. Tracker and Deskbar started. No USB audio device was attached, so an isochronous payload was not played. Not tested on the 5625U or the X1 Carbon.
 
 ## 2026-11-11 - USB isochronous transfers on xHCI
 
