@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - multi_audio queues four input buffers
+
+Each playback input held one buffer. A buffer that arrived while that slot was full was dropped, and the next beat was silence. The slot is now a queue of four. A full queue still waits 100 µs once and then drops the new buffer. Stopping the thread recycles what is still queued. Ported from RenkuOS `7405980fad` (David Beckman, MIT). Not played through a device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Roland and Edirol Advanced mode is a table
 
 Those interfaces have no USB-MIDI descriptors, so the driver matches vendor 0x0582 and a per-model table of interface number and cable masks. A composite unit is found by its non-isochronous IN and OUT pair. An interrupt IN endpoint is queued as an interrupt transfer. The driver scans every endpoint for the first IN and the first OUT. A missing port in the middle of the cable list is skipped instead of ending the scan. Standard mode still uses the class descriptors. Ported from RenkuOS `cb61494f02` (David Beckman, MIT). No Roland device was attached. There is no What's new section and `distro/BUILD` stays the same.
