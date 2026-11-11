@@ -74,7 +74,7 @@ Grabber::Grabber()
 	fLastSize(0),
 	fLast(NULL)
 {
-	memset(&fFormat, 0, sizeof(fFormat));
+	fFormat = media_format();
 }
 
 
@@ -224,8 +224,7 @@ main()
 
 	live_node_info nodes[32];
 	int32 count = 32;
-	media_format video;
-	memset(&video, 0, sizeof(video));
+	media_format video = media_format();
 	video.type = B_MEDIA_RAW_VIDEO;
 	status_t status = roster->GetLiveNodes(nodes, &count, NULL, &video, NULL,
 		B_BUFFER_PRODUCER | B_PHYSICAL_INPUT);
@@ -288,7 +287,7 @@ main()
 		return 1;
 	}
 
-	roster->SetRunModeNode(nodes[chosen].node, B_RECORDING);
+	roster->SetRunModeNode(nodes[chosen].node, BMediaNode::B_RECORDING);
 	roster->StartNode(nodes[chosen].node, 0);
 	snooze(kRunTime);
 	roster->StopNode(nodes[chosen].node, 0, true);
