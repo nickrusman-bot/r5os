@@ -1,6 +1,12 @@
 # After M7
 
-One line each. These showed up in sticks 35, 35-b, 36 and 37 and are outside the Vulkan window. Known hardware lines are listed so they are not treated as new.
+Open after the window. Pending stick 39.
+
+- The isolation stage hangs the GPU until the M10 reset. Detail below.
+- An offscreen cube takes 3.5 s.
+- `DRM_IOCTL_PRIME` returns ENOSYS. The blit uses a host pointer. Detail below.
+
+One line each. These showed up in sticks 35, 35-b, 36, 37 and 38 and are outside the Vulkan window. Known hardware lines are listed so they are not treated as new.
 
 - sshd cannot create `/packages/openssh-10.4p1-1/.self/var/run/sshd.pid` (stick 35-b). The package has no `var/run`. Left.
 - packagefs and package_daemon open `activated-packages` and it is missing on first boot (all four sticks). Haiku then loads every package in the directory. Left.
