@@ -437,7 +437,7 @@ Stream::_SetupBuffers()
 	if (fIsInput) {
 		fActualBytes = (uint32*)malloc(sizeof(uint32) * plan.packetsPerBuffer);
 		fCarry = (uint8*)malloc(
-			((size_t)usb_audio_carry_capacity(&plan) + 1) * sampleSize);
+			((size_t)plan.framesPerBuffer + 1) * sampleSize);
 		if (fActualBytes == NULL || fCarry == NULL)
 			return B_NO_MEMORY;
 	}
@@ -675,8 +675,19 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 	// Recording: join the packets of the buffer that just completed into
 	// exactly one buffer of frames before the reader is woken. The buffer
 	// that completed is the one after fCurrentBuffer.
-	if (stream->fIsInput)
-		stream->_JoinRecorded((stream->fCurrentBuffer + 1) % kSamplesBufferCount);
+	// A short capture stays in the carry and does not wake the reader. The
+	// next transfer finishes the buffer. An empty packet was already turned
+	// into nominal silence, so a missed interval still advances.
+	if (stream->fIsInput
+		&& !stream->_JoinRecorded(
+			(stream->fCurrentBuffer + 1) % kSamplesBufferCount)) {
+		atomic_add(&stream->fProcessedBuffers, -1);
+		stream->fCurrentBuffer
+			= (stream->fCurrentBuffer + 1) % kSamplesBufferCount;
+		stream->_QueueNextTransfer(stream->fCurrentBuffer, false);
+		atomic_add(&stream->fInsideNotify, -1);
+		return;
+	}
 // SPDX-SnippetEnd
 
 	release_sem_etc(stream->fDevice->fBuffersReadySem, 1, B_DO_NOT_RESCHEDULE);
@@ -717,29 +728,40 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-void
+bool
 Stream::_JoinRecorded(size_t buffer)
 {
 	if (fActualBytes == NULL || fCarry == NULL || fPlan.packetsPerBuffer == 0)
-		return;
+		return false;
 
 	usb_iso_packet_descriptor* descriptors
 		= fDescriptors + buffer * fPlan.packetsPerBuffer;
+	const uint32 frameBytes = fPlan.frameBytes;
+	uint8* region = fKernelBuffers + fRegionBytes * buffer;
 	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++) {
-		fActualBytes[i] = descriptors[i].status == B_OK
-				&& descriptors[i].actual_length > 0
-			? (uint32)descriptors[i].actual_length : 0;
+		if (descriptors[i].status == B_OK && descriptors[i].actual_length > 0) {
+			fActualBytes[i] = (uint32)descriptors[i].actual_length;
+			continue;
+		}
+		// A missed service interval. Silence of the nominal size keeps the
+		// following audio in time. A short but present packet is left short.
+		uint32 frames = usb_audio_packet_frames(&fPlan, i);
+		uint32 bytes = frames * frameBytes;
+		uint32 slot = fPlan.requestFrames * frameBytes;
+		if (bytes > slot)
+			bytes = slot;
+		memset(region + (size_t)i * slot, 0, bytes);
+		fActualBytes[i] = bytes;
 	}
 
-	uint32 before = fPadded + fDropped;
-	usb_audio_compact_record(&fPlan, fKernelBuffers + fRegionBytes * buffer,
-		fActualBytes, fCarry, &fCarryFrames, &fPadded, &fDropped);
-	uint32 after = fPadded + fDropped;
-	// One line per second of frames that had to be repeated or dropped.
-	if (after / fPlan.rate != before / fPlan.rate) {
-		dprintf("usb_audio: record clock drift, %" B_PRIu32 " frames padded, %"
-			B_PRIu32 " dropped so far\n", fPadded, fDropped);
+	uint32 before = fDropped;
+	bool ready = usb_audio_compact_record(&fPlan, region, fActualBytes, fCarry,
+		&fCarryFrames, &fPadded, &fDropped);
+	if (fPlan.rate != 0 && fDropped / fPlan.rate != before / fPlan.rate) {
+		dprintf("usb_audio: record clock drift, %" B_PRIu32
+			" frames dropped so far\n", fDropped);
 	}
+	return ready;
 }
 // SPDX-SnippetEnd
 

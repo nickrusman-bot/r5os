@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A short USB recording waits for a full buffer
+
+Each capture transfer used to become exactly one record buffer. What the device sent beyond that was dropped, and a short transfer was filled by repeating the last frame, so recording followed the host clock while playback followed the device. The extra frames now start the next buffer, and a short transfer is not published until the buffer is full. An empty packet, a service interval the host missed, is nominal silence, so the audio after it stays in time. The host test `scripts/test-usb-audio-packets.cpp` passed on this machine. Ported from RenkuOS `b3dc1212e4` (rations, MIT) onto the existing carry. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - USB audio arms every stream before one starts
 
 A UAC 2.0 device with playback and capture used to program each stream on its own. The second interface was then switched while the first was already running on the same clock, and a UMC204HD stays silent for as long as capture runs. On a fresh run the driver now parks every streaming interface, programs each clock once, selects the active alternates, and only then queues a transfer. A clock is not rewritten while another stream of that device is running. UAC 1.0 is unchanged. Ported from RenkuOS `a842555ed6` (rations, MIT) onto this driver's clock write. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
