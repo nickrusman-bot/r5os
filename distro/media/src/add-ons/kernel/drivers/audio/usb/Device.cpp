@@ -828,6 +828,8 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 		return B_BAD_ADDRESS;
 	}
 
+	_ArmStreams();
+
 	for (int i = 0; i < fStreams.Count(); i++) {
 		if (!fStreams[i]->IsRunning())
 			fStreams[i]->Start();
@@ -857,6 +859,46 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 		return B_BAD_ADDRESS;
 
 	return status;
+}
+
+
+void
+Device::_ArmStreams()
+{
+	// Park every UAC 2.0 interface, program each clock once, then select the
+	// active alternates, and only then does the caller queue a transfer.
+	// Doing this one stream at a time parks the second interface while the
+	// first is already streaming on the same clock. RenkuOS a842555ed6.
+	if (fAudioControl.SpecReleaseNumber() < 0x0200 || fStreams.Count() == 0)
+		return;
+
+	for (int i = 0; i < fStreams.Count(); i++) {
+		if (fStreams[i]->IsRunning())
+			return;
+	}
+
+	for (int i = 0; i < fStreams.Count(); i++)
+		fStreams[i]->SelectAlternate(0);
+
+	uint8 programmed[8];
+	int programmedCount = 0;
+	for (int i = 0; i < fStreams.Count(); i++) {
+		uint8 clockId = fStreams[i]->ClockId();
+		bool done = false;
+		for (int j = 0; j < programmedCount; j++)
+			done = done || programmed[j] == clockId;
+		if (done && clockId != 0)
+			continue;
+		if (clockId != 0 && programmedCount < 8)
+			programmed[programmedCount++] = clockId;
+		fStreams[i]->ProgramClock();
+	}
+
+	for (int i = 0; i < fStreams.Count(); i++) {
+		const usb_configuration_info* config = fStreams[i]->fConfig;
+		if (config != NULL)
+			fStreams[i]->OnSetConfiguration(fDevice, config);
+	}
 }
 
 

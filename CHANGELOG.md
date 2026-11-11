@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - USB audio arms every stream before one starts
+
+A UAC 2.0 device with playback and capture used to program each stream on its own. The second interface was then switched while the first was already running on the same clock, and a UMC204HD stays silent for as long as capture runs. On a fresh run the driver now parks every streaming interface, programs each clock once, selects the active alternates, and only then queues a transfer. A clock is not rewritten while another stream of that device is running. UAC 1.0 is unchanged. Ported from RenkuOS `a842555ed6` (rations, MIT) onto this driver's clock write. Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Buffer length stays on the Latency page
 
 RenkuOS `6ed1b63f79` adds a Buffer size menu on the sound card and asks the driver for that many frames. That menu is not added. Media already writes `play_buffer_frames` and `record_buffer_frames`, and the USB driver reads them. HD Audio already reads the same file. A live control that sends a short buffer to HD Audio stops its interrupts, which is why that commit left HD Audio out. The request fields in `multi_audio` stay 0, so a driver keeps its own default unless it reads the Latency file itself. There is no What's new section and `distro/BUILD` stays the same.

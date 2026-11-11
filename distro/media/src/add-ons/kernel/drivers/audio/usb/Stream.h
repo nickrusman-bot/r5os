@@ -27,6 +27,12 @@ public:
 			status_t		Start();
 			status_t		Stop();
 			bool			IsRunning() { return fIsRunning; }
+
+			// UAC 2.0 start, run for every stream before any of them queues
+			// a transfer. RenkuOS a842555ed6.
+			status_t		SelectAlternate(size_t alternate);
+			status_t		ProgramClock();
+			uint8			ClockId() const { return fClockId; }
 			void			OnRemove();
 
 			status_t		GetBuffers(multi_buffer_list* List);
@@ -47,6 +53,7 @@ protected:
 			status_t		fStatus;
 
 			usb_pipe		fStreamEndpoint;
+			const usb_configuration_info* fConfig;
 
 			bool			fIsRunning;
 			area_id			fArea, fKernelArea;
@@ -88,7 +95,7 @@ private:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-			void			_JoinRecorded(size_t buffer);
+			bool			_JoinRecorded(size_t buffer);
 			void			_QueryClockRates();
 // SPDX-SnippetEnd
 };

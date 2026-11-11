@@ -35,6 +35,7 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fDevice(device),
 	fStatus(B_NO_INIT),
 	fStreamEndpoint(0),
+	fConfig(NULL),
 	fIsRunning(false),
 	fArea(-1),
 	fKernelArea(-1),
@@ -476,6 +477,7 @@ Stream::OnSetConfiguration(usb_device device,
 		TRACE(ERR, "NULL configuration. Not set.\n");
 		return B_ERROR;
 	}
+	fConfig = config;
 
 	// The replugged configuration may not have this interface or alternate.
 	// Indexing a missing alt[] is a small non-NULL pointer, so a NULL check
@@ -514,6 +516,64 @@ Stream::OnSetConfiguration(usb_device device,
 	TRACE(INF, "%s Stream Endpoint [address %#04x] was not found.\n",
 		fIsInput ? "Input" : "Output", address);
 	return B_ERROR;
+}
+
+
+status_t
+Stream::SelectAlternate(size_t alternate)
+{
+	if (fConfig == NULL || fDevice == NULL)
+		return B_NO_INIT;
+	if (fInterface >= fConfig->interface_count
+		|| fConfig->interface[fInterface].alt == NULL
+		|| alternate >= fConfig->interface[fInterface].alt_count) {
+		return B_ERROR;
+	}
+	return gUSBModule->set_alt_interface(fDevice->fDevice,
+		&fConfig->interface[fInterface].alt[alternate]);
+}
+
+
+status_t
+Stream::ProgramClock()
+{
+	uint32 samplingRate = fAlternates[fActiveAlternate]->GetSamplingRate();
+	size_t actualLength = 0;
+	status_t status = B_OK;
+
+	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
+		uint8 clock = fClockId;
+		if (clock == 0) {
+			_AudioControl* control = fControlInterface->Find(TerminalLink());
+			clock = control != NULL ? fControlInterface->ResolveClockSource(
+				control->ClockSourceId()) : 0;
+		}
+		if (clock == 0) {
+			dprintf("usb_audio: no clock source to set %" B_PRIu32 " Hz on\n",
+				samplingRate);
+			return B_ERROR;
+		}
+		uint32 rate = samplingRate;
+		status = gUSBModule->send_request(fDevice->fDevice,
+			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,
+			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
+			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
+			sizeof(rate), &rate, &actualLength);
+		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
+			samplingRate, clock, strerror(status));
+		return status;
+	}
+
+	usb_audio_sampling_freq freq = _ASFormatDescriptor::GetSamFreq(samplingRate);
+	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
+	status = gUSBModule->send_request(fDevice->fDevice,
+		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,
+		USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
+		address, sizeof(freq), &freq, &actualLength);
+	TRACE(ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
+		freq.bytes[0], freq.bytes[1], freq.bytes[2],
+		address, actualLength, strerror(status));
+	return status;
 }
 
 
@@ -776,50 +836,16 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	if (status != B_OK)
 		return status;
 
-	// set endpoint speed
-	uint32 samplingRate = fAlternates[fActiveAlternate]->GetSamplingRate();
-	size_t actualLength = 0;
-	usb_audio_sampling_freq freq = _ASFormatDescriptor::GetSamFreq(samplingRate);
-	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
-
-	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-		// The rate is set on the clock source, not on a selector in front
-		// of it. Init() found it; refuse rather than send clock 0.
-		uint8 clock = fClockId;
-		if (clock == 0) {
-			_AudioControl* control = fControlInterface->Find(TerminalLink());
-			clock = control != NULL ? fControlInterface->ResolveClockSource(
-				control->ClockSourceId()) : 0;
+	// A shared clock is locked while another stream of this device runs.
+	// Rewriting it then is what silences a UMC204HD for the whole capture.
+	for (int i = 0; i < fDevice->fStreams.Count(); i++) {
+		Stream* other = fDevice->fStreams[i];
+		if (other != this && other->IsRunning()) {
+			TRACE(ERR, "clock locked by a running stream\n");
+			return B_OK;
 		}
-		if (clock == 0) {
-			dprintf("usb_audio: no clock source to set %" B_PRIu32 " Hz on\n",
-				samplingRate);
-			return B_ERROR;
-		}
-// SPDX-SnippetEnd
-		uint32 rate = samplingRate;
-		status = gUSBModule->send_request(fDevice->fDevice,
-			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,
-			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
-			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
-			sizeof(rate), &rate, &actualLength);
-		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
-			samplingRate, clock, strerror(status));
-		return status;
 	}
-
-	status = gUSBModule->send_request(fDevice->fDevice,
-		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,
-		USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
-		address, sizeof(freq), &freq, &actualLength);
-
-	TRACE(ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
-		freq.bytes[0], freq.bytes[1], freq.bytes[2],
-		address, actualLength, strerror(status));
-	return status;
+	return ProgramClock();
 }
 
 

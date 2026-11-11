@@ -80,6 +80,7 @@ private:
 			status_t		_MultiSetMix(multi_mix_value_info* Info);
 			status_t		_MultiListMixControls(multi_mix_control_info* Info);
 			status_t		_MultiBufferExchange(multi_buffer_info* Info);
+			void			_ArmStreams();
 			status_t		_MultiBufferForceStop();
 
 			sem_id			fBuffersReadySem;
