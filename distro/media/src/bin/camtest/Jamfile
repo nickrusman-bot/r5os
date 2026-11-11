@@ -1,0 +1,6 @@
+SubDir HAIKU_TOP src bin camtest ;
+
+Application camtest :
+	camtest.cpp
+	: be
+	;

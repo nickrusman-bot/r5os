@@ -69,6 +69,18 @@ RenkuOS, copyright David Beckman:
 
 `scripts/apply-kernel-bugs.py` copies these files.
 
+### USB webcam
+
+Location: `distro/media/src/add-ons/media/media-add-ons/usb_webcam/`.
+
+The files are Haiku's webcam add-on. Copyright the Haiku authors named in each file, including François Revol. License: MIT. The headers stay. The air/OS rewrite stays MIT. It is not relicensed. `scripts/apply-media.py` copies the files and removes the old `USB_video.h` and `UVCDeframer` sources from the build tree.
+
+air/OS (airos-works/haiku), copyright jmgasper:
+
+- `a314c835a947baedb3a04fa46eec4dc4e74b2eb9` rewrites the USB Video Class path. YUY2, UYVY, NV12, I420 and Motion-JPEG become `B_RGB32`. Frames go out as the camera sends them, at the size the consumer asks for. Camera controls are parameters. One node per camera. The active USB configuration is left as it is, so the microphone stays with `usb_audio`. Co-Authored-By: Claude Fable 5.1.
+
+`distro/media/src/bin/camtest/` is R5's own test. License: GPL-3.0-or-later. It is not from air/OS and it is not camgrab.
+
 ### Touchpads and TrackPoint
 
 The image built `i2c_hid` and did not install it. RenkuOS `b37a078925` adds it next to `i2c_elan`.

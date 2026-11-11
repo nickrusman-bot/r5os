@@ -67,6 +67,48 @@ FILES = (
     "src/bin/midi2test/midi2test.cpp",
     "src/bin/usb_audiotest/Jamfile",
     "src/bin/usb_audiotest/usb_audiotest.cpp",
+    "src/bin/camtest/Jamfile",
+    "src/bin/camtest/camtest.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/AddOn.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/AddOn.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamBufferedFilterInterface.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamBufferedFilterInterface.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamBufferingDeframer.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamBufferingDeframer.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamColorSpaceTransform.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamColorSpaceTransform.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamDebug.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamDeframer.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamDeframer.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamDevice.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamDevice.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamFilterInterface.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamFilterInterface.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamRoster.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamRoster.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamSensor.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamSensor.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamStreamingDeframer.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/CamStreamingDeframer.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/Jamfile",
+    "src/add-ons/media/media-add-ons/usb_webcam/Producer.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/Producer.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/README.txt",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/NW80xCamDevice.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/NW80xCamDevice.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/quickcam/QuickCamDevice.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/quickcam/QuickCamDevice.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/sonix/SonixCamDevice.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/sonix/SonixCamDevice.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/uvc/UVCCamDevice.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/addons/uvc/UVCCamDevice.h",
+    "src/add-ons/media/media-add-ons/usb_webcam/cstransforms/Bayer.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/sensors/hdcs1000.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/sensors/hv7131e1.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/sensors/pas106b.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/sensors/pb0100.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/sensors/tas5110c1b.cpp",
+    "src/add-ons/media/media-add-ons/usb_webcam/sensors/tas5130d1b.cpp",
 )
 
 
@@ -87,6 +129,7 @@ def main() -> None:
         print(f"copied {relative}")
 
     hook_midi2test(haiku)
+    hook_webcam(haiku)
     hook_mixer(haiku)
 
 
@@ -154,6 +197,56 @@ def hook_midi2test(haiku: pathlib.Path) -> None:
         print("patched usb_audiotest image")
     else:
         print("already usb_audiotest image")
+
+
+def hook_webcam(haiku: pathlib.Path) -> None:
+    for relative in (
+        "src/add-ons/media/media-add-ons/usb_webcam/addons/uvc/USB_video.h",
+        "src/add-ons/media/media-add-ons/usb_webcam/addons/uvc/UVCDeframer.cpp",
+        "src/add-ons/media/media-add-ons/usb_webcam/addons/uvc/UVCDeframer.h",
+    ):
+        leftover = haiku / relative
+        if leftover.is_file():
+            leftover.unlink()
+            print(f"removed {relative}")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin camtest ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin usb_audiotest ;\n"
+        if anchor not in text:
+            raise SystemExit("camtest anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched camtest Jamfile")
+
+    regular = haiku / "build" / "jam" / "images" / "definitions" / "regular"
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += camtest ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += usb_audiotest ;\n"
+        if anchor not in text:
+            raise SystemExit("camtest anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched camtest image")
+
+    minimum = haiku / "build" / "jam" / "images" / "definitions" / "minimum"
+    text = minimum.read_text(encoding="utf-8")
+    if "\n\tcamtest\n" not in text:
+        anchor = "\n\tbfsinfo\n"
+        if anchor not in text:
+            raise SystemExit("camtest anchor missing in minimum image")
+        minimum.write_text(text.replace(anchor, anchor + "\tcamtest\n", 1),
+            encoding="utf-8")
+        print("patched minimum camtest")
+    text = minimum.read_text(encoding="utf-8")
+    addon = "SYSTEM_ADD_ONS_MEDIA = \n\tusb_webcam.media_addon\n;\n"
+    empty = "SYSTEM_ADD_ONS_MEDIA = ;\n"
+    if "usb_webcam.media_addon" not in text:
+        if empty not in text:
+            raise SystemExit("webcam anchor missing in minimum image")
+        minimum.write_text(text.replace(empty, addon, 1), encoding="utf-8")
+        print("patched minimum webcam")
 
 
 if __name__ == "__main__":

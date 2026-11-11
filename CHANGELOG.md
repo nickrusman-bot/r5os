@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - USB Video Class cameras
+
+Haiku's `usb_webcam` add-on was copied into `distro/media` and the USB Video Class path was replaced with air/OS `a314c835a9` (jmgasper, MIT). YUY2, UYVY, NV12, I420 and Motion-JPEG become `B_RGB32`. Frames go out as the camera sends them, at the size asked for, and the controls are parameters. One node per camera. The old `UVCDeframer` and `USB_video.h` are gone. The add-on uses the active USB configuration and does not set it again, so a camera microphone stays with `usb_audio`. Motion-JPEG is built when the jpeg feature is on; the AMD64 package list has `libjpeg_turbo_devel`, and without that feature only the uncompressed formats work. The regular image already installed the add-on. The minimum image now does too. `camtest` lists video inputs, takes frames for five seconds, prints the count and the size, and saves the last frame. QEMU has no camera. Not built yet. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - xHCI asks a high-bandwidth camera for every packet
 
 Bits 11 and 12 of a high-speed `wMaxPacketSize` are extra transactions per microframe. They were left in the packet size, and an isochronous transfer was refused when one packet was larger than a single transaction, so a camera on xHCI delivered one packet per microframe. The packet size written to the endpoint is now only bits 0-10, and each isochronous TD tells the controller how many bursts it contains. SuperSpeed Mult is still not applied. The existing stall recovery in this file is unchanged. From air/OS `6d877da057` (jmgasper, MIT). Not booted. There is no What's new section and `distro/BUILD` stays the same.
