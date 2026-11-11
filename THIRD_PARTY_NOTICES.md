@@ -18,7 +18,7 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 Location: `distro/media/` `usb_midi`, `multi_audio`, `usb_audio`, the media server, and the media kit.
 
-The files stay Haiku's, MIT, copyright the authors named in each file. The added behavior is ported from RenkuOS commits `fe2de4aa60`, `cb61494f02`, `7405980fad`, `303b85eae5`, `bd571637d2`, `cf885a005b`, `8db4b0d1b4`, `8d3c445d68`, `428e08cd07`, `4b157fb134`, `bc165f5613`, `d1028141c2`, `cf12459a32`, `917e0e9e30`, and `2aee4b6c3c`. Authors: David Beckman, rations, and atomozero. The Roland cable table is facts about the hardware. No ALSA code is included. The product-name read is the same idea as the Media-OS `usb_audio` driver and is written on our file. The Haiku MIT headers stay. The R5 snippets that were already in these files stay GPL-3.0-or-later.
+The files stay Haiku's, MIT, copyright the authors named in each file. The added behavior is ported from RenkuOS commits `fe2de4aa60`, `cb61494f02`, `7405980fad`, `303b85eae5`, `bd571637d2`, `cf885a005b`, `8db4b0d1b4`, `8d3c445d68`, `428e08cd07`, `4b157fb134`, `bc165f5613`, `d1028141c2`, `cf12459a32`, `917e0e9e30`, `2aee4b6c3c`, and `e95a210256`. Authors: David Beckman, rations, and atomozero. The Roland cable table is facts about the hardware. No ALSA code is included. The product-name read is the same idea as the Media-OS `usb_audio` driver and is written on our file. The Haiku MIT headers stay. The R5 snippets that were already in these files stay GPL-3.0-or-later.
 
 ### PCI segments
 

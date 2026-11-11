@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-11 - A plugged-in sound card replaces the fallback
+
+While a fallback stands in for a saved input or output, a rescan looks for that saved device again. When it has a node, the media server uses it and reconnects the mixer to the new output. The saved name is not overwritten. Ported from RenkuOS `e95a210256` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - Opening Media does not save the fallback device
 
 Showing the current input or output also told the media server to set it. The server treats that as a choice, so a fallback for a missing USB card became the saved device, and choosing an output could put the input back on the built-in card. The menus now only mark the current default. A choice in the menu sets it, and creates the node first when the card appeared after the media services started. A failure is reported and the menus show the default in use. The latency menu and the USB layout menu are unchanged. Ported from RenkuOS `2aee4b6c3c` (rations, MIT). Not tested with a USB device. There is no What's new section and `distro/BUILD` stays the same.
