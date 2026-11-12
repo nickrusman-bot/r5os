@@ -284,6 +284,51 @@ def next_boot_dir():
     return folder / ("boot-5625u-%u" % (highest + 1))
 
 
+def copy_tree(bfs, path, dest, depth=0):
+    """Copy a directory of the volume below dest. Files already there stay."""
+    inode = bfs.walk(path)
+    if inode is None:
+        return 0
+    if (bfs.mode(inode) & 0o170000) != 0o040000:
+        return 0
+    if depth > 4:
+        return 0
+    count = 0
+    for name, block in bfs.list_dir(inode):
+        if name in (".", "..") or "/" in name:
+            continue
+        child = bfs.read_inode(block)
+        kind = bfs.mode(child) & 0o170000
+        target = dest / name
+        if kind == 0o040000:
+            count += copy_tree(bfs, path + "/" + name, target, depth + 1)
+        elif kind == 0o100000:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                continue
+            if bfs.i64(child, 208) > 64 * 1024 * 1024:
+                print("skipped %s, too large" % (path + "/" + name))
+                continue
+            target.write_bytes(bfs.read_file(child))
+            count += 1
+    return count
+
+
+def copy_m10(bfs, dest):
+    """The M10 stick tools keep their files in ~/m10, and the standard
+    account's in its own home (check-user)."""
+    total = copy_tree(bfs, "home/m10", dest / "m10")
+    users = bfs.walk("home/users")
+    if users is not None and (bfs.mode(users) & 0o170000) == 0o040000:
+        for name, _block in bfs.list_dir(users):
+            total += copy_tree(bfs, "home/users/%s/m10" % name,
+                               dest / "users" / name / "m10")
+    if total:
+        print("copied %u files from /boot/home/m10 into %s" % (total, dest / "m10"))
+    else:
+        print("missing home/m10")
+
+
 def copy_logs(bfs, dest, list_root):
     if list_root:
         root = bfs.read_inode(bfs.block_number(*bfs.root[:2]))
@@ -303,6 +348,7 @@ def copy_logs(bfs, dest, list_root):
         (dest / name).write_bytes(data)
         written[name] = path
         print("copied %s (%u bytes) from %s" % (name, len(data), path))
+    copy_m10(bfs, dest)
     if "syslog" not in written and "radeon_hd" not in written:
         die("neither the syslog nor the radeon_hd settings were on the volume")
     print("logs: %s" % dest)

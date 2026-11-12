@@ -1,0 +1,374 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+#
+# M10 stick: PASS or FAIL per line for the current boot. The boot is read
+# from the radeon_hd settings file: none = 1, gpu_opengl true = 1b,
+# gpu_hang_test 1 = 2, gpu_hang_test 2 = 3, gpu false = 4,
+# gpu_app_server true = 5 and with gpu_app_server_fail true = 6 (both
+# optional). boot-next notes
+# the same number in ~/m10/next; a mismatch is a FAIL. Files go to
+# ~/m10/boot<k>/. A directory that already has a check.txt is never
+# reused: the next one is boot<k>-2, boot<k>-3, ...
+#
+# For the host tests: R5_HOME, R5_SYSLOG, R5_SYSTEM_SETTINGS and
+# R5_NODE_DIR, R5_USER_SETTINGS, R5_CACHE and R5_BIN move the paths,
+# CHECK_WAIT=0 does not wait, CHECK_LIVE=0 runs no program.
+
+# finddir gives the Haiku directories; the fallback is for the host tests.
+fd() {
+	finddir "$1" 2>/dev/null || echo "$2"
+}
+
+home=${R5_HOME:-$(fd B_USER_DIRECTORY /boot/home)}
+syslog=${R5_SYSLOG:-$(fd B_SYSTEM_LOG_DIRECTORY /boot/system/var/log)/syslog}
+sysset=${R5_SYSTEM_SETTINGS:-$(fd B_SYSTEM_SETTINGS_DIRECTORY /boot/system/settings)/kernel/drivers/radeon_hd}
+nodes=${R5_NODE_DIR:-/dev/gpu/radeon_hd}
+wait_s=${CHECK_WAIT:-900}
+live=${CHECK_LIVE:-1}
+bin=${R5_BIN:-/bin}
+m10=$home/m10
+cache=${R5_CACHE:-$(fd B_USER_CACHE_DIRECTORY "$home/config/cache")}
+selftest=$cache/r5-gpu-selftest.txt
+settings=${R5_USER_SETTINGS:-$(fd B_USER_SETTINGS_DIRECTORY "$home/config/settings")}/kernel/drivers/radeon_hd
+bad=0
+
+mkdir -p "$m10"
+if [ ! -f "$settings" ]; then
+	settings=$sysset
+fi
+
+# Which boot is this?
+if [ ! -f "$settings" ]; then
+	boot=1
+elif grep -q '^gpu_app_server_fail true' "$settings"; then
+	boot=6
+elif grep -q '^gpu_app_server true' "$settings"; then
+	boot=5
+elif grep -q '^gpu false' "$settings"; then
+	boot=4
+elif grep -Eq '^gpu_hang_test[[:space:]]+2' "$settings"; then
+	boot=3
+elif grep -Eq '^gpu_hang_test[[:space:]]+1' "$settings"; then
+	boot=2
+elif grep -q '^gpu_opengl true' "$settings"; then
+	boot=1b
+else
+	echo "FAIL settings match no boot: $settings"
+	echo FAIL
+	exit 1
+fi
+
+# Never overwrite an earlier boot's files.
+keep=$m10/boot$boot
+n=2
+while [ -f "$keep/check.txt" ]; do
+	keep=$m10/boot$boot-$n
+	n=$((n + 1))
+done
+mkdir -p "$keep"
+report=$keep/check.txt
+: > "$report"
+
+emit() {
+	printf '%s\n' "$1" | tee -a "$report"
+}
+say() {
+	if [ "$1" -eq 0 ]; then
+		emit "PASS $2"
+	else
+		emit "FAIL $2"
+		bad=1
+	fi
+}
+# have <pattern> <file> <text>: the pattern is in the file.
+have() {
+	if [ -s "$2" ] && grep -Eq -- "$1" "$2"; then
+		say 0 "$3"
+	else
+		say 1 "$3"
+	fi
+}
+# none <pattern> <file> <text>: the file has text and no such line.
+none() {
+	if [ -s "$2" ] && ! grep -Eq -- "$1" "$2"; then
+		say 0 "$3"
+	else
+		say 1 "$3"
+	fi
+}
+# atleast <n> <pattern> <file> <text>
+atleast() {
+	c=0
+	if [ -s "$3" ]; then
+		c=$(grep -Ec -- "$2" "$3" || true)
+	fi
+	if [ "$c" -ge "$1" ]; then
+		say 0 "$4"
+	else
+		say 1 "$4 (found $c, want $1)"
+	fi
+}
+# exactly <n> <pattern> <file> <text>
+exactly() {
+	c=0
+	if [ -s "$3" ]; then
+		c=$(grep -Ec -- "$2" "$3" || true)
+	fi
+	if [ "$c" -eq "$1" ]; then
+		say 0 "$4"
+	else
+		say 1 "$4 (found $c, want $1)"
+	fi
+}
+manual() {
+	emit "MANUAL $1"
+}
+
+# Wait for the self-test. It writes "selftest done" last.
+if [ "$wait_s" -gt 0 ]; then
+	i=0
+	while [ "$i" -lt "$wait_s" ] && ! grep -q '^selftest done' "$selftest" 2>/dev/null; do
+		if [ "$i" -eq 0 ]; then
+			echo "check: waiting for the self-test (up to $wait_s s)"
+		fi
+		sleep 5
+		i=$((i + 5))
+	done
+fi
+
+# The syslog since the last boot marker. syslog_daemon keeps one older file.
+extract_syslog() {
+	: > "$keep/syslog.all"
+	for part in "$syslog.1" "$syslog.old" "$syslog"; do
+		if [ -f "$part" ]; then
+			cat "$part" >> "$keep/syslog.all"
+		fi
+	done
+	awk '
+		/Welcome to the Haiku boot loader!/ { buf = ""; seen = 1 }
+		{ all = all $0 "\n" }
+		seen { buf = buf $0 "\n" }
+		END { if (seen) printf "%s", buf; else printf "%s", all }
+	' "$keep/syslog.all" > "$keep/syslog.txt"
+	rm -f "$keep/syslog.all"
+}
+extract_syslog
+slog=$keep/syslog.txt
+
+# The hang test writes its lines late. Wait for the last one.
+case $boot in
+2) until_pat='gpu selftest after reset (ok|failed)' ;;
+3) until_pat='gpu off until reboot' ;;
+*) until_pat= ;;
+esac
+if [ "$wait_s" -gt 0 ] && [ -n "$until_pat" ]; then
+	i=0
+	while [ "$i" -lt 180 ] && ! grep -Eq "$until_pat" "$slog"; do
+		sleep 5
+		i=$((i + 5))
+		extract_syslog
+	done
+fi
+
+# Copy the boot's files.
+if [ -f "$settings" ]; then
+	cp "$settings" "$keep/radeon_hd"
+else
+	echo "(no settings file)" > "$keep/radeon_hd"
+fi
+for f in "$selftest" "$cache/r5-gpu-selftest.old.txt" "$home/r5-session.log" \
+		"$home"/wsi.txt "$home"/win-*.txt; do
+	if [ -f "$f" ]; then
+		cp "$f" "$keep/"
+	fi
+done
+
+# Live runs: the GPU state of right now.
+runlive() {
+	name=$1
+	shift
+	: > "$keep/$name.txt"
+	if [ "$live" -eq 1 ]; then
+		timeout 180 "$@" > "$keep/$name.txt" 2>&1 || true
+		sleep 3
+	fi
+}
+
+emit "boot $boot"
+if [ -f "$settings" ]; then
+	emit "settings: $(tr '\n' ' ' < "$settings")"
+else
+	emit "settings: none (the default)"
+fi
+
+# The note from boot-next. No note means boot 1.
+want=1
+if [ -f "$m10/next" ]; then
+	want=$(head -n 1 "$m10/next" | tr -d ' \r')
+fi
+if [ "$want" = "$boot" ]; then
+	say 0 "boot number matches m10/next"
+else
+	say 1 "boot number $boot, but m10/next says $want"
+fi
+
+have 'Welcome to the Haiku boot loader!' "$slog" "boot marker"
+have '^selftest done' "$selftest" "self-test finished"
+
+contract() {
+	atleast "$1" 'GFX9 scratch 0xdeadbeef' "$slog" "GFX9 scratch 0xdeadbeef x$1"
+	atleast "$1" 'fence landed' "$slog" "fence landed x$1"
+	atleast "$1" 'k2 ok gart' "$slog" "k2 ok gart x$1"
+}
+
+# RADV must be GPU0 in vulkaninfo --summary.
+radv_first() {
+	name=$(awk '/^GPU0:/ { on = 1; next } /^GPU[1-9]:/ { on = 0 }
+		on && /deviceName/ { sub(/^[^=]*= */, ""); print; exit }' "$selftest" 2>/dev/null)
+	if [ -n "$name" ] && echo "$name" | grep -q RADV; then
+		say 0 "RADV is device 0 ($name)"
+	else
+		say 1 "RADV is device 0 (GPU0 is: ${name:-none})"
+	fi
+}
+
+# The lines of one self-test stage, up to the next stage.
+section() {
+	awk -v t="$1" '
+		$0 ~ "^stage " t " t [0-9]" { on = 1; next }
+		/^stage / { on = 0 }
+		on' "$selftest" 2>/dev/null
+}
+
+teapot_ok() {
+	section "VulkanTeapot" > "$keep/stage-teapot.txt"
+	have '^pixels ok max 2' "$keep/stage-teapot.txt" "VulkanTeapot pixels ok max 2"
+	none 'pixels MISMATCH' "$selftest" "no pixels MISMATCH in the self-test"
+}
+gl_stage() {
+	section "gl" > "$keep/stage-gl.txt"
+	have 'compared zink.*RADV.* and llvmpipe' "$keep/stage-gl.txt" \
+		"stage gl: compared zink RADV and llvmpipe"
+	have '^pixels ok max 2' "$keep/stage-gl.txt" "stage gl: pixels ok max 2"
+	atleast 2 '^gl ms per frame' "$keep/stage-gl.txt" "stage gl: gl ms per frame twice"
+}
+window_ok() {
+	w=$home/win-glteapot.txt
+	have 'window driver zink.*RADV' "$w" "win-glteapot: window driver zink RADV"
+	for a in resize workspace minimise restore close; do
+		have "^window $a ok" "$w" "win-glteapot: window $a ok"
+	done
+	none '^window .*(FAIL|fail)' "$w" "win-glteapot: no failed action"
+	have '^device lost no' "$w" "win-glteapot: device lost no"
+}
+
+case $boot in
+1|1b)
+	if [ "$boot" = 1 ]; then
+		have 'radeon_hd: gpu available' "$slog" "radeon_hd: gpu available"
+	fi
+	contract 1
+	radv_first
+	teapot_ok
+	have 'egl: opengl zink:.*RADV' "$slog" "egl: opengl zink with RADV"
+	gl_stage
+	window_ok
+	none 'gpu lost' "$slog" "no gpu lost"
+	none 'radeon_hd: gpu hang' "$slog" "no gpu hang"
+	manual "GLTeapot from Demos turns; FPS on its card: ____"
+	manual "look: pointer stays visible while a window moves"
+	emit "INFO window files: $(cd "$home" && ls win-*.txt 2>/dev/null | tr '
+' ' ')"
+	;;
+2)
+	exactly 1 'radeon_hd: gpu hang ring' "$slog" "one gpu hang"
+	have 'radeon_hd: gpu reset mode2 ok' "$slog" "gpu reset mode2 ok"
+	have 'radeon_hd: gpu selftest after reset ok' "$slog" "gpu selftest after reset ok"
+	contract 2
+	none 'gpu off until reboot' "$slog" "no gpu off"
+	runlive gl-test "$bin"/r5-gl-test --selftest
+	runlive teapot "$bin"/VulkanTeapot --selftest
+	have 'compared zink.*RADV.* and llvmpipe' "$keep/gl-test.txt" \
+		"after reset: r5-gl-test zink RADV"
+	have '^pixels ok max 2' "$keep/gl-test.txt" "after reset: r5-gl-test pixels ok max 2"
+	have 'compared .*RADV.* and .*llvmpipe' "$keep/teapot.txt" \
+		"after reset: VulkanTeapot on RADV"
+	have '^pixels ok max 2' "$keep/teapot.txt" "after reset: VulkanTeapot pixels ok max 2"
+	manual "desktop keeps working (move a window): ____"
+	;;
+3)
+	exactly 2 'radeon_hd: gpu hang ring' "$slog" "two gpu hang lines"
+	have 'radeon_hd: gpu off until reboot: second hang' "$slog" \
+		"gpu off until reboot: second hang"
+	runlive gl-test "$bin"/r5-gl-test --selftest
+	runlive teapot "$bin"/VulkanTeapot --selftest
+	extract_syslog
+	awk '/gpu off until reboot/ { on = 1 } on' "$slog" > "$keep/syslog-after-off.txt"
+	have 'egl: opengl llvmpipe: gpu not available' "$keep/syslog-after-off.txt" \
+		"egl: opengl llvmpipe: gpu not available"
+	have '^pixels ok llvmpipe only' "$keep/gl-test.txt" "r5-gl-test pixels ok llvmpipe only"
+	have '^pixels ok lavapipe only' "$keep/teapot.txt" "VulkanTeapot pixels ok lavapipe only"
+	none 'RADV' "$keep/teapot.txt" "VulkanTeapot on Lavapipe, not RADV"
+	manual "desktop keeps working; GLTeapot turns on llvmpipe: ____"
+	;;
+4)
+	have 'radeon_hd: gpu not available: opt-out' "$slog" "gpu not available: opt-out"
+	if [ -d "$nodes" ] && [ -n "$(ls "$nodes" 2>/dev/null)" ]; then
+		say 1 "no render node"
+	else
+		say 0 "no render node"
+	fi
+	runlive gl-test "$bin"/r5-gl-test --selftest
+	extract_syslog
+	have 'egl: opengl llvmpipe: gpu off' "$slog" "egl: opengl llvmpipe: gpu off"
+	have '^pixels ok llvmpipe only' "$keep/gl-test.txt" "r5-gl-test pixels ok llvmpipe only"
+	none 'radeon_hd: gpu hang' "$slog" "no gpu hang"
+	manual "GLTeapot turns on llvmpipe: ____"
+	;;
+5)
+	# The marker self-test must pass while app_server's copy runs.
+	ms=$(sed -n 's/.*mark selftest ok \([0-9][0-9]*\) ms.*/\1/p' "$slog" | head -n 1)
+	if [ -n "$ms" ] && [ "$ms" -lt 5000 ]; then
+		say 0 "mark selftest ok $ms ms (under 5000)"
+	else
+		say 1 "mark selftest ok under 5000 ms (got: ${ms:-no ok line})"
+	fi
+	none 'mark selftest timeout' "$slog" "no mark selftest timeout"
+	have 'gpu copy on scanout' "$slog" "gpu copy on scanout"
+	none 'gpu copy off' "$slog" "no gpu copy off"
+	contract 1
+	none 'gpu lost' "$slog" "no gpu lost"
+	manual "desktop still running (move a window): ____"
+	;;
+6)
+	exactly 1 'app_server: gpu copy off: forced failure' "$slog" \
+		"gpu copy off: forced failure, once"
+	contract 1
+	none 'gpu lost' "$slog" "no gpu lost"
+	manual "desktop still running (move a window): ____"
+	;;
+esac
+
+# The shutdown of the boot before, measured by boot-next's heartbeat.
+if [ -f "$m10/shutdown-start" ]; then
+	s=$(head -n 1 "$m10/shutdown-start")
+	a=$(head -n 1 "$m10/alive" 2>/dev/null)
+	was=$(head -n 1 "$m10/shutdown-boot" 2>/dev/null)
+	if [ -n "$a" ] && [ "$a" -ge "$s" ] 2>/dev/null; then
+		emit "INFO shutdown of boot $was: $((a - s)) s from boot-next to the last heartbeat"
+	else
+		emit "INFO shutdown of boot $was: not measured (no heartbeat)"
+	fi
+	mv "$m10/shutdown-start" "$keep/"
+	mv "$m10/alive" "$keep/" 2>/dev/null
+	rm -f "$m10/shutdown-boot"
+fi
+
+if [ "$bad" -eq 0 ]; then
+	emit PASS
+else
+	emit FAIL
+fi
+echo "check: files in $keep"
+[ "$bad" -eq 0 ]

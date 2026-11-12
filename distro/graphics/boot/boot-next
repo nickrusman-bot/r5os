@@ -1,0 +1,147 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+#
+# M10 stick: write the radeon_hd settings for the next boot, note the boot
+# number in ~/m10/next, restart on y. The settings file belongs to root, so
+# it is removed and written again. With no argument the next boot follows
+# the order 1, 2, 3, 4. "boot-next 5" is the optional boot with the GPU copy
+# of app_server on (the marker self-test must pass), "boot-next 6" the
+# optional forced failure of that copy.
+# "boot-next 1b" writes the M6 contract settings plus
+# gpu_opengl true; "boot-next 1" removes the file.
+#
+# The shutdown time: right before the restart a background loop writes the
+# time to ~/m10/alive every second. check in the next boot reports the span
+# from the start to the last heartbeat that reached the disk.
+#
+# For the host tests: R5_HOME and R5_USER_SETTINGS move the paths, BOOT_NEXT_YES=0 never
+# restarts.
+
+# finddir gives the Haiku directories; the fallback is for the host tests.
+fd() {
+	finddir "$1" 2>/dev/null || echo "$2"
+}
+
+home=${R5_HOME:-$(fd B_USER_DIRECTORY /boot/home)}
+m10=$home/m10
+file=${R5_USER_SETTINGS:-$(fd B_USER_SETTINGS_DIRECTORY "$home/config/settings")}/kernel/drivers/radeon_hd
+sysfile=${R5_SYSTEM_SETTINGS:-$(fd B_SYSTEM_SETTINGS_DIRECTORY /boot/system/settings)/kernel/drivers/radeon_hd}
+mkdir -p "$m10"
+
+# The boot that just ran: the note, else no note means boot 1.
+cur=1
+if [ -f "$m10/next" ]; then
+	cur=$(head -n 1 "$m10/next" | tr -d ' \r')
+fi
+
+if [ -n "$1" ]; then
+	next=$1
+else
+	case $cur in
+	1|1b) next=2 ;;
+	2) next=3 ;;
+	3) next=4 ;;
+	*)
+		echo "FAIL no boot follows $cur; run boot-next <1|1b|2|3|4|5|6>"
+		exit 1
+		;;
+	esac
+fi
+
+# The boot that just ran must have been checked. Its files are the record.
+done_check=0
+for d in "$m10/boot$cur" "$m10/boot$cur"-*; do
+	if [ -f "$d/check.txt" ]; then
+		done_check=1
+	fi
+done
+if [ "$done_check" -ne 1 ]; then
+	echo "FAIL run check first (no check.txt for boot $cur in $m10)"
+	exit 1
+fi
+
+case $next in
+1) lines= ;;
+1b) lines="gfx9_ring true
+gfx9_kernel true
+gfx9_irq true
+gfx9_gart true
+gpu_render true
+gpu_selftest true
+gfx9_vmids true
+gfx9_vmid_per_file true
+gfx9_pasid_map true
+gpu_present true
+gpu_opengl true" ;;
+2) lines="gpu_hang_test 1" ;;
+3) lines="gpu_hang_test 2" ;;
+4) lines="gpu false" ;;
+5|6) lines="gfx9_ring true
+gfx9_kernel true
+gfx9_irq true
+gfx9_gart true
+gpu_render true
+gpu_selftest true
+gfx9_vmids true
+gfx9_vmid_per_file true
+gfx9_pasid_map true
+gpu_present true
+gpu_app_server true"
+	if [ "$next" = 6 ]; then
+		lines="$lines
+gpu_app_server_fail true"
+	fi ;;
+*)
+	echo "FAIL unknown boot $next (1, 1b, 2, 3, 4, 5 or 6)"
+	exit 1
+	;;
+esac
+
+echo "boot-next: remove the settings file"
+rm -f "$file"
+if [ -f "$file" ]; then
+	echo FAIL
+	exit 1
+fi
+if [ -f "$sysfile" ]; then
+	echo "boot-next: note, $sysfile exists and is read too"
+fi
+if [ -n "$lines" ]; then
+	echo "boot-next: write the settings for boot $next"
+	mkdir -p "$(dirname "$file")"
+	printf '%s\n' "$lines" > "$file"
+	if [ ! -s "$file" ]; then
+		echo FAIL
+		exit 1
+	fi
+	cat "$file"
+else
+	echo "boot-next: boot $next uses no settings file"
+fi
+echo "$next" > "$m10/next"
+echo "boot-next: boot $next is next"
+
+if [ "${BOOT_NEXT_YES:-1}" = 0 ]; then
+	echo PASS
+	exit 0
+fi
+printf 'boot-next: restart? [y] '
+read ans
+if [ "$ans" = y ]; then
+	echo PASS
+	rm -f "$m10/alive"
+	date +%s > "$m10/shutdown-start"
+	echo "$cur" > "$m10/shutdown-boot"
+	( while :; do date +%s > "$m10/alive"; sleep 1; done ) > /dev/null 2>&1 &
+	beat=$!
+	if ! shutdown -r; then
+		kill "$beat"
+		rm -f "$m10/shutdown-start" "$m10/alive" "$m10/shutdown-boot"
+		echo "FAIL shutdown -r did not start"
+		exit 1
+	fi
+else
+	echo "FAIL not restarted (the settings are written)"
+	exit 1
+fi
