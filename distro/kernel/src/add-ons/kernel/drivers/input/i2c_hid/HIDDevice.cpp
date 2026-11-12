@@ -140,30 +140,9 @@ HIDDevice::HIDDevice(uint16 descriptorAddress, i2c_device_interface* i2c,
 	for (uint32 i = 0; i < fParser.CountReports(HID_REPORT_TYPE_FEATURE); i++) {
 		HIDReport *report = fParser.ReportAt(HID_REPORT_TYPE_FEATURE, i);
 
-		// try to toggle trackpad into a mouse emulated mode
-		// we may remove this once we are capable to handle multitouch events
-		// some trackpads ignore this feature, however
-		HIDReportItem *deviceMode = report->FindItem(B_HID_USAGE_PAGE_DIGITIZER,
-			B_HID_UID_DIG_DEVICE_MODE);
-
-		if (deviceMode) {
-			status_t result = MaybeScheduleTransfer(report);
-
-			if (result != B_OK)
-				continue;
-			TRACE_ALWAYS("Found a trackpad mode configuration\n");
-
-			if (deviceMode->Extract() == B_OK) {
-				uint32 value = deviceMode->Data();
-				TRACE_ALWAYS("Current device mode:%d\n", value);
-				report->DoneProcessing();
-				deviceMode->SetData(0);
-				result = report->SendReport();
-
-				if (result != B_OK)
-					TRACE_ALWAYS("Failed to set trackpad mode\n");
-			}
-		}
+		// The input mode is set when the touchpad handler is opened. Reading
+		// it here timed out on the 5625U (4 bytes, TX abort) and the pad
+		// never left its boot mode.
 
 		// we do nothing with this value other than debugging
 		// perhaps we can get rid of this in a future patch
@@ -175,7 +154,7 @@ HIDDevice::HIDDevice(uint16 descriptorAddress, i2c_device_interface* i2c,
 			if (result != B_OK)
 				continue;
 
-			if (latencyMode->Extract() == B_OK) {
+			if (latencyMode->Extract() == B_OK && latencyMode->Valid()) {
 				uint32 value = latencyMode->Data();
 				TRACE_ALWAYS("Current latency mode:%d\n", value);
 				report->DoneProcessing();
