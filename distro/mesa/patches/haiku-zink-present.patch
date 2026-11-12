@@ -1,0 +1,591 @@
+--- a/src/egl/drivers/haiku/egl_haiku.cpp
++++ b/src/egl/drivers/haiku/egl_haiku.cpp
+@@ -29,6 +29,20 @@
+ 
+ #include <algorithm>
+ 
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: MIT
++#include <dirent.h>
++#include <new>
++#include <stdarg.h>
++#include <stdlib.h>
++#include <string.h>
++#include <syslog.h>
++
++#include <OS.h>
++#include <driver_settings.h>
++// SPDX-SnippetEnd
++
+ #include "eglconfig.h"
+ #include "eglcontext.h"
+ #include "eglcurrent.h"
+@@ -44,6 +58,12 @@
+ #include "pipe/p_defines.h"
+ #include "state_tracker/st_context.h"
+ #include "util/u_atomic.h"
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: MIT
++#include "util/u_inlines.h"
++#include "util/format/u_format.h"
++// SPDX-SnippetEnd
+ #include "mesa/glapi/glapi/glapi.h"
+ 
+ #include "hgl/hgl_sw_winsys.h"
+@@ -72,6 +92,12 @@
+ struct haiku_egl_display {
+    int ref_count;
+    struct hgl_display *disp;
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   // The screen is Zink: frames are shown by r5_present_frame().
++   bool zink;
++   // SPDX-SnippetEnd
+ };
+ 
+ struct haiku_egl_config {
+@@ -89,6 +115,372 @@
+    struct pipe_fence_handle *throttle_fence;
+ };
+ 
++// SPDX-SnippetBegin
++// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++// SPDX-License-Identifier: MIT
++
++// #pragma mark R5 log
++
++static bool
++r5_gl_trace(void)
++{
++   static int trace = -1;
++   if (trace < 0) {
++      const char *value = getenv("R5_GL_TRACE");
++      trace = value != NULL && strcmp(value, "1") == 0;
++   }
++   return trace != 0;
++}
++
++// One line to the syslog (when asked), and to stderr with R5_GL_TRACE=1.
++static void
++r5_gl_log(bool toSyslog, const char *format, ...)
++{
++   char line[256];
++   va_list args;
++   va_start(args, format);
++   vsnprintf(line, sizeof(line), format, args);
++   va_end(args);
++   if (toSyslog)
++      syslog(LOG_INFO, "%s", line);
++   if (r5_gl_trace())
++      fprintf(stderr, "%s\n", line);
++}
++
++// #pragma mark R5 present
++
++// A Zink frame is read back into a BBitmap and handed to the window.
++// Up to two bitmaps that the window hands back are kept for later frames.
++#define R5_PRESENT_SPARES 2
++#define R5_PRESENT_SAMPLES 4096
++#define R5_PRESENT_REPORT 10000000
++
++struct r5_present {
++   BitmapHook *hook;
++   BBitmap *spare[R5_PRESENT_SPARES];
++   bool failed;
++   bigtime_t windowStart;
++   uint32_t frames;
++   uint32_t samples;
++   bigtime_t sample[R5_PRESENT_SAMPLES];
++};
++
++static bool
++r5_present_fail(struct r5_present *present, const char *why)
++{
++   if (!present->failed) {
++      present->failed = true;
++      if (why != NULL)
++         r5_gl_log(true, "egl: present failed: format %s", why);
++      else
++         r5_gl_log(true, "egl: present failed");
++   }
++   return false;
++}
++
++static bool
++r5_present_fits(BBitmap *bitmap, uint32_t width, uint32_t height,
++                color_space space)
++{
++   BRect bounds = bitmap->Bounds();
++   return bitmap->ColorSpace() == space
++      && (uint32_t)bounds.IntegerWidth() + 1 == width
++      && (uint32_t)bounds.IntegerHeight() + 1 == height;
++}
++
++// Reuses a spare of the right size and deletes a spare of the wrong size.
++static BBitmap *
++r5_present_bitmap(struct r5_present *present, uint32_t width, uint32_t height,
++                  color_space space)
++{
++   BBitmap *found = NULL;
++   for (int i = 0; i < R5_PRESENT_SPARES; i++) {
++      BBitmap *spare = present->spare[i];
++      if (spare == NULL)
++         continue;
++      if (!r5_present_fits(spare, width, height, space)) {
++         delete spare;
++         present->spare[i] = NULL;
++      } else if (found == NULL) {
++         found = spare;
++         present->spare[i] = NULL;
++      }
++   }
++   if (found != NULL)
++      return found;
++   BBitmap *bitmap = new (std::nothrow) BBitmap(
++      BRect(0, 0, width - 1, height - 1), 0, space);
++   if (bitmap != NULL && bitmap->InitCheck() != B_OK) {
++      delete bitmap;
++      bitmap = NULL;
++   }
++   return bitmap;
++}
++
++static void
++r5_present_keep(struct r5_present *present, BBitmap *bitmap)
++{
++   if (bitmap == NULL)
++      return;
++   for (int i = 0; i < R5_PRESENT_SPARES; i++) {
++      if (present->spare[i] == NULL) {
++         present->spare[i] = bitmap;
++         return;
++      }
++   }
++   delete bitmap;
++}
++
++static int
++r5_present_compare(const void *a, const void *b)
++{
++   bigtime_t x = *(const bigtime_t *)a;
++   bigtime_t y = *(const bigtime_t *)b;
++   return x < y ? -1 : x > y ? 1 : 0;
++}
++
++// With R5_GL_TRACE=1: the median time of one present, every 10 s.
++static void
++r5_present_measure(struct r5_present *present, bigtime_t start, bigtime_t end)
++{
++   if (!r5_gl_trace())
++      return;
++   if (present->windowStart == 0)
++      present->windowStart = start;
++   present->sample[present->frames % R5_PRESENT_SAMPLES] = end - start;
++   present->frames++;
++   if (present->samples < R5_PRESENT_SAMPLES)
++      present->samples++;
++   if (end - present->windowStart < R5_PRESENT_REPORT)
++      return;
++   qsort(present->sample, present->samples, sizeof(present->sample[0]),
++         r5_present_compare);
++   r5_gl_log(false, "egl: present median %lld us frames %u",
++             (long long)present->sample[present->samples / 2],
++             (unsigned)present->frames);
++   present->windowStart = end;
++   present->frames = 0;
++   present->samples = 0;
++}
++
++static bool
++r5_present_frame(struct hgl_buffer *buffer, struct pipe_context *pipe,
++                 struct pipe_resource *resource)
++{
++   struct r5_present *present = (struct r5_present *)buffer->present_data;
++   // A pbuffer has no window: nothing to show.
++   if (present == NULL || present->hook == NULL)
++      return true;
++   if (pipe == NULL || resource == NULL)
++      return r5_present_fail(present, NULL);
++
++   color_space space;
++   switch (resource->format) {
++   case PIPE_FORMAT_BGRX8888_UNORM:
++      space = B_RGB32;
++      break;
++   case PIPE_FORMAT_BGRA8888_UNORM:
++      space = B_RGBA32;
++      break;
++   default:
++      return r5_present_fail(present, util_format_name(resource->format));
++   }
++
++   bigtime_t start = system_time();
++   uint32_t width = resource->width0;
++   uint32_t height = resource->height0;
++   struct pipe_transfer *transfer = NULL;
++   const uint8_t *map = (const uint8_t *)pipe_texture_map(pipe, resource, 0,
++      0, PIPE_MAP_READ, 0, 0, width, height, &transfer);
++   if (map == NULL)
++      return r5_present_fail(present, NULL);
++
++   BBitmap *bitmap = r5_present_bitmap(present, width, height, space);
++   if (bitmap == NULL) {
++      pipe_texture_unmap(pipe, transfer);
++      return r5_present_fail(present, NULL);
++   }
++
++   // One copy when both rows are width * 4 bytes. The bitmap is not cleared.
++   size_t row = (size_t)width * 4;
++   size_t bitmapRow = (size_t)bitmap->BytesPerRow();
++   uint8_t *bits = (uint8_t *)bitmap->Bits();
++   if (bitmapRow == row && (size_t)transfer->stride == row) {
++      memcpy(bits, map, row * height);
++   } else {
++      for (uint32_t y = 0; y < height; y++)
++         memcpy(bits + y * bitmapRow, map + (size_t)y * transfer->stride, row);
++   }
++   pipe_texture_unmap(pipe, transfer);
++
++   r5_present_keep(present, present->hook->SetBitmap(bitmap));
++   r5_present_measure(present, start, system_time());
++   return true;
++}
++
++static bool
++r5_present_attach(struct hgl_buffer *buffer, BitmapHook *hook)
++{
++   struct r5_present *present =
++      (struct r5_present *)calloc(1, sizeof(struct r5_present));
++   if (present == NULL)
++      return false;
++   present->hook = hook;
++   buffer->present = r5_present_frame;
++   buffer->present_data = present;
++   return true;
++}
++
++// Takes the shown bitmap back, and deletes it and the spares.
++static void
++r5_present_detach(struct hgl_buffer *buffer)
++{
++   struct r5_present *present = (struct r5_present *)buffer->present_data;
++   if (present == NULL)
++      return;
++   if (present->hook != NULL)
++      delete present->hook->SetBitmap(NULL);
++   for (int i = 0; i < R5_PRESENT_SPARES; i++)
++      delete present->spare[i];
++   free(present);
++   buffer->present_data = NULL;
++   buffer->present = NULL;
++}
++
++// #pragma mark R5 driver choice
++
++static const char *const kR5Settings[] = {
++   "/boot/home/config/settings/kernel/drivers/radeon_hd",
++   "/boot/system/settings/kernel/drivers/radeon_hd",
++};
++
++struct r5_gl_settings {
++   bool gpuOff;
++   bool opengl;
++   bool forceFail;
++};
++
++// The first file that can be read, in the order libdrm-r5 uses. A file that
++// cannot be read means "not set".
++static void
++r5_gl_read_settings(struct r5_gl_settings *settings)
++{
++   memset(settings, 0, sizeof(*settings));
++   void *handle = NULL;
++   for (size_t i = 0; handle == NULL
++        && i < sizeof(kR5Settings) / sizeof(kR5Settings[0]); i++) {
++      handle = load_driver_settings(kR5Settings[i]);
++   }
++   if (handle == NULL)
++      return;
++   settings->gpuOff = !get_driver_boolean_parameter(handle, "gpu", true, true);
++   settings->opengl = get_driver_boolean_parameter(handle, "gpu_opengl",
++                                                   false, false);
++   settings->forceFail = get_driver_boolean_parameter(handle,
++      "gpu_opengl_fail", false, false);
++   unload_driver_settings(handle);
++}
++
++// Any entry under /dev/gpu/<driver>/. No driver name is assumed.
++static bool
++r5_gl_render_node(void)
++{
++   DIR *gpu = opendir("/dev/gpu");
++   if (gpu == NULL)
++      return false;
++   bool found = false;
++   struct dirent *driver;
++   while (!found && (driver = readdir(gpu)) != NULL) {
++      if (driver->d_name[0] == '.')
++         continue;
++      char path[B_PATH_NAME_LENGTH];
++      snprintf(path, sizeof(path), "/dev/gpu/%s", driver->d_name);
++      DIR *nodes = opendir(path);
++      if (nodes == NULL)
++         continue;
++      struct dirent *node;
++      while ((node = readdir(nodes)) != NULL) {
++         if (node->d_name[0] != '.') {
++            found = true;
++            break;
++         }
++      }
++      closedir(nodes);
++   }
++   closedir(gpu);
++   return found;
++}
++
++static bool
++r5_gl_is_zink(struct pipe_screen *screen)
++{
++   const char *name = screen->get_name(screen);
++   return name != NULL && strncmp(name, "zink", 4) == 0;
++}
++
++// R5_GL_TRACE=1 only: names the screen when no syslog line is due.
++static void
++r5_gl_trace_screen(struct pipe_screen *screen)
++{
++   if (screen != NULL)
++      r5_gl_log(false, "egl: opengl %s: %s",
++                r5_gl_is_zink(screen) ? "zink" : "llvmpipe",
++                screen->get_name(screen));
++}
++
++// M9 decision 3. The order of these checks is fixed. A line is written once
++// per process.
++static struct pipe_screen *
++r5_gl_create_screen(_EGLDisplay *disp, struct sw_winsys *winsys)
++{
++   static bool logged = false;
++   bool first = !logged;
++   logged = true;
++
++   // 1. The program asked for a driver itself: as before.
++   if (disp->Options.ForceSoftware || getenv("LIBGL_ALWAYS_SOFTWARE") != NULL
++       || getenv("GALLIUM_DRIVER") != NULL) {
++      struct pipe_screen *screen = sw_screen_create(winsys);
++      if (first)
++         r5_gl_trace_screen(screen);
++      return screen;
++   }
++
++   struct r5_gl_settings settings;
++   r5_gl_read_settings(&settings);
++   const char *reason = NULL;
++   struct pipe_screen *screen = NULL;
++   if (!settings.opengl)
++      reason = NULL; // 2. not asked for: no line
++   else if (settings.gpuOff)
++      reason = "gpu off";
++   else if (settings.forceFail)
++      reason = "forced failure";
++   else if (!r5_gl_render_node())
++      reason = "no render node";
++   else {
++      screen = sw_screen_create_zink(winsys, NULL, false);
++      if (screen == NULL)
++         reason = "zink failed";
++   }
++
++   if (screen != NULL) {
++      if (first)
++         r5_gl_log(true, "egl: opengl zink: %s", screen->get_name(screen));
++      return screen;
++   }
++
++   screen = sw_screen_create(winsys);
++   if (first) {
++      if (reason != NULL)
++         r5_gl_log(true, "egl: opengl llvmpipe: %s", reason);
++      else
++         r5_gl_trace_screen(screen);
++   }
++   return screen;
++}
++// SPDX-SnippetEnd
++
+ // #pragma mark EGLSurface
+ 
+ // Called via eglCreateWindowSurface(), drv->CreateWindowSurface().
+@@ -120,6 +512,18 @@
+       return NULL;
+    }
+ 
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   if (hgl_dpy->zink
++       && !r5_present_attach(wgl_surf->fb, (BitmapHook *)native_window)) {
++      hgl_destroy_st_framebuffer(wgl_surf->fb);
++      free(wgl_surf);
++      _eglError(EGL_BAD_ALLOC, "eglCreateWindowSurface");
++      return NULL;
++   }
++   // SPDX-SnippetEnd
++
+    // Unset and delete previously set bitmap if any.
+    delete ((BitmapHook *)native_window)->SetBitmap(NULL);
+ 
+@@ -161,6 +565,18 @@
+       return NULL;
+    }
+ 
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   // Zink has no display target. A pbuffer is never shown.
++   if (hgl_dpy->zink && !r5_present_attach(wgl_surf->fb, NULL)) {
++      hgl_destroy_st_framebuffer(wgl_surf->fb);
++      free(wgl_surf);
++      _eglError(EGL_BAD_ALLOC, "eglCreatePbufferSurface");
++      return NULL;
++   }
++   // SPDX-SnippetEnd
++
+    wgl_surf->fb->newWidth = wgl_surf->base.Width;
+    wgl_surf->fb->newHeight = wgl_surf->base.Height;
+    p_atomic_inc(&wgl_surf->fb->base.stamp);
+@@ -180,8 +596,15 @@
+       // Unset bitmap to release ownership. Bitmap will be deleted later
+       // when destroying framebuffer.
+       BitmapHook *bitmapHook = (BitmapHook*)hgl_surf->fb->winsysContext;
+-      if (bitmapHook != NULL)
++      // SPDX-SnippetBegin
++      // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++      // SPDX-License-Identifier: MIT
++      // R5 owns the bitmaps of a Zink surface.
++      if (hgl_surf->fb->present_data != NULL)
++         r5_present_detach(hgl_surf->fb);
++      else if (bitmapHook != NULL)
+          bitmapHook->SetBitmap(NULL);
++      // SPDX-SnippetEnd
+ 
+       hgl_destroy_st_framebuffer(hgl_surf->fb);
+       free(surf);
+@@ -192,6 +615,13 @@
+ static void
+ update_size(struct hgl_buffer *buffer)
+ {
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   // A pbuffer has no window. Its size is set when it is created.
++   if (buffer->winsysContext == NULL)
++      return;
++   // SPDX-SnippetEnd
+    uint32_t newWidth, newHeight;
+    ((BitmapHook *)buffer->winsysContext)->GetSize(newWidth, newHeight);
+    if (buffer->newWidth != newWidth || buffer->newHeight != newHeight) {
+@@ -233,9 +663,21 @@
+    hgl_surf->throttle_fence = new_fence;
+ 
+    // flush back buffer and swap buffers if double buffering is used
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   bool presented = true;
++   // SPDX-SnippetEnd
+    if (backBuffer != NULL) {
+-      screen->flush_frontbuffer(screen, st->pipe, backBuffer, 0, 0,
+-                                buffer->winsysContext, 1, NULL);
++      // SPDX-SnippetBegin
++      // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++      // SPDX-License-Identifier: MIT
++      if (buffer->present != NULL)
++         presented = buffer->present(buffer, st->pipe, backBuffer);
++      else
++         screen->flush_frontbuffer(screen, st->pipe, backBuffer, 0, 0,
++                                   buffer->winsysContext, 1, NULL);
++      // SPDX-SnippetEnd
+       std::swap(frontBuffer, backBuffer);
+       p_atomic_inc(&buffer->base.stamp);
+    }
+@@ -246,6 +688,12 @@
+ 
+    st_context_invalidate_state(st, ST_INVALIDATE_FB_STATE);
+ 
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   if (!presented)
++      return _eglError(EGL_BAD_ALLOC, "eglSwapBuffers");
++   // SPDX-SnippetEnd
+    return EGL_TRUE;
+ }
+ 
+@@ -346,7 +794,12 @@
+    disp->DriverData = (void *)hgl_dpy;
+ 
+    struct sw_winsys *winsys = hgl_create_sw_winsys();
+-   struct pipe_screen *screen = sw_screen_create(winsys);
++   // SPDX-SnippetBegin
++   // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++   // SPDX-License-Identifier: MIT
++   struct pipe_screen *screen = r5_gl_create_screen(disp, winsys);
++   hgl_dpy->zink = screen != NULL && r5_gl_is_zink(screen);
++   // SPDX-SnippetEnd
+    hgl_dpy->disp = hgl_create_display(screen);
+ 
+    disp->ClientAPIs = 0;
+--- a/src/gallium/frontends/hgl/hgl.c
++++ b/src/gallium/frontends/hgl/hgl.c
+@@ -68,6 +68,13 @@
+ 	if (!ptex)
+ 		return true;
+ 
++	// SPDX-SnippetBegin
++	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++	// SPDX-License-Identifier: MIT
++	if (buffer->present != NULL)
++		return buffer->present(buffer, st != NULL ? st->pipe : NULL, ptex);
++	// SPDX-SnippetEnd
++
+ 	// TODO: pipe_context here??? Might be needed for hw renderers
+ 	buffer->screen->flush_frontbuffer(buffer->screen, NULL, ptex, 0, 0,
+ 		buffer->winsysContext, 0, NULL);
+@@ -115,6 +122,12 @@
+ 				case ST_ATTACHMENT_BACK_RIGHT:
+ 					format = buffer->visual.color_format;
+ 					bind = PIPE_BIND_DISPLAY_TARGET | PIPE_BIND_RENDER_TARGET;
++					// SPDX-SnippetBegin
++					// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++					// SPDX-License-Identifier: MIT
++					if (buffer->present != NULL)
++						bind = PIPE_BIND_RENDER_TARGET;
++					// SPDX-SnippetEnd
+ 					break;
+ 				case ST_ATTACHMENT_DEPTH_STENCIL:
+ 					format = buffer->visual.depth_stencil_format;
+--- a/src/gallium/frontends/hgl/hgl_context.h
++++ b/src/gallium/frontends/hgl/hgl_context.h
+@@ -58,6 +58,17 @@
+ 
+ 	enum pipe_texture_target target;
+ 	struct pipe_resource* textures[ST_ATTACHMENT_COUNT];
++
++	// SPDX-SnippetBegin
++	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
++	// SPDX-License-Identifier: MIT
++	// Set by the EGL driver for a screen that has no display target of its
++	// own (Zink). It shows the given colour buffer and returns false when
++	// it cannot. The colour buffers then have no PIPE_BIND_DISPLAY_TARGET.
++	bool (*present)(struct hgl_buffer* buffer, struct pipe_context* pipe,
++		struct pipe_resource* resource);
++	void* present_data;
++	// SPDX-SnippetEnd
+ };
+ 
+ 

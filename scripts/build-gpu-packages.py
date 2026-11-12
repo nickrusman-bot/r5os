@@ -7,7 +7,7 @@ from pathlib import Path
 HAIKU = Path("/home/nickr/r5os/haiku")
 PKG = HAIKU / "generated.x86_64/objects/linux/x86_64/release/tools/package/package"
 STRIP = HAIKU / "generated.x86_64/cross-tools-x86_64/bin/x86_64-unknown-haiku-strip"
-OUT = Path("/mnt/c/Users/nickr/Projects/R5OS/distro/packages/x86_64")
+OUT = Path(__file__).resolve().parents[1] / "distro/packages/x86_64"
 SYS = Path("/home/nickr/r5os/r5-sysroot/lib")
 RADV = Path("/home/nickr/r5os/mesa-build/mesa-25.3.6/build-radv")
 IDS = Path("/home/nickr/r5os/src-third/libdrm-2.4.124/data/amdgpu.ids")
@@ -144,10 +144,10 @@ def zink():
         "}\n"
     )
     info(root / ".PackageInfo", """name\t\t\tmesa
-version\t\t\t25.3.6-2
+version\t\t\t25.3.6-3
 architecture\t\tx86_64
 summary\t\t\t"Mesa EGL with llvmpipe and Zink"
-description\t\t"EGL vendor for libglvnd. llvmpipe is the default. GALLIUM_DRIVER=zink selects Zink."
+description\t\t"EGL vendor for libglvnd. llvmpipe is the default. gpu_opengl true in the radeon_hd settings selects Zink when a render node exists. GALLIUM_DRIVER=zink selects Zink."
 packager\t\t"R5OS <r5os@localhost>"
 vendor\t\t\t"R5OS"
 copyrights\t\t"1999-2026 Brian Paul and others"
@@ -167,10 +167,15 @@ requires {
 \tvulkan_loader >= 1.4.367
 }
 """)
-    create(root, OUT / "mesa-25.3.6-2-x86_64.hpkg")
+    create(root, OUT / "mesa-25.3.6-3-x86_64.hpkg")
 
 
 if __name__ == "__main__":
-    libdrm()
-    radv()
-    zink()
+    import sys
+    # "mesa" packs only the EGL vendor (build-radv.sh). No argument packs all.
+    if sys.argv[1:] == ["mesa"]:
+        zink()
+    else:
+        libdrm()
+        radv()
+        zink()

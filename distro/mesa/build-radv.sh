@@ -29,6 +29,12 @@ if ! grep -q 'wsi_view_r5_init_wsi' "$MESA/src/amd/vulkan/radv_wsi.c" \
 	|| ! grep -q 'ifndef VK_USE_PLATFORM_VIEW_RFIVE' "$MESA/src/amd/vulkan/radv_wsi.c"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-radv-view-surface.patch"
 fi
+# M9: a Zink frame is read back into the window's bitmap, and the EGL driver
+# chooses Zink when the radeon_hd settings say gpu_opengl true.
+if ! grep -q 'present_data' "$MESA/src/gallium/frontends/hgl/hgl_context.h" \
+	|| ! grep -q 'r5_gl_create_screen' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
+	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-zink-present.patch"
+fi
 
 cd "$MESA"
 setup="python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup build-radv"
@@ -55,6 +61,7 @@ python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup --reconfigure bui
 	-Dprefix=/home/nickr/r5os/mesa-build/sysroot -Dlibdir=lib \
 	-Dbuildtype=debugoptimized
 ninja -C build-radv src/gallium/targets/lavapipe/libvulkan_lvp.so \
-	src/amd/vulkan/libvulkan_radeon.so
+	src/amd/vulkan/libvulkan_radeon.so src/egl/libEGL_mesa.so.0.0.0
 python3 "$ROOT/distro/mesa/pack-lavapipe.py" "$ROOT"
 python3 "$ROOT/distro/mesa/pack-radv.py" "$ROOT"
+python3 "$ROOT/scripts/build-gpu-packages.py" mesa

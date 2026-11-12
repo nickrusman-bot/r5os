@@ -1,6 +1,7 @@
 #!/bin/sh
-# Drives one Vulkan window with hey. The argument is the program.
-# VulkanTeapot is the default. vkcube is the other program.
+# Drives one Vulkan or OpenGL window with hey. The argument is the program.
+# VulkanTeapot is the default. vkcube, GLTeapot and GLTeapot-zink-cpu are the
+# others. GLTeapot-zink-cpu runs GLTeapot through Zink on Lavapipe.
 OUT=/tmp/r5-wsi-window-app.txt
 if [ $# -ge 1 ]; then
 	prog=$1
@@ -15,6 +16,18 @@ VulkanTeapot)
 	;;
 vkcube)
 	APP=application/x-vnd.R5OS-vkcube
+	set --
+	;;
+GLTeapot)
+	APP=application/x-vnd.Haiku-GLTeapot
+	prog=/boot/system/demos/GLTeapot
+	export R5_GL_TRACE=1
+	set --
+	;;
+GLTeapot-zink-cpu)
+	APP=application/x-vnd.Haiku-GLTeapot
+	prog=/boot/system/demos/GLTeapot
+	export R5_GL_TRACE=1 GALLIUM_DRIVER=zink LIBGL_ALWAYS_SOFTWARE=1
 	set --
 	;;
 *)
@@ -33,6 +46,9 @@ while [ "$i" -lt 30 ]; do
 	fi
 	if [ -z "$driver" ] && [ -f "$OUT" ]; then
 		driver=$(sed -n 's/^window driver //p' "$OUT" | head -n 1)
+		if [ -z "$driver" ]; then
+			driver=$(sed -n 's/^egl: opengl //p' "$OUT" | head -n 1)
+		fi
 		if [ -z "$driver" ]; then
 			driver=$(sed -n 's/^Selected GPU [0-9]*: \(.*\), type: .*/\1/p' "$OUT" | head -n 1)
 		fi
