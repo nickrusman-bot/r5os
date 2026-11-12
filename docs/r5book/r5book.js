@@ -54,6 +54,14 @@
 			["vulkan.html#fallback", "GPU or software", true],
 			["vulkan.html#porting", "Porting a program", true],
 		]},
+		{ title: "Accounts", file: "accounts.html", items: [
+			["accounts.html", "Accounts and sessions"],
+			["accounts.html#who", "Who your program runs as", true],
+			["accounts.html#paths", "Folders and settings", true],
+			["accounts.html#admin", "Administrator changes", true],
+			["accounts.html#session", "Lock and log out", true],
+			["accounts.html#example", "Example: Sign in", true],
+		]},
 		{ title: "Haiku kits", file: "haiku-additions.html", items: [
 			["haiku-additions.html", "Additions to Haiku kits"],
 			["haiku-additions.html#BLocaleRoster", "BLocaleRoster", true],
