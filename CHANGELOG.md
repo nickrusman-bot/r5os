@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Test tools for the M10 stick: boot-next, check, check-user (PR D)
+
+The M9 + M10 stick has five boots (the default, `gpu_hang_test 1`, `gpu_hang_test 2`, `gpu false`, and 1b if the default fails). Hand-written settings files and copied logs were the M7 and M8 mistakes (a root-owned file cannot be overwritten, a second `check` overwrote the first boot). `distro/graphics/boot` now has `boot-next`, `check` and `check-user`, all MIT. `boot-next` removes and rewrites the `radeon_hd` settings file, refuses until `check` has run for the boot that just ran, notes the next boot in `/boot/home/m10/next`, and restarts on `y`. `check` finds its boot from the settings file, compares it with `m10/next`, prints PASS or FAIL per line from the brief, waits for `selftest done` and for the late hang lines, runs `r5-gl-test --selftest` and `VulkanTeapot --selftest` on boots 2 to 4, and copies its files to `/boot/home/m10/boot<k>/`. A directory with a `check.txt` is never reused: the next run goes to `boot<k>-2`. `check-user` runs the three programs of the standard-account test. `scripts/read-stick-logs.py` also copies `/boot/home/m10/` and `/boot/home/users/*/m10/`. `pack-radv.py` also puts the three scripts in `/bin`.
+
+Tested on the host only, with a Git Bash `sh`, stub programs and a made-up syslog (stick 46 is not in this checkout; stick 41 was run as boot 1 and mostly FAILs: no boot marker, no contract lines, llvmpipe first, no `gl` stage). Not run on Haiku, not run on the 5625U, the stick reader was not run against an image, and the lines of PRs A, B and C are matched to the brief, not to their code. The shutdown time is a stopwatch line, not measured by the script.
+
 ## 2026-11-12 - Wi-Fi works on the 5625U; the Deskbar list shows each network once
 
 Stick 51 (`7df60ccc53`, the code of `main` after PR #4215, sha256 `f5d21996…`): the owner joined a WPA2 network with the MT7921 and reports that Wi-Fi works. No kernel panic. No syslog was collected for this boot, so DHCP and the transfer speed are not on record. Bluetooth and a long idle were not reported.
