@@ -49,6 +49,12 @@ The order is impact, not ticket number.
 
 Zeroconf, AirPrint, AirPlay 1 and the network tray exist. They are not "done" until LAN tests exist.
 
+## Before the first public release
+
+Things that are fine in a development build but must be settled before R5 2026.1 (or whichever version is first) is published.
+
+- **A MIDI manufacturer ID for R5.** MIDI 2.0 (MIDI-CI and the UMP endpoint identity) now answers with `0x7D`, the SysEx ID for educational and non-commercial use. A released system must not use it. The product owner requests a Manufacturer SysEx ID from the MIDI Association (midi.org), under the project name, not a personal name (the list is public). The three-byte ID then goes into `midi2_pe_catalog_init` and `midi2_endpoint_init` in `distro/media/src/kits/midi2/Midi2Library.cpp`, and `docs/MIDI2.md` (Limits) is updated. MIDI 1.0 devices are not affected.
+
 ## Named products (later)
 
 Do not start these during an unrelated bugfix.
