@@ -178,6 +178,34 @@ second_client()
 }
 
 
+/* SELFTEST-FINDINGS.md: between two polls of the self-test wait, the
+ * fence jumps from sequence - 1 to sequence + 1 (a second client's job
+ * retired right after the self-test's). The wait must end "ok" on the
+ * second poll; the old "seen == sequence" test never matched and timed
+ * out after 5 s. */
+static int
+fence_jump()
+{
+	const uint64_t sequence = 314624;
+	const uint64_t polls[] = { sequence - 1, sequence + 1, sequence + 1,
+		sequence + 2 };
+	int landed = -1;
+	int oldLanded = -1;
+	for (int i = 0; i < 4; i++) {
+		if (landed < 0 && r5_fence_reached(polls[i], sequence))
+			landed = i;
+		if (oldLanded < 0 && polls[i] == sequence)
+			oldLanded = i;
+	}
+	if (landed != 1)
+		return fail("fence jump not ok on the second poll");
+	if (oldLanded != -1)
+		return fail("fence jump case does not reproduce the old timeout");
+	sCases++;
+	return 0;
+}
+
+
 /* The hang job: one WAIT_REG_MEM, memory space, equal, on a dword that
  * stays 0 and is compared with 1. scripts/check-pm4.py checks the bits
  * against Mesa sid.h; this checks the layout and the refusals. */
@@ -210,7 +238,7 @@ int
 main()
 {
 	if (one_hang() || two_hangs() || reset_fail() || selftest_fail()
-		|| stray_events() || second_client() || hang_ib())
+		|| stray_events() || second_client() || fence_jump() || hang_ib())
 		return 1;
 	printf("ok hang policy %d cases\n", sCases);
 	return 0;

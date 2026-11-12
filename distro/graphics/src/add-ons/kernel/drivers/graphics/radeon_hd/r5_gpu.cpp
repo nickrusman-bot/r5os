@@ -55,7 +55,7 @@ static const uint32 kInactiveMask = 0xffff0000u;
 static int32 sKernelPreamble;
 
 
-static void gpu_ib_words(const char* why);
+static void gpu_ib_words(const char* why, uint64 ownVa = 0);
 static void gpu_dump_priv();
 
 
@@ -494,8 +494,11 @@ gpu_dump_regs(const char* why, const r5_gfx9_ib_now* ib, const char* which)
 }
 
 
+/* ownVa is the caller's own indirect buffer. A self-test step passes
+ * it, because sLastIbVa may meanwhile name another client's buffer
+ * (AFTER-M8 item 4). 0 falls back to sLastIbVa. */
 static void
-gpu_ib_words(const char* why)
+gpu_ib_words(const char* why, uint64 ownVa)
 {
 	r5_gfx9_ib_now ib1;
 	r5_gfx9_ib_now ib2;
@@ -510,9 +513,14 @@ gpu_ib_words(const char* why)
 	if (gpu_dump_line())
 	dprintf("radeon_hd: %s roq ib1 %08lx\n",
 		why == NULL ? "ib" : why, (unsigned long)r5_gfx9_roq_ib1());
+	if (ownVa != 0 && gpu_dump_line()) {
+		dprintf("radeon_hd: %s own ib %016llx\n", why == NULL ? "ib" : why,
+			(unsigned long long)ownVa);
+	}
 	if (sInfo != NULL) {
 		uint64 pte = 0;
-		uint64 va = ib1.base != 0 ? ib1.base : sLastIbVa;
+		uint64 va = ib1.base != 0 ? ib1.base
+			: (ownVa != 0 ? ownVa : sLastIbVa);
 		if (va != 0)
 			r5_gfx9_vmid1_pte(va, &pte);
 		r5_gfx9_cp_dump(why == NULL ? "ib" : why, pte);
@@ -895,7 +903,7 @@ gpu_stage_step(radeon_info* info, const char* name, gpu_stage_page* ibPage,
 		(unsigned long long)destPhys, (unsigned long)pat);
 	if (pace.hang) {
 		gpu_stage_dump(name, ibPage->va, ibPage->cpu, ibPage->phys);
-		gpu_ib_words(name);
+		gpu_ib_words(name, ibPage->va);
 	}
 	return !pace.hang;
 }
@@ -1087,7 +1095,7 @@ gpu_stage_dma(radeon_info* info, const char* name, uint64 srcVa, bool srcGtt)
 		(unsigned long long)dest.phys, (unsigned long)pat);
 	if (pace.hang) {
 		gpu_stage_dump(name, ib.va, ib.cpu, ib.phys);
-		gpu_ib_words(name);
+		gpu_ib_words(name, ib.va);
 	}
 	gpu_stage_release(&dest);
 	gpu_stage_release(&src);
@@ -1167,7 +1175,7 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 		status = R5_GPU_P_TIMEOUT;
 		how = "timeout";
 		if (!sLost)
-			gpu_ib_words(step == 0 ? "mark" : name);
+			gpu_ib_words(step == 0 ? "mark" : name, va);
 	}
 	if (step == 0) {
 		dprintf("radeon_hd: mark selftest %s %ld ms\n", how,
@@ -1177,6 +1185,19 @@ gpu_stage_submit(radeon_info* info, uint32 step, const char* name,
 			(unsigned long)step, name, how, (long)pace.ms);
 	}
 	return status;
+}
+
+
+static const char*
+gpu_stage_status_word(uint32 status)
+{
+	if (status == R5_GPU_P_TIMEOUT)
+		return "timeout";
+	if (status == R5_GPU_P_PRIV)
+		return "priv";
+	if (status == R5_GPU_P_ROOM)
+		return "room";
+	return "failed";
 }
 
 
@@ -1226,6 +1247,8 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 	*(volatile uint32*)(page.cpu + R5_P_SHADER_OFF) = R5_P_SHADER;
 	r5_gfx9_stage_bytes(page.cpu, 4096);
 	bool stop = false;
+	const char* stopName = "mark";
+	const char* stopHow = "build";
 	uint32 probe[8];
 	memset(probe, 0, sizeof(probe));
 	uint32 probeN = r5_stage_p_build(R5_P_WRITE_DATA, page.va, probe, 8, 0);
@@ -1242,6 +1265,7 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 		if (probeStatus != R5_GPU_P_OK) {
 			dprintf("radeon_hd: mark selftest bad\n");
 			stop = true;
+			stopHow = gpu_stage_status_word(probeStatus);
 		} else {
 			uint32 back = 0;
 			uint32 got = r5_gfx9_vmid1_copy(page.va, &back, 1);
@@ -1279,6 +1303,8 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 			out->status[i] = R5_GPU_P_TIMEOUT;
 			out->first_fail = i + 1;
 			stop = true;
+			stopName = r5_stage_p_name(i);
+			stopHow = "build";
 			continue;
 		}
 		memcpy(ib.cpu, words, n * 4);
@@ -1289,14 +1315,17 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 		if (status != R5_GPU_P_OK) {
 			out->first_fail = i + 1;
 			stop = true;
+			stopName = r5_stage_p_name(i);
+			stopHow = gpu_stage_status_word(status);
 		}
 	}
 	gpu_stage_release(&page);
 	gpu_stage_release(&ib2);
 	gpu_stage_release(&ib);
-	if (stop)
-		dprintf(sLost ? "radeon_hd: skipped, gpu lost\n"
-			: "radeon_hd: skipped, step failed\n");
+	if (stop && sLost)
+		dprintf("radeon_hd: skipped, gpu lost\n");
+	else if (stop)
+		dprintf("radeon_hd: p skipped: %s %s\n", stopName, stopHow);
 	return stop ? ECANCELED : B_OK;
 }
 
