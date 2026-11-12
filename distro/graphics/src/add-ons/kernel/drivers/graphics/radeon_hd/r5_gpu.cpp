@@ -13,6 +13,8 @@
 #include "r5_cs.h"
 #include "r5_log.h"
 #include "r5_wait.h"
+#include "r5_hang.h"
+#include "r5_hang_ib.h"
 #include "r5_stage_p.h"
 #include "r5_stage_r1.h"
 #include "r5_passport.h"
@@ -63,8 +65,14 @@ gpu_cache_log_settings()
 	bool debugOn = false;
 	bool selftestOn = false;
 	bool submitLogOn = false;
+	uint32 hangTest = 0;
 	void* settings = load_driver_settings("radeon_hd");
 	if (settings != NULL) {
+		/* gpu_hang_test <n>: a test switch, off by default. */
+		const char* hang = get_driver_parameter(settings, "gpu_hang_test",
+			"0", "0");
+		if (hang != NULL)
+			hangTest = (uint32)strtoul(hang, NULL, 10);
 		debugOn = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);
 		selftestOn = get_driver_boolean_parameter(settings, "gpu_selftest",
@@ -96,6 +104,7 @@ gpu_cache_log_settings()
 	sDebugOn = debugOn ? 1 : 0;
 	sSelftestOn = selftestOn ? 1 : 0;
 	sSubmitLogOn = submitLogOn ? 1 : 0;
+	sHangTest = hangTest;
 }
 
 
@@ -196,12 +205,13 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 	out.vendor = 0x1002;
 	out.device = info->pci->device_id;
 	out.revision = info->pci->revision;
-	if (gpu_render_enabled())
-		out.capabilities = R5_GPU_CAP_RENDER;
 	gpu_lock();
-	if (sLost)
+	/* Off until reboot: no render, and lost for every file. */
+	if (gpu_render_enabled() && !sGpuOff)
+		out.capabilities = R5_GPU_CAP_RENDER;
+	if (gpu_gone(client))
 		out.capabilities |= R5_GPU_CAP_LOST;
-	if (sLost && client != NULL
+	if (gpu_gone(client) && client != NULL
 		&& (client == sGuilty || client->faulted))
 		out.capabilities |= R5_GPU_CAP_GUILTY;
 	out.va_offset = R5_GPU_VA_OFFSET;
@@ -777,7 +787,9 @@ gpu_stage_pace_wait(radeon_info* info, int slot, uint64 sequence,
 	gpu_unlock();
 	while (true) {
 		pace.seen = r5_gfx9_user_seen();
-		bool fence = pace.seen == sequence;
+		/* At or past: another client's later job may already have
+		 * landed (AFTER-M8 item 4). */
+		bool fence = r5_fence_reached(pace.seen, sequence) != 0;
 		pace.word = expectWord ? gpu_stage_word(destCpu, flush) : 0xDEADBEEF;
 		pace.cp = gpu_mmio(info, kGcSegment, 0x01a0);
 		bigtime_t elapsed = system_time() - start;
@@ -1281,7 +1293,8 @@ gpu_stage_p(radeon_info* info, r5_gpu_stage_p* out)
 	gpu_stage_release(&ib2);
 	gpu_stage_release(&ib);
 	if (stop)
-		dprintf("radeon_hd: skipped, gpu lost\n");
+		dprintf(sLost ? "radeon_hd: skipped, gpu lost\n"
+			: "radeon_hd: skipped, step failed\n");
 	return stop ? ECANCELED : B_OK;
 }
 
@@ -1908,6 +1921,158 @@ amd_dump(const char* why)
 }
 
 
+/* M10 hang policy. The mode-2 reset is r5_smu12.cpp, from the kernel. */
+static int
+amd_reset_mode2(void* info)
+{
+	(void)info;
+	return r5_gfx9_kernel_reset() ? B_OK : B_ERROR;
+}
+
+
+/* The fixed sequences again, then the user fence and the kernel
+ * context start over on the new ring. */
+static int
+amd_restart(void* info)
+{
+	(void)info;
+	if (!r5_gfx9_kernel_restart())
+		return B_ERROR;
+	r5_gfx9_after_restart();
+	sKernelPreamble = 0;
+	return B_OK;
+}
+
+
+static gpu_stage_page sHangIb;
+static gpu_stage_page sHangWord;
+
+
+static void
+gpu_hang_job_release()
+{
+	gpu_stage_release(&sHangIb);
+	gpu_stage_release(&sHangWord);
+}
+
+
+/* The marker of stage P, on its own: one WRITE_DATA through VMID 1 to
+ * a fresh page, its fence, and the word read back through the kernel
+ * mapping. Run after a reset, before new contexts are allowed. */
+static int
+amd_selftest(void* info)
+{
+	radeon_info* device = (radeon_info*)info;
+	if (!r5_gfx9_vmid1_setup()) {
+		dprintf("radeon_hd: mark selftest vmid\n");
+		return B_NO_INIT;
+	}
+	gpu_hang_job_release();
+	gpu_stage_page ib;
+	gpu_stage_page page;
+	memset(&ib, 0, sizeof(ib));
+	memset(&page, 0, sizeof(page));
+	if (!gpu_stage_map(device, &ib, gpu_stage_fresh(), false)
+		|| !gpu_stage_map(device, &page, gpu_stage_fresh(), false)) {
+		dprintf("radeon_hd: mark selftest map\n");
+		gpu_stage_release(&ib);
+		gpu_stage_release(&page);
+		return B_NO_MEMORY;
+	}
+	memset(page.cpu, 0, 4096);
+	r5_gfx9_stage_bytes(page.cpu, 4096);
+	uint32 probe[8];
+	memset(probe, 0, sizeof(probe));
+	uint32 n = r5_stage_p_build(R5_P_WRITE_DATA, page.va, probe, 8, 0);
+	bool ok = false;
+	if (n == 6) {
+		probe[4] = R5_P_MARK_VALUE;
+		memcpy(ib.cpu, probe, n * 4);
+		r5_gfx9_stage_bytes(ib.cpu, n * 4);
+		if (gpu_stage_submit(device, 0, "mark", ib.va, n, 0, 0)
+				== R5_GPU_P_OK) {
+			uint32 back = 0;
+			ok = r5_gfx9_vmid1_copy(page.va, &back, 1) == 1
+				&& back == R5_P_MARK_VALUE;
+		}
+	}
+	dprintf("radeon_hd: mark selftest %s\n", ok ? "ok" : "bad");
+	gpu_stage_release(&page);
+	gpu_stage_release(&ib);
+	return ok ? B_OK : B_ERROR;
+}
+
+
+/* gpu_hang_test: one IB whose WAIT_REG_MEM waits for a GTT dword that
+ * stays 0 (r5_hang_ib.h). It is a kernel job like a stage P step, so
+ * the watchdog sees it. The pages stay until the self-test after the
+ * reset releases them. */
+static int
+amd_hang_job(void* info, uint64* sequence)
+{
+	radeon_info* device = (radeon_info*)info;
+	if (sequence == NULL)
+		return B_BAD_VALUE;
+	*sequence = 0;
+	if (!r5_gfx9_vmid1_setup())
+		return B_NO_INIT;
+	gpu_hang_job_release();
+	int slot = -1;
+	for (uint32 i = 0; i < kMaxJob && slot < 0; i++) {
+		if (!sJobs[i].live)
+			slot = (int)i;
+	}
+	if (slot < 0)
+		return B_BUSY;
+	if (!gpu_stage_map(device, &sHangIb, gpu_stage_fresh(), false)
+		|| !gpu_stage_map(device, &sHangWord, gpu_stage_fresh(), true)) {
+		gpu_hang_job_release();
+		return B_NO_MEMORY;
+	}
+	memset(sHangWord.cpu, 0, 4096);
+	uint32 n = r5_hang_ib((uint32*)sHangIb.cpu, 4096 / 4, sHangWord.va + 64);
+	if (n == 0) {
+		gpu_hang_job_release();
+		return B_ERROR;
+	}
+	r5_gfx9_stage_bytes(sHangIb.cpu, n * 4);
+	uint32 need = r5_gfx9_user_commit_dwords(1);
+	if (need == 0 || !r5_gfx9_user_room(need)) {
+		gpu_hang_job_release();
+		return B_BUSY;
+	}
+	r5_gfx9_user_ib submit;
+	memset(&submit, 0, sizeof(submit));
+	submit.va = sHangIb.va;
+	submit.dwords = n;
+	submit.vmid = 1;
+	sLastIbVa = sHangIb.va;
+	sLastIbN = 1;
+	sLastIbList[0] = sHangIb.va;
+	sLastIbDw[0] = n;
+	r5_gfx9_set_debug(gpu_submit_log_enabled() ? 1 : 0);
+	r5_gfx9_set_job_pasid(0, 0);
+	uint64 seq = 0;
+	if (!r5_gfx9_user_submit(&submit, 1, 0, &sKernelPreamble, &seq)) {
+		gpu_hang_job_release();
+		return B_ERROR;
+	}
+	memset(&sJobs[slot], 0, sizeof(sJobs[slot]));
+	sJobs[slot].live = true;
+	sJobs[slot].sequence = seq;
+	sJobs[slot].submitted = system_time();
+	*sequence = seq;
+	return B_OK;
+}
+
+
+static int
+amd_fault_status(uint32* status)
+{
+	return r5_gfx9_fault_status(status) ? B_OK : B_ERROR;
+}
+
+
 static int amd_scanout(void* info, uint32* width, uint32* height,
 	uint32* bytesPerRow, uint32* format, uint64* vramOffset, uint64* bytes);
 
@@ -1949,7 +2114,12 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_map_vram,
 	amd_ring_waited,
 	amd_ring_fill,
-	amd_scanout
+	amd_scanout,
+	amd_reset_mode2,
+	amd_restart,
+	amd_selftest,
+	amd_hang_job,
+	amd_fault_status
 };
 
 

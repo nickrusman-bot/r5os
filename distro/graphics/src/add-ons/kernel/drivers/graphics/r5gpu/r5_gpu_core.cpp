@@ -9,14 +9,18 @@
  * Render node /dev/gpu/radeon_hd/<n>. The graphics node is unchanged.
  * Without gpu_render the node only answers GET_INFO. VMID 1 is one
  * shared address space unless gfx9_vmid_per_file is set. A job that
- * stays in the ring for 5 seconds
- * marks the device lost. A client wait does not. There is no reset.
- * The GFX watchdog is 10 seconds, the same as amdgpu.lockup_timeout.
+ * stays in the ring past the GFX watchdog (10 seconds, the same as
+ * amdgpu.lockup_timeout) is a hang. A client wait is not. The hang
+ * policy is r5_hang.h: the first hang resets the GPU (mode 2) and runs
+ * the fixed sequences and the self-test again; every context of that
+ * moment is lost. A second hang, or a failed reset or self-test, turns
+ * the GPU off until the next boot.
  */
 
 #include "r5_gpu_internal.h"
 #include "r5_cs.h"
 #include "r5_defer.h"
+#include "r5_hang.h"
 #include "r5_log.h"
 #include "r5_span.h"
 #include "r5_vmid.h"
@@ -40,8 +44,8 @@ extern "C" team_id team_get_current_team_id(void);
 
 static void r5_gpu_eop();
 static void gpu_fault_retire();
-static status_t gpu_wait_value(void* info, volatile uint64* value, uint64 target,
-	uint64 timeoutUs);
+static status_t gpu_wait_value(gpu_client* client, volatile uint64* value,
+	uint64 target, uint64 timeoutUs);
 static status_t gpu_bo_map(gpu_client* client, void* buffer, size_t length);
 static status_t gpu_free(void* cookie);
 static status_t gpu_read(void* cookie, off_t position, void* buffer, size_t* numBytes);
@@ -74,6 +78,13 @@ ConditionVariable sEop;
 bool sReady = false;
 bool sLost = false;
 gpu_client* sGuilty = NULL;
+bool sGpuOff = false;
+bool sResetting = false;
+uint32 sHangTest = 0;
+static r5_hang sHang;
+static bool sHangTestArmed = false;
+static uint32 sHangTestJobs = 0;
+static bigtime_t sFaultLineAt = 0;
 int32 sContexts = 0;
 static r5_ctx_counter sCtxCounter;
 r5_pasid_ida sPasids;
@@ -91,6 +102,7 @@ static void gpu_watchdog();
 static status_t gpu_file_root(gpu_client* client);
 static void gpu_defer_reclaim(uint64 seen);
 static void gpu_prt_release_tree(r5_vm* vm);
+static void gpu_hang_test_step();
 
 
 
@@ -348,6 +360,7 @@ gpu_retire_thread(void* data)
 		gpu_release_parked(gpu_hw_seen());
 		gpu_hw_dump(NULL);
 		gpu_watchdog();
+		gpu_hang_test_step();
 		gpu_unlock();
 	}
 	return B_OK;
@@ -682,27 +695,124 @@ gpu_release_parked(uint64 seen)
 }
 
 
+/* The actions of r5_hang_step, in order. LOG and LOSE were done by the
+ * caller. The GPU lock is held throughout; the self-test drops it only
+ * while it polls, and gpu_control waits while sResetting is set. */
+static void
+gpu_hang_run(uint32 actions)
+{
+	while (actions != 0) {
+		uint32 next = 0;
+		if ((actions & R5_HANG_ACT_RESET) != 0) {
+			sResetting = true;
+			bool ok = gR5GpuOps.reset_mode2 != NULL
+				&& gR5GpuOps.reset_mode2(sInfo) == B_OK;
+			dprintf("radeon_hd: gpu reset mode2 %s\n", ok ? "ok" : "failed");
+			next = r5_hang_step(&sHang, ok ? R5_HANG_EV_RESET_OK
+				: R5_HANG_EV_RESET_FAILED, &sHang);
+		} else if ((actions & R5_HANG_ACT_SELFTEST) != 0) {
+			bool ok = gR5GpuOps.restart != NULL
+				&& gR5GpuOps.restart(sInfo) == B_OK;
+			if (ok) {
+				/* Every job of before is gone. The fence now reads the
+				 * last sequence (restart), so nothing parked is left. */
+				for (uint32 i = 0; i < kMaxJob; i++)
+					sJobs[i].live = false;
+				sLost = false;
+				ok = gR5GpuOps.selftest != NULL
+					&& gR5GpuOps.selftest(sInfo) == B_OK && !sLost;
+			}
+			dprintf("radeon_hd: gpu selftest after reset %s\n",
+				ok ? "ok" : "failed");
+			next = r5_hang_step(&sHang, ok ? R5_HANG_EV_SELFTEST_OK
+				: R5_HANG_EV_SELFTEST_FAILED, &sHang);
+		} else if ((actions & R5_HANG_ACT_OFF) != 0) {
+			sGpuOff = true;
+			gpu_lost(sInfo, "gpu off");
+			gpu_release_parked(~0ull);
+			sResetting = false;
+			dprintf("radeon_hd: gpu off until reboot: %s\n",
+				r5_hang_why(sHang.why));
+			sEop.NotifyAll();
+		} else if ((actions & R5_HANG_ACT_REOPEN) != 0) {
+			/* VMIDs of files are handed out again and flushed. */
+			if (sFileVmidsReady)
+				r5_vmid_init_files(&sFileVmids);
+			sLost = false;
+			sResetting = false;
+			sEop.NotifyAll();
+		}
+		actions = next;
+	}
+}
+
+
+static void
+gpu_hang(gpu_job* job, bigtime_t now)
+{
+	dprintf("radeon_hd: gpu hang ring gfx seq %llu after %lld ms\n",
+		(unsigned long long)job->sequence,
+		(long long)((now - job->submitted) / 1000));
+	uint32 actions = r5_hang_step(&sHang, R5_HANG_EV_HANG, &sHang);
+	if ((actions & R5_HANG_ACT_LOSE) != 0) {
+		if (sGuilty == NULL)
+			sGuilty = job->owner;
+		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+			if (scan->contexts > 0)
+				scan->lost = true;
+		}
+		gpu_lost(sInfo, "gpu lost watchdog");
+		gpu_release_parked(~0ull);
+	}
+	gpu_hang_run(actions & ~(R5_HANG_ACT_LOG | R5_HANG_ACT_LOSE));
+}
+
+
 static void
 gpu_watchdog()
 {
-	if (sLost || sInfo == NULL)
+	if (sLost || sGpuOff || sResetting || sInfo == NULL)
 		return;
 	bigtime_t now = system_time();
 	uint64 seen = gpu_hw_seen();
 	gpu_job* oldest = NULL;
 	for (uint32 i = 0; i < kMaxJob; i++) {
 		gpu_job* job = &sJobs[i];
-		if (!job->live || job->sequence <= seen || job->submitted == 0)
+		if (!job->live || r5_fence_reached(seen, job->sequence)
+			|| job->submitted == 0)
 			continue;
 		if (oldest == NULL || job->submitted < oldest->submitted)
 			oldest = job;
 	}
-	if (oldest == NULL || now - oldest->submitted < kWatchdogUs)
+	if (oldest == NULL || !r5_job_hung(seen, oldest->sequence,
+			now - oldest->submitted, kWatchdogUs))
 		return;
-	if (sGuilty == NULL)
-		sGuilty = oldest->owner;
-	gpu_lost(sInfo, "gpu lost watchdog");
-	gpu_release_parked(~0ull);
+	gpu_hang(oldest, now);
+}
+
+
+/* gpu_hang_test <n>: armed by the last call of the sign-in self-test.
+ * One job at a time; the next one only after the GPU came back. */
+static void
+gpu_hang_test_step()
+{
+	if (sHangTest == 0 || !sHangTestArmed || sHangTestJobs >= sHangTest
+		|| sHangTestJobs > sHang.hangs)
+		return;
+	if (sLost || sGpuOff || sResetting || sInfo == NULL
+		|| sHang.state != R5_HANG_RUNNING || gR5GpuOps.hang_job == NULL)
+		return;
+	uint64 sequence = 0;
+	status_t status = gR5GpuOps.hang_job(sInfo, &sequence);
+	if (status != B_OK) {
+		dprintf("radeon_hd: gpu hang test refused %ld\n", (long)status);
+		sHangTest = 0;
+		return;
+	}
+	sHangTestJobs++;
+	dprintf("radeon_hd: gpu hang test job %lu of %lu seq %llu\n",
+		(unsigned long)sHangTestJobs, (unsigned long)sHangTest,
+		(unsigned long long)sequence);
 }
 
 
@@ -1322,7 +1432,7 @@ gpu_wait_ready(const gpu_sync* sync, const r5_gpu_cs_sync* wait)
 static status_t
 gpu_submit(gpu_client* client, void* buffer, size_t length)
 {
-	if (sLost)
+	if (gpu_gone(client))
 		return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, 0, 0, 0, 0, 0, 0, 0);
 	r5_gpu_cs in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
@@ -1369,7 +1479,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 				in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 		bigtime_t deadline = system_time() + (bigtime_t)kFreeWaitUs;
 		while (!gpu_wait_ready(sync, &waits[i])) {
-			if (sLost)
+			if (gpu_gone(client))
 				return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, in.context, 0,
 					in.ib_count, 0, waits[i].handle, in.ring, waits[i].flags);
 			bigtime_t now = system_time();
@@ -1419,6 +1529,11 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 	if (status != B_OK)
 		return gpu_refuse("CS_SUBMIT", "room", status, in.context, 0, in.ib_count,
 			ibs[0].gpu_va, 0, in.ring, 0);
+	/* The room wait drops the lock. A hang in that time lost this
+	 * context, or a reset is still running its self-test. */
+	if (gpu_gone(client) || sResetting)
+		return gpu_refuse("CS_SUBMIT", "lost", ECANCELED, in.context, 0,
+			in.ib_count, 0, 0, in.ring, 0);
 	status = gpu_ibs_mapped(client, ibs, in.ib_count, in.ring);
 	if (status != B_OK)
 		return status;
@@ -1568,13 +1683,13 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 
 
 static status_t
-gpu_fence_wait(void* info, void* buffer, size_t length)
+gpu_fence_wait(gpu_client* client, void* buffer, size_t length)
 {
 	r5_gpu_fence in;
 	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
 		return status;
-	status = gpu_wait_value(info, NULL, in.sequence, in.timeout_us);
+	status = gpu_wait_value(client, NULL, in.sequence, in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		gpu_hw_dump("fence timeout");
 	return status;
@@ -1659,10 +1774,10 @@ gpu_sync_wait(gpu_client* client, void* buffer, size_t length)
 	if ((in.flags & R5_GPU_SYNCOBJ_BINARY) != 0) {
 		if (sync->submitted == 0)
 			return B_TIMED_OUT;
-		status = gpu_wait_value(client->info, &sync->point, sync->submitted,
+		status = gpu_wait_value(client, &sync->point, sync->submitted,
 			in.timeout_us);
 	} else
-		status = gpu_wait_value(client->info, &sync->point, in.point,
+		status = gpu_wait_value(client, &sync->point, in.point,
 			in.timeout_us);
 	if (status == B_TIMED_OUT && in.timeout_us != 0)
 		gpu_hw_dump("sync wait");
@@ -1773,7 +1888,7 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 			return gpu_copy_out(buffer, length, &in, sizeof(in));
 		}
 		bigtime_t now = system_time();
-		if (sLost)
+		if (gpu_gone(client))
 			return ECANCELED;
 		if (in.timeout_us == 0 || now >= deadline)
 			return B_TIMED_OUT;
@@ -1861,7 +1976,7 @@ gpu_sync_transfer(gpu_client* client, void* buffer, size_t length)
 	bool dstBinary = in.dst_point == 0;
 	if (srcBinary && src->submitted == 0)
 		return B_BAD_VALUE;
-	if (!gpu_src_reached(src, in.src_point) && sLost)
+	if (!gpu_src_reached(src, in.src_point) && gpu_gone(client))
 		return ECANCELED;
 	if (gpu_src_reached(src, in.src_point)) {
 		if (dstBinary)
@@ -2244,14 +2359,32 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		return gpu_get_counters(client, buffer, length);
 	if (op == R5_GPU_RING_FILL)
 		return gpu_ring_fill(buffer, length);
-	if (op == R5_GPU_IH_COUNTS)
+	if (op == R5_GPU_IH_COUNTS) {
+		/* The last call of r5-gpu-selftest. gpu_hang_test starts after
+		 * it, from the retire thread. */
+		gpu_lock();
+		if (sHangTest != 0 && !sHangTestArmed) {
+			sHangTestArmed = true;
+			sInfo = client->info;
+			dprintf("radeon_hd: gpu hang test armed %lu\n",
+				(unsigned long)sHangTest);
+			r5_gpu_retire_wake();
+		}
+		gpu_unlock();
 		return gpu_ih_counts(buffer, length);
+	}
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
 	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)
 		return B_UNSUPPORTED;
 
 	gpu_lock();
+	/* A reset holds the lock, except while its self-test polls. */
+	while (sResetting) {
+		gpu_unlock();
+		snooze(10000);
+		gpu_lock();
+	}
 	sInfo = client->info;
 	int perFile = gpu_hw_per_file();
 	if (perFile < 0) {
@@ -2285,6 +2418,8 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			;
 		else if (gR5GpuOps.vmid_prepare == NULL)
 			status = B_NOT_SUPPORTED;
+		else if (sGpuOff || client->lost)
+			status = ECANCELED;
 		else if (!gpu_hw_prepare())
 			status = B_NO_INIT;
 		else {
@@ -2309,6 +2444,9 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		else {
 			client->contexts--;
 			sContexts--;
+			/* The lost context is gone. A new one on this file works. */
+			if (client->contexts == 0)
+				client->lost = false;
 			status = B_OK;
 		}
 	} else if (op == R5_GPU_BO_CREATE)
@@ -2370,7 +2508,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			|| in.y != in.x + 0x1000ull
 			|| r5_vm_va_fits(in.y, 4096) == 0)
 			status = B_BAD_VALUE;
-		else if (sLost) {
+		else if (gpu_gone(client)) {
 			dprintf("radeon_hd: skipped, gpu lost\n");
 			status = ECANCELED;
 		} else if (!gpu_render_enabled() || !gpu_selftest_enabled())
@@ -2390,7 +2528,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		}
 	}
 	else if (op == R5_GPU_SELFTEST) {
-		if (sLost) {
+		if (gpu_gone(client)) {
 			dprintf("radeon_hd: skipped, gpu lost\n");
 			status = ECANCELED;
 		} else if (!gpu_selftest_enabled())
@@ -2405,7 +2543,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	else if (op == R5_GPU_CS_SUBMIT)
 		status = gpu_submit(client, buffer, length);
 	else if (op == R5_GPU_FENCE_WAIT)
-		status = gpu_fence_wait(client->info, buffer, length);
+		status = gpu_fence_wait(client, buffer, length);
 	else if (op == R5_GPU_SYNCOBJ_CREATE)
 		status = gpu_sync_create(client, buffer, length);
 	else if (op == R5_GPU_SYNCOBJ_DESTROY)
@@ -2485,10 +2623,13 @@ gpu_counter(volatile uint64* value)
 
 
 static status_t
-gpu_wait_value(void* info, volatile uint64* value, uint64 target,
+gpu_wait_value(gpu_client* client, volatile uint64* value, uint64 target,
 	uint64 timeoutUs)
 {
-	(void)info;
+	/* A lost context gets no result, also not for a job that the reset
+	 * counted as retired. */
+	if (client != NULL && client->lost)
+		return ECANCELED;
 	int step = r5_wait_step(gpu_counter(value), target, timeoutUs, 0);
 	if (step == R5_WAIT_DONE)
 		return B_OK;
@@ -2505,7 +2646,7 @@ gpu_wait_value(void* info, volatile uint64* value, uint64 target,
 			now >= deadline);
 		if (step == R5_WAIT_DONE)
 			return B_OK;
-		if (sLost)
+		if (gpu_gone(client))
 			return ECANCELED;
 		if (step == R5_WAIT_TIMEOUT)
 			return B_TIMED_OUT;
@@ -2532,7 +2673,22 @@ gpu_fault_retire()
 				break;
 			}
 		}
+		/* AFTER-M8 item 11: the fixed line, with the hub status that
+		 * gmc_v9_0_process_interrupt reads and clears. At most one
+		 * line per second; a fault storm still sets the flags. */
+		uint32 status = 0;
+		if (gR5GpuOps.fault_status != NULL)
+			gR5GpuOps.fault_status(&status);
+		bigtime_t now = system_time();
+		bool line = sFaultLineAt == 0 || now - sFaultLineAt >= 1000000;
+		if (line) {
+			sFaultLineAt = now;
+			dprintf("radeon_hd: vm fault vmid %lu addr %016llx status %08lx\n",
+				(unsigned long)vmid, (unsigned long long)addr,
+				(unsigned long)status);
+		}
 		if (found == NULL) {
+			if (line)
 			dprintf("radeon_hd: vm fault pasid %lu unknown addr %016llx\n",
 				(unsigned long)pasid, (unsigned long long)addr);
 			continue;
@@ -2540,6 +2696,7 @@ gpu_fault_retire()
 		found->faulted = true;
 		if (sGuilty == NULL)
 			sGuilty = found;
+		if (line)
 		dprintf("radeon_hd: vm fault pasid %lu vmid %lu addr %016llx\n",
 			(unsigned long)pasid, (unsigned long)vmid,
 			(unsigned long long)addr);
@@ -2675,6 +2832,8 @@ gpu_free(void* cookie)
 		if (sContexts < 0)
 			sContexts = 0;
 	}
+	if (sGuilty == client)
+		sGuilty = NULL;
 	gpu_unlock();
 	free(client);
 	return status;

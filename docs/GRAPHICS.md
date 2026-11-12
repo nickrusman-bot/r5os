@@ -162,6 +162,28 @@ These keys stay opt-in. GC 9.3 is not `release-supported`, and the GPU is not th
 
 Tested on the Ryzen 5 5625U, 5 Nov 2026. The stick sha256 `7f137a27d566fa2493648b1852e92620baf1c404cad43f8f71da98a1e4e85d47`, written at 15:29 Europe/Amsterdam, reached the desktop. The lines are `k0 ok fence`, `k1 ok msi irq 61 eop 1 client 20 src 181 ring 0`, `k1_wait_us 1132`, `k2 map count 8 pages 256`, `k2 ptb 0000000812c18001 got 12c18001 00000008`, `k2 inv 007c0001`, `k2 ok gart`, `k2 dma a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5`, `k2 dma pattern 262144 cafe 0 other 0`, and `k2_ib wb deadbeef seq 10 seen 10`. There is no `k2 fault` line. The user shut that session down and reported no panic. The syslog exported while the desktop was up does not contain the stop lines. A boot with `gfx9_kernel` absent was not run. Other AMD GPUs, VirtualBox, ARM64 and RISC-V were not tested.
 
+## GFX9 reset on GC 9.3 (draft)
+
+This section is a draft (M10, PR B). It has not been booted on the 5625U. The stick fills it in, and PR E turns it into a fixed contract. The sections above do not change: a reset runs them again, it does not edit them.
+
+A hang is a GFX job whose fence is still out after the watchdog, 10 s, the same as `amdgpu.lockup_timeout`. A job whose fence a later job already passed is not a hang (`r5_fence_reached`: at or past, never equal). The policy is one pure function, `r5_hang_step()` in `r5_hang.h`. Order after the first hang of a boot:
+
+1. `radeon_hd: gpu hang ring gfx seq <n> after <ms> ms`. Every file with a context is marked lost, every job is dropped, every parked buffer is freed.
+2. The mode-2 reset from the kernel, `r5_smu12_mode2_reset()` (`r5_smu12.cpp`, after Linux v6.12 `smu_v12_0_mode2_reset` and `smu_cmn_send_smc_msg_with_param`): the interrupt ring is switched off, then wait for a non-zero `C2PMSG_90`, write 0 to it, `C2PMSG_82` = 2, `C2PMSG_66` = `0x1E`, and wait up to 2 s for 1. `radeon_hd: reset mode2 before <hex> after <hex>`, then `radeon_hd: gpu reset mode2 ok` or `failed`.
+3. `r5_gfx9_kernel_restart()`: `r5_gfx9_prepare` and `r5_gfx9_start` unchanged (the soc15 reset-on-init step, the PSP load, MEC before the GFX ring, the 914-dword ring, the fence and its readback check), `k0 ok fence`, then K1 (the handler and the MSI vector from boot stay; the ring is programmed again) and K2 with the GART, `k2 ok gart`. VMID 1 is programmed again on its next use from its existing page tables. The new user fence reads the last sequence before the reset.
+4. The self-test: the stage P marker, one `WRITE_DATA` through VMID 1 and its read-back, `mark selftest ok`. Then `radeon_hd: gpu selftest after reset ok` or `failed`.
+5. New contexts and submits work again. A file that was lost gets `ECANCELED` on submits and waits, and `R5_GPU_CAP_LOST` in `GET_INFO`, until it destroys its context.
+
+A second hang, a failed reset or a failed self-test: `radeon_hd: gpu off until reboot: <second hang|reset failed|selftest failed>`. Then the node refuses new contexts (`ECANCELED`) and submits, and `GET_INFO` reports `R5_GPU_CAP_LOST` without `R5_GPU_CAP_RENDER` for every file.
+
+Each restart takes new ring, fence, interrupt-ring and GART pages from the boot pool. There is at most one restart per boot.
+
+The fault line is `radeon_hd: vm fault vmid <n> addr <hex> status <hex>`, at most once per second. The status is `VM_L2_PROTECTION_FAULT_STATUS` of the GFX hub, read after a dummy read and cleared with bit 0 of `VM_L2_PROTECTION_FAULT_CNTL` (Linux v6.12 `gmc_v9_0.c:660-676`).
+
+`gpu_hang_test <n>` (off by default, a test switch): after the last call of the sign-in self-test, the kernel submits n jobs one after another that never finish: one `WAIT_REG_MEM` (memory, equal to 1) on a GTT dword that stays 0 (`r5_hang_ib.h`, checked by `scripts/check-pm4.py`). The next job goes out only after the GPU came back. Each must give one hang line and one reset.
+
+Still to record on the stick: the lines above in boot 2 (`gpu_hang_test 1`) and boot 3 (`gpu_hang_test 2`), the second `0xdeadbeef` and `k2 ok gart`, and the time from the hang line to `gpu selftest after reset ok`.
+
 ## GFX9 user address space (draft)
 
 This section is still a draft. Stick 19 did not draw the teapot without SAM (`pixels MISMATCH`). The register list is what the code programs. The stick lines below are what booted. The K sections above are not part of this draft.

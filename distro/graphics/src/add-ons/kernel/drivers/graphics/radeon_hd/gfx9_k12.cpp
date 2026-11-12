@@ -62,6 +62,19 @@ static uint32 sLastRing = 0;
 static uint8 sFirstRaw[4][32];
 static area_id sSystemArea = -1;
 static bool sGfx9Started = false;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+/* The boot choices, so a restart after a reset runs the same stages. */
+static struct {
+	bool	workload;
+	bool	compute;
+	bool	irq;
+	bool	gart;
+	uint64	vramBytes;
+} sStart;
+static bool sK1Ok = false;
+// SPDX-SnippetEnd
 static bool sGpuDebug = false;
 static bool sInvRange = true;
 static bool sHubLinux = false;
@@ -822,6 +835,13 @@ ih_on()
 static void
 run_k1()
 {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	/* After a reset (r5_gfx9_kernel_restart) the vector and the handler
+	 * from boot stay. Only the ring below is programmed again. */
+	if (!sIhInstalled) {
+// SPDX-SnippetEnd
 	sIrq = sInfo->pci->u.h0.interrupt_line;
 	sMsi = false;
 	if (gPCI != NULL && gPCI->get_msi_count(sInfo->pci->bus,
@@ -835,13 +855,15 @@ run_k1()
 			sMsi = true;
 		}
 	}
-	sEopSem = create_sem(0, "r5 gfx9 eop");
+	if (sEopSem < 0)
+		sEopSem = create_sem(0, "r5 gfx9 eop");
 	if (install_io_interrupt_handler(sIrq, ih_handler, sInfo, 0) != B_OK) {
 		knote("k1 fail %s irq %lu install", sMsi ? "msi" : "legacy",
 			(unsigned long)sIrq);
 		return;
 	}
 	sIhInstalled = true;
+	}
 	bigtime_t started = system_time();
 	if (!ih_on()) {
 		ih_off();
@@ -856,6 +878,7 @@ run_k1()
 		waited = acquire_sem_etc(sEopSem, 1, B_RELATIVE_TIMEOUT, 200000);
 	bigtime_t elapsed = system_time() - started;
 	if (waited == B_OK && sEopCount > 0) {
+		sK1Ok = true;
 		knote("k1 ok %s irq %lu eop %lu client %lu src %lu ring %lu",
 			sMsi ? "msi" : "legacy", (unsigned long)sIrq,
 			(unsigned long)sEopCount, (unsigned long)sLastClient,
@@ -1102,6 +1125,16 @@ run_k2()
 		pte[i] = dummyPte;
 
 	void* system = NULL;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	/* A restart after a reset runs K2 again. The GPU no longer reads
+	 * the boot copy: the mode-2 reset came first. */
+	if (sSystemArea >= 0) {
+		delete_area(sSystemArea);
+		sSystemArea = -1;
+	}
+// SPDX-SnippetEnd
 	sSystemArea = create_area("r5 gfx9 gart", &system, B_ANY_KERNEL_ADDRESS,
 		1024 * 1024, B_FULL_LOCK, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 	if (sSystemArea < 0 || system == NULL) {
@@ -2086,6 +2119,15 @@ r5_gfx9_kernel_start(radeon_info& info)
 	uint64 vramBytes = (uint64)info.shared_info->frame_buffer_size * 1024;
 	memset(&sResults, 0, sizeof(sResults));
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	sStart.workload = workload;
+	sStart.compute = compute;
+	sStart.irq = irq;
+	sStart.gart = gart;
+	sStart.vramBytes = vramBytes;
+// SPDX-SnippetEnd
 	r5_gfx9_prepare(&sHost, vramBytes);
 	bool ok = r5_gfx9_start(&sHost, pci, vramBytes, workload, compute, &sResults);
 	if (ok)
@@ -2100,3 +2142,87 @@ r5_gfx9_kernel_start(radeon_info& info)
 		map_carveout(info);
 	publish();
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+extern "C" bool r5_smu12_mode2_reset(radeon_info* info, uint32* before,
+	uint32* after);
+
+
+/* M10 hang policy, step 1: the mode-2 reset. The interrupt ring is
+ * switched off first and the handler ignores it until the restart has
+ * programmed a new one. The handler itself stays installed. */
+bool
+r5_gfx9_kernel_reset()
+{
+	if (sInfo == NULL || !sGfx9Started || sInfo->registers_area < 0
+		|| sInfo->registers == 0)
+		return false;
+	sIhWbReady = false;
+	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
+	kwrite(sInfo, gc_byte(mmCP_INT_CNTL_RING0), 0);
+	uint32 before = 0;
+	uint32 after = 0;
+	bool ok = r5_smu12_mode2_reset(sInfo, &before, &after);
+	knote("reset mode2 before %08lx after %08lx", (unsigned long)before,
+		(unsigned long)after);
+	return ok;
+}
+
+
+/* M10 hang policy, step 2: the fixed sequences again, unchanged and in
+ * their contract order (docs/GRAPHICS.md "GFX9 reset on GC 9.3"): the
+ * ring start with its PSP load, MEC before the GFX ring, the fence and
+ * its readback check (r5_gfx9_start), then K1 and K2 with the GART as
+ * at boot. VMID 1 is programmed again on its next use from the page
+ * tables it already has. Each restart takes new ring, fence, IH and
+ * GART pages from the boot pool; there is at most one per boot. */
+bool
+r5_gfx9_kernel_restart()
+{
+	if (sInfo == NULL || !sGfx9Started || sInfo->shared_info == NULL)
+		return false;
+	memset(&sResults, 0, sizeof(sResults));
+	r5_gfx9_prepare(&sHost, sStart.vramBytes);
+	bool ok = r5_gfx9_start(&sHost, sInfo->pciID, sStart.vramBytes,
+		sStart.workload, sStart.compute, &sResults);
+	if (ok)
+		r5_gfx9_hub_linux();
+	knote("k0 %s fence", ok ? "ok" : "fail");
+	sK1Ok = false;
+	if (ok && sStart.irq)
+		run_k1();
+	sK2GartMc = 0;
+	sK2GartCpu = NULL;
+	if (ok && sStart.gart)
+		run_k2();
+	sVmid1 = false;
+	publish();
+	if (!ok)
+		return false;
+	if (sStart.gart && sK2GartMc == 0)
+		return false;
+	return true;
+}
+
+
+/* gmc_v9_0_process_interrupt (Linux v6.12 gmc_v9_0.c:660-676) for the
+ * GFX hub: a dummy read, the status, then CLEAR_PROTECTION_FAULT_STATUS_ADDR
+ * (bit 0 of VM_L2_PROTECTION_FAULT_CNTL, WREG32_P(cntl, 1, ~1)). */
+int
+r5_gfx9_fault_status(uint32* status)
+{
+	if (status == NULL)
+		return 0;
+	*status = 0;
+	if (sInfo == NULL || sInfo->registers_area < 0 || sInfo->registers == 0)
+		return 0;
+	(void)kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_STATUS));
+	*status = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_STATUS));
+	uint32 cntl = kread(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL));
+	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL), cntl | 1u);
+	return 1;
+}
+// SPDX-SnippetEnd

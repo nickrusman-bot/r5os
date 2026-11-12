@@ -31,6 +31,24 @@
 
 static int fail(const char* what);
 
+
+/* generated/ is not in git (.gitignore). A fresh checkout or worktree
+ * lacks the boot captures there. Such an input is skipped with one line
+ * instead of stopping the whole program (AFTER-M8 item 12). */
+static int
+generated_missing(const char* path)
+{
+	if (strncmp(path, "generated/", 10) != 0)
+		return 0;
+	FILE* file = fopen(path, "rb");
+	if (file != NULL) {
+		fclose(file);
+		return 0;
+	}
+	fprintf(stderr, "skip %s: not in this checkout\n", path);
+	return 1;
+}
+
 static int
 body_skip(int index)
 {
@@ -83,6 +101,8 @@ linux_ring_frame()
 	const char* path =
 		"generated/linux-ref/capture-5625u/capture-20261106-194121/"
 		"ring-after-2-amdgpu_ring_gfx.bin";
+	if (generated_missing(path))
+		return 0;
 	FILE* file = fopen(path, "rb");
 	if (file == NULL)
 		return fail(path);
@@ -367,6 +387,8 @@ fail(const char* what)
 static int
 source_order(const char* path, const char** marks, int count)
 {
+	if (generated_missing(path))
+		return 0;
 	FILE* file = fopen(path, "rb");
 	if (file == NULL)
 		return fail(path);
