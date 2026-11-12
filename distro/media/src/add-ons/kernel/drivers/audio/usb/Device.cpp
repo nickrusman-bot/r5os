@@ -25,6 +25,9 @@ static const int32 kMaxMixItems = 1024;
 static const int32 kMaxBufferDescs = 32;
 static const int32 kMaxDescribedChannels = 128;
 static const size_t kEnableBitBytes = kMaxEnabledChannels / 8;
+// Longest wait for a buffer. The largest buffer is 8192 frames, 186 ms at
+// 44.1 kHz.
+static const bigtime_t kBufferExchangeTimeout = 1000000;
 // SPDX-SnippetEnd
 
 
@@ -174,9 +177,15 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 			multi_channel_info* channels = NULL;
 			if (description.request_channel_count > 0) {
-				channels = (multi_channel_info*)malloc(
-					sizeof(multi_channel_info)
-						* description.request_channel_count);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+				// Zeroed: only the channels the card has are filled in, and
+				// the whole array goes back to the caller.
+				channels = (multi_channel_info*)calloc(
+					description.request_channel_count,
+					sizeof(multi_channel_info));
+// SPDX-SnippetEnd
 				if (channels == NULL)
 					return B_NO_MEMORY;
 			}
@@ -282,8 +291,14 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				return status;
 
 			enable.enable_bits = orig_enable_bits;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// Write back only the bytes that were read: the caller's bitmap
+			// is sized for this card, not for kMaxEnabledChannels.
 			if (user_memcpy(enable.enable_bits, enable_bits,
-					sizeof(enable_bits)) < B_OK
+					(channels + 7) / 8) < B_OK
+// SPDX-SnippetEnd
 				|| user_memcpy(buffer, &enable, sizeof(multi_channel_enable))
 					< B_OK) {
 				return B_BAD_ADDRESS;
@@ -842,7 +857,13 @@ Device::_MultiGetBuffers(multi_buffer_list* List)
 			TRACE(API, "%d:%d %08x:%d\n", b, c, List->record_buffers[b][c].base,
 				List->record_buffers[b][c].stride);
 #endif
-	return B_OK;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A stream that refused the request (too few buffers or channels, a bad
+	// address) used to be reported as success with half-filled lists.
+	return status;
+// SPDX-SnippetEnd
 }
 
 
@@ -862,12 +883,21 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 			fStreams[i]->Start();
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A stream that is stopped from another thread (a format or latency
+	// change) or whose transfers stop completing never releases the
+	// semaphore. Without a timeout this call then waited forever, and the
+	// next exchange, which starts the stream again, never came.
 	status_t status = acquire_sem_etc(fBuffersReadySem, 1,
-		B_CAN_INTERRUPT, 0);
-	if (status == B_TIMED_OUT) {
-		TRACE(ERR, "Timeout during buffers exchange.\n");
+		B_CAN_INTERRUPT | B_RELATIVE_TIMEOUT, kBufferExchangeTimeout);
+	if (status != B_OK) {
+		if (status == B_TIMED_OUT)
+			TRACE(ERR, "Timeout during buffers exchange.\n");
 		return status;
 	}
+// SPDX-SnippetEnd
 
 	status = B_ERROR;
 	for (int i = 0; i < fStreams.Count(); i++) {
