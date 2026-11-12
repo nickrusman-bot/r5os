@@ -8,7 +8,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 90fa3bc401 (star row 19), copyright 2026 Witold Bołt. The Haiku copyright
  * and the license above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -745,7 +745,7 @@ IORequest::IORequest()
 	:
 	fIsNotified(false),
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	fIterating(false),
 	fIterationFinished(false),
@@ -818,7 +818,7 @@ IORequest::Init(off_t offset, generic_size_t firstVecOffset,
 	fPartialTransfer = false;
 	fSuppressChildNotifications = false;
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	fIterating = false;
 	fIterationFinished = false;
@@ -967,7 +967,7 @@ IORequest::NotifyFinished()
 	ASSERT(fStatus != 1);
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	if (fIterating) {
 		// What the running iteration callback scheduled has finished already

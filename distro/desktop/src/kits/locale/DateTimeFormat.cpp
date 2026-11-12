@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -63,7 +62,7 @@ BDateTimeFormat::SetDateTimeFormat(BDateFormatStyle dateStyle,
 	UErrorCode error = U_ZERO_ERROR;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Month names follow the preferred language only when that checkbox is
 	// on. The hour cycle follows the formatting country otherwise, so a
 	// Dutch country does not keep an English AM/PM pattern.
@@ -74,7 +73,7 @@ BDateTimeFormat::SetDateTimeFormat(BDateFormatStyle dateStyle,
 	DateTimePatternGenerator* generator
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		= DateTimePatternGenerator::createInstance(*icuLocale, error);
 // SPDX-SnippetEnd
 
@@ -110,7 +109,7 @@ BDateTimeFormat::SetDateTimeFormat(BDateFormatStyle dateStyle,
 	pattern.toUTF8(stringConverter);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// The pattern generator can keep AM/PM for an English locale after the
 	// skeleton asked for 24-hour. The preflet examples already coerce.

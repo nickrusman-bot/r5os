@@ -21,7 +21,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "SignInBackground.h"
 // SPDX-SnippetEnd
 
@@ -41,7 +41,7 @@ DesktopWindow::DesktopWindow(BRect frame, bool editMode)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The R5 Sign in background instead of the plain desktop color.
 	BView *desktop = new SignInBackground(Bounds());
 	AddChild(desktop);

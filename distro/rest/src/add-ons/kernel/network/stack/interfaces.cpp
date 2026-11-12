@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -1338,7 +1337,7 @@ add_interface_address(Interface* interface, net_domain_private* domain,
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (status == B_OK) {
 		// SIOCAIFADDR / ADD_ALIAS used to skip this; IPv6 SLAAC then had
 		// no RTF_LOCAL host route, so ping to the ULA went off-link.
@@ -1347,7 +1346,7 @@ add_interface_address(Interface* interface, net_domain_private* domain,
 		notify_interface_changed(interface);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	} else
 // SPDX-SnippetEnd
 		delete address;

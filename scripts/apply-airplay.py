@@ -17,7 +17,7 @@ def replace_once(
     path: pathlib.Path, old: str, new: str, tag: str, optional: bool = False
 ) -> None:
     text = path.read_text(encoding="utf-8")
-    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+    if "R5OS modifications in this file are " in text:
         print(f"already {path.name} ({tag})")
         return
     if new in text:

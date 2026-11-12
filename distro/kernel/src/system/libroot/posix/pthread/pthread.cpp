@@ -48,7 +48,7 @@ pthread_thread_entry(void*, void* _thread)
 	__heap_thread_init();
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	if (__gRuntimeLoader->init_initial_exec_tls != NULL)
 		__gRuntimeLoader->init_initial_exec_tls();

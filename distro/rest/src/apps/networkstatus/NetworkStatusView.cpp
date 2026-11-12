@@ -10,10 +10,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -60,7 +59,7 @@
 #include "WirelessNetworkMenuItem.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "WiFiWindow.h"
 // SPDX-SnippetEnd
 
@@ -85,7 +84,7 @@ const uint32 kMsgOpenNetworkPreferences = 'onwp';
 const uint32 kMsgJoinNetwork = 'join';
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 const uint32 kMsgOpenWifi = 'wifi';
 // SPDX-SnippetEnd
 
@@ -273,7 +272,7 @@ NetworkStatusView::MessageReceived(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case kMsgOpenWifi:
 			WiFiWindow::ShowWindow();
 			break;
@@ -285,19 +284,19 @@ NetworkStatusView::MessageReceived(BMessage* message)
 			const char* name;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 			if (message->FindString("device", &deviceName) == B_OK
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				&& message->FindString("name", &name) == B_OK) {
 // SPDX-SnippetEnd
 				BNetworkDevice device(deviceName);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				wireless_network network;
 				if (device.GetNetwork(name, network) != B_OK) {
 					strlcpy(network.name, name, sizeof(network.name));
@@ -451,7 +450,7 @@ NetworkStatusView::MouseDown(BPoint point)
 	// Add wireless networks, if any, first so that we can sort the menu
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Wi-Fi" B_UTF8_ELLIPSIS),
 		new BMessage(kMsgOpenWifi)));
@@ -630,7 +629,7 @@ NetworkStatusView::_Update(bool force)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString ssid;
 	BString tip;
 	if (r5_wifi_current_ssid(ssid) == B_OK && ssid.Length() > 0)

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Page-table and interrupt helpers the host test can compile on its own.
  * The bit positions are from Linux v6.12 amdgpu_vm.h and amdgpu_ih.c.

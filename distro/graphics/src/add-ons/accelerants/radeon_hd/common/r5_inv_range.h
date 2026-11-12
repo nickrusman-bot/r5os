@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Address of each GFXHUB invalidation engine. The step and the two
  * written values are gfxhub_v1_0_program_invalidation.

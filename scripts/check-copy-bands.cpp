@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Host check of the dirty-row bands. Prints one pass line, then the
  * packet streams check-pm4.py reads.

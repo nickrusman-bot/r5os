@@ -1,6 +1,6 @@
 <!--
   SPDX-FileCopyrightText: 2026 R5OS Contributors
-  SPDX-License-Identifier: GPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 # Review: Moving R5 from GCC 13.3.0 to GCC 16 (and Binary Compatibility) (12 Nov 2026)
 

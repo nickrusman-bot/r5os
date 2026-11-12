@@ -64,7 +64,7 @@ private:
 			void				_WatchFlavors();
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			void				_ShowDefaults();
 			void				_ScheduleRefresh();
 			// SPDX-SnippetEnd
@@ -121,7 +121,7 @@ private:
 			BAlert*				fRestartAlert;
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// One refresh for a burst of B_MEDIA_FLAVORS_CHANGED.
 			BMessageRunner*		fRefreshRunner;
 			// SPDX-SnippetEnd

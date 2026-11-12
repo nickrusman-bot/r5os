@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Known PCI ids keep their firmware stem. An unknown id does not.
  */

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * GFX user job, matching the non-MCBP frame Linux puts around the
  * indirect buffers (gfx_v9_0.c emit_cntxcntl, emit_frame_cntl,

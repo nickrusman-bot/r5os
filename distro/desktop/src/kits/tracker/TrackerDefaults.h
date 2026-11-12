@@ -20,7 +20,7 @@ static const bool kDefaultShowSelectionWhenInactive = true;
 static const bool kDefaultShowFullPathInTitleBar = false;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5: a folder opens in the same window, with the navigator bar.
 static const bool kDefaultSingleWindowBrowse = true;
 static const bool kDefaultShowNavigator = true;

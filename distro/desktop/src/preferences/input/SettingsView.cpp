@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -22,7 +21,7 @@
 #include <Debug.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <File.h>
 #include <FindDirectory.h>
 // SPDX-SnippetEnd
@@ -31,7 +30,7 @@
 #include <Locale.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Path.h>
 // SPDX-SnippetEnd
 #include <SeparatorView.h>
@@ -89,7 +88,7 @@ SettingsView::SettingsView(MouseSettings& settings)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fPointerSizeSlider = new BSlider("pointer_size",
 		B_TRANSLATE("Pointer size"), new BMessage(kMsgCursorSpeed),
 		0, 1000, B_HORIZONTAL);
@@ -162,7 +161,7 @@ SettingsView::SettingsView(MouseSettings& settings)
 					.Add(fAccelerationSlider)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 					.End()
 				.AddGroup(B_HORIZONTAL, 0)
 					.Add(fPointerSizeSlider)
@@ -239,7 +238,7 @@ SettingsView::UpdateFromSettings()
 		fSettings.MouseMode() != B_FOCUS_FOLLOWS_MOUSE);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	float extra = 1.0f;
 	BPath path;

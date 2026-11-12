@@ -11,7 +11,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 1539d29eee (star row 18), copyright 2026 Witold Bołt. The Haiku copyright
  * and the licenses above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -574,7 +574,7 @@ ModifiedPageQueue::_PageWriter()
 		if (queue.Count() < kNumPages && sUnderQuotaCondition.EntriesCount() == 0) {
 			// wait the full amount when nobody's waiting for us
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 			// A timeout used to go back to waiting, so the last modified pages
 			// below kNumPages stayed unwritten until a sync.

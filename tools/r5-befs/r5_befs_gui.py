@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """Read-only BeFS GUI reader for Windows.
 
 Built with Python and tkinter only (no external GUI libraries).

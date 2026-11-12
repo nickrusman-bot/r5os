@@ -39,7 +39,7 @@
 #include <fs_info.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Key.h>
 #include <KeyStore.h>
 // SPDX-SnippetEnd
@@ -47,7 +47,7 @@
 #include <OS.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <String.h>
 // SPDX-SnippetEnd
 
@@ -1269,7 +1269,7 @@ parse_options(int argc, const char* const* argv)
 			sOptions.user = value;
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		else if (key == "password") {
 			// The value is not logged. The product path does not send it.
 			syslog(LOG_ERR, "smbfs: the password is read from the keystore\n");
@@ -1317,7 +1317,7 @@ parse_options(int argc, const char* const* argv)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// Same identifier the mount server stored: smb://server/share, user name.
 	if (sOptions.password.empty() && !sOptions.user.empty()) {
 		BString identifier;

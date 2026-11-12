@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -23,14 +22,14 @@
 #include <string.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <unistd.h>
 // SPDX-SnippetEnd
 
 #include <Directory.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Messenger.h>
 // SPDX-SnippetEnd
 #include <File.h>
@@ -638,7 +637,7 @@ BNetworkSettings::_Load(const char* name, uint32* _type)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 r5_network_save_allowed()
 {
@@ -663,7 +662,7 @@ BNetworkSettings::_Save(const char* name)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!r5_network_save_allowed())
 		return B_PERMISSION_DENIED;
 

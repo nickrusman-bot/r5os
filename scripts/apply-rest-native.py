@@ -4,7 +4,7 @@
 Packages, networking, accounts, About, and branding text. Jamfiles and
 launch jobs stay in the older apply scripts. The original copyright and
 license header stay. R5OS edits are the SPDX-Snippet blocks and are
-GPL-3.0-or-later.
+MIT.
 """
 from __future__ import annotations
 

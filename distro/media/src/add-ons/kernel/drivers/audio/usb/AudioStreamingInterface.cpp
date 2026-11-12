@@ -91,7 +91,7 @@ ASEndpointDescriptor::ASEndpointDescriptor(usb_endpoint_descriptor* Endpoint,
 	fMaxPacketSize = Endpoint->max_packet_size;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fInterval = Endpoint->interval;
 // SPDX-SnippetEnd
 

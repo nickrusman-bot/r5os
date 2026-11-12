@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -202,7 +201,7 @@ LocaleRosterData::SetDefaultFormattingConventions(
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (status == B_OK) {
 	// The preflet examples update from this process. Deskbar and Tracker
 	// only hear the broadcast, so a failed save must not hide the change.
@@ -232,7 +231,7 @@ LocaleRosterData::SetDefaultTimeZone(const BTimeZone& newZone)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (status == B_OK) {
 	// The preflet examples update from this process. Deskbar and Tracker
 	// only hear the broadcast, so a failed save must not hide the change.
@@ -262,7 +261,7 @@ LocaleRosterData::SetPreferredLanguages(const BMessage* languages)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (status == B_OK) {
 	// The preflet examples update from this process. Deskbar and Tracker
 	// only hear the broadcast, so a failed save must not hide the change.
@@ -290,7 +289,7 @@ LocaleRosterData::SetFilesystemTranslationPreferred(bool preferred)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The preflet examples update from this process. Deskbar and Tracker
 	// only hear the broadcast, so a failed save must not hide the change.
 	_SaveLocaleSettings();
@@ -473,7 +472,7 @@ LocaleRosterData::_CleanupCatalogAddOns()
 status_t
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 LocaleRosterData::ApplyUpdatedSettings(const BMessage* message)
 {
 	if (message == NULL)
@@ -589,7 +588,7 @@ LocaleRosterData::_SaveLocaleSettings()
 	BPath path;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (status == B_OK) {
 		// Create ~/config/settings when the first locale change is saved.
 		status = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);

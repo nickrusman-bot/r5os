@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Public Settings module API. Version 1.
  * Add a virtual method only at the end, then bump kSettingsApiVersion.
  * A module built for a different version is not loaded.

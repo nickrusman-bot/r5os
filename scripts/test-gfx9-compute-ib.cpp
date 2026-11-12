@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later
+/* SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  *
  * Host check for the GFX9 compute indirect buffer. The expected dwords are

@@ -6,7 +6,7 @@
 /*
  * The R5 change in this file is the SPDX snippet. Copyright 2026 R5OS
  * Contributors. The Haiku copyright and the license above still cover the
- * original work. The snippet is GPL-3.0-or-later.
+ * original work. The snippet is MIT.
  * Storing the TLS symbol value alone would be wrong: %fs is the slot array,
  * not the ELF TLS block. The stored value is the offset from %fs to the
  * template bytes placed for the startup images.
@@ -77,7 +77,7 @@ relocate_rela(image_t* rootImage, image_t* image, Elf64_Rela* rel,
 				relocValue = symAddr;
 				break;
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			case R_X86_64_TPOFF32:
 			case R_X86_64_TPOFF64: {
@@ -128,7 +128,7 @@ arch_relocate_image(image_t* rootImage, image_t* image,
 	}
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	materialize_initial_exec_tls();
 	// SPDX-SnippetEnd

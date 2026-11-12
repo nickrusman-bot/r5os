@@ -94,7 +94,7 @@ rldexport_init(void)
 	gRuntimeLoader.program_args = gProgramArgs;
 	gRuntimeLoader.commpage_address = __gCommPageAddress;
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	gRuntimeLoader.init_initial_exec_tls = materialize_initial_exec_tls;
 	// SPDX-SnippetEnd

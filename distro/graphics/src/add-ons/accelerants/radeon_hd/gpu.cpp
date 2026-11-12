@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -23,7 +22,7 @@
 #include <OS.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <driver_settings.h>
 #include <stdarg.h>
 #include "gfx9_start.h"
@@ -602,7 +601,7 @@ radeon_gpu_mc_init()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 radeon_vram_pool_report()
 {
@@ -690,7 +689,7 @@ radeon_gpu_mc_setup()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!radeon_hd_uses_dce(info.chipsetID)) {
 		// Evergreen MC registers are not the Raven display controller.
 		// Programming them halts a controller this driver does not own.
@@ -712,7 +711,7 @@ radeon_gpu_mc_setup()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (result == B_OK)
 		radeon_vram_pool_report();
 // SPDX-SnippetEnd
@@ -743,7 +742,7 @@ radeon_gpu_ring_setup()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // The doorbell is an area clone. It stays in the accelerant. The kernel
 // maps the same BAR before the accelerant exists.
 // AMDGPU_DOORBELL64_GFX_RING0 is qword 0x8b, shifted to byte 0x458.
@@ -984,7 +983,7 @@ radeon_gpu_ring_boot(uint32 ringType)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
 		if (gInfo->shared_info->gfx9_owner == R5_GFX9_OWNER_KERNEL) {
 			ERROR("%s: R5 radeon_hd: GFX9 owned by the kernel\n",

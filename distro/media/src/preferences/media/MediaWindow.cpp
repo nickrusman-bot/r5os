@@ -48,7 +48,7 @@ const uint32 ML_RESTART_THREAD_FINISHED = 'MlRF';
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static const uint32 kMsgRefreshDevices = 'MlRD';
 // Long enough to catch the input and output notices of one card.
 static const bigtime_t kRefreshDelay = 300000;
@@ -395,7 +395,7 @@ MediaWindow::MessageReceived(BMessage* message)
 
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		case B_MEDIA_FLAVORS_CHANGED:
 			// One card sends several of these in a row.
 			_ScheduleRefresh();
@@ -562,7 +562,7 @@ MediaWindow::_InitMedia(bool first)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 MediaWindow::_ShowDefaults()
 {

@@ -203,7 +203,7 @@ def patch_boot_prompt(path: pathlib.Path) -> None:
     text = path.read_text(encoding="utf-8")
     # The copied source already says "R5". A blanket replace would also
     # rewrite the R5OS license notice.
-    if "R5OS modifications in this file are GPL-3.0-or-later." in text:
+    if "R5OS modifications in this file are " in text:
         print(f"already {path.name} (boot prompt)")
         return
     text = text.replace(

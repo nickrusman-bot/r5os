@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * VMIDs 1-15, one owner at a time. Linux v6.18 amdgpu_ids.c
  * amdgpu_vmid_grab keeps a VMID while that address space has a job

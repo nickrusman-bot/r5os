@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, R5OS.
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Checks the MIDI 2.0 helpers and, when midi_server is running, one local
  * producer sprayed into one local consumer.

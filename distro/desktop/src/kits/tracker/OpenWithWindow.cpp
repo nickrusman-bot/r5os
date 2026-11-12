@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -65,7 +64,7 @@ All rights reserved.
 #include <NodeMonitor.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <FindDirectory.h>
 // SPDX-SnippetEnd
 #include <Path.h>
@@ -458,7 +457,7 @@ OpenWithContainerWindow::RestoreState()
 		AttributeStreamFileNode streamNodeSource(&defaultingNode);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fPoseView->Init(&streamNodeSource);
 		InitLayout();
 		// Layout used to wipe the saved frame (Haiku #19520 #8772).
@@ -466,20 +465,20 @@ OpenWithContainerWindow::RestoreState()
 		RestoreWindowState(&streamNodeSource);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 	} else {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fPoseView->Init(NULL);
 		InitLayout();
 // SPDX-SnippetEnd
 		RestoreWindowState(NULL);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	}
 // SPDX-SnippetEnd
 }
@@ -504,7 +503,7 @@ OpenWithContainerWindow::RestoreWindowState(AttributeStreamNode* node)
 			== sizeof(BRect)) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// Saved frames are in 12pt units, same as other Tracker windows.
 		const float scalingFactor = be_plain_font->Size() / 12.0f;
 		frame.left *= scalingFactor;
@@ -1689,7 +1688,7 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				// Do not write into the MIME type buffer (Haiku #8551).
 				BMimeType superType;
 				mimeType.GetSupertype(&superType);
@@ -1698,7 +1697,7 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
 				description->SetTo(B_TRANSLATE("Handles any %type"));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				description->ReplaceFirst("%type",
 					superName != NULL ? superName : "");
 // SPDX-SnippetEnd
@@ -1730,7 +1729,7 @@ SearchForSignatureEntryList::RelationDescription(const BMessage* entriesToOpen,
 	description->SetTo(B_TRANSLATE("Does not handle file"));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 }
 
 
@@ -1797,7 +1796,7 @@ SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
 		app_info trackerInfo;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// The comparison used to read an uninitialized app_info.
 		if (be_roster->GetActiveAppInfo(&trackerInfo) != B_OK
 			|| *appModel->EntryRef() != trackerInfo.ref) {
@@ -1828,7 +1827,7 @@ SearchForSignatureEntryList::CanOpenWithFilter(const Model* appModel,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Tracker add-ons are for the Add-ons menu, not Open With.
 	if (_InTrackerAddOns(appModel->EntryRef()))
 		return false;

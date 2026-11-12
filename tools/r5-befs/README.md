@@ -4,7 +4,7 @@ Read-only BeFS reader for Windows. It opens a disk image (`.iso`, `.image`, `.im
 
 There is no separate R5 toolchain repository. This tool lives in the R5OS tree and is run with Python 3 or as a standalone Windows executable.
 
-The on-disk layout is the Be File System: the superblock, inodes, small_data attributes, and directory B+ trees. This program is R5OS code under GPL-3.0-or-later. It does not copy the Haiku BFS sources. Those stay under the MIT license in a Haiku tree (`src/add-ons/kernel/file_systems/bfs`).
+The on-disk layout is the Be File System: the superblock, inodes, small_data attributes, and directory B+ trees. This program is R5OS code under the MIT License. It does not copy the Haiku BFS sources. Those stay under the MIT license in a Haiku tree (`src/add-ons/kernel/file_systems/bfs`).
 
 ## Graphical User Interface (GUI)
 

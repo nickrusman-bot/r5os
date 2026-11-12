@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Read /dev/misc/r5_pstate twice and write the boot logs on /boot/home.
  * That directory is on the BeFS boot volume. Mounting another partition

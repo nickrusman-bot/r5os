@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -49,7 +48,7 @@ All rights reserved.
 #include <Catalog.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Clipboard.h>
 // SPDX-SnippetEnd
 #include <ControlLook.h>
@@ -57,7 +56,7 @@ All rights reserved.
 #include <NodeMonitor.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <OS.h>
 // SPDX-SnippetEnd
 #include <PopUpMenu.h>
@@ -162,7 +161,7 @@ OpenToolTipWindow(BScreen& screen, BRect rect, const char* name,
 	window->AddChild(trackingView);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// Stay on this workspace (Haiku #8543).
 	window->SetWorkspaces(1UL << current_workspace());
@@ -497,7 +496,7 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 				if (strcmp(attrName, kAttrLargeIcon) == 0
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 					|| strcmp(attrName, kAttrMiniIcon) == 0
 // SPDX-SnippetEnd
 					|| strcmp(attrName, kAttrIcon) == 0) {
@@ -506,7 +505,7 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 				} else if (strcmp(attrName, kAttrMIMEType) == 0) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 					// Identify updates the type. Refresh the icon too
 					// (Haiku #8544).
 // SPDX-SnippetEnd
@@ -517,7 +516,7 @@ GeneralInfoView::ModelChanged(Model* model, BMessage* message)
 					}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 					IconCache::sIconCache->IconChanged(model->ResolveIfLink());
 // SPDX-SnippetEnd
 					Invalidate();
@@ -561,7 +560,7 @@ GeneralInfoView::MouseDown(BPoint where)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BMessage* currentMessage = Window() != NULL
 		? Window()->CurrentMessage() : NULL;
 	int32 buttons = 0;

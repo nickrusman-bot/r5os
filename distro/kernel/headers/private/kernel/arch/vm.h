@@ -35,7 +35,7 @@ status_t arch_vm_set_memory_type(struct VMArea *area, phys_addr_t physicalBase,
 	uint32 type, uint32 *effectiveType);
 void arch_vm_unset_memory_type(struct VMArea *area);
 /* SPDX-SnippetBegin
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
  * After the page tables change, flush the lines. AMD64 uses clflush
  * when PAT is on. A type the page tables cannot name is refused.

@@ -22,14 +22,14 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <usb/R5USBSpeed.h>
 // SPDX-SnippetEnd
 
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Transfers that fail in a row before the callback stops the stream.
 static const int32 kMaxTransferErrors = 32;
 // SPDX-SnippetEnd
@@ -82,7 +82,7 @@ Stream::~Stream()
 	delete_area(fKernelArea);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// fDescriptors comes from new[].
 	delete[] fDescriptors;
 	free(fCarry);
@@ -233,7 +233,7 @@ Stream::Init()
 	fStatus = _ChooseAlternate();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (fStatus == B_OK && fControlInterface != NULL
 		&& fControlInterface->SpecReleaseNumber() >= 0x0200) {
 		_QueryClockRates();
@@ -245,7 +245,7 @@ Stream::Init()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // UAC 2.0 has no rate list in the format descriptor. The clock source that
 // drives this stream answers a RANGE request on its sampling frequency
 // control (UAC 2.0 § 5.2.5.1.1). Before this, every UAC 2.0 stream offered
@@ -377,7 +377,7 @@ Stream::_SetupBuffers()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// One ISO descriptor is one service interval of the endpoint: 1 ms at
 	// full speed, 125 us at high speed (times 2^(bInterval-1)). The old code
 	// sized every packet for 1 ms and clamped it to wMaxPacketSize, which on
@@ -473,7 +473,7 @@ Stream::_SetupBuffers()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fDescriptorsCount = (size_t)plan.packetsPerBuffer * kSamplesBufferCount;
 	fDescriptors = new(std::nothrow) usb_iso_packet_descriptor[fDescriptorsCount];
 	if (fDescriptors == NULL)
@@ -600,7 +600,7 @@ Stream::ProgramClock()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
 		uint8 clock = fClockId;
 		if (clock == 0) {
@@ -645,7 +645,7 @@ Stream::Start()
 	if (!fIsRunning) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// A stream the callback stopped after repeated errors may still have
 		// a transfer queued. Cancel it so both buffers are not queued twice.
 		if (fStreamEndpoint != 0)
@@ -694,7 +694,7 @@ Stream::_QueueNextTransfer(size_t queuedBuffer, bool start)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A region is the bytes of one buffer's packets: exactly one buffer of
 	// frames for playback, room for the largest packets for recording.
 	size_t bufferSize = fRegionBytes;
@@ -736,7 +736,7 @@ Stream::_QueuePlayback(size_t queuedBuffer)
 		fFeedbackError += (sample - nominal) * (int32)fPlan.packetsPerBuffer;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// A device that runs fast can only be followed while frames are
 		// held back. Cap the error so it cannot grow for an hour and wrap
 		// the int32 round to the other sign.
@@ -749,7 +749,7 @@ Stream::_QueuePlayback(size_t queuedBuffer)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// fPlayCarry holds 8 frames. Hold one more back only while there is
 	// room, or the frame past the eighth would be dropped.
 	int32 adjust = 0;
@@ -828,7 +828,7 @@ Stream::_QueueFeedback()
 	fFeedbackPacket.status = B_OK;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The stack may write the starting frame after this call returns, so
 	// it is a member, not a local.
 	fFeedbackFrame = 0;
@@ -838,7 +838,7 @@ Stream::_QueueFeedback()
 		Stream::_FeedbackCallback, this);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Without feedback, pace at the nominal rate instead of following the
 	// last sample for the rest of the stream.
 	if (status != B_OK)
@@ -861,7 +861,7 @@ Stream::_FeedbackCallback(void* cookie, status_t status, void* data,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A failed or short sample is not used, and the next one is queued: the
 	// feedback used to stop after the first error. A value is accepted only
 	// within 1/8 of nominal, as Linux does. A full-speed device that sends
@@ -930,7 +930,7 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Recording: join the packets of the buffer that just completed into
 	// exactly one buffer of frames before the reader is woken. The buffer
 	// that completed is the one after fCurrentBuffer.
@@ -953,7 +953,7 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// This callback runs in the USB stack's finisher thread, so it must not
 	// sleep: a snooze here held up every other transfer on the controller.
 	// An error that keeps coming straight back (babble, missed service,
@@ -986,7 +986,7 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 bool
 Stream::_JoinRecorded(size_t buffer)
 {
@@ -1052,7 +1052,7 @@ Stream::GetEnabledChannels(uint32& offset, multi_channel_enable* Enable)
 	for (size_t i = 0; i < cluster->ChannelsCount(); i++) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (offset >= kMaxEnabledChannels)
 			break;
 // SPDX-SnippetEnd
@@ -1074,7 +1074,7 @@ Stream::SetEnabledChannels(uint32& offset, multi_channel_enable* Enable)
 	for (size_t i = 0; i < cluster->ChannelsCount()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			&& offset < kMaxEnabledChannels;
 // SPDX-SnippetEnd
 			i++, offset++) {
@@ -1121,7 +1121,7 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A shared UAC 2.0 clock is locked while another stream of this device
 	// runs. Rewriting it then is what silences a UMC204HD for the whole
 	// capture. This used to set up buffers for the new rate and report
@@ -1170,7 +1170,7 @@ Stream::GetBuffers(multi_buffer_list* List)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The loop below fills kSamplesBufferCount entries of the caller's array.
 	if ((fIsInput ? List->request_record_buffers
 			: List->request_playback_buffers) < (int32)kSamplesBufferCount) {
@@ -1206,7 +1206,7 @@ Stream::GetBuffers(multi_buffer_list* List)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// This stream's channels follow the channels of the streams before it
 	// in the caller's array. The old loop started at startChannel inside a
 	// local array of this stream's size and copied that array to the start
@@ -1233,7 +1233,7 @@ Stream::GetBuffers(multi_buffer_list* List)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Buffers start one region apart. A recording region is larger
 			// than its frames; the frames are joined at its start.
 			size_t bufferSize = fRegionBytes;

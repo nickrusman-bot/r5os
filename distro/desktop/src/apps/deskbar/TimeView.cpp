@@ -34,10 +34,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -50,7 +49,7 @@ All rights reserved.
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <String.h>
 
 // SPDX-SnippetEnd
@@ -59,14 +58,14 @@ All rights reserved.
 #include <Debug.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <FormattingConventions.h>
 // SPDX-SnippetEnd
 #include <Locale.h>
 #include <MenuItem.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <TimeFormat.h>
 // SPDX-SnippetEnd
 #include <MessageRunner.h>
@@ -193,7 +192,7 @@ TTimeView::Draw(BRect /*updateRect*/)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	SetLowUIColor(B_MENU_BACKGROUND_COLOR);
 	SetHighUIColor(B_MENU_BACKGROUND_COLOR);
 // SPDX-SnippetEnd
@@ -202,7 +201,7 @@ TTimeView::Draw(BRect /*updateRect*/)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString shown(fCurrentTimeStr);
 	BPoint where(fTimeLocation);
 	if (Vertical()) {
@@ -243,7 +242,7 @@ TTimeView::GetPreferredSize(float* width, float* height)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	timeWidth += kHMargin * 2;
 // SPDX-SnippetEnd
 	if (Vertical()) {
@@ -319,7 +318,7 @@ TTimeView::Pulse()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The clock uses the same short time pattern as the Locale preflet.
 	// Reloading the settings file here would put en_US back when that
 	// file was not written yet.
@@ -501,7 +500,7 @@ TTimeView::GetCurrentTime()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// BTimeFormat reads the formatting country's own pattern. The
 	// date-time pattern generator can keep an English AM/PM skeleton.
 	BTimeFormatStyle style = B_SHORT_TIME_FORMAT;
@@ -560,7 +559,7 @@ TTimeView::CalculateTextPlacement()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A vertical Deskbar that is narrower than the clock string is
 	// shortened in Draw() instead of being shifted off the left edge.
 // SPDX-SnippetEnd

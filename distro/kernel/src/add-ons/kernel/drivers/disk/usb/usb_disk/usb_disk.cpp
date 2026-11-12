@@ -11,7 +11,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * d3cc8e3fd1 (star row 54), copyright 2026 Witold Bołt. The Haiku copyright
  * and the license above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -529,7 +529,7 @@ usb_disk_operation_bulk(device_lun* lun, uint8* operation, size_t operationLengt
 				// the operation is complete but has failed at the SCSI level
 				// SPDX-SnippetBegin
 				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-				// SPDX-License-Identifier: GPL-3.0-or-later
+				// SPDX-License-Identifier: MIT
 				// SYNCHRONIZE CACHE on a stick that rejects it is handled
 				// below, after request sense, so the rejection is not logged
 				// five times.
@@ -543,7 +543,7 @@ usb_disk_operation_bulk(device_lun* lun, uint8* operation, size_t operationLengt
 				result = usb_disk_request_sense(lun, _action);
 				// SPDX-SnippetBegin
 				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-				// SPDX-License-Identifier: GPL-3.0-or-later
+				// SPDX-License-Identifier: MIT
 				if (operation[0] == SCSI_SYNCHRONIZE_CACHE_10
 					&& result != B_DEV_INVALID_IOCTL) {
 					TRACE_ALWAYS("operation %#" B_PRIx8
@@ -675,7 +675,7 @@ usb_disk_request_sense(device_lun* lun, err_act* _action)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// Illegal request, invalid field in CDB: the device rejected the
 	// command. usb_disk_synchronize() treats that as "no cache".
 	const bool rejected = parameter.sense_key == SCSI_SENSE_KEY_ILLEGAL_REQUEST
@@ -714,7 +714,7 @@ usb_disk_request_sense(device_lun* lun, err_act* _action)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (rejected)
 		return B_DEV_INVALID_IOCTL;
 	// SPDX-SnippetEnd
@@ -1832,7 +1832,7 @@ usb_disk_do_io(void* cookie, IOOperation* operation)
 	MutexLocker deviceLocker(lun->device->lock);
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	if (lun->device->removed) {
 		// Operations still queued when the device went away: every command
@@ -1974,7 +1974,7 @@ usb_disk_uninit_driver(void* _cookie)
 	CALLED();
 	disk_device* device = (disk_device*)_cookie;
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	mutex_lock(&device->lock);
 	const bool removed = device->removed;

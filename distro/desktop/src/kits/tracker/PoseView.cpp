@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -293,7 +292,7 @@ BPoseView::BPoseView(Model* model, uint32 viewMode)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	font_height listHeight;
 	be_plain_font->GetHeight(&listHeight);
 	fListElemHeight = ceilf(listHeight.ascent + listHeight.descent
@@ -555,7 +554,7 @@ BPoseView::RestoreState(AttributeStreamNode* node)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool restoredState = false;
 // SPDX-SnippetEnd
 	RestoreColumnState(node);
@@ -591,7 +590,7 @@ BPoseView::RestoreState(AttributeStreamNode* node)
 					fViewState = state;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 					restoredState = true;
 // SPDX-SnippetEnd
 				}
@@ -606,7 +605,7 @@ BPoseView::RestoreState(AttributeStreamNode* node)
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	if (IsDesktopView() && !restoredState)
 		fViewState->SetIconSize(48);
@@ -622,7 +621,7 @@ BPoseView::RestoreState(const BMessage &message)
 	BViewState* state = BViewState::InstantiateFromMessage(message);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool restoredState = state != NULL;
 // SPDX-SnippetEnd
 	if (state != NULL) {
@@ -636,7 +635,7 @@ BPoseView::RestoreState(const BMessage &message)
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	if (IsDesktopView() && !restoredState)
 		fViewState->SetIconSize(48);
@@ -811,7 +810,7 @@ BPoseView::StringWidth(const char* str, int32 len) const
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 _IsMountPoint(const Model* model)
 {
@@ -875,7 +874,7 @@ BPoseView::SavePoseLocations(BRect* frameIfDesktop)
 			Model* model = pose->TargetModel();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (_IsMountPoint(model)) {
 				// Writing the icon position into the mounted filesystem
 				// blocks Tracker. The icon still moves until the next boot.
@@ -1091,7 +1090,7 @@ BPoseView::AttachedToWindow()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Row height must cover the whole glyph or the date column overlaps
 	// (Haiku #16853).
 	font_height listHeight;
@@ -1178,7 +1177,7 @@ BPoseView::GetLayoutInfo(uint32 mode, BPoint* grid, BPoint* offset) const
 		{
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			const float gridOffset = ceilf(IconSizeInt() * 0.5f),
 				offsetValue = ceilf(IconSizeInt() * 0.25f);
 // SPDX-SnippetEnd
@@ -1744,7 +1743,7 @@ BPoseView::AddVolumePoses()
 	SortPoses();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (ViewMode() != kListMode)
 		CheckAutoPlacedPoses();
 // SPDX-SnippetEnd
@@ -2518,7 +2517,7 @@ BPoseView::MessageReceived(BMessage* message)
 		case B_CANCEL:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		{
 			// Escape clears the cut and filtering, and otherwise the
 			// selection (Haiku #9216).
@@ -2530,14 +2529,14 @@ BPoseView::MessageReceived(BMessage* message)
 				StopTypeAheadFiltering();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			else if (!hadClipboard)
 				ClearSelection();
 // SPDX-SnippetEnd
 			break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		}
 // SPDX-SnippetEnd
 
@@ -2909,7 +2908,7 @@ BPoseView::MessageReceived(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case B_COLORS_UPDATED:
 			if (HasSystemColors())
 				AdoptSystemColors();
@@ -3203,7 +3202,7 @@ BPoseView::ReadPoseInfo(Model* model, PoseInfo* poseInfo)
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// A position saved on the mounted volume is ignored. VBox Share
 	// otherwise comes back on top of Trash when Tracker starts again.
@@ -3677,7 +3676,7 @@ BPoseView::NewFolder(const BMessage* message)
 		BPose* pose = EntryCreated(targetModel->NodeRef(), &nodeRef, ref.name, &index);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (pose != NULL && ViewMode() != kListMode) {
 			RemoveFromVSList(pose);
 			fHintLocation = pose->Location(this);
@@ -3817,7 +3816,7 @@ BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 	// find an empty slot to put pose into
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	int32 slots = 0;
 // SPDX-SnippetEnd
 	while (SlotOccupied(rect, viewBounds)
@@ -3829,7 +3828,7 @@ BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 		if (checkValidLocation && !rect.Intersects(viewBounds)) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// The scan left the screen. Do not drop the icon on the
 			// first cell: that cell is usually already taken, so a late
 			// icon such as VBox Share lands on top of another one.
@@ -3840,7 +3839,7 @@ BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 			rect = pose->CalcRect(this);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			rect.InsetBy(-3, 0);
 			for (int32 guard = 0; guard < 400
 				&& SlotOccupied(rect, viewBounds); guard++) {
@@ -3853,7 +3852,7 @@ BPoseView::PlacePose(BPose* pose, BRect &viewBounds)
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (++slots >= 400)
 			break;
 // SPDX-SnippetEnd
@@ -3895,7 +3894,7 @@ BPoseView::IsValidLocation(const BRect& rect)
 	if (GetDeskbarFrame(&deskbarFrame) == B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		BPoint leftTop = deskbarFrame.LeftTop();
 		BPoint rightBottom = deskbarFrame.RightBottom();
 		ConvertFromScreen(&leftTop);
@@ -4014,13 +4013,13 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 		BRect rect(pose->CalcRect(this));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (!bounds.Contains(rect) || (desktop && !IsValidLocation(rect))) {
 // SPDX-SnippetEnd
 			if (!locationNeedsUpdating) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 				Invalidate(rect);
@@ -4028,7 +4027,7 @@ BPoseView::CheckPoseVisibility(BRect* newFrame)
 			}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			fHintLocation = pose->Location(this);
 			PlacePose(pose, bounds);
 // SPDX-SnippetEnd
@@ -4314,7 +4313,7 @@ BPoseView::ScrollIntoView(BRect poseRect)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (newPos != oldPos) {
 		// The range can still be the old folder when the pose just appeared
 		// (Haiku #16643).
@@ -4323,7 +4322,7 @@ BPoseView::ScrollIntoView(BRect poseRect)
 		SetScrollBarsTo(newPos);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	}
 // SPDX-SnippetEnd
 }
@@ -5826,7 +5825,7 @@ BPoseView::FSNotification(const BMessage* message)
 				CreateVolumePose(&volume);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				if (ViewMode() != kListMode)
 					CheckAutoPlacedPoses();
 // SPDX-SnippetEnd
@@ -6258,7 +6257,7 @@ BPoseView::AttributeChanged(const BMessage* message)
 			int32 fields;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (message->FindInt32("fields", &fields) != B_OK) {
 				// StyledEdit's stat notice sometimes omits the field mask.
 				// Still re-sort (Haiku #20261).
@@ -6267,7 +6266,7 @@ BPoseView::AttributeChanged(const BMessage* message)
 				continue;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			}
 // SPDX-SnippetEnd
 
@@ -6960,7 +6959,7 @@ BPoseView::KeyDown(const char* bytes, int32 count)
 		{
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Ctrl+Up/Down matches Home/End on a keyboard without those
 			// keys. Command+Up stays Open parent (Haiku #9974).
 			if ((key == B_UP_ARROW || key == B_DOWN_ARROW)
@@ -9395,7 +9394,7 @@ BPoseView::IconModeExtent() const
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BRect rect(fExtent);
 // SPDX-SnippetEnd
 	if (!rect.IsValid())
@@ -9776,20 +9775,20 @@ PoseCompareAddWidget(const BPose* p1, const BPose* p2, BPoseView* view)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 	int32 result = 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// We perform a loop in case there is a secondary sort.
 	// Each pass uses its own reverse flag (Haiku #14900).
 // SPDX-SnippetEnd
 	for (int32 count = 0; ; count++) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		bool reverse = count == 0 ? view->ReverseSort()
 			: view->ReverseSecondarySort();
 		BPose* primary = const_cast<BPose*>(reverse ? p2 : p1);
@@ -9940,7 +9939,7 @@ BPoseView::SetReverseSort(bool reverse)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 BPoseView::SetReverseSecondarySort(bool reverse)
 {
@@ -10038,7 +10037,7 @@ BPoseView::ResizeColumnToWidest(BColumn* column)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (maxWidth > column->Width()) {
 // SPDX-SnippetEnd
 		ResizeColumn(column, maxWidth);

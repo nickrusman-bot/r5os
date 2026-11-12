@@ -7,7 +7,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 9799738757 (star row 50), copyright 2026 Witold Bołt. The Haiku copyright
  * and the license above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -239,7 +239,7 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	if (status < B_OK) {
 		FATAL(("could not initialize journal: %s!\n", strerror(status)));
 		// SPDX-SnippetBegin
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 		delete fJournal;
 		fJournal = NULL;
@@ -263,7 +263,7 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	if (status != B_OK) {
 		FATAL(("could not initialize block bitmap allocator!\n"));
 		// SPDX-SnippetBegin
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 		delete fJournal;
 		fJournal = NULL;
@@ -307,7 +307,7 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	}
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	if (status != B_OK) {
 		// The block allocator may have started a transaction to repair the

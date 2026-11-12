@@ -81,7 +81,7 @@ Not built: turning off one device instead of the whole driver (needs a kernel se
 - Haiku's Devices files keep their Haiku MIT headers.
 - The icon is Haiku's Devices icon (MIT).
 - The PCI ID list is GPL-2.0-or-later or BSD-3-Clause; Device Manager uses it under BSD-3-Clause. The USB ID list states no license in the file (open point, the same list Haiku's Devices uses).
-- It links the administrator lock in `libr5ui.so`, which is MIT. Login, the side that checks the password and writes the file, stays GPL-3.0-or-later and is reached only by messages.
+- It links the administrator lock in `libr5ui.so`, which is MIT. Login, the side that checks the password and writes the file, is MIT too since 12 Nov 2026 and is reached only by messages.
 
 ## About
 

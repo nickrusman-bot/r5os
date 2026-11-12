@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -32,7 +31,7 @@
 #include "DHCPClient.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "SLAACClient.h"
 #include "DHCPv6Client.h"
 // SPDX-SnippetEnd
@@ -44,7 +43,7 @@ static const uint32 kMsgReadyToRun = 'rdyr';
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 AutoconfigLooper::AutoconfigLooper(BMessenger target, const char* device,
 	bool autoIPv4, bool autoIPv6)
 // SPDX-SnippetEnd
@@ -54,14 +53,14 @@ AutoconfigLooper::AutoconfigLooper(BMessenger target, const char* device,
 	fCurrentClient(NULL),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fSLAACClient(NULL),
 	fDHCPv6Client(NULL),
 // SPDX-SnippetEnd
 	fLastMediaStatus(0),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fJoiningNetwork(false),
 	fAutoIPv4(autoIPv4),
 	fAutoIPv6(autoIPv6)
@@ -77,7 +76,7 @@ AutoconfigLooper::~AutoconfigLooper()
 	_RemoveClient();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	_RemoveSLAAC();
 	_RemoveDHCPv6();
 // SPDX-SnippetEnd
@@ -94,7 +93,7 @@ AutoconfigLooper::_RemoveClient()
 	fCurrentClient = NULL;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 }
 
 
@@ -221,7 +220,7 @@ AutoconfigLooper::_ReadyToRun()
 	if (interface.HasLink()) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (fAutoIPv4)
 			_ConfigureIPv4();
 		if (fAutoIPv6)
@@ -271,7 +270,7 @@ AutoconfigLooper::_NetworkMonitorNotification(BMessage* message)
 				// Reconfigure the interface when we have a link again
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				if (fAutoIPv4)
 					_ConfigureIPv4();
 				if (fAutoIPv6)
@@ -281,7 +280,7 @@ AutoconfigLooper::_NetworkMonitorNotification(BMessage* message)
 				_RemoveClient();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				_RemoveSLAAC();
 				_RemoveDHCPv6();
 				fJoiningNetwork = false;

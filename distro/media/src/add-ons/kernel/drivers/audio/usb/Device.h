@@ -14,7 +14,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // The enable bitmap of B_MULTI_GET/SET_ENABLED_CHANNELS holds this many
 // channels (16 bytes). A stream stops at this channel, so several
 // 64-channel streams cannot write past it.

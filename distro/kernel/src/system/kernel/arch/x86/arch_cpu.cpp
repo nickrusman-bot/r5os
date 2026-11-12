@@ -10,10 +10,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright lines, the MIT License, and the NewOS
- * notice above still cover the original work. A build that ships both follows
- * GPL-3.0-or-later, and those notices stay on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -44,7 +43,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "r5_pstate.h"
 // SPDX-SnippetEnd
 #include <boot/kernel_args.h>
@@ -883,7 +882,7 @@ detect_cpu_topology(int currentCPU, cpu_ent* cpu, uint32 maxBasicLeaf,
 					detect_amd_cache_topology(maxExtendedLeaf);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				// The raw words behind the SMT and core masks, once, so a
 				// boot log shows what the topology was built from.
 				cpuid_info raw;
@@ -1152,7 +1151,7 @@ find_microcode_amd(addr_t data, size_t size, uint32 patchLevel)
 	for (uint32 i = 0; table[i].installed_cpu != 0; i++) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (signature == table[i].installed_cpu) {
 			equiv_id = table[i].equiv_cpu;
 // SPDX-SnippetEnd
@@ -1867,7 +1866,7 @@ arch_cpu_init_post_modules(kernel_args* args)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	r5_pstate_publish();
 	dprintf("R5 kernel: arch_cpu from distro, microcode match uses installed_cpu\n");
 	// SPDX-SnippetEnd

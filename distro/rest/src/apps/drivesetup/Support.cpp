@@ -11,10 +11,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -130,7 +129,7 @@ SizeSlider::SizeSlider(const char* name, const char* label,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	off_t units = MaxPartitionSize() / fGranularity;
 	if (units < 1)
 		units = 1;
@@ -138,7 +137,7 @@ SizeSlider::SizeSlider(const char* name, const char* label,
 	SetKeyIncrementValue(int32(1024 * 1024 * 1.0 * kMaxSliderLimit
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		/ units + 0.5));
 // SPDX-SnippetEnd
 
@@ -165,7 +164,7 @@ SizeSlider::SetValue(int32 value)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	off_t maxSize = MaxPartitionSize();
 	if (maxSize <= 0) {
 		fSize = 0;
@@ -212,7 +211,7 @@ SizeSlider::SetSize(off_t size)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	off_t maxSize = MaxPartitionSize();
 	off_t units = maxSize / fGranularity;
 	if (units < 1)

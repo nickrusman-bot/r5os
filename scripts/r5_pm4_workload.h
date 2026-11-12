@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Copies of the GFX9 workload packets for the host checker. The kernel
  * ring in gfx9_start.cpp is not built here. scripts/check-pm4.py compares

@@ -18,29 +18,29 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 Location: `distro/media/` `usb_midi`, `multi_audio`, `usb_audio`, the media server, and the media kit.
 
-The files stay Haiku's, MIT, copyright the authors named in each file. The added behavior is ported from RenkuOS commits `fe2de4aa60`, `cb61494f02`, `7405980fad`, `303b85eae5`, `bd571637d2`, `cf885a005b`, `8db4b0d1b4`, `8d3c445d68`, `428e08cd07`, `4b157fb134`, `bc165f5613`, `d1028141c2`, `cf12459a32`, `917e0e9e30`, `2aee4b6c3c`, `e95a210256`, `a842555ed6`, and `b3dc1212e4`. Authors: David Beckman, rations, and atomozero. The Roland cable table is facts about the hardware. No ALSA code is included. The product-name read and the playback pacing from an explicit feedback endpoint are the same ideas as the Media-OS `usb_audio` driver and are written on our file. The Haiku MIT headers stay. The R5 snippets that were already in these files stay GPL-3.0-or-later.
+The files stay Haiku's, MIT, copyright the authors named in each file. The added behavior is ported from RenkuOS commits `fe2de4aa60`, `cb61494f02`, `7405980fad`, `303b85eae5`, `bd571637d2`, `cf885a005b`, `8db4b0d1b4`, `8d3c445d68`, `428e08cd07`, `4b157fb134`, `bc165f5613`, `d1028141c2`, `cf12459a32`, `917e0e9e30`, `2aee4b6c3c`, `e95a210256`, `a842555ed6`, and `b3dc1212e4`. Authors: David Beckman, rations, and atomozero. The Roland cable table is facts about the hardware. No ALSA code is included. The product-name read and the playback pacing from an explicit feedback endpoint are the same ideas as the Media-OS `usb_audio` driver and are written on our file. The Haiku MIT headers stay. The R5 snippets in these files are MIT.
 
 ### PCI segments
 
-The x86 PCI host files are Haiku's. Copyright 2022 Haiku, Inc., and the earlier authors named in `pci.cpp`. License: MIT. The code that keeps a firmware segment other than segment 0 is copyright 2026 R5OS Contributors. Those snippets are GPL-3.0-or-later. The Haiku headers stay.
+The x86 PCI host files are Haiku's. Copyright 2022 Haiku, Inc., and the earlier authors named in `pci.cpp`. License: MIT. The code that keeps a firmware segment other than segment 0 is copyright 2026 R5OS Contributors. Those snippets are MIT. The Haiku headers stay.
 
 ### Fault signal
 
 Location: `distro/kernel/src/system/kernel/signal.cpp`, `distro/kernel/headers/private/kernel/ksignal.h`, and the page-fault call in `distro/kernel/src/system/kernel/vm/vm.cpp`.
 
-The files are Haiku's. Copyright the Haiku authors named in each file. License: MIT, and NewOS for `vm.cpp`. The added blocks are haiku-pi `6e517bb52c`: a blocked or ignored fault signal is reset to the default and unblocked before it is sent. Copyright 2026 Witold Bołt. The snippets are distributed as GPL-3.0-or-later. The Haiku headers stay. ARM64 `arch_int.cpp` is not included.
+The files are Haiku's. Copyright the Haiku authors named in each file. License: MIT, and NewOS for `vm.cpp`. The added blocks are haiku-pi `6e517bb52c`: a blocked or ignored fault signal is reset to the default and unblocked before it is sent. Copyright 2026 Witold Bołt. The snippets are MIT, like the file. The Haiku headers stay. ARM64 `arch_int.cpp` is not included.
 
 ### Exited thread stack
 
 Location: `distro/kernel/src/system/kernel/thread.cpp`.
 
-The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's `thread.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `e09cfa1d9e`: an exited thread's stack stays while its team goes down. Copyright 2026 Witold Bołt. The snippet is MIT, like the file. The Haiku header stays.
 
 ### BFS I/O vnode release
 
 Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/kernel_interface.cpp`.
 
-The file is Haiku's BFS interface. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `44cc183c0c` (star row 57): the last reference from a finished I/O is released through `vfs_put_vnode()`. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's BFS interface. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `44cc183c0c` (star row 57): the last reference from a finished I/O is released through `vfs_put_vnode()`. Copyright 2026 Witold Bołt. The snippet is MIT, like the file. The Haiku header stays.
 ### USB controller
 
 Location: `distro/kernel/src/add-ons/kernel/busses/usb/xhci.cpp`, `xhci.h`, `xhci_hardware.h`, `ehci.cpp`, `ehci.h`, `ehci_hardware.h`, `uhci.cpp`, `uhci.h`, `ohci.cpp`, `ohci.h`, `distro/kernel/src/add-ons/kernel/bus_managers/usb/Device.cpp`, `Hub.cpp`, `usb_private.h`, `Object.cpp`, `BusManager.cpp`, `Stack.cpp`, and `distro/kernel/src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp`.
@@ -109,7 +109,7 @@ air/OS (airos-works/haiku), copyright jmgasper:
 - `d0df427f165f0dc6ef45c5d675d841200f242ee0` frees the camera when its consumer dies. Co-Authored-By: Claude Fable 5.1. `Producer.cpp` and `Producer.h` only.
 - `0af4c0889e` keeps several isochronous transfers queued, in `usb_raw` and the USB kit, so a packet is not lost between two reads. The webcam add-on reads that stream.
 
-`distro/media/src/bin/camtest/` is R5's own test. License: GPL-3.0-or-later. It is not from air/OS and it is not camgrab.
+`distro/media/src/bin/camtest/` is R5's own test. License: MIT. It is not from air/OS and it is not camgrab.
 
 ### Touchpads and TrackPoint
 
@@ -144,39 +144,39 @@ air/OS (airos-works/haiku), copyright jmgasper:
 
 Location: `distro/kernel/src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp`.
 
-The file is Haiku's USB disk driver. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `d3cc8e3fd1` (star row 54): the I/O schedulers are deleted before the device lock is taken, and a removed disk's queued transfer returns at once. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's USB disk driver. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `d3cc8e3fd1` (star row 54): the I/O schedulers are deleted before the device lock is taken, and a removed disk's queued transfer returns at once. Copyright 2026 Witold Bołt. The snippet is MIT, like the file. The Haiku header stays.
 ### BFS mount cleanup
 
 Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/Volume.cpp`.
 
-The file is Haiku's BFS volume. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `9799738757` (star row 50): a failed mount deletes the journal before the block cache. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's BFS volume. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `9799738757` (star row 50): a failed mount deletes the journal before the block cache. Copyright 2026 Witold Bołt. The snippet is MIT, like the file. The Haiku header stays.
 ### Profiler timer
 
 Location: `distro/kernel/src/system/kernel/debug/user_debugger.cpp` and `distro/kernel/src/system/kernel/scheduler/scheduler.cpp`.
 
-The files are Haiku's. Copyright the Haiku authors named in the files. License: MIT, and NewOS for the scheduler. The blocks are haiku-pi `5180e96119` (star row 23): a profiling timer is cancelled when its thread exits or is switched away, and it is unlinked before it is armed again. Copyright 2026 Witold Bołt. The snippets are distributed as GPL-3.0-or-later. The Haiku headers stay.
+The files are Haiku's. Copyright the Haiku authors named in the files. License: MIT, and NewOS for the scheduler. The blocks are haiku-pi `5180e96119` (star row 23): a profiling timer is cancelled when its thread exits or is switched away, and it is unlinked before it is armed again. Copyright 2026 Witold Bołt. The snippets are MIT, like the file. The Haiku headers stay.
 ### I/O request iteration
 
 Location: `distro/kernel/src/system/kernel/device_manager/IORequest.cpp` and `IORequest.h`.
 
-The files are Haiku's. Copyright the Haiku authors named in the files. License: MIT. One block is haiku-pi `90fa3bc401` (star row 19): a fragmented file is walked in a loop instead of by recursion. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku headers stay.
+The files are Haiku's. Copyright the Haiku authors named in the files. License: MIT. One block is haiku-pi `90fa3bc401` (star row 19): a fragmented file is walked in a loop instead of by recursion. Copyright 2026 Witold Bołt. The snippet is MIT, like the file. The Haiku headers stay.
 ### Page writer flush after a timeout
 
 Location: `distro/kernel/src/system/kernel/vm/vm_page_writer.cpp`.
 
-The file is Haiku's page writer. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `1539d29eee` (star row 18): when the flush wait times out, the modified pages already queued are still written. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's page writer. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `1539d29eee` (star row 18): when the flush wait times out, the modified pages already queued are still written. Copyright 2026 Witold Bołt. The snippet is MIT, like the file. The Haiku header stays.
 
 ### Wired range shrink
 
 Location: `distro/kernel/src/system/kernel/vm/vm.cpp`.
 
-The file is Haiku's `vm.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `6f810ed2d7`: a partial wire shrinks to the pages that were wired. Another block is haiku-pi `894c4abe7f` (star row 21): a protection change does not insert a copy-on-write cache above a file. Copyright 2026 Witold Bołt. The snippets are distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's `vm.cpp`. Copyright the Haiku authors named in the file. License: MIT and NewOS. One block is haiku-pi `6f810ed2d7`: a partial wire shrinks to the pages that were wired. Another block is haiku-pi `894c4abe7f` (star row 21): a protection change does not insert a copy-on-write cache above a file. Copyright 2026 Witold Bołt. The snippets are MIT, like the file. The Haiku header stays.
 
 ### Runtime-loader TLS generation
 
 Location: `distro/rest/src/system/runtime_loader/elf_tls.cpp`.
 
-The file is Haiku's `elf_tls.cpp`. Copyright 2014 Paweł Dziepak. License: MIT. One block is the haiku-pi change `5db923abc6`: a new thread's TLS vector starts at the current generation. Copyright 2026 Witold Bołt. The startup images' TLS template bytes are also placed at a fixed offset from the thread pointer. That placement is copyright 2026 R5OS Contributors. The snippets are distributed as GPL-3.0-or-later. The Haiku header stays.
+The file is Haiku's `elf_tls.cpp`. Copyright 2014 Paweł Dziepak. License: MIT. One block is the haiku-pi change `5db923abc6`: a new thread's TLS vector starts at the current generation. Copyright 2026 Witold Bołt. The startup images' TLS template bytes are also placed at a fixed offset from the thread pointer. That placement is copyright 2026 R5OS Contributors. The snippets are MIT, like the file. The Haiku header stays.
 
 ### Teapot control points
 
@@ -217,7 +217,7 @@ Tracker preferences gain the Network shares page, and the Mount menu lists share
 
 The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is `LICENSES/Unlicense.txt`. The Apache-2.0 text is not in `LICENSES/` yet.
 
-R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
+R5-owned source in this tree is MIT where the file is ours as a whole (since 12 Nov 2026). The R5 artwork stays GPL-3.0-or-later. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
 
 ### CPU topology, scheduler and deep idle
 
@@ -231,7 +231,7 @@ air/OS (airos-works/haiku), copyright jmgasper:
 - `2c48d1ae0ca03c267b2bd278aef39567f8d80ce2`, `32a4200329c6e4b9fc8830e9af63e5f5b212fb8f`, and `e24004dc25f370061be94abbc1009a88e0a71433` let the ACPI C-state module run on AMD and newer firmware, and choose the state by how long a CPU stays idle.
 - `30da1eeda2b5e7d5d49d28b7ebcd95305b54e5df` takes the ACPI processor ids only from enabled MADT entries (`apic.cpp`, `ioapic.cpp`), so the ACPI C-state module can match every CPU.
 
-The line that prints the raw CPUID words of the topology is R5's own, GPL-3.0-or-later, in SPDX-Snippet tags.
+The line that prints the raw CPUID words of the topology is R5's own, MIT, in SPDX-Snippet tags.
 
 ### Device Manager
 
@@ -243,7 +243,7 @@ Device Manager is MIT. It builds Haiku's Devices code unchanged from `src/apps/d
 
 Oracle VirtualBox 7.2.22 Haiku additions. License: GPL-3.0-only. Some IPRT files are GPL-3.0-only OR CDDL-1.0; we take the GPL-3.0-only choice. The Oracle tarball is not in git. The R5 build fixes are `distro/vbox-guest/virtualbox-7.2.22-r5os.patch`. The binaries are not in git. The daily image installs them, plus the unmodified GNU GPL version 3 and that source, at `/boot/system/non-packaged/data/licenses/virtualbox`. They are not MIT.
 
-The “or later” name on `LICENSES/GPL-3.0-or-later.txt` is the grant for new R5 code. It is not added to the VirtualBox sources. Haiku’s MIT notices stay on the Haiku files. See `docs/LICENSING.md` and `distro/vbox-guest/README.md`.
+The “or later” name on `LICENSES/GPL-3.0-or-later.txt` is the grant for the R5 artwork. It is not added to the VirtualBox sources. Haiku’s MIT notices stay on the Haiku files. See `docs/LICENSING.md` and `distro/vbox-guest/README.md`.
 
 ### OpenGL stack on the image
 

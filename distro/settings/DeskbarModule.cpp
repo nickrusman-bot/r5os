@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Desktop and Deskbar page. Messages the running Deskbar.
  * Does not write Deskbar's settings file. The separate preferences
  * program stays installed.

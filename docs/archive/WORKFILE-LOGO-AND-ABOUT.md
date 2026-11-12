@@ -31,7 +31,7 @@ An organic, fluid ring (viewBox `0 0 100 100`) whose inner negative space forms 
 </svg>
 ```
 
-- Store the canonical vector source in `distro/artwork/r5-symbol.svg` with an SPDX sidecar or comment (`SPDX-FileCopyrightText: 2026 R5OS Contributors`, `SPDX-License-Identifier: GPL-3.0-or-later`).
+- Store the canonical vector source in `distro/artwork/r5-symbol.svg` with an SPDX sidecar or comment (`SPDX-FileCopyrightText: 2026 R5OS Contributors`, `SPDX-License-Identifier: MIT`).
 
 ### 1.2 Typography Rule (`AGENTS.md` § Name)
 - Never render `R5OS` in user-facing artwork.

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Stage P. Each step is one packet type copied from the eleventh-stick
  * dump, with only the addresses moved onto the caller's test page.

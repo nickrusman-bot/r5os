@@ -866,7 +866,7 @@ ClockSelector::ClockSelector(AudioControlInterface*	interface,
 	TRACE(UAC, "Clock Selector:%d >>>\n", descriptor->terminal_id);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// UAC 2.0 Table 4-11: bClockID, bNrInPins, baCSourceID[bNrInPins].
 	const uint8* bytes = (const uint8*)Header;
 	if (bytes[0] >= 5) {
@@ -894,7 +894,7 @@ ClockMultiplier::ClockMultiplier(AudioControlInterface*	interface,
 	TRACE(UAC, "Clock Multiplier:%d >>>\n",	descriptor->terminal_id);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// UAC 2.0 Table 4-12: bClockID, bCSourceID.
 	const uint8* bytes = (const uint8*)Header;
 	if (bytes[0] >= 5)
@@ -1883,7 +1883,7 @@ AudioControlInterface::_ListMixControlsPage(int32& index,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // A terminal's bCSourceID may name a clock selector or a clock multiplier.
 // The sampling frequency control lives on the clock source behind them
 // (UAC 2.0 § 5.2.5.1). A selector follows its current pin (CX_SELECTOR

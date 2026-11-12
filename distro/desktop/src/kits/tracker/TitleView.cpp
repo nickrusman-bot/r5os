@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -79,7 +78,7 @@ _DrawLine(BPoseView* view, BPoint from, BPoint to)
 	color_which highColor = view->HighUIColor(&tint);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	float lineTint = view->LowColor().IsLight() ? B_DARKEN_1_TINT : B_LIGHTEN_1_TINT;
 	view->SetHighUIColor(view->LowUIColor(), lineTint);
 // SPDX-SnippetEnd
@@ -257,7 +256,7 @@ BTitleView::Draw(BRect /*updateRect*/, bool useOffscreen, bool updateOnly,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	rgb_color baseColor = ui_color(B_PANEL_BACKGROUND_COLOR);
 // SPDX-SnippetEnd
 	be_control_look->DrawButtonBackground(view, bounds, bounds, baseColor, 0,
@@ -537,7 +536,7 @@ BColumnTitle::Draw(BView* view, bool pressed)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	view->SetHighUIColor(B_DOCUMENT_TEXT_COLOR, pressed ? B_DARKEN_1_TINT : 1.0f);
 // SPDX-SnippetEnd
 	view->SetLowColor(baseColor);
@@ -554,7 +553,7 @@ BColumnTitle::Draw(BView* view, bool pressed)
 		BPoint triangle[3];
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		bool reverse = secondary
 			? fParent->PoseView()->ReverseSecondarySort()
 			: fParent->PoseView()->ReverseSort();
@@ -840,7 +839,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Shift-click on the secondary column cycles ascending, descending,
 	// then off. A plain click clears the secondary sort (Haiku #14900).
 	// The secondary reverse flag is not written into the view-state
@@ -850,7 +849,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 		if (shift && secondarySort) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			bool primaryReverse = poseView->ReverseSort();
 			bool secondaryReverse = poseView->ReverseSecondarySort();
 // SPDX-SnippetEnd
@@ -858,7 +857,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 			poseView->SetSecondarySort(primarySort);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			poseView->SetReverseSort(secondaryReverse);
 			poseView->SetReverseSecondarySort(primaryReverse);
 		} else {
@@ -866,7 +865,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 			poseView->SetReverseSort(!poseView->ReverseSort());
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			poseView->SetSecondarySort(0);
 			poseView->SetReverseSecondarySort(false);
 		}
@@ -874,7 +873,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 	} else if (shift) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (hash == secondarySort) {
 			if (!poseView->ReverseSecondarySort())
 				poseView->SetReverseSecondarySort(true);
@@ -887,7 +886,7 @@ ColumnDragState::Clicked(BPoint /*where*/)
 			poseView->SetSecondarySort(hash);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			poseView->SetReverseSecondarySort(false);
 		}
 // SPDX-SnippetEnd
@@ -896,13 +895,13 @@ ColumnDragState::Clicked(BPoint /*where*/)
 		poseView->SetReverseSort(false);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 		poseView->SetSecondarySort(0);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		poseView->SetReverseSecondarySort(false);
 	}
 

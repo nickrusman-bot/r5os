@@ -19,7 +19,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // Upper bounds for counts that come from a caller of the ioctls.
 static const int32 kMaxMixItems = 1024;
 static const int32 kMaxBufferDescs = 32;
@@ -164,7 +164,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				description.request_channel_count = kMaxDescribedChannels;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// A negative count would become a huge copy below, and the
 			// channel list goes back to user memory only.
 			if (description.request_channel_count < 0)
@@ -179,7 +179,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			if (description.request_channel_count > 0) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				// Zeroed: only the channels the card has are filled in, and
 				// the whole array goes back to the caller.
 				channels = (multi_channel_info*)calloc(
@@ -236,7 +236,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			enable.enable_bits = enable_bits;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			uint32 channels = 0;
 			status_t status = _MultiGetEnabledChannels(&enable, &channels);
 			if (status != B_OK)
@@ -269,7 +269,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Read only the bytes this card's channels use: a caller sized
 			// for 8 channels passes one byte.
 			multi_channel_enable count;
@@ -293,7 +293,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 			enable.enable_bits = orig_enable_bits;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Write back only the bytes that were read: the caller's bitmap
 			// is sized for this card, not for kMaxEnabledChannels.
 			if (user_memcpy(enable.enable_bits, enable_bits,
@@ -346,7 +346,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// The count comes from the caller. It used to size an alloca on
 			// the kernel stack, and the pointer was not checked.
 			if (info.item_count < 0 || info.item_count > kMaxMixItems)
@@ -401,7 +401,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Cap the caller's count before it sizes the allocation.
 			if (info.control_count <= 0 || info.control_count > kMaxMixItems)
 				return B_BAD_VALUE;
@@ -451,7 +451,7 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// These counts sized arrays on the kernel stack. Each stream
 			// writes kSamplesBufferCount entries, so a smaller request is
 			// refused in Stream::GetBuffers.
@@ -616,7 +616,7 @@ Device::_ReadProductString(usb_device device, uint8 index, char* output,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The string is UTF-16LE. Taking the low byte of each character made a
 	// name with é or ü invalid UTF-8 in Media. A surrogate pair becomes '?'.
 	size_t chars = (actualLength - 2) / 2;
@@ -769,7 +769,7 @@ Device::_MultiGetEnabledChannels(multi_channel_enable* Enable,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (count != NULL)
 		*count = offset;
 // SPDX-SnippetEnd
@@ -880,7 +880,7 @@ Device::_MultiGetBuffers(multi_buffer_list* List)
 #endif
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A stream that refused the request (too few buffers or channels, a bad
 	// address) used to be reported as success with half-filled lists.
 	return status;
@@ -906,7 +906,7 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A stream that is stopped from another thread (a format or latency
 	// change) or whose transfers stop completing never releases the
 	// semaphore. Without a timeout this call then waited forever, and the
@@ -1020,7 +1020,7 @@ Device::TraceListMixControls(multi_mix_control_info* Info)
 	int32 i = 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// This loop runs even with tracing off. Stop at the filled count
 	// instead of reading past the allocation when no entry has id 0.
 	while (i < Info->control_count && Info->controls[i].id > 0) {

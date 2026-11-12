@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -1142,7 +1141,7 @@ ipv6_setsockopt(net_protocol* _protocol, int level, int option,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			memset(address, 0, sizeof(*address));
 			address->sin6_len = sizeof(*address);
 			address->sin6_family = AF_INET6;
@@ -1283,7 +1282,7 @@ ip6_select_hoplimit(net_protocol* _protocol, net_buffer* buffer)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 ipv6_prefer_nonlocal_source(net_interface* interface, sockaddr_in6& source,
 	const sockaddr_in6& destination)
@@ -1338,7 +1337,7 @@ ipv6_send_routed_data(net_protocol* _protocol, struct net_route* route,
 	sockaddr_in6& destination = *(sockaddr_in6*)buffer->destination;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	if (sDatalinkModule->is_local_address(sDomain, (sockaddr*)&destination,
 			NULL, NULL))
@@ -1428,7 +1427,7 @@ ipv6_send_data(net_protocol* _protocol, net_buffer* buffer)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (IN6_IS_ADDR_MULTICAST(&destination->sin6_addr) && protocol != NULL) {
 		uint32 index = 0;
 		if (protocol->multicast_address != NULL) {

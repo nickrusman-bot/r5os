@@ -10,10 +10,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -661,7 +660,7 @@ static uint32 radeon_hd_pci_bar_mmio(uint16 chipsetID);
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // amdgpu_doorbell_init maps PCI BAR 2 for BONAIRE and later. MMIO on
 // those parts is BAR 5. A size outside 0x460 bytes .. 16 MiB is left
 // unmapped and the GFX ring still starts from the write-pointer register.
@@ -728,7 +727,7 @@ radeon_hd_pci_bar_mmio(uint16 chipsetID)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static uint64
 radeon_align_down(uint64 value, uint64 align)
 {
@@ -805,7 +804,7 @@ radeon_hd_init(radeon_info &info)
 	TRACE("card(%" B_PRId32 "): %s: called\n", info.id, __func__);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	info.doorbell_area = -1;
 // SPDX-SnippetEnd
 
@@ -833,7 +832,7 @@ radeon_hd_init(radeon_info &info)
 	memset((void*)info.shared_info, 0, sizeof(radeon_shared_info));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	info.doorbell_area = -1;
 	info.shared_info->doorbell_area = -1;
 // SPDX-SnippetEnd
@@ -864,7 +863,7 @@ radeon_hd_init(radeon_info &info)
 	if (info.chipsetID >= RADEON_TAHITI) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// Tahiti+ stores this in MB. Raven leaves the register at
 		// 0x3fffff, which prints as 4194303 MB. Treat that as unknown.
 		uint32 memMb = read32(info.registers + CONFIG_MEMSIZE_TAHITI);
@@ -939,7 +938,7 @@ radeon_hd_init(radeon_info &info)
 		// we can recover as we have PCI FB bar, but this should be fixed
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (!radeon_hd_uses_dce(info.chipsetID)) {
 			// Raven leaves CONFIG_MEMSIZE unused. The PCI aperture stays
 			// the upper bound. The mapped picture is the boot framebuffer.
@@ -952,13 +951,13 @@ radeon_hd_init(radeon_info &info)
 			__func__);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		}
 // SPDX-SnippetEnd
 		info.shared_info->frame_buffer_size = fbBarSize;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		info.shared_info->graphics_memory_size = fbBarSize;
 // SPDX-SnippetEnd
 	} else if (info.shared_info->graphics_memory_size > fbBarSize) {
@@ -1005,7 +1004,7 @@ radeon_hd_init(radeon_info &info)
 	uint64 reservedBytes = 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	frame_buffer_boot_info* bootFrame
 		= (frame_buffer_boot_info*)get_boot_item(FRAME_BUFFER_BOOT_INFO, NULL);
 	if (bootFrame != NULL && bootFrame->physical_frame_buffer != 0
@@ -1032,7 +1031,7 @@ radeon_hd_init(radeon_info &info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!radeon_hd_uses_dce(info.chipsetID) && reservedBytes == 0) {
 		ERROR("%s: R5 radeon_hd: DCN without the boot framebuffer, "
 			"not claimed\n", __func__);
@@ -1049,7 +1048,7 @@ radeon_hd_init(radeon_info &info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (frambufferMapper.InitCheck() < B_OK && reservedBytes > 0) {
 		// The whole window did not map. Keep the picture, and publish
 		// an empty pool, which is the previous DCN mapping.
@@ -1087,7 +1086,7 @@ radeon_hd_init(radeon_info &info)
 	info.shared_info->frame_buffer_area = info.framebuffer_area;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	{
 		uint8* window = info.shared_info->frame_buffer;
 		// DCN keeps drawing into the firmware picture. DCE modeset still
@@ -1199,7 +1198,7 @@ radeon_hd_init(radeon_info &info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	radeon_map_doorbell(info);
 	if (!radeon_hd_uses_dce(info.chipsetID)) {
 		/* The PSP hole is whatever SETUP_TMR allocates. It is not
@@ -1246,7 +1245,7 @@ radeon_hd_uninit(radeon_info &info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	void r5_gfx9_kernel_stop();
 	r5_gfx9_kernel_stop();
 // SPDX-SnippetEnd
@@ -1256,7 +1255,7 @@ radeon_hd_uninit(radeon_info &info)
 	delete_area(info.rom_area);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (info.doorbell_area >= 0)
 		delete_area(info.doorbell_area);
 // SPDX-SnippetEnd

@@ -34,10 +34,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -263,7 +262,7 @@ TBarView::Draw(BRect)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (IsHidden())
 		return;
 
@@ -293,7 +292,7 @@ TBarView::MessageReceived(BMessage* message)
 	switch (message->what) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case B_COLORS_UPDATED:
 			SetViewUIColor(B_MENU_BACKGROUND_COLOR);
 			Invalidate();
@@ -668,7 +667,7 @@ TBarView::GetPreferredWindowSize(BRect screenFrame, float* width,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		windowWidth = kHiddenDimension;
 // SPDX-SnippetEnd
 	} else if (Vertical()) {

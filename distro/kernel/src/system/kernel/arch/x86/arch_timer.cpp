@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright, the MIT License, and the NewOS
- * notice above still cover the original work. A build that ships both follows
- * GPL-3.0-or-later, and those notices stay on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 #include <arch/timer.h>
@@ -29,7 +28,7 @@
 #include <cpuid.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <debug.h>
 // SPDX-SnippetEnd
 
@@ -355,7 +354,7 @@ calibration_loop_hpet(uint8 ticks, hpet_regs* hpet, uint64& tscDelta,
 	const uint64 period = HPET_GET_PERIOD(hpet);
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (period == 0) {
 		hpet->config = originalConfig;
 		return false;
@@ -364,7 +363,7 @@ calibration_loop_hpet(uint8 ticks, hpet_regs* hpet, uint64& tscDelta,
 	const uint64 frequency = 1000000000000000ULL / period;
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (frequency == 0) {
 		hpet->config = originalConfig;
 		return false;
@@ -398,7 +397,7 @@ calibration_loop_hpet(uint8 ticks, hpet_regs* hpet, uint64& tscDelta,
 	expired = ((end - start) * TIMER_CLKNUM_HZ) / frequency;
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (expired == 0)
 		return false;
 	// SPDX-SnippetEnd
@@ -409,7 +408,7 @@ calibration_loop_hpet(uint8 ticks, hpet_regs* hpet, uint64& tscDelta,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 r5_hpet_give_up_for_pit(bool& useHPET, uint8 pitChannel,
 	uint32& quickSampleCount, uint32& slowSampleCount)
@@ -461,7 +460,7 @@ quick_sample:
 				conversionFactorQuick, expired)) {
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			r5_hpet_give_up_for_pit(useHPET, pitChannel, quickSampleCount,
 				slowSampleCount);
 			goto quick_sample;
@@ -476,7 +475,7 @@ slower_sample:
 				conversionFactorSlower, expired)) {
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			r5_hpet_give_up_for_pit(useHPET, pitChannel, quickSampleCount,
 				slowSampleCount);
 			goto quick_sample;
@@ -498,7 +497,7 @@ slower_sample:
 				conversionFactorSlow, expired)) {
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			r5_hpet_give_up_for_pit(useHPET, pitChannel, quickSampleCount,
 				slowSampleCount);
 			goto quick_sample;
@@ -519,7 +518,7 @@ slower_sample:
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (expired == 0 || tscDeltaSlow == 0) {
 		if (useHPET) {
 			r5_hpet_give_up_for_pit(useHPET, pitChannel, quickSampleCount,
@@ -613,7 +612,7 @@ init_tsc_with_cpuid(kernel_args* args, uint32* conversionFactor)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	const uint64 tscKhz = uint64(khz) * numerator / denominator;
 	if (tscKhz == 0)
 		return;
@@ -659,7 +658,7 @@ init_tsc_with_msr(kernel_args* args, uint32* conversionFactor)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	const uint64 tscKhz = khz * numerator / denominator;
 	if (tscKhz == 0)
 		return;
@@ -688,7 +687,7 @@ init_tsc_on_hypervisor(kernel_args* args, uint32* conversionFactor)
 
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// Leaf present with EAX=0 still must not divide (Haiku #20400).
 		if (info.regs.eax != 0) {
 			uint64 clockSpeed = uint64(info.regs.eax) * 1000;
@@ -741,7 +740,7 @@ x86_init_tsc(kernel_args* args)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (conversionFactor == 0)
 		panic("failed to calibrate TSC");
 

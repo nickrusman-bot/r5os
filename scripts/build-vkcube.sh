@@ -1,7 +1,7 @@
 #!/bin/bash
 # Cross-build vkcube from Vulkan-Tools 1.4.367 and put it in vulkan_tools.
 # Also refreshes r5-wsi-window-test.sh inside the vulkanteapot package.
-# Apache-2.0 for cube.c. The window file is GPL-3.0-or-later.
+# Apache-2.0 for cube.c. The window file is MIT.
 set -eu
 HAIKU=/home/nickr/r5os/haiku
 SRCROOT=/home/nickr/r5os/mesa-build

@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, R5OS.
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Host fuzz harness for the MIDI 2.0 parsers. Build with AddressSanitizer.
  * Usage: midi2-fuzz <target> <seconds>
