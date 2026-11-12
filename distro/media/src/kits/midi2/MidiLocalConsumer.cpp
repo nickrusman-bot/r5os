@@ -287,6 +287,26 @@ dispatch_ump(BMidiLocalConsumer* consumer, uchar* data, size_t length,
 		size_t midiLength = (kind == B_PROGRAM_CHANGE
 			|| kind == B_CHANNEL_PRESSURE) ? 2 : 3;
 		consumer->Data(midi, midiLength, true, time);
+		return;
+	}
+
+	/* Type 0x1: clock, start, stop, continue, active sensing, reset, time
+	 * code, song position and song select. These were dropped, so a MIDI
+	 * 1.0 program did not see the clock of a UMP device. */
+	if (messageType == 0x1 && wordCount == 1) {
+		uchar midi[3];
+		midi[0] = (words[0] >> 16) & 0xff;
+		midi[1] = (words[0] >> 8) & 0x7f;
+		midi[2] = words[0] & 0x7f;
+		size_t midiLength = 0;
+		if (midi[0] >= 0xf8 || midi[0] == 0xf6)
+			midiLength = 1;
+		else if (midi[0] == 0xf1 || midi[0] == 0xf3)
+			midiLength = 2;
+		else if (midi[0] == 0xf2)
+			midiLength = 3;
+		if (midiLength > 0)
+			consumer->Data(midi, midiLength, true, time);
 	}
 }
 // SPDX-SnippetEnd

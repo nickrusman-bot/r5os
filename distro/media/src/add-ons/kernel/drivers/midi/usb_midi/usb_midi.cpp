@@ -1207,12 +1207,18 @@ usb_midi_read(driver_cookie* cookie, off_t position,
 
 const uint8 CINcode[] = {	/* see USB-MIDI Spec */
 	0x4,	/* 0x0 - sysex start */
-	0,	/* 0x1 -- undefined */
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* 0xF1 is a 2-byte system common message (CIN 0x2); it was 0 and was
+	 * never sent. 0xF6 is one byte (CIN 0x5); it was sent as two. */
+	0x2,	/* 0x1 -- MTC quarter frame */
 	0x3,	/* 0x2  -- song pos */
 	0x2,	/* 0x3 -- song select */
 	0,	/* 0x4 -- undefined */
 	0,	/* 0x5 -- undefined */
-	0x2,	/* 0x6  -- tune request */
+	0x5,	/* 0x6  -- tune request */
+// SPDX-SnippetEnd
 	0x5,	/* 0x7 -- sysex end */
 	0x5,	/* 0x8 -- clock */
 	0,	/* 0x9 -- undefined */

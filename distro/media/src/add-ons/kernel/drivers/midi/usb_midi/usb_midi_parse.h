@@ -64,6 +64,26 @@ usb_midi_ump_word_count(uint32_t first)
 }
 
 
+/* The size of any UMP, also of the reserved message types, so a receiver
+ * can step over a packet it does not know (UMP 1.1 § 2.1.4). The walk used
+ * usb_midi_ump_word_count and dropped the rest of a transfer at the first
+ * reserved type. Writing still accepts only the known types. */
+inline uint32_t
+usb_midi_ump_size(uint32_t first)
+{
+	switch (first >> 28) {
+		case 0x0: case 0x1: case 0x2: case 0x6: case 0x7:
+			return 1;
+		case 0x3: case 0x4: case 0x8: case 0x9: case 0xa:
+			return 2;
+		case 0xb: case 0xc:
+			return 3;
+		default:
+			return 4;
+	}
+}
+
+
 inline int
 usb_midi_sysex7_bytes(const uint32_t* words, uint8_t* status, uint8_t data[6])
 {
@@ -137,16 +157,17 @@ usb_midi_walk_ump(const uint8_t* bytes, size_t left,
 {
 	while (left >= 4) {
 		uint32_t word = usb_midi_load_le32(bytes);
-		uint32_t count = usb_midi_ump_word_count(word);
-		if (count == 0 || left < count * 4)
+		uint32_t count = usb_midi_ump_size(word);
+		if (left < count * 4)
 			break;
 
 		uint32_t words[4];
 		for (uint32_t i = 0; i < count; i++)
 			words[i] = usb_midi_load_le32(bytes + i * 4);
 
+		/* A reserved type is stepped over, not delivered. */
 		uint32_t group = (word >> 24) & 0x0f;
-		if (deliver != NULL)
+		if (deliver != NULL && usb_midi_ump_word_count(word) == count)
 			deliver(cookie, group, words, count);
 
 		bytes += count * 4;
