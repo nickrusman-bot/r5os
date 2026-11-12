@@ -1,0 +1,94 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+#
+# M10 stick, last step of boot 1: the short test for the standard account.
+# Sign in as that account, run check-user, sign out. The account runs:
+#   r5-gl-test --selftest       Zink with pixels ok
+#   VulkanTeapot --selftest     pixels ok
+#   r5-gpu-isolation            a write to another program's address that
+#                               faults in the account's own VMID (M5)
+# The files go to ~/m10/user-<account>/ in the account's own home, so a
+# standard account can write them. read-stick-logs.py copies ~/m10 of the
+# administrator and of every account under /boot/home/users.
+#
+# For the host tests: CHECK_LIVE=0 runs no program.
+
+who=$(id -un 2>/dev/null || echo unknown)
+home=${R5_HOME:-$HOME}
+keep=$home/m10/user-$who
+mkdir -p "$keep"
+report=$keep/check-user.txt
+: > "$report"
+bad=0
+live=${CHECK_LIVE:-1}
+bin=${R5_BIN:-/bin}
+
+emit() {
+	printf '%s\n' "$1" | tee -a "$report"
+}
+say() {
+	if [ "$1" -eq 0 ]; then
+		emit "PASS $2"
+	else
+		emit "FAIL $2"
+		bad=1
+	fi
+}
+have() {
+	if [ -s "$2" ] && grep -Eq -- "$1" "$2"; then
+		say 0 "$3"
+	else
+		say 1 "$3"
+	fi
+}
+none() {
+	if [ -s "$2" ] && ! grep -Eq -- "$1" "$2"; then
+		say 0 "$3"
+	else
+		say 1 "$3"
+	fi
+}
+runlive() {
+	name=$1
+	shift
+	: > "$keep/$name.txt"
+	if [ "$live" -eq 1 ]; then
+		timeout 180 "$@" > "$keep/$name.txt" 2>&1
+		echo "exit $?" >> "$keep/$name.txt"
+	fi
+}
+
+emit "check-user: account $who, uid $(id -u 2>/dev/null)"
+if [ "$(id -u 2>/dev/null)" = 0 ]; then
+	say 1 "account is a standard account (this one is uid 0)"
+else
+	say 0 "account is a standard account"
+fi
+
+runlive gl-test "$bin"/r5-gl-test --selftest
+have 'compared zink.*RADV.* and llvmpipe' "$keep/gl-test.txt" "r5-gl-test: compared zink RADV and llvmpipe"
+have '^pixels ok max 2' "$keep/gl-test.txt" "r5-gl-test: pixels ok max 2"
+
+runlive teapot "$bin"/VulkanTeapot --selftest
+have 'compared .*RADV.* and .*llvmpipe' "$keep/teapot.txt" "VulkanTeapot: compared RADV and llvmpipe"
+have '^pixels ok max 2' "$keep/teapot.txt" "VulkanTeapot: pixels ok max 2"
+none 'pixels MISMATCH' "$keep/teapot.txt" "VulkanTeapot: no pixels MISMATCH"
+
+# The isolation program: the owner's buffer stays unchanged, and the other
+# account's write faults in its own VMID. "vm fault not in syslog" means
+# the fault was not seen, which is not a pass.
+runlive isolation "$bin"/r5-gpu-isolation
+have '^owner unchanged' "$keep/isolation.txt" "isolation: owner unchanged"
+have '^vm fault addr ' "$keep/isolation.txt" "isolation: vm fault in the syslog"
+none 'vm fault not in syslog' "$keep/isolation.txt" "isolation: the fault was seen"
+have '^owner ok client' "$keep/isolation.txt" "isolation: owner ok"
+have '^exit 0' "$keep/isolation.txt" "isolation: exit 0"
+
+if [ "$bad" -eq 0 ]; then
+	emit PASS
+else
+	emit FAIL
+fi
+echo "check-user: files in $keep"
+[ "$bad" -eq 0 ]

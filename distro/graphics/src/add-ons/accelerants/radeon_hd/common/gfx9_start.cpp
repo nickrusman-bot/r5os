@@ -4351,3 +4351,21 @@ r5_gfx9_last_sequence()
 		return 0;
 	return *(volatile uint64*)(sRadeonGfx9Ring.fenceAddress + kFenceSequence);
 }
+
+
+/* M10 hang policy, after r5_gfx9_kernel_restart. The new user fence
+ * reads the last sequence handed out before the reset, so every job
+ * from before it counts as retired and sequences keep rising. The next
+ * job emits a full context switch on the new ring. Not part of the
+ * fixed start: it runs after it and writes no register. */
+void
+r5_gfx9_after_restart(void)
+{
+	if (sRadeonGfx9Ring.fenceAddress == NULL)
+		return;
+	uint8* cpu = r5_gfx9_vram_cpu(sRadeonGfx9Ring.fenceOffset + kR5UserFenceOffset);
+	if (cpu == NULL)
+		cpu = sRadeonGfx9Ring.fenceAddress + kR5UserFenceOffset;
+	*(volatile uint64*)cpu = sUserSequence;
+	memset(&sRingCtx, 0, sizeof(sRingCtx));
+}

@@ -13,6 +13,7 @@
 #include "gfx9_compute_ib.h"
 #include "r5_cs.h"
 #include "r5_gc9_regs.h"
+#include "r5_hang_ib.h"
 #include "r5_isolation_ib.h"
 #include "r5_pm4_workload.h"
 #include "r5_selftest_ib.h"
@@ -247,6 +248,7 @@ static const char* kSites[] = {
 	"distro/graphics/src/bin/r5-gpu-isolation/r5_isolation_ib.h:r5_isolation_fill_ib#2",
 	"distro/graphics/src/bin/r5-gpu-selftest/r5_selftest_ib.h:r5_selftest_fill_ib#1",
 	"distro/graphics/src/bin/r5-gpu-selftest/r5_selftest_ib.h:r5_selftest_fill_ib#2",
+	"distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_hang_ib.h:r5_hang_ib#1",
 	0
 };
 
@@ -302,6 +304,11 @@ main()
 	r5_pm4_stage_dma(words, 0x80003000ull, 0x80004000ull);
 	begin("stage-dma");
 	dump(words, 7);
+	n = r5_hang_ib(words, 256, 0x80001040ull);
+	if (n != R5_HANG_IB_DWORDS)
+		return 5;
+	begin("hang-ib");
+	dump(words, n);
 
 	for (i = 0; i < R5_P_COUNT; i++) {
 		char name[32];
