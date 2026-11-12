@@ -1245,15 +1245,21 @@ XHCI::CancelQueuedTransfers(Pipe* pipe, bool force)
 		return B_NO_INIT;
 	}
 
+	MutexLocker endpointLocker(endpoint->lock);
+
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// An empty endpoint has nothing to cancel. CodyCam's quit hits this
+	// after the stream's transfers have already completed.
 #ifndef TRACE_USB
-	if (force)
+	if (force && endpoint->used > 0)
 #endif
+	// SPDX-SnippetEnd
 	{
 		TRACE_ALWAYS("cancel queued transfers (%" B_PRId8 ") for pipe %p (%d)\n",
 			endpoint->used, pipe, pipe->EndpointAddress());
 	}
-
-	MutexLocker endpointLocker(endpoint->lock);
 
 	// Calling the callbacks while holding the endpoint lock could potentially
 	// cause deadlocks, so we instead store them in a pointer array. We need
@@ -2348,7 +2354,15 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 			pipe->Direction() == Pipe::In, pipe->Interval(), pipe->MaxPacketSize(),
 			usbDevice->Speed(), pipe->MaxBurst(), pipe->BytesPerInterval());
 		if (status != B_OK) {
-			TRACE_ERROR("unable to configure endpoint: %s\n", strerror(status));
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			// A default alternate advertises an isochronous endpoint with
+			// wMaxPacketSize 0. It is not configured until an alternate
+			// with bandwidth is selected.
+			if (status != B_BAD_VALUE || pipe->MaxPacketSize() != 0)
+			// SPDX-SnippetEnd
+				TRACE_ERROR("unable to configure endpoint: %s\n", strerror(status));
 			return status;
 		}
 
@@ -2643,7 +2657,12 @@ XHCI::ConfigureEndpoint(xhci_endpoint* ep, uint8 slot, uint8 number, uint8 type,
 	// maximum sized burst. (XHCI 1.2 § 4.11.7.1 p236.)
 	ep->max_burst_payload = (maxBurst + 1) * maxPacketSize;
 	if (ep->max_burst_payload == 0) {
-		TRACE_ERROR("ConfigureEndpoint() failed invalid max_burst_payload\n");
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		// Zero means the endpoint has no packet size. The caller refuses
+		// it without a syslog line.
+		// SPDX-SnippetEnd
 		return B_BAD_VALUE;
 	}
 
@@ -3234,6 +3253,18 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 		}
 		return;
 	}
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// The TD was already retired. An isochronous event-data completion,
+	// or the stop when CodyCam quits, can still name its TRB.
+	if (completionCode == COMP_SUCCESS || completionCode == COMP_SHORT_PACKET
+			|| completionCode == COMP_STOPPED
+			|| completionCode == COMP_STOPPED_LENGTH_INVALID) {
+		TRACE("TRB 0x%" B_PRIxPHYSADDR " was already retired\n", source);
+		return;
+	}
+	// SPDX-SnippetEnd
 	TRACE_ERROR("TRB 0x%" B_PRIxPHYSADDR " was not found in the endpoint!\n", source);
 }
 

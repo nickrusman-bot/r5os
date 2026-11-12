@@ -479,7 +479,12 @@ VideoConsumer::GetNextInput(int32* cookie, media_input* outInput)
 		return B_OK;
 	}
 
-	ERROR("VideoConsumer::GetNextInput - - BAD INDEX\n");
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// The media roster asks for the next input until this returns.
+	// That end of the list is not a fault.
+	// SPDX-SnippetEnd
 	return B_MEDIA_BAD_DESTINATION;
 }
 
