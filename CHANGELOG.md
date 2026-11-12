@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - One touchpad
+
+Stick 48 published the 5625U trackpad as two mice and three tablets. A click arrived only when one of the tablets happened to see it. The mode read that was meant to switch the pad timed out (`trackpad mode report was not read`, 4 bytes, TX abort). That read is gone. A precision touchpad (digitizer, touch pad) is now one `input/touchpad` device, from air/OS `a063548811` (`TouchpadProtocolHandler`, jmgasper, MIT). The mouse and tablet collections of that same device are not published. Opening it writes input mode 3 (contacts) and the surface switch, without reading the feature first. The input preferences page for a device whose name contains "Touchpad" is the one Haiku already ships; it applies once the device is a touchpad. The touchscreen stays a tablet.
+
+The mouse add-on keeps the current tap handling and adds the three air/OS gesture fixes on top. A change in the finger count does not jump the pointer (`94736a44f1`). The finger left after a two-finger gesture is not a tap (`1d69faffef`). Scrolling also sends `be:wheel_precise_delta_x/y` and `be:wheel_phase` (`bf91f88318`). `be:wheel_delta_x/y` stay whole steps.
+
+Not booted after this change. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-11 - The webcam add-on booted in QEMU
 
 The AMD64 image was built (`jam_exit=0`, `mesa_exit=0` at 20:41, Europe/Amsterdam). `usb_webcam.media_addon` links libjpeg (`HAVE_LIBJPEG`, package `libjpeg_turbo-3.1.4.1-1`). QEMU has no camera. The boot was TCG, without KVM. After Try R5 and Sign in, Tracker and Deskbar started, the session log says sign-in done, and the syslog has no panic. `camtest` printed `no camera` and exited 0, so the media roster answered. The syslog does not name `media_server` or `media_addon_server`. No high-bandwidth camera was attached, so the xHCI burst path was not exercised, and no frame was saved. A real camera, the built-in 04f2:b767 on the 5625U, and the microphone beside it, stay for the next stick. There is no What's new section and `distro/BUILD` stays the same.
