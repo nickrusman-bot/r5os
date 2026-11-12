@@ -7,6 +7,11 @@ Stick 48 published the 5625U trackpad as two mice and three tablets. A click arr
 The mouse add-on keeps the current tap handling and adds the three air/OS gesture fixes on top. A change in the finger count does not jump the pointer (`94736a44f1`). The finger left after a two-finger gesture is not a tap (`1d69faffef`). Scrolling also sends `be:wheel_precise_delta_x/y` and `be:wheel_phase` (`bf91f88318`). `be:wheel_delta_x/y` stay whole steps.
 
 Not booted after this change. There is no What's new section and `distro/BUILD` stays the same.
+## 2026-11-12 - R5Book: Vulkan, additions to Haiku kits, interface guidelines
+
+Four pages are added to `docs/r5book/`. **Accounts and sessions** tells a program who it runs as, where its settings go (`find_directory`, never `/boot/home`), how to ask Login to lock (`'lokc'`) or log out (`'lout'`), and to quit without a dialog at log out; Sign in and the lock screen are the worked example, with the first QEMU screenshots in the book. **Vulkan in a window** describes `VK_RFIVE_view_surface` for application developers: the create info, what `vkQueuePresentKHR` returns on R5, FIFO as the only present mode, the Lavapipe fallback while `gpu_present` is off, and porting. **Additions to Haiku kits** lists the public calls R5 added to existing classes: `BLocaleRoster::ApplySettings()` and `BFormattingConventions::CoerceFormatForClock()`. **Interface guidelines** gathers the rules from `docs/STYLE.md`, `docs/SETTINGS.md` and `AGENTS.md`: forms on the panel, cards, one accent button, icons, settings pages, accounts and words.
+
+`docs/LOOK.md` (rounded window chrome) is a plan and is not in the guidelines. The GPU driver interface is left for a later Driver Kit page. Checked in headless Edge at desktop width.
 
 ## 2026-11-12 - The R5Book, a developer guide to LibR5
 
