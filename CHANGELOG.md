@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - R5's own code is MIT
+
+Problem: R5's own code was GPL-3.0-or-later, with MIT only for libraries and public headers. The other Haiku-based systems (air/OS, RenkuOS, haiku-pi) are MIT, and RenkuOS takes MIT only, so they could not use R5's fixes, while R5 takes theirs. R5's GPL snippets also sat inside `libbe` sources (`Alert.cpp`, `Button.cpp`, `Box.cpp` and others).
+
+What changed: by the rights holder's decision, MIT is now the default for all new R5 code, and R5's existing code is relicensed to MIT. 421 files under `distro/`, `docs/`, `scripts/` and `tools/` had their SPDX identifier, their snippet identifiers or their "R5OS modifications" notice changed; no code line changed. The apply scripts that recognise an already copied file by that notice now match both the old and the new text. `AGENTS.md`, `docs/LICENSING.md` (new section "The change of 12 Nov 2026"), `THIRD_PARTY_NOTICES.md`, `README.md`, the website and the About Licenses text (`distro/about/licenses.txt`) say MIT.
+
+Rights: every commit in those directories is from the R5 accounts, with Cursor and Claude as co-authors. The haiku-pi blocks (Witold Bołt) and air/OS blocks (jmgasper) were changes to Haiku's MIT files with no other license stated, so they are marked MIT again with their authors' copyright. The Linux `amdgpu` files the GPU code follows were checked in Linux v6.12: all carry the MIT permission text.
+
+Not changed: the VirtualBox Guest Additions (GPL-3.0-only) and the R5 artwork and brand files (`distro/artwork/`, `r5_disk_badge.h`, `scripts/generate-r5-artwork.py`), which stay GPL-3.0-or-later until the rights holder decides. Builds published before this change keep their GPL-3.0-or-later offer. This history file is not rewritten.
+
+Tested: `ast.parse` of every script in `scripts/`. A diff check shows only license lines, the notices and the apply-script match changed. Not jammed, not booted. A check that the apply scripts still find their files is the next `scripts/apply-overlay.sh` run.
+
 ## 2026-11-12 - CPU topology, scheduler and deep idle from air/OS (build 10059)
 
 Stick 47 (the 14:58 anyboot of `110b185145`, sha256 `54829e08…`), one boot on the 5625U, logs in `generated/boot-5625u-47/syslog`:
