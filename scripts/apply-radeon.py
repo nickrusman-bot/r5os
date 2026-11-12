@@ -12,11 +12,14 @@ import pathlib
 import shutil
 import sys
 
+# The hashes recorded in docs/LICENSING.md and THIRD_PARTY_NOTICES.md: the
+# unmodified Linux v6.12 files with LF line ends. The check hashes with LF
+# line ends, so a Windows checkout with core.autocrlf (CRLF) also passes.
 CLEARSTATE_SHA256 = {
     "src/add-ons/accelerants/radeon_hd/clearstate_defs.h":
-        "59b4b9ad8370461554f6fedd12e63037c9087be7537fa17e8ae9a9d752076c57",
+        "70eb9f9a57d2cacb2ee2d7b9f17485384019ac03c845ce4bea941acdae137285",
     "src/add-ons/accelerants/radeon_hd/clearstate_gfx9.h":
-        "c0813551a629a5748cc1967232835c33bb3401a3ea2665a3b89dfe584e94e2f9",
+        "e885c7f6475efd74e7729688a70992ff9543979363eb029c628bd95627fb34b5",
 }
 
 FILES = (
@@ -211,7 +214,8 @@ def main() -> None:
             raise SystemExit(f"missing {source}")
         expected = CLEARSTATE_SHA256.get(relative)
         if expected is not None:
-            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            digest = hashlib.sha256(
+                source.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             print(f"sha256 {relative} {digest}")
             if digest != expected:
                 raise SystemExit(

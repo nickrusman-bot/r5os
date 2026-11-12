@@ -1,8 +1,15 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
- * Lock for machine settings. The preference app stays the signed-in user.
- * Sign in (uid 0) checks an administrator password and applies the change.
+ * SPDX-License-Identifier: MIT
+ *
+ * Part of libr5ui.so (docs/LIBR5.md, "Administrator lock"). Relicensed from
+ * GPL-3.0-or-later to MIT by the rights holder in November 2026, so any
+ * program, Device Manager included, can use it.
+ *
+ * Lock for machine settings. The program stays the signed-in person.
+ * Sign in (Login, uid 0) checks an administrator password and applies the
+ * change. A function or field that shipped does not change; add new ones at
+ * the end.
  */
 #ifndef R5_ADMIN_LOCK_H
 #define R5_ADMIN_LOCK_H
@@ -38,12 +45,19 @@ status_t r5_admin_relock();
 status_t r5_admin_set_clock(unsigned long seconds);
 status_t r5_admin_set_timezone(int32 offset, const char* name);
 status_t r5_admin_set_clock_gmt(bool gmt);
+// Blocks or unblocks one packaged driver under /boot/system. Login checks
+// the grant and refuses drivers the system needs to start.
+status_t r5_admin_set_driver_blocked(const char* driver, bool blocked,
+	BString& error);
 
 
-class AdminLockBar : public BGroupView {
+namespace BAppearanceKit {
+
+
+class BAdminLockBar : public BGroupView {
 public:
-								AdminLockBar();
-	virtual						~AdminLockBar();
+								BAdminLockBar();
+	virtual						~BAdminLockBar();
 	virtual	void				AttachedToWindow();
 	virtual	void				DetachedFromWindow();
 	virtual	void				MessageReceived(BMessage* message);
@@ -70,7 +84,16 @@ private:
 			bool				fAdmin;
 			bool				fUnlocked;
 			bool				fSyncing;
+
+			uint32				_reserved[4];
 };
+
+
+}	// namespace BAppearanceKit
+
+
+// The name the system preferences have always used.
+typedef BAppearanceKit::BAdminLockBar AdminLockBar;
 
 
 #endif

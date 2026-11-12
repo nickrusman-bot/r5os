@@ -38,35 +38,6 @@
 		draw an icon. Every call here goes through a public API: an HVIF buffer, a file's icon, or a MIME
 		type's icon. None of them draws the Settings preferences wrench.</p>
 
-		<!-- r5_icon -->
-		<section class="entry" id="r5_icon">
-			<div class="entry-header"><h2>r5_icon</h2><span class="kind">enum</span></div>
-			<p>The predefined icons. They are the unmodified Haiku and Tracker pictures. The numbers are part
-			of the contract: a new icon is added at the end, with the next number.</p>
-
-			<figure class="stage">
-				<div class="shot">
-					<span class="hvif" style="width:48px;height:48px">Tracker<br>back</span>
-					<span class="hvif" style="width:48px;height:48px">Tracker<br>forward</span>
-					<span class="hvif" style="width:48px;height:48px">Tracker<br>up</span>
-					<span class="hvif" style="width:48px;height:48px">Tracker<br>home</span>
-					<span class="hvif" style="width:48px;height:48px">Action_<br>Login</span>
-					<span class="hvif" style="width:48px;height:48px">Action_<br>Logout</span>
-				</div>
-				<figcaption><span>The six predefined icons at 48 pixels</span><span class="badge-mockup">Stand-ins &middot; screenshot follows</span></figcaption>
-			</figure>
-
-			<table class="spec">
-				<tr><th>Value</th><th>Number</th><th>Picture</th></tr>
-				<tr><td><code>R5_ICON_BACK</code></td><td>1</td><td>The arrow Tracker draws in its location bar</td></tr>
-				<tr><td><code>R5_ICON_FORWARD</code></td><td>2</td><td>Tracker's forward arrow</td></tr>
-				<tr><td><code>R5_ICON_UP</code></td><td>3</td><td>Tracker's up arrow</td></tr>
-				<tr><td><code>R5_ICON_HOME</code></td><td>4</td><td>The house Tracker draws on the home folder</td></tr>
-				<tr><td><code>R5_ICON_UNLOCKED</code></td><td>5</td><td>Haiku's <code>Action_Login</code>, an open lock</td></tr>
-				<tr><td><code>R5_ICON_LOCKED</code></td><td>6</td><td>Haiku's <code>Action_Logout</code>, a closed lock</td></tr>
-			</table>
-		</section>
-
 		<!-- bitmaps -->
 		<section class="entry" id="icon-bitmaps">
 			<div class="entry-header"><h2 class="plain">Icon bitmaps</h2><span class="kind">functions</span></div>
@@ -198,6 +169,35 @@ status_t r5_button_set_mime_icon(BButton* button, const char* type, float button
 <pre class="code">BButton* restart = <span class="k">new</span> BButton(<span class="s">"reboot"</span>, <span class="s">"Restart"</span>, <span class="k">new</span> BMessage(kRebootAction));
 restart-&gt;SetFont(&amp;buttonFont);
 r5_button_set_glyph(restart, R5_GLYPH_RESTART);</pre>
+		</section>
+
+		<!-- r5_icon -->
+		<section class="entry" id="r5_icon">
+			<div class="entry-header"><h2>r5_icon</h2><span class="kind">enum</span></div>
+			<p>The predefined icons. They are the unmodified Haiku and Tracker pictures. The numbers are part
+			of the contract: a new icon is added at the end, with the next number.</p>
+
+			<figure class="stage">
+				<div class="shot">
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>back</span>
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>forward</span>
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>up</span>
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>home</span>
+					<span class="hvif" style="width:48px;height:48px">Action_<br>Login</span>
+					<span class="hvif" style="width:48px;height:48px">Action_<br>Logout</span>
+				</div>
+				<figcaption><span>The six predefined icons at 48 pixels</span><span class="badge-mockup">Stand-ins &middot; screenshot follows</span></figcaption>
+			</figure>
+
+			<table class="spec">
+				<tr><th>Value</th><th>Number</th><th>Picture</th></tr>
+				<tr><td><code>R5_ICON_BACK</code></td><td>1</td><td>The arrow Tracker draws in its location bar</td></tr>
+				<tr><td><code>R5_ICON_FORWARD</code></td><td>2</td><td>Tracker's forward arrow</td></tr>
+				<tr><td><code>R5_ICON_UP</code></td><td>3</td><td>Tracker's up arrow</td></tr>
+				<tr><td><code>R5_ICON_HOME</code></td><td>4</td><td>The house Tracker draws on the home folder</td></tr>
+				<tr><td><code>R5_ICON_UNLOCKED</code></td><td>5</td><td>Haiku's <code>Action_Login</code>, an open lock</td></tr>
+				<tr><td><code>R5_ICON_LOCKED</code></td><td>6</td><td>Haiku's <code>Action_Logout</code>, a closed lock</td></tr>
+			</table>
 		</section>
 	</main>
 </div>

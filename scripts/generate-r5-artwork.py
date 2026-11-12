@@ -36,8 +36,9 @@ OUT_DIR = ARTWORK_DIR / "brand-kit"
 FONT_DIR = ROOT / "distro" / "fonts" / "manrope"
 WALLPAPER_SRC = ARTWORK_DIR / "r5-wallpaper.jpg"
 
-BOLD_TTF = FONT_DIR / "Manrope-Bold.ttf"
-REGULAR_TTF = FONT_DIR / "Manrope-Regular.ttf"
+# The files are lower case. Windows finds them either way; Linux (WSL) does not.
+BOLD_TTF = FONT_DIR / "manrope-bold.ttf"
+REGULAR_TTF = FONT_DIR / "manrope-regular.ttf"
 
 
 def save_png(image: Image.Image, path: pathlib.Path) -> None:
@@ -940,8 +941,16 @@ INSTALLED_NAMES = (
 )
 
 
+TEXT_SUFFIXES = {".svg", ".h", ".rdef", ".txt"}
+
+
 def sha256(path: pathlib.Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """Hash of the file. Text files are hashed with LF line ends, so a Windows
+    checkout with core.autocrlf (CRLF) and a Linux checkout (LF) agree."""
+    data = path.read_bytes()
+    if path.suffix in TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def produce(artwork_dir: pathlib.Path, kit_dir: pathlib.Path, badge_path: pathlib.Path) -> None:
