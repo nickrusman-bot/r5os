@@ -24,6 +24,8 @@ static const uid_t kMinPersonUid = 1000;
 const uint32 kMsgAdminAdd = 'r5aa';
 const uint32 kMsgAdminDelete = 'r5ad';
 const uint32 kMsgAdminSetDisabled = 'r5ax';
+// The lock messages below have the same values in libr5ui's
+// AdminLockProtocol.h. Change neither.
 const uint32 kMsgAdminQuery = 'r5aq';
 const uint32 kMsgAdminUnlock = 'r5au';
 const uint32 kMsgAdminRelock = 'r5al';
@@ -32,6 +34,9 @@ const uint32 kMsgAdminSetTimezone = 'r5az';
 const uint32 kMsgAdminSetClockGmt = 'r5ag';
 const uint32 kMsgAdminGetProfile = 'r5ah';
 const uint32 kMsgAdminSetProfile = 'r5af';
+// Device Manager: block or unblock one packaged kernel driver. Fields
+// "driver" (string, the driver file under /boot/system) and "blocked" (bool).
+const uint32 kMsgAdminSetDriverBlocked = 'r5dv';
 
 // How long an administrator password keeps one preference app unlocked.
 static const int32 kAdminGrantSeconds = 5 * 60;
@@ -52,6 +57,8 @@ status_t signed_in_name(BString& name);
 void clear_admin_grants();
 void refresh_machine_settings_access();
 status_t handle_admin_message(BMessage* request, BMessage& reply);
+// True when the sender is an administrator or holds a running grant.
+bool admin_sender_may_change(BMessage* request);
 
 
 #endif

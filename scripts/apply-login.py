@@ -44,6 +44,8 @@ def copy_sources() -> None:
     for name in (
         "DesktopWindow.cpp",
         "DesktopWindow.h",
+        "DriverAdmin.cpp",
+        "DriverAdmin.h",
         "Jamfile",
         "Login.rdef",
         "LockWindow.cpp",

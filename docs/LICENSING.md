@@ -23,6 +23,8 @@ Existing Haiku code keeps its original license and copyright notices. Do not rel
 
 The public MIDI kit (the headers plus `libmidi2.so`) is MIT. That is an exception to the GPL default, like the R5 GPU interface and the R5 DRM library, because every MIDI program links it. The R5 parts of the USB MIDI driver and of the MIDI server stay GPL-3.0-or-later.
 
+Device Manager (`distro/apps/devicemanager`) is MIT as a whole, an exception to the GPL default, so other Haiku-based systems can use it. Its own files are R5's; the Devices files it builds are Haiku's and stay MIT. It links the administrator lock in `libr5ui.so`. That lock (`distro/ui/AdminLock.*`) was GPL-3.0-or-later; in November 2026 the rights holder relicensed it to MIT and moved it into `libr5ui.so`, so MIT programs can link it. Login, which checks the password and writes the settings (`distro/users/AccountAdmin.cpp`, `distro/login/DriverAdmin.cpp`), stays GPL-3.0-or-later. Programs reach it only by messages, so they are not combined with it. Login compiles Haiku's `DriverUtils.cpp` (MIT) and Device Manager's `BlockedDrivers.cpp` (MIT), which is allowed in a GPL work. Details: `docs/DEVICE-MANAGER.md`.
+
 ## Kernel and drivers
 
 GPL-3.0-or-later is the default for new R5-owned code. It is not a rule that every kernel or driver file must use that license.

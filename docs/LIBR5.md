@@ -13,7 +13,7 @@ The R5Book (`docs/r5book/index.html`) shows each part with a picture, what it is
 | Library | Header | Source | What it is |
 |---|---|---|---|
 | `libr5icons.so` | `<R5Icons.h>` | `distro/icons` | Icons and icon buttons. `docs/ICONS.md` |
-| `libr5ui.so` | `<R5UI.h>` | `distro/ui` | The screen picture, cards, the sidebar, and the page heading. It links `libr5icons.so` because a locked sidebar row draws `R5_ICON_LOCKED` |
+| `libr5ui.so` | `<R5UI.h>` | `distro/ui` | The screen picture, cards, the sidebar, the page heading, and the administrator lock (`<AdminLock.h>`). It links `libr5icons.so` because a locked sidebar row draws `R5_ICON_LOCKED` |
 
 `scripts/apply-icons.py` and `scripts/apply-r5ui.py` copy the sources into the Haiku tree, copy the header to `headers/os/interface/`, and add the library to the regular image and the minimum image. On a running system the files are `/system/lib/libr5icons.so` and `/system/lib/libr5ui.so`. The soname is the file name, with no version suffix, the same way `libbe.so` is named.
 
@@ -301,3 +301,33 @@ float side = r5_avatar_icon_side(44);
 BBitmap* people = r5_mime_icon_bitmap("application/x-vnd.Be-PEPL", side);
 r5_avatar_draw(this, BRect(0, 0, 43, 43), people, true);
 ```
+
+
+## Administrator lock
+
+The machine-settings lock. The header is `<AdminLock.h>`. A program runs as the signed-in person. A change that needs an administrator goes to Sign in (Login, uid 0), which checks the grant and makes the change. An administrator starts unlocked. One unlock is a grant for that program for `kAdminGrantSeconds` (5 minutes). The password goes to Login in one message and is not logged or kept.
+
+Since November 2026 this is part of `libr5ui.so` and is MIT. It was GPL-3.0-or-later and compiled into each program; the rights holder relicensed it so any program can use it, Device Manager included. Settings, Users, Time, Screen, Network, Printers, Repositories, VirtualMemory and Device Manager link it. Login's side (`distro/users/AccountAdmin.cpp`, `distro/login/DriverAdmin.cpp`) stays GPL-3.0-or-later; a program talks to it only through messages.
+
+| Call | What it does |
+|---|---|
+| `r5_admin_query(administrator, unlocked)` | Asks Login. `unlocked` is true for an administrator or while a grant runs. Both are false when Login cannot be asked |
+| `r5_admin_change_allowed()` | `unlocked` from `r5_admin_query()` |
+| `r5_admin_prompt_unlock(target)` | Opens the unlock window. On success sends `kMsgAdminLockChanged` (`'r5ac'`) to `target` |
+| `r5_admin_unlock(name, password, error)` | The same without a window |
+| `r5_admin_relock()` | Ends this program's grant |
+| `r5_admin_set_clock(seconds)`, `r5_admin_set_timezone(offset, name)`, `r5_admin_set_clock_gmt(gmt)` | The clock and time zone (Time, Settings) |
+| `r5_admin_set_driver_blocked(driver, blocked, error)` | Turns a packaged driver under `/boot/system/add-ons/kernel/` off (`blocked` true) or on for the next start, in `/boot/system/settings/packages`. Login refuses drivers the system needs to start (the list of Haiku's Devices `IsCriticalDriver()`) |
+
+`BAppearanceKit::BAdminLockBar` is the lock row: a label and an Unlock button. Views in its window that are not exempt are disabled while the lock is closed; `SetExempt(view, true)` keeps one usable (the person's own account card in Users). `AdminLockBar` is a typedef for it, the name the preferences have always used. The class keeps `_reserved[4]` so it can get fields later.
+
+```cpp
+#include <AdminLock.h>
+
+BLayoutBuilder::Group<>(this, B_HORIZONTAL)
+	.Add(fRevertButton)
+	.AddGlue()
+	.Add(new BAppearanceKit::BAdminLockBar());
+```
+
+The message codes Login answers are in `distro/ui/AdminLockProtocol.h` (private) and `distro/users/AccountAdmin.h`, with the same values. A code that shipped does not change.

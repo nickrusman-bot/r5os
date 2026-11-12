@@ -7,9 +7,20 @@ UsePrivateHeaders kernel ;
 UsePrivateHeaders libroot ;
 UsePrivateHeaders shared ;
 
+# Turning drivers off and on for Device Manager (DriverAdmin.cpp).
+# DriverUtils.cpp is Haiku's (MIT), unchanged from the Devices app.
+# BlockedDrivers.cpp is Device Manager's (MIT).
+SubDirHdrs $(HAIKU_TOP) src apps devices ;
+SubDirHdrs $(HAIKU_TOP) src apps devicemanager ;
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src apps devices ] ;
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src apps devicemanager ] ;
+
 Application Login :
 	AccountAdmin.cpp
 	DesktopWindow.cpp
+	BlockedDrivers.cpp
+	DriverAdmin.cpp
+	DriverUtils.cpp
 	HomeLock.cpp
 	LockWindow.cpp
 	LoginApp.cpp
@@ -17,7 +28,8 @@ Application Login :
 	LoginView.cpp
 	SignInBackground.cpp
 	main.cpp
-	: be tracker translation libr5ui.so libr5icons.so [ TargetLibstdc++ ] localestub
+	: be tracker translation libr5ui.so libr5icons.so shared package
+		[ TargetLibstdc++ ] localestub
 	: Login.rdef
 ;
 

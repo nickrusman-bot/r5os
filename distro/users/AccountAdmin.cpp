@@ -1859,3 +1859,10 @@ handle_admin_message(BMessage* request, BMessage& reply)
 	reply.AddInt32("error", status == B_OK ? B_OK : status);
 	return status;
 }
+
+
+bool
+admin_sender_may_change(BMessage* request)
+{
+	return sender_may_change(request);
+}

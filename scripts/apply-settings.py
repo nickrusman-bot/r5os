@@ -115,10 +115,13 @@ def copy_sources() -> None:
         shutil.copy2(SRC / name, dest / name)
         (dest / name).touch()
         print(f"copied {name}")
+    # The administrator lock is in libr5ui.so now (public AdminLock.h).
+    # Remove the copies older runs put here, or they would shadow it.
     for name in ("AdminLock.cpp", "AdminLock.h", "AccountAdmin.h"):
-        shutil.copy2(USERS / name, dest / name)
-        (dest / name).touch()
-        print(f"copied {name} from users")
+        old = dest / name
+        if old.is_file():
+            old.unlink()
+            print(f"removed old {name}")
 
 
 def patch_jams() -> None:

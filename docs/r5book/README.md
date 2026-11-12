@@ -21,4 +21,4 @@ The next step replaces the mockups with screenshots taken from R5 in QEMU, one p
 
 ## Keeping it current
 
-A change that adds or changes a public call in `libr5icons.so`, `libr5ui.so`, the MIDI 2 headers, `vulkan_r5.h`, or a public Haiku header in `distro/` updates the matching page in the same change: the entry, its members, and its picture. A new class gets an entry with the facts box (declared in, derived from, first user), what it is for and not for, its members, and an example. Add it to the contents in `r5book.js`.
+A change that adds or changes a public call in `libr5icons.so`, `libr5ui.so`, the MIDI 2 headers, `vulkan_r5.h`, or a public Haiku header in `distro/` updates the matching page in the same change: the entry, its members, and its picture. A new class gets an entry with the facts box (declared in, derived from, first user), what it is for and not for, its members, and an example. Add it to the contents in `r5book.js`. On a kit page (Icons Kit, Appearance Kit, Haiku kits) the entries and their contents list are in alphabetical order, Overview first. The guides (MIDI 2, Vulkan, Accounts, Guidelines) keep their reading order.

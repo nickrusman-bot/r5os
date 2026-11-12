@@ -8,6 +8,7 @@
 
 #include "AccountAdmin.h"
 #include "DesktopWindow.h"
+#include "DriverAdmin.h"
 #include "HomeLock.h"
 #include "LockWindow.h"
 #include "LoginWindow.h"
@@ -195,6 +196,18 @@ LoginApp::MessageReceived(BMessage* message)
 			// "error" field as failure.
 			HandleAdmin(message);
 			break;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		case kMsgAdminSetDriverBlocked:
+		{
+			// Device Manager turns a driver off or on (DriverAdmin.cpp).
+			BMessage reply;
+			handle_driver_admin_message(message, reply);
+			message->SendReply(&reply);
+			break;
+		}
+// SPDX-SnippetEnd
 		case kLogoutAction:
 			Logout();
 			break;

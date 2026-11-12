@@ -10,9 +10,8 @@ UsePrivateHeaders shared ;
 
 Application Users :
 	AccountAdmin.cpp
-	AdminLock.cpp
 	HomeLock.cpp
 	Users.cpp
-	: be tracker translation [ TargetLibstdc++ ]
+	: be tracker translation libr5ui.so [ TargetLibstdc++ ]
 	: Users.rdef
 ;
