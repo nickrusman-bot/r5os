@@ -61,7 +61,7 @@ struct rld_export {
 	int api_version;
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	void (*init_initial_exec_tls)();
 	// SPDX-SnippetEnd

@@ -8,7 +8,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 90fa3bc401 (star row 19), copyright 2026 Witold Bołt. The Haiku copyright
  * and the license above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 #ifndef IO_REQUEST_H
 #define IO_REQUEST_H
@@ -351,7 +351,7 @@ private:
 			bool				fSuppressChildNotifications;
 			bool				fIsNotified;
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 			bool				fIterating;
 									// the iteration callback is running

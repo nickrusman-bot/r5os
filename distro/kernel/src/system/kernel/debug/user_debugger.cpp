@@ -8,7 +8,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 5180e96119 (star row 23), copyright 2026 Witold Bołt. The Haiku copyright
  * and the license above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -1207,7 +1207,7 @@ user_debug_thread_exiting(Thread* thread)
 	threadDebugInfo.profile.samples = NULL;
 	threadDebugInfo.profile.flush_needed = false;
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	// The profiling timer must not outlive the samples: once this thread no
 	// longer counts as debugged, nothing unlinks it when the thread is
@@ -1347,7 +1347,7 @@ schedule_profiling_timer(Thread* thread, bigtime_t interval)
 {
 	struct timer* timer = &sProfilingTimers[thread->cpu->cpu_num];
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	// The timer is this CPU's, shared by the profiled threads that run here.
 	// Adding it while it is still in the CPU's timer list linked it to itself.
@@ -1530,7 +1530,7 @@ profiling_event(timer* timer)
 
 	SpinLocker threadDebugInfoLocker(debugInfo.lock);
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	if (debugInfo.profile.installed_timer != timer) {
 		// Not the running thread's timer, left behind by a thread that was

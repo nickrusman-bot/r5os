@@ -6,7 +6,7 @@
 /*
  * The R5 change in this file is the SPDX snippet. Copyright 2026 R5OS
  * Contributors. The Haiku copyright and the license above still cover the
- * original work. The snippet is GPL-3.0-or-later.
+ * original work. The snippet is MIT.
  */
 
 
@@ -64,7 +64,7 @@ ECAMPCIControllerACPI::ReadResourceInfo(device_node* parent)
 		if (alloc->pci_segment != 0) {
 #ifdef ECAM_PCI_CONTROLLER_NO_INIT
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			void r5_pci_note_mcfg_segment(uint64 address, uint16 segment,
 				uint8 startBus, uint8 endBus);

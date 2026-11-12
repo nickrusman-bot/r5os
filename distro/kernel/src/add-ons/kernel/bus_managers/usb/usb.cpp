@@ -14,7 +14,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <usb/R5USBSpeed.h>
 
 // The public numbers are the bus manager's own.
@@ -534,7 +534,7 @@ usb_ioctl(uint32 opcode, void *buffer, size_t bufferSize)
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case B_USB_IOCTL_GET_DEVICE_SPEED: {
 			// In: the usb_id of a device. Out: its B_USB_SPEED_* value.
 			// Callers are drivers, so the buffer is a kernel address.

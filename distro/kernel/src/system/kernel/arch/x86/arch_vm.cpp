@@ -330,7 +330,7 @@ ensure_temporary_ranges_space(int32 count)
 
 
 /* SPDX-SnippetBegin
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
  * clflush after the page tables change. The address is physical.
  * The flush walks the kernel physical map, never the area's own
@@ -402,7 +402,7 @@ update_mtrrs(update_mtrr_info& updateInfo)
 	for (MemoryTypeRangeList::Iterator it = sMemoryTypeRanges.GetIterator();
 			memory_type_range* range = it.Next();) {
 		/* SPDX-SnippetBegin
-		 * SPDX-License-Identifier: GPL-3.0-or-later
+		 * SPDX-License-Identifier: MIT
 		 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 		 * A write-combining RAM range overlaps the boot write-back MTRR.
 		 * Leaving it in this list would replace that range. With PAT the
@@ -574,7 +574,7 @@ update_mtrrs(update_mtrr_info& updateInfo)
 				continue;
 
 			/* SPDX-SnippetBegin
-			 * SPDX-License-Identifier: GPL-3.0-or-later
+			 * SPDX-License-Identifier: MIT
 			 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			 * Write-combining RAM sits inside the write-back MTRR. With PAT
 			 * the PTE selects write-combining, so this range is recorded and
@@ -658,7 +658,7 @@ add_memory_type_range(area_id areaID, uint64 base, uint64 size, uint32 type,
 		}
 
 		/* SPDX-SnippetBegin
-		 * SPDX-License-Identifier: GPL-3.0-or-later
+		 * SPDX-License-Identifier: MIT
 		 * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 		 * A write-combining RAM area overlaps the boot write-back MTRR.
 		 * With PAT that overlap is the page type, not a second MTRR.

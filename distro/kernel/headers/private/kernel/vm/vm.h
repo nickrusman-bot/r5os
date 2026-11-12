@@ -118,7 +118,7 @@ status_t vm_create_vnode_cache(struct vnode *vnode, struct ModifiedPageQueue* qu
 status_t vm_set_area_memory_type(area_id id, phys_addr_t physicalBase,
 			uint32 type);
 /* SPDX-SnippetBegin
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
  * Page-table memory type only. No MTRR. For a buffer whose pages are
  * not one physical range.

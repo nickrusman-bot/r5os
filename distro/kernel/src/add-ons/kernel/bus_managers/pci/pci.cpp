@@ -9,7 +9,7 @@
 /*
  * The R5 change in this file is the SPDX snippet. Copyright 2026 R5OS
  * Contributors. The Haiku copyright and the license above still cover the
- * original work. The snippet is GPL-3.0-or-later. Segment 0 still uses
+ * original work. The snippet is MIT. Segment 0 still uses
  * virtual bus numbers equal to the firmware bus numbers.
  */
 
@@ -646,7 +646,7 @@ PCI::_CreateVirtualBus(uint8 domain, uint8 bus, uint8 *virtualBus)
 	}
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	bool used[256] = {};
 	struct Marker {
@@ -716,7 +716,7 @@ PCI::ResolveVirtualBus(uint8 virtualBus, uint8 *domain, uint8 *bus)
 #if defined(__i386__) || defined(__x86_64__)
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	VirtualBusMap::Iterator found = fVirtualBusMap.Find(virtualBus);
 	if (found != fVirtualBusMap.End()) {
