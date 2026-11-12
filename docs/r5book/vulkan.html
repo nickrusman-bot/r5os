@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Vulkan in a window</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+	<style>
+		.flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+		.flow .box { border: 1px solid var(--slate-300); background: #fff; border-radius: 10px; padding: 10px 14px; text-align: center; min-width: 120px; }
+		.flow .box b { display: block; font-size: 13px; }
+		.flow .box span { font-size: 11px; color: var(--slate-500); font-family: 'JetBrains Mono', monospace; }
+		.flow .box.app { border-color: rgba(0, 132, 255, 0.4); background: rgba(0, 132, 255, 0.06); }
+		.flow .box.r5 { border-color: rgba(101, 184, 145, 0.5); background: rgba(101, 184, 145, 0.08); }
+		.flow .arrow { color: var(--slate-400); font-weight: 800; }	</style>
+</head>
+<body data-page="vulkan">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">VK_RFIVE_view_surface</span>
+			<h1>Vulkan in a window</h1>
+			<p>A Vulkan program on R5 draws into an ordinary <code class="inline">BView</code> in a
+			<code class="inline">BWindow</code>. The window can be resized, moved between workspaces, minimised and
+			closed like any other. R5 has its own Vulkan extension for this, registered with Khronos.</p>
+		</section>
+
+		<table class="facts">
+			<tr><th>Declared in</th><td>&lt;vulkan/vulkan_r5.h&gt; (define VK_USE_PLATFORM_VIEW_RFIVE first)</td></tr>
+			<tr><th>Extension</th><td>VK_RFIVE_view_surface, instance extension, needs VK_KHR_surface</td></tr>
+			<tr><th>Registered</th><td>Khronos author ID RFIVE, extension 732 (KhronosGroup/Vulkan-Docs#2851)</td></tr>
+			<tr><th>Library</th><td>libvulkan.so, the loader 1.4.367 built by R5</td></tr>
+			<tr><th>Drivers</th><td>Lavapipe (software, always); RADV on a supported AMD GPU when gpu_present is on</td></tr>
+			<tr><th>Long description</th><td>docs/VULKAN-WSI.md</td></tr>
+		</table>
+
+		<section class="entry" id="path">
+			<div class="entry-header"><h2 class="plain">How a frame reaches the screen</h2></div>
+
+			<figure class="stage">
+				<div class="flow">
+					<div class="box app"><b>Your BView</b><span>attached to a BWindow</span></div>
+					<div class="arrow">&rarr;</div>
+					<div class="box app"><b>VkSurfaceKHR</b><span>vkCreateViewSurfaceRFIVE</span></div>
+					<div class="arrow">&rarr;</div>
+					<div class="box app"><b>Swapchain</b><span>FIFO</span></div>
+					<div class="arrow">&rarr;</div>
+					<div class="box r5"><b>One BBitmap per image</b><span>vkQueuePresentKHR</span></div>
+					<div class="arrow">&rarr;</div>
+					<div class="box r5"><b>app_server</b><span>SetViewBitmap</span></div>
+				</div>
+				<figcaption><span>Blue is your program, green is R5. app_server redraws the last image itself after minimise, a workspace change, or when the view is uncovered.</span><span class="badge-mockup">Diagram</span></figcaption>
+			</figure>
+
+			<p>Each swapchain image has its own <code class="inline">BBitmap</code>. Present copies the image into it
+			and makes it the view's bitmap. Your <code class="inline">Draw()</code> is not replaced. Lavapipe renders
+			on the CPU; RADV renders on the GPU and copies the result into the bitmap.</p>
+		</section>
+
+		<section class="entry" id="surface">
+			<div class="entry-header"><h2>vkCreateViewSurfaceRFIVE</h2><span class="kind">function</span></div>
+
+<pre class="code"><span class="k">typedef struct</span> VkViewSurfaceCreateInfoRFIVE {
+	VkStructureType                sType;	<span class="c">// VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE</span>
+	<span class="k">const void</span>*                    pNext;	<span class="c">// NULL</span>
+	VkViewSurfaceCreateFlagsRFIVE  flags;	<span class="c">// 0, reserved</span>
+	BView*                         view;	<span class="c">// attached to a BWindow</span>
+} VkViewSurfaceCreateInfoRFIVE;
+
+VkResult vkCreateViewSurfaceRFIVE(VkInstance instance,
+	<span class="k">const</span> VkViewSurfaceCreateInfoRFIVE* pCreateInfo,
+	<span class="k">const</span> VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);</pre>
+
+			<p>The create info carries the view and nothing else; the window is the view's window. The view must
+			already be attached to a window. The surface keeps a <code class="inline">BMessenger</code> to that window,
+			not a lock, so present may run on any thread. Destroying the surface does not destroy the view.</p>
+
+<pre class="code"><span class="k">#define</span> VK_USE_PLATFORM_VIEW_RFIVE
+<span class="k">#include</span> <span class="s">&lt;vulkan/vulkan.h&gt;</span>
+<span class="k">#include</span> <span class="s">&lt;vulkan/vulkan_r5.h&gt;</span>
+
+<span class="k">const char</span>* extensions[] = {
+	VK_KHR_SURFACE_EXTENSION_NAME,
+	VK_RFIVE_VIEW_SURFACE_EXTENSION_NAME,
+};
+<span class="c">// ... create the instance with these two extensions ...</span>
+
+VkViewSurfaceCreateInfoRFIVE info = {};
+info.sType = VK_STRUCTURE_TYPE_VIEW_SURFACE_CREATE_INFO_RFIVE;
+info.view = fRenderView;		<span class="c">// already AddChild()-ed to the window</span>
+
+VkSurfaceKHR surface;
+VkResult result = vkCreateViewSurfaceRFIVE(instance, &amp;info, NULL, &amp;surface);</pre>
+		</section>
+
+		<section class="entry" id="present">
+			<div class="entry-header"><h2>vkQueuePresentKHR</h2><span class="kind">what it returns on R5</span></div>
+			<p>Present locks the window for at most one frame. It never makes the window's own thread wait.</p>
+			<table class="spec">
+				<tr><th>Situation</th><th>Result</th><th>What your program does</th></tr>
+				<tr><td>Shown</td><td><code>VK_SUCCESS</code></td><td>Carry on.</td></tr>
+				<tr><td>The window was busy for a whole frame</td><td><code>VK_SUCCESS</code></td><td>Nothing: that frame was skipped, the surface is fine.</td></tr>
+				<tr><td>The view changed size</td><td><code>VK_SUBOPTIMAL_KHR</code>, then <code>VK_ERROR_OUT_OF_DATE_KHR</code></td><td>Build a new swapchain at the new size.</td></tr>
+				<tr><td>The window closed, or the view was removed</td><td><code>VK_ERROR_SURFACE_LOST_KHR</code></td><td>Destroy the swapchain and the surface.</td></tr>
+			</table>
+			<p>The size in pixels is <code class="inline">IntegerWidth() + 1</code> by
+			<code class="inline">IntegerHeight() + 1</code> of the view.</p>
+		</section>
+
+		<section class="entry" id="modes">
+			<div class="entry-header"><h2 class="plain">Present modes</h2></div>
+			<p><code class="inline">VK_PRESENT_MODE_FIFO_KHR</code> is the only mode offered today. It waits for the
+			screen's retrace on the present thread. Asking for a mode the query did not return fails with
+			<code class="inline">VK_ERROR_INITIALIZATION_FAILED</code>. Always pick from
+			<code class="inline">vkGetPhysicalDeviceSurfacePresentModesKHR</code>.</p>
+		</section>
+
+		<section class="entry" id="fallback">
+			<div class="entry-header"><h2 class="plain">GPU or software</h2></div>
+			<p>Lavapipe can always present to a view. RADV says yes to
+			<code class="inline">vkGetPhysicalDeviceSurfaceSupportKHR</code> only on a supported GPU with the
+			<code class="inline">radeon_hd</code> setting <code class="inline">gpu_present</code> turned on; that
+			setting is off by default for now. When RADV says no, the window runs on Lavapipe and looks the same.
+			One line goes to the syslog the first time: <code class="inline">RADV view surface: no, window through Lavapipe</code>.</p>
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Do</h4><p>Ask each device with <code class="inline">vkGetPhysicalDeviceSurfaceSupportKHR</code> and pick one that says yes.</p></div>
+				<div class="use-box no"><h4>Don't</h4><p>Open RADV without asking. Creating the swapchain then fails with <code class="inline">VK_ERROR_INITIALIZATION_FAILED</code>; the device does not switch mid-frame.</p></div>
+			</div>
+		</section>
+
+		<section class="entry" id="porting">
+			<div class="entry-header"><h2 class="plain">Porting a program</h2></div>
+			<p>A ported program creates a <code class="inline">BWindow</code> and a <code class="inline">BView</code>,
+			then calls <code class="inline">vkCreateViewSurfaceRFIVE</code> where it would create a Metal or Wayland
+			surface on other systems. <code class="inline">vkcube</code> from Vulkan-Tools and VulkanTeapot do exactly
+			that. SDL, GLFW and other toolkits need a backend that does the same; it is this extension, not a second one.</p>
+			<div class="note"><strong>Coming later.</strong> <code class="inline">BVulkanView</code> in the Graphics Kit
+			will own the surface and the swapchain, call your <code class="inline">Render()</code> every frame, and
+			rebuild the swapchain on its own. It is built on this extension and is not in R5 yet.</div>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>

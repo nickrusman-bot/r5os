@@ -47,6 +47,36 @@
 			["midi2-kit.html#usb", "USB descriptors", true],
 			["midi2-kit.html#drivers", "Drivers", true],
 		]},
+		{ title: "Vulkan", file: "vulkan.html", items: [
+			["vulkan.html", "Vulkan in a window"],
+			["vulkan.html#surface", "vkCreateViewSurfaceRFIVE", true],
+			["vulkan.html#present", "Present results", true],
+			["vulkan.html#fallback", "GPU or software", true],
+			["vulkan.html#porting", "Porting a program", true],
+		]},
+		{ title: "Accounts", file: "accounts.html", items: [
+			["accounts.html", "Accounts and sessions"],
+			["accounts.html#who", "Who your program runs as", true],
+			["accounts.html#paths", "Folders and settings", true],
+			["accounts.html#admin", "Administrator changes", true],
+			["accounts.html#session", "Lock and log out", true],
+			["accounts.html#example", "Example: Sign in", true],
+		]},
+		{ title: "Haiku kits", file: "haiku-additions.html", items: [
+			["haiku-additions.html", "Additions to Haiku kits"],
+			["haiku-additions.html#BLocaleRoster", "BLocaleRoster", true],
+			["haiku-additions.html#BFormattingConventions", "BFormattingConventions", true],
+		]},
+		{ title: "Guidelines", file: "guidelines.html", items: [
+			["guidelines.html", "Making it look like R5"],
+			["guidelines.html#forms", "Forms", true],
+			["guidelines.html#cards", "Cards", true],
+			["guidelines.html#actions", "Buttons", true],
+			["guidelines.html#icons", "Icons", true],
+			["guidelines.html#settings", "Settings pages", true],
+			["guidelines.html#people", "People and accounts", true],
+			["guidelines.html#words", "Words", true],
+		]},
 	];
 
 	const pebble = `
@@ -78,6 +108,8 @@
 			<a href="icons-kit.html" class="${page === "icons" ? "active" : ""}">Icons Kit</a>
 			<a href="appearance-kit.html" class="${page === "appearance" ? "active" : ""}">Appearance Kit</a>
 			<a href="midi2-kit.html" class="${page === "midi2" ? "active" : ""}">MIDI 2 Kit</a>
+			<a href="vulkan.html" class="${page === "vulkan" ? "active" : ""}">Vulkan</a>
+			<a href="guidelines.html" class="${page === "guidelines" ? "active" : ""}">Guidelines</a>
 			<a href="https://github.com/r5-operating-system/r5os" class="nav-pill">GitHub</a>
 		</nav>`;
 	document.body.prepend(header);

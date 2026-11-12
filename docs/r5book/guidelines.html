@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Interface guidelines</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+	<style>
+		.form { display: grid; grid-template-columns: auto 200px; gap: 8px 10px; align-items: center; }
+		.form .lbl { text-align: right; }
+		.form .fld { height: 22px; background: #fff; border: 1px solid #a8a8a8; border-radius: 2px; padding: 0 6px; display: flex; align-items: center; }
+		.wrong .lbl { text-align: left; }
+		.verdict { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 8px; text-align: center; }
+		.verdict.ok { color: #059669; }
+		.verdict.bad { color: var(--redline); }
+		.pair { display: flex; flex-direction: column; align-items: center; }
+	</style>
+</head>
+<body data-page="guidelines">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">Interface guidelines</span>
+			<h1>Making it look like R5</h1>
+			<p>How an R5 window is put together: Haiku controls on the panel, a card only where something stands on its
+			own, one main action, sharp icons, and changes that apply at once. These are the rules R5's own windows
+			follow.</p>
+		</section>
+
+		<section class="entry" id="forms">
+			<div class="entry-header"><h2 class="plain">Forms</h2></div>
+			<ul class="plain">
+				<li>The window background is the panel color, <code class="inline">B_PANEL_BACKGROUND_COLOR</code>. Do not
+				put a white card behind a form.</li>
+				<li>Labels share one column and are right-aligned. Values share the next column and start on the same line.</li>
+				<li>A label and its field share one row and its vertical center. A text field is one line high.</li>
+				<li>A grid row does not grow with the window or with a tall neighbor such as a picture or a list. Extra room
+				is glue outside the form.</li>
+				<li>Buttons that belong together sit on one row.</li>
+			</ul>
+
+			<figure class="stage">
+				<div class="shot sys" style="gap:28px;align-items:flex-start">
+					<div class="pair">
+						<div class="sys-panel form">
+							<span class="lbl">Full name</span><span class="fld">Nicky</span>
+							<span class="lbl">Email</span><span class="fld"></span>
+							<span class="lbl">Password</span><span class="fld">&bull;&bull;&bull;&bull;</span>
+						</div>
+						<div class="verdict ok">Like this</div>
+					</div>
+					<div class="pair">
+						<div class="sys-panel"><div class="sys-card form wrong" style="padding:12px">
+							<span class="lbl">Full name</span><span class="fld">Nicky</span>
+							<span class="lbl">Email</span><span class="fld"></span>
+							<span class="lbl">Password</span><span class="fld">&bull;&bull;&bull;&bull;</span>
+						</div></div>
+						<div class="verdict bad">Not like this</div>
+					</div>
+				</div>
+				<figcaption><span>Right-aligned labels on the panel; not a form in a white card with ragged labels</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+			<div class="note"><strong>Hiding a column.</strong> Use the layout item's <code class="inline">SetVisible()</code>
+			after the window is shown. Before <code class="inline">Show()</code>, <code class="inline">IsHidden()</code>
+			follows the window, so a <code class="inline">Hide()</code> in the constructor never runs.</div>
+		</section>
+
+		<section class="entry" id="cards">
+			<div class="entry-header"><h2 class="plain">Cards</h2></div>
+			<p>A <a href="appearance-kit.html#BCard">BCard</a> holds something that stands on its own: a heading, a
+			summary, an account. A form stays on the panel. A page of choices uses
+			<a href="appearance-kit.html#BActionCard">BActionCard</a>s; the top of a page uses a
+			<a href="appearance-kit.html#BPageHeader">BPageHeader</a>.</p>
+		</section>
+
+		<section class="entry" id="actions">
+			<div class="entry-header"><h2 class="plain">Buttons</h2></div>
+			<ul class="plain">
+				<li>One main action per window, as a <a href="appearance-kit.html#BAccentButton">BAccentButton</a>:
+				Sign in, Unlock, Install. Everything else is a plain <code class="inline">BButton</code>.</li>
+				<li>An icon button on a row of text buttons has their height: use
+				<a href="icons-kit.html#icon-buttons"><code>r5_button_set_icon()</code></a> with that height.</li>
+				<li>A symbol before a label, such as Restart or Shut down, is a
+				<a href="icons-kit.html#r5_glyph">line glyph</a>.</li>
+			</ul>
+			<figure class="stage">
+				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:420px">
+					<div class="sys-accent-button">Sign in</div>
+					<div style="display:flex;gap:8px;justify-content:flex-end">
+						<span class="sys-button"><svg data-glyph="restart"></svg>Restart</span>
+						<span class="sys-button"><svg data-glyph="power"></svg>Shut down</span>
+					</div>
+				</div>
+				<figcaption><span>One accent button; the other actions stay plain</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+		</section>
+
+		<section class="entry" id="icons">
+			<div class="entry-header"><h2 class="plain">Icons</h2></div>
+			<ul class="plain">
+				<li>Use Haiku's own icons. A glyph is only for a small symbol Haiku has no icon for.</li>
+				<li>Render an icon at the size it is shown, and draw it pixel for pixel. A stretched bitmap gets jagged
+				edges; <a href="appearance-kit.html#BIconView">BIconView</a> does it right.</li>
+				<li>The preferences wrench is only for the Settings application and the pages inside it.</li>
+			</ul>
+		</section>
+
+		<section class="entry" id="settings">
+			<div class="entry-header"><h2 class="plain">Settings pages</h2></div>
+			<ul class="plain">
+				<li>A change is applied at once. There is no Save button.</li>
+				<li><strong>Revert</strong> puts the page back to the values from when it was opened, and applies them.
+				<strong>Defaults</strong> puts it back to its factory setup. Defaults stays disabled on a page that has none.</li>
+				<li>A page that needs an administrator is gray, and writes nothing, until the lock is opened. One unlock
+				covers every such page.</li>
+				<li>A setting a person changes for themselves is written in their own home, never by a system service.</li>
+			</ul>
+		</section>
+
+		<section class="entry" id="people">
+			<div class="entry-header"><h2 class="plain">People and accounts</h2></div>
+			<ul class="plain">
+				<li>A list of people is two lines: the name in bold, then the username and the role. Use
+				<a href="appearance-kit.html#BUserListItem">BUserListItem</a>.</li>
+				<li>The signed-in person can edit their own name, email, picture and password while the computer is
+				locked. The lock is for the computer and for other people.</li>
+				<li>Do not hardcode a home folder. Use <code class="inline">find_directory()</code> or
+				<code class="inline">getpwuid()</code>.</li>
+			</ul>
+		</section>
+
+		<section class="entry" id="words">
+			<div class="entry-header"><h2 class="plain">Words</h2></div>
+			<ul class="plain">
+				<li>The product is <strong>R5 Operating System</strong>, short <strong>R5</strong>. Not Haiku, not BeOS,
+				not R5OS in text people read.</li>
+				<li>Say what the user gets, in plain language. A message says what happened and what to do, for example
+				"That password is not right." rather than an error code.</li>
+				<li>The font is Manrope, the system font. Use the system font sizes, so a larger font scales the window.</li>
+			</ul>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Accounts and sessions</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+	<style>
+		.shots { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+		.shots img { width: 300px; height: auto; border-radius: 8px; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16); display: block; }
+		.shots .cap { font-size: 12px; color: var(--slate-500); text-align: center; margin-top: 8px; }
+		.badge-shot { font-size: 11px; font-weight: 700; color: #047857; background: rgba(101, 184, 145, 0.16); border: 1px solid rgba(101, 184, 145, 0.45); padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+		.parts td:first-child { white-space: nowrap; }
+	</style>
+</head>
+<body data-page="accounts">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">Accounts and sessions</span>
+			<h1>More than one person</h1>
+			<p>R5 has accounts: one administrator and, if they want, standard accounts for other people. Someone signs
+			in, works, locks the screen or logs out. A program does not draw those screens, but it runs inside that
+			session, and a few things follow from that.</p>
+		</section>
+
+		<section class="entry" id="who">
+			<div class="entry-header"><h2 class="plain">Who your program runs as</h2></div>
+			<ul class="plain">
+				<li>Your program runs as the person who signed in, never as root. The administrator, login name
+				<code class="inline">user</code>, has a uid of 1000 or higher like everyone else.</li>
+				<li>Only the system services stay at uid 0: the kernel, <code class="inline">launch_daemon</code>, the
+				registrar, the network and package services, and Login itself.</li>
+				<li>One graphical session runs at a time. There is no fast switching between people yet.</li>
+			</ul>
+			<table class="spec">
+				<tr><th>Account</th><th>Home folder</th><th>Groups</th></tr>
+				<tr><td>The administrator (<code>user</code>)</td><td><code>/boot/home</code></td><td><code>users</code>, <code>admin</code></td></tr>
+				<tr><td>A standard account</td><td><code>/boot/home/users/&lt;name&gt;</code>, mode 0700</td><td><code>users</code></td></tr>
+			</table>
+		</section>
+
+		<section class="entry" id="paths">
+			<div class="entry-header"><h2 class="plain">Folders and settings</h2></div>
+			<p>Each person has their own home, Desktop and <code class="inline">config/settings</code>. Ask the system
+			where they are; never write <code class="inline">/boot/home</code> into your program.</p>
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Do</h4><p><code class="inline">find_directory(B_USER_SETTINGS_DIRECTORY, &amp;path)</code> for your settings, and
+				<code class="inline">getpwuid(getuid())</code> when you need the person's name or home.</p></div>
+				<div class="use-box no"><h4>Don't</h4><p>Hardcode <code class="inline">/boot/home/config/settings</code>. For a standard account that is
+				someone else's folder, and your program cannot write there.</p></div>
+			</div>
+<pre class="code">BPath path;
+<span class="k">if</span> (find_directory(B_USER_SETTINGS_DIRECTORY, &amp;path) == B_OK) {
+	path.Append(<span class="s">"MyApp settings"</span>);
+	<span class="c">// /boot/home/config/settings/... for the administrator,</span>
+	<span class="c">// /boot/home/users/nicky/config/settings/... for Nicky</span>
+}</pre>
+			<p>A setting that is for the whole computer lives in <code class="inline">B_SYSTEM_SETTINGS_DIRECTORY</code>,
+			and only an administrator changes it.</p>
+		</section>
+
+		<section class="entry" id="admin">
+			<div class="entry-header"><h2 class="plain">Changes that need an administrator</h2></div>
+			<p>Some changes are for the whole computer: the screen mode, the network, the clock, accounts. Do not run your
+			program as root for them. In R5's own windows such a page is gray until the person opens the lock with
+			an administrator password. Accounts are then changed by a small checked helper, not by the window running as root.
+			One unlock covers every such page, and the grant ends at the lock screen and at log out.</p>
+			<div class="note"><strong>No public call yet.</strong> The lock and the helper are used by Settings and
+			Users &amp; Accounts. A public call for other programs is not part of LibR5 yet. Until then, keep
+			system-wide changes in those windows.</div>
+		</section>
+
+		<section class="entry" id="session">
+			<div class="entry-header"><h2 class="plain">Lock and log out</h2></div>
+			<p>Deskbar asks Login, by its signature, to lock the screen or to log out. A program can send the same
+			message, for example a "lock" button in a remote-control app.</p>
+			<table class="spec">
+				<tr><th>Message</th><th>To</th><th>What happens</th></tr>
+				<tr><td><code>'lokc'</code></td><td><code>application/x-vnd.Haiku-Login</code></td><td>The lock screen covers the session. Programs keep running.</td></tr>
+				<tr><td><code>'lout'</code></td><td><code>application/x-vnd.Haiku-Login</code></td><td>The session ends. Deskbar asks the person first; a message you send does not.</td></tr>
+			</table>
+<pre class="code">BMessenger login(<span class="s">"application/x-vnd.Haiku-Login"</span>);
+<span class="k">if</span> (login.IsValid())
+	login.SendMessage(<span class="s">'lokc'</span>);	<span class="c">// lock the screen</span></pre>
+
+			<h3>When the person logs out</h3>
+			<p>Every program of the session gets <code class="inline">B_QUIT_REQUESTED</code>. Save what you need in
+			<code class="inline">QuitRequested()</code> and quit. Do not open a dialog that waits for an answer: the
+			person has already chosen to leave, and Login does not wait for it. The next person who signs in starts
+			with a clean session.</p>
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Do</h4><p>Save quietly, for example a draft next to the document, and return <code class="inline">true</code>.</p></div>
+				<div class="use-box no"><h4>Don't</h4><p>Ask "Save changes?" and return <code class="inline">false</code> until someone answers. Nobody will.</p></div>
+			</div>
+		</section>
+
+		<section class="entry" id="example">
+			<div class="entry-header"><h2 class="plain">Example: Sign in and the lock screen</h2><span class="kind">built from LibR5</span></div>
+			<p>Sign in and the lock screen are ordinary windows built from the parts in this book. They show how the parts
+			fit together, and they are the first pictures in the R5Book taken from R5 itself.</p>
+
+			<figure class="stage">
+				<div class="shots">
+					<div><img src="img/sign-in-1.png" alt="Sign in with one account" /><div class="cap">One account</div></div>
+					<div><img src="img/sign-in-2.png" alt="Sign in with two accounts" /><div class="cap">Two to four accounts: cards</div></div>
+					<div><img src="img/sign-in-6.png" alt="Sign in with six accounts" /><div class="cap">Five or more: a list</div></div>
+					<div><img src="img/lock-screen.png" alt="The lock screen" /><div class="cap">The lock screen</div></div>
+				</div>
+				<figcaption><span>R5 in QEMU, 11 Nov 2026</span><span class="badge-shot">Screenshot</span></figcaption>
+			</figure>
+
+			<table class="spec parts">
+				<tr><th>What you see</th><th>Part</th></tr>
+				<tr><td>The white areas</td><td><a href="appearance-kit.html#BCard">BCard</a>, document style</td></tr>
+				<tr><td>The R5 pebble and the clock symbol</td><td><a href="appearance-kit.html#BIconView">BIconView</a>, with <a href="icons-kit.html#icon-bitmaps"><code>r5_vector_icon_bitmap()</code></a> and <a href="icons-kit.html#r5_glyph"><code>r5_glyph_bitmap()</code></a></td></tr>
+				<tr><td>The account picture</td><td><a href="appearance-kit.html#functions"><code>r5_avatar_draw()</code></a> with the People icon</td></tr>
+				<tr><td>Two to four accounts</td><td><a href="appearance-kit.html#BUserCard">BUserCard</a>, two on a row</td></tr>
+				<tr><td>Five accounts or more</td><td><a href="appearance-kit.html#BUserListItem">BUserListItem</a> in a <code>BListView</code></td></tr>
+				<tr><td>The password field</td><td><a href="appearance-kit.html#BPasswordControl">BPasswordControl</a>, with "Enter password"</td></tr>
+				<tr><td>Sign in, Unlock</td><td><a href="appearance-kit.html#BAccentButton">BAccentButton</a>, the one main action</td></tr>
+				<tr><td>Log out, Restart, Shut down</td><td>Plain <code>BButton</code>s with <a href="icons-kit.html#r5_glyph"><code>r5_button_set_glyph()</code></a></td></tr>
+			</table>
+
+			<p>The waves behind the window are drawn by Login itself (<code class="inline">SignInBackground.cpp</code>);
+			they are not a LibR5 part. The source is <code class="inline">distro/login</code>, and the design is
+			<code class="inline">docs/design/login-mockup/sign-in.html</code>.</p>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>
