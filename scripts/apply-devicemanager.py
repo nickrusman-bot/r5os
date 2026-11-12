@@ -49,8 +49,9 @@ def patch_jams() -> None:
     regular = HAIKU / "build" / "jam" / "images" / "definitions" / "regular"
     replace_once(
         regular,
-        "SYSTEM_APPS += r5-tray ;\n",
-        "SYSTEM_APPS += r5-tray ;\nSYSTEM_APPS += DeviceManager ;\n",
+        "SYSTEM_APPS += [ FFilterByBuildFeatures\n\tActivityMonitor\n\tAutoRaise\n",
+        "SYSTEM_APPS += [ FFilterByBuildFeatures\n\tActivityMonitor\n\tAutoRaise\n"
+        "\tDeviceManager\n",
         "DeviceManager SYSTEM_APPS",
     )
     replace_once(
