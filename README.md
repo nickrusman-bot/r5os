@@ -145,9 +145,9 @@ Haiku is the foundation, and its source is where R5 gets many of its fixes. R5 d
 R5 Operating System is **multi-license**:
 
 - Files that come from Haiku keep their original license and copyright, mostly MIT.
-- New files that R5 owns are GPL-3.0-or-later.
+- New files that R5 owns are MIT, so other Haiku-based systems can use them (since 12 Nov 2026).
 - Libraries and public headers that applications link or include are MIT, so any program can use them: the R5 libraries (`libr5icons`, `libr5ui`), the R5 GPU interface header and the R5 DRM library.
-- The combined system is distributed under GPL-3.0-or-later.
+- Third-party parts keep their own licenses; some of them, such as the VirtualBox Guest Additions, are GPL.
 - Third-party components keep their own licenses. They are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Examples are the VirtualBox Guest Additions (GPL-3.0-only), the AMD firmware and Mesa.
 
 The full policy is in [`docs/LICENSING.md`](docs/LICENSING.md). About R5 shows the licenses and credits on the system itself.
