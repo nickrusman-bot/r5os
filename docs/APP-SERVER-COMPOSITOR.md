@@ -1,6 +1,6 @@
 # The compositor in app_server
 
-This is the design for M11, step 0. It follows `generated/gpu-m11/BRIEF.md` (11 Nov 2026) and `docs/GPU-ARCHITECTURE.md`, "2D in app_server". It is paper only: nothing here is built yet. Where the source disagrees with the brief, the point is under [Open questions](#open-questions) and is not decided here.
+This is the design for M11, step 0. It follows `generated/gpu-m11/BRIEF.md` (as updated on 12 Nov 2026) and `docs/GPU-ARCHITECTURE.md`, "2D in app_server". It is paper only: nothing here is built yet. Where the source disagrees with the brief, the point is under [Open questions](#open-questions) and is not decided here.
 
 Source read: the Haiku tree in WSL (`src/servers/app`, commit `4aae8640c9`, 7 Nov 2026), with the R5 copies from `distro/app_server` and `distro/desktop/src/servers/app` applied. Paths below are relative to `src/servers/app` unless they start with `distro/`.
 
@@ -70,9 +70,19 @@ The R5 frame is a 1-pixel line, so `fBorderWidth` is 1. Proposal:
 
 - **Width:** the grab area is as wide as Haiku's border is today: `fBorderWidth` of the Haiku decorator for that look (5 for titled and document, 3 for floating, times the same font scale). The line is the inner pixel of it. So a user grabs the edge where Haiku's border was, and there is no new constant.
 - **Where:** outside the line. The content keeps every pixel, so a scroll bar or a text field at the window edge does not start a resize. The corner zone stays `fBorderResizeLength` along the bottom and right edges, also on the left-bottom and top corners where Haiku has them.
-- **Not drawn, not clipped:** the outer part is an **input margin**, not part of the footprint. It does not cover the windows below, it is not in `VisibleRegion()`, it has no pixels in the window buffer, and it gets no shadow of its own. New at the end of the R5 decorator interface: `GetInputMargin()` (the four widths; 0 for decorators that do not have it, so the Haiku decorators are unchanged). `Desktop::WindowAt()` walks front to back as today and also returns a window when the point is in its input margin and not in the visible region of a window in front of it. `RegionAt()` of the R5 decorator returns the border and corner regions for the margin.
+- **Not drawn, not clipped:** the outer part is an **input margin**, not part of the footprint. It does not cover the windows below, it is not in `VisibleRegion()`, it has no pixels in the window buffer, and it gets no shadow of its own. New in the R5 decorator interface: `GetInputMargin()` (the four widths; 0 for decorators that do not have it, so the Haiku decorators are unchanged; see "Decorator hooks"). `Desktop::WindowAt()` walks front to back as today and also returns a window when the point is in its input margin and not in the visible region of a window in front of it. `RegionAt()` of the R5 decorator returns the border and corner regions for the margin.
 - **Both modes:** the margin is input only, so it works the same in the CPU mode.
 - Only windows that can be resized get the margin. `B_NOT_RESIZABLE`, `B_NOT_H_RESIZABLE` and `B_NOT_V_RESIZABLE` remove the matching sides. The cursor changes over the margin, as `DefaultWindowBehaviour` does today over the border.
+
+## Decorator hooks (decision 10)
+
+Decorators stay Haiku add-ons in `/system/add-ons/decorators`, subclasses of `Decorator` (`decorator/Decorator.h`), loaded by `DecorManager`. New, after the existing members of the R5 decorator interface:
+
+- `GetShadowExtent(BRect* extent)`: how far the shadow reaches on each side. Default: the small, short shadow derived from the decorator's border width.
+- `GetGlassRegion(BRegion* region)`: the part of the footprint that is glass (the tab and the frame line for the R5 decorator). Default: empty, so a Haiku decorator has no glass.
+- `GetInputMargin(...)`: the resize margin above. Default: 0 on every side.
+
+The R5 decorator implements all three. app_server adds the glass views of the window (`set_view_glass()`) to the decorator's glass region. How the hooks are added without breaking a decorator add-on built earlier is Open question 2.
 
 ## Window buffer life cycle (decision 5)
 
@@ -93,7 +103,7 @@ The R5 frame is a 1-pixel line, so `fBorderWidth` is 1. Proposal:
 - **Order:** back to front over `CurrentWindows()` of the current workspace, read under `LockSingleWindow()`. The compose thread copies the list of windows, frames and buffers under that read lock and releases it before recording. It never holds `fWindowLock` while it waits for a fence.
 - **A1 (no effects):** each window is one quad with its buffer as a texture, nearest sampling, integer positions, no blending of opaque pixels. With the effects off, every output pixel must be the pixel the CPU mode would have: that is what the compare checks.
 - **A3 shadow:** a separate pass before a window's quad: an alpha mask of the frame rectangle, blurred once at window creation or resize, drawn offset under the window. Its extent comes from the decorator hook (decision 10); the default is small and short, derived from the decorator's border width, not a new constant.
-- **A4 frosted glass:** for the glass region of a window (the tab, the frame line, and the open background, see Open questions), the compose blurs what is already composed beneath it (a downsampled two-pass blur in a compute shader), then draws the window's pixels with their alpha over it. Painter writes alpha into the window buffer; the tab and frame get a fixed alpha from the R5 decorator in the GPU mode only.
+- **A4 frosted glass:** for the glass region of a window (the tab, the frame line, and the views a program marked as glass, see "What programs and developers see"), the compose blurs what is already composed beneath it (a downsampled two-pass blur in a compute shader), then draws the window's pixels with their alpha over it. Painter writes alpha into the window buffer; the tab and frame get a fixed alpha from the R5 decorator in the GPU mode only.
 - **Shaders:** GLSL in `distro/app_server/compositor/`, compiled at build time by a host `glslangValidator` into `compositor_shaders.h`, never edited by hand (the rule of `gfx9_compute_shader.h`). The command is recorded in the Jamfile and in this document when step 2 adds it.
 
 ## The scanout path
@@ -131,9 +141,62 @@ A direct window writes to `HWInterface()->FrontBuffer()`, which the compositor a
 - **Budget:** half of the GTT size the driver reports for RADV; on Lavapipe a quarter of the physical memory from `get_system_info()`. Both come from the system, not from a constant.
 - **Above it:** first the buffers of hidden and minimised windows, and of windows on other workspaces, are freed, oldest show first; such a window is redrawn in full when it shows again. If a window on the current workspace still cannot get a buffer, the session switches to the CPU mode with the reason `window memory`.
 
+## What programs and developers see (decision 13)
+
+The compositor, Vulkan and the shaders stay inside app_server. No public header names them. What a program sees follows the Haiku pattern.
+
+### How Haiku does it today
+
+- `ui_color()` and `set_ui_color()` / `set_ui_colors()` (`headers/os/interface/InterfaceDefs.h`, `src/kits/interface/InterfaceDefs.cpp`) are free functions. The setter sends `AS_SET_UI_COLOR` / `AS_SET_UI_COLORS` to app_server. `DesktopSettingsPrivate::SetUIColor()` stores the colour and calls `Save(kAppearanceSettings)`, which writes the `appearance` file in `~/config/settings/system/app_server/`. The reader takes the value from app_server's shared read-only memory.
+- `set_decorator()` and `get_decorator()` (`headers/private/interface/DecoratorPrivate.h`, namespace `BPrivate`) are free functions too. They open a `BPrivate::AppServerLink` and send `AS_SET_DECORATOR` / `AS_GET_DECORATOR`. The Appearance program calls them; no program writes app_server's files.
+
+### The new calls
+
+One new header in `libr5ui`, `<WindowEffects.h>`, namespace `BAppearanceKit`, free functions like the two Haiku pairs above:
+
+```cpp
+namespace BAppearanceKit {
+
+enum {
+	B_WINDOW_SHADOW			= 0x00000001,
+	B_WINDOW_FROSTED_GLASS	= 0x00000002
+};
+
+// The user's choice, for Settings and the Appearance program.
+uint32		window_effects();
+status_t	set_window_effects(uint32 effects);
+
+// A program asks for glass behind its own content. Opt-in.
+status_t	set_window_glass(BWindow* window, bool glass);
+status_t	set_view_glass(BView* view, bool glass);
+
+}
+```
+
+- `window_effects()` / `set_window_effects()` are the one call pair for the two settings, like `ui_color()` / `set_ui_color()`. The Settings page and the Appearance program both use it. The reader asks app_server over an `AppServerLink`, like `get_decorator()`; it is not in the shared memory, so `server_read_only_memory` does not change.
+- `set_view_glass()` marks one view: in the GPU mode app_server fills that view's background with full transparency instead of its view colour, and the compose blurs what lies behind it. What the view draws itself stays on top. Child views with their own view colour stay opaque. `set_window_glass()` does the same for the window's top view, so the whole content area is glass where no child covers it.
+- In the CPU mode, and with "Frosted glass" off, both calls are accepted and stored, and the view colour is drawn as before. When the user turns glass on again, the views marked earlier become glass without a new call.
+- **Not used:** `B_TRANSPARENT_COLOR`. Programs set it to mean "do not erase" (`View::Draw`, `View.cpp`, skips the fill for it), and they stay opaque. Nothing is added to `libbe`. A program that links only `libbe` is unchanged.
+- **Transport:** new message codes at the end of `headers/private/app/ServerProtocol.h`, before `AS_LAST_CODE` (additive, private). `libr5ui` opens a `BPrivate::AppServerLink`, the way `set_decorator()` does. A view is named by `_get_object_token_(view)`, the token `libbe` already sends as the view token (`View.cpp`); a window by `_get_object_token_(window)`. The `ServerApp` of the calling team finds the `ServerWindow` by its client token and the `View` by its token, so a program can only mark its own windows.
+- **Documentation:** the calls go into `docs/LIBR5.md` and `docs/APPEARANCE-KIT.md` (a row for `<WindowEffects.h>`) with a short example, in the change that adds them. Step 1 and later use these names and add no others.
+
+Example, as it would appear in `docs/APPEARANCE-KIT.md`:
+
+```cpp
+#include <WindowEffects.h>
+
+MyWindow::MyWindow()
+	: BWindow(BRect(100, 100, 500, 400), "Glass", B_TITLED_WINDOW, 0)
+{
+	BAppearanceKit::set_window_glass(this, true);
+}
+```
+
 ## Settings
 
-- **Shadow** and **Frosted glass** are two checkboxes in a new "Window effects" box on the Look and feel tab of the Appearance page in Settings, and the same two in the separate Appearance program. Each works on its own. They are stored next to the decorator choice in app_server's decorator settings (new keys, read by `DesktopSettings`; an old settings file without them means both on). A change goes to app_server as a desktop-settings message and applies at once, with the log lines `app_server: shadow on` / `off` and `app_server: frosted on` / `off`. Defaults turns both on; Revert restores the two values from when the page was opened. With both off, the GPU mode still composes (A1, A2).
+- **Shadow** and **Frosted glass** are two checkboxes in a new "Window effects" box on the Look and feel tab of the Appearance page in Settings, and the same two in the separate Appearance program. Each works on its own. Both call `set_window_effects()`.
+- **Where app_server keeps them:** with its other appearance settings, in `DesktopSettingsPrivate`: two new keys in the `appearance` file (`~/config/settings/system/app_server/appearance`), written by `Save(kAppearanceSettings)` like the UI colours. An old file without the keys means both on. No new settings file, and no program writes the file.
+- A change applies at once, with the log lines `app_server: shadow on` / `off` and `app_server: frosted on` / `off`. Defaults turns both on; Revert restores the two values from when the page was opened. With both off, the GPU mode still composes (A1, A2).
 - In the CPU mode the checkboxes stay usable and are stored; they have no visible effect there.
 - `radeon_hd` settings: `gpu_compositor`, `gpu_compositor_lavapipe`, `gpu_compositor_fail`, `gpu_debug`. `gpu false` turns the GPU off, and the GPU mode then runs on Lavapipe.
 
@@ -158,7 +221,6 @@ Read from `KhronosGroup/glslang` `LICENSE.txt` on `main` and the releases page, 
 
 These are places where the source says something other than the brief. They are not decided here.
 
-1. **`B_TRANSPARENT_COLOR` as the glass signal (decision 2).** The brief gives as an example that a window says its background is open with `B_TRANSPARENT_COLOR` as the view colour of its top view. In the source, `View::Draw` (`View.cpp`, around lines 1056 and 1161) skips the background fill for that colour. Existing programs use it to mean "I draw every pixel myself" (no flicker), not "see-through": game views, `BGLView`, and many custom views. Using it as the signal would make those programs glass, and whatever they leave undrawn for one frame would show the blur. Options: (a) keep the brief's example; (b) a new, additive opt-in that no existing program sends, for example a call in `libr5ui` that sends a new app_server message for a window; (c) a view colour with an alpha between 1 and 254, which today has no special meaning. My recommendation would be (b), but that is the user's choice.
-2. **Painter draws only visible parts today.** Decision 5 says each window draws its whole content, including covered parts. That holds for app_server's own drawing (backgrounds, decorator) once the drawing region is the full frame. But a client only draws what `_UPDATE_` asks for, and the dirty region of a newly shown window is its whole content, so the first full draw comes from the client. Programs that draw outside an update, for example during a `Pulse()`, are clipped today by `GetEffectiveDrawingRegion()`; with a full drawing region they draw their covered parts too. No break is expected, but it is a change in behaviour that the brief does not name.
+1. **Covered parts and client drawing (decision 5).** The brief says each window draws its whole content, including parts that other windows cover. That holds for app_server's own drawing (backgrounds, decorator) once the drawing region is the full frame, and for a window that is shown, whose update covers its whole content. But programs that draw outside an update, for example in `Pulse()`, are clipped today by `Window::GetEffectiveDrawingRegion()` to what is visible. With a full drawing region they draw their covered parts too. No break is expected, but it is a change of behaviour that the brief does not name.
+2. **New decorator hooks and old add-ons (decisions 10 and 13).** The brief puts the hooks "at the end of the interface". `Decorator` (`decorator/Decorator.h`) has no reserved virtual slots. A new virtual function at the end changes the vtable layout of every subclass. A decorator add-on that was built before the change, and that app_server loads from `/system/add-ons/decorators`, has no entry for it, so a call crashes. The in-tree Haiku decorators are rebuilt and are not affected. Options: (a) virtual functions at the end, as the brief says, and the decorator add-on ABI version is raised so an old add-on is refused instead of crashing; (b) a separate interface class (for example `R5DecoratorEffects`) that the R5 decorator also inherits, found with `dynamic_cast`, so `Decorator` itself does not change. My recommendation would be (b), but that is the user's choice.
 3. **Importing the scanout buffer into RADV (decision 4).** The Vulkan copy needs RADV, through the R5 DRM library, to import the `R5_GPU_SCANOUT_BO` handle as `VkDeviceMemory`. M7 and M8 did not use that import. If the DRM library cannot do it without a new interface call, the choice is between a new call (additive) and the M8 `DMA_DATA` copy after the compose. That is decided in step 2 against the code, and this document follows.
-4. **Direct windows and the shared front buffer.** `DirectWindowInfo::SetState` hands the client the front buffer's address. In the GPU mode on RADV that front buffer is the scanout buffer the compositor writes. The brief's pause (decision 9) handles that. On Lavapipe the front buffer is the same accelerant framebuffer, so the pause is the same. No conflict, but the brief does not say whether the pause also applies to a `BWindowScreen` that only takes `LockDirectScreen` and draws nothing; this design pauses on the lock.
