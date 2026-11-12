@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - The R5Book, a developer guide to LibR5
+
+`docs/r5book/` is a static HTML guide in the layout of the Be Book and the look of the R5 website: an introduction, the Icons Kit (`libr5icons.so`), the Appearance Kit (`libr5ui.so`, every `BAppearanceKit` class and the `R5UI.h` functions) and the MIDI 2 Kit (the MIDI 2.0 additions to `libmidi2.so`). Each entry has the facts box (declared in, derived from, first user), what it is for and not for, its members, an example, and a picture.
+
+The pictures are HTML mockups in the R5 system colors, labelled as such; the HVIF icons are stand-ins. The glyphs use the geometry of `glyph_paint()`. Screenshots from R5 replace the mockups later. Checked in headless Edge at 1300 pixels wide; the signatures were compared with the headers.
+
 ## 2026-11-11 - USB isochronous transfers on EHCI, UHCI and OHCI
 
 RenkuOS group B, the whole list, on our copies. `uhci.cpp`, `uhci.h`, `ehci.h`, `ehci_hardware.h` and `ohci.h` are now copies too. The Haiku headers stay. The added blocks stay MIT.

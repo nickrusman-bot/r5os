@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>MIDI 2 Kit</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+	<style>
+		/* A 32-bit word as a row of bit fields */
+		.word { display: flex; width: 640px; max-width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+		.word + .word { margin-top: 6px; }
+		.field { border: 1px solid var(--slate-300); margin-left: -1px; padding: 8px 4px 6px; text-align: center; background: #fff; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+		.field:first-child { margin-left: 0; border-radius: 8px 0 0 8px; }
+		.field:last-child { border-radius: 0 8px 8px 0; }
+		.field b { font-size: 12px; color: var(--slate-900); }
+		.field span { color: var(--slate-500); font-size: 10px; }
+		.field.mt { background: rgba(0, 132, 255, 0.08); }
+		.field.grp { background: rgba(255, 184, 0, 0.12); }
+		.field.st { background: rgba(101, 184, 145, 0.14); }
+		.word-label { font-size: 11px; font-weight: 700; color: var(--slate-500); width: 640px; max-width: 100%; margin-bottom: 4px; }
+	</style>
+</head>
+<body data-page="midi2">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">libmidi2.so</span>
+			<h1>The MIDI 2 Kit</h1>
+			<p>R5's <code class="inline">libmidi2.so</code> sends and receives the Universal MIDI Packet (UMP) of
+			MIDI 2.0. The MIDI 1.0 calls stay; there is no second MIDI kit. Property Exchange, Profiles, per-note
+			controllers, and Endpoint and Function Block discovery are in this same kit.</p>
+		</section>
+
+		<table class="facts">
+			<tr><th>Declared in</th><td>&lt;MidiProducer.h&gt;, &lt;MidiConsumer.h&gt;, &lt;Midi2Defs.h&gt;, &lt;Midi2Property.h&gt;, &lt;Midi2Profile.h&gt;, &lt;Midi2Stream.h&gt;, &lt;Midi2Usb.h&gt;</td></tr>
+			<tr><th>Library</th><td>libmidi2.so (link be and libmidi2.so)</td></tr>
+			<tr><th>Source</th><td>distro/media/src/kits/midi2, headers in distro/media/headers/os/midi2</td></tr>
+			<tr><th>Long description</th><td>docs/MIDI2.md</td></tr>
+			<tr><th>Check program</th><td>/system/bin/midi2test</td></tr>
+		</table>
+
+		<div class="note"><strong>One kit, two protocols.</strong> A <code class="inline">uchar</code> velocity or
+		controller is still a MIDI 1.0 message. The wide values have their own calls with a <code class="inline">2</code>
+		at the end, so a bare integer always picks the MIDI 1.0 call.</div>
+
+		<!-- Sending -->
+		<section class="entry" id="sending">
+			<div class="entry-header"><h2>BMidiLocalProducer</h2><span class="kind">MIDI 2.0 additions</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;MidiProducer.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BMidiProducer</td></tr>
+			</table>
+			<p>The Haiku producer, with three calls added. Each sends one MIDI 2.0 packet; connected consumers
+			that only know MIDI 1.0 still get their 7-bit hooks.</p>
+
+			<div class="member"><div class="sig">void SprayNoteOn2(uchar channel, uchar note, uint16 velocity, bigtime_t time = 0) const;</div>
+				<p>A note-on with a 16-bit velocity, as one type 0x4 channel-voice packet.</p></div>
+			<div class="member"><div class="sig">void SprayControlChange2(uchar channel, uchar controller, uint32 value, bigtime_t time = 0) const;</div>
+				<p>A control change with a 32-bit value.</p></div>
+			<div class="member"><div class="sig">status_t SprayUMP(const uint32* ump, size_t wordCount, bigtime_t time = 0) const;</div>
+				<p>Any packet. <code class="inline">wordCount</code> is 1, 2 or 4 and must match the message type in
+				<code class="inline">ump[0]</code>; anything else is refused.</p></div>
+
+<pre class="code">producer-&gt;SprayNoteOn(0, 60, 100);						<span class="c">// MIDI 1.0</span>
+
+uint16 velocity = 0x8000;
+producer-&gt;SprayNoteOn2(0, 60, velocity);				<span class="c">// MIDI 2.0</span>
+
+uint32 level = 0x80000000;
+producer-&gt;SprayControlChange2(0, B_MAIN_VOLUME, level);
+
+uint32 words[2];
+midi2_encode_note_on(0, 60, velocity, words);
+status_t status = producer-&gt;SprayUMP(words, 2);</pre>
+		</section>
+
+		<!-- Packet -->
+		<section class="entry" id="ump">
+			<div class="entry-header"><h2 class="plain">The Universal MIDI Packet</h2><span class="kind">&lt;Midi2Defs.h&gt;</span></div>
+			<p>A packet is one, two or four 32-bit words, native byte order. The message type in the top four
+			bits of the first word says how many.</p>
+
+			<figure class="stage">
+				<div style="display:flex;flex-direction:column;align-items:center">
+					<div class="word-label">Word 0 &middot; a MIDI 2.0 note-on from midi2_encode_note_on()</div>
+					<div class="word">
+						<div class="field mt" style="flex:4"><b>0x4</b><span>type 31..28</span></div>
+						<div class="field grp" style="flex:4"><b>group</b><span>27..24</span></div>
+						<div class="field st" style="flex:4"><b>0x9</b><span>status 23..20</span></div>
+						<div class="field" style="flex:4"><b>chan</b><span>19..16</span></div>
+						<div class="field" style="flex:8"><b>note</b><span>15..8</span></div>
+						<div class="field" style="flex:8"><b>attribute type</b><span>7..0</span></div>
+					</div>
+					<div class="word-label" style="margin-top:12px">Word 1</div>
+					<div class="word">
+						<div class="field" style="flex:16"><b>velocity, 16 bits</b><span>31..16</span></div>
+						<div class="field" style="flex:16"><b>attribute data</b><span>15..0</span></div>
+					</div>
+				</div>
+				<figcaption><span>Note-off is status 0x8, control change 0xB (word 1 is then the whole 32-bit value). The helpers leave the group 0; <code>usb_midi</code> sets it to the port's cable.</span><span class="badge-mockup">Diagram</span></figcaption>
+			</figure>
+
+			<table class="spec">
+				<tr><th>Type</th><th>Words</th><th>In this kit</th></tr>
+				<tr><td><code>0x0</code> utility, <code>0x1</code> system, <code>0x2</code> MIDI 1.0 channel voice</td><td>1</td><td>A type 0x2 packet is unpacked to the MIDI 1.0 hooks. <code>SprayUMP</code> accepts type 0x1.</td></tr>
+				<tr><td><code>0x3</code> SysEx7, <code>0x4</code> MIDI 2.0 channel voice</td><td>2</td><td>Type 0x4 note and control keep the full value and also call the 7-bit hooks. Type 0x3 calls <code>SystemExclusive</code> once the message is complete.</td></tr>
+				<tr><td><code>0x5</code> data, <code>0xD</code> Flex Data, <code>0xF</code> stream</td><td>4</td><td>Delivered in <code>Data</code>; no extra hook reads it.</td></tr>
+				<tr><td>anything else</td><td>&mdash;</td><td>Refused by <code>SprayUMP</code> and <code>midi2_ump_from_payload</code>.</td></tr>
+			</table>
+
+			<div class="member"><div class="sig">uint32 midi2_ump_word_count(uint32 firstWord);</div><p>1, 2 or 4, or 0 for a type the kit does not take.</p></div>
+			<div class="member"><div class="sig">void midi2_encode_note_on(uchar channel, uchar note, uint16 velocity, uint32 words[2]);
+void midi2_encode_control_change(uchar channel, uchar controller, uint32 value, uint32 words[2]);</div></div>
+			<div class="member"><div class="sig">uint16 midi2_scale_up_7_to_16(uint8 value7);
+uint8 midi2_note_on_midi1_velocity(uint16 velocity);</div>
+				<p>Value scaling as in Appendix D of the specification. A 16-bit note-on velocity becomes at least 1
+				in MIDI 1.0, so it never turns into a note-off.</p></div>
+		</section>
+
+		<!-- Receiving -->
+		<section class="entry" id="receiving">
+			<div class="entry-header"><h2>BMidiLocalConsumer</h2><span class="kind">reading a packet</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;MidiConsumer.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BMidiConsumer</td></tr>
+			</table>
+			<p><code class="inline">Data()</code> gets the packet. The base <code class="inline">Data()</code> still calls
+			<code class="inline">NoteOn</code>, <code class="inline">ControlChange</code> and the other 7-bit hooks,
+			and <code class="inline">SystemExclusive</code> for a complete SysEx7. To read the full value, override
+			<code class="inline">Data()</code>, unpack the words, and return without calling the base when you handled it.</p>
+
+<pre class="code"><span class="k">void</span>
+MyConsumer::Data(uchar* data, size_t length, <span class="k">bool</span> atomic, bigtime_t time)
+{
+	uint32 words[4];
+	size_t count = 0;
+	<span class="k">if</span> (midi2_ump_from_payload(data, length, words, 4, &amp;count) == B_OK) {
+		<span class="k">if</span> (midi2_is_note(words, count)) {
+			uint16 velocity = midi2_note_velocity(words, count);
+			<span class="c">// ...</span>
+		}
+		<span class="k">return</span>;
+	}
+	BMidiLocalConsumer::Data(data, length, atomic, time);
+}</pre>
+
+			<div class="member"><div class="sig">status_t midi2_ump_from_payload(const void* data, size_t length, uint32* words,
+	size_t capacity, size_t* _count);</div>
+				<p>Checks the magic (<code class="inline">B_MIDI2_UMP_MAGIC</code>), the word count, the buffer length and
+				the message type, then copies the words.</p></div>
+			<div class="member"><div class="sig">bool midi2_is_note(const uint32* words, size_t wordCount);
+uint16 midi2_note_velocity(const uint32* words, size_t wordCount);
+bool midi2_is_control(const uint32* words, size_t wordCount);
+uint32 midi2_control_value(const uint32* words, size_t wordCount);</div></div>
+			<div class="member"><div class="sig">size_t midi2_sysex_packet_count(size_t length);
+status_t midi2_encode_sysex(const uint8* data, size_t length, uint32* words, ...);
+status_t midi2_sysex_payload(const uint32* words, size_t wordCount, uint8* _status, ...);</div>
+				<p>SysEx7 in type 0x3 packets: status 0 is a whole message, 1 starts, 2 continues, 3 ends. The kit joins
+				the parts per consumer and per group.</p></div>
+		</section>
+
+		<!-- Per-note -->
+		<section class="entry" id="per-note">
+			<div class="entry-header"><h2 class="plain">Per-note controllers</h2><span class="kind">&lt;Midi2Defs.h&gt;</span></div>
+			<p>A controller for one note, as one type 0x4 packet: registered or assignable, a controller index and a
+			32-bit value. <code class="inline">NoteOn</code> and <code class="inline">ControlChange</code> are not
+			called for it; a MIDI 1.0 program does not see it as a channel controller.</p>
+			<div class="member"><div class="sig">void midi2_encode_per_note(uchar channel, uchar note, uint8 index, uint32 value,
+	bool registered, uint32 words[2]);</div></div>
+			<div class="member"><div class="sig">bool midi2_is_per_note(const uint32* words, size_t wordCount);
+uint8 midi2_per_note_note(...);  uint8 midi2_per_note_index(...);
+uint32 midi2_per_note_value(...);  bool midi2_per_note_registered(...);</div></div>
+<pre class="code">uint32 words[2];
+midi2_encode_per_note(1, 60, 7, 0x80000000, <span class="k">false</span>, words);
+producer-&gt;SprayUMP(words, 2);</pre>
+		</section>
+
+		<!-- Property Exchange -->
+		<section class="entry" id="property-exchange">
+			<div class="entry-header"><h2 class="plain">Property Exchange</h2><span class="kind">&lt;Midi2Property.h&gt;</span></div>
+			<p>MIDI-CI Property Exchange: get and set a device's properties as JSON, over SysEx. The kit encodes and
+			decodes the messages, splits a large body into chunks and joins them again, and answers inquiries from a
+			small local catalog (<code class="inline">DeviceInfo</code>, <code class="inline">ChannelList</code>,
+			<code class="inline">ProgramList</code>, <code class="inline">CtrlMapList</code>).</p>
+
+			<table class="spec">
+				<tr><th>Sub-id</th><th>Message</th></tr>
+				<tr><td><code>B_MIDI2_PE_CAPABILITIES</code> / <code>_REPLY</code></td><td>0x30 / 0x31, how many requests at once</td></tr>
+				<tr><td><code>B_MIDI2_PE_GET</code> / <code>_REPLY</code></td><td>0x34 / 0x35</td></tr>
+				<tr><td><code>B_MIDI2_PE_SET</code> / <code>_REPLY</code></td><td>0x36 / 0x37</td></tr>
+				<tr><td><code>B_MIDI2_PE_SUBSCRIBE</code> / <code>_REPLY</code></td><td>0x38 / 0x39</td></tr>
+				<tr><td><code>B_MIDI2_PE_NOTIFY</code></td><td>0x3F</td></tr>
+			</table>
+
+			<div class="member"><div class="sig">status_t midi2_pe_encode(const midi2_pe_message* message, uint8* out, size_t capacity, size_t* _length);
+status_t midi2_pe_decode(const uint8* payload, size_t length, midi2_pe_message* message);</div></div>
+			<div class="member"><div class="sig">status_t midi2_pe_split(const midi2_pe_message* message, size_t maxPayload,
+	midi2_pe_message* chunks, size_t capacity, size_t* _count);
+void midi2_pe_assembly_init(midi2_pe_assembly* assembly);
+status_t midi2_pe_assembly_add(midi2_pe_assembly* assembly, const midi2_pe_message* chunk);</div>
+				<p>Pass the other device's largest SysEx as <code class="inline">maxPayload</code>, or 0 for one chunk.
+				A gap in the chunks drops the assembly.</p></div>
+			<div class="member"><div class="sig">midi2_pe_header_string(...), midi2_pe_header_number(...)</div><p>Read one field from a JSON header.</p></div>
+			<div class="member"><div class="sig">void midi2_pe_catalog_init(midi2_pe_catalog* catalog);
+status_t midi2_pe_respond(midi2_pe_catalog* catalog, const midi2_pe_message* inquiry, ...,
+	midi2_pe_message* reply);</div><p>Answers one complete inquiry from the catalog.</p></div>
+
+<pre class="code">midi2_pe_message request;
+memset(&amp;request, 0, <span class="k">sizeof</span>(request));
+request.subId = B_MIDI2_PE_GET;
+request.sourceMuid = 2;
+request.destinationMuid = 1;
+request.requestId = 3;
+request.header = <span class="s">"{\"resource\":\"DeviceInfo\"}"</span>;
+request.headerLength = strlen(request.header);
+request.chunkCount = 1;
+request.chunkNumber = 1;
+
+uint8 payload[128];
+size_t length = 0;
+midi2_pe_encode(&amp;request, payload, <span class="k">sizeof</span>(payload), &amp;length);</pre>
+		</section>
+
+		<!-- Profiles -->
+		<section class="entry" id="profiles">
+			<div class="entry-header"><h2 class="plain">Profiles</h2><span class="kind">&lt;Midi2Profile.h&gt;</span></div>
+			<p>MIDI-CI Profiles: ask a device which profiles it has, and switch one on or off. A profile id is five
+			bytes. The local catalog holds one standard profile, which starts disabled.</p>
+			<table class="spec">
+				<tr><th>Sub-id</th><th>Message</th></tr>
+				<tr><td><code>B_MIDI2_PROFILE_INQUIRY</code> / <code>_REPLY</code></td><td>0x20 / 0x21</td></tr>
+				<tr><td><code>B_MIDI2_PROFILE_SET_ON</code> / <code>_SET_OFF</code></td><td>0x22 / 0x23</td></tr>
+				<tr><td><code>B_MIDI2_PROFILE_ENABLED</code> / <code>_DISABLED</code></td><td>0x24 / 0x25, the reports</td></tr>
+				<tr><td><code>B_MIDI2_PROFILE_SPECIFIC</code></td><td>0x2F, profile specific data</td></tr>
+			</table>
+			<div class="member"><div class="sig">void midi2_profile_catalog_init(midi2_profile_catalog* catalog);
+status_t midi2_profile_encode(const midi2_profile_message* message, uint8* out, ...);
+status_t midi2_profile_decode(const uint8* payload, size_t length, ...);
+status_t midi2_profile_respond(midi2_profile_catalog* catalog, ...);</div></div>
+		</section>
+
+		<!-- Stream -->
+		<section class="entry" id="discovery">
+			<div class="entry-header"><h2 class="plain">Endpoint and Function Block discovery</h2><span class="kind">&lt;Midi2Stream.h&gt;</span></div>
+			<p>UMP Stream messages (type 0xF, four words) ask a MIDI 2.0 endpoint who it is, what its function blocks
+			are, and which protocol to use. The local endpoint is named <code class="inline">R5OS</code>, with one
+			bidirectional function block on group 0. It runs MIDI 1.0 protocol until a Stream Configuration message
+			selects another.</p>
+			<div class="member"><div class="sig">status_t midi2_stream_endpoint_discovery(uint8 filter, uint32 words[4]);
+status_t midi2_stream_block_discovery(uint8 block, uint8 filter, uint32 words[4]);</div>
+				<p>Filters: <code class="inline">B_MIDI2_STREAM_FILTER_INFO</code>, <code class="inline">_IDENTITY</code>,
+				<code class="inline">_NAME</code>, <code class="inline">_PRODUCT</code>, <code class="inline">_CONFIG</code>.
+				Block 0xFF asks for every block.</p></div>
+			<div class="member"><div class="sig">void midi2_endpoint_init(midi2_endpoint* endpoint);
+status_t midi2_stream_configure(midi2_endpoint* endpoint, const uint32* request);
+midi2_stream_identity(...), midi2_stream_reply(...)</div></div>
+		</section>
+
+		<!-- USB -->
+		<section class="entry" id="usb">
+			<div class="entry-header"><h2 class="plain">USB MIDI 2.0 descriptors</h2><span class="kind">&lt;Midi2Usb.h&gt;</span></div>
+			<p>Write and read the USB descriptors of a MIDI 2.0 interface: the standard interface descriptor,
+			the class-specific header (version 2.0), and a Group Terminal Block. Alternate setting 0 is the MIDI 1.0
+			interface; a later one is MIDI 2.0. <code class="inline">usb_midi</code> uses this to pick the protocol
+			of an endpoint.</p>
+			<div class="member"><div class="sig">status_t midi2_usb_write_interface(...);   status_t midi2_usb_parse_interface(...);
+status_t midi2_usb_write_header(...);      status_t midi2_usb_parse_header(...);
+status_t midi2_usb_write_group_terminal(...); status_t midi2_usb_parse_group_terminal(...);</div></div>
+		</section>
+
+		<!-- Drivers -->
+		<section class="entry" id="drivers">
+			<div class="entry-header"><h2 class="plain">For driver writers</h2><span class="kind">&lt;midi_driver.h&gt;</span></div>
+			<p><code class="inline">midi_server</code> sends a packet with
+			<code class="inline">ioctl(fd, B_MIDI_WRITE_UMP, &amp;packet)</code> and reads one with
+			<code class="inline">B_MIDI_READ_UMP</code>. The argument is <code class="inline">midi_ump_packet</code>:
+			<code class="inline">word_count</code> and <code class="inline">words[4]</code>. A driver that does not
+			implement them is used as a MIDI 1.0 port, with <code class="inline">read()</code> and
+			<code class="inline">write()</code>, as before.</p>
+			<div class="note"><strong>Tested.</strong> <code class="inline">midi2test</code> passes all checks in VirtualBox.
+			No USB MIDI 2.0 device has been attached yet.</div>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>
