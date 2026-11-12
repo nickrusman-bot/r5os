@@ -25,7 +25,6 @@
 #include <NodeMonitor.h>
 #include <OutlineListView.h>
 #include <Path.h>
-#include <PathMonitor.h>
 #include <R5Icons.h>
 #include <Screen.h>
 #include <ScrollView.h>
@@ -82,6 +81,8 @@ MainWindow::MainWindow()
 	fShowHidden(false),
 	fSavePanel(NULL),
 	fReloadRunner(NULL),
+	fPollRunner(NULL),
+	fSignature(0),
 	fHasPending(false),
 	fPendingEnable(false)
 {
@@ -174,8 +175,10 @@ MainWindow::MainWindow()
 	if (!BScreen(this).Frame().Contains(Frame().LeftTop()))
 		CenterOnScreen();
 
-	BPrivate::BPathMonitor::StartWatching("/dev",
-		B_WATCH_DIRECTORY | B_WATCH_RECURSIVELY, BMessenger(this));
+	// The device manager sends no notifications, and devfs does not report
+	// every plug-in. Compare the node ids every two seconds instead.
+	BMessage poll(kMsgDevChanged);
+	fPollRunner = new BMessageRunner(BMessenger(this), &poll, 2000000);
 
 	_Reload();
 }
@@ -183,7 +186,7 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
-	BPrivate::BPathMonitor::StopWatching(BMessenger(this));
+	delete fPollRunner;
 	delete fReloadRunner;
 	delete fSavePanel;
 	for (std::map<int32, BBitmap*>::iterator it = fIcons.begin();
@@ -272,7 +275,9 @@ MainWindow::MessageReceived(BMessage* message)
 			_Reload();
 			break;
 
-		case B_PATH_MONITOR:
+		case kMsgDevChanged:
+			if (DeviceModel::TreeSignature() == fSignature)
+				break;
 			// Wait half a second for the rest of a plug-in or unplug.
 			if (fReloadRunner == NULL) {
 				BMessage reload(kMsgReloadNow);
@@ -346,6 +351,7 @@ MainWindow::DescribeDevice(const DeviceRecord* record, BMessage& out)
 void
 MainWindow::_Reload()
 {
+	fSignature = DeviceModel::TreeSignature();
 	fModel.Scan();
 	_Rebuild();
 	_UpdatePropertiesWindows();

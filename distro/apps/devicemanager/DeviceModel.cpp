@@ -60,7 +60,8 @@ DeviceRecord::DeviceRecord()
 	driverKind(DM_DRIVER_NONE),
 	hidden(false),
 	internal(false),
-	critical(false)
+	critical(false),
+	plumbing(false)
 {
 }
 
@@ -289,6 +290,7 @@ DeviceModel::Scan()
 	fRoot = fRecords[0];
 
 	_FindDrivers();
+	_FindBusDrivers();
 	_MatchGraphics();
 	for (size_t i = 0; i < fRecords.size(); i++) {
 		_Classify(fRecords[i]);
@@ -478,6 +480,13 @@ DeviceModel::_AddNode(device_node_cookie* node, DeviceRecord* parent)
 	record->name = newDevice->GetName();
 	if (record->name.IsEmpty() || record->name == "unknown")
 		record->name = newDevice->Text();
+	// A device missing from the ID lists: say what kind it is instead.
+	if (record->name.IsEmpty() || record->name.StartsWith("unknown")) {
+		BString kind = newDevice->GetAttribute("Class info").fValue;
+		if (kind.IsEmpty() || kind.StartsWith("unknown"))
+			kind = B_TRANSLATE("Unknown device");
+		record->name = kind;
+	}
 	record->manufacturer = newDevice->GetManufacturer();
 	if (record->manufacturer == "unknown")
 		record->manufacturer = "";
@@ -550,6 +559,72 @@ DeviceModel::_FindDrivers()
 				record->driverName = path.Leaf();
 			}
 		}
+	}
+}
+
+
+// A node that is not a device of its own: a plain Device with no category,
+// such as a bus driver's node, an ATA channel or a virtio device.
+static bool
+is_plumbing(const DeviceRecord* record)
+{
+	Device* device = record->device;
+	if (dynamic_cast<DevicePCI*>(device) != NULL
+		|| dynamic_cast<DeviceUSB*>(device) != NULL
+		|| dynamic_cast<DeviceACPI*>(device) != NULL
+		|| dynamic_cast<DeviceSCSI*>(device) != NULL)
+		return false;
+	return device->GetCategory() == CAT_NONE
+		&& record->RawValue(B_DEVICE_BUS) != "legacy_driver"
+		&& record->group != DM_GROUP_DISK_DRIVES;
+}
+
+
+// Searches the plumbing under a device for its driver: the first module
+// under drivers/, else the first other kernel module. Stops at real devices.
+static void
+find_bus_driver(DeviceRecord* record, BString& driverPath, BString& busPath)
+{
+	for (size_t i = 0; i < record->children.size(); i++) {
+		DeviceRecord* child = record->children[i];
+		if (!is_plumbing(child))
+			continue;
+		child->plumbing = true;
+		child->hidden = true;
+		if (driverPath.IsEmpty() && is_driver_module_path(child->modulePath))
+			driverPath = child->modulePath;
+		if (busPath.IsEmpty() && is_kernel_module_path(child->modulePath)
+			&& child->modulePath != record->modulePath)
+			busPath = child->modulePath;
+		find_bus_driver(child, driverPath, busPath);
+	}
+}
+
+
+// Many controllers are served by a bus driver (busses/ata, busses/usb,
+// busses/virtio) with its own node below the PCI device, and the function
+// driver further down. The kernel's driver path only looks one level down
+// for drivers/, so look through those nodes here.
+void
+DeviceModel::_FindBusDrivers()
+{
+	for (size_t i = 0; i < fRecords.size(); i++) {
+		DeviceRecord* record = fRecords[i];
+		if (dynamic_cast<DevicePCI*>(record->device) == NULL
+			&& dynamic_cast<DeviceUSB*>(record->device) == NULL)
+			continue;
+		BString driverPath;
+		BString busPath;
+		find_bus_driver(record, driverPath, busPath);
+		if (record->driverKind != DM_DRIVER_NONE)
+			continue;
+		BString path = driverPath.IsEmpty() ? busPath : driverPath;
+		if (path.IsEmpty())
+			continue;
+		record->driverKind = driverPath.IsEmpty() ? DM_DRIVER_SYSTEM : DM_DRIVER_NODE;
+		record->driverPath = path;
+		BPath leaf(path.String());
+		record->driverName = leaf.Leaf();
 	}
 }
 
@@ -665,6 +740,28 @@ DeviceModel::_Classify(DeviceRecord* record)
 	if (record->group == DM_GROUP_DISK_DRIVES)
 		return;
 
+	// A plain node with no category that the bus search did not reach (for
+	// example the SCSI bus under an ATA channel) is plumbing of its parent.
+	// Directly under the computer it is a system device.
+	if (!record->plumbing && is_plumbing(record) && record->parent != NULL) {
+		if (record->parent == fRoot) {
+			record->group = DM_GROUP_SYSTEM;
+			return;
+		}
+		record->plumbing = true;
+		record->hidden = true;
+	}
+
+	if (record->plumbing) {
+		DeviceRecord* owner = record->parent;
+		while (owner != NULL && owner->plumbing)
+			owner = owner->parent;
+		record->group = owner != NULL ? owner->group : DM_GROUP_SYSTEM;
+		record->location.SetToFormat(B_TRANSLATE("On %s"),
+			record->parent != NULL ? record->parent->name.String() : "");
+		return;
+	}
+
 	if (dynamic_cast<DeviceSCSI*>(device) != NULL) {
 		record->group = DM_GROUP_DISK_DRIVES;
 	} else if (dynamic_cast<DeviceUSB*>(device) != NULL) {
@@ -690,6 +787,11 @@ DeviceModel::_Classify(DeviceRecord* record)
 
 	if (record->name == "Unknown device")
 		record->hidden = true;
+
+	// A device with no class that has a driver is a working system part
+	// (for example a random number generator), not an unknown device.
+	if (record->group == DM_GROUP_OTHER && record->HasDriver())
+		record->group = DM_GROUP_OTHER_SYSTEM;
 
 	// Location, in words.
 	BString pciBus = record->RawValue(B_PCI_DEVICE_BUS);
@@ -730,6 +832,31 @@ DeviceModel::_SetStatus(DeviceRecord* record)
 		return;
 	}
 	record->status = DM_STATUS_NOT_REPORTED;
+}
+
+
+static void
+add_signature(device_node_cookie* node, uint32& hash, int32 depth)
+{
+	hash = hash * 31 + (uint32)*node + (uint32)depth;
+	device_node_cookie child = *node;
+	if (get_child(&child) != B_OK)
+		return;
+	do {
+		add_signature(&child, hash, depth + 1);
+	} while (get_next_child(&child) == B_OK);
+}
+
+
+/*static*/ uint32
+DeviceModel::TreeSignature()
+{
+	device_node_cookie root;
+	if (get_root(&root) != B_OK)
+		return 0;
+	uint32 hash = 17;
+	add_signature(&root, hash, 0);
+	return hash;
 }
 
 
@@ -803,7 +930,9 @@ DeviceModel::StatusSentence(const DeviceRecord* record)
 			return B_TRANSLATE("The driver for this device is turned off. "
 				"It stops after a restart.");
 		case DM_STATUS_NO_DRIVER:
-			return B_TRANSLATE("No driver is installed for this device.");
+			return B_TRANSLATE("No driver is installed for this device. If you "
+				"turned its driver off, Action â¸ Turned-off drivers turns it on "
+				"again.");
 	}
 	return B_TRANSLATE("The system does not report which driver serves "
 		"this device. It may still work.");

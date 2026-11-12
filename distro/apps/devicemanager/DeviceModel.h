@@ -90,6 +90,10 @@ struct DeviceRecord {
 			// reservation). Its data is shown on the parent.
 			bool				internal;
 			bool				critical;
+			// A node between a device and its driver (a bus driver's own
+			// node, an ATA channel, a virtio device). Hidden, in its
+			// device's group.
+			bool				plumbing;
 
 			BString				RawValue(const char* name) const;
 			BString				modulePath;
@@ -114,6 +118,10 @@ public:
 	static	const char*			GroupIconSignature(int32 group);
 	static	const char*			StatusSentence(const DeviceRecord* record);
 
+	// A cheap fingerprint of the kernel's device tree (the node ids), to
+	// notice a plug-in or unplug without reading every attribute.
+	static	uint32				TreeSignature();
+
 private:
 			void				_Clear();
 			void				_AddNode(device_node_cookie* node,
@@ -121,6 +129,7 @@ private:
 			void				_Classify(DeviceRecord* record);
 			void				_FindDrivers();
 			void				_MatchGraphics();
+			void				_FindBusDrivers();
 	static	BString				_DriverFile(const BString& name);
 			void				_SetStatus(DeviceRecord* record);
 

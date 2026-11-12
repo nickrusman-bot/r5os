@@ -78,6 +78,8 @@ private:
 			BMessenger			fTurnedOffWindow;
 			BFilePanel*			fSavePanel;
 			BMessageRunner*		fReloadRunner;
+			BMessageRunner*		fPollRunner;
+			uint32				fSignature;
 
 			bool				fHasPending;
 			BString				fPendingPath;

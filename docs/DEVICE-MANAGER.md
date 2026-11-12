@@ -19,7 +19,9 @@ Haiku's Devices code is built from `src/apps/devices` without changes: `dm_wrapp
 - **Action**: Properties, Turn off driver / Turn on driver, Scan for hardware changes, Turned-off drivers.
 - **File**: Export > Full details (every device under its type, with all its properties) or Device tree (as connected, indented one step per level). Plain UTF-8 text.
 - Groups by type: Cameras, Disk drives, Display adapters, Human interface devices, Network adapters, Other devices, Other system devices, Processors, Sound video and game controllers, Storage controllers, System devices, Universal Serial Bus controllers. Groups start folded, except Other devices.
-- The list follows `/dev` (`BPathMonitor`, recursive). After a change it waits 500 ms and reads the tree again. Selection and folded groups stay.
+- The list follows plug-in and unplug. The device manager sends no notifications and watching `/dev` did not report a USB keyboard in QEMU, so every 2 seconds Device Manager compares the node ids of the tree (`TreeSignature()`, no attributes read). After a change it waits 500 ms and reads the tree again. Selection and folded groups stay.
+
+Hidden unless Show hidden devices: the nodes between a device and its driver, such as a bus driver's own node, an ATA channel's SCSI bus or a virtio device. They take the group of their device. A plain node directly under the computer is a system device.
 
 Not shown: the nodes that only carry a driver (a driver node whose path is its parent's, and the PCI "legacy driver" reservations). Hidden unless Show hidden devices: unnamed ACPI nodes and nodes with no name.
 

@@ -58,6 +58,7 @@ static BStringView*
 value_view(const char* name)
 {
 	BStringView* view = new BStringView(name, "");
+	view->SetExplicitMinSize(BSize(60, B_SIZE_UNSET));
 	view->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	view->SetTruncation(B_TRUNCATE_MIDDLE);
 	return view;
@@ -101,7 +102,7 @@ size_text(off_t size)
 PropertiesWindow::PropertiesWindow(BMessenger mainWindow, const BMessage& device)
 	:
 	BWindow(BRect(0, 0, 439, 499), "", B_TITLED_WINDOW,
-		B_NOT_RESIZABLE | B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS
+		B_NOT_ZOOMABLE | B_AUTO_UPDATE_SIZE_LIMITS
 			| B_CLOSE_ON_ESCAPE),
 	fMainWindow(mainWindow),
 	fCookie(0),
@@ -111,6 +112,9 @@ PropertiesWindow::PropertiesWindow(BMessenger mainWindow, const BMessage& device
 {
 	BTabView* tabs = new BTabView("tabs", B_WIDTH_FROM_LABEL);
 	tabs->SetBorder(B_NO_BORDER);
+	// 440 by 500 at a 12 point font, as Windows' Properties window.
+	float unit = be_plain_font->Size() / 12.0f;
+	tabs->SetExplicitMinSize(BSize(floorf(410 * unit), floorf(420 * unit)));
 
 	BView* general = _GeneralTab();
 	general->SetName(B_TRANSLATE("General"));
@@ -139,7 +143,6 @@ PropertiesWindow::PropertiesWindow(BMessenger mainWindow, const BMessage& device
 	AddShortcut('C', B_COMMAND_KEY, new BMessage(B_COPY));
 
 	_SetDevice(device);
-	ResizeTo(439, 499);
 }
 
 
@@ -222,6 +225,7 @@ PropertiesWindow::_Header(BIconView*& icon, BStringView*& name)
 	name = new BStringView("name", "");
 	BFont bold(be_bold_font);
 	name->SetFont(&bold);
+	name->SetExplicitMinSize(BSize(60, B_SIZE_UNSET));
 	name->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 	name->SetTruncation(B_TRUNCATE_END);
 
@@ -244,6 +248,11 @@ PropertiesWindow::_GeneralTab()
 	fStatus = read_only_text("status");
 	BScrollView* statusScroll = new BScrollView("status-scroll", fStatus, 0,
 		false, false);
+	font_height height;
+	be_plain_font->GetHeight(&height);
+	float line = ceilf(height.ascent + height.descent + height.leading);
+	statusScroll->SetExplicitMinSize(BSize(B_SIZE_UNSET, line * 4));
+	statusScroll->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, line * 4));
 	BBox* box = new BBox("status-box");
 	box->SetLabel(B_TRANSLATE("Device status"));
 	BLayoutBuilder::Group<>(box, B_VERTICAL)
@@ -264,7 +273,8 @@ PropertiesWindow::_GeneralTab()
 			.Add(label_view(B_TRANSLATE("Location:")), 0, 2)
 			.Add(fLocation, 1, 2)
 		.End()
-		.Add(box, 1.0f);
+		.Add(box)
+		.AddGlue();
 	return view;
 }
 
