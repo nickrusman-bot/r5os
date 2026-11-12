@@ -86,6 +86,36 @@ MyApp::MessageReceived(BMessage* message)
 	BApplication::MessageReceived(message);
 }</pre>
 		</section>
+
+		<!-- USB device speed -->
+		<section class="entry" id="usb-speed">
+			<div class="entry-header"><h2>B_USB_IOCTL_GET_DEVICE_SPEED</h2><span class="kind">USB (drivers)</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;usb/R5USBSpeed.h&gt;</td></tr>
+				<tr><th>Module</th><td>bus_managers/usb (USB module v3)</td></tr>
+				<tr><th>For</th><td>Kernel drivers</td></tr>
+			</table>
+
+			<p>Haiku's USB module does not tell a driver at which speed its device runs. R5 answers that through the
+			existing <code class="inline">usb_ioctl()</code> of the module; the module structure is unchanged. The value
+			is one of <code class="inline">B_USB_SPEED_LOW</code>, <code class="inline">_FULL</code>,
+			<code class="inline">_HIGH</code>, <code class="inline">_SUPER</code> and
+			<code class="inline">_SUPER_PLUS</code>. A USB audio driver needs it to size its packets: a high-speed
+			device takes eight packets per millisecond, a full-speed device one.</p>
+
+			<div class="member"><div class="sig">status_t usb_ioctl(B_USB_IOCTL_GET_DEVICE_SPEED, uint32* value, sizeof(uint32));</div>
+				<p>In: the <code class="inline">usb_device</code> in <code class="inline">*value</code>. Out: its speed.
+				<code class="inline">B_BAD_VALUE</code> when the ID is not a device. On Haiku, and on R5 before build
+				10058, the call returns <code class="inline">B_DEV_INVALID_IOCTL</code>; keep a fallback.</p></div>
+
+<pre class="code">uint32 speed = (uint32)device;
+<span class="k">bool</span> highSpeed;
+<span class="k">if</span> (gUSBModule-&gt;usb_ioctl(B_USB_IOCTL_GET_DEVICE_SPEED, &amp;speed,
+		<span class="k">sizeof</span>(speed)) == B_OK)
+	highSpeed = speed &gt;= B_USB_SPEED_HIGH;
+<span class="k">else</span>
+	highSpeed = guess_from_descriptors();	<span class="c">// your own fallback</span></pre>
+		</section>
 	</main>
 </div>
 

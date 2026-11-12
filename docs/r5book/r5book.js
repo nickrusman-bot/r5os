@@ -45,6 +45,7 @@
 			["midi2-kit.html#property-exchange", "Property Exchange", true],
 			["midi2-kit.html#profiles", "Profiles", true],
 			["midi2-kit.html#discovery", "Discovery", true],
+			["midi2-kit.html#identity", "Your program's identity", true],
 			["midi2-kit.html#usb", "USB descriptors", true],
 			["midi2-kit.html#drivers", "Drivers", true],
 		]},
@@ -67,6 +68,7 @@
 			["haiku-additions.html", "Additions to Haiku kits"],
 			["haiku-additions.html#BFormattingConventions", "BFormattingConventions", true],
 			["haiku-additions.html#BLocaleRoster", "BLocaleRoster", true],
+			["haiku-additions.html#usb-speed", "USB device speed", true],
 		]},
 		{ title: "Guidelines", file: "guidelines.html", items: [
 			["guidelines.html", "Making it look like R5"],

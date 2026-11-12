@@ -10,7 +10,7 @@ The developer guide to LibR5 and the MIDI 2 additions, in the layout of the Be B
 | `midi2-kit.html` | MIDI 2.0 in `libmidi2.so` | `distro/media/headers/os/midi2`, `docs/MIDI2.md` |
 | `vulkan.html` | Vulkan in a `BView`: `VK_RFIVE_view_surface` | `distro/vulkan/include/vulkan/vulkan_r5.h`, `docs/VULKAN-WSI.md` |
 | `accounts.html` | Accounts, sessions, lock and log out; Sign in as an example, with screenshots in `img/` | `docs/MULTIUSER.md`, `distro/login` |
-| `haiku-additions.html` | Public calls R5 added to Haiku classes | the `SPDX-Snippet` parts of the public headers in `distro/` |
+| `haiku-additions.html` | Public calls R5 added to Haiku classes and modules (Locale Kit, USB module) | the `SPDX-Snippet` parts of the public headers in `distro/` |
 | `guidelines.html` | How an R5 window is put together | `docs/STYLE.md`, `docs/SETTINGS.md`, `AGENTS.md` |
 
 ## Pictures
