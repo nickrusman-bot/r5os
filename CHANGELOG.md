@@ -1,5 +1,16 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Stick 49: deep idle and Wi-Fi come up; NetworkStatus crashed on the Wi-Fi menu (build 10060)
+
+Stick 49 (`f7797d180f`, sha256 `192f0f33…`), one boot on the 5625U, syslog in `generated/boot-5625u-49/syslog`.
+
+- Boot: no kernel panic. The idle-module fix works: `found power/cpuidle module: …x86_cstates…`, then `acpi cpu 0 maps to cpu 0` … `acpi cpu 11 maps to cpu 11` (the MADT fix), `_CST` with C1 (FFH, 1 µs), C2 (I/O, 18 µs) and C3 (I/O, 350 µs), and `using cpuidle module power/cpuidle/x86_acpi_cstates/v1`. `failed to eval _OSC and _PDC` is expected on this firmware. Whether the laptop stays responsive after a long idle was not reported yet.
+- CPPC: one `R5 CPPC:` line per CPU, each request's max equal to its own CAP1. The cores differ: highest 186 (cores 4/5/8/9), 181 (2/3), 176 (0/1), 171 (10/11), 166 (6/7) — AMD preferred cores. The race fix holds.
+- PCID: `R5 CPU topology: … ecx 0x76d8320b stored ecx 0x76d8320b …`. Bit 17 is clear in the raw word too, so the CPU or firmware does not report PCID on this laptop, and the kernel does not lose the bit. PCID work stops here for the 5625U.
+- Wi-Fi: `mt7922wifi` attached: `firmware WIFI_MT7961_patch_mcu_1_2_hdr.bin, WIFI_RAM_CODE_MT7961_1.bin`, `MT7961, revision 0x10`, `firmware running; radio …, 2 streams`, `attached to the wireless stack`, `start_wlan: wlan started`, link down. No network was joined: the menu crashed first.
+- NetworkStatus crashed when its Deskbar icon was clicked: `General protection fault` in `BString::BString(const BString&)` from `WirelessNetworkMenuItem::CompareSignalStrength` from `BMenu::SortItems` in `NetworkStatusView::MouseDown`. The Wi-Fi part of the menu (R5's, since before this round) puts "Wi-Fi…" and the current network first and then sorted the whole menu with a comparator that reads every item as a `WirelessNetworkMenuItem`. That path had never run: no earlier stick had a Wi-Fi adapter. Fix (`distro/rest/src/apps/networkstatus/NetworkStatusView.cpp`, MIT snippet): only the network items are sorted, in a vector, and then added. NetworkStatus builds; not booted yet.
+- Bluetooth: `h2generic` did not load in this log (nothing opened `/dev/bluetooth` before the crash). Not tested.
+
 ## 2026-11-12 - The About icon stays GPL, so the overlay runs again
 
 After the MIT change (#4216), `scripts/apply-overlay.sh` stopped at its first step: `artwork does not match the generator: distro/rest/src/apps/aboutsystem/AboutSystem.rdef`. #4216 made the `vector_icon` snippet MIT, but `scripts/generate-r5-artwork.py` writes it as GPL-3.0-or-later, because it is R5 artwork. By the owner's decision the icon stays GPL like `distro/artwork`: the snippet says GPL-3.0-or-later again, the file's notice names that exception, and `docs/LICENSING.md` lists it. `generate-r5-artwork.py --check` passes. This also affects `main` until this is merged.

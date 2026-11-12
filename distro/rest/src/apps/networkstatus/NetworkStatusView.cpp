@@ -516,6 +516,13 @@ NetworkStatusView::MouseDown(BPoint point)
 		uint32 networksCount = 0;
 		wireless_network* networks = NULL;
 		device.GetNetworks(networks, networksCount);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		// Sort only the networks: the menu also holds the Wi-Fi settings
+		// item and the current network, and CompareSignalStrength() reads
+		// every item it is given as a WirelessNetworkMenuItem.
+		std::vector<BMenuItem*> networkItems;
 		for (uint32 i = 0; i < networksCount; i++) {
 			const wireless_network& network = networks[i];
 			BMessage* message = new BMessage(kMsgJoinNetwork);
@@ -524,19 +531,26 @@ NetworkStatusView::MouseDown(BPoint point)
 			message->AddFlat("address", &network.address);
 
 			BMenuItem* item = new WirelessNetworkMenuItem(network, message);
-			menu->AddItem(item);
 			if (associated.find(network.address) != associated.end())
 				item->SetMarked(true);
+			networkItems.push_back(item);
 		}
 		delete[] networks;
+
+		std::stable_sort(networkItems.begin(), networkItems.end(),
+			[](const BMenuItem* a, const BMenuItem* b) {
+				return WirelessNetworkMenuItem::CompareSignalStrength(a, b) < 0;
+			});
+		for (size_t i = 0; i < networkItems.size(); i++)
+			menu->AddItem(networkItems[i]);
 
 		if (networksCount == 0) {
 			BMenuItem* item = new BMenuItem(
 				B_TRANSLATE("<no wireless networks found>"), NULL);
 			item->SetEnabled(false);
 			menu->AddItem(item);
-		} else
-			menu->SortItems(WirelessNetworkMenuItem::CompareSignalStrength);
+		}
+// SPDX-SnippetEnd
 
 		menu->AddSeparatorItem();
 	}
