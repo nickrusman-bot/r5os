@@ -17,8 +17,8 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
 - **Settings** is one window. Home shows a card per category; the list on the left folds open to the pages of one category, and Search jumps to any page. Pages include Information (your computer at a glance), Display (your screen and workspaces), Appearance, Desktop and Deskbar, Wallpaper, Notifications and Virtual memory. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
 - Notifications, with a choice of where they appear on screen.
-- Device Manager, with a warning for devices without a driver.
-- Touchpad gestures and TrackPoint support.
+- A new Device Manager
+- Touchpad support
 
 ### Accounts
 - A **sign-in screen** before the desktop starts. **Log out** and **Lock screen** are in the leaf menu.
@@ -37,16 +37,15 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - A latency choice: Normal, Low latency, or Pro audio.
 - USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
 - Virtual surround for headphones.
-- More reliable USB sound cards, which can be unplugged safely.
+- More reliable USB sound cards
 - Finer MIDI velocity and controller values. Existing MIDI programs keep working.
 - MIDI 2.0 support
-- MIDI Monitor, to see what a MIDI device sends.
+- A new MIDI Monitor
 
 ### Graphics
 **Not just any port.** We've done it the Haiku and BeOS way: a native layer between Vulkan and R5.
 
-- Native Vulkan support \*
-- Vulkan in a normal window \*
+- Native Vulkan (no Linux kernel) \*
 - Native OpenGL, running on top of Vulkan \*
 - Your existing Haiku apps keep working, unchanged
 - Software rendering as a fallback
@@ -54,8 +53,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 \* In active development. Hardware support is still limited. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
 
 ### Processor
-- Better use of multi-core and hybrid processors.
-- Deeper sleep states when idle, for a cooler laptop and longer battery life.
+- Better CPU support (AMD/Intel)
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
