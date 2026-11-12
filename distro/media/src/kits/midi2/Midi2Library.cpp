@@ -1267,3 +1267,84 @@ midi2_usb_parse_group_terminal(const uint8* raw, size_t length,
 	return B_OK;
 }
 
+
+/* A name goes into JSON between quotes. Refusing the characters that would
+ * need escaping keeps the writer small and the result valid. */
+static bool
+midi2_identity_name_ok(const char* name)
+{
+	if (name == NULL)
+		return true;
+	for (const char* c = name; *c != '\0'; c++) {
+		if (*c == '"' || *c == '\\' || (uint8)*c < 0x20)
+			return false;
+	}
+	return true;
+}
+
+static bool
+midi2_identity_bytes_ok(const midi2_identity* identity)
+{
+	const uint8* groups[] = { identity->manufacturer, identity->family,
+		identity->model, identity->revision };
+	const size_t sizes[] = { 3, 2, 2, 4 };
+	for (size_t g = 0; g < 4; g++) {
+		for (size_t i = 0; i < sizes[g]; i++) {
+			if (groups[g][i] > 0x7f)
+				return false;
+		}
+	}
+	return true;
+}
+
+status_t
+midi2_pe_catalog_set_identity(midi2_pe_catalog* catalog,
+	const midi2_identity* identity)
+{
+	if (catalog == NULL || identity == NULL || !midi2_identity_bytes_ok(identity)
+		|| !midi2_identity_name_ok(identity->manufacturerName)
+		|| !midi2_identity_name_ok(identity->familyName)
+		|| !midi2_identity_name_ok(identity->modelName)
+		|| !midi2_identity_name_ok(identity->versionName)) {
+		return B_BAD_VALUE;
+	}
+	const uint8* m = identity->manufacturer;
+	const uint8* f = identity->family;
+	const uint8* d = identity->model;
+	const uint8* r = identity->revision;
+	char info[sizeof(catalog->deviceInfo)];
+	int length = snprintf(info, sizeof(info),
+		"{\"manufacturerId\":[%u,%u,%u],\"manufacturer\":\"%s\","
+		"\"familyId\":[%u,%u],\"family\":\"%s\",\"modelId\":[%u,%u],"
+		"\"model\":\"%s\",\"versionId\":[%u,%u,%u,%u],\"version\":\"%s\"}",
+		m[0], m[1], m[2],
+		identity->manufacturerName != NULL ? identity->manufacturerName : "",
+		f[0], f[1], identity->familyName != NULL ? identity->familyName : "",
+		d[0], d[1], identity->modelName != NULL ? identity->modelName : "",
+		r[0], r[1], r[2], r[3],
+		identity->versionName != NULL ? identity->versionName : "");
+	if (length < 0 || (size_t)length >= sizeof(info))
+		return B_BAD_VALUE;
+	memcpy(catalog->deviceInfo, info, (size_t)length + 1);
+	return B_OK;
+}
+
+status_t
+midi2_endpoint_set_identity(midi2_endpoint* endpoint,
+	const midi2_identity* identity, const char* name, const char* productId)
+{
+	if (endpoint == NULL || identity == NULL
+		|| !midi2_identity_bytes_ok(identity)) {
+		return B_BAD_VALUE;
+	}
+	memcpy(endpoint->manufacturer, identity->manufacturer,
+		sizeof(endpoint->manufacturer));
+	memcpy(endpoint->family, identity->family, sizeof(endpoint->family));
+	memcpy(endpoint->model, identity->model, sizeof(endpoint->model));
+	memcpy(endpoint->revision, identity->revision, sizeof(endpoint->revision));
+	if (name != NULL)
+		strlcpy(endpoint->name, name, sizeof(endpoint->name));
+	if (productId != NULL)
+		strlcpy(endpoint->productId, productId, sizeof(endpoint->productId));
+	return B_OK;
+}

@@ -53,7 +53,7 @@ Zeroconf, AirPrint, AirPlay 1 and the network tray exist. They are not "done" un
 
 Things that are fine in a development build but must be settled before R5 2026.1 (or whichever version is first) is published.
 
-- **A MIDI manufacturer ID for R5.** MIDI 2.0 (MIDI-CI and the UMP endpoint identity) now answers with `0x7D`, the SysEx ID for educational and non-commercial use. A released system must not use it. The product owner requests a Manufacturer SysEx ID from the MIDI Association (midi.org), under the project name, not a personal name (the list is public). The three-byte ID then goes into `midi2_pe_catalog_init` and `midi2_endpoint_init` in `distro/media/src/kits/midi2/Midi2Library.cpp`, and `docs/MIDI2.md` (Limits) is updated. MIDI 1.0 devices are not affected.
+- **A MIDI manufacturer ID, only if R5 ships its own MIDI 2.0 device.** R5 itself does not present itself to MIDI devices: the identity in MIDI-CI and the UMP Device Identity belongs to the program (`midi2_pe_catalog_set_identity`, `midi2_endpoint_set_identity`), and the kit's default is `0x7D`, the SysEx ID for educational and non-commercial use. R5 needs its own Manufacturer SysEx ID from the MIDI Association (midi.org, about $260 a year, or included with a paid membership) only when R5 ships a program that acts as a MIDI 2.0 device, such as a built-in synthesizer. Before the release, check that no R5 program does that with `0x7D`. If an ID is ever bought: register it under the project name, not a personal name (the list is public), and ask first whether there is an arrangement for open-source projects.
 
 ## Named products (later)
 

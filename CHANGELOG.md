@@ -12,7 +12,9 @@ Bus speed: the USB bus manager answers `usb_ioctl(B_USB_IOCTL_GET_DEVICE_SPEED)`
 
 Not changed, after a look: the recording carry. It can hold almost a whole buffer, but that is audio, not drift: after a short capture is held back, the next transfer brings two buffers. A cap of 4 ms dropped most of a buffer on a slow device clock; `test-usb-audio-packets` failed (`44100 Hz drift -1: buffer 2 frame 176 is 880, want 617`) and the cap was taken out again. The latency is at most one buffer; a smaller buffer in Media lowers it. The review point was wrong on that.
 
-MIDI 1.0 devices stay MIDI 1.0 bytes through `midi_server`: handing them over as UMP would change what an existing program's `Data()` receives. Documented in `docs/MIDI2.md` (Limits), with the `UMP1` marker and the `0x7D` manufacturer ID, which stays until R5 has a SysEx ID from the MIDI Association.
+MIDI 1.0 devices stay MIDI 1.0 bytes through `midi_server`: handing them over as UMP would change what an existing program's `Data()` receives. Documented in `docs/MIDI2.md` (Limits), with the `UMP1` marker.
+
+Manufacturer ID: R5 itself never presents itself to a MIDI device; only `midi2test` and the fuzzer use the kit's catalogs. The identity is the program's: new `<Midi2Identity.h>` (`midi2_identity`, `B_MIDI2_NONCOMMERCIAL_ID`), `midi2_pe_catalog_set_identity` (writes DeviceInfo, refuses 8-bit bytes and names that would need JSON escaping) and `midi2_endpoint_set_identity`, added at the end of `libmidi2.so`; the existing calls are unchanged and still default to `0x7D`. So R5 does not buy a SysEx ID now; `docs/ROADMAP.md` keeps the item for the case that R5 ships its own MIDI 2.0 device. `midi2test` checks the new calls (built, not run); the same checks passed in a host build with ASan/UBSan, and `fuzz-midi2` property and stream ran 60 s `ok`.
 
 Licensing: the R5 UMP code in `usb_midi.cpp` and `usb_midi.h` is inside SPDX snippet tags (20 in the source file, no code changed by the tagging; the 3 Nov entry said they were there).
 

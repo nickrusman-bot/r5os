@@ -263,7 +263,15 @@ status_t midi2_stream_block_discovery(uint8 block, uint8 filter, uint32 words[4]
 				Block 0xFF asks for every block.</p></div>
 			<div class="member"><div class="sig">void midi2_endpoint_init(midi2_endpoint* endpoint);
 status_t midi2_stream_configure(midi2_endpoint* endpoint, const uint32* request);
-midi2_stream_identity(...), midi2_stream_reply(...)</div></div>
+midi2_stream_identity(...), midi2_stream_reply(...)
+status_t midi2_endpoint_set_identity(midi2_endpoint* endpoint,
+	const midi2_identity* identity, const char* name, const char* productId);
+status_t midi2_pe_catalog_set_identity(midi2_pe_catalog* catalog,
+	const midi2_identity* identity);</div>
+				<p>The identity is your program's, not R5's. The init calls start with
+				<code class="inline">B_MIDI2_NONCOMMERCIAL_ID</code> (0x7D, for educational and
+				non-commercial use). A program that is published sets its own SysEx ID from the
+				MIDI Association with these two calls (<code class="inline">&lt;Midi2Identity.h&gt;</code>).</p></div>
 		</section>
 
 		<!-- USB -->
