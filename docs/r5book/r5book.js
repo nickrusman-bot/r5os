@@ -33,6 +33,7 @@
 			["appearance-kit.html#BPasswordControl", "BPasswordControl", true],
 			["appearance-kit.html#BAccentButton", "BAccentButton", true],
 			["appearance-kit.html#BIconView", "BIconView", true],
+			["appearance-kit.html#BAdminLockBar", "BAdminLockBar", true],
 			["appearance-kit.html#functions", "Functions", true],
 		]},
 		{ title: "MIDI 2 Kit", file: "midi2-kit.html", items: [

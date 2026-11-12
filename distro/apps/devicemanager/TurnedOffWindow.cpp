@@ -105,6 +105,5 @@ TurnedOffWindow::_Refresh()
 	}
 	if (fDrivers.empty())
 		fList->AddItem(new BStringItem(B_TRANSLATE("No drivers are turned off.")));
-	fList->SetEnabled(!fDrivers.empty());
 	fTurnOnButton->SetEnabled(false);
 }

@@ -219,6 +219,10 @@ The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is
 
 R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
 
+### Device Manager
+
+Device Manager is MIT. It builds Haiku's Devices code unchanged from `src/apps/devices` (`dm_wrapper.c`, `Device*.cpp`, `DriverUtils.cpp`): MIT, copyright 2006-2026 Haiku, Inc., authors Pieter Panman and Leo Rouleau as named in those files. Its icon is the Devices icon, MIT, copyright Haiku, Inc. Hardware names come from the lists in Haiku's `src/data/ids`, the same ones Devices uses. The PCI ID list (Martin Mares and Albert Pool, pci-ids.ucw.cz) may be distributed under GPL-2.0-or-later or BSD-3-Clause; Device Manager uses it under BSD-3-Clause. The USB ID list (maintained by Stephen J. Gowdy, linux-usb.org) states no license in the file; it is not yet reviewed beyond that. ACPI and PnP names come from the UEFI registry files Haiku ships in the same folder. The R5 parts are copyright 2026 R5OS Contributors, MIT.
+
 ## Built outside this repository, not in the image
 
 ### VirtualBox Guest Additions 7.2.22

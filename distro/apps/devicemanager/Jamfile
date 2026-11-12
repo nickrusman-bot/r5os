@@ -123,7 +123,7 @@ Application DeviceManager :
 	DriverUtils.cpp
 	dm_wrapper.c
 
-	: be device shared package libr5ui.so libr5icons.so [ TargetLibsupc++ ]
+	: be device shared package tracker libr5ui.so libr5icons.so [ TargetLibsupc++ ]
 		[ TargetLibstdc++ ] localestub
 	: DeviceManager.rdef
 ;

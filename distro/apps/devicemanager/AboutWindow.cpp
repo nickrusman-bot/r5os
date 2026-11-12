@@ -162,7 +162,7 @@ public:
 		_AddCell(grid, 0, 1, B_TRANSLATE("Based on"),
 			B_TRANSLATE("Devices, \xC2\xA9 2008\xE2\x80\x93" "2026 Haiku, Inc. (MIT)"));
 		_AddCell(grid, 1, 1, B_TRANSLATE("Hardware names"),
-			B_TRANSLATE("PCI ID and USB ID lists (BSD-3-Clause)"));
+			B_TRANSLATE("The PCI ID and USB ID lists"));
 		_Apply();
 	}
 

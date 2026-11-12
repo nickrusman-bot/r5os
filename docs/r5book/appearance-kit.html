@@ -547,6 +547,76 @@ BAppearanceKit::BIconView* logo = <span class="k">new</span> BAppearanceKit::BIc
 <span class="k">delete</span> pebble;</pre>
 		</section>
 
+		<!-- BAdminLockBar -->
+		<section class="entry" id="BAdminLockBar">
+			<div class="entry-header"><h2>BAdminLockBar</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;AdminLock.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BGroupView</td></tr>
+				<tr><th>First user</th><td>Time, Screen, Network, Printers, Repositories, VirtualMemory, Users, Settings; Device Manager</td></tr>
+			</table>
+			<p>The lock for machine settings. A program runs as the signed-in person; a change that needs an
+			administrator goes to Sign in (Login), which checks the grant and makes the change. The bar is a label
+			and an Unlock button. While it is locked, the views in its window are gray; an administrator starts
+			unlocked, and one unlock opens the program for five minutes. <code class="inline">AdminLockBar</code>
+			is a typedef for this class, the name the preferences have always used.</p>
+			<p>It was compiled into each preference under GPL-3.0-or-later. Since November 2026 it is part of
+			<code class="inline">libr5ui.so</code> and MIT, so any program can link it. Login, the side that checks
+			the password, stays GPL and is reached only by messages.</p>
+
+			<figure class="stage">
+				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:380px">
+					<div style="display:flex;align-items:center;gap:8px">
+						<span class="sys-button">Revert</span>
+						<span style="flex:1"></span>
+						<span>Locked</span>
+						<span class="sys-button">Unlock&hellip;</span>
+					</div>
+				</div>
+				<figcaption><span>At the right of a preference's bottom row</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Use it for</h4><p>A window that changes the whole computer: the clock, the screen mode, network, printers, drivers.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>The person's own settings. Those need no administrator and stay unlocked.</p></div>
+			</div>
+
+			<div class="member"><div class="sig">BAdminLockBar();</div>
+				<p>Put it in the window's bottom row. It asks Login when it is attached and watches the grant.</p></div>
+			<div class="member"><div class="sig">void SetExempt(BView* view, bool exempt);</div>
+				<p>Keeps one view usable while the lock is closed, for example the person's own account card in Users.</p></div>
+			<div class="member"><div class="sig">bool AcceptsInput(BHandler* target) const;</div>
+				<p>Whether a click or key for <code class="inline">target</code> goes through now.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_query(bool&amp; administrator, bool&amp; unlocked);
+bool r5_admin_change_allowed();</div>
+				<p>Asks Login. <code class="inline">unlocked</code> is true for an administrator or while a grant runs.
+				Both are false when Login cannot be asked.</p></div>
+			<div class="member"><div class="sig">void r5_admin_prompt_unlock(BMessenger target);
+status_t r5_admin_unlock(const char* name, const char* password, BString&amp; error);
+status_t r5_admin_relock();</div>
+				<p>The unlock window, the same without a window, and ending the grant. On success the window sends
+				<code class="inline">kMsgAdminLockChanged</code> to <code class="inline">target</code>. The password is
+				not logged.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_set_clock(unsigned long seconds);
+status_t r5_admin_set_timezone(int32 offset, const char* name);
+status_t r5_admin_set_clock_gmt(bool gmt);</div>
+				<p>The clock and the time zone, for Time and Settings.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_set_driver_blocked(const char* driver, bool blocked, BString&amp; error);</div>
+				<p>Turns a packaged driver under <code class="inline">/boot/system/add-ons/kernel/</code> off or on for
+				the next start. Login refuses drivers the system needs to start. Device Manager uses it.</p></div>
+
+<pre class="code"><span class="k">#include</span> <span class="s">&lt;AdminLock.h&gt;</span>
+
+BLayoutBuilder::Group&lt;&gt;(bottomRow, B_HORIZONTAL)
+	.Add(fRevertButton)
+	.AddGlue()
+	.Add(<span class="k">new</span> BAppearanceKit::BAdminLockBar());
+
+<span class="k">bool</span> administrator, unlocked;
+<span class="k">if</span> (r5_admin_query(administrator, unlocked) == B_OK &amp;&amp; !unlocked)
+	r5_admin_prompt_unlock(BMessenger(<span class="k">this</span>));	<span class="c">// kMsgAdminLockChanged follows</span></pre>
+		</section>
+
 		<!-- Functions -->
 		<section class="entry" id="functions">
 			<div class="entry-header"><h2 class="plain">Functions</h2><span class="kind">&lt;R5UI.h&gt;</span></div>

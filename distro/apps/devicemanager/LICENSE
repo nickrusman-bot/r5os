@@ -21,5 +21,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Hardware names come from the PCI ID and USB ID lists in Haiku's src/data/ids,
-used under the BSD-3-Clause choice those lists offer.
+Hardware names come from the lists in Haiku's src/data/ids. The PCI ID list is
+used under the BSD-3-Clause choice it offers. The USB ID list states no license
+in the file.
