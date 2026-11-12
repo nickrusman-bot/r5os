@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - A camera stream that stays queued
+
+An isochronous camera was read one short transfer at a time, so packets between calls were lost and CodyCam showed no picture. `usb_raw` now keeps four transfers queued (air/OS `0af4c0889e`, jmgasper, MIT) and the UVC add-on reads that stream. CodyCam's errors, the video source it finds, and a successful connect go to the syslog and to `/boot/home/codycam.log`. The webcam add-on writes the same kind of line to the syslog and to `/boot/home/uvc.log`.
+
+Not booted. Not written to a stick. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-12 - The R5Book, a developer guide to LibR5
 
 `docs/r5book/` is a static HTML guide in the layout of the Be Book and the look of the R5 website: an introduction, the Icons Kit (`libr5icons.so`), the Appearance Kit (`libr5ui.so`, every `BAppearanceKit` class and the `R5UI.h` functions) and the MIDI 2 Kit (the MIDI 2.0 additions to `libmidi2.so`). Each entry has the facts box (declared in, derived from, first user), what it is for and not for, its members, an example, and a picture.

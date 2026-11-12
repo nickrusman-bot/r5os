@@ -107,6 +107,7 @@ air/OS (airos-works/haiku), copyright jmgasper:
 
 - `a314c835a947baedb3a04fa46eec4dc4e74b2eb9` rewrites the USB Video Class path. YUY2, UYVY, NV12, I420 and Motion-JPEG become `B_RGB32`. Frames go out as the camera sends them, at the size the consumer asks for. Camera controls are parameters. One node per camera. The active USB configuration is left as it is, so the microphone stays with `usb_audio`. Co-Authored-By: Claude Fable 5.1.
 - `d0df427f165f0dc6ef45c5d675d841200f242ee0` frees the camera when its consumer dies. Co-Authored-By: Claude Fable 5.1. `Producer.cpp` and `Producer.h` only.
+- `0af4c0889e` keeps several isochronous transfers queued, in `usb_raw` and the USB kit, so a packet is not lost between two reads. The webcam add-on reads that stream.
 
 `distro/media/src/bin/camtest/` is R5's own test. License: GPL-3.0-or-later. It is not from air/OS and it is not camgrab.
 

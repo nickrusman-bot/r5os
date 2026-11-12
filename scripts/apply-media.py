@@ -56,6 +56,8 @@ FILES = (
     "src/preferences/media/MediaWindow.cpp",
     "src/preferences/media/MediaWindow.h",
     "src/kits/interface/MenuField.cpp",
+    "src/kits/device/USBEndpoint.cpp",
+    "headers/os/device/USBKit.h",
     "headers/os/midi2/Midi2Defs.h",
     "headers/os/midi2/Midi2Property.h",
     "headers/os/midi2/Midi2Profile.h",
