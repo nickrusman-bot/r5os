@@ -6,7 +6,7 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 
 > R5 Operating System is **not** the official Haiku distribution, and it is **not** BeOS. It is an independent project and is not associated with the Haiku Project. See [`distro/DISCLAIMER.txt`](distro/DISCLAIMER.txt).
 
-**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10053**. There is no public release yet.
+**Status:** in development. The current tree is **R5 Operating System 2026.1-dev, build 10059**. There is no public release yet.
 
 ---
 
@@ -17,6 +17,8 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
 - **Settings** is one window. Home shows a card per category; the list on the left folds open to the pages of one category, and Search jumps to any page. Pages include Information (your computer at a glance), Display (your screen and workspaces), Appearance, Desktop and Deskbar, Wallpaper, Notifications and Virtual memory. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
 - Notifications, with a choice of where they appear on screen.
+- A new Device Manager
+- Touchpad support
 
 ### Accounts
 - A **sign-in screen** before the desktop starts. **Log out** and **Lock screen** are in the leaf menu.
@@ -35,18 +37,23 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - A latency choice: Normal, Low latency, or Pro audio.
 - USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
 - Virtual surround for headphones.
+- More reliable USB sound cards
 - Finer MIDI velocity and controller values. Existing MIDI programs keep working.
 - MIDI 2.0 support
+- A new MIDI Monitor
 
 ### Graphics
 **Not just any port.** We've done it the Haiku and BeOS way: a native layer between Vulkan and R5.
 
-- Native Vulkan support \*
+- Native Vulkan (no Linux kernel) \*
 - Native OpenGL, running on top of Vulkan \*
 - Your existing Haiku apps keep working, unchanged
 - Software rendering as a fallback
 
 \* In active development. Hardware support is still limited. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
+
+### Processor
+- Better CPU support (AMD/Intel)
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
@@ -126,6 +133,7 @@ Build an image:
 |---|---|
 | `distro/` | Everything R5 Operating System adds or changes: version, What's new, artwork, apps, drivers and system components. These files are copied into the Haiku tree at build time. |
 | `haiku/` | The Haiku source tree that R5 Operating System builds on. |
+| `docs/r5book/` | The R5Book, a developer guide in the style of the Be Book. |
 | `docs/` | Design notes and contracts: [roadmap](docs/ROADMAP.md), [graphics](docs/GRAPHICS.md), [multi-user](docs/MULTIUSER.md), [Settings](docs/SETTINGS.md), [icons](docs/ICONS.md), [shared libraries](docs/LIBR5.md), [licensing](docs/LICENSING.md), and more. |
 | `scripts/` | Build, image, virtual-machine and tracker scripts. |
 | `tracker/` | Which open Haiku tickets R5 Operating System has fixed. The overview is [`tracker/STATUS.md`](tracker/STATUS.md). |
