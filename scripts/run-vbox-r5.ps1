@@ -44,6 +44,19 @@ function Get-RawImagePath {
 	throw "r5-os.image not found. Jam AMD64 first (scripts/jam-r5-raw.sh)."
 }
 
+function Assert-WslIdle {
+	# jam and QEMU hold this lock; a copy now gives a broken image.
+	wsl -e flock -n /home/nickr/r5os/.jam.lock true
+	$busy = ($LASTEXITCODE -ne 0)
+	if (-not $busy) {
+		wsl -e bash -lc "pgrep -x jam >/dev/null || pgrep -x qemu-system-x86 >/dev/null"
+		$busy = ($LASTEXITCODE -eq 0)
+	}
+	if ($busy) {
+		throw "A jam or QEMU run is busy in WSL; try again when it is done."
+	}
+}
+
 function Detach-IdeDisk([string]$vbox, [string]$name) {
 	& $vbox storageattach $name --storagectl IDE --port 0 --device 0 --medium none 2>&1 | Out-Null
 }
@@ -64,6 +77,7 @@ function Get-BridgeName([string]$vbox, [string]$preferred) {
 }
 
 $vbox = Find-VBoxManage
+Assert-WslIdle
 $raw = Get-RawImagePath
 $outDir = Join-Path $PSScriptRoot "..\generated"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null

@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - VirtualBox waits until a build is done
+
+`scripts/run-vbox-r5.ps1` stops with "A jam or QEMU run is busy in WSL; try again when it is done." while `/home/nickr/r5os/.jam.lock` is held or `jam` / `qemu-system-x86` runs in WSL, so it no longer copies a half-written `r5-os.image`. The check runs once at the start, not during the copy. Tested: busy (a real jam held the lock; also a 20 s test lock); free only with a scratch lock and non-matching process names, because a jam was running.
+
 ## 2026-11-12 - Wi-Fi works on the 5625U; the Deskbar list shows each network once
 
 Stick 51 (`7df60ccc53`, the code of `main` after PR #4215, sha256 `f5d21996…`): the owner joined a WPA2 network with the MT7921 and reports that Wi-Fi works. No kernel panic. No syslog was collected for this boot, so DHCP and the transfer speed are not on record. Bluetooth and a long idle were not reported.
