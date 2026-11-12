@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - The About icon stays GPL, so the overlay runs again
+
+After the MIT change (#4216), `scripts/apply-overlay.sh` stopped at its first step: `artwork does not match the generator: distro/rest/src/apps/aboutsystem/AboutSystem.rdef`. #4216 made the `vector_icon` snippet MIT, but `scripts/generate-r5-artwork.py` writes it as GPL-3.0-or-later, because it is R5 artwork. By the owner's decision the icon stays GPL like `distro/artwork`: the snippet says GPL-3.0-or-later again, the file's notice names that exception, and `docs/LICENSING.md` lists it. `generate-r5-artwork.py --check` passes. This also affects `main` until this is merged.
+
 ## 2026-11-12 - Boot panic on the 5625U: the idle module was swapped under running CPUs (build 10060)
 
 Stick 48 (build 10060, `873776597e`) stopped at boot in the kernel debugger: `PANIC: SMEP violation user-mapped address 0xffffffff8255cc90 touched from kernel`, thread `main2`, CPU 7. The stack: `cpu_init_post_modules` → `load_cpuidle_module` → `put_module` → `unload_kernel_add_on` → `vm_delete_area` → `X86VMTranslationMap::Flush` → `x86_cstates_text + 0xc90`. The other CPUs already run when the cpuidle modules are loaded. `load_cpuidle_module()` installed the first module it found (`x86_cstates`, rank 0.8) at once, then found `x86_acpi_cstates` (0.9), put the first one and unloaded its code while CPUs were idling in it; the TLB shootdown waited in `cpu_wait()` through the old module. The fault on the freed text is reported as SMEP.
