@@ -34,10 +34,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -45,7 +44,7 @@ All rights reserved.
 #include "BarApp.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 #include "DeskbarMenu.h"
 
@@ -76,7 +75,7 @@ namespace BPrivate {
 #include <Path.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Alert.h>
 #include <OS.h>
 #include <LaunchRoster.h>
@@ -84,7 +83,7 @@ namespace BPrivate {
 #include <Roster.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <String.h>
 #include <WindowInfo.h>
 // SPDX-SnippetEnd
@@ -101,7 +100,7 @@ namespace BPrivate {
 #include "ResourceSet.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "BarSettings.h"
 #include "ShowHideMenuItem.h"
 // SPDX-SnippetEnd
@@ -111,7 +110,7 @@ namespace BPrivate {
 #include "icons.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -149,7 +148,7 @@ TBarApp::TBarApp()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	debug_printf("R5 deskbar: BarApp from distro\n");
 // SPDX-SnippetEnd
 	InitSettings();
@@ -249,7 +248,7 @@ TBarApp::SaveSettings()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (fSettingsFile != NULL && fSettingsFile->InitCheck() == B_OK) {
 // SPDX-SnippetEnd
 		fSettingsFile->Seek(0, SEEK_SET);
@@ -282,7 +281,7 @@ TBarApp::SaveSettings()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fSettingsFile->SetSize(0);
 		fSettingsFile->Seek(0, SEEK_SET);
 // SPDX-SnippetEnd
@@ -291,7 +290,7 @@ TBarApp::SaveSettings()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (fClockSettingsFile != NULL
 		&& fClockSettingsFile->InitCheck() == B_OK) {
 // SPDX-SnippetEnd
@@ -303,7 +302,7 @@ TBarApp::SaveSettings()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fClockSettingsFile->SetSize(0);
 		fClockSettingsFile->Seek(0, SEEK_SET);
 // SPDX-SnippetEnd
@@ -631,7 +630,7 @@ TBarApp::MessageReceived(BMessage* message)
 			fBarWindow->Unlock();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			SaveSettings();
 // SPDX-SnippetEnd
 			break;
@@ -786,7 +785,7 @@ TBarApp::MessageReceived(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case kLockSession:
 		{
 			BMessenger login("application/x-vnd.Haiku-Login");
@@ -822,7 +821,7 @@ TBarApp::MessageReceived(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case kShowDesktop:
 		{
 			BList teams;
@@ -868,14 +867,14 @@ TBarApp::MessageReceived(BMessage* message)
 		{
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// The file may still be the previous locale. Apply the message
 			// after Refresh() so that copy does not win.
 // SPDX-SnippetEnd
 			BLocaleRoster::Default()->Refresh();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			BLocaleRoster::Default()->ApplySettings(message);
 			BPrivate::ForceUnloadCatalog();
 			gLocalizedNamePreferred
@@ -906,7 +905,7 @@ TBarApp::MessageReceived(BMessage* message)
 				// and reflow the tray icons.
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			break;
 
 		case B_COLORS_UPDATED:

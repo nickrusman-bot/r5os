@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Manrope for this application. The system fonts stay as they are.
  * The files are OFL-1.1 and are not modified.
  */

@@ -10,7 +10,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "AccountAdmin.h"
 #include "SignInLook.h"
 #include "r5_pebble.inc"
@@ -449,7 +449,7 @@ LoginView::PrepareForSignIn()
 	fPasswordControl->SetText("");
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString ready;
 	ready.SetToFormat("Ready to sign in as %s", fActiveName->Text());
 	_SetFeedback(ready.String(), false);
@@ -474,7 +474,7 @@ LoginView::Pulse()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 LoginView::_FillUsers()
 {
@@ -659,7 +659,7 @@ LoginView::_EnableControls(bool enable)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 LoginView::_ApplyColors()
 {

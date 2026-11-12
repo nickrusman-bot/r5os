@@ -9,10 +9,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -84,7 +83,7 @@ ipv6_copy_address(const sockaddr *from, sockaddr **to,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		memset(*to, 0, sizeof(sockaddr_in6));
 		size_t copyLen = from->sa_len;
 		if (copyLen > sizeof(sockaddr_in6))
@@ -265,7 +264,7 @@ ipv6_first_mask_bit(const sockaddr *_mask)
 	const uint8 *pmask = ((const sockaddr_in6 *)_mask)->sin6_addr.s6_addr;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool allZero = true;
 	for (uint8 i = 0; i < sizeof(in6_addr); ++i) {
 		if (pmask[i] != 0) {

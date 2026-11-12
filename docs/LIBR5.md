@@ -307,7 +307,7 @@ r5_avatar_draw(this, BRect(0, 0, 43, 43), people, true);
 
 The machine-settings lock. The header is `<AdminLock.h>`. A program runs as the signed-in person. A change that needs an administrator goes to Sign in (Login, uid 0), which checks the grant and makes the change. An administrator starts unlocked. One unlock is a grant for that program for `kAdminGrantSeconds` (5 minutes). The password goes to Login in one message and is not logged or kept.
 
-Since November 2026 this is part of `libr5ui.so` and is MIT. It was GPL-3.0-or-later and compiled into each program; the rights holder relicensed it so any program can use it, Device Manager included. Settings, Users, Time, Screen, Network, Printers, Repositories, VirtualMemory and Device Manager link it. Login's side (`distro/users/AccountAdmin.cpp`, `distro/login/DriverAdmin.cpp`) stays GPL-3.0-or-later; a program talks to it only through messages.
+Since November 2026 this is part of `libr5ui.so` and is MIT. It was GPL-3.0-or-later and compiled into each program; the rights holder relicensed it so any program can use it, Device Manager included. Settings, Users, Time, Screen, Network, Printers, Repositories, VirtualMemory and Device Manager link it. Login's side (`distro/users/AccountAdmin.cpp`, `distro/login/DriverAdmin.cpp`) is MIT too since 12 Nov 2026; a program talks to it only through messages.
 
 | Call | What it does |
 |---|---|

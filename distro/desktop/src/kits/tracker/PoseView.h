@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 #ifndef _POSE_VIEW_H
@@ -202,7 +201,7 @@ public:
 	void SetReverseSort(bool reverse);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	void SetReverseSecondarySort(bool reverse);
 // SPDX-SnippetEnd
 	uint32 PrimarySort() const;
@@ -212,7 +211,7 @@ public:
 	bool ReverseSort() const;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool ReverseSecondarySort() const;
 // SPDX-SnippetEnd
 	void CheckPoseSortOrder(BPose*, int32 index);
@@ -1109,7 +1108,7 @@ BPoseView::ReverseSort() const
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 inline bool
 BPoseView::ReverseSecondarySort() const
 {

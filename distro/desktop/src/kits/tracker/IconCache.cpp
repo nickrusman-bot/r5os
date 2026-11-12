@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 //	Icon cache is used for drawing node icons; it caches icons
@@ -73,7 +72,7 @@ All rights reserved.
 #include <ControlLook.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <IconUtils.h>
 // SPDX-SnippetEnd
 #include <Debug.h>
@@ -86,7 +85,7 @@ All rights reserved.
 #include "Bitmaps.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "r5_drive_icon.h"
 // SPDX-SnippetEnd
 #include "FSUtils.h"
@@ -637,7 +636,7 @@ IconCache::GetVolumeIcon(AutoLock<SimpleIconCache>*nodeCacheLocker,
 			BBitmap* bitmap = lazyBitmap->Get();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// The legacy volume and share icons are the beige cabinet.
 			if (BIconUtils::GetVectorIcon(kR5DriveIcon, kR5DriveIconSize, bitmap)
 					!= B_OK) {
@@ -752,7 +751,7 @@ IconCache::GetWellKnownIcon(AutoLock<SimpleIconCache>*,
 			case B_BOOT_DISK:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				// R_HardDiskIcon is the beige cabinet, and R_BootVolumeIcon
 				// carries the ladybug of the nightly builds. The boot disk is
 				// the drive without the ladybug; Pose draws the R5 mark on it.
@@ -822,7 +821,7 @@ IconCache::GetWellKnownIcon(AutoLock<SimpleIconCache>*,
 		BBitmap* bitmap = lazyBitmap->Get();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (resourceId != R_BootVolumeIcon
 			|| BIconUtils::GetVectorIcon(kR5DriveIcon, kR5DriveIconSize, bitmap)
 				!= B_OK) {

@@ -11,10 +11,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -398,7 +397,7 @@ BScrollBar::Draw(BRect updateRect)
 	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Arrow buttons follow the control color. The trough stays the panel
 	// color. Haiku #19630 button colors
 	rgb_color button = ui_color(B_CONTROL_BACKGROUND_COLOR);
@@ -437,7 +436,7 @@ BScrollBar::Draw(BRect updateRect)
 		be_control_look->DrawScrollBarButton(this, buttonFrame, updateRect,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			button, buttonText, flags | (fPrivateData->fButtonDown == ARROW1
 // SPDX-SnippetEnd
 				? BControlLook::B_ACTIVATED : 0),
@@ -449,7 +448,7 @@ BScrollBar::Draw(BRect updateRect)
 			be_control_look->DrawScrollBarButton(this, buttonFrame, updateRect,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				button, buttonText, flags | (fPrivateData->fButtonDown == ARROW2
 // SPDX-SnippetEnd
 					? BControlLook::B_ACTIVATED : 0),
@@ -461,7 +460,7 @@ BScrollBar::Draw(BRect updateRect)
 			be_control_look->DrawScrollBarButton(this, buttonFrame, updateRect,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				button, buttonText, flags | (fPrivateData->fButtonDown == ARROW3
 // SPDX-SnippetEnd
 					? BControlLook::B_ACTIVATED : 0),
@@ -479,7 +478,7 @@ BScrollBar::Draw(BRect updateRect)
 		be_control_look->DrawScrollBarButton(this, buttonFrame, updateRect,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			button, buttonText, flags | (fPrivateData->fButtonDown == ARROW4
 // SPDX-SnippetEnd
 				? BControlLook::B_ACTIVATED : 0),
@@ -492,7 +491,7 @@ BScrollBar::Draw(BRect updateRect)
 		be_control_look->DrawScrollBarButton(this, buttonFrame, updateRect,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			button, buttonText, flags | (fPrivateData->fButtonDown == ARROW1
 // SPDX-SnippetEnd
 				? BControlLook::B_ACTIVATED : 0),
@@ -504,7 +503,7 @@ BScrollBar::Draw(BRect updateRect)
 			be_control_look->DrawScrollBarButton(this, buttonFrame,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				updateRect, button, buttonText, flags | (fPrivateData->fButtonDown == ARROW2
 // SPDX-SnippetEnd
 					? BControlLook::B_ACTIVATED : 0),
@@ -516,7 +515,7 @@ BScrollBar::Draw(BRect updateRect)
 			be_control_look->DrawScrollBarButton(this, buttonFrame,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				updateRect, button, buttonText, flags | (fPrivateData->fButtonDown == ARROW3
 // SPDX-SnippetEnd
 					? BControlLook::B_ACTIVATED : 0),
@@ -534,7 +533,7 @@ BScrollBar::Draw(BRect updateRect)
 		be_control_look->DrawScrollBarButton(this, buttonFrame, updateRect,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			button, buttonText, flags | (fPrivateData->fButtonDown == ARROW4
 // SPDX-SnippetEnd
 				? BControlLook::B_ACTIVATED : 0),
@@ -1480,7 +1479,7 @@ BScrollBar::_UpdateArrowButtons()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A bar that already shows everything keeps its arrows off
 	// (Haiku #6873). Proportion 0 is the non-proportional mode.
 	bool canScroll = fMin < fMax && fProportion >= 0.0f
@@ -1496,7 +1495,7 @@ BScrollBar::_UpdateArrowButtons()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool downEnabled = canScroll && fValue < fMax;
 // SPDX-SnippetEnd
 	if (fPrivateData->fDownArrowsEnabled != downEnabled) {

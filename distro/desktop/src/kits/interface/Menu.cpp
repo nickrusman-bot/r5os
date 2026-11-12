@@ -12,10 +12,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -666,14 +665,14 @@ BMenu::KeyDown(const char* bytes, int32 numBytes)
 		case B_ESCAPE:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Always leave the open menu. Forwarding Escape used to leave
 			// the Deskbar menu up (Haiku #16144).
 // SPDX-SnippetEnd
 			_SelectItem(NULL);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			_QuitTracking(false);
 // SPDX-SnippetEnd
 			break;
@@ -2883,7 +2882,7 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 	BRect screenFrame = screen.Frame();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Keep the border on screen when the menu opens from the Deskbar
 	// (Haiku #13431).
 	if (screenFrame.Width() > 16 && screenFrame.Height() > 16)
@@ -2929,7 +2928,7 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (frame.left < screenFrame.left)
 			frame.OffsetBy(screenFrame.left - frame.left + 6, 0);
 // SPDX-SnippetEnd
@@ -2951,7 +2950,7 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 			frame.OffsetBy(screenFrame.right - frame.right, 0);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		else if (frame.left < screenFrame.left)
 			frame.OffsetBy(screenFrame.left - frame.left, 0);
 // SPDX-SnippetEnd
@@ -2964,7 +2963,7 @@ BMenu::_CalcFrame(BPoint where, bool* scrollOn)
 		// not left/right
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// The 4px placement margin is not part of this test. A leaf
 		// menu that starts at the top of the screen still fits, so it
 		// does not grow up and down arrows (Haiku #13431).

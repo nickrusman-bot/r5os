@@ -199,7 +199,7 @@ LoginApp::MessageReceived(BMessage* message)
 			break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case kMsgAdminSetDriverBlocked:
 		{
 			// Device Manager turns a driver off or on (DriverAdmin.cpp).
@@ -326,7 +326,7 @@ LoginApp::TryLogin(BMessage* message)
 		reply.AddInt32("error", status);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (status == B_PERMISSION_DENIED) {
 			const char* entered = message->GetString("password");
 			if (entered == NULL || entered[0] == '\0') {
@@ -394,7 +394,7 @@ LoginApp::Unlock(BMessage* message)
 	if (status != B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (password == NULL || password[0] == '\0')
 			reply.AddString("text", "Please enter your password.");
 		else
@@ -571,7 +571,7 @@ LoginApp::_StartVirtualBoxGuest()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 gpu_selftest_requested()
 {
@@ -607,7 +607,7 @@ LoginApp::_LaunchSessionHooks()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (gpu_selftest_requested()) {
 		status = _LaunchSessionApp("/system/bin/r5-gpu-selftest");
 		if (status != B_OK)
@@ -782,7 +782,7 @@ LoginApp::_OpenLoginWindow()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fLoginWindow = new LoginWindow(BRect(0, 0, 440, 380));
 // SPDX-SnippetEnd
 	fLoginWindow->Show();

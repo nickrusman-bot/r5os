@@ -12,10 +12,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -2523,7 +2522,7 @@ BeControlLook::_DrawButtonFrame(BView* view, BRect& rect,
 	// colors
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	rgb_color lighten1 = tint_color(base,
 		base.IsLight() ? B_LIGHTEN_1_TINT : B_LIGHTEN_2_TINT);
 	if (base.IsLight()) {
@@ -2742,7 +2741,7 @@ BeControlLook::_DrawButtonBackground(BView* view, BRect& rect,
 	// fill the button area
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	view->SetHighColor(tint_color(base,
 		base.IsLight() ? B_LIGHTEN_1_TINT : B_LIGHTEN_2_TINT));
 // SPDX-SnippetEnd

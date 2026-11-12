@@ -4,10 +4,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -788,7 +787,7 @@ load_driver_settings(const char *driverName)
 		char path[B_FILE_NAME_LENGTH + 64];
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		file = -1;
 		if (strcmp(driverName, "virtual_memory") == 0) {
 			file = open(
@@ -802,7 +801,7 @@ load_driver_settings(const char *driverName)
 #else
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// Other driver settings still follow the user directory.
 // SPDX-SnippetEnd
 		if (__find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,
@@ -816,7 +815,7 @@ load_driver_settings(const char *driverName)
 		file = open(path, O_RDONLY);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		}
 // SPDX-SnippetEnd
 	} else

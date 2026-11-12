@@ -23,4 +23,4 @@ SOFTWARE.
 The byte tables in lock_icons.inc are unmodified HVIF exports of Haiku's
 Action_Login and Action_Logout artwork (data/artwork, exported in the
 haiku-icons collection). This notice covers those bytes. The C++ that draws
-them is separate and is GPL-3.0-or-later.
+them is separate and is MIT.

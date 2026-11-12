@@ -67,10 +67,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 /*
@@ -1613,7 +1612,7 @@ pr_pack(u_char *buf, int cc, struct msghdr *mhdr)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	hoplim = get_hoplim(mhdr);
 	if (hoplim == -1)
 		hoplim = 64;
@@ -1665,7 +1664,7 @@ pr_pack(u_char *buf, int cc, struct msghdr *mhdr)
 			(void)printf(" hlim=%d", hoplim);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if ((options & F_VERBOSE) != 0 && pktinfo != NULL) {
 // SPDX-SnippetEnd
 				struct sockaddr_in6 dstsa;

@@ -9,10 +9,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -27,7 +26,7 @@
 #include <LayoutUtils.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <List.h>
 // SPDX-SnippetEnd
 #include <MenuItem.h>
@@ -468,7 +467,7 @@ BMenuBar::Perform(perform_code code, void* _data)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 BMenuBar::_StopOtherMenuBars(BView* view, BList& stopped)
 {
@@ -517,7 +516,7 @@ BMenuBar::StartMenuBar(int32 menuIndex, bool sticky, bool showMenu,
 		debugger("MenuBar must be added to a window before it can be used.");
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// Deskbar has two menu bars. Close the other one before this one tracks
 	// (Haiku #20099). The wait is outside the window lock so the tracking
@@ -567,7 +566,7 @@ BMenuBar::StartMenuBar(int32 menuIndex, bool sticky, bool showMenu,
 		fTracking = false;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		_clear_menu_sem_(window, fMenuSem);
 // SPDX-SnippetEnd
 		delete_sem(fMenuSem);
@@ -599,7 +598,7 @@ BMenuBar::_TrackTask(void* arg)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	_clear_menu_sem_(window, menuBar->fMenuSem);
 // SPDX-SnippetEnd
 	delete_sem(menuBar->fMenuSem);

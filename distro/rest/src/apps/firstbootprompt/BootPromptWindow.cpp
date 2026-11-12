@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -320,13 +319,13 @@ BootPromptWindow::QuitRequested()
 	BAlert* alert = new(std::nothrow) BAlert(
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 // SPDX-SnippetEnd
 		B_TRANSLATE_SYSTEM_NAME("Quit Haiku"),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #else
 		B_TRANSLATE("Quit R5"),
 #endif
@@ -399,20 +398,20 @@ BootPromptWindow::_UpdateStrings()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString titleTextDebranded = B_TRANSLATE("Welcome to R5 Operating System!");
 // SPDX-SnippetEnd
 	BString mainTextDebranded = B_TRANSLATE_COMMENT(
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			"Thank you for trying R5! We hope you'll "
 // SPDX-SnippetEnd
 			"like it!\n\n"
 			"Please select your preferred language and keymap. Both settings "
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			"can also be changed later when running R5.\n\n"
 
 			"Do you wish to install R5 now, or try it out first?",
@@ -427,7 +426,7 @@ BootPromptWindow::_UpdateStrings()
 			"<www.haiku-os.org>.\"");
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString desktopTextDebranded = B_TRANSLATE("Try R5");
 	BString installTextDebranded = B_TRANSLATE("Install R5");
 // SPDX-SnippetEnd

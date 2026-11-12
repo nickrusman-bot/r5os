@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * The last copy from the back buffer to the screen. Off unless
  * gpu_app_server is set. A failure stays on the CPU copy.

@@ -13,10 +13,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -167,7 +166,7 @@ ScreenshotWindow::ScreenshotWindow(const Utility& utility, bool silent,
 		new BMessage(kShowSelectedArea));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fAreaSelect->SetEnabled(true);
 // SPDX-SnippetEnd
 	fActiveWindow->SetEnabled(fUtility.activeWindowFrame.IsValid());
@@ -318,7 +317,7 @@ ScreenshotWindow::MessageReceived(BMessage* message)
 			fWindowBorder->SetEnabled(false);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (!fSelectedArea.IsValid()) {
 				be_app->PostMessage(new BMessage(SS_LAUNCH_AREA_SELECTOR));
 				break;

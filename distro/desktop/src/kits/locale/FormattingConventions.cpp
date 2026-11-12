@@ -6,10 +6,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -126,7 +125,7 @@ CoerceFormatTo24HourClock(BString& format)
 			case 'h':
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			case 'K':
 			case 'k':
 				// H is 0-23. K is 0-11 and k is 1-24; both must become H or
@@ -137,13 +136,13 @@ CoerceFormatTo24HourClock(BString& format)
 				break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 			case 'a':
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			case 'b':
 			case 'B':
 // SPDX-SnippetEnd
@@ -642,7 +641,7 @@ BFormattingConventions::Use24HourClock() const
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A cached 12/24 choice must stick when no explicit choice is stored.
 	return use24HourClock == CLOCK_HOURS_24;
 // SPDX-SnippetEnd
@@ -700,7 +699,7 @@ BFormattingConventions::CoerceFormatForClock(BString& outFormat) const
 		? fExplicitUse24HourClock : fCachedUse24HourClock;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (use24HourClock == CLOCK_HOURS_24) {
 		// Also rewrite a 12-hour pattern that has no AM/PM marker.
 		CoerceFormatTo24HourClock(outFormat);

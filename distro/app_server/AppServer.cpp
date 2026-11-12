@@ -125,7 +125,7 @@ AppServer::MessageReceived(BMessage* message)
 			if (version != AS_PROTOCOL_VERSION) {
 				// SPDX-SnippetBegin
 				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-				// SPDX-License-Identifier: GPL-3.0-or-later
+				// SPDX-License-Identifier: MIT
 				// Name the sender, so a refused program can be found in the log.
 				team_id team = message->ReturnAddress().Team();
 				team_info info;

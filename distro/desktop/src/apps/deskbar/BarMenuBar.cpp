@@ -34,10 +34,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -48,7 +47,7 @@ All rights reserved.
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Application.h>
 
 // SPDX-SnippetEnd
@@ -58,7 +57,7 @@ All rights reserved.
 #include <IconUtils.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <TranslatorFormats.h>
 #include <TranslationUtils.h>
 // SPDX-SnippetEnd
@@ -68,13 +67,13 @@ All rights reserved.
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "BarApp.h"
 // SPDX-SnippetEnd
 #include "BarMenuTitle.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "BarSettings.h"
 // SPDX-SnippetEnd
 #include "BarView.h"
@@ -142,7 +141,7 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 	fTeamIconSize(0),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fSymbolWidth(0)
 // SPDX-SnippetEnd
 {
@@ -155,7 +154,7 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 	BBitmap* icon = NULL;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #ifdef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 // SPDX-SnippetEnd
 	size_t dataSize;
@@ -175,7 +174,7 @@ TBarMenuBar::TBarMenuBar(BRect frame, const char* name, TBarView* barView)
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #else
 	icon = BTranslationUtils::GetBitmap(B_PNG_FORMAT, "r5_deskbar_logo.png");
 	if (icon != NULL)
@@ -203,7 +202,7 @@ TBarMenuBar::SmartResize(float width, float height)
 	} else {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// The button is only the mark. Do not stretch it to the wide slot.
 		// A vertical bar and the mini team menu keep the width they were given.
 		if (fSymbolWidth > 0 && fAppListMenuItem == NULL
@@ -327,7 +326,7 @@ TBarMenuBar::DrawBackground(BRect updateRect)
 	BMenu::DrawBackground(updateRect);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 }
 
 

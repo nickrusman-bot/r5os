@@ -9,10 +9,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -42,7 +41,7 @@ _BTextInput_::_BTextInput_(BRect frame, BRect textRect, uint32 resizeMask,
 	fPreviousText(NULL),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fInMouseDown(false),
 	fSuppressModification(false)
 // SPDX-SnippetEnd
@@ -57,7 +56,7 @@ _BTextInput_::_BTextInput_(BMessage* archive)
 	fPreviousText(NULL),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fInMouseDown(false),
 	fSuppressModification(false)
 // SPDX-SnippetEnd
@@ -188,7 +187,7 @@ _BTextInput_::SetInitialText()
 		fPreviousText = strdup(Text());
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 }
 
 
@@ -232,7 +231,7 @@ _BTextInput_::InsertText(const char* inText, int32 inLength,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!fSuppressModification) {
 		TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
 			B_CONTROL_MODIFIED);
@@ -248,7 +247,7 @@ _BTextInput_::DeleteText(int32 fromOffset, int32 toOffset)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!fSuppressModification) {
 		TextControl()->InvokeNotify(TextControl()->ModificationMessage(),
 			B_CONTROL_MODIFIED);

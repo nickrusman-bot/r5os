@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -154,7 +153,7 @@ TCustomButton::Draw(BRect updateRect)
 		updateRect.InsetBy(9, 8);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		SetHighUIColor(B_CONTROL_TEXT_COLOR);
 // SPDX-SnippetEnd
 		if (Value() == B_CONTROL_ON)
@@ -170,7 +169,7 @@ TCustomButton::Draw(BRect updateRect)
 		updateRect.OffsetBy(1, 0);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		SetHighUIColor(B_CONTROL_TEXT_COLOR);
 // SPDX-SnippetEnd
 		if (Value() == B_CONTROL_ON) {
@@ -225,7 +224,7 @@ BStatusWindow::BStatusWindow()
 	SetSizeLimits(0, 100000, 0, 100000);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Wide enough for a long file name at a large font (Haiku #5338 #16185).
 	float scale = be_plain_font->Size() / 12.0f;
 	if (scale < 1.0f)
@@ -265,7 +264,7 @@ BStatusWindow::CreateStatusItem(thread_id thread, StatusWindowState type)
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	float rowScale = be_plain_font->Size() / 12.0f;
 	if (rowScale < 1.0f)
 		rowScale = 1.0f;
@@ -480,7 +479,7 @@ BStatusView::BStatusView(BRect bounds, thread_id thread, StatusWindowState type)
 	SetLowUIColor(ViewUIColor());
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	SetHighUIColor(B_PANEL_TEXT_COLOR);
 // SPDX-SnippetEnd
 	SetDrawingMode(B_OP_ALPHA);
@@ -838,7 +837,7 @@ BStatusView::_TimeStatusString(float availableSpace, float* _width)
 	BString string;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// NaN and a huge estimate used to become 13 Dec 1901 (Haiku #11176).
 	if (!(secondsRemaining >= 0)
 		|| secondsRemaining > 60.0 * 60.0 * 24.0 * 365.0 * 10.0
@@ -1032,7 +1031,7 @@ BStatusView::UpdateStatus(const char* curItem, off_t itemSize, bool optional)
 		// so we can show it when the time comes
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// The old terminator was the character '0', so a long name ran off
 		// the end of the buffer (Haiku #5338).
 		strlcpy(fPendingStatusString, curItem, sizeof(fPendingStatusString));

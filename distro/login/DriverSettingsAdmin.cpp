@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Login side of kMsgAdminSetDriverSetting. Media runs as the signed-in
  * person. The drivers read their settings from the administrator's
  * kernel/drivers directory, which a standard account cannot write. Login

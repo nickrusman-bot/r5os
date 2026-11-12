@@ -33,17 +33,16 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
 #include "Tracker.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 
 namespace BPrivate {
@@ -112,7 +111,7 @@ namespace BPrivate {
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static const uint32 kMountErrorAlertClosed = 'Tmec';
 // SPDX-SnippetEnd
 
@@ -277,7 +276,7 @@ TTracker::TTracker()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	debug_printf("R5 tracker: Tracker from distro\n");
 // SPDX-SnippetEnd
 	BPathMonitor::SetWatchingInterface(fWatchingInterface);
@@ -567,7 +566,7 @@ TTracker::MessageReceived(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case kMountNetworkShare:
 			// how that went is known when the server has answered
 			MountServer().SendMessage(message, this);
@@ -657,14 +656,14 @@ TTracker::MessageReceived(BMessage* message)
 		{
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			// Apply the message after the file. A missing file must not
 			// put English back on top of the language the user just chose.
 // SPDX-SnippetEnd
 			BLocaleRoster::Default()->Refresh();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			BLocaleRoster::Default()->ApplySettings(message);
 			BPrivate::ForceUnloadCatalog();
 			gLocalizedNamePreferred

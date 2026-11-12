@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Fonts page. The rows and the antialiasing controls are the ones from
  * the Appearance preference, with antialiasing in a box.
  */

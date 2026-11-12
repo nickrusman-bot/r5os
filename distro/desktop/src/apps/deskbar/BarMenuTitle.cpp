@@ -135,7 +135,7 @@ TBarMenuTitle::DrawContent()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The mark sits in the middle of the button, with the same space above and below.
 	iconRect.OffsetBy(widthOffset, heightOffset);
 // SPDX-SnippetEnd

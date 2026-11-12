@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -52,7 +51,7 @@ All rights reserved.
 #include <fs_info.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Bitmap.h>
 #include <DataIO.h>
 #include <TranslationUtils.h>
@@ -353,7 +352,7 @@ BPose::UpdateIcon(BPoint poseLoc, BPoseView* poseView)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// The free-space bar is drawn with the icon. Invalidating only the
 	// icon bitmap left the bar stale (Haiku #19573).
 	poseView->Invalidate(CalcRect(poseLoc, poseView));
@@ -567,7 +566,7 @@ BPose::Draw(BRect rect, const BRect& updateRect, BPoseView* poseView, BView* dra
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Desktop labels sit on the wallpaper. InvertRect after drawing makes
 	// a selected name look like an unselected one on a black background
 	// (Haiku #16471). Fill with the list-selection color instead.
@@ -575,7 +574,7 @@ BPose::Draw(BRect rect, const BRect& updateRect, BPoseView* poseView, BView* dra
 	if (selected && poseView->IsDesktopView())
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		drawView->SetLowColor(ui_color(B_LIST_SELECTED_BACKGROUND_COLOR));
 // SPDX-SnippetEnd
 	else if (poseView->IsDesktopView())
@@ -664,7 +663,7 @@ BPose::DrawTextWidget(BRect rect, BRect textRect, BTextWidget* widget,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (poseView->IsDesktopView()) {
 			// Selection fill already drawn; do not invert (Haiku #16471).
 		} else if (windowActive || isDrawingSelectionRect) {
@@ -817,7 +816,7 @@ BPose::WidgetFor(BColumn* column, BPoseView* poseView, ModelNodeLazyOpener& open
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static dev_t
 r5_boot_device()
 {
@@ -880,7 +879,7 @@ BPose::DrawIcon(BPoint where, BView* view, BSize size, bool drawUnselected)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	r5_draw_boot_badge(model, view, where, size);
 // SPDX-SnippetEnd
 
@@ -959,7 +958,7 @@ BPose::DrawToggleSwitch(BRect, BPoseView*)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 BPose::ReloadLabels()
 {

@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -822,7 +821,7 @@ FindWindow::FindSaveCommon(bool find)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (!fEditTemplateOnly) {
 			// A second Find used to keep the first file name, so the
 			// result window title never followed the new text (Haiku #4154).
@@ -838,7 +837,7 @@ FindWindow::FindSaveCommon(bool find)
 			entry.SetTo(&fRef);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			entry.Remove();
 // SPDX-SnippetEnd
 		}
@@ -2266,14 +2265,14 @@ FindPanel::CurrentMimeType(const char** type) const
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BMenuItem* mostUsed = NULL;
 // SPDX-SnippetEnd
 	if (item != NULL && MimeTypeMenu()->IndexOf(item) != 0
 		&& item->Submenu() == NULL) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// Prefer the same type in the tree, but keep the most-used item
 		// when that is the only mark (Haiku #11402).
 		mostUsed = item;
@@ -2290,7 +2289,7 @@ FindPanel::CurrentMimeType(const char** type) const
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	if (item == NULL)
 		item = mostUsed;

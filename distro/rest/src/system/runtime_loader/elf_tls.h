@@ -6,7 +6,7 @@
 /*
  * The R5 change in this file is the SPDX snippet. Copyright 2026 R5OS
  * Contributors. The Haiku copyright and the license above still cover the
- * original work. The snippet is GPL-3.0-or-later.
+ * original work. The snippet is MIT.
  */
 #ifndef ELF_TLS_H
 #define ELF_TLS_H
@@ -36,7 +36,7 @@ public:
 			TLSBlock	CreateBlock();
 
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			size_t		Alignment() const	{ return fAlignment; }
 			size_t		FileSize() const	{ return fFileSize; }
@@ -55,7 +55,7 @@ private:
 			size_t		fFileSize;
 			size_t		fMemorySize;
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			size_t		fAlignment;
 			size_t		fStaticOffset;
@@ -77,7 +77,7 @@ public:
 			TLSBlock	CreateBlock(unsigned dso);
 
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			uint64		StaticPlacement(unsigned dso) const;
 			void		Materialize();
@@ -87,7 +87,7 @@ private:
 	inline				TLSBlockTemplates();
 
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			void		_AssignStaticOffset(unsigned dso);
 			addr_t		_GapFromThreadPointer() const;
@@ -102,7 +102,7 @@ private:
 			utility::vector<unsigned>	fFreeDSOs;
 
 			// SPDX-SnippetBegin
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 			bool		fStaticBaseReady;
 			addr_t		fStaticBase;

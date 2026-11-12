@@ -11,10 +11,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -32,7 +31,7 @@
 #include <ScrollView.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Region.h>
 // SPDX-SnippetEnd
 #include <Window.h>
@@ -1944,14 +1943,14 @@ BListView::DrawItem(BListItem* item, BRect itemRect, bool complete)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BRegion clip(itemRect);
 	ConstrainClippingRegion(&clip);
 // SPDX-SnippetEnd
 	item->DrawItem(this, itemRect, complete);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	ConstrainClippingRegion(NULL);
 // SPDX-SnippetEnd
 }

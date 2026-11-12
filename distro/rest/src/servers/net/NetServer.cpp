@@ -9,23 +9,22 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Debug.h>
 // SPDX-SnippetEnd
 #include "NetServer.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "IPv6Dad.h"
 // SPDX-SnippetEnd
 
@@ -67,7 +66,7 @@
 #include "Services.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 extern void r5_start_mdns_service();
 // SPDX-SnippetEnd
@@ -169,7 +168,7 @@ NetServer::NetServer(status_t& error)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	debug_printf("R5 net_server: NetServer from distro\n");
 
 // SPDX-SnippetEnd
@@ -190,7 +189,7 @@ NetServer::ReadyToRun()
 	_StartServices();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	r5_start_mdns_service();
 // SPDX-SnippetEnd
 
@@ -458,7 +457,7 @@ NetServer::_ConfigureInterface(BMessage& message)
 	bool startAutoConfig = false;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool autoIPv4 = false;
 	bool autoIPv6 = false;
 	bool sawIPv6 = false;
@@ -501,7 +500,7 @@ NetServer::_ConfigureInterface(BMessage& message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	_ConfigureIPv6LinkLocal(name);
 // SPDX-SnippetEnd
 
@@ -512,7 +511,7 @@ NetServer::_ConfigureInterface(BMessage& message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (addressSettings.Family() == AF_INET6)
 			sawIPv6 = true;
 		if (addressSettings.IsAutoConfigure()) {
@@ -520,7 +519,7 @@ NetServer::_ConfigureInterface(BMessage& message)
 			startAutoConfig = true;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (addressSettings.Family() == AF_INET6)
 				autoIPv6 = true;
 			else
@@ -624,7 +623,7 @@ NetServer::_ConfigureInterface(BMessage& message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!sawIPv6)
 		autoIPv6 = true;
 	if (startAutoConfig || autoIPv6) {
@@ -632,7 +631,7 @@ NetServer::_ConfigureInterface(BMessage& message)
 		// start auto configuration
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (_LooperForDevice(name) == NULL) {
 			AutoconfigLooper* looper = new AutoconfigLooper(this, name,
 				autoIPv4, autoIPv6);
@@ -651,7 +650,7 @@ NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Union IPv4 DHCP and IPv6 RDNSS nameservers. A rewrite that only
 	// listed RDNSS wiped the IPv4 servers and broke dual-stack DNS.
 // SPDX-SnippetEnd
@@ -663,7 +662,7 @@ NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	char servers[8][INET6_ADDRSTRLEN];
 	int32 nServers = 0;
 	bool staticOnly = false;
@@ -679,7 +678,7 @@ NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
 			}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (strncmp(line, "nameserver ", 11) == 0) {
 				char* start = line + 11;
 				size_t length = strlen(start);
@@ -701,7 +700,7 @@ NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fclose(existing);
 	}
 	if (staticOnly)
@@ -713,7 +712,7 @@ NetServer::_ConfigureResolver(BMessage& resolverConfiguration)
 			&nameserver) == B_OK; i++) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (nameserver == NULL || nameserver[0] == '\0')
 			continue;
 		bool have = false;
@@ -789,7 +788,7 @@ NetServer::_ConfigureDevice(const char* device)
 	interface.AddMessage("address", &address);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BMessage address6;
 	address6.AddString("family", "inet6");
 	address6.AddBool("auto_config", true);
@@ -990,7 +989,7 @@ NetServer::_ConfigureIPv6LinkLocal(const char* name)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (r5_ipv6_has_address(name, addressRaw)) {
 // SPDX-SnippetEnd
 		// uhoh... already has a local link address

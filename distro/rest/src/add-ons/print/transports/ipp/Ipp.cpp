@@ -1,8 +1,7 @@
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 // Sun, 18 Jun 2000
@@ -20,7 +19,7 @@
 #include <HashMap.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <r5_mdns.h>
 // SPDX-SnippetEnd
 
@@ -212,7 +211,7 @@ list_transport_ports(BMessage* msg)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	status_t status = gRoster.ListPorts(msg);
 	r5_mdns_service svcs[R5_MDNS_MAX_SERVICES];
 	const char* types[] = {

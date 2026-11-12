@@ -34,10 +34,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -53,7 +52,7 @@ All rights reserved.
 #include <Bitmap.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Catalog.h>
 // SPDX-SnippetEnd
 #include <ControlLook.h>
@@ -61,13 +60,13 @@ All rights reserved.
 #include <Font.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <MenuItem.h>
 // SPDX-SnippetEnd
 #include <Mime.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <OS.h>
 #include <PopUpMenu.h>
 // SPDX-SnippetEnd
@@ -87,13 +86,13 @@ All rights reserved.
 #include "WindowMenu.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "BarSettings.h"
 // SPDX-SnippetEnd
 #include "WindowMenuItem.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -189,7 +188,7 @@ TTeamMenuItem::HandleMouseDown(BPoint where)
 		return true;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	} else if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0) {
 		BPopUpMenu popup("team");
 		popup.AddItem(new BMenuItem(B_TRANSLATE("Hide all"),
@@ -339,13 +338,13 @@ TTeamMenuItem::Draw()
 	uint32 flags = 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (_IsSelected() && canHandle) {
 // SPDX-SnippetEnd
 		flags |= BControlLook::B_ACTIVATED;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		menuColor = ui_color(B_MENU_SELECTED_BACKGROUND_COLOR);
 	}
 // SPDX-SnippetEnd
@@ -444,7 +443,7 @@ TTeamMenuItem::DrawContent()
 	if (_IsSelected() && IsEnabled() && canHandle)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		menu->SetLowColor(ui_color(B_MENU_SELECTED_BACKGROUND_COLOR));
 // SPDX-SnippetEnd
 	else
@@ -471,7 +470,7 @@ TTeamMenuItem::DrawContent()
 		&& static_cast<TBarApp*>(be_app)->Settings()->superExpando
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		&& fBarView->ExpandoState()
 		&& HasListedWindows()) {
 // SPDX-SnippetEnd
@@ -589,7 +588,7 @@ TTeamMenuItem::ExpanderBounds() const
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!HasListedWindows())
 		return BRect(0, 0, -1, -1);
 
