@@ -889,6 +889,7 @@ detect_cpu_topology(int currentCPU, cpu_ent* cpu, uint32 maxBasicLeaf,
 				cpuid_info raw;
 				get_current_cpuid(&raw, 1, 0);
 				uint32 leaf1 = raw.regs.ebx;
+				uint32 leaf1c = raw.regs.ecx;
 				uint32 leaf8 = 0;
 				uint32 leaf1e = 0;
 				if (maxExtendedLeaf >= 0x80000008) {
@@ -899,10 +900,14 @@ detect_cpu_topology(int currentCPU, cpu_ent* cpu, uint32 maxBasicLeaf,
 					get_current_cpuid(&raw, 0x8000001e, 0);
 					leaf1e = raw.regs.ebx;
 				}
+				// Leaf 1 ECX raw and as stored: bit 17 is PCID, so the two
+				// show whether the CPU hides it or the kernel loses it.
 				dprintf("R5 CPU topology: leaf1 ebx 0x%08" B_PRIx32
+					" ecx 0x%08" B_PRIx32 " stored ecx 0x%08" B_PRIx32
 					" 80000008 ecx 0x%08" B_PRIx32 " 8000001e ebx 0x%08"
 					B_PRIx32 " smt mask 0x%" B_PRIx32 " core mask 0x%"
-					B_PRIx32 "\n", leaf1, leaf8, leaf1e,
+					B_PRIx32 "\n", leaf1, leaf1c,
+					cpu->arch.feature[FEATURE_EXT], leaf8, leaf1e,
 					sHierarchyMask[CPU_TOPOLOGY_SMT],
 					sHierarchyMask[CPU_TOPOLOGY_CORE]);
 // SPDX-SnippetEnd

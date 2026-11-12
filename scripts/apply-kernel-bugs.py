@@ -51,6 +51,33 @@ def install_kernel_sources() -> None:
         "src/add-ons/kernel/power/cpuidle/x86_acpi_cstates/acpi_cpuidle.cpp",
         "src/system/kernel/arch/x86/apic.cpp",
         "src/system/kernel/arch/x86/ioapic.cpp",
+        # R5: the AMD CPPC values stay per CPU (no shared globals)
+        "src/add-ons/kernel/power/cpufreq/amd_pstates/amd_pstates.cpp",
+        # air/OS 6178b691d2: memcpy leaves rep movsb under 4K aliasing
+        "src/system/libroot/posix/string/arch/x86_64/memcpy.cpp",
+        "src/tests/system/libroot/posix/string/Jamfile",
+        "src/tests/system/libroot/posix/string/memcpy_test.cpp",
+        # air/OS: the FreeBSD network and wireless layers the MediaTek Wi-Fi
+        # driver and wpa_supplicant need (THIRD_PARTY_NOTICES.md)
+        "src/libs/compat/freebsd_network/bus.cpp",
+        "src/libs/compat/freebsd_network/condvar.cpp",
+        "src/libs/compat/freebsd_network/device_hooks.c",
+        "src/libs/compat/freebsd_network/fbsd_if_media.c",
+        "src/libs/compat/freebsd_network/if.c",
+        "src/libs/compat/freebsd_network/taskqueue.c",
+        "src/libs/compat/freebsd_network/usb.cpp",
+        "src/libs/compat/freebsd_wlan/net80211/ieee80211_haiku.cpp",
+        "src/libs/compat/freebsd_wlan/net80211/ieee80211_ioctl.c",
+        "src/libs/compat/freebsd_wlan/net80211/ieee80211_output.c",
+        "src/libs/compat/freebsd_wlan/net80211/ieee80211_scan_sw.c",
+        "src/libs/compat/freebsd_wlan/net80211/ieee80211_sta.c",
+        # air/OS: MediaTek Bluetooth firmware loader in h2generic
+        "src/add-ons/kernel/bluetooth/hci/bluetooth.cpp",
+        "src/add-ons/kernel/drivers/bluetooth/h2/h2generic/Jamfile",
+        "src/add-ons/kernel/drivers/bluetooth/h2/h2generic/h2generic.cpp",
+        "src/add-ons/kernel/drivers/bluetooth/h2/h2generic/h2mediatek.cpp",
+        "src/add-ons/kernel/drivers/bluetooth/h2/h2generic/h2mediatek.h",
+        "src/add-ons/kernel/drivers/bluetooth/h2/h2generic/h2transactions.cpp",
         "src/add-ons/kernel/file_systems/bfs/Volume.cpp",
         "src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp",
         "src/add-ons/kernel/file_systems/bfs/kernel_interface.cpp",
