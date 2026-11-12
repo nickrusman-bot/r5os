@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - The R5Book, a developer guide to LibR5
+
+`docs/r5book/` is a static HTML guide in the layout of the Be Book and the look of the R5 website: an introduction, the Icons Kit (`libr5icons.so`), the Appearance Kit (`libr5ui.so`, every `BAppearanceKit` class and the `R5UI.h` functions) and the MIDI 2 Kit (the MIDI 2.0 additions to `libmidi2.so`). Each entry has the facts box (declared in, derived from, first user), what it is for and not for, its members, an example, and a picture.
+
+The pictures are HTML mockups in the R5 system colors, labelled as such; the HVIF icons are stand-ins. The glyphs use the geometry of `glyph_paint()`. Screenshots from R5 replace the mockups later. Checked in headless Edge at 1300 pixels wide; the signatures were compared with the headers.
+
 ## 2026-11-11 - The webcam add-on booted in QEMU
 
 The AMD64 image was built (`jam_exit=0`, `mesa_exit=0` at 20:41, Europe/Amsterdam). `usb_webcam.media_addon` links libjpeg (`HAVE_LIBJPEG`, package `libjpeg_turbo-3.1.4.1-1`). QEMU has no camera. The boot was TCG, without KVM. After Try R5 and Sign in, Tracker and Deskbar started, the session log says sign-in done, and the syslog has no panic. `camtest` printed `no camera` and exited 0, so the media roster answered. The syslog does not name `media_server` or `media_addon_server`. No high-bandwidth camera was attached, so the xHCI burst path was not exercised, and no frame was saved. A real camera, the built-in 04f2:b767 on the 5625U, and the microphone beside it, stay for the next stick. There is no What's new section and `distro/BUILD` stays the same.

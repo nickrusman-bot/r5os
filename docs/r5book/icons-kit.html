@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Icons Kit</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+</head>
+<body data-page="icons">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">libr5icons.so</span>
+			<h1>The Icons Kit</h1>
+			<p>Icons for R5 programs through public calls only: Haiku's own HVIF icons as bitmaps of the
+			size you ask for, icon buttons that line up with text buttons, and one-color line glyphs for
+			the symbols Haiku's icon set does not have.</p>
+		</section>
+
+		<table class="facts">
+			<tr><th>Declared in</th><td>&lt;R5Icons.h&gt;</td></tr>
+			<tr><th>Library</th><td>libr5icons.so</td></tr>
+			<tr><th>Source</th><td>distro/icons</td></tr>
+			<tr><th>Long description</th><td>docs/ICONS.md</td></tr>
+		</table>
+
+		<p>Do not open Tracker's private resources or read <code class="inline">libtracker.so</code> to
+		draw an icon. Every call here goes through a public API: an HVIF buffer, a file's icon, or a MIME
+		type's icon. None of them draws the Settings preferences wrench.</p>
+
+		<!-- r5_icon -->
+		<section class="entry" id="r5_icon">
+			<div class="entry-header"><h2>r5_icon</h2><span class="kind">enum</span></div>
+			<p>The predefined icons. They are the unmodified Haiku and Tracker pictures. The numbers are part
+			of the contract: a new icon is added at the end, with the next number.</p>
+
+			<figure class="stage">
+				<div class="shot">
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>back</span>
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>forward</span>
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>up</span>
+					<span class="hvif" style="width:48px;height:48px">Tracker<br>home</span>
+					<span class="hvif" style="width:48px;height:48px">Action_<br>Login</span>
+					<span class="hvif" style="width:48px;height:48px">Action_<br>Logout</span>
+				</div>
+				<figcaption><span>The six predefined icons at 48 pixels</span><span class="badge-mockup">Stand-ins &middot; screenshot follows</span></figcaption>
+			</figure>
+
+			<table class="spec">
+				<tr><th>Value</th><th>Number</th><th>Picture</th></tr>
+				<tr><td><code>R5_ICON_BACK</code></td><td>1</td><td>The arrow Tracker draws in its location bar</td></tr>
+				<tr><td><code>R5_ICON_FORWARD</code></td><td>2</td><td>Tracker's forward arrow</td></tr>
+				<tr><td><code>R5_ICON_UP</code></td><td>3</td><td>Tracker's up arrow</td></tr>
+				<tr><td><code>R5_ICON_HOME</code></td><td>4</td><td>The house Tracker draws on the home folder</td></tr>
+				<tr><td><code>R5_ICON_UNLOCKED</code></td><td>5</td><td>Haiku's <code>Action_Login</code>, an open lock</td></tr>
+				<tr><td><code>R5_ICON_LOCKED</code></td><td>6</td><td>Haiku's <code>Action_Logout</code>, a closed lock</td></tr>
+			</table>
+		</section>
+
+		<!-- bitmaps -->
+		<section class="entry" id="icon-bitmaps">
+			<div class="entry-header"><h2 class="plain">Icon bitmaps</h2><span class="kind">functions</span></div>
+			<p>Each call returns a new <code class="inline">B_RGBA32</code> bitmap of
+			<code class="inline">side</code> &times; <code class="inline">side</code> pixels, or
+			<code class="inline">NULL</code>. The caller deletes it. Ask for the size you will show: the
+			bitmap is rendered from the vector at that size and stays sharp.</p>
+
+			<div class="member">
+				<div class="sig">BBitmap* r5_icon_bitmap(r5_icon which, float side);</div>
+				<p>One of the predefined icons.</p>
+			</div>
+			<div class="member">
+				<div class="sig">BBitmap* r5_vector_icon_bitmap(const uint8* data, size_t size, float side);</div>
+				<p>Any HVIF icon you already have, for example from a resource or an <code class="inline">.inc</code> file.</p>
+			</div>
+			<div class="member">
+				<div class="sig">BBitmap* r5_file_icon_bitmap(const char* path, float side);</div>
+				<p>The icon of a file or folder, through the public node API.</p>
+			</div>
+			<div class="member">
+				<div class="sig">BBitmap* r5_mime_icon_bitmap(const char* type, float side);</div>
+				<p>The icon of a MIME type, for example <code class="inline">"application/x-vnd.Be-PEPL"</code>
+				for the People icon that Sign in uses as the account picture.</p>
+			</div>
+
+<pre class="code"><span class="k">#include</span> <span class="s">&lt;R5Icons.h&gt;</span>
+
+BBitmap* home = r5_icon_bitmap(R5_ICON_HOME, 32);
+BBitmap* people = r5_mime_icon_bitmap(<span class="s">"application/x-vnd.Be-PEPL"</span>, 30);
+<span class="c">// ... draw them pixel for pixel, then:</span>
+<span class="k">delete</span> home;
+<span class="k">delete</span> people;</pre>
+		</section>
+
+		<!-- buttons -->
+		<section class="entry" id="icon-buttons">
+			<div class="entry-header"><h2 class="plain">Icon buttons</h2><span class="kind">functions</span></div>
+			<p>A text button gets its height from the font. An icon button next to it has to use that same
+			height, or the row looks uneven. These calls make a <code class="inline">BButton</code> a square of
+			the height you pass and draw the icon inside it, one pixel clear of the border. The label is left
+			as you set it; leave it empty for an icon only, and say what it does with
+			<code class="inline">SetToolTip()</code>.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel" style="display:flex;gap:8px;align-items:center">
+						<span class="sys-button" style="width:32px;justify-content:center;padding:0"><span class="hvif" style="width:20px;height:20px;font-size:6px">lock</span></span>
+						<span class="sys-button">Revert</span>
+						<span class="sys-button">Defaults</span>
+					</div>
+				</div>
+				<figcaption><span>The Settings bottom row: <code>r5_button_set_lock()</code> beside Revert and Defaults</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member">
+				<div class="sig">status_t r5_button_set_icon(BButton* button, r5_icon which, float buttonHeight);</div>
+				<p>A predefined icon. Pass the height of a text button on the same row, for example
+				<code class="inline">revert-&gt;PreferredSize().height</code>.</p>
+			</div>
+			<div class="member">
+				<div class="sig">status_t r5_button_set_vector(BButton* button, const uint8* data, size_t size, float buttonHeight);
+status_t r5_button_set_file_icon(BButton* button, const char* path, float buttonHeight);
+status_t r5_button_set_mime_icon(BButton* button, const char* type, float buttonHeight);</div>
+				<p>The same for an HVIF buffer, a file's icon, or a MIME type's icon.</p>
+			</div>
+			<div class="member">
+				<div class="sig">status_t r5_button_set_lock(BButton* button, bool locked, float buttonHeight);</div>
+				<p>The closed lock when <code class="inline">locked</code> is true, the open lock otherwise.
+				It does not open a password window: the caller decides what a click does.</p>
+			</div>
+			<p>Each returns <code class="inline">B_OK</code> when the icon was set. A valid button is still made
+			square when the picture could not be loaded, so the row does not jump. A <code class="inline">NULL</code>
+			button or a height below 1 returns <code class="inline">B_BAD_VALUE</code>.</p>
+		</section>
+
+		<!-- glyphs -->
+		<section class="entry" id="r5_glyph">
+			<div class="entry-header"><h2>r5_glyph</h2><span class="kind">enum and functions</span></div>
+			<p>Haiku's icon set has no power symbol, no circular arrow, no small clock face and no eye. For
+			those, the kit draws a line glyph in code: one color, given by the caller, so it follows the text
+			color and dark mode. Glyphs are small symbols beside text. A full icon still comes from Haiku's
+			HVIF set.</p>
+
+			<figure class="stage">
+				<div class="shot" style="gap:30px;color:#000">
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><svg data-glyph="power" width="48" height="48"></svg><code style="font-size:11px;color:var(--slate-500)">POWER</code></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><svg data-glyph="restart" width="48" height="48"></svg><code style="font-size:11px;color:var(--slate-500)">RESTART</code></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><svg data-glyph="clock" width="48" height="48"></svg><code style="font-size:11px;color:var(--slate-500)">CLOCK</code></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><svg data-glyph="eye" width="48" height="48"></svg><code style="font-size:11px;color:var(--slate-500)">EYE</code></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><svg data-glyph="eye-off" width="48" height="48"></svg><code style="font-size:11px;color:var(--slate-500)">EYE_OFF</code></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><svg data-glyph="log-out" width="48" height="48"></svg><code style="font-size:11px;color:var(--slate-500)">LOG_OUT</code></span>
+				</div>
+				<div class="shot sys">
+					<span class="sys-button"><svg data-glyph="log-out"></svg>Log out</span>
+					<span class="sys-button"><svg data-glyph="restart"></svg>Restart</span>
+					<span class="sys-button"><svg data-glyph="power"></svg>Shut down</span>
+				</div>
+				<figcaption><span>The six glyphs at 48 pixels, and on buttons with <code>r5_button_set_glyph()</code></span><span class="badge-mockup">Mockup &middot; same geometry as the code</span></figcaption>
+			</figure>
+
+			<table class="spec">
+				<tr><th>Value</th><th>Number</th><th>Picture</th></tr>
+				<tr><td><code>R5_GLYPH_POWER</code></td><td>1</td><td>A ring open at the top, with a stem in its middle</td></tr>
+				<tr><td><code>R5_GLYPH_RESTART</code></td><td>2</td><td>A ring open at the right, with an arrow head at the top</td></tr>
+				<tr><td><code>R5_GLYPH_CLOCK</code></td><td>3</td><td>A clock face with two hands</td></tr>
+				<tr><td><code>R5_GLYPH_EYE</code></td><td>4</td><td>An open eye: show the password</td></tr>
+				<tr><td><code>R5_GLYPH_EYE_OFF</code></td><td>5</td><td>The eye with a line through it: hide the password</td></tr>
+				<tr><td><code>R5_GLYPH_LOG_OUT</code></td><td>6</td><td>An open door frame with an arrow out to the right</td></tr>
+			</table>
+
+			<div class="member">
+				<div class="sig">void r5_glyph_draw(BView* view, r5_glyph which, BRect frame, rgb_color color);</div>
+				<p>Draws the glyph inside <code class="inline">frame</code>. The view's drawing state is the same afterwards.</p>
+			</div>
+			<div class="member">
+				<div class="sig">BBitmap* r5_glyph_bitmap(r5_glyph which, float side, rgb_color color);</div>
+				<p>A new <code class="inline">B_RGBA32</code> bitmap with the glyph on a transparent background.
+				The edges keep their soft coverage in the alpha channel. The caller deletes it.</p>
+			</div>
+			<div class="member">
+				<div class="sig">status_t r5_button_set_glyph(BButton* button, r5_glyph which);</div>
+				<p>Puts the glyph before the label, in <code class="inline">B_CONTROL_TEXT_COLOR</code>, at the
+				size of the button's font. Unlike <code class="inline">r5_button_set_icon()</code>, the button keeps
+				its own width and height. Set the font first, and call it again after
+				<code class="inline">B_COLORS_UPDATED</code>.</p>
+			</div>
+
+<pre class="code">BButton* restart = <span class="k">new</span> BButton(<span class="s">"reboot"</span>, <span class="s">"Restart"</span>, <span class="k">new</span> BMessage(kRebootAction));
+restart-&gt;SetFont(&amp;buttonFont);
+r5_button_set_glyph(restart, R5_GLYPH_RESTART);</pre>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>

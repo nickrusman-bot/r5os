@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>R5Book</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+</head>
+<body data-page="index">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">R5Book</span>
+			<h1>Building on LibR5</h1>
+			<p>The R5Book describes the libraries R5 adds next to <code class="inline">libbe</code>: what each part
+			looks like, what it is for, and how to call it. It follows the Be Book: one entry per class, with
+			where it is declared, what it derives from, and its member functions.</p>
+		</section>
+
+		<div class="note"><strong>Pictures.</strong> The pictures in this edition are HTML mockups, drawn with
+		the R5 system colors and sizes at the 12 point system font. They will be replaced by screenshots
+		taken from R5 itself. Each picture says which one it is.</div>
+
+		<h3>The kits</h3>
+		<div class="kit-grid">
+			<a class="kit-card" href="icons-kit.html">
+				<span class="mono">libr5icons.so &middot; &lt;R5Icons.h&gt;</span>
+				<h3>Icons Kit</h3>
+				<p>Haiku's own icons as bitmaps, icon buttons that match a text button, and line glyphs such
+				as power, restart and the password eye, drawn in the text color.</p>
+			</a>
+			<a class="kit-card" href="appearance-kit.html">
+				<span class="mono">libr5ui.so &middot; namespace BAppearanceKit</span>
+				<h3>Appearance Kit</h3>
+				<p>Cards, page headings, the Settings sidebar, the screen picture, account cards and lists,
+				the password field, the accent button, and the icon view.</p>
+			</a>
+			<a class="kit-card" href="midi2-kit.html">
+				<span class="mono">libmidi2.so &middot; &lt;Midi2Defs.h&gt;</span>
+				<h3>MIDI 2 Kit</h3>
+				<p>MIDI 2.0 in Haiku's own MIDI kit: the Universal MIDI Packet, 16-bit velocities and 32-bit
+				controllers, Property Exchange, Profiles and endpoint discovery.</p>
+			</a>
+		</div>
+
+		<h3>Next to libbe, not inside it</h3>
+		<p>A Haiku program that links only <code class="inline">libbe</code> keeps working, and keeps its
+		ABI. LibR5 adds parts Haiku does not have; it does not rename or replace a <code class="inline">libbe</code>
+		call. The classes follow the Haiku conventions: a <code class="inline">B</code> prefix, archiving with
+		<code class="inline">Archive()</code> and <code class="inline">Instantiate()</code>, colors from
+		<code class="inline">ui_color()</code>, and sizes that follow the system font.</p>
+
+		<section class="entry" id="linking">
+			<div class="entry-header"><h2 class="plain">Linking a program</h2></div>
+			<table class="spec">
+				<tr><th>Library</th><th>Header</th><th>Source</th><th>On a running system</th></tr>
+				<tr><td><code>libr5icons.so</code></td><td><code>&lt;R5Icons.h&gt;</code></td><td><code>distro/icons</code></td><td><code>/system/lib/libr5icons.so</code></td></tr>
+				<tr><td><code>libr5ui.so</code></td><td><code>&lt;R5UI.h&gt;</code>, one header per class</td><td><code>distro/ui</code></td><td><code>/system/lib/libr5ui.so</code></td></tr>
+			</table>
+			<p>Both are in the regular image and in the minimum image. The soname is the file name, without a
+			version suffix, the same way <code class="inline">libbe.so</code> is named.
+			<code class="inline">libr5ui.so</code> links <code class="inline">libr5icons.so</code>.</p>
+<pre class="code"><span class="c"># Jamfile</span>
+Application Example :
+	Example.cpp
+	: be libr5ui.so libr5icons.so [ TargetLibstdc++ ]
+	;</pre>
+		</section>
+
+		<section class="entry" id="rules">
+			<div class="entry-header"><h2 class="plain">Rules for LibR5</h2></div>
+			<ul class="plain">
+				<li><strong>Additive.</strong> A new function or class is added at the end. A function that
+				shipped keeps its arguments. A numbered value, such as <code class="inline">R5_ICON_HOME</code>,
+				keeps its number.</li>
+				<li><strong>MIT.</strong> The libraries and their headers are MIT, so any program can link them.
+				Code added to them must be MIT-compatible.</li>
+				<li><strong>Shared.</strong> A helper written for R5 and used by more than one program goes in
+				one of these libraries, with its entry in this book and in <code class="inline">docs/LIBR5.md</code>
+				in the same change.</li>
+				<li><strong>Sharp.</strong> An icon is rendered at the size it is shown and drawn pixel for pixel.
+				Stretching a bitmap by even one pixel makes its edges jagged; use <a href="appearance-kit.html#BIconView">BIconView</a>.</li>
+				<li><strong>System colors.</strong> Every color comes from <code class="inline">ui_color()</code>,
+				so a part follows the user's colors and dark mode.</li>
+			</ul>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>

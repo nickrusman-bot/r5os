@@ -6,6 +6,8 @@ Do not move a call from here into `libbe`. Do not add a function here only to re
 
 The C++ is MIT, so any application can link these libraries. Code added to them must be MIT-compatible. A program that does not link it is unchanged. The icon pictures have their own notices in `docs/ICONS.md`.
 
+The R5Book (`docs/r5book/index.html`) shows each part with a picture, what it is for, its members, and an example, in the layout of the Be Book. A change to a public call here updates its R5Book page in the same change. This file stays the contract.
+
 ## Libraries
 
 | Library | Header | Source | What it is |

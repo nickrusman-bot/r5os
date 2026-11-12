@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Appearance Kit</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+	<style>
+		/* Mockups specific to this chapter */
+		.pebble { display: block; }
+		.people { display: block; }
+
+		.m-header { display: flex; align-items: center; gap: 14px; padding: 14px 16px; width: 380px; }
+		.m-title { font-size: 18px; font-weight: 800; }
+		.m-sub { font-size: 12.5px; color: var(--sys-muted); }
+
+		.m-pagehead { display: flex; align-items: center; gap: 12px; padding: 14px 16px; width: 440px; }
+		.m-pagehead .lines { flex: 1; }
+		.m-eyebrow { font-size: 11px; font-weight: 600; color: #666; }
+		.m-pagetitle { font-size: 20px; font-weight: 700; line-height: 1.2; }
+
+		.m-action { width: 280px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+		.m-action.hover { background: #f6faff; border-color: var(--sys-accent); box-shadow: inset 0 0 0 1px rgba(50, 150, 255, 0.28); }
+		.m-action .t { font-weight: 700; font-size: 13px; }
+		.m-action .s { color: var(--sys-muted); font-size: 12px; }
+		.m-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+		.m-tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #e3ebf4; color: #2f4d70; }
+
+		.m-sidebar { width: 200px; background: #fff; border: 1px solid var(--sys-border); padding: 6px 0; font-size: 12.5px; }
+		.m-row { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; margin: 0 6px; border-radius: 4px; }
+		.m-row .count { margin-left: auto; color: #64748b; font-size: 11px; }
+		.m-row.child { height: 28px; padding-left: 36px; font-weight: 400; }
+		.m-row.selected { background: var(--sys-accent); color: #fff; font-weight: 700; }
+		.m-row.cat { font-weight: 600; }
+		.m-sep { height: 1px; background: #c8c8c8; margin: 6px 12px; }
+		.m-open { background: #eef2fa; border-radius: 3px; margin: 2px 6px; padding: 2px 0; }
+		.m-open .m-row { margin: 0; }
+		.m-lock { margin-left: auto; opacity: 0.6; }
+
+		.m-desk { width: 420px; height: 160px; background: #f3f6fb; border: 1px solid #dbe3ef; border-radius: 6px; position: relative; }
+		.m-screen { position: absolute; background: #2b2b2b; border-radius: 5px; padding: 5px; }
+		.m-screen .glass { width: 100%; height: 100%; background: #336698; border-radius: 2px; position: relative; }
+		.m-screen .deskbar { position: absolute; top: 3px; right: 3px; width: 18px; height: 7px; background: #e6e6e6; }
+		.m-screen .num { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #000; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+		.m-screen.selected { box-shadow: 0 0 0 2px #f3f6fb, 0 0 0 5px var(--sys-accent); }
+		.m-screen .name { position: absolute; bottom: -18px; left: 0; right: 0; text-align: center; font-size: 10px; color: #333; }
+
+		.m-usercard { display: flex; align-items: center; gap: 10px; padding: 8px 10px; width: 200px; height: 54px; border-radius: 5px; border: 1px solid var(--sys-border); background: #fbfbfb; }
+		.m-usercard.selected { background: #fff; border-color: var(--sys-accent); box-shadow: inset 0 0 0 1px rgba(50, 150, 255, 0.24); }
+		.m-name { font-weight: 700; font-size: 13px; }
+		.m-role { font-size: 11px; color: var(--sys-soft); }
+		.m-role.admin { color: var(--sys-accent); font-weight: 700; }
+
+		.m-list { width: 400px; background: #fff; border: 1px solid var(--sys-border); }
+		.m-li { display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 12px; border-bottom: 1px solid #ececec; }
+		.m-li.selected { background: #e9f4ff; box-shadow: inset 3px 0 0 var(--sys-accent); }
+		.m-li .m-name { font-size: 12.5px; }
+
+		.m-stack { display: flex; flex-direction: column; gap: 12px; width: 380px; }
+		.m-label { font-weight: 700; font-size: 12px; color: #444; margin-bottom: 3px; }
+		.m-dots { letter-spacing: 2px; font-size: 16px; }
+
+		.m-bad { image-rendering: pixelated; }
+	</style>
+</head>
+<body data-page="appearance">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">libr5ui.so</span>
+			<h1>The Appearance Kit</h1>
+			<p>The parts R5's own windows are built from: Settings, About, Display, Sign in and the lock
+			screen. All classes are in <code class="inline">namespace BAppearanceKit</code>, follow the system
+			colors and font size, and can be archived.</p>
+		</section>
+
+		<table class="facts">
+			<tr><th>Namespace</th><td>BAppearanceKit</td></tr>
+			<tr><th>Library</th><td>libr5ui.so (links libr5icons.so)</td></tr>
+			<tr><th>Source</th><td>distro/ui</td></tr>
+			<tr><th>Which class for what</th><td>docs/APPEARANCE-KIT.md</td></tr>
+		</table>
+
+		<div class="note"><strong>Not Haiku's BCardView.</strong> <code class="inline">BCard</code> is a
+		rounded panel with a layout, not a stack of pages. A stack of pages is still Haiku's
+		<code class="inline">BCardView</code> / <code class="inline">BCardLayout</code>.</div>
+
+		<!-- BCard -->
+		<section class="entry" id="BCard">
+			<div class="entry-header"><h2>BCard</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;Card.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BView</td></tr>
+				<tr><th>First user</th><td>About R5</td></tr>
+			</table>
+			<p>A rounded area with a group layout inside it. Use it for a heading or a summary that stands on
+			its own. Children are added through <code class="inline">GetLayout()</code>, as with a
+			<code class="inline">BGroupView</code>. A child that adopts its parent's colors, such as a
+			<code class="inline">BStringView</code>, gets the card's face.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel" style="display:flex;flex-direction:column;gap:12px">
+						<div class="sys-card m-header">
+							<img class="pebble" src="../../distro/artwork/r5-symbol.svg" width="44" height="44" alt="" />
+							<div><div class="m-title">Welcome to R5</div><div class="m-sub">Sign in to start your session</div></div>
+						</div>
+						<div class="sys-card panel-style" style="padding:12px 16px;width:380px">
+							<div class="sys-bold">Processors</div><div>2 &times; AMD Ryzen 5 5625U</div>
+						</div>
+					</div>
+				</div>
+				<figcaption><span><code>B_CARD_DOCUMENT</code> above, <code>B_CARD_PANEL</code> below</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Use it for</h4><p>A heading or summary in its own area: the About heading, the system information, an account summary, the Sign in header.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>A form the user fills in: that stays on the panel. A stack of pages: that is Haiku's <code class="inline">BCardView</code>.</p></div>
+			</div>
+
+			<div class="member"><div class="sig">BCard(const char* name, card_style style = B_CARD_DOCUMENT, orientation orientation = B_VERTICAL);</div>
+				<p><code class="inline">B_CARD_DOCUMENT</code> fills with the document background,
+				<code class="inline">B_CARD_PANEL</code> with the panel color one step darker. The border is one
+				pixel, the corner radius a quarter of the plain font size, the inner margin
+				<code class="inline">B_USE_BIG_SPACING</code>.</p></div>
+			<div class="member"><div class="sig">void SetStyle(card_style style);
+card_style Style() const;</div><p>Changes the fill and the color children adopt.</p></div>
+
+<pre class="code"><span class="k">#include</span> <span class="s">&lt;Card.h&gt;</span>
+
+BAppearanceKit::BCard* card = <span class="k">new</span> BAppearanceKit::BCard(<span class="s">"info"</span>,
+	BAppearanceKit::B_CARD_PANEL);
+BLayoutBuilder::Group&lt;&gt;((BGroupLayout*)card-&gt;GetLayout())
+	.Add(<span class="k">new</span> BStringView(<span class="s">"title"</span>, <span class="s">"Processors"</span>))
+	.Add(<span class="k">new</span> BStringView(<span class="s">"value"</span>, <span class="s">"2"</span>));</pre>
+		</section>
+
+		<!-- BPageHeader -->
+		<section class="entry" id="BPageHeader">
+			<div class="entry-header"><h2>BPageHeader</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;PageHeader.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BCard</td></tr>
+				<tr><th>First user</th><td>Settings; Users &amp; Accounts is the second</td></tr>
+			</table>
+			<p>The heading card at the top of a page: a small category line (the eyebrow), the title, a
+			description and an icon on the right. It draws itself and has no child views.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel">
+						<div class="sys-card m-pagehead">
+							<div class="lines">
+								<div class="m-eyebrow">System</div>
+								<div class="m-pagetitle">Notifications</div>
+								<div class="m-sub">Manage alerts and notifications</div>
+							</div>
+							<span class="hvif" style="width:40px;height:40px">page<br>icon</span>
+						</div>
+					</div>
+				</div>
+				<figcaption><span>Eyebrow, title, subtitle and the page icon</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BPageHeader(const char* name);</div></div>
+			<div class="member"><div class="sig">void SetEyebrow(const char* text);
+void SetTitle(const char* text);
+void SetSubtitle(const char* text);
+void SetIcon(const BBitmap* icon);</div>
+				<p>An empty eyebrow hides that line without leaving a gap. The title is bold, 8 points above the
+				bold font; the subtitle is plain at 70 percent text color. Each line ends with an ellipsis when it
+				does not fit. The icon is <code class="inline">ComposeIconSize(40)</code>; draw any wrench on it
+				before <code class="inline">SetIcon()</code>, which keeps a copy.</p></div>
+
+<pre class="code">BAppearanceKit::BPageHeader* heading = <span class="k">new</span> BAppearanceKit::BPageHeader(<span class="s">"heading"</span>);
+heading-&gt;SetEyebrow(<span class="s">"System"</span>);
+heading-&gt;SetTitle(<span class="s">"Notifications"</span>);
+heading-&gt;SetSubtitle(<span class="s">"Manage alerts and notifications"</span>);
+heading-&gt;SetIcon(icon);</pre>
+		</section>
+
+		<!-- BActionCard -->
+		<section class="entry" id="BActionCard">
+			<div class="entry-header"><h2>BActionCard</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;ActionCard.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BCard, BInvoker</td></tr>
+				<tr><th>First user</th><td>Settings home; R5 Hub and Store next</td></tr>
+			</table>
+			<p>A card the user clicks: an icon, a title, a summary of at most two lines and small tags. It
+			follows the pointer, the pressed button and the keyboard focus. A click on the card, Space or Enter
+			calls <code class="inline">Invoke()</code>; a click on a tag sends the tag message.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel" style="display:flex;gap:12px">
+						<div class="sys-card m-action">
+							<span class="hvif" style="width:40px;height:40px">icon</span>
+							<div class="t">System</div>
+							<div class="s">Display, sound, notifications, virtual memory, and this computer.</div>
+							<div class="m-tags"><span class="m-tag">Display</span><span class="m-tag">Sound</span><span class="m-tag">Notifications</span></div>
+						</div>
+						<div class="sys-card m-action hover">
+							<span class="hvif" style="width:40px;height:40px">icon</span>
+							<div class="t">Personalization</div>
+							<div class="s">Appearance, wallpaper, Desktop and Deskbar.</div>
+							<div class="m-tags"><span class="m-tag">Appearance</span><span class="m-tag">Wallpaper</span></div>
+						</div>
+					</div>
+				</div>
+				<figcaption><span>At rest, and under the pointer</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Use it for</h4><p>A start page of choices: Settings home, the R5 Hub and Store front page.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>A form. The card does not hold other views.</p></div>
+			</div>
+
+			<div class="member"><div class="sig">BActionCard(const char* name, BMessage* message);</div>
+				<p>The message is sent by <code class="inline">Invoke()</code>. Without a target, the window is the target.</p></div>
+			<div class="member"><div class="sig">void SetIcon(const BBitmap* icon);
+void SetTitle(const char* title);
+void SetSummary(const char* summary);</div><p>The summary wraps to two lines; the second ends with an ellipsis.</p></div>
+			<div class="member"><div class="sig">int32 AddTag(const char* label);
+void RemoveAllTags();
+int32 CountTags() const;
+void SetTagColor(rgb_color tint);
+void SetTagMessage(BMessage* message);</div>
+				<p>A click on a tag sends the tag message with <code class="inline">int32 "be:tag"</code> and
+				<code class="inline">"be:label"</code>.</p></div>
+			<div class="member"><div class="sig">void SetHighlighted(bool on);</div><p>Draws the card as if the pointer were on it, for example for a search match.</p></div>
+
+<pre class="code">BAppearanceKit::BActionCard* card = <span class="k">new</span> BAppearanceKit::BActionCard(
+	<span class="s">"system"</span>, <span class="k">new</span> BMessage(<span class="s">'open'</span>));
+card-&gt;SetTitle(<span class="s">"System"</span>);
+card-&gt;SetSummary(<span class="s">"Display, sound, notifications, virtual memory, and this computer."</span>);
+card-&gt;SetIcon(icon);
+card-&gt;AddTag(<span class="s">"Display"</span>);</pre>
+		</section>
+
+		<!-- BSidebar -->
+		<section class="entry" id="BSidebar">
+			<div class="entry-header"><h2>BSidebar</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;Sidebar.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BOutlineListView</td></tr>
+				<tr><th>First user</th><td>Settings, beside the page</td></tr>
+			</table>
+			<p>A list of categories that fold, with one category open at a time, and a filter for search. The
+			rows are <a href="#BSidebarItem">BSidebarItem</a>s: categories at the top level, pages under them with
+			<code class="inline">AddUnder()</code>. Wrap it in a <code class="inline">BScrollView</code>.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="m-sidebar">
+						<div class="m-row" style="font-weight:700"><img class="pebble" src="../../distro/artwork/r5-symbol.svg" width="20" height="20" alt="" />Home</div>
+						<div class="m-sep"></div>
+						<div class="m-row cat"><span class="hvif" style="width:20px;height:20px;font-size:6px">icon</span>Personalization<span class="count">4</span></div>
+						<div class="m-open">
+							<div class="m-row cat"><span class="hvif" style="width:20px;height:20px;font-size:6px">icon</span>System<span class="count">&#9662;</span></div>
+							<div class="m-row child">Display<svg class="m-lock" width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="5" width="8" height="6" rx="1" fill="#8a6d1d"/><path d="M4 5 V3.5 a2 2 0 0 1 4 0 V5" stroke="#8a6d1d" fill="none"/></svg></div>
+							<div class="m-row child selected">Information</div>
+							<div class="m-row child">Notifications</div>
+							<div class="m-row child">Virtual memory</div>
+						</div>
+						<div class="m-row cat"><span class="hvif" style="width:20px;height:20px;font-size:6px">icon</span>Network<span class="count">3</span></div>
+					</div>
+				</div>
+				<figcaption><span>Home, a folded category with its count, the open category with a selected page and a locked page</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BSidebar(const char* name);</div></div>
+			<div class="member"><div class="sig">void SetSingleExpand(bool single);
+bool IsSingleExpand() const;
+void ExpandOnly(BSidebarItem* section);</div>
+				<p>One category unfolds at a time by default. <code class="inline">ExpandOnly(NULL)</code> folds them all.</p></div>
+			<div class="member"><div class="sig">BSidebarItem* ItemForId(const char* id) const;
+bool SelectId(const char* id);</div>
+				<p><code class="inline">SelectId()</code> unfolds the parent, selects the row and scrolls it into view.
+				It returns false when the id is missing.</p></div>
+			<div class="member"><div class="sig">void SetFilter(const char* text);
+const char* Filter() const;</div>
+				<p>Hides pages whose label and keywords do not contain the text, ignoring case, and unfolds every
+				category that still has a match. An empty filter puts every row back. Rows are hidden, not deleted.</p></div>
+			<div class="member"><div class="sig">void SetFooter(const char* text);</div><p>A panel at the bottom of the list.</p></div>
+			<p>Up and Down move and skip a separator, Right unfolds, Left folds, Enter posts the selection message.</p>
+
+<pre class="code">BAppearanceKit::BSidebar* list = <span class="k">new</span> BAppearanceKit::BSidebar(<span class="s">"sidebar"</span>);
+list-&gt;AddItem(home);
+list-&gt;AddItem(system);
+list-&gt;AddUnder(display, system);
+list-&gt;SetFilter(<span class="s">"display"</span>);</pre>
+		</section>
+
+		<!-- BSidebarItem -->
+		<section class="entry" id="BSidebarItem">
+			<div class="entry-header"><h2>BSidebarItem</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;SidebarItem.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BListItem</td></tr>
+			</table>
+			<p>One row of a <a href="#BSidebar">BSidebar</a>: Home, a category or a page. An empty label and an
+			empty id make a separator, which cannot be selected. Only a top-level row draws its icon; a page's
+			text starts where the category name starts. The selection is a rounded rectangle in the selection
+			blue with the text in the list background color.</p>
+
+			<div class="member"><div class="sig">BSidebarItem(const char* label, const char* id, const BBitmap* icon = NULL);</div></div>
+			<div class="member"><div class="sig">void SetCount(int32 count);</div><p>Drawn on the right of a folded category.</p></div>
+			<div class="member"><div class="sig">void SetBadge(sidebar_badge badge);</div><p><code class="inline">B_SIDEBAR_BADGE_LOCKED</code> draws the small closed lock on a page that needs an administrator.</p></div>
+			<div class="member"><div class="sig">void SetEmphasized(bool bold);</div><p>A bold row, such as Home. It stays visible while a filter is active.</p></div>
+			<div class="member"><div class="sig">void SetKeywords(const char* keywords);</div><p>Extra words the filter matches, beyond the label.</p></div>
+			<div class="member"><div class="sig">void SetIcon(const BBitmap* icon);
+const char* Label() const;
+const char* Id() const;</div></div>
+
+<pre class="code">BAppearanceKit::BSidebarItem* home = <span class="k">new</span> BAppearanceKit::BSidebarItem(
+	<span class="s">"Home"</span>, <span class="s">"home"</span>, pebble);
+home-&gt;SetEmphasized(<span class="k">true</span>);</pre>
+		</section>
+
+		<!-- BScreenArrangement -->
+		<section class="entry" id="BScreenArrangement">
+			<div class="entry-header"><h2>BScreenArrangement</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;ScreenArrangement.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BView, BInvoker</td></tr>
+				<tr><th>First user</th><td>Display; Desktop and Deskbar next</td></tr>
+			</table>
+			<p>One or more screens in their places on the desk, each drawn with
+			<a href="#functions"><code>r5_screen_draw()</code></a>. A click, Space or Enter sends the message with
+			<code class="inline">int32 "be:screen"</code>. With dragging on, a released screen snaps against its
+			neighbor and the modification message is sent. The view does not change the screens itself.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="m-desk">
+						<div class="m-screen selected" style="left:70px;top:28px;width:150px;height:96px"><div class="glass"><span class="deskbar"></span><span class="num">1</span></div><div class="name">Built-in display</div></div>
+						<div class="m-screen" style="left:226px;top:44px;width:120px;height:76px"><div class="glass"><span class="num">2</span></div><div class="name">DELL U2419H</div></div>
+					</div>
+				</div>
+				<figcaption><span>Two screens, the first selected and holding the Deskbar</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+<pre class="code"><span class="k">struct</span> screen_tile {
+	int32		id;			<span class="c">// the caller's id for this screen</span>
+	BRect		frame;		<span class="c">// in desktop coordinates</span>
+	<span class="k">const char</span>*	name;		<span class="c">// copied by SetScreens()</span>
+	<span class="k">bool</span>		main;		<span class="c">// the Deskbar is on this screen</span>
+	<span class="k">bool</span>		enabled;	<span class="c">// false draws it dimmed</span>
+};</pre>
+
+			<div class="member"><div class="sig">BScreenArrangement(const char* name, BMessage* selectionMessage);</div></div>
+			<div class="member"><div class="sig">status_t SetScreens(const screen_tile* tiles, int32 count);
+int32 CountScreens() const;
+bool ScreenAt(int32 index, screen_tile* tile) const;</div>
+				<p>The tiles are copied. One screen is centered and keeps its shape; several are scaled together
+				so the gaps stay.</p></div>
+			<div class="member"><div class="sig">void SetSelected(int32 id);
+int32 Selected() const;</div><p>-1 when none is selected.</p></div>
+			<div class="member"><div class="sig">void SetDraggable(bool draggable);
+void SetModificationMessage(BMessage* message);</div><p>Dragging needs two screens or more. The message is adopted.</p></div>
+			<div class="member"><div class="sig">void SetCaption(const char* caption);</div><p>A line in the lower left; NULL hides it.</p></div>
+		</section>
+
+		<!-- BUserCard -->
+		<section class="entry" id="BUserCard">
+			<div class="entry-header"><h2>BUserCard</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;UserCard.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BControl</td></tr>
+				<tr><th>First user</th><td>Sign in, for two to four accounts</td></tr>
+			</table>
+			<p>A compact account card: the account picture, the display name and the role. It sends its message
+			when clicked, or with Space or Enter. The selected card has a blue border. An administrator's role is
+			bold and blue, and the picture of anyone else is gray.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel" style="display:flex;gap:8px">
+						<div class="m-usercard selected">
+							<div class="sys-avatar" style="width:38px;height:38px"><img class="people" src="../design/login-mockup/icons/people.svg" width="30" height="30" alt="" /></div>
+							<div><div class="m-name">User</div><div class="m-role admin">Administrator</div></div>
+						</div>
+						<div class="m-usercard">
+							<div class="sys-avatar muted" style="width:38px;height:38px"><img class="people" src="../design/login-mockup/icons/people.svg" width="30" height="30" alt="" /></div>
+							<div><div class="m-name">Guest</div><div class="m-role">Standard</div></div>
+						</div>
+					</div>
+				</div>
+				<figcaption><span>Selected administrator, and a standard account</span><span class="badge-mockup">Mockup, after the QEMU screenshot of Sign in</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BUserCard(const char* name, const char* login, const char* displayName,
+	const char* role, const BBitmap* avatar = NULL, BMessage* message = NULL);</div>
+				<p>Render the avatar at <code class="inline">r5_avatar_icon_side()</code> of the card's picture size
+				so it is drawn pixel for pixel.</p></div>
+			<div class="member"><div class="sig">void SetSelected(bool selected);
+bool IsSelected() const;</div></div>
+			<div class="member"><div class="sig">void SetDisplayName(const char* displayName);
+void SetRole(const char* role);
+void SetAvatar(const BBitmap* avatar);</div></div>
+		</section>
+
+		<!-- BUserListItem -->
+		<section class="entry" id="BUserListItem">
+			<div class="entry-header"><h2>BUserListItem</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;UserListItem.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BListItem</td></tr>
+				<tr><th>First user</th><td>Sign in, for five accounts or more</td></tr>
+			</table>
+			<p>A two-line account row for a <code class="inline">BListView</code>: the picture, the name in bold,
+			and <code class="inline">@login &middot; role</code> below it. Only the role is blue, and only for an
+			administrator. The selected row is light blue with a bar on the left.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="m-list">
+						<div class="m-li selected"><div class="sys-avatar" style="width:32px;height:32px"><img class="people" src="../design/login-mockup/icons/people.svg" width="25" height="25" alt="" /></div><div><div class="m-name">User</div><div class="m-role">@user &middot; <span class="admin m-role">Administrator</span></div></div></div>
+						<div class="m-li"><div class="sys-avatar muted" style="width:32px;height:32px"><img class="people" src="../design/login-mockup/icons/people.svg" width="25" height="25" alt="" /></div><div><div class="m-name">Nicky</div><div class="m-role">@nicky &middot; Standard</div></div></div>
+						<div class="m-li"><div class="sys-avatar muted" style="width:32px;height:32px"><img class="people" src="../design/login-mockup/icons/people.svg" width="25" height="25" alt="" /></div><div><div class="m-name">Alex</div><div class="m-role">@alex &middot; Standard</div></div></div>
+					</div>
+				</div>
+				<figcaption><span>A selected administrator and two standard accounts</span><span class="badge-mockup">Mockup, after the QEMU screenshot of Sign in</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BUserListItem(const char* login, const char* displayName, const char* role,
+	const BBitmap* avatar = NULL);</div><p>The row is 46 pixels high at a 12 point font.</p></div>
+			<div class="member"><div class="sig">const char* Login() const;
+const char* DisplayName() const;
+const char* Role() const;</div></div>
+		</section>
+
+		<!-- BPasswordControl -->
+		<section class="entry" id="BPasswordControl">
+			<div class="entry-header"><h2>BPasswordControl</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;PasswordControl.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BControl</td></tr>
+				<tr><th>First user</th><td>Sign in and the lock screen</td></tr>
+			</table>
+			<p>A password field with the eye inside it. The open eye shows the password, the crossed-out eye
+			hides it again. Enter invokes the control's message, or the window's default button. The password is
+			never archived.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="m-stack">
+						<div><div class="m-label">Password</div><div class="sys-field"><span class="placeholder">Enter password</span><svg data-glyph="eye" stroke="#7a7a7a"></svg></div></div>
+						<div><div class="sys-field focus"><span class="text m-dots">&bull;&bull;&bull;</span><svg data-glyph="eye" stroke="#7a7a7a"></svg></div></div>
+						<div><div class="sys-field focus"><span class="text">abc</span><svg data-glyph="eye-off" stroke="#7a7a7a"></svg></div></div>
+					</div>
+				</div>
+				<figcaption><span>Empty with its placeholder, typed with focus, and shown with the eye</span><span class="badge-mockup">Mockup, after the QEMU screenshots</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BPasswordControl(const char* name, const char* label, const char* text = NULL,
+	BMessage* message = NULL);</div></div>
+			<div class="member"><div class="sig">const char* Text() const;
+void SetText(const char* text);
+BTextView* TextView() const;</div><p>Clear the field after every attempt with <code class="inline">SetText("")</code>.</p></div>
+			<div class="member"><div class="sig">void SetPasswordRevealed(bool revealed);
+bool IsPasswordRevealed() const;</div><p>The same as a click on the eye.</p></div>
+			<div class="member"><div class="sig">void SetPlaceholder(const char* text);
+const char* Placeholder() const;</div><p>Gray text while the field is empty.</p></div>
+
+<pre class="code">BAppearanceKit::BPasswordControl* password = <span class="k">new</span> BAppearanceKit::BPasswordControl(
+	<span class="s">"password"</span>, <span class="s">""</span>, <span class="s">""</span>, <span class="k">new</span> BMessage(kAttemptLogin));
+password-&gt;SetPlaceholder(<span class="s">"Enter password"</span>);</pre>
+		</section>
+
+		<!-- BAccentButton -->
+		<section class="entry" id="BAccentButton">
+			<div class="entry-header"><h2>BAccentButton</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;AccentButton.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BButton</td></tr>
+				<tr><th>First user</th><td>Sign in, Unlock on the lock screen</td></tr>
+			</table>
+			<p>The one main action of a window, filled with the selection blue, with a bold label one step larger
+			than body text. It is a <code class="inline">BButton</code>: the message, the target,
+			<code class="inline">MakeDefault()</code> and Enter work as usual. It is as wide as its label; for the
+			full row, set an explicit maximum width of <code class="inline">B_SIZE_UNLIMITED</code>.</p>
+
+			<figure class="stage">
+				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:380px">
+					<div class="sys-accent-button">Sign in</div>
+					<div style="display:flex;gap:8px">
+						<div class="sys-accent-button hover" style="flex:1">Hover</div>
+						<div class="sys-accent-button pressed" style="flex:1">Pressed</div>
+						<div class="sys-accent-button disabled" style="flex:1">Disabled</div>
+					</div>
+				</div>
+				<figcaption><span>Full width, and its states</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Use it for</h4><p>The single action the window is for: Sign in, Unlock, Install.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>Every button on a row. Restart, Cancel and the like stay plain <code class="inline">BButton</code>s.</p></div>
+			</div>
+
+			<div class="member"><div class="sig">BAccentButton(const char* name, const char* label, BMessage* message = NULL);</div>
+				<p>38 pixels high at a 12 point font. The label is white on a dark accent and black on a light one.</p></div>
+
+<pre class="code">BAppearanceKit::BAccentButton* signIn = <span class="k">new</span> BAppearanceKit::BAccentButton(
+	<span class="s">"signin"</span>, <span class="s">"Sign in"</span>, <span class="k">new</span> BMessage(kAttemptLogin));
+signIn-&gt;SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+window-&gt;SetDefaultButton(signIn);</pre>
+		</section>
+
+		<!-- BIconView -->
+		<section class="entry" id="BIconView">
+			<div class="entry-header"><h2>BIconView</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;R5IconView.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BView</td></tr>
+				<tr><th>First user</th><td>Sign in, for the pebble and the clock</td></tr>
+			</table>
+			<p>One icon at its own pixel size. The view is exactly as large as the bitmap and never scales it.
+			The header is <code class="inline">R5IconView.h</code> because Haiku already has a private
+			<code class="inline">IconView.h</code>.</p>
+
+			<figure class="stage">
+				<div class="shot">
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><img src="../../distro/artwork/r5-symbol.svg" width="44" height="44" alt="" /><span style="font-size:11px;color:#059669;font-weight:700">Rendered at 44, drawn at 44</span></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><canvas class="m-bad" id="stretched" width="44" height="44"></canvas><span style="font-size:11px;color:var(--redline);font-weight:700">Rendered at 40, stretched to 44</span></span>
+				</div>
+				<figcaption><span>Why it exists: a stretched bitmap gets jagged edges</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BIconView(const char* name, const BBitmap* icon = NULL);</div></div>
+			<div class="member"><div class="sig">void SetIcon(const BBitmap* icon);
+const BBitmap* Icon() const;</div><p>The view keeps a copy and changes size with it.</p></div>
+
+<pre class="code">BBitmap* pebble = r5_vector_icon_bitmap(kR5Pebble, <span class="k">sizeof</span>(kR5Pebble), 44);
+BAppearanceKit::BIconView* logo = <span class="k">new</span> BAppearanceKit::BIconView(<span class="s">"logo"</span>, pebble);
+<span class="k">delete</span> pebble;</pre>
+		</section>
+
+		<!-- Functions -->
+		<section class="entry" id="functions">
+			<div class="entry-header"><h2 class="plain">Functions</h2><span class="kind">&lt;R5UI.h&gt;</span></div>
+
+			<figure class="stage">
+				<div class="shot sys" style="gap:40px">
+					<div class="m-screen" style="position:relative;width:180px;height:116px"><div class="glass"></div></div>
+					<div style="display:flex;gap:16px;align-items:center">
+						<div class="sys-avatar" style="width:44px;height:44px"><img class="people" src="../design/login-mockup/icons/people.svg" width="34" height="34" alt="" /></div>
+						<div class="sys-avatar muted" style="width:44px;height:44px"><img class="people" src="../design/login-mockup/icons/people.svg" width="34" height="34" alt="" /></div>
+					</div>
+				</div>
+				<figcaption><span><code>r5_screen_draw()</code>, and <code>r5_avatar_draw()</code> highlighted and not</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BRect r5_screen_draw(BView* view, BRect bounds, rgb_color contentColor);</div>
+				<p>The screen frame Settings uses, in a 4:3 shape centered in <code class="inline">bounds</code>,
+				filled with <code class="inline">contentColor</code>. It returns that fill, in the view's coordinates,
+				so the caller can draw a Deskbar or a notification on the glass.</p></div>
+			<div class="member"><div class="sig">void r5_screen_caption(BView* view, BRect content, const char* text, rgb_color textColor);</div>
+				<p>One centered line on the glass. Text that does not fit is skipped.</p></div>
+			<div class="member"><div class="sig">void r5_avatar_draw(BView* view, BRect circle, const BBitmap* icon, bool highlighted);
+float r5_avatar_icon_side(float circleSide);</div>
+				<p>An account picture: a round plate with a thin ring and the icon in the middle. Highlighted is the
+				light accent plate; otherwise the plate and the picture are gray. A bitmap of
+				<code class="inline">r5_avatar_icon_side()</code> pixels is drawn pixel for pixel; any other size is
+				filtered. Without an icon a plain person outline is drawn.</p></div>
+
+<pre class="code"><span class="k">float</span> side = r5_avatar_icon_side(44);
+BBitmap* people = r5_mime_icon_bitmap(<span class="s">"application/x-vnd.Be-PEPL"</span>, side);
+r5_avatar_draw(<span class="k">this</span>, BRect(0, 0, 43, 43), people, <span class="k">true</span>);</pre>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+<script>
+	// The "stretched" pebble: render small, then scale up without smoothing.
+	(function () {
+		const canvas = document.getElementById("stretched");
+		const image = new Image();
+		image.onload = function () {
+			const small = document.createElement("canvas");
+			small.width = small.height = 40;
+			small.getContext("2d").drawImage(image, 0, 0, 40, 40);
+			const context = canvas.getContext("2d");
+			context.imageSmoothingEnabled = false;
+			context.drawImage(small, 0, 0, 40, 40, 0, 0, 44, 44);
+		};
+		image.src = "../../distro/artwork/r5-symbol.svg";
+	})();
+</script>
+</body>
+</html>
