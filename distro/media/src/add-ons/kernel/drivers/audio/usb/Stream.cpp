@@ -592,7 +592,7 @@ Stream::ProgramClock()
 			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
 			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
 			sizeof(rate), &rate, &actualLength);
-		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
+		TRACE(status == B_OK ? INF : ERR, "UAC2 set_speed %lu clock %u: %s\n",
 			samplingRate, clock, strerror(status));
 		return status;
 	}
@@ -604,7 +604,7 @@ Stream::ProgramClock()
 		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,
 		USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
 		address, sizeof(freq), &freq, &actualLength);
-	TRACE(ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
+	TRACE(status == B_OK ? INF : ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
 		freq.bytes[0], freq.bytes[1], freq.bytes[2],
 		address, actualLength, strerror(status));
 	return status;
@@ -623,6 +623,15 @@ Stream::Start()
 		// a transfer queued. Cancel it so both buffers are not queued twice.
 		if (fStreamEndpoint != 0)
 			Stop();
+		// Buffer 0 is queued first, so its completion must be the first one
+		// the callback handles. Values left from before the stop pointed the
+		// callback at the buffer still in flight, and the carries held
+		// frames from the old run.
+		fCurrentBuffer = fIsInput ? (size_t)-1 : 0;
+		atomic_set(&fProcessedBuffers, 0);
+		fCarryFrames = 0;
+		fPlayCarryFrames = 0;
+		fFeedbackError = 0;
 // SPDX-SnippetEnd
 		atomic_set(&fQueueStopped, 0);
 		atomic_set(&fTransferErrors, 0);
@@ -721,6 +730,15 @@ Stream::_QueuePlayback(size_t queuedBuffer)
 		adjust = 1;
 	else if (fFeedbackError < -65536 && want > 1 && fPlayCarryFrames < 8)
 		adjust = -1;
+	// The extra frame goes in the last packet. When wMaxPacketSize has no
+	// room for it, do not take it from the carry: it used to be clamped off
+	// and lost while the error was already counted down.
+	const uint32 packetLimit = fPlan.maxPacketBytes / fb;
+	if (adjust == 1 && fPlan.packetsPerBuffer > 0
+		&& usb_audio_packet_frames(&fPlan, fPlan.packetsPerBuffer - 1) + 1
+			> packetLimit) {
+		adjust = 0;
+	}
 // SPDX-SnippetEnd
 
 	uint32 sent = (uint32)((int32)want + adjust);
@@ -755,8 +773,8 @@ Stream::_QueuePlayback(size_t queuedBuffer)
 		uint32 frames = usb_audio_packet_frames(&fPlan, i);
 		if (i + 1 == fPlan.packetsPerBuffer && sent > accounted)
 			frames = sent - accounted;
-		if (frames > fPlan.nominalMaxFrames)
-			frames = fPlan.nominalMaxFrames;
+		if (frames > packetLimit)
+			frames = packetLimit;
 		accounted += frames;
 		descriptors[i].request_length = (int16)(frames * fb);
 		descriptors[i].actual_length = 0;
@@ -788,9 +806,17 @@ Stream::_QueueFeedback()
 	// it is a member, not a local.
 	fFeedbackFrame = 0;
 // SPDX-SnippetEnd
-	gUSBModule->queue_isochronous(fFeedbackPipe, fFeedbackBytes, 4,
-		&fFeedbackPacket, 1, &fFeedbackFrame, USB_ISO_ASAP,
+	status_t status = gUSBModule->queue_isochronous(fFeedbackPipe,
+		fFeedbackBytes, 4, &fFeedbackPacket, 1, &fFeedbackFrame, USB_ISO_ASAP,
 		Stream::_FeedbackCallback, this);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// Without feedback, pace at the nominal rate instead of following the
+	// last sample for the rest of the stream.
+	if (status != B_OK)
+		atomic_set(&fFeedbackSample, 0);
+// SPDX-SnippetEnd
 }
 
 
@@ -800,26 +826,47 @@ Stream::_FeedbackCallback(void* cookie, status_t status, void* data,
 {
 	Stream* stream = (Stream*)cookie;
 	atomic_add(&stream->fInsideNotify, 1);
-	if (status != B_OK || actualLength < 3 || data == NULL
-		|| atomic_get(&stream->fQueueStopped) != 0 || !stream->fIsRunning) {
+	if (status == B_CANCELED || atomic_get(&stream->fQueueStopped) != 0
+		|| !stream->fIsRunning) {
 		atomic_add(&stream->fInsideNotify, -1);
 		return;
 	}
 
-	uint32 raw = 0;
-	memcpy(&raw, data, actualLength < 4 ? actualLength : 4);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A failed or short sample is not used, and the next one is queued: the
+	// feedback used to stop after the first error. A value is accepted only
+	// within 1/8 of nominal, as Linux does. A full-speed device that sends
+	// 16.16 instead of 10.14 is recognised by that range.
 	int32 perPacket = 0;
-	if (stream->fPlan.packetsPerSecond > 1000) {
-		uint32 micros = 8000 / stream->fPlan.packetsPerSecond;
-		perPacket = (int32)(raw * micros);
-	} else {
-		uint32 frames = 1000 / stream->fPlan.packetsPerSecond;
-		if (frames == 0)
-			frames = 1;
-		perPacket = (int32)((raw & 0x00ffffff) << 2) * (int32)frames;
+	if (status == B_OK && actualLength >= 3 && data != NULL
+		&& stream->fPlan.packetsPerSecond != 0) {
+		uint32 raw = 0;
+		memcpy(&raw, data, actualLength < 4 ? actualLength : 4);
+		int64 nominal = ((int64)stream->fPlan.rate << 16)
+			/ stream->fPlan.packetsPerSecond;
+		int64 candidates[2];
+		if (stream->fPlan.packetsPerSecond > 1000) {
+			uint32 micros = 8000 / stream->fPlan.packetsPerSecond;
+			candidates[0] = (int64)raw * micros;
+			candidates[1] = candidates[0];
+		} else {
+			uint32 frames = 1000 / stream->fPlan.packetsPerSecond;
+			if (frames == 0)
+				frames = 1;
+			candidates[0] = ((int64)(raw & 0x00ffffff) << 2) * frames;
+			candidates[1] = (int64)raw * frames;
+		}
+		for (int i = 0; i < 2 && perPacket == 0; i++) {
+			if (candidates[i] >= nominal - nominal / 8
+				&& candidates[i] <= nominal + nominal / 8) {
+				perPacket = (int32)candidates[i];
+			}
+		}
 	}
-	if (perPacket > 0)
-		atomic_set(&stream->fFeedbackSample, perPacket);
+	atomic_set(&stream->fFeedbackSample, perPacket);
+// SPDX-SnippetEnd
 
 	if (atomic_get(&stream->fQueueStopped) == 0 && stream->fIsRunning)
 		stream->_QueueFeedback();
@@ -1038,6 +1085,28 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 		return _SetupBuffers();
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A shared UAC 2.0 clock is locked while another stream of this device
+	// runs. Rewriting it then is what silences a UMC204HD for the whole
+	// capture. This used to set up buffers for the new rate and report
+	// success while the device kept the old rate; now the change is refused
+	// and nothing is changed.
+	if (fControlInterface != NULL
+		&& fControlInterface->SpecReleaseNumber() >= 0x0200) {
+		for (int i = 0; i < fDevice->fStreams.Count(); i++) {
+			Stream* other = fDevice->fStreams[i];
+			if (other != this && other->IsRunning()
+				&& (other->ClockId() == fClockId || fClockId == 0)) {
+				dprintf("usb_audio: %s rate change refused, the clock is used "
+					"by a running stream\n", fIsInput ? "record" : "play");
+				return B_BUSY;
+			}
+		}
+	}
+// SPDX-SnippetEnd
+
 	alternate->SetSamplingRateById(format->rate);
 	alternate->SetFormatId(format->format);
 	TRACE(INF, "%s.rate:%d cvsr:%f format:%#08x\n",
@@ -1055,15 +1124,6 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	if (status != B_OK)
 		return status;
 
-	// A shared clock is locked while another stream of this device runs.
-	// Rewriting it then is what silences a UMC204HD for the whole capture.
-	for (int i = 0; i < fDevice->fStreams.Count(); i++) {
-		Stream* other = fDevice->fStreams[i];
-		if (other != this && other->IsRunning()) {
-			TRACE(ERR, "clock locked by a running stream\n");
-			return B_OK;
-		}
-	}
 	return ProgramClock();
 }
 
@@ -1110,12 +1170,28 @@ Stream::GetBuffers(multi_buffer_list* List)
 	TypeIFormatDescriptor* format = static_cast<TypeIFormatDescriptor*>(
 		fAlternates[fActiveAlternate]->Format());
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// This stream's channels follow the channels of the streams before it
+	// in the caller's array. The old loop started at startChannel inside a
+	// local array of this stream's size and copied that array to the start
+	// of the caller's: a second stream in one direction overwrote the
+	// first, and sent uninitialised stack bytes to user space.
+	int32 requested = fIsInput ? List->request_record_channels
+		: List->request_playback_channels;
+	if (startChannel < 0
+		|| startChannel + (int32)format->fNumChannels > requested) {
+		return B_BAD_VALUE;
+	}
+// SPDX-SnippetEnd
+
 	// [buffer][channel] init buffers
 	for (size_t buffer = 0; buffer < kSamplesBufferCount; buffer++) {
 		TRACE(DTA, "%s buffer #%d:\n", fIsInput ? "input" : "output", buffer + 1);
 
 		struct buffer_desc descs[format->fNumChannels];
-		for (size_t channel = startChannel;
+		for (size_t channel = 0;
 				channel < format->fNumChannels; channel++) {
 			// init stride to the same for all buffers
 			uint32 stride = format->fSubframeSize * format->fNumChannels;
@@ -1136,7 +1212,8 @@ Stream::GetBuffers(multi_buffer_list* List)
 				descs[channel].base, descs[channel].stride);
 		}
 		if (!IS_USER_ADDRESS(Buffers[buffer])
-				|| user_memcpy(Buffers[buffer], descs, sizeof(descs)) < B_OK) {
+				|| user_memcpy(Buffers[buffer] + startChannel, descs,
+					sizeof(descs)) < B_OK) {
 			return B_BAD_ADDRESS;
 		}
 	}

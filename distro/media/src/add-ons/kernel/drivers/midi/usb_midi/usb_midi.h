@@ -116,6 +116,12 @@ typedef struct usbmidi_device_info
 		/* IN endpoint is interrupt, so the driver uses queue_interrupt.
 		 * Some Roland Advanced-mode devices do this. RenkuOS cb61494f02.
 		 */
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	bool out_is_interrupt;
+		/* USB MIDI 2.0 allows an interrupt OUT endpoint too. */
+// SPDX-SnippetEnd
 
 	uint16 vendor_id;
 	uint16 product_id;

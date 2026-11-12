@@ -344,8 +344,15 @@ deliver_ump_packet(void* cookie, uint32_t group, const uint32_t* words,
 {
 	usbmidi_device_info* midiDevice = (usbmidi_device_info*)cookie;
 	usbmidi_port_info* port = group < 16 ? midiDevice->ports[group] : NULL;
-	if ((words[0] >> 28) == 0xfu && ((words[0] >> 16) & 0x3ffu) == 0x005u
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* The device reports its protocol with a Stream Configuration
+	 * Notification (status 0x006). 0x005 is the Request, which only the host
+	 * sends, so the protocol never changed before. */
+	if ((words[0] >> 28) == 0xfu && ((words[0] >> 16) & 0x3ffu) == 0x006u
 		&& count >= 1) {
+// SPDX-SnippetEnd
 		uint8 protocol = (uint8)((words[0] >> 8) & 0xffu);
 		if (protocol == 1 || protocol == 2)
 			midiDevice->ump_protocol = protocol;
@@ -587,6 +594,87 @@ interface_has_midi_io(const usb_interface_info* intf)
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+/* USB-MIDI 2.0 § 3.1: alternate 0 of a MIDIStreaming interface is USB MIDI
+ * 1.0. The alternate whose MS header has bcdMSC 0x0200 carries Universal
+ * MIDI Packets. Returns NULL when the interface has none.
+ */
+static const usb_interface_info*
+find_midi2_alternate(const usb_configuration_info* conf, uint16 ifno)
+{
+	for (size_t alt = 0; alt < conf->interface[ifno].alt_count; alt++) {
+		const usb_interface_info* candidate = &conf->interface[ifno].alt[alt];
+		if (candidate->descr == NULL || candidate->endpoint_count == 0)
+			continue;
+		for (size_t g = 0; g < candidate->generic_count; g++) {
+			usb_generic_descriptor* gd = &candidate->generic[g]->generic;
+			if (gd->length >= 5
+				&& gd->descriptor_type == USB_DESCRIPTOR_CS_INTERFACE
+				&& gd->data[0] == USB_MS_HEADER_DESCRIPTOR
+				&& (gd->data[1] | ((uint16)gd->data[2] << 8)) >= 0x0200) {
+				return candidate;
+			}
+		}
+	}
+	return NULL;
+}
+
+
+/* The Group Terminal Blocks are not in the configuration descriptor. The
+ * host asks for them with GET_DESCRIPTOR, wValue CS_GR_TRM_BLOCK (0x26) and
+ * the alternate setting, wIndex the interface (USB-MIDI 2.0 § 5.4). First
+ * the 5-byte header for wTotalLength, then the whole set, as Linux does.
+ * Returns the groups the blocks use, as a mask; 0 when they cannot be read.
+ */
+static uint16
+read_group_terminal_blocks(const usb_device* dev, const usb_interface_info* intf)
+{
+	uint8 buffer[256];
+	size_t actual = 0;
+	uint16 value = (0x26 << 8) | intf->descr->alternate_setting;
+	uint16 index = intf->descr->interface_number;
+	status_t status = gUSBModule->send_request(dev,
+		USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_STANDARD,
+		USB_REQUEST_GET_DESCRIPTOR, value, index, 5, buffer, 5, &actual);
+	if (status != B_OK || actual < 5 || buffer[0] < 5 || buffer[1] != 0x26
+		|| buffer[2] != 0x01) {
+		return 0;
+	}
+	size_t total = buffer[3] | ((size_t)buffer[4] << 8);
+	if (total > sizeof(buffer))
+		total = sizeof(buffer);
+	if (total < 5)
+		return 0;
+	status = gUSBModule->send_request(dev,
+		USB_REQTYPE_INTERFACE_IN | USB_REQTYPE_STANDARD,
+		USB_REQUEST_GET_DESCRIPTOR, value, index, total, buffer, total,
+		&actual);
+	if (status != B_OK || actual < 5)
+		return 0;
+
+	uint16 groups = 0;
+	size_t offset = buffer[0];
+	while (offset + 2 <= actual) {
+		const uint8* block = buffer + offset;
+		uint8 length = block[0];
+		if (length < 3 || offset + length > actual)
+			break;
+		/* bDescriptorSubtype 0x02 is GR_TRM_BLOCK; 0x01 is the header. */
+		if (block[1] == 0x26 && block[2] == 0x02 && length >= 13) {
+			uint8 first = block[5];
+			uint8 count = block[6];
+			for (uint16 g = first; g < (uint16)first + count && g < 16; g++)
+				groups |= (uint16)(1u << g);
+		}
+		offset += length;
+	}
+	return groups;
+}
+// SPDX-SnippetEnd
+
+
 static status_t
 usb_midi_added(const usb_device* dev, void** cookie)
 {
@@ -669,6 +757,28 @@ got_one:
 		return B_ERROR;
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* A MIDI 2.0 device starts in alternate 0, USB MIDI 1.0. Select the
+	 * MIDI 2.0 alternate; when that fails, stay on MIDI 1.0. */
+	if (roland == NULL) {
+		const usb_interface_info* midi2 = find_midi2_alternate(conf, ifno);
+		if (midi2 != NULL && midi2 != intf) {
+			status = gUSBModule->set_alt_interface(dev, midi2);
+			if (status == B_OK) {
+				intf = midi2;
+				DPRINTF_INFO((MY_ID "interface %u: USB MIDI 2.0 alternate %u\n",
+					ifno, midi2->descr->alternate_setting));
+			} else {
+				DPRINTF_ERR((MY_ID "interface %u: cannot select the MIDI 2.0 "
+					"alternate (0x%" B_PRIx32 "), staying on MIDI 1.0\n",
+					ifno, status));
+			}
+		}
+	}
+// SPDX-SnippetEnd
+
 	usbmidi_device_info* midiDevice;
 	if ((midiDevice = create_device(dev, dev_desc, ifno)) == NULL)
 		return B_ERROR;
@@ -684,13 +794,6 @@ got_one:
 			uint16 version = generic->data[1] | ((uint16)generic->data[2] << 8);
 			if (version >= 0x0200)
 				midiDevice->ump_endpoint = true;
-		}
-		/* USB MIDI 2.0 Group Terminal Block. Same bytes as Midi2Usb.h:
-		 * type 0x26, subtype in data[0], protocol in data[6]. 0x11 is MIDI 2.0.
-		 */
-		if (generic->descriptor_type == 0x26 && generic->length >= 13
-			&& generic->data[0] == 0x01 && generic->data[6] == 0x11) {
-			midiDevice->ump_endpoint = true;
 		}
 		if (generic->descriptor_type == USB_DESCRIPTOR_CS_ENDPOINT
 			&& generic->data[0] == USB_MS_GENERAL_DESCRIPTOR) {
@@ -721,6 +824,7 @@ got_one:
 			}
 		} else if (midiDevice->ept_out == NULL) {
 			midiDevice->ept_out = &intf->endpoint[i];
+			midiDevice->out_is_interrupt = isInterrupt;
 			out_cables = (i < 2) ? cable_count[i] : 0;
 			if (ed->max_packet_size < midiDevice->outMaxPkt)
 				midiDevice->outMaxPkt = ed->max_packet_size;
@@ -733,6 +837,8 @@ got_one:
 	if (roland != NULL) {
 		DPRINTF_INFO((MY_ID "roland cables: in_mask=0x%x out_mask=0x%x\n",
 			(unsigned int)roland->in_mask, (unsigned int)roland->out_mask));
+	} else if (midiDevice->ump_endpoint) {
+		/* UMP groups come from the Group Terminal Blocks, below. */
 	} else if (in_cables == 0 && out_cables == 0) {
 		for (uint16 i = 0; i < intf->generic_count; i++) {
 			usb_generic_descriptor* gd = &intf->generic[i]->generic;
@@ -766,6 +872,26 @@ got_one:
 			if (port != NULL)
 				add_port_info(port);
 		}
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	} else if (midiDevice->ump_endpoint) {
+		/* One port per UMP group, the port number is the group. Without
+		 * readable blocks, group 1 (index 0) only. */
+		uint16 groups = read_group_terminal_blocks(dev, intf);
+		if (groups == 0) {
+			DPRINTF_ERR((MY_ID "no Group Terminal Blocks, using group 1\n"));
+			groups = 1;
+		}
+		for (uint16 g = 0; g < 16; g++) {
+			if ((groups & (1u << g)) == 0)
+				continue;
+			port = create_usbmidi_port(midiDevice, g,
+				midiDevice->ept_in != NULL, midiDevice->ept_out != NULL);
+			if (port != NULL)
+				add_port_info(port);
+		}
+// SPDX-SnippetEnd
 	} else {
 		for (uint16 i = 0; in_cables > 0 || out_cables > 0; i++) {
 			port = create_usbmidi_port(midiDevice, i,
@@ -1081,12 +1207,18 @@ usb_midi_read(driver_cookie* cookie, off_t position,
 
 const uint8 CINcode[] = {	/* see USB-MIDI Spec */
 	0x4,	/* 0x0 - sysex start */
-	0,	/* 0x1 -- undefined */
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* 0xF1 is a 2-byte system common message (CIN 0x2); it was 0 and was
+	 * never sent. 0xF6 is one byte (CIN 0x5); it was sent as two. */
+	0x2,	/* 0x1 -- MTC quarter frame */
 	0x3,	/* 0x2  -- song pos */
 	0x2,	/* 0x3 -- song select */
 	0,	/* 0x4 -- undefined */
 	0,	/* 0x5 -- undefined */
-	0x2,	/* 0x6  -- tune request */
+	0x5,	/* 0x6  -- tune request */
+// SPDX-SnippetEnd
 	0x5,	/* 0x7 -- sysex end */
 	0x5,	/* 0x8 -- clock */
 	0,	/* 0x9 -- undefined */
@@ -1121,9 +1253,19 @@ queue_out(usbmidi_device_info* midiDevice, const void* data, size_t size)
 		return status;
 
 	memcpy(midiDevice->out_buffer, data, size);
-	status = gUSBModule->queue_bulk(midiDevice->ept_out->handle,
-		midiDevice->out_buffer, size,
-		(usb_callback_func)usb_midi_write_callback, midiDevice);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (midiDevice->out_is_interrupt) {
+		status = gUSBModule->queue_interrupt(midiDevice->ept_out->handle,
+			midiDevice->out_buffer, size,
+			(usb_callback_func)usb_midi_write_callback, midiDevice);
+	} else {
+		status = gUSBModule->queue_bulk(midiDevice->ept_out->handle,
+			midiDevice->out_buffer, size,
+			(usb_callback_func)usb_midi_write_callback, midiDevice);
+	}
+// SPDX-SnippetEnd
 	if (status != B_OK) {
 		DPRINTF_ERR((MY_ID "midi write queue_bulk() error 0x%" B_PRIx32 "\n",
 			status));

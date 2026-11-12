@@ -15,6 +15,26 @@
 #include <Midi2Usb.h>
 
 
+/* MIDI-CI wants a random 28-bit MUID per instance, so two programs or two
+ * computers can tell each other apart. 0 and 0x0FFFFF00-0x0FFFFFFF are
+ * reserved. This was a fixed 1. */
+static uint32
+midi2_new_muid(const void* instance)
+{
+	static int32 sCounter = 0;
+	uint64 mix = (uint64)system_time() ^ ((uint64)find_thread(NULL) << 20)
+		^ (uint64)(addr_t)instance
+		^ ((uint64)atomic_add(&sCounter, 1) * 0x9e3779b97f4a7c15ULL);
+	mix ^= mix >> 29;
+	mix *= 0xbf58476d1ce4e5b9ULL;
+	mix ^= mix >> 32;
+	uint32 muid = (uint32)mix & 0x0fffffff;
+	if (muid == 0 || muid >= 0x0fffff00)
+		muid = 0x00123456;
+	return muid;
+}
+
+
 status_t
 midi2_pe_encode(const midi2_pe_message* message, uint8* out, size_t capacity,
 	size_t* _length)
@@ -318,12 +338,16 @@ midi2_pe_header_number(const char* header, size_t length, const char* key)
 		size_t value = i + 3 + keyLength;
 		if (value >= length || header[value] < '0' || header[value] > '9')
 			return -1;
-		int32 number = 0;
+		/* The header comes from the other device. A long run of digits used
+		 * to overflow int32; anything above 2^31 - 1 is refused. */
+		int64 number = 0;
 		while (value < length && header[value] >= '0' && header[value] <= '9') {
 			number = number * 10 + (header[value] - '0');
+			if (number > 0x7fffffff)
+				return -1;
 			value++;
 		}
-		return number;
+		return (int32)number;
 	}
 	return -1;
 }
@@ -334,10 +358,10 @@ midi2_pe_catalog_init(midi2_pe_catalog* catalog)
 	if (catalog == NULL)
 		return;
 	memset(catalog, 0, sizeof(midi2_pe_catalog));
-	catalog->muid = 1;
+	catalog->muid = midi2_new_muid(catalog);
 	strlcpy(catalog->deviceInfo,
 		"{\"manufacturerId\":[125,0,0],\"manufacturer\":\"Educational Use\","
-		"\"familyId\":[0,0],\"family\":\"R5OS\",\"modelId\":[1,0],"
+		"\"familyId\":[0,0],\"family\":\"R5\",\"modelId\":[1,0],"
 		"\"model\":\"midi2\",\"versionId\":[1,0,0,0],\"version\":\"1\"}",
 		sizeof(catalog->deviceInfo));
 	strlcpy(catalog->channelList,
@@ -661,7 +685,7 @@ midi2_profile_catalog_init(midi2_profile_catalog* catalog)
 	if (catalog == NULL)
 		return;
 	memset(catalog, 0, sizeof(midi2_profile_catalog));
-	catalog->muid = 1;
+	catalog->muid = midi2_new_muid(catalog);
 	catalog->count = 1;
 	catalog->ids[0].bytes[0] = 0x7e;
 	catalog->ids[0].bytes[4] = 0x01;
@@ -939,7 +963,7 @@ midi2_endpoint_init(midi2_endpoint* endpoint)
 	endpoint->blocks[0].firstGroup = 0;
 	endpoint->blocks[0].groupCount = 1;
 	endpoint->blocks[0].midiCiVersion = 1;
-	strlcpy(endpoint->name, "R5OS", sizeof(endpoint->name));
+	strlcpy(endpoint->name, "R5", sizeof(endpoint->name));
 	strlcpy(endpoint->productId, "r5os", sizeof(endpoint->productId));
 	strlcpy(endpoint->blocks[0].name, "midi2", sizeof(endpoint->blocks[0].name));
 }

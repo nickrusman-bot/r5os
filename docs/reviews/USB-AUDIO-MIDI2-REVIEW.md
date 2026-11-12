@@ -4,6 +4,8 @@ For Cursor. Read-only review of `origin/main` at `9880d5346d`: the `usb_audio` d
 
 Nothing was built or run for this review. No USB audio or MIDI device was attached. Every point below is from reading the code.
 
+**Status (12 Nov 2026, build 10057):** point 1 fixed in #4203. Points 2–16 fixed on `claude/review-fixes`, and from the smaller points: the product name (UTF-8), the log level and the `new` check. The 0x7D manufacturer ID stays until R5 has its own. Still open: unplug while reading, `B_MIDI_READ_UMP` on MIDI 1.0 devices, the in-band marker note, the bus-speed guess, the recording carry, the `padded` parameter, the rate list per alternate, and the SPDX snippet tags. Correction to point 4: the error stop after 32 transfers does release the semaphore once, so it does not hang by itself. The hang comes from a stop from another thread (format or latency change) or transfers that stop completing; the one-second timeout covers both. None of it is tested on hardware yet.
+
 **Verdict: two points break things that worked before (1, 4). MIDI 2.0 over USB cannot switch on with a real device yet (2, 3).** Fix 1 first, in its own PR: it stops MIDI input from every MIDI device, also USB MIDI 1.0 keyboards. Then 2+3, then 4+5, then 6–10. The rest can wait for a later round.
 
 Line numbers are from `9880d5346d`.

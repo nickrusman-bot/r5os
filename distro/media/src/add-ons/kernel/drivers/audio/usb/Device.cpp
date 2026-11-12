@@ -25,6 +25,9 @@ static const int32 kMaxMixItems = 1024;
 static const int32 kMaxBufferDescs = 32;
 static const int32 kMaxDescribedChannels = 128;
 static const size_t kEnableBitBytes = kMaxEnabledChannels / 8;
+// Longest wait for a buffer. The largest buffer is 8192 frames, 186 ms at
+// 44.1 kHz.
+static const bigtime_t kBufferExchangeTimeout = 1000000;
 // SPDX-SnippetEnd
 
 
@@ -174,9 +177,15 @@ Device::Control(uint32 op, void* buffer, size_t length)
 
 			multi_channel_info* channels = NULL;
 			if (description.request_channel_count > 0) {
-				channels = (multi_channel_info*)malloc(
-					sizeof(multi_channel_info)
-						* description.request_channel_count);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+				// Zeroed: only the channels the card has are filled in, and
+				// the whole array goes back to the caller.
+				channels = (multi_channel_info*)calloc(
+					description.request_channel_count,
+					sizeof(multi_channel_info));
+// SPDX-SnippetEnd
 				if (channels == NULL)
 					return B_NO_MEMORY;
 			}
@@ -282,8 +291,14 @@ Device::Control(uint32 op, void* buffer, size_t length)
 				return status;
 
 			enable.enable_bits = orig_enable_bits;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			// Write back only the bytes that were read: the caller's bitmap
+			// is sized for this card, not for kMaxEnabledChannels.
 			if (user_memcpy(enable.enable_bits, enable_bits,
-					sizeof(enable_bits)) < B_OK
+					(channels + 7) / 8) < B_OK
+// SPDX-SnippetEnd
 				|| user_memcpy(buffer, &enable, sizeof(multi_channel_enable))
 					< B_OK) {
 				return B_BAD_ADDRESS;
@@ -599,12 +614,33 @@ Device::_ReadProductString(usb_device device, uint8 index, char* output,
 	if (status < B_OK || actualLength < 2)
 		return;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The string is UTF-16LE. Taking the low byte of each character made a
+	// name with é or ü invalid UTF-8 in Media. A surrogate pair becomes '?'.
 	size_t chars = (actualLength - 2) / 2;
-	if (chars > outputMax - 1)
-		chars = outputMax - 1;
-	for (size_t i = 0; i < chars; i++)
-		output[i] = raw[2 + i * 2];
-	output[chars] = '\0';
+	size_t used = 0;
+	for (size_t i = 0; i < chars; i++) {
+		uint16 c = raw[2 + i * 2] | ((uint16)raw[3 + i * 2] << 8);
+		if (c >= 0xd800 && c <= 0xdfff)
+			c = '?';
+		size_t need = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+		if (used + need > outputMax - 1)
+			break;
+		if (need == 1)
+			output[used++] = (char)c;
+		else if (need == 2) {
+			output[used++] = (char)(0xc0 | (c >> 6));
+			output[used++] = (char)(0x80 | (c & 0x3f));
+		} else {
+			output[used++] = (char)(0xe0 | (c >> 12));
+			output[used++] = (char)(0x80 | ((c >> 6) & 0x3f));
+			output[used++] = (char)(0x80 | (c & 0x3f));
+		}
+	}
+	output[used] = '\0';
+// SPDX-SnippetEnd
 }
 
 
@@ -842,7 +878,13 @@ Device::_MultiGetBuffers(multi_buffer_list* List)
 			TRACE(API, "%d:%d %08x:%d\n", b, c, List->record_buffers[b][c].base,
 				List->record_buffers[b][c].stride);
 #endif
-	return B_OK;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A stream that refused the request (too few buffers or channels, a bad
+	// address) used to be reported as success with half-filled lists.
+	return status;
+// SPDX-SnippetEnd
 }
 
 
@@ -862,12 +904,21 @@ Device::_MultiBufferExchange(multi_buffer_info* multiInfo)
 			fStreams[i]->Start();
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// A stream that is stopped from another thread (a format or latency
+	// change) or whose transfers stop completing never releases the
+	// semaphore. Without a timeout this call then waited forever, and the
+	// next exchange, which starts the stream again, never came.
 	status_t status = acquire_sem_etc(fBuffersReadySem, 1,
-		B_CAN_INTERRUPT, 0);
-	if (status == B_TIMED_OUT) {
-		TRACE(ERR, "Timeout during buffers exchange.\n");
+		B_CAN_INTERRUPT | B_RELATIVE_TIMEOUT, kBufferExchangeTimeout);
+	if (status != B_OK) {
+		if (status == B_TIMED_OUT)
+			TRACE(ERR, "Timeout during buffers exchange.\n");
 		return status;
 	}
+// SPDX-SnippetEnd
 
 	status = B_ERROR;
 	for (int i = 0; i < fStreams.Count(); i++) {
@@ -1017,7 +1068,7 @@ Device::_SetupEndpoints()
 				{
 					Stream* stream = new(std::nothrow) Stream(this, i,
 						&config->interface[i]);
-					if (stream->Init() == B_OK) {
+					if (stream != NULL && stream->Init() == B_OK) {
 						// put the stream in the correct order:
 						// first output that input ones.
 						if (stream->IsInput())

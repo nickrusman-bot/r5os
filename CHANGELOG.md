@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - USB audio and MIDI fixes from the review (build 10057)
+
+Points 2 to 16 of `docs/reviews/USB-AUDIO-MIDI2-REVIEW.md`, and three of its smaller points. Point 1 was #4203.
+
+MIDI over USB (`usb_midi`): a MIDI 2.0 device is switched to the alternate whose MS header says `bcdMSC 0x0200` (`set_alt_interface`); before, alternate 0 (MIDI 1.0) always stayed active and the UMP code never ran on a real device. The Group Terminal Blocks are read with `GET_DESCRIPTOR` (`0x26`, alternate, interface), header first, as Linux does; one port per group, group 1 only when they cannot be read. The protocol is taken from the Stream Configuration Notification (`0x006`), not the Request (`0x005`). An interrupt OUT endpoint is queued as interrupt. `CINcode`: `0xF1` (MTC) is CIN 0x2 and `0xF6` CIN 0x5 (both wrong in Haiku as well). The UMP walk steps over reserved message types instead of dropping the rest of the transfer. `Midi2Usb.h`: a Group Terminal Block is subtype `0x02`; `0x01` is the header (`B_MIDI2_USB_GROUP_TERMINAL_HEADER_SUBTYPE`). Development builds up to 10056 used `0x01`.
+
+MIDI 2.0 kit: `BMidiLocalConsumer` passes UMP type 0x1 (clock, start, stop, continue, time code, song position, song select) to MIDI 1.0 hooks. MIDI-CI catalogs get a random 28-bit MUID instead of 1; the family and endpoint name are `R5`. `midi2_pe_header_number` refuses a value above 2^31 − 1 instead of overflowing. The manufacturer ID stays `0x7D` (educational use) until R5 has its own.
+
+USB audio (`usb_audio`): buffer exchange waits at most one second, so a stream that was stopped from another thread (format or latency change) no longer leaves the media add-on waiting forever. (The review said the error stop after 32 transfers caused that hang; it does not, because the callback releases the semaphore once before it stops.) `Start()` resets the buffer cycle, the processed count and both carries. `B_MULTI_SET_ENABLED_CHANNELS` writes back only the card's bytes. `B_MULTI_GET_DESCRIPTION` returns zeroed spare entries. `B_MULTI_GET_BUFFERS` returns a stream's error and puts each stream at its own channel offset (also Haiku code). A rate change on a UAC 2.0 clock that another running stream uses returns `B_BUSY` and changes nothing; before, it set up buffers for the new rate and reported success. Feedback: a value is used only within 1/8 of nominal, a full-speed 16.16 value is recognised, an error no longer stops the feedback, a failed queue paces at nominal, and the extra frame is limited by `wMaxPacketSize` instead of being clamped off. The product name is UTF-8. A successful rate change is logged as information.
+
+Not done: the unplug use-after-free in `usb_midi` (Haiku design), `B_MIDI_READ_UMP` on a MIDI 1.0 device, the bus-speed guess, the recording carry size, the SPDX snippet tags on the older UMP code in `usb_midi.cpp`.
+
+Tested: `jam -q usb_midi usb_audio libmidi2.so midi2test midi_server` in WSL, no warnings (`-Werror`). Host: `fuzz-midi2` targets kernel, payload, property, profile, stream and usb, 60 s each with AddressSanitizer and UBSan, all `ok`; `test-usb-midi-sysex` and `test-usb-audio-packets` `ok`. No image was built and nothing was booted; no USB sound card and no MIDI device was attached. `midi2test` was built but not run.
+
 ## 2026-11-12 - The WSL build passes its own checks
 
 Two checks in `scripts/apply-overlay.sh` failed in WSL on main, so the Device Manager test build had to skip them.
