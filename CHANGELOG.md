@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - The WSL build passes its own checks
+
+Two checks in `scripts/apply-overlay.sh` failed in WSL on main, so the Device Manager test build had to skip them.
+
+`generate-r5-artwork.py --check` asked for `Manrope-Bold.ttf` and `Manrope-Regular.ttf`. The files are `manrope-bold.ttf` and `manrope-regular.ttf`; Windows finds them either way, Linux does not. It also compared files byte for byte, so a Windows checkout with `core.autocrlf` failed on CRLF. It now uses the real names and hashes `.svg`, `.h`, `.rdef` and `.txt` with LF line ends.
+
+`apply-radeon.py` expected the CRLF hashes of `clearstate_defs.h` and `clearstate_gfx9.h` (`59b4b9ad...`, `c0813551...`), not the LF hashes recorded in `docs/LICENSING.md` and `THIRD_PARTY_NOTICES.md` (`70eb9f9a...`, `e885c7f6...`). It now checks those and hashes with LF line ends. The headers, the GFX9 ring and its contract are unchanged.
+
+Tested in WSL: both checks pass from the Windows checkout (`/mnt/c`, CRLF) and from a Linux clone (LF). `apply-radeon.py` ran against an empty folder for that test, not the build tree. No jam and no boot after this change; it touches only the checks. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-12 - Device Manager, and the administrator lock in libr5ui
 
 Haiku's Devices app lists the kernel device tree but is hard to use. Device Manager (`distro/apps/devicemanager`, Build 10056) works like Windows 11 Device Manager: devices by type or by connection, a status badge, Properties with General, Driver, Details and Events, turning a driver off and on, Action > Turned-off drivers, and File > Export as full details or as a tree. Devices stays installed. The whole app is MIT. It builds Haiku's Devices code unchanged from `src/apps/devices`. Details: `docs/DEVICE-MANAGER.md`.
