@@ -27,15 +27,9 @@ def replace_once(path: pathlib.Path, old: str, new: str, tag: str) -> None:
 
 def copy_sources() -> None:
     dest = HAIKU / "src" / "apps" / "networkstatus"
-    # NetworkStatus is native R5 source now (distro/network/networkstatus):
-    # the Wi-Fi arcs, the Wi-Fi settings item and the R5 Wi-Fi join window.
-    # It replaces the string patches this script used to apply to it.
-    for name in ("NetworkStatusView.cpp", "NetworkStatusView.h", "Jamfile"):
-        source = SRC / "networkstatus" / name
-        if not source.is_file():
-            raise SystemExit(f"missing {source}")
-        shutil.copy2(source, dest / name)
-        print(f"copied networkstatus/{name}")
+    # NetworkStatusView.cpp/.h and the Jamfile are native R5 source in
+    # distro/rest/src/apps/networkstatus (apply-rest-native.py), which
+    # replaces the string patches this script used to apply to them.
     for name in ("WiFiWindow.cpp", "WiFiWindow.h"):
         shutil.copy2(SRC / name, dest / name)
         print(f"copied {name} -> {dest}")

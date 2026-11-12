@@ -62,6 +62,8 @@
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "WiFiWindow.h"
+#include <R5WiFiGlyphs.h>
+#include <R5WiFiNetworkList.h>
 // SPDX-SnippetEnd
 
 
@@ -100,7 +102,8 @@ NetworkStatusView::NetworkStatusView(BRect frame, int32 resizingMode,
 		bool inDeskbar)
 	: BView(frame, kDeskbarItemName, resizingMode,
 		B_WILL_DRAW | B_TRANSPARENT_BACKGROUND | B_FRAME_EVENTS),
-	fInDeskbar(inDeskbar)
+	fInDeskbar(inDeskbar),
+	fWirelessBars(0)
 {
 	_Init();
 
@@ -119,7 +122,8 @@ NetworkStatusView::NetworkStatusView(BRect frame, int32 resizingMode,
 
 NetworkStatusView::NetworkStatusView(BMessage* archive)
 	: BView(archive),
-	fInDeskbar(false)
+	fInDeskbar(false),
+	fWirelessBars(0)
 {
 	app_info info;
 	if (be_app->GetAppInfo(&info) == B_OK
@@ -275,8 +279,12 @@ NetworkStatusView::MessageReceived(BMessage* message)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 		case kMsgOpenWifi:
-			WiFiWindow::ShowWindow();
+		{
+			// The Wi-Fi page in Settings (libr5wifi.so)
+			const char* args[] = { "--page", "wifi", NULL };
+			be_roster->Launch("application/x-vnd.R5OS-Settings", 2, args);
 			break;
+		}
 
 // SPDX-SnippetEnd
 		case kMsgJoinNetwork:
@@ -359,6 +367,33 @@ NetworkStatusView::Draw(BRect updateRect)
 		if (it->second > status)
 			status = it->second;
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// With a Wi-Fi adapter the tray shows the Wi-Fi arcs (the same glyph as
+	// the WiFi program), whatever else is connected; otherwise the wired
+	// network icon.
+	if (fWirelessInterface.Length() > 0) {
+		int32 wifiStatus = kStatusUnknown;
+		std::map<BString, int32>::const_iterator found
+			= fInterfaceStatuses.find(fWirelessInterface);
+		if (found != fInterfaceStatuses.end())
+			wifiStatus = found->second;
+		tray_glyph_state state = TRAY_GLYPH_DISCONNECTED;
+		int32 bars = 0;
+		if (wifiStatus == kStatusReady) {
+			state = TRAY_GLYPH_CONNECTED;
+			bars = fWirelessBars;
+		} else if (wifiStatus == kStatusConnecting
+			|| wifiStatus == kStatusLinkNoConfig) {
+			state = TRAY_GLYPH_CONNECTING;
+			bars = 2;
+		}
+		DrawWiFiTrayIcon(this, Bounds(), bars, state, LowColor());
+		return;
+	}
+// SPDX-SnippetEnd
 
 	if (fTrayIcons[status] == NULL)
 		return;
@@ -453,7 +488,7 @@ NetworkStatusView::MouseDown(BPoint point)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Wi-Fi" B_UTF8_ELLIPSIS),
+	menu->AddItem(new BMenuItem(B_TRANSLATE("Wi-Fi settings" B_UTF8_ELLIPSIS),
 		new BMessage(kMsgOpenWifi)));
 
 	BString currentSsid;
@@ -627,6 +662,33 @@ NetworkStatusView::_Update(bool force)
 			fInterfaceStatuses[interface.Name()] = status;
 		}
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	BString wirelessInterface;
+	int32 wirelessBars = 0;
+	for (std::map<BString, int32>::const_iterator it
+			= fInterfaceStatuses.begin(); it != fInterfaceStatuses.end(); ++it) {
+		if (currentInterfaces.find(it->first) == currentInterfaces.end())
+			continue;
+		BNetworkDevice wireless(it->first.String());
+		if (!wireless.IsWireless())
+			continue;
+		wirelessInterface = it->first;
+		wireless_network network;
+		uint32 networkCookie = 0;
+		if (wireless.GetNextAssociatedNetwork(networkCookie, network) == B_OK)
+			wirelessBars = WirelessSignalBars(network);
+		break;
+	}
+	if (wirelessInterface != fWirelessInterface
+		|| wirelessBars != fWirelessBars) {
+		fWirelessInterface = wirelessInterface;
+		fWirelessBars = wirelessBars;
+		Invalidate();
+	}
+// SPDX-SnippetEnd
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
