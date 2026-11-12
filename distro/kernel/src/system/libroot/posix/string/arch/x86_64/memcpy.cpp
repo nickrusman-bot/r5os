@@ -161,7 +161,16 @@ memcpy(void* destination, const void* source, size_t length)
 	// keeps its speed there.
 	uintptr_t distance = (reinterpret_cast<uintptr_t>(to)
 		- reinterpret_cast<uintptr_t>(from)) & (kPageSize - 1);
-	if (distance != 0 && (distance < 16 || distance > kPageSize - 16)) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// On Zen 3 (Ryzen 5 5625U) the slow window reaches 31 bytes: 16 KiB at a
+	// distance of 16 to 31 copied at 3.6-3.8 GB/s with rep movsb, against
+	// 54 GB/s with the SSE loop; from 32 on rep movsb is fast again.
+	static const uintptr_t kAliasWindow = 32;
+	if (distance != 0 && (distance < kAliasWindow
+			|| distance > kPageSize - 16)) {
+// SPDX-SnippetEnd
 		memcpy_sse(to, from, length);
 		return destination;
 	}

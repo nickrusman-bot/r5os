@@ -241,7 +241,7 @@ R5 changes, all MIT except where marked: the firmware file names per PCI part in
 
 The FreeBSD network and wireless layers Haiku runs these drivers on (`src/libs/compat/freebsd_network`, `src/libs/compat/freebsd_wlan`) keep their own licenses (Haiku's MIT, FreeBSD's BSD). The fixes taken into them are air/OS commits: `db88e0c67ce4f7be26c2aaec5f825c21c6514322`, `01d5a4d53a4941b1baf96a4f05a7c3e04bf2f1c9`, `bdc484fbe61ad70f338c05b877829d9d6957bf19`, `291ad13a8aa04883e92e2ce63246a113c8a454f5`, `4797f2fb9ce4e3b4a9851a9beee991aa2c7928cb` and `efd664942774869d6790b0305486e4618a427943` by jmgasper; `2307520ffbb1b75fb44dd1768cbe0da1044f5992`, `d341df45ce30a91c83ebf20c3c68c148334a2b23`, `e6027d523b3265c4bfe1364b697e47982787fab3` and `a9899f43add1b82d87bbe4169fc94a331c7ec638` by Felipe De Bene; `db80c70462b2842adff39e8b2ec3e2e6de448703`, `5b2e7b33b001202d3bebdfe2d015f13236a4bf8a`, `69fac4c61ddb5674a84cbc36c9cfa1203fe4bf7d`, `745966932b6dab32906d7ac9c0c20968327cffab` and `88320aa9666f4d8b646115a3add80129624ca5e2` by Ian. `scripts/apply-kernel-bugs.py` and `scripts/apply-wireless.py` copy them.
 
-`memcpy` for x86_64 (`distro/kernel/src/system/libroot/posix/string/arch/x86_64/memcpy.cpp`) and its test are Haiku's, MIT, with air/OS `6178b691d287eac6f53f4726589c29327012ee8c` by jmgasper (MIT): no `rep movsb` when source and destination are less than 16 bytes apart modulo the page size.
+`memcpy` for x86_64 (`distro/kernel/src/system/libroot/posix/string/arch/x86_64/memcpy.cpp`) and its test are Haiku's, MIT, with air/OS `6178b691d287eac6f53f4726589c29327012ee8c` by jmgasper (MIT): no `rep movsb` when source and destination are less than 16 bytes apart modulo the page size. R5 widened that window to 32 bytes after measuring the 5625U (MIT).
 
 ### Device Manager
 
