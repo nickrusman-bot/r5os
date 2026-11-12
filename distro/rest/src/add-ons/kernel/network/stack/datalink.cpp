@@ -399,9 +399,14 @@ datalink_send_routed_data(struct net_route* route, net_buffer* buffer)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
+	// Only a domain with an address module can hold local addresses: the
+	// link domain (AF_LINK, wpa_supplicant's EAPOL frames) has none, and the
+	// address table hashes through that module.
 	if ((route->flags & RTF_LOCAL) != 0
-		|| datalink_is_local_address(address->domain, buffer->destination,
-			NULL, NULL)) {
+		|| (address->domain != NULL
+			&& address->domain->address_module != NULL
+			&& datalink_is_local_address(address->domain,
+				buffer->destination, NULL, NULL))) {
 // SPDX-SnippetEnd
 		TRACE("  local route\n");
 

@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+#
+# libr5wifi.so: the Wi-Fi state machine and its network list, shared by the
+# WiFi program and the Wi-Fi page in Settings. The sources are air/OS's
+# (MIT); see THIRD_PARTY_NOTICES.md and docs/LIBR5.md.
+
+SubDir HAIKU_TOP src preferences r5wifi ;
+
+UsePrivateHeaders interface net shared ;
+UseHeaders [ FDirName $(HAIKU_TOP) src libs compat ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) src libs compat freebsd_wlan ] : true ;
+
+SharedLibrary [ MultiArchDefaultGristFiles libr5wifi.so ] :
+	WiFiController.cpp
+	NetworkListView.cpp
+	JoinOtherWindow.cpp
+	WiFiView.cpp
+	: be bnetapi shared localestub [ TargetLibstdc++ ]
+	;
+
+DoCatalogs libr5wifi.so :
+	x-vnd.R5OS-libr5wifi
+	:
+	WiFiController.cpp
+	NetworkListView.cpp
+	JoinOtherWindow.cpp
+	WiFiView.cpp
+	;

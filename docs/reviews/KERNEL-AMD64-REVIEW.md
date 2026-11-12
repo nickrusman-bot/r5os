@@ -16,6 +16,8 @@ Line numbers are from the WSL tree at `4aae8640c9`.
 
 **Status (build 10059):** findings 1 and 6 are taken from air/OS, together with the scheduler commits for SMT and cores of several speeds, so Intel hybrid and Zen 5c are covered too. Generic, not for this CPU only. The RenkuOS deep-idle hold, the `memcpy` aliasing fix, and findings 3, 4, 5 and 7 are still open. Details and limits are in `CHANGELOG.md`. Not booted on the 5625U yet.
 
+**Status (build 10060):** stick 47 confirmed the SMT map on the 5625U. The topology line now also prints leaf 1 ECX (the PCID question), `amd_pstates` keeps its CPPC values per CPU and logs them, and the air/OS `memcpy` aliasing fix is in. `launch_speedup` does not compile any more and stays out. Still open: findings 3, 4 (beyond the PCID print) and 7, the AVX2 copy, the `setjmp` user copy. Stick 49 answered the PCID question: bit 17 is clear in the raw CPUID word on the 5625U, so the CPU or firmware does not report PCID; PCID work stops for this laptop. Deep idle runs on `x86_acpi_cstates` with C1–C3, and the per-CPU CPPC values hold.
+
 ## AMD and Intel
 
 These are not all general AMD64 fixes. The shared x86_64 code also runs on Intel. The AMD CPUID leaves and MSRs do not.

@@ -21,7 +21,9 @@ Application Settings :
 	InformationModule.cpp
 	DisplayModule.cpp
 	DisplayScreens.cpp
-	: be tracker translation shared libr5icons.so libr5ui.so [ TargetLibstdc++ ]
+	WiFiModule.cpp
+	: be tracker translation shared libr5icons.so libr5ui.so libr5wifi.so
+		[ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

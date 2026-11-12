@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+#
+# The WiFi program from air/OS (MIT). The Wi-Fi state machine and the
+# network list come from libr5wifi.so.
+
+SubDir HAIKU_TOP src preferences wifi ;
+
+UsePrivateHeaders interface net shared ;
+
+Application WiFi :
+	WiFi.cpp
+	WiFiWindow.cpp
+	: be bnetapi libr5wifi.so shared localestub [ TargetLibstdc++ ]
+	: WiFi.rdef
+	;
+
+DoCatalogs WiFi :
+	x-vnd.Haiku-WiFi
+	:
+	WiFi.cpp
+	WiFiWindow.cpp
+	;

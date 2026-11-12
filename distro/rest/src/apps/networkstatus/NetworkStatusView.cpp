@@ -61,6 +61,8 @@
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
 #include "WiFiWindow.h"
+#include <R5WiFiGlyphs.h>
+#include <R5WiFiNetworkList.h>
 // SPDX-SnippetEnd
 
 
@@ -99,7 +101,8 @@ NetworkStatusView::NetworkStatusView(BRect frame, int32 resizingMode,
 		bool inDeskbar)
 	: BView(frame, kDeskbarItemName, resizingMode,
 		B_WILL_DRAW | B_TRANSPARENT_BACKGROUND | B_FRAME_EVENTS),
-	fInDeskbar(inDeskbar)
+	fInDeskbar(inDeskbar),
+	fWirelessBars(0)
 {
 	_Init();
 
@@ -118,7 +121,8 @@ NetworkStatusView::NetworkStatusView(BRect frame, int32 resizingMode,
 
 NetworkStatusView::NetworkStatusView(BMessage* archive)
 	: BView(archive),
-	fInDeskbar(false)
+	fInDeskbar(false),
+	fWirelessBars(0)
 {
 	app_info info;
 	if (be_app->GetAppInfo(&info) == B_OK
@@ -274,8 +278,12 @@ NetworkStatusView::MessageReceived(BMessage* message)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
 		case kMsgOpenWifi:
-			WiFiWindow::ShowWindow();
+		{
+			// The Wi-Fi page in Settings (libr5wifi.so)
+			const char* args[] = { "--page", "wifi", NULL };
+			be_roster->Launch("application/x-vnd.R5OS-Settings", 2, args);
 			break;
+		}
 
 // SPDX-SnippetEnd
 		case kMsgJoinNetwork:
@@ -358,6 +366,33 @@ NetworkStatusView::Draw(BRect updateRect)
 		if (it->second > status)
 			status = it->second;
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// With a Wi-Fi adapter the tray shows the Wi-Fi arcs (the same glyph as
+	// the WiFi program), whatever else is connected; otherwise the wired
+	// network icon.
+	if (fWirelessInterface.Length() > 0) {
+		int32 wifiStatus = kStatusUnknown;
+		std::map<BString, int32>::const_iterator found
+			= fInterfaceStatuses.find(fWirelessInterface);
+		if (found != fInterfaceStatuses.end())
+			wifiStatus = found->second;
+		tray_glyph_state state = TRAY_GLYPH_DISCONNECTED;
+		int32 bars = 0;
+		if (wifiStatus == kStatusReady) {
+			state = TRAY_GLYPH_CONNECTED;
+			bars = fWirelessBars;
+		} else if (wifiStatus == kStatusConnecting
+			|| wifiStatus == kStatusLinkNoConfig) {
+			state = TRAY_GLYPH_CONNECTING;
+			bars = 2;
+		}
+		DrawWiFiTrayIcon(this, Bounds(), bars, state, LowColor());
+		return;
+	}
+// SPDX-SnippetEnd
 
 	if (fTrayIcons[status] == NULL)
 		return;
@@ -452,7 +487,7 @@ NetworkStatusView::MouseDown(BPoint point)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
 
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Wi-Fi" B_UTF8_ELLIPSIS),
+	menu->AddItem(new BMenuItem(B_TRANSLATE("Wi-Fi settings" B_UTF8_ELLIPSIS),
 		new BMessage(kMsgOpenWifi)));
 
 	BString currentSsid;
@@ -481,6 +516,13 @@ NetworkStatusView::MouseDown(BPoint point)
 		uint32 networksCount = 0;
 		wireless_network* networks = NULL;
 		device.GetNetworks(networks, networksCount);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		// Sort only the networks: the menu also holds the Wi-Fi settings
+		// item and the current network, and CompareSignalStrength() reads
+		// every item it is given as a WirelessNetworkMenuItem.
+		std::vector<BMenuItem*> networkItems;
 		for (uint32 i = 0; i < networksCount; i++) {
 			const wireless_network& network = networks[i];
 			BMessage* message = new BMessage(kMsgJoinNetwork);
@@ -489,19 +531,26 @@ NetworkStatusView::MouseDown(BPoint point)
 			message->AddFlat("address", &network.address);
 
 			BMenuItem* item = new WirelessNetworkMenuItem(network, message);
-			menu->AddItem(item);
 			if (associated.find(network.address) != associated.end())
 				item->SetMarked(true);
+			networkItems.push_back(item);
 		}
 		delete[] networks;
+
+		std::stable_sort(networkItems.begin(), networkItems.end(),
+			[](const BMenuItem* a, const BMenuItem* b) {
+				return WirelessNetworkMenuItem::CompareSignalStrength(a, b) < 0;
+			});
+		for (size_t i = 0; i < networkItems.size(); i++)
+			menu->AddItem(networkItems[i]);
 
 		if (networksCount == 0) {
 			BMenuItem* item = new BMenuItem(
 				B_TRANSLATE("<no wireless networks found>"), NULL);
 			item->SetEnabled(false);
 			menu->AddItem(item);
-		} else
-			menu->SortItems(WirelessNetworkMenuItem::CompareSignalStrength);
+		}
+// SPDX-SnippetEnd
 
 		menu->AddSeparatorItem();
 	}
@@ -626,6 +675,33 @@ NetworkStatusView::_Update(bool force)
 			fInterfaceStatuses[interface.Name()] = status;
 		}
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	BString wirelessInterface;
+	int32 wirelessBars = 0;
+	for (std::map<BString, int32>::const_iterator it
+			= fInterfaceStatuses.begin(); it != fInterfaceStatuses.end(); ++it) {
+		if (currentInterfaces.find(it->first) == currentInterfaces.end())
+			continue;
+		BNetworkDevice wireless(it->first.String());
+		if (!wireless.IsWireless())
+			continue;
+		wirelessInterface = it->first;
+		wireless_network network;
+		uint32 networkCookie = 0;
+		if (wireless.GetNextAssociatedNetwork(networkCookie, network) == B_OK)
+			wirelessBars = WirelessSignalBars(network);
+		break;
+	}
+	if (wirelessInterface != fWirelessInterface
+		|| wirelessBars != fWirelessBars) {
+		fWirelessInterface = wirelessInterface;
+		fWirelessBars = wirelessBars;
+		Invalidate();
+	}
+// SPDX-SnippetEnd
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors

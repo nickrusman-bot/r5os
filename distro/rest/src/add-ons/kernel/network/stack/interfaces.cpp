@@ -55,6 +55,15 @@ struct AddressHashDefinition {
 		net_domain* domain = get_domain(key->sa_family);
 		if (domain == NULL)
 			return 0;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		// The link domain (AF_LINK) has no address module and holds no
+		// interface addresses: hash it like an unknown family, so a lookup
+		// finds nothing instead of following a NULL module.
+		if (domain->address_module == NULL)
+			return 0;
+// SPDX-SnippetEnd
 
 		return domain->address_module->hash_address(key, false);
 	}
