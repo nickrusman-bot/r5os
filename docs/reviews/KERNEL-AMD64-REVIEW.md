@@ -14,6 +14,8 @@ The other forks were not cloned. The first version took what they have from `doc
 
 Line numbers are from the WSL tree at `4aae8640c9`.
 
+**Status (build 10059):** findings 1 and 6 are taken from air/OS, together with the scheduler commits for SMT and cores of several speeds, so Intel hybrid and Zen 5c are covered too. Generic, not for this CPU only. The RenkuOS deep-idle hold, the `memcpy` aliasing fix, and findings 3, 4, 5 and 7 are still open. Details and limits are in `CHANGELOG.md`. Not booted on the 5625U yet.
+
 ## AMD and Intel
 
 These are not all general AMD64 fixes. The shared x86_64 code also runs on Intel. The AMD CPUID leaves and MSRs do not.

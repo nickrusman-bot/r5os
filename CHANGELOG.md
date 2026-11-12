@@ -1,5 +1,25 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - CPU topology, scheduler and deep idle from air/OS (build 10059)
+
+Findings 1 and 6 of `docs/reviews/KERNEL-AMD64-REVIEW.md`, and `docs/KERNEL.md` findings 5 and 6, taken from air/OS instead of written again (`docs/ROADMAP.md`, "Other Haiku forks as sources"). Generic: every AMD Zen generation, Zen 5c, Intel hybrid cores, any x86 machine whose ACPI firmware has `_CST`. Not specific to the 5625U.
+
+Problem: on AMD Zen, `detect_amd_cpu_topology()` read CPUID `0x80000008` ECX[15:12] as the core width, and the CmpLegacy bit then made every logical CPU a core. Stick 33 shows `smt 0` on all twelve CPUs of the 5625U while the L1/L2 ids come in six pairs, so the scheduler had twelve one-thread cores and could put two busy threads on one physical core while another core idled. Idle: `x86_cstates` builds its states from CPUID leaf 5, which on AMD lists C1 only (stick 33: `using x86 C-States: C0, C1`). AMD's deep core state is in ACPI `_CST`. `x86_acpi_cstates` was built but not in the image, and only handled Intel firmware.
+
+What changed (all air/OS, jmgasper, MIT, cherry-picked onto the R5 files in that order; full hashes in `THIRD_PARTY_NOTICES.md`):
+
+- `1376a518e2` the scheduler uses idle cores; `7abf76e985` `cpu_ent::capacity` (larger is faster, 0 unknown) and the scheduler prefers the faster cores, set on x86 for Intel hybrid cores (P 1024, E 600); `71eadca3af`, `a4ddc48124`, `f100985748`, `3fbd41c840`, `1aa18e8aa5`, `10c5b544a8`, `f1d9347032`, `417666ae77`, `c3de7f3ac6`: placement on SMT and faster cores in low-latency and power-saving mode, and the fixes those changes needed.
+- `49eda6ac00` Zen and later (family `0x17`+, leaf `0x8000001E` present): threads per core from `0x8000001E` EBX[15:8], the topology id from its EAX, the core width as logical width divided by threads per core. The `0x8000001D` cache sharing is no longer multiplied by the SMT threads (it already counts them). Zen 5 parts with Zen 5c cores (CPUID `0x80000026`) give those cores capacity 768. Older AMD keeps the old path.
+- `2c48d1ae0c`, `32a4200329`, `e24004dc25` `x86_acpi_cstates`: ACPI0007 processor devices, `_OSC`/`_PDC` optional, AMD FFH and no ARB_DIS/BM_RLD on Zen, idle with interrupts disabled instead of a callback and `longjmp()`, the state chosen by a per-CPU running average of the idle time, deep states also in low-latency mode once idle periods last ten times the exit latency. On AMD with a state deeper than C1 it ranks above `x86_cstates`; elsewhere `x86_cstates` stays the module that is used.
+- `scripts/apply-kernel-bugs.py` copies the new files from `distro/kernel` and adds `x86_acpi_cstates` before `x86_cstates` in the image (an idempotent hook, as for `i2c_hid`).
+- R5's own: one syslog line on CPU 0, `R5 CPU topology: leaf1 ebx … 80000008 ecx … 8000001e ebx … smt mask … core mask …`, so a boot log shows what the masks were built from (SPDX-Snippet, GPL-3.0-or-later).
+
+Not taken, and why: the arm64 and device-tree parts of `7abf76e985` (air/OS has its own arm64 base and the hunks do not apply; arm64 CPUs keep capacity 0, which the scheduler treats as all alike; ARM64 is parked). The clamp to `kMaxLoad` in `CoreEntry::GetLoad()` from `71eadca3af` comes from an earlier air/OS commit that R5 does not have; the zero-CPU check is taken, the clamp not. RenkuOS `cpu_block_deep_idle()` (a driver holding the CPUs out of deep idle) is a later step: it changes the same `acpi_cpuidle.cpp` and needs a merge by hand. air/OS `9f9dec61a` (profiler timer) touches `scheduler.cpp` but is unrelated and not taken.
+
+Limits: the air/OS measurements are from a Threadripper 1950X, a Ryzen 7640U and a Ryzen AI 5 340, not from R5. What the 5625U firmware puts in `_CST` is not known yet. Intel hybrid and Zen 5c are not tested on R5 (no such machine). ARM64 not built.
+
+Tested: `jam -q kernel_x86_64 x86_acpi_cstates x86_cstates` in WSL, no warnings in the changed files. `scripts/apply-overlay.sh` exit 0; `x86_acpi_cstates` appears once in the package list.
+
 ## 2026-11-12 - media_server and Media fixes from the review
 
 All points of `docs/reviews/MEDIA-SERVER-REVIEW.md` (#4207). No What's new section; `distro/BUILD` stays the same.

@@ -105,6 +105,8 @@ Minimal fix: leave this alone until a >8 CPU xAPIC boot shows a lost interrupt. 
 
 ### 5. AMD core-count fallback reads the wrong register — possible, dormant on Zen
 
+**Status (build 10059):** on Zen and later the topology now comes from CPUID `0x8000001E` (air/OS `49eda6ac00`), so this fallback no longer runs there. The wrong result on Zen was the CmpLegacy override, not this line (`docs/reviews/KERNEL-AMD64-REVIEW.md`, finding 1). The legacy path for older AMD is unchanged. A syslog line `R5 CPU topology:` prints the raw words. Not yet booted on the 5625U.
+
 Severity: possible wrong SMT/core masks. Not reproduced. The 5625U is Zen 3; if leaf `0x80000008` ECX bits 15:12 are non-zero, this line never runs.
 
 `detect_amd_cpu_topology()` (`arch_cpu.cpp` around lines 602–607): when the 4-bit `ApicIdCoreIdSize` field is 0, the core count is `next_power_of_2((cpuid.regs.edx & 0xf) + 1)`. AMD documents that count in ECX bits 7:0 of the same leaf (`NC`), not in the low nibble of EDX. EDX on that leaf is a feature word on current AMD. The fallback would then see at most 16 cores and would often see 1.
@@ -114,6 +116,8 @@ There is no read of leaf `0x8000001E` (extended APIC id / threads per core / cor
 Minimal fix: use ECX bits 7:0 for the legacy count, and prefer leaf `0x8000001E` when the extended leaf allows it. Confirm on the 5625U by printing the masks before changing them. This belongs in the kernel topology code, not in a driver.
 
 ### 6. Intel hybrid CPUs are named and then ignored
+
+**Status (build 10059):** each CPU now has a speed, `cpu_ent::capacity`, and the scheduler prefers the faster cores (air/OS `7abf76e985` and the scheduler commits after it). On x86 a performance core gets 1024 and an efficiency core 600; a Zen 5c core gets 768. Not tested on R5: there is no hybrid machine. The leaf `0x1F` levels below are unchanged.
 
 Severity: none on the 5625U (one core type). On Alder Lake and newer, thread placement can prefer an efficiency core with no policy saying otherwise. Not reproduced. R5 has no hybrid test machine in the logs.
 
@@ -137,7 +141,9 @@ Severity: laptops run at firmware-chosen P-states. No confirmed bug. Not a scala
 
 `r5_pstate.cpp` reads AMD hardware P-states and CPPC, and Intel HWP capabilities, when those CPUID bits are set and the hypervisor bit is clear. It does not write an MSR. The write hook on `/dev/misc/r5_pstate` returns `B_NOT_ALLOWED`. Nothing in this tree programs `IA32_PM_ENABLE`. `arch_timer.cpp` reads AMD `MSR_F10H_PSTATEDEF(0)` to estimate TSC frequency. `apply-kernel-bugs.py` `patch_tsc_div0()` guards the CPUID TSC conversion against a zero divisor (Haiku #20400). That is a panic fix in the timer, not a power driver.
 
-Invariant TSC is a named feature bit. C-state policy and a userspace power preference are not in this tree as an R5 component.
+Invariant TSC is a named feature bit. A userspace power preference is not in this tree as an R5 component.
+
+Idle (build 10059): `x86_cstates` takes its states from CPUID leaf 5, which on AMD lists C1 only. The image now also has `x86_acpi_cstates` (air/OS `2c48d1ae0c`, `32a4200329`, `e24004dc25`), which reads ACPI `_CST`, works on AMD, and is used instead of `x86_cstates` when the firmware has a state deeper than C1. The syslog says which module was found. A driver cannot yet keep the CPUs out of deep idle (RenkuOS `cpu_block_deep_idle()` is the candidate).
 
 Where it belongs: MSRs and idle (kernel). A “balanced / performance” control, if one is added later, is a preference program talking to the kernel, not a new APIC path.
 
