@@ -306,6 +306,9 @@ def copy_tree(bfs, path, dest, depth=0):
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.exists():
                 continue
+            if bfs.i64(child, 208) > 64 * 1024 * 1024:
+                print("skipped %s, too large" % (path + "/" + name))
+                continue
             target.write_bytes(bfs.read_file(child))
             count += 1
     return count

@@ -98,7 +98,6 @@ else
 	echo "boot-next: boot $next uses no settings file"
 fi
 echo "$next" > "$m10/next"
-date +%s > "$m10/shutdown-start"
 echo "boot-next: boot $next is next"
 
 if [ "${BOOT_NEXT_YES:-1}" = 0 ]; then

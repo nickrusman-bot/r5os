@@ -10,8 +10,8 @@
 # reused: the next one is boot<k>-2, boot<k>-3, ...
 #
 # For the host tests: R5_HOME, R5_SYSLOG, R5_SYSTEM_SETTINGS and
-# R5_NODE_DIR, R5_USER_SETTINGS, R5_CACHE and R5_BIN move the paths, CHECK_WAIT=0 does not wait, CHECK_LIVE=0 runs
-# no program.
+# R5_NODE_DIR, R5_USER_SETTINGS, R5_CACHE and R5_BIN move the paths,
+# CHECK_WAIT=0 does not wait, CHECK_LIVE=0 runs no program.
 
 # finddir gives the Haiku directories; the fallback is for the host tests.
 fd() {
@@ -185,6 +185,7 @@ runlive() {
 	: > "$keep/$name.txt"
 	if [ "$live" -eq 1 ]; then
 		timeout 180 "$@" > "$keep/$name.txt" 2>&1 || true
+		sleep 3
 	fi
 }
 
@@ -273,7 +274,7 @@ case $boot in
 	manual "shutdown time (stopwatch, Shut down to power-off): ____ s"
 	;;
 2)
-	exactly 1 'radeon_hd: gpu hang' "$slog" "one gpu hang"
+	exactly 1 'radeon_hd: gpu hang ring' "$slog" "one gpu hang"
 	have 'radeon_hd: gpu reset mode2 ok' "$slog" "gpu reset mode2 ok"
 	have 'radeon_hd: gpu selftest after reset ok' "$slog" "gpu selftest after reset ok"
 	contract 2
@@ -289,13 +290,14 @@ case $boot in
 	manual "desktop keeps working (move a window): ____"
 	;;
 3)
-	exactly 2 'radeon_hd: gpu hang' "$slog" "two gpu hang lines"
+	exactly 2 'radeon_hd: gpu hang ring' "$slog" "two gpu hang lines"
 	have 'radeon_hd: gpu off until reboot: second hang' "$slog" \
 		"gpu off until reboot: second hang"
 	runlive gl-test "$bin"/r5-gl-test --selftest
 	runlive teapot "$bin"/VulkanTeapot --selftest
 	extract_syslog
-	have 'egl: opengl llvmpipe: gpu not available' "$slog" \
+	awk '/gpu off until reboot/ { on = 1 } on' "$slog" > "$keep/syslog-after-off.txt"
+	have 'egl: opengl llvmpipe: gpu not available' "$keep/syslog-after-off.txt" \
 		"egl: opengl llvmpipe: gpu not available"
 	have '^pixels ok llvmpipe only' "$keep/gl-test.txt" "r5-gl-test pixels ok llvmpipe only"
 	have '^pixels ok' "$keep/teapot.txt" "VulkanTeapot pixels ok"
@@ -318,13 +320,6 @@ case $boot in
 	manual "shutdown time (stopwatch, Shut down to power-off): ____ s"
 	;;
 esac
-
-# The time since the last boot-next is an upper bound for the shutdown.
-if [ -f "$m10/shutdown-start" ]; then
-	prev=$(head -n 1 "$m10/shutdown-start")
-	now=$(date +%s)
-	emit "INFO seconds since the last boot-next: $((now - prev))"
-fi
 
 if [ "$bad" -eq 0 ]; then
 	emit PASS
