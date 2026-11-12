@@ -197,6 +197,8 @@ def install_usb_stability() -> None:
         "src/add-ons/kernel/bus_managers/usb/Object.cpp",
         "src/add-ons/kernel/bus_managers/usb/BusManager.cpp",
         "src/add-ons/kernel/bus_managers/usb/Stack.cpp",
+        "src/add-ons/kernel/bus_managers/usb/usb.cpp",
+        "headers/os/drivers/usb/R5USBSpeed.h",
         "src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp",
     )
     for relative in files:
