@@ -58,6 +58,7 @@ air/OS (airos-works/haiku), copyright jmgasper, unless another author is named:
 - `11775b1e9079ac101886941651d4ef1cb458efc4` returns when a transfer event names a slot past the device list. Taken from RenkuOS `a9bba0ca79` by Mas Ahmad Muhammad. The Bay Trail part of that commit was not taken.
 - `e04ebcb285d3c54d8d7db73a34423c8bcb7173bd` fails control requests of a device that is going away, and a USB Ethernet adapter only clears a halt after a stall.
 - `fa1ebc8a74050bba0c373d95f6307b8b46784e67` resets a built-in device that takes no address, through ACPI, on x86.
+- `6d877da0572106eb647c47bd3ef568aa939c9251` lets a high-bandwidth isochronous endpoint send more than one packet per microframe. Co-Authored-By: Claude Fable 5.1.
 
 `df92a69cdb633ebf70dcdd08d68ca8bed9f6a37c` and `c707b89ff80be4fdfa780637da5cf1d38167a46f` are copyright David Beckman. The first waits half a second for a USB object to go idle and panics only when it is still busy. The second writes a repeated transfer error at most once every tenth of a second. The two-second wait in the original note was not taken.
 
@@ -95,6 +96,19 @@ RenkuOS, copyright Bryan Irvine:
 - `dc8872b9823656b7b323821cffc4d998970735d2` keeps that space only on the VIA VL805 (PCI 1106:3483). The kernel debugger's allocation size was not changed. The ACPI `_CCA` path in that commit was not added: this driver always has the PCI id.
 
 `scripts/apply-kernel-bugs.py` copies these files.
+
+### USB webcam
+
+Location: `distro/media/src/add-ons/media/media-add-ons/usb_webcam/`.
+
+The files are Haiku's webcam add-on. Copyright the Haiku authors named in each file, including François Revol. License: MIT. The headers stay. The air/OS rewrite stays MIT. It is not relicensed. `scripts/apply-media.py` copies the files and removes the old `USB_video.h` and `UVCDeframer` sources from the build tree.
+
+air/OS (airos-works/haiku), copyright jmgasper:
+
+- `a314c835a947baedb3a04fa46eec4dc4e74b2eb9` rewrites the USB Video Class path. YUY2, UYVY, NV12, I420 and Motion-JPEG become `B_RGB32`. Frames go out as the camera sends them, at the size the consumer asks for. Camera controls are parameters. One node per camera. The active USB configuration is left as it is, so the microphone stays with `usb_audio`. Co-Authored-By: Claude Fable 5.1.
+- `d0df427f165f0dc6ef45c5d675d841200f242ee0` frees the camera when its consumer dies. Co-Authored-By: Claude Fable 5.1. `Producer.cpp` and `Producer.h` only.
+
+`distro/media/src/bin/camtest/` is R5's own test. License: GPL-3.0-or-later. It is not from air/OS and it is not camgrab.
 
 ### Touchpads and TrackPoint
 
