@@ -7,7 +7,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 44cc183c0c (star row 57), copyright 2026 Witold Bołt. The Haiku copyright
  * and the license above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -31,7 +31,7 @@
 #	include <io_requests.h>
 #	include <util/fs_trim_support.h>
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 #	include <vfs.h>
 	// SPDX-SnippetEnd
@@ -127,7 +127,7 @@ iterative_io_finished_hook(void* cookie, io_request* request, status_t status,
 	rw_lock_read_unlock(&inode->Lock());
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 #ifdef FS_SHELL
 	put_vnode(inode->GetVolume()->FSVolume(), inode->ID());

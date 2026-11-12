@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Which radeon_hd lines are printed. Errors are always on, and at most
  * 32 events per boot. A dump is one event and then at most 64 lines.

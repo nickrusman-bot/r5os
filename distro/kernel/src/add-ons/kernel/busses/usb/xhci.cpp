@@ -1249,7 +1249,7 @@ XHCI::CancelQueuedTransfers(Pipe* pipe, bool force)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// An empty endpoint has nothing to cancel. CodyCam's quit hits this
 	// after the stream's transfers have already completed.
 #ifndef TRACE_USB
@@ -2356,7 +2356,7 @@ XHCI::_InsertEndpointForPipe(Pipe* pipe)
 		if (status != B_OK) {
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// A default alternate advertises an isochronous endpoint with
 			// wMaxPacketSize 0. It is not configured until an alternate
 			// with bandwidth is selected.
@@ -2659,7 +2659,7 @@ XHCI::ConfigureEndpoint(xhci_endpoint* ep, uint8 slot, uint8 number, uint8 type,
 	if (ep->max_burst_payload == 0) {
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// Zero means the endpoint has no packet size. The caller refuses
 		// it without a syslog line.
 		// SPDX-SnippetEnd
@@ -3255,7 +3255,7 @@ XHCI::HandleTransferComplete(xhci_trb* trb)
 	}
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// The TD was already retired. An isochronous event-data completion,
 	// or the stop when CodyCam quits, can still name its TRB.
 	if (completionCode == COMP_SUCCESS || completionCode == COMP_SHORT_PACKET

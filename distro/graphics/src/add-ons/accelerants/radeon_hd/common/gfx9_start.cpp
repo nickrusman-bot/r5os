@@ -1,11 +1,12 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * GFX9 start for GC 9.3. The packet bytes are the sequence that landed the
  * fence, the indirect buffer, the DMA, and the compute dispatch. This file
  * is the only copy. The accelerant and the kernel driver both link it.
- * The user chose GPL-3.0-or-later for this file on 5 Nov 2026.
+ * The user chose GPL-3.0-or-later for this file on 5 Nov 2026 and
+ * relicensed it to MIT on 12 Nov 2026.
  */
 
 #include "gfx9_start.h"
@@ -2087,7 +2088,7 @@ radeon_gfx9_verify_ring_config(uint32 cntl, uint64 ringGpu, uint32 location,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // The first fence has already landed. This submits one indirect buffer.
 // The constants are the Linux v6.12 names in soc15d.h and vega10_enum.h.
 static const uint32 kWlWriteData = 0x37;

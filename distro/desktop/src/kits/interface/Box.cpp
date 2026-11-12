@@ -11,10 +11,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -270,14 +269,14 @@ BBox::Draw(BRect updateRect)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// Baseline at the ascent. A negative offset draws above y=0 and
 		// the view clips the top of the glyphs (Haiku #11625 #18518).
 // SPDX-SnippetEnd
 		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		DrawString(fLabel, BPoint(10.0f, ceilf(fontHeight.ascent)));
 // SPDX-SnippetEnd
 	}
@@ -789,7 +788,7 @@ BBox::_ValidateLayoutData()
 		GetFontHeight(&fontHeight);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// Full line, including leading, so a large font is not clipped
 		// against the top of the view (Haiku #11625 #18518).
 		labelHeight = ceilf(fontHeight.ascent + fontHeight.descent
@@ -798,7 +797,7 @@ BBox::_ValidateLayoutData()
 		fLayoutData->label_box.Set(6.0f, 0, 14.0f + StringWidth(fLabel),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			labelHeight);
 // SPDX-SnippetEnd
 	} else if (fLabelView) {

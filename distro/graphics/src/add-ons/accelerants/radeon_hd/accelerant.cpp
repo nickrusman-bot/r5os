@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -148,7 +147,7 @@ init_common(int device, bool isClone)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	radeon_gfx9_doorbell_attach(gInfo->shared_info->doorbell_area,
 		gInfo->shared_info->doorbell_bytes);
 // SPDX-SnippetEnd
@@ -184,7 +183,7 @@ uninit_common(void)
 		delete_area(gInfo->rom_area);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		radeon_gfx9_doorbell_detach();
 // SPDX-SnippetEnd
 
@@ -260,7 +259,7 @@ radeon_init_accelerant(int device)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!radeon_hd_uses_dce(info.chipsetID)) {
 		// Raven display clocks and encoders belong to DCN. The DCE
 		// AtomBIOS commands here stop the firmware scanout.
@@ -278,7 +277,7 @@ radeon_init_accelerant(int device)
 	dp_setup_connectors();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	}
 // SPDX-SnippetEnd
 

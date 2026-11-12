@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """Wi-Fi and Bluetooth on the MediaTek MT7921/MT7922, from distro/.
 
 Copies, with idempotent Jam and image hooks only:

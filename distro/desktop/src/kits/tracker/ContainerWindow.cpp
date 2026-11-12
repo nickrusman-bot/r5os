@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -64,7 +63,7 @@ All rights reserved.
 #include <Screen.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <TextControl.h>
 // SPDX-SnippetEnd
 #include <UnicodeChar.h>
@@ -171,7 +170,7 @@ ActivateWindowFilter(BMessage*, BHandler** target, BMessageFilter*)
 	return B_DISPATCH_MESSAGE;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 }
 
 
@@ -506,7 +505,7 @@ BContainerWindow::BContainerWindow(LockingList<BWindow>* list, uint32 openFlags,
 	AddCommonFilter(new BMessageFilter(B_MOUSE_DOWN, ActivateWindowFilter));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	AddCommonFilter(new BMessageFilter(B_KEY_DOWN, LocationSelectAllFilter));
 // SPDX-SnippetEnd
 
@@ -782,7 +781,7 @@ BContainerWindow::RepopulateMenus()
 	AddWindowContextMenu(fWindowContextMenu);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 }
 
 
@@ -957,7 +956,7 @@ BContainerWindow::InitLayout()
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// The scrollbar's minimum width was forcing this view, and the
 		// window, to grow (Haiku #16726).
 		size.width = 32;
@@ -1585,7 +1584,7 @@ BContainerWindow::MessageReceived(BMessage* message)
 		case kFindButton:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		{
 			// Start in this folder (Haiku #19546).
 			const entry_ref* here = TargetModel() != NULL
@@ -1595,7 +1594,7 @@ BContainerWindow::MessageReceived(BMessage* message)
 			break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		}
 
 		case kEditFavorites:
@@ -1646,7 +1645,7 @@ BContainerWindow::MessageReceived(BMessage* message)
 			} else {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				node_ref childNode;
 				bool selectChild = TargetModel() != NULL;
 				if (selectChild)
@@ -1656,7 +1655,7 @@ BContainerWindow::MessageReceived(BMessage* message)
 				SwitchDirectory(&ref);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 				// Keep the folder we just left selected (Haiku #11029).
 				TTracker* tracker = dynamic_cast<TTracker*>(be_app);
@@ -1940,7 +1939,7 @@ BContainerWindow::AddWindowMenu(BMenu* menu)
 	menu->AddItem(item);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	menu->AddSeparatorItem();
 	FavoritesMenu* favorites = new FavoritesMenu(B_TRANSLATE("Favorites"),
 		new BMessage(B_REFS_RECEIVED), new BMessage(B_REFS_RECEIVED),
@@ -2071,7 +2070,7 @@ BContainerWindow::MenusBeginning()
 		UpdateMenu(fWindowMenu, kWindowMenuContext);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// Pick up add-ons copied in while this window was open (Haiku #11495).
 	BuildAddOnsMenu(fMenuBar);
@@ -2438,7 +2437,7 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what, const 
 		&& model.SetTo(&entry) == B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		navMenu->AddNavDir(&model, what, this, false);
 // SPDX-SnippetEnd
 	}
@@ -2448,7 +2447,7 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what, const 
 		&& entry.SetTo(path.Path()) == B_OK && model.SetTo(&entry) == B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		navMenu->AddNavDir(&model, what, this, false);
 // SPDX-SnippetEnd
 	}
@@ -2483,7 +2482,7 @@ BContainerWindow::PopulateMoveCopyNavMenu(BNavMenu* navMenu, uint32 what, const 
 				&& model.SetTo(&entry) == B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				navMenu->AddNavDir(&model, what, this, false);
 // SPDX-SnippetEnd
 			}
@@ -3678,14 +3677,14 @@ BContainerWindow::SetupArrangeByMenu(BMenu* parent)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 	if (PoseView()->IsDesktopView()) {
 		Shortcuts()->UpdateCleanupItem(Shortcuts()->FindItem(parent, kCleanup, kCleanupAll));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// still offer Arrange by on the Desktop (Haiku #20419)
 	}
 
@@ -3700,7 +3699,7 @@ BContainerWindow::SetupArrangeByMenu(BMenu* parent)
 	int32 selectIndex = parent->IndexOf(parent->FindItem(kShowSelectionWindow));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (selectIndex == B_ERROR || fArrangeByItem == NULL)
 // SPDX-SnippetEnd
 		return;
@@ -3710,7 +3709,7 @@ BContainerWindow::SetupArrangeByMenu(BMenu* parent)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BMenu* submenu = fArrangeByItem->Submenu();
 	if (submenu == NULL)
 		return;
@@ -3720,13 +3719,13 @@ BContainerWindow::SetupArrangeByMenu(BMenu* parent)
 	uint32 attrHash;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	int32 itemCount = submenu->CountItems();
 // SPDX-SnippetEnd
 	for (int32 index = 0; index < itemCount; index++) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		BMenuItem* item = submenu->ItemAt(index);
 // SPDX-SnippetEnd
 		if (item == NULL || item->Message() == NULL)

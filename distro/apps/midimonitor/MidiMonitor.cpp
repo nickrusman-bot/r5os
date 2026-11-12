@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, R5OS Contributors.
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * MIDI Monitor: shows every MIDI message that a device or a program sends,
  * one line per message, with the time, the source, the channel, what the

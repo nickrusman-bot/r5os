@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2026 R5OS Contributors
 //
 // Two compute kernels for GC 9.3 (gfx90c). The instructions are the test.

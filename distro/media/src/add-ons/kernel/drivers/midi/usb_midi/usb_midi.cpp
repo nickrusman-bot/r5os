@@ -112,7 +112,7 @@ create_usbmidi_port(usbmidi_device_info* devinfo,
 	port->rbuf = create_ring_buffer(1024);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	port->ump_capacity = 64;
 	port->ump_packets = (midi_ump_packet*)malloc(
 		sizeof(midi_ump_packet) * port->ump_capacity);
@@ -151,7 +151,7 @@ remove_port(usbmidi_port_info* port)
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	free(port->ump_packets);
 	port->ump_packets = NULL;
 // SPDX-SnippetEnd
@@ -183,7 +183,7 @@ create_device(const usb_device* usbDevice, const usb_device_descriptor* deviceDe
 	memset(midiDevice, 0, sizeof(usbmidi_device_info));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* No Stream Configuration yet: MIDI 1.0 protocol. */
 	midiDevice->ump_protocol = 1;
 // SPDX-SnippetEnd
@@ -309,7 +309,7 @@ usb_module_info* gUSBModule = NULL;
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static uint32
 ump_word_count(uint32 first)
 {
@@ -472,7 +472,7 @@ usb_midi_read_callback(void* cookie, status_t status,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (midiDevice->ump_endpoint)
 			interpret_ump_buffer(midiDevice);
 		else
@@ -613,7 +613,7 @@ interface_has_midi_io(const usb_interface_info* intf)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 /* USB-MIDI 2.0 § 3.1: alternate 0 of a MIDIStreaming interface is USB MIDI
  * 1.0. The alternate whose MS header has bcdMSC 0x0200 carries Universal
  * MIDI Packets. Returns NULL when the interface has none.
@@ -776,7 +776,7 @@ got_one:
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* A MIDI 2.0 device starts in alternate 0, USB MIDI 1.0. Select the
 	 * MIDI 2.0 alternate; when that fails, stay on MIDI 1.0. */
 	if (roland == NULL) {
@@ -891,7 +891,7 @@ got_one:
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	} else if (midiDevice->ump_endpoint) {
 		/* One port per UMP group, the port number is the group. Without
 		 * readable blocks, group 1 (index 0) only. */
@@ -959,7 +959,7 @@ usb_midi_removed(void* cookie)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* A program can still be inside read(), write() or ioctl() on a port of
 	 * this device. Those hooks hold the device and port pointers, so both
 	 * used to be freed under them. Now a port that is open, and the device
@@ -1077,7 +1077,7 @@ usb_midi_open(const char* name, uint32 flags,
 	acquire_sem(usbmidi_port_list_lock);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (port->device->removed) {
 		delete_sem(cookie->sem_cb);
 		free(cookie);
@@ -1094,7 +1094,7 @@ usb_midi_open(const char* name, uint32 flags,
 	}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	port->ump_head = 0;
 	port->ump_tail = 0;
 	port->ump_count = 0;
@@ -1116,7 +1116,7 @@ usb_midi_open(const char* name, uint32 flags,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 pop_ump_packet(usbmidi_port_info* port, midi_ump_packet* packet)
 {
@@ -1213,7 +1213,7 @@ usb_midi_read(driver_cookie* cookie, off_t position,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (midiDevice->ump_endpoint)
 		return read_ump_as_midi1(cookie, buf, num_bytes);
 // SPDX-SnippetEnd
@@ -1278,7 +1278,7 @@ const uint8 CINcode[] = {	/* see USB-MIDI Spec */
 	0x4,	/* 0x0 - sysex start */
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* 0xF1 is a 2-byte system common message (CIN 0x2); it was 0 and was
 	 * never sent. 0xF6 is one byte (CIN 0x5); it was sent as two. */
 	0x2,	/* 0x1 -- MTC quarter frame */
@@ -1302,7 +1302,7 @@ const uint8 CINcode[] = {	/* see USB-MIDI Spec */
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 store_le32(uint8* out, uint32 word)
 {
@@ -1624,14 +1624,14 @@ usb_midi_write(driver_cookie* cookie, off_t position,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (midiDevice->ump_endpoint)
 		return write_midi1_as_ump(cookie, midiseq, num_bytes, midicode, cin);
 // SPDX-SnippetEnd
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* max MIDI bytes per transfer: whole 4-byte packets of 3 MIDI bytes */
 	buff_lim = (midiDevice->outMaxPkt / sizeof(usb_midi_event_packet)) * 3;
 	if (buff_lim < 3)
@@ -1669,7 +1669,7 @@ usb_midi_write(driver_cookie* cookie, off_t position,
 		while (xfer_bytes) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			/* A SysEx packet takes its CIN and length from the bytes left in
 			 * the message, so a message of one or two bytes no longer
 			 * subtracts three and runs past out_buffer, and the last packet
@@ -1737,7 +1737,7 @@ usb_midi_control(driver_cookie* cookie, uint32 op, void* data, size_t len)
 	switch (op) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		case B_MIDI_WRITE_UMP:
 		{
 			midi_ump_packet packet;
@@ -1865,7 +1865,7 @@ usb_midi_free(driver_cookie* cookie)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* The last reference to a port or device that was unplugged while open
 	 * frees it here; no hook of this cookie can run any more. */
 	usbmidi_port_info* port = cookie->port;

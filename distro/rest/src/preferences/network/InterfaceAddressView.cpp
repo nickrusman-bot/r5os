@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -70,7 +69,7 @@ InterfaceAddressView::InterfaceAddressView(int family,
 		// Automatic can be DHCPv6 or Router Advertisements
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fModePopUpMenu->AddItem(new BMenuItem(
 			B_TRANSLATE("Automatic (SLAAC / DHCPv6)"),
 // SPDX-SnippetEnd
@@ -86,7 +85,7 @@ InterfaceAddressView::InterfaceAddressView(int family,
 	fModeField = new BMenuField(B_TRANSLATE("Mode:"), fModePopUpMenu);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fModeField->SetToolTip(fFamily == AF_INET6
 		? B_TRANSLATE("Automatic uses router advertisements (SLAAC) and "
 			"DHCPv6. Test in Terminal: grep -E 'slaac|dad|dhcpv6' "

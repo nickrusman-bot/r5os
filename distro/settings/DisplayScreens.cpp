@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Screen list and mode helpers for the Display page.
  * One screen today: the main screen. A later screen is another item
  * from display_screens_get(), not a change to the page.

@@ -9,7 +9,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 6e517bb52c, copyright 2026 Witold Bołt. The Haiku copyright and the
  * licenses above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 #ifndef _KERNEL_SIGNAL_H
@@ -224,7 +224,7 @@ status_t send_signal_to_thread(Thread* thread, const Signal& signal,
 status_t send_signal_to_thread_id(thread_id threadID, const Signal& signal,
 	uint32 flags);
 // SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 Witold Bołt
 status_t send_fault_signal(Thread* thread, const Signal& signal);
 // SPDX-SnippetEnd

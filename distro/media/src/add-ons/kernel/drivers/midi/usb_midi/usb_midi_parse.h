@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, R5OS.
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * UMP byte walk and the MIDI 1.0 expansion. The driver and the host fuzz
  * harness include this file, so both run the same code.

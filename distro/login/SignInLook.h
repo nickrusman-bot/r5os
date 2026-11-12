@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Shared by the Sign in window and the lock screen, so both follow
  * docs/design/login-mockup/sign-in.html the same way.

@@ -12,7 +12,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * e09cfa1d9e, copyright 2026 Witold Bołt. The Haiku copyright and the
  * licenses above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 /*! Threading routines */
@@ -2469,7 +2469,7 @@ thread_exit(void)
 		// While the team is going down, the other threads may still run and
 		// use an object on this stack. The area goes with the address space.
 		// SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 Witold Bołt
 		bool goingDown = false;
 		Team* dying = Team::Get(teamID);

@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -142,7 +141,7 @@ TruncStringBase(BString* outString, const char* inString, int32 length,
 	// a standard ellipsis inserting fitting algorithm
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (view == NULL) {
 		*outString = inString != NULL ? inString : "";
 		return 0;
@@ -324,7 +323,7 @@ WidgetAttributeText::FittingText(const BPoseView* view)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Icon mode used to keep the name truncated to the list column
 	// (Haiku #15444). Refit when that column width is still in effect.
 	bool widthChanged = view->ViewMode() == kListMode
@@ -500,7 +499,7 @@ WidgetAttributeText::SetDirty(bool value)
 // #pragma mark - StringAttributeText
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 
 void
@@ -1738,7 +1737,7 @@ GenericAttributeText::CommitEditedTextFlavor(BTextView* textView)
 				case B_TIME_TYPE:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				{
 					const char* text = textView->Text();
 					time_t parsed = parsedate(text, time(0));
@@ -1761,7 +1760,7 @@ GenericAttributeText::CommitEditedTextFlavor(BTextView* textView)
 					break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				}
 // SPDX-SnippetEnd
 

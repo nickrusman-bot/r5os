@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Display page. Sets the screen mode through BScreen, the same call the
  * separate Screen program uses. That program stays installed.
  */

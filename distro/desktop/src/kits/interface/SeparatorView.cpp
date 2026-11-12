@@ -5,10 +5,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -261,7 +260,7 @@ BSeparatorView::Draw(BRect updateRect)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		float textHeight = ceilf(fontHeight.ascent + fontHeight.descent
 			+ fontHeight.leading);
 		float spare = labelBounds.Height() + 1.0f - textHeight;
@@ -273,7 +272,7 @@ BSeparatorView::Draw(BRect updateRect)
 			DrawString(fLabel.String(), BPoint(labelBounds.left,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				textTop + ceilf(fontHeight.ascent)));
 // SPDX-SnippetEnd
 		} else {
@@ -298,7 +297,7 @@ BSeparatorView::GetPreferredSize(float* _width, float* _height)
 		GetFontHeight(&fontHeight);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		height = ceilf(fontHeight.ascent + fontHeight.descent
 			+ fontHeight.leading);
 // SPDX-SnippetEnd

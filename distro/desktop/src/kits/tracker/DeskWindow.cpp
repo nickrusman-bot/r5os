@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -64,7 +63,7 @@ All rights reserved.
 #include <fcntl.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <stdio.h>
 #include <string.h>
 // SPDX-SnippetEnd
@@ -222,7 +221,7 @@ LoadAddOnDir(BDirectory directory, BDeskWindow* window,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 desk_log(const char* text)
 {
@@ -248,14 +247,14 @@ BDeskWindow::BDeskWindow(LockingList<BWindow>* windowList, uint32 openFlags)
 	BDirectory deskDir;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	status_t deskStatus = FSGetDeskDir(&deskDir);
 	if (deskStatus == B_OK) {
 // SPDX-SnippetEnd
 		BEntry entry;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		status_t entryStatus = deskDir.GetEntry(&entry);
 		if (entryStatus == B_OK) {
 			Model* model = new Model(&entry, true);
@@ -289,7 +288,7 @@ BDeskWindow::~BDeskWindow()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (PoseView() == NULL) {
 		stop_watching(this);
 		return;
@@ -325,7 +324,7 @@ BDeskWindow::Init(const BMessage*)
 	_inherited::Init();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// PoseView() is null when the desktop directory did not open.
 	// BShelf then calls AddFilter on that null view.

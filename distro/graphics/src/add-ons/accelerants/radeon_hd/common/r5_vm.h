@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * VMID 1 walk for GC 9.3. The layout is docs/GRAPHICS.md,
  * "GFX9 user address space (M4, not fixed)". translate_further is off,

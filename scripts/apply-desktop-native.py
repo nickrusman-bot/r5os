@@ -3,7 +3,7 @@
 
 Interface, Tracker, Deskbar, locale, control look, and the related preference
 and app_server files. The Haiku MIT (or other original) header stays. R5OS
-edits are the SPDX-Snippet blocks and are GPL-3.0-or-later.
+edits are the SPDX-Snippet blocks and are MIT.
 """
 from __future__ import annotations
 

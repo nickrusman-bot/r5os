@@ -1,6 +1,12 @@
 # R5 Operating System
 Original R5 code.
 
+License: MIT
+Source: https://opensource.org/license/mit
+
+# R5 artwork
+The R5 logo, the wave pebble, the splash and the brand files.
+
 License: GPL-3.0-or-later
 Source: https://www.gnu.org/licenses/gpl-3.0.html
 

@@ -6,7 +6,7 @@
 /*
  * The R5 change in this file is the SPDX snippet. Copyright 2026 R5OS
  * Contributors. The Haiku copyright and the license above still cover the
- * original work. The snippet is GPL-3.0-or-later.
+ * original work. The snippet is MIT.
  */
 
 
@@ -24,7 +24,7 @@
 
 
 // SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 
 struct r5_mcfg_window {
@@ -206,7 +206,7 @@ X86PCIController::InitDriver(device_node* node, X86PCIController*& outDriver)
 	}
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	uint64 window = 0;
 	if (gDeviceManager->get_attr_uint64(node, "r5_pci_segment_window", &window,
@@ -297,7 +297,7 @@ status_t
 X86PCIController::Finalize()
 {
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	static bool sSegmentsRegistered = false;
 	if (sSegmentsRegistered)
@@ -308,7 +308,7 @@ X86PCIController::Finalize()
 	ioapic_routing_init();
 
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	RegisterExtraSegments();
 	// SPDX-SnippetEnd
@@ -317,7 +317,7 @@ X86PCIController::Finalize()
 
 
 // SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 
 void

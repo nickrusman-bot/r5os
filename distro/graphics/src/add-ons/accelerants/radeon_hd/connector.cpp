@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -377,7 +376,7 @@ gpio_general_populate()
 	int index = GetIndexIntoMasterTable(DATA, GPIO_Pin_LUT);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Master data table format 2 (Raven and later) stores gpio_pin_lut at
 	// index 12. Index 11 is vram_usagebyfirmware, which this walk was reading.
 	if (gAtomContext->bios[gAtomContext->data_table + 2] >= 2)
@@ -453,7 +452,7 @@ gpio_i2c_populate()
 		NULL, NULL, &tableOffset) != B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// v2.1 has no GPIO_I2C_Info. I2C lives on the display-path records.
 		TRACE("%s: no GPIO_I2C_Info at index %d\n", __func__, index);
 		return B_OK;
@@ -686,7 +685,7 @@ connector_probe_legacy()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static uint16
 atom_le16(const uint8* bytes)
 {
@@ -888,7 +887,7 @@ connector_probe()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (tableMajor == 1 && tableMinor >= 4)
 		return connector_probe_object_v14(tableOffset, tableSize, tableMinor);
 // SPDX-SnippetEnd

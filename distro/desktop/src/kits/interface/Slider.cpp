@@ -9,10 +9,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -595,7 +594,7 @@ BSlider::MouseDown(BPoint point)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// A click in the padding is not a slider click.
 	if (!BarFrame().Contains(point) && !ThumbFrame().Contains(point))
 		return;
@@ -636,7 +635,7 @@ BSlider::MouseDown(BPoint point)
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// A second click on the same value still sends the message
 		// (Haiku #13680).
 		Invoke();
@@ -651,7 +650,7 @@ BSlider::MouseUp(BPoint point)
 	if (IsTracking()) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// A second click on the same value still sends the message
 		// (Haiku #13680).
 		Invoke();

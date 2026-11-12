@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """Fail if an anyboot was built from a different tree than this branch.
 
 The shared Haiku tree can still hold another branch's overlay. This compares

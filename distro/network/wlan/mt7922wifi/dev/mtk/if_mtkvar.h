@@ -211,7 +211,7 @@ extern const uint8_t mtk_channels_5ghz[MTK_CHANNELS_5GHZ];
 
 /* SPDX-SnippetBegin
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  */
 /* The firmware files differ per part (MT7921 is MT7961 in linux-firmware);
  * mtk_parts in if_mtk.c names them, and attach keeps them in the softc. */
@@ -327,7 +327,7 @@ struct mtk_softc {
 	device_t		sc_dev;
 /* SPDX-SnippetBegin
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  */
 	const char*		sc_patch_name;
 	const char*		sc_ram_name;

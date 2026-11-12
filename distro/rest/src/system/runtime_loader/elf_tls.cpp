@@ -125,7 +125,7 @@ TLSBlockTemplates::Register(const TLSBlockTemplate& block)
 
 	fTemplates[dso].SetGeneration(fGeneration);
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	_AssignStaticOffset(dso);
 	// SPDX-SnippetEnd
@@ -306,7 +306,7 @@ DynamicThreadVector::_ResizeVector(unsigned minimumSize)
 		if (fGeneration == NULL)
 			return B_NO_MEMORY;
 // SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 Witold Bołt
 		// A new vector has no blocks yet, so none of them can be stale.
 		// It starts at the templates' generation. At 0, unloading any TLS
@@ -341,7 +341,7 @@ destroy_thread_tls()
 
 
 // SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 
 void

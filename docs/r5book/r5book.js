@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 //
 // The R5Book frame: the top bar, the contents on the left and the footer,
 // the same on every page (as site-nav.js does for the website). It also

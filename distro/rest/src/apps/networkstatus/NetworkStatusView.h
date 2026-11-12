@@ -68,7 +68,7 @@ class NetworkStatusView : public BView {
 		BBitmap*		fNotifyIcons[kStatusCount];
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		BString			fWirelessInterface;
 		int32			fWirelessBars;
 // SPDX-SnippetEnd

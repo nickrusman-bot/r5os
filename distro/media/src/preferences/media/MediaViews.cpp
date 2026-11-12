@@ -209,7 +209,7 @@ SettingsView::_GetNode(const dormant_node_info* info, media_node* node,
 	if (status != B_OK || instanceCount == 0) {
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// A node made here is kept, as BMediaRoster::SetAudioOutput() with a
 		// dormant_node_info does: releasing it would delete the new default.
 		// SPDX-SnippetEnd
@@ -300,7 +300,7 @@ NodeMenuItem::Invoke(BMessage* message)
 {
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// The marked device may only stand in for a saved one that is absent.
 	// Choosing it again tells media_server to keep it, so it is sent too.
 	// SPDX-SnippetEnd
@@ -348,7 +348,7 @@ ChannelMenuItem::Invoke(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 // The HDA and usb_audio drivers read these files with load_driver_settings()
 // in the kernel, and the mixer reads virtual_surround in media_addon_server.
@@ -513,7 +513,7 @@ AudioSettingsView::AudioSettingsView()
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// The drivers and the mixer read these files from the administrator's
 	// settings. Someone who cannot write there unlocks them with an
 	// administrator password, as in Settings; Login then writes them.
@@ -570,7 +570,7 @@ AudioSettingsView::AttachedToWindow()
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	fLockButton->SetTarget(thisMessenger);
 	if (fNeedsLock && fLockRunner == NULL) {
 		BMessage refresh(kMsgMediaLockRefresh);
@@ -584,7 +584,7 @@ AudioSettingsView::AttachedToWindow()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 AudioSettingsView::DetachedFromWindow()
 {
@@ -671,7 +671,7 @@ AudioSettingsView::MessageReceived(BMessage* message)
 		}
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		case ML_USB_CHANNEL_LAYOUT:
 		{
 			int32 channels = 0;
@@ -809,7 +809,7 @@ AudioSettingsView::_ChangeDefaultOutput(const dormant_node_info* info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 BMenuField*
 AudioSettingsView::_MakeLatencyMenu()
 {

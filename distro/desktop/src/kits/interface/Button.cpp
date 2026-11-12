@@ -12,10 +12,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -144,7 +143,7 @@ BButton::Draw(BRect updateRect)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// High and low color changes inside an overridden Draw stay ignored
 	// (LibLayout / Wonderbrush). SetViewColor() clears the UI color and is
 	// the custom face. A flat button follows its parent so hover does not
@@ -154,7 +153,7 @@ BButton::Draw(BRect updateRect)
 	rgb_color base = ui_color(B_CONTROL_BACKGROUND_COLOR);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (ViewUIColor() == B_NO_COLOR) {
 		base = ViewColor();
 		if (base.IsDark() == text.IsDark()) {

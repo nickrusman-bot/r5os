@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later
+/* SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  *
  * Pure PM4 builders for the GC 9.3 compute indirect buffer. No Haiku headers.

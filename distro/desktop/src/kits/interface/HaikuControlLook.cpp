@@ -9,17 +9,16 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <Debug.h>
 // SPDX-SnippetEnd
 #include <HaikuControlLook.h>
@@ -55,7 +54,7 @@ HaikuControlLook::HaikuControlLook()
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	debug_printf("R5 interface: HaikuControlLook from distro\n");
 // SPDX-SnippetEnd
 }
@@ -203,7 +202,7 @@ HaikuControlLook::DrawMenuBarBackground(BView* view, BRect& rect,
 	float bottomTint;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	if ((flags & B_DISABLED) != 0) {
 		_FillGradient(view, rect, base, 1.05, 1.08);
@@ -613,7 +612,7 @@ HaikuControlLook::DrawScrollBarBorder(BView* view, BRect rect,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	view->SetHighColor(tint_color(base,
 		base.IsLight() ? B_DARKEN_2_TINT : 0.75f));
 // SPDX-SnippetEnd
@@ -718,7 +717,7 @@ HaikuControlLook::DrawScrollBarBackground(BView* view, BRect& rect,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (base.IsLight()) {
 		if (isEnabled) {
 			gradient1Tint = 1.10;

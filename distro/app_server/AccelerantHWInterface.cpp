@@ -18,7 +18,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "GPUCopy.h"
 #include <OS.h>
 // SPDX-SnippetEnd
@@ -644,7 +644,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	// update backbuffer if necessary
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	bool r5PitchChanged = fBackBuffer.IsSet()
 		&& fFrontBuffer->BytesPerRow() != fBackBuffer->BytesPerRow();
 // SPDX-SnippetEnd
@@ -661,7 +661,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		RenderingBuffer* gpuBack = GPUCopy::BackBuffer(fFrontBuffer->Width(),
 			fFrontBuffer->Height(), fFrontBuffer->BytesPerRow());
 		if (gpuBack != NULL)
@@ -1400,7 +1400,7 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	clipping_rect bounds;
 	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get(),
 			&bounds)) {

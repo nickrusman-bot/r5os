@@ -108,7 +108,7 @@ static const struct mtk_fixed mtk_fixed_map[] = {
 
 /* SPDX-SnippetBegin
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  */
 static const struct mtk_part {
 	uint16_t	vendor;
@@ -1042,7 +1042,7 @@ mtk_attach(device_t dev)
 	sc->sc_dev = dev;
 /* SPDX-SnippetBegin
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  */
 	for (const struct mtk_part* part = mtk_parts; part->name != NULL; part++) {
 		if (pci_get_vendor(dev) == part->vendor

@@ -1,6 +1,6 @@
 <!--
   SPDX-FileCopyrightText: 2026 R5OS Contributors
-  SPDX-License-Identifier: GPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 # Review of the AMD64 kernel (12 Nov 2026)
 

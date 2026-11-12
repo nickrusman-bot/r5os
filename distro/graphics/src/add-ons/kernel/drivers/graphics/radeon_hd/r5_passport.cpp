@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * The device passport. One GC 9.3 row is the cross-check. Discovery
  * and the ATOM tables are the values that are reported. Field offsets

@@ -1,6 +1,6 @@
 /*
  * Copyright 2026, R5OS.
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Kernel copies of the note translation in Midi2Defs.h. A kernel driver does
  * not include that header. Keep each function the same as the one named in

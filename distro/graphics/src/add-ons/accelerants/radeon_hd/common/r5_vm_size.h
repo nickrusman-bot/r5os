@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * VM size the way amdgpu_vm_adjust_size computes it, then the context
  * register gfxhub_v1_0_setup_vmid_config writes.

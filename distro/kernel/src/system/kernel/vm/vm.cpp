@@ -11,7 +11,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 6f810ed2d7, 6e517bb52c, and 894c4abe7f (star row 21), copyright 2026 Witold Bołt. The Haiku copyright and the
  * licenses above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 #include <vm/vm.h>
@@ -3130,7 +3130,7 @@ vm_copy_area(team_id team, const char* name, void** _address,
 
 
 // SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 Witold Bołt
 /*!	Whether making an area of \a cache writable, or changing the protection of
 	one, has to insert a copy-on-write cache above \a cache.
@@ -3843,7 +3843,7 @@ vm_page_fault(addr_t address, addr_t faultAddress, bool isWrite, bool isExecute,
 					EFAULT, thread->team->id);
 				signal.SetAddress((void*)address);
 				// SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 Witold Bołt
 				send_fault_signal(thread, signal);
 // SPDX-SnippetEnd
@@ -4598,7 +4598,7 @@ vm_set_area_memory_type(area_id id, phys_addr_t physicalBase, uint32 type)
 
 
 /* SPDX-SnippetBegin
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * SPDX-SnippetCopyrightText: 2026 R5OS Contributors
  * Other architectures cannot name a page type, and they do not flush.
  * AMD64 replaces both when PAT is on. The write lock is held because
@@ -5295,7 +5295,7 @@ lock_memory_etc(team_id team, void* address, size_t numBytes, uint32 flags)
 				// Only the pages before nextAddress are wired. That is the
 				// size unlock_memory_etc() looks up when it reverts.
 				// SPDX-SnippetBegin
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // SPDX-SnippetCopyrightText: 2026 Witold Bołt
 				range->size = nextAddress - areaStart;
 // SPDX-SnippetEnd

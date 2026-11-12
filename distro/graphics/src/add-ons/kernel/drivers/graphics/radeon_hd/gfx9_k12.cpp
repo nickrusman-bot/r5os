@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Kernel host for the shared GFX9 start, then the interrupt ring and the
  * GART. The packet bytes stay in gfx9_start.cpp. Register numbers are from

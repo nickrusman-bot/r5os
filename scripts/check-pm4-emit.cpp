@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Builds the hand-written PM4 streams on the host and prints them for
  * scripts/check-pm4.py. The words come from the same headers the kernel

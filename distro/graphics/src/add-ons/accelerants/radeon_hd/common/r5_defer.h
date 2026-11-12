@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Linux v6.12 amdgpu_vm_clear_freed keeps a freed page until the next
  * VM-flush fence has signalled. state 1 is waiting for that fence's

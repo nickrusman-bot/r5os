@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """linear_size against RADV's 16-byte buffer requirement.
 
 RADV rounds the requirement up to 16 (radv_get_buffer_memory_requirements).

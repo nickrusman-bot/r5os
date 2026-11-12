@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Host test for usb_audio_parse_rate_range (UsbAudioFormat.h), the parser of
  * the UAC 2.0 RANGE answer on a clock source's sampling frequency control.

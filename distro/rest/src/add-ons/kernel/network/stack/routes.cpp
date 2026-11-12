@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -33,7 +32,7 @@
 #include <net/route.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <netinet6/in6.h>
 // SPDX-SnippetEnd
 #include <new>
@@ -128,7 +127,7 @@ find_route(struct net_domain* _domain, const net_route* description)
 			// TODO: check this better
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (route->interface_address == description->interface_address
 				|| (route->interface_address != NULL
 					&& description->interface_address != NULL
@@ -169,7 +168,7 @@ find_route(net_domain* _domain, const sockaddr* address)
 	net_route_private* candidate = NULL;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	net_route_private* defaultRoute = NULL;
 // SPDX-SnippetEnd
 
@@ -183,13 +182,13 @@ find_route(net_domain* _domain, const sockaddr* address)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		bool matched = false;
 // SPDX-SnippetEnd
 		if (route->mask) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			sockaddr_storage maskedAddress;
 			if (domain->address_module->mask_address(address, route->mask,
 					(sockaddr*)&maskedAddress) == B_OK
@@ -204,7 +203,7 @@ find_route(net_domain* _domain, const sockaddr* address)
 				route->destination))
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			matched = true;
 
 		if (!matched)
@@ -212,7 +211,7 @@ find_route(net_domain* _domain, const sockaddr* address)
 			continue;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 		if ((route->flags & RTF_DEFAULT) != 0) {
 			if (defaultRoute == NULL)
@@ -240,7 +239,7 @@ find_route(net_domain* _domain, const sockaddr* address)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (candidate != NULL)
 		return candidate;
 	if (defaultRoute != NULL
@@ -492,7 +491,7 @@ control_routes(struct net_interface* _interface, net_domain* domain,
 				= interface->FirstForFamily(domain->family);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (domain->family == AF_INET6 && address != NULL) {
 				size_t count = interface->CountAddresses();
 				for (size_t i = 0; i < count; i++) {
@@ -764,7 +763,7 @@ get_buffer_route(net_domain* _domain, net_buffer* buffer, net_route** _route)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	InterfaceAddress* localDest = get_interface_address(buffer->destination);
 	if (status == B_OK && localDest != NULL && localDest->local != NULL) {
 		uint16 port = domain->address_module->get_port(source);

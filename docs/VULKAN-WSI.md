@@ -271,9 +271,9 @@ New R5 files carry an SPDX header. Mesa and loader files keep their own licence.
 | Loader patch, in R5's loader recipe | The Metal-shaped pieces in section 2: platform enum, ICD struct, trampoline, `wsi_swapchain_instance_gpa`, ICD and layer dispatch, `VkIcdSurface` union member, CMake define, terminator, and that terminator's structure-type list. `copy_surface_create_info` is not edited. | Apache-2.0, like the loader. |
 | `src/vulkan/wsi/wsi_common_haiku.cpp` in R5's Mesa recipe | Surface, swapchain, present, the CPU image for Lavapipe, the buffer image for RADV | MIT, like Mesa. |
 | `build-radv.sh` | The platform turned on for Lavapipe and RADV | — |
-| `r5-wsi-test`, new, under `distro/graphics` | The step 2 test program | GPL-3.0-or-later |
+| `r5-wsi-test`, new, under `distro/graphics` | The step 2 test program | MIT |
 
-Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets. Step 2 adds the Mesa surface for Lavapipe: a CPU image, one `BBitmap` per swapchain image, and `r5-wsi-test`. The RADV buffer image is step 5. `wsi_common_haiku.cpp` is MIT. `r5-wsi-test` is GPL-3.0-or-later. Nothing is copied from haiku-amdgpu, haiku-rpi, or summit.
+Step 1 adds `vulkan_r5.h`, R5's copy of `vk_icd.h`, and the loader recipe. The loader patch is Apache-2.0. `vulkan_r5.h` is MIT because applications include it. `vk_icd.h` keeps the Vulkan-Headers licence, Apache-2.0 OR MIT, and the two R5 placeholders are Apache-2.0 snippets. Step 2 adds the Mesa surface for Lavapipe: a CPU image, one `BBitmap` per swapchain image, and `r5-wsi-test`. The RADV buffer image is step 5. `wsi_common_haiku.cpp` is MIT. `r5-wsi-test` is MIT. Nothing is copied from haiku-amdgpu, haiku-rpi, or summit.
 
 ### Settings
 

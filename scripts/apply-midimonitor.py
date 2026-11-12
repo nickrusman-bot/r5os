@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """MIDI Monitor. Idempotent copy into the Haiku tree, Jam SubInclude, and the
 regular image app and Deskbar lists."""
 from __future__ import annotations

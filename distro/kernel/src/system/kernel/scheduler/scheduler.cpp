@@ -14,7 +14,7 @@
  * The R5 change in this file is the SPDX snippet. It is haiku-pi
  * 5180e96119 (star row 23), copyright 2026 Witold Bołt. The Haiku copyright
  * and the licenses above still cover the original work. The snippet is
- * GPL-3.0-or-later.
+ * MIT.
  */
 
 
@@ -299,7 +299,7 @@ switch_thread(Thread* fromThread, Thread* toThread)
 {
 	// notify the user debugger code
 	// SPDX-SnippetBegin
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// SPDX-SnippetCopyrightText: 2026 Witold Bołt
 	// Also when the team lost its debugger while the thread ran: its profiling
 	// timer must not stay on this CPU.

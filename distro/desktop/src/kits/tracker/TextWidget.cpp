@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -562,7 +561,7 @@ BTextWidget::StartEdit(BPoseView* view, BPose* pose, BColumn* column)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	int32 length = textView->TextLength();
 	int32 end = length;
 	Model* model = pose->TargetModel();
@@ -659,7 +658,7 @@ BTextWidget::SelectAll(BPoseView* view)
 	BTextView* text = dynamic_cast<BTextView*>(view->FindView("WidgetTextView"));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (text == NULL)
 		return;
 	int32 length = text->TextLength();

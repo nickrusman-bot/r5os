@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Linux v6.12 amdgpu_ids.c:amdgpu_pasid_alloc. The bitmap covers 16
  * bits. amdgpu_pasid_alloc itself accepts up to 31; a wider map is

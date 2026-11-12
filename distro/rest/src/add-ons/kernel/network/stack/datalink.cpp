@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -366,7 +365,7 @@ datalink_control(net_domain* _domain, int32 option, void* value,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool datalink_is_local_address(net_domain* domain,
 	const struct sockaddr* address, net_interface_address** _interfaceAddress,
 	uint32* _matchedType);
@@ -399,7 +398,7 @@ datalink_send_routed_data(struct net_route* route, net_buffer* buffer)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if ((route->flags & RTF_LOCAL) != 0
 		|| datalink_is_local_address(address->domain, buffer->destination,
 			NULL, NULL)) {
@@ -1081,7 +1080,7 @@ net_datalink_module_info gNetDatalinkModule = {
 	unregister_route_info,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	update_route_info,
 	get_device_route
 // SPDX-SnippetEnd

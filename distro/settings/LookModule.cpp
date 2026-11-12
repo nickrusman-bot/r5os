@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  * Look and feel page. Decorator, control look, and arrow style are the
  * Appearance preference controls. Colors is a box under them.
  */

@@ -11,10 +11,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -23,7 +22,7 @@
 #include <stdio.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <string.h>
 // SPDX-SnippetEnd
 #include <time.h>
@@ -63,7 +62,7 @@
 #include <ScrollView.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <TabView.h>
 // SPDX-SnippetEnd
 #include <String.h>
@@ -88,7 +87,7 @@
 #include <system_revision.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <r5_os_version.h>
 // SPDX-SnippetEnd
 
@@ -212,7 +211,7 @@ public:
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 class R5MarkView : public BView {
 public:
 							R5MarkView();
@@ -335,7 +334,7 @@ private:
 			BTextView*		fUptimeView;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			BStringView*	fBuildView;
 // SPDX-SnippetEnd
 
@@ -351,7 +350,7 @@ private:
 	static const uint8		kLabelCount = 5;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	static const uint8		kSubtextCount = 7;
 // SPDX-SnippetEnd
 };
@@ -385,7 +384,7 @@ private:
 			CropView*		_CreateCreditsView();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			BView*			_CreateInfoTabs();
 			void			_FillWhatsNew();
 			void			_FillLicenses();
@@ -403,7 +402,7 @@ private:
 			HyperTextView*	fCreditsView;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			HyperTextView*	fWhatsNewView;
 			HyperTextView*	fLicensesView;
 			BTabView*		fTabView;
@@ -461,7 +460,7 @@ AboutApp::MessageReceived(BMessage* message)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static float r5_about_width();
 // SPDX-SnippetEnd
 
@@ -471,7 +470,7 @@ AboutWindow::AboutWindow()
 	BWindow(BRect(0, 0, kWindowWidth, kWindowHeight),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		B_TRANSLATE("About R5"), B_TITLED_WINDOW,
 // SPDX-SnippetEnd
 		B_AUTO_UPDATE_SIZE_LIMITS | B_NOT_ZOOMABLE)
@@ -485,7 +484,7 @@ AboutWindow::AboutWindow()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Open at the mockup width. The layout max stays unlimited, so the
 	// window can grow and shrink on both axes.
 	float mockupWidth = r5_about_width();
@@ -516,7 +515,7 @@ AboutWindow::QuitRequested()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static const char*
 r5_arch_name()
 {
@@ -534,7 +533,7 @@ r5_arch_name()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 r5_make_transparent(BView* view)
 {
@@ -873,7 +872,7 @@ SysInfoView::SysInfoView()
 	// OS Version / ABI
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fVersionLabelView = _CreateLabel("oslabel",
 		B_TRANSLATE("R5 Operating System"));
 	fVersionInfoView = _CreateSubtext("ostext", _GetOSVersion());
@@ -901,7 +900,7 @@ SysInfoView::SysInfoView()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString buildLine;
 	buildLine.SetToFormat(B_TRANSLATE_COMMENT("Build %" B_PRId32,
 		"Build line under the system information, e.g. Build 10001"),
@@ -929,7 +928,7 @@ SysInfoView::SysInfoView()
 		.Add(fVersionInfoView)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		.Add(abiView)
 		.Add(grid)
 		.Add(fBuildView);
@@ -1021,7 +1020,7 @@ SysInfoView::CacheInitialSize()
 	fCachedMinWidth = ceilf(std::max(fCachedMinWidth,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		fVersionInfoView->StringWidth(fVersionInfoView->Text()) + insets));
 	fCachedMinWidth = ceilf(std::max(fCachedMinWidth,
 // SPDX-SnippetEnd
@@ -1149,7 +1148,7 @@ SysInfoView::_UpdateColors()
 		fUptimeView->SetFontAndColor(NULL, 0, &textColor);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		r5_color_system_info(this, textColor);
 		if (fBuildView != NULL) {
 			rgb_color buildColor = tint_color(textColor, B_LIGHTEN_1_TINT);
@@ -1167,7 +1166,7 @@ SysInfoView::_UpdateColors()
 		fUptimeView->SetDrawingMode(B_OP_ALPHA);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		r5_color_system_info(this, textColor);
 		if (fBuildView != NULL)
 			fBuildView->SetHighColor(tint_color(textColor, B_LIGHTEN_1_TINT));
@@ -1315,7 +1314,7 @@ SysInfoView::_GetOSVersion()
 	BString revision;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	revision.SetToFormat(
 		B_TRANSLATE_COMMENT("Version %s • %s",
@@ -1327,20 +1326,20 @@ SysInfoView::_GetOSVersion()
 	const char* hrev = __get_haiku_revision();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (hrev != NULL) {
 // SPDX-SnippetEnd
 		revision.SetToFormat(B_TRANSLATE_COMMENT("Version: %s",
 			"Version: R1 or hrev99999"), hrev);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	} else
 // SPDX-SnippetEnd
 		revision = B_TRANSLATE("Version:");
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #endif
 // SPDX-SnippetEnd
 
@@ -1374,7 +1373,7 @@ SysInfoView::_GetABIVersion()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Package ABI stays x86_64. About shows the name used for the target.
 	const char* archName = B_HAIKU_ABI_NAME;
 	if (strcmp(archName, "x86_64") == 0)
@@ -1551,7 +1550,7 @@ AboutView::AboutView()
 	fCreditsView(NULL),
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fWhatsNewView(NULL),
 	fLicensesView(NULL),
 	fTabView(NULL),
@@ -1580,7 +1579,7 @@ AboutView::AboutView()
 		.Add(_CreateSysInfoView(), 0.0f)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		.Add(_CreateInfoTabs())
 // SPDX-SnippetEnd
 		.End();
@@ -1614,7 +1613,7 @@ AboutView::AttachedToWindow()
 	fCachedMinWidth = std::max(infoWidth, fLogoView->MinSize().width);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	fCachedMinWidth = std::max(fCachedMinWidth, r5_about_content_width());
 // SPDX-SnippetEnd
 	float tabHeight = 180.0f;
@@ -1708,7 +1707,7 @@ AboutView::MessageReceived(BMessage* message)
 		{
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (fTabView != NULL && fTabView->Selection() != 0)
 				break;
 // SPDX-SnippetEnd
@@ -1753,7 +1752,7 @@ AboutView::AddCopyrightEntry(const char* name, const char* text,
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	HyperTextView* views[] = { fCreditsView, fLicensesView };
 	int32 viewCount = fLicensesView != NULL ? 2 : 1;
 	for (int32 viewIndex = 0; viewIndex < viewCount; viewIndex++) {
@@ -1800,7 +1799,7 @@ AboutView::AddCopyrightEntry(const char* name, const char* text,
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	
 		if (sources.CountStrings() > 0) {
 			view->Insert(B_TRANSLATE("Source Code: "));
@@ -1830,7 +1829,7 @@ AboutView::AddCopyrightEntry(const char* name, const char* text,
 			BString urlAddress;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			parse_named_url(url, urlName, urlAddress);
 	
 			view->SetFontAndColor(be_plain_font, B_FONT_ALL,
@@ -1838,19 +1837,19 @@ AboutView::AddCopyrightEntry(const char* name, const char* text,
 				&fLinkColor);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			view->InsertHyperText(urlName,
 // SPDX-SnippetEnd
 				new URLAction(urlAddress));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			view->Insert("\n");
 // SPDX-SnippetEnd
 		}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		view->Insert("\n");
 		}
 // SPDX-SnippetEnd
@@ -1941,7 +1940,7 @@ AboutView::_CreateSysInfoView()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 BView*
 AboutView::_CreateInfoTabs()
 {
@@ -2108,7 +2107,7 @@ AboutView::_CreateCreditsView()
 	fCreditsView->SetFontAndColor(&font, B_FONT_ALL, &fHaikuGreenColor);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	fCreditsView->Insert("R5 Operating System\n");
 	fCreditsView->SetFontAndColor(be_plain_font, B_FONT_ALL, &fTextColor);
@@ -2321,7 +2320,7 @@ AboutView::_CreateCreditsView()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// VirtualBox guest additions are GPL-3.0-only. kGPLv3 opens the
 	// license text already shipped under data/licenses.
 	AddCopyrightEntry("VirtualBox Guest Additions",
@@ -2371,7 +2370,7 @@ AboutView::_CreateCreditsView()
 		"https://www.netbsd.org");
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 #ifndef HAIKU_DISTRO_COMPATIBILITY_OFFICIAL
 	AddCopyrightEntry("R5 AirPlay",

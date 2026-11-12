@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * R1 packets. R1a is a WRITE_DATA of one dword. R1b is the end-of-pipe
  * RELEASE_MEM from gfx_v9_0_ring_emit_fence. R1c's indirect buffer is

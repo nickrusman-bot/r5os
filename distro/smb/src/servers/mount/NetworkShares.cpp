@@ -857,7 +857,7 @@ NetworkShares::_Mount(int32 id, bool byUser)
 		// which is where trying ends.
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// The password stays in the key store. smbfs reads it. It is not a
 		// mount parameter, so it is not in the file system argument list.
 		if (!copy.user.IsEmpty()) {

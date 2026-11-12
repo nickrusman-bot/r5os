@@ -1,6 +1,6 @@
 SubDir HAIKU_TOP src apps midimonitor ;
 
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 
 Application MidiMonitor :
 	MidiMonitor.cpp

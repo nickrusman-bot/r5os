@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Host test for the SysEx packet split in usb_midi_write. It runs the same
  * helper as the driver (usb_midi_sysex_packet) through the same loop shape:

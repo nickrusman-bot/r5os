@@ -33,4 +33,4 @@ All rights reserved.
 The byte tables in standard_icons.inc are unmodified HVIF resources from
 Haiku's src/kits/tracker/TrackerIcons.rdef (R_ResBackNav, R_ResForwNav,
 R_ResUpNav, R_HomeDirIcon). This notice covers those bytes. The C++ that
-draws them is separate and is GPL-3.0-or-later.
+draws them is separate and is MIT.

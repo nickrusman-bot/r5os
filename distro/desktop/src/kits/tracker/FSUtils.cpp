@@ -33,10 +33,9 @@ respective holders. All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -67,7 +66,7 @@ respective holders. All rights reserved.
 #include <FindDirectory.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <DateTimeFormat.h>
 // SPDX-SnippetEnd
 #include <Locale.h>
@@ -1191,7 +1190,7 @@ MoveTask(BObjectList<entry_ref, true>* srcList, BEntry* destEntry, BList* pointL
 					collisionCount > 1, conflictCheckResult) != B_OK) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				if (conflictCheckResult == kCanceled)
 					break;
 // SPDX-SnippetEnd
@@ -2204,7 +2203,7 @@ FileStatToString(StatStruct* stat, char* buffer, int32 length)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 	BString size;
@@ -2213,7 +2212,7 @@ FileStatToString(StatStruct* stat, char* buffer, int32 length)
 	format.Format(size, stat->st_size);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	BString when;
 	BDateTimeFormat().Format(when, stat->st_mtime,
 		B_MEDIUM_DATE_FORMAT, B_MEDIUM_TIME_FORMAT);
@@ -2360,7 +2359,7 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 			alert->AddButton(B_TRANSLATE("Replace all"));
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			alert->AddButton(B_TRANSLATE("Cancel"));
 			alert->SetShortcut(4, B_ESCAPE);
 // SPDX-SnippetEnd
@@ -2368,7 +2367,7 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 				case 0:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 					return B_ERROR;
@@ -2383,7 +2382,7 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 					break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				default:
 					conflictResolution = kCanceled;
 					return B_ERROR;
@@ -2392,7 +2391,7 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 		} else {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			alert = new BAlert();
 			alert->SetText(replaceMsg.String());
 			alert->AddButton(B_TRANSLATE("Skip"));
@@ -2404,7 +2403,7 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 				case 0:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // R5OS removed the Haiku lines that were here.
 // SPDX-SnippetEnd
 					return B_ERROR;
@@ -2413,7 +2412,7 @@ CheckName(uint32 moveMode, const BEntry* sourceEntry,
 					break;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				default:
 					conflictResolution = kCanceled;
 					return B_ERROR;

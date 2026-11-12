@@ -34,10 +34,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -51,7 +50,7 @@ All rights reserved.
 #include <Locale.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <pwd.h>
 #include <unistd.h>
 // SPDX-SnippetEnd
@@ -134,7 +133,7 @@ TDeskbarMenu::DetachedFromWindow()
 		if (looper != NULL && looper->Lock()) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			fBarView->DragStop(true);
 // SPDX-SnippetEnd
 			looper->Unlock();
@@ -265,7 +264,7 @@ B_TRANSLATE_MARK_VOID("About Haiku")
 B_TRANSLATE_MARK_VOID("About this system")
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 B_TRANSLATE_MARK_VOID("About R5")
 // SPDX-SnippetEnd
 
@@ -275,7 +274,7 @@ B_TRANSLATE_MARK_VOID("About R5")
 #else
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	B_TRANSLATE_NOCOLLECT("About R5")
 // SPDX-SnippetEnd
 #endif
@@ -299,7 +298,7 @@ B_TRANSLATE_MARK_VOID("About R5")
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	item = new BMenuItem(B_TRANSLATE("Show replicants handle"),
 // SPDX-SnippetEnd
 		new BMessage(kToggleDraggers));
@@ -307,7 +306,7 @@ B_TRANSLATE_MARK_VOID("About R5")
 	item->SetMarked(BDragger::AreDraggersDrawn());
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	AddItem(item);
 
 	item = new BMenuItem(B_TRANSLATE("Show desktop"),
@@ -335,7 +334,7 @@ B_TRANSLATE_MARK_VOID("About R5")
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	item = new BMenuItem(B_TRANSLATE("Lock screen"),
 		new BMessage(kLockSession));
 	item->SetEnabled(!dragging);
@@ -365,7 +364,7 @@ B_TRANSLATE_MARK_VOID("About R5")
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	item = new BMenuItem(B_TRANSLATE("Restart"),
 // SPDX-SnippetEnd
 		new BMessage(kRebootSystem));
@@ -437,7 +436,7 @@ TDeskbarMenu::ResetTargets()
 				case kShowSplash:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				case kShowDesktop:
 // SPDX-SnippetEnd
 				case kToggleDraggers:
@@ -454,7 +453,7 @@ TDeskbarMenu::ResetTargets()
 				case kShutdownSystem:
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 				case kLogoutSession:
 				case kLockSession:
 // SPDX-SnippetEnd
@@ -699,7 +698,7 @@ TRecentsMenu::DoneBuildingItemList()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (CountItems() == 0) {
 		// An empty menu kept a huge frame and ran off the screen (Haiku #7328).
 		BMenuItem* empty = new BMenuItem(B_TRANSLATE("(empty)"), NULL);

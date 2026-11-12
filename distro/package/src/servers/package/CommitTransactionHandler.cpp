@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -1447,7 +1446,7 @@ CommitTransactionHandler::_RunPostOrPreScript(Package* package,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	INFORM("%s script starting: %s, package %s\n",
 		postOrPreInstallWording, script.String(),
 		package->FileName().String());
@@ -1456,7 +1455,7 @@ CommitTransactionHandler::_RunPostOrPreScript(Package* package,
 	int result = system(scriptPath.Path());
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	INFORM("%s script finished: %s, package %s, result %d\n",
 		postOrPreInstallWording, script.String(),
 		package->FileName().String(), result);

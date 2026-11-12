@@ -72,7 +72,7 @@ static const uint32 kMsgNodeInstantiated = 'mnin';
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 // The control thread posts this for ADD_ON_SERVER_RESCAN_ADD_ON_FLAVORS.
 static const uint32 kMsgRescanFlavors = 'mrsf';
 // SPDX-SnippetEnd
@@ -116,7 +116,7 @@ private:
 			void				_ScanAddOnFlavors(BMediaAddOn* addOn);
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			void				_RescanAddOnFlavors(media_addon_id id);
 			void				_PruneActiveFlavors(AddOnInfo& info);
 			bool				_HasInstanceOf(const AddOnInfo& info,
@@ -401,7 +401,7 @@ MediaAddonServer::MessageReceived(BMessage* message)
 
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// Drop nodes that are gone first, or the list only grows and the
 			// add-on is never unloaded again.
 			_PruneActiveFlavors(found->second);
@@ -421,7 +421,7 @@ MediaAddonServer::MessageReceived(BMessage* message)
 
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		case kMsgRescanFlavors:
 		{
 			media_addon_id addOnID;
@@ -472,7 +472,7 @@ MediaAddonServer::_HandleMessage(int32 code, const void* data, size_t size)
 		{
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// The rescan reads and changes fInfoMap. Only the application
 			// looper touches that map, so the work is done there.
 			const add_on_server_rescan_flavors_command* command = static_cast<
@@ -784,7 +784,7 @@ MediaAddonServer::_PutAddonIfPossible(AddOnInfo& info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 void
 MediaAddonServer::_RescanAddOnFlavors(media_addon_id id)
 {

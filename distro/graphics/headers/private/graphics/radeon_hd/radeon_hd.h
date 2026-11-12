@@ -125,7 +125,7 @@ enum radeon_chipset {
 	RADEON_RAVEN,		// DCN 1.0
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	RADEON_RENOIR,		// DCN 2.1
 // SPDX-SnippetEnd
 	RADEON_NAVI,		// DCN 2.0 and DCN 3.0
@@ -256,7 +256,7 @@ struct radeon_shared_info {
 	uint8			dceMinor;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Display engine recorded from the device table. dceMajor is the DCE
 	// register generation and stays 0 when the engine is not DCE.
 	uint8			displayClass;
@@ -269,7 +269,7 @@ struct radeon_shared_info {
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// CPU-visible VRAM window. This is the PCI framebuffer BAR, or the
 	// smaller mapping used when that BAR would not map. Offsets are bytes
 	// from vram_window_phys.
@@ -306,7 +306,7 @@ struct radeon_shared_info {
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 enum {
 	RHD_DISPLAY_DCE = 0,
 	RHD_DISPLAY_DCN = 1,

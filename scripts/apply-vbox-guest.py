@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """Install VirtualBox 7.2.22 guest additions into the R5OS image.
 
 The binaries are not stored in git. This script copies a local build and the
@@ -160,7 +160,7 @@ mount -t vboxsf -p <share-name> <directory>
 
 The clipboard R5OS starts on its own is the serial clipboard. VirtualBox drag-and-drop is not part of this build.
 
-This notice is R5OS text, GPL-3.0-or-later. The VirtualBox files keep their own license.
+This notice is R5OS text, MIT. The VirtualBox files keep their own license.
 """
     (SRC / "SOURCE.txt").write_text(notice, encoding="utf-8", newline="\n")
     print(f"staged source ({archive.stat().st_size} bytes, sha256 {digest})")

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * The Wi-Fi page: the WiFiView from libr5wifi.so, the same panel as the
  * separate WiFi program. Joining a network, leaving it and forgetting it

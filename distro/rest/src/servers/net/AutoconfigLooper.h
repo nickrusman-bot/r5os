@@ -7,10 +7,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 #ifndef AUTOCONFIG_LOOPER_H
@@ -25,7 +24,7 @@
 class AutoconfigClient;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 class SLAACClient;
 class DHCPv6Client;
 // SPDX-SnippetEnd
@@ -35,7 +34,7 @@ public:
 								AutoconfigLooper(BMessenger target,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 									const char* device,
 									bool autoIPv4 = true,
 									bool autoIPv6 = true);
@@ -50,14 +49,14 @@ private:
 			void				_RemoveClient();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			void				_RemoveSLAAC();
 			void				_RemoveDHCPv6();
 // SPDX-SnippetEnd
 			void				_ConfigureIPv4();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			void				_ConfigureIPv6();
 // SPDX-SnippetEnd
 			void				_ConfigureIPv4Failed();
@@ -69,7 +68,7 @@ private:
 			AutoconfigClient*	fCurrentClient;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			SLAACClient*		fSLAACClient;
 			DHCPv6Client*		fDHCPv6Client;
 // SPDX-SnippetEnd
@@ -77,7 +76,7 @@ private:
 			bool				fJoiningNetwork;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			bool				fAutoIPv4;
 			bool				fAutoIPv6;
 // SPDX-SnippetEnd

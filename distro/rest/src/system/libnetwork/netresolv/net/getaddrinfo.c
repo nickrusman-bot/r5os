@@ -32,10 +32,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 /*
@@ -100,7 +99,7 @@ __RCSID("$NetBSD: getaddrinfo.c,v 1.119.2.1 2020/11/29 11:25:31 martin Exp $");
 #include "nsswitch.h"
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include "r5_mdns.h"
 // SPDX-SnippetEnd
 #include "servent.h"
@@ -1244,7 +1243,7 @@ explore_fqdn(const struct addrinfo *pai, const char *hostname,
 		return 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	if (r5_mdns_name_is_local(hostname)) {
 		error = r5_mdns_getaddrinfo(hostname, pai, &result);

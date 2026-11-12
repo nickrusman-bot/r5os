@@ -33,10 +33,9 @@ All rights reserved.
 */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright and license notice above still cover
- * the original work. A build that ships both follows GPL-3.0-or-later, and
- * that notice stays on the original portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -103,7 +102,7 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
 		"InfoWindow", B_TITLED_WINDOW,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		B_NOT_ZOOMABLE,
 // SPDX-SnippetEnd
 		B_CURRENT_WORKSPACE),
@@ -120,7 +119,7 @@ BInfoWindow::BInfoWindow(Model* model, int32 group_index,
 		// we use pulse to check freebytes on volume
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 	// B_AUTO_UPDATE_SIZE_LIMITS locked the frame to the preferred size,
 	// so the border looked resizable and was not (Haiku #19433).

@@ -8,8 +8,8 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The copyright lines and the MIT License above still
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
  * cover the original work.
  */
 
@@ -71,7 +71,7 @@ set_normal_pstate(void* /* dummy */, int cpu)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// This runs on every CPU at the same time (call_all_cpus_sync), and the
 	// cores do not all report the same values: keep them local, so no CPU
 	// takes another one's highest or guaranteed level.

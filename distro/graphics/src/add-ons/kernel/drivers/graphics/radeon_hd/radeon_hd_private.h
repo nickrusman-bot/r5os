@@ -42,7 +42,7 @@ struct radeon_info {
 	area_id			rom_area;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	area_id			doorbell_area;
 	uint8*			doorbell;
 	// Kernel view of the VRAM pool only. r5_gfx9_kernel_start creates it
@@ -70,7 +70,7 @@ struct radeon_info {
 	uint8			dceMinor;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	uint8			displayClass;
 	uint8			displayMajor;
 	uint8			displayMinor;
