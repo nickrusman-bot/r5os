@@ -22,7 +22,10 @@ const uint8 B_MIDI2_USB_MIDISTREAMING = 0x03;
 const uint8 B_MIDI2_USB_CS_INTERFACE = 0x24;
 const uint8 B_MIDI2_USB_MS_HEADER = 0x01;
 const uint8 B_MIDI2_USB_GROUP_TERMINAL_TYPE = 0x26;
-const uint8 B_MIDI2_USB_GROUP_TERMINAL_SUBTYPE = 0x01;
+/* GR_TRM_BLOCK is subtype 0x02; 0x01 is the header in front of the blocks
+ * (USB-MIDI 2.0 Appendix A, the same values as Linux midi-v2.h).
+ * Development builds up to 10055 used 0x01 here. */
+const uint8 B_MIDI2_USB_GROUP_TERMINAL_SUBTYPE = 0x02;
 const uint16 B_MIDI2_USB_VERSION = 0x0200;
 
 const uint8 B_MIDI2_USB_BLOCK_BIDIRECTIONAL = 0x00;
@@ -35,6 +38,7 @@ const uint8 B_MIDI2_USB_PROTOCOL_MIDI2 = 0x11;
 const size_t B_MIDI2_USB_INTERFACE_LENGTH = 9;
 const size_t B_MIDI2_USB_HEADER_LENGTH = 7;
 const size_t B_MIDI2_USB_GROUP_TERMINAL_LENGTH = 13;
+const uint8 B_MIDI2_USB_GROUP_TERMINAL_HEADER_SUBTYPE = 0x01;
 
 
 struct midi2_usb_interface {
