@@ -308,7 +308,7 @@ case $boot in
 	have 'egl: opengl llvmpipe: gpu not available' "$keep/syslog-after-off.txt" \
 		"egl: opengl llvmpipe: gpu not available"
 	have '^pixels ok llvmpipe only' "$keep/gl-test.txt" "r5-gl-test pixels ok llvmpipe only"
-	have '^pixels ok' "$keep/teapot.txt" "VulkanTeapot pixels ok"
+	have '^pixels ok lavapipe only' "$keep/teapot.txt" "VulkanTeapot pixels ok lavapipe only"
 	none 'RADV' "$keep/teapot.txt" "VulkanTeapot on Lavapipe, not RADV"
 	manual "desktop keeps working; GLTeapot turns on llvmpipe: ____"
 	;;
