@@ -114,7 +114,7 @@ air/OS (airos-works/haiku), copyright jmgasper:
 
 The image built `i2c_hid` and did not install it. RenkuOS `b37a078925` adds it next to `i2c_elan`.
 
-Location: `distro/kernel/src/add-ons/kernel/drivers/input/i2c_hid/`, `distro/kernel/src/add-ons/kernel/drivers/input/i2c_elan/`, `distro/kernel/src/add-ons/kernel/bus_managers/ps2/`, and `distro/rest/src/add-ons/input_server/devices/mouse/MouseInputDevice.cpp`.
+Location: `distro/kernel/src/add-ons/kernel/drivers/input/i2c_hid/`, `distro/kernel/src/add-ons/kernel/drivers/input/i2c_elan/`, `distro/kernel/src/add-ons/kernel/bus_managers/ps2/`, `distro/rest/headers/os/interface/Input.h`, and `distro/rest/src/add-ons/input_server/devices/mouse/`.
 
 The copied files are Haiku's. Copyright the Haiku authors named in each file. License: MIT. The headers stay. `InputReadyLine.cpp` and `InputReadyLine.h` are new in RenkuOS and keep the header that commit wrote: Copyright 2026, Haiku, Inc., MIT. The RenkuOS changes stay MIT. They are not relicensed. No name was added to `elan_iic_devs`. Goodix (`4f32e08ca6`) was not taken. Each commit below is signed off by its author (DCO).
 
@@ -130,7 +130,14 @@ RenkuOS (RenkuOS/Source):
 - `cb22fd5cfecf93f5f52e188d2cb985e37fddd8ea`, idumych: a right or middle click on an Elan clickpad.
 - `17bb2a0c3e7842996acf3602c55c56f9e76c64a6`, idumych: follow the fingers that stay down, so a drag or a scroll does not jump.
 
-`scripts/apply-kernel-bugs.py` copies the kernel files and adds `i2c_hid` to the package. `scripts/apply-rest-native.py` copies the mouse add-on.
+air/OS (airos-works/haiku), copyright jmgasper:
+
+- `a063548811` publishes a precision touchpad as one `input/touchpad` device and switches it to reporting contacts. `TouchpadProtocolHandler.cpp` and `TouchpadProtocolHandler.h`.
+- `94736a44f1` starts the movement again when the finger count changes, so the pointer does not jump.
+- `1d69faffef` does not treat the finger left after a gesture as a tap.
+- `bf91f88318` reports the scroll between whole wheel steps, and whether the gesture began, changed, or ended.
+
+`scripts/apply-kernel-bugs.py` copies the kernel files and adds `i2c_hid` to the package. `scripts/apply-rest-native.py` copies the mouse add-on and `Input.h`.
 
 ### USB disk unplug
 

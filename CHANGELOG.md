@@ -1,5 +1,12 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - One touchpad
+
+Stick 48 published the 5625U trackpad as two mice and three tablets. A click arrived only when one of the tablets happened to see it. The mode read that was meant to switch the pad timed out (`trackpad mode report was not read`, 4 bytes, TX abort). That read is gone. A precision touchpad (digitizer, touch pad) is now one `input/touchpad` device, from air/OS `a063548811` (`TouchpadProtocolHandler`, jmgasper, MIT). The mouse and tablet collections of that same device are not published. Opening it writes input mode 3 (contacts) and the surface switch, without reading the feature first. The input preferences page for a device whose name contains "Touchpad" is the one Haiku already ships; it applies once the device is a touchpad. The touchscreen stays a tablet.
+
+The mouse add-on keeps the current tap handling and adds the three air/OS gesture fixes on top. A change in the finger count does not jump the pointer (`94736a44f1`). The finger left after a two-finger gesture is not a tap (`1d69faffef`). Scrolling also sends `be:wheel_precise_delta_x/y` and `be:wheel_phase` (`bf91f88318`). `be:wheel_delta_x/y` stay whole steps.
+
+Not booted after this change. There is no What's new section and `distro/BUILD` stays the same.
 ## 2026-11-12 - R5Book: Vulkan, additions to Haiku kits, interface guidelines
 
 Four pages are added to `docs/r5book/`. **Accounts and sessions** tells a program who it runs as, where its settings go (`find_directory`, never `/boot/home`), how to ask Login to lock (`'lokc'`) or log out (`'lout'`), and to quit without a dialog at log out; Sign in and the lock screen are the worked example, with the first QEMU screenshots in the book. **Vulkan in a window** describes `VK_RFIVE_view_surface` for application developers: the create info, what `vkQueuePresentKHR` returns on R5, FIFO as the only present mode, the Lavapipe fallback while `gpu_present` is off, and porting. **Additions to Haiku kits** lists the public calls R5 added to existing classes: `BLocaleRoster::ApplySettings()` and `BFormattingConventions::CoerceFormatForClock()`. **Interface guidelines** gathers the rules from `docs/STYLE.md`, `docs/SETTINGS.md` and `AGENTS.md`: forms on the panel, cards, one accent button, icons, settings pages, accounts and words.
