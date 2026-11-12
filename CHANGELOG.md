@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - MIDI input works again; MIDI Monitor (build 10055)
+
+Problem: no MIDI input reached any program. A Pioneer DDJ-1000 gave no input in R5 while it works on Windows. `MidiPortProducer::GetData()` in `midi_server` compared the return value of `ioctl(fd, B_MIDI_READ_UMP, ...)` with `B_UNSUPPORTED`, `B_DEV_INVALID_IOCTL` and `B_TIMED_OUT`. Haiku's `ioctl()` returns -1 and sets `errno`, so none of those matched, and the reader thread stopped on its first call: at once for a USB MIDI 1.0 device or any other MIDI driver, and after one quiet second for a UMP device. The MIDI 2.0 entry below (3 Nov) said "A driver that does not implement the ioctl is still read as MIDI 1.0 bytes"; that was not true. Found in `docs/reviews/USB-AUDIO-MIDI2-REVIEW.md`, point 1.
+
+Changed: the reader takes the status from `errno`. `MidiPortConsumer::Data()` no longer drops a MIDI 2.0 message to a driver without `B_MIDI_WRITE_UMP`: it writes the same message as MIDI 1.0 bytes, one event per `write()` (type 0x4 through `midi2_channel_voice_to_midi1`, types 0x1 and 0x2 as their bytes; type 0x3 SysEx is not sent that way).
+
+New: MIDI Monitor (`distro/apps/midimonitor`, `scripts/apply-midimonitor.py`, GPL-3.0-or-later). It connects its own consumer to every MIDI producer, also ones that appear later, and shows one line per message: time, source, channel, meaning (note name, controller, pitch bend, system messages, MIDI 2.0 packets) and the bytes. A menu shows one source, Pause stops the list, clock and active sensing are hidden by default, the list keeps the last 2000 lines. In the regular image and the Deskbar Applications menu. The icon is the Haiku MIDI server icon, unchanged.
+
+Limits: the other review points (MIDI 2.0 over USB, `usb_midi` table errors, unplug while reading) are not in this change. Whether the DDJ-1000 is bound by `usb_midi` at all is not known: that needs its USB descriptors or a syslog from a boot with it attached.
+
+Tested: see the pull request. No MIDI device was attached during this work.
+
 ## 2026-11-12 - Quiet the USB lines from the 5625U boot
 
 The vanilla stick boot logged four USB lines that are not faults.

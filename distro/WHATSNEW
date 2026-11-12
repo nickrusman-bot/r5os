@@ -1,5 +1,8 @@
-R5 2026.1-dev Build 10055 - Device Manager
+R5 2026.1-dev Build 10056 - Device Manager
 Device Manager shows every device in your computer, grouped by type or by how it is connected, with a warning on a device that has no driver. Properties shows the driver, its version and license, the device details, and recent events. You can turn a driver off and on again; that needs an administrator and takes effect after a restart. File > Export saves the list as text, with full details or as a tree.
+
+R5 2026.1-dev Build 10055 - See what your MIDI controller sends
+MIDI keyboards and controllers send their notes and knobs to programs again. MIDI Monitor, in the Applications menu, shows every message a MIDI device sends, one line each: the time, the device, the channel, what the message means and its bytes. You can show one device, pause the list, and hide the clock.
 
 R5 2026.1-dev Build 10054 - Vulkan in a window
 Vulkan programs can draw in an ordinary window. On AMD Ryzen laptops this uses the GPU, as an experimental option, with software as the fallback.
