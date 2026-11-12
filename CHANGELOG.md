@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Kernel panic when joining a WPA network: the link domain has no address module (build 10060)
+
+Stick 50 (`d6b2471ed4`, sha256 `177cbd31…`): the NetworkStatus menu no longer crashes, the network list shows, and joining "Skynet" with a password got through association. Then the kernel stopped in KDL (photo): `PANIC: vm_page_fault: unhandled page fault in kernel space at 0xb0`, thread `wpa_supplicant thread`, in `get_interface_address()` ← `datalink_is_local_address()` ← `datalink_send_routed_data()` ← `socket_send()` ← `sendto` from `wpa_supplicant` `l2_packet_send()` ← `wpa_supplicant_send_2_of_4()`: message 2 of the WPA 4-way handshake. The syslog on disk ends before the join; the KDL screen is the evidence.
+
+Cause: an R5 change in `datalink_send_routed_data()` (from the IPv6 work, in `distro/rest/.../network/stack/datalink.cpp`) also asks `datalink_is_local_address(address->domain, buffer->destination)` for every routed send. wpa_supplicant sends its EAPOL frames through the link domain (`AF_LINK`), which is registered without an address module (`register_domain(AF_LINK, "link", NULL, NULL, …)`), and the address table hashes through that module. Nothing on R5 had sent link-level frames before this round. Fix (MIT snippet): the check runs only for a domain that has an address module; IP and IPv6 keep it. The `stack` module builds; not booted yet.
+
 ## 2026-11-12 - Stick 49: deep idle and Wi-Fi come up; NetworkStatus crashed on the Wi-Fi menu (build 10060)
 
 Stick 49 (`f7797d180f`, sha256 `192f0f33…`), one boot on the 5625U, syslog in `generated/boot-5625u-49/syslog`.
