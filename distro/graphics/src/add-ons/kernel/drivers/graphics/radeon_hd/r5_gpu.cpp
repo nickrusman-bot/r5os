@@ -2039,6 +2039,9 @@ amd_selftest(void* info)
 			uint32 back = 0;
 			ok = r5_gfx9_vmid1_copy(page.va, &back, 1) == 1
 				&& back == R5_P_MARK_VALUE;
+			if (!ok)
+				dprintf("radeon_hd: mark selftest readback %08lx\n",
+					(unsigned long)back);
 		}
 	}
 	gpu_stage_release(&page);

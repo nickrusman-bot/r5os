@@ -85,6 +85,8 @@ static r5_hang sHang;
 static bool sHangTestArmed = false;
 static uint32 sHangTestJobs = 0;
 static bigtime_t sFaultLineAt = 0;
+/* The last mode-2 reset worked: the CP no longer reads old buffers. */
+static bool sCpStopped = false;
 int32 sContexts = 0;
 static r5_ctx_counter sCtxCounter;
 r5_pasid_ida sPasids;
@@ -729,10 +731,7 @@ gpu_hang_run(uint32 actions)
 				&& gR5GpuOps.reset_mode2(sInfo) == B_OK;
 			gpu_lock();
 			dprintf("radeon_hd: gpu reset mode2 %s\n", ok ? "ok" : "failed");
-			/* The hung CP may read parked buffers until the reset has
-			 * stopped it. A failed reset frees them at OFF. */
-			if (ok)
-				gpu_release_parked(~0ull);
+			sCpStopped = ok;
 			next = r5_hang_step(&sHang, ok ? R5_HANG_EV_RESET_OK
 				: R5_HANG_EV_RESET_FAILED, &sHang);
 		} else if ((actions & R5_HANG_ACT_SELFTEST) != 0) {
@@ -741,6 +740,9 @@ gpu_hang_run(uint32 actions)
 				&& gR5GpuOps.restart(sInfo) == B_OK;
 			gpu_lock();
 			if (ok) {
+				/* The CP is stopped and the hub is programmed again,
+				 * so the page-table writes of a release reach it. */
+				gpu_release_parked(~0ull);
 				/* Every job of before is gone. The fence now reads the
 				 * last sequence (restart), so nothing parked is left. */
 				for (uint32 i = 0; i < kMaxJob; i++)
@@ -756,7 +758,11 @@ gpu_hang_run(uint32 actions)
 		} else if ((actions & R5_HANG_ACT_OFF) != 0) {
 			sGpuOff = true;
 			gpu_lost(sInfo, "gpu off");
-			gpu_release_parked(~0ull);
+			/* Without a reset that worked (a second hang, a failed
+			 * reset) the CP may still reach parked buffers, so they
+			 * stay allocated until reboot. */
+			if (sCpStopped)
+				gpu_release_parked(~0ull);
 			if (gR5GpuOps.hang_release != NULL)
 				gR5GpuOps.hang_release();
 			sResetting = false;
@@ -785,6 +791,7 @@ gpu_hang(gpu_job* job, bigtime_t now)
 		(unsigned long long)job->sequence,
 		(long long)((now - job->submitted) / 1000));
 	uint32 actions = r5_hang_step(&sHang, R5_HANG_EV_HANG, &sHang);
+	sCpStopped = false;
 	if ((actions & R5_HANG_ACT_LOSE) != 0) {
 		if (sGuilty == NULL)
 			sGuilty = job->owner;

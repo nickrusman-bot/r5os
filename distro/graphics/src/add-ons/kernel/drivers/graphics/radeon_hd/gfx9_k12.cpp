@@ -863,11 +863,11 @@ k1_install()
  * reset every end-of-pipe since boot has released the semaphore once,
  * so only there the old counts are taken first and only the interrupt
  * of this K1 packet counts. */
-static void
+static bool
 run_k1(bool restart)
 {
 	if (!k1_install())
-		return;
+		return false;
 	uint32 eopBefore = 0;
 	if (restart) {
 		int32 stale = 0;
@@ -881,7 +881,7 @@ run_k1(bool restart)
 		ih_off();
 		knote("k1 fail %s irq %lu ih", sMsi ? "msi" : "legacy",
 			(unsigned long)sIrq);
-		return;
+		return false;
 	}
 	uint32 sequence = 0;
 	bool armed = r5_gfx9_k1_submit(&sequence);
@@ -895,7 +895,7 @@ run_k1(bool restart)
 			(unsigned long)sEopCount, (unsigned long)sLastClient,
 			(unsigned long)sLastSource, (unsigned long)sLastRing);
 		knote("k1_wait_us %ld", (long)elapsed);
-		return;
+		return true;
 	}
 	uint32 rptr = kread(sInfo, oss_byte(mmIH_RB_RPTR));
 	uint32 wptr = kread(sInfo, oss_byte(mmIH_RB_WPTR));
@@ -918,6 +918,7 @@ run_k1(bool restart)
 	}
 	ih_off();
 	(void)sequence;
+	return false;
 }
 
 
@@ -2205,9 +2206,7 @@ r5_gfx9_kernel_reset()
 		(unsigned long)after);
 
 	/* The header back, the command word last, as it was before. */
-	for (uint32 i = kPciHeaderDwords - 1; i >= 1; i--) {
-		if (i == 1)
-			continue;
+	for (uint32 i = kPciHeaderDwords - 1; i >= 2; i--) {
 		if (pci_dword((uint8)(i * 4)) != header[i]) {
 			gPCI->write_pci_config(sInfo->pci->bus, sInfo->pci->device,
 				sInfo->pci->function, (uint8)(i * 4), 4, header[i]);
@@ -2252,15 +2251,14 @@ r5_gfx9_kernel_restart()
 	if (ok)
 		r5_gfx9_hub_linux();
 	knote("k0 %s fence", ok ? "ok" : "fail");
-	if (ok && sStart.irq)
-		run_k1(true);
+	bool k1 = !sStart.irq || (ok && run_k1(true));
 	sK2GartMc = 0;
 	sK2GartCpu = NULL;
 	if (ok && sStart.gart)
 		run_k2();
 	sVmid1 = false;
 	publish();
-	if (!ok)
+	if (!ok || !k1)
 		return false;
 	if (sStart.gart && sK2GartMc == 0)
 		return false;
