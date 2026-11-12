@@ -95,98 +95,43 @@
 		rounded panel with a layout, not a stack of pages. A stack of pages is still Haiku's
 		<code class="inline">BCardView</code> / <code class="inline">BCardLayout</code>.</div>
 
-		<!-- BCard -->
-		<section class="entry" id="BCard">
-			<div class="entry-header"><h2>BCard</h2><span class="kind">class</span></div>
+		<!-- BAccentButton -->
+		<section class="entry" id="BAccentButton">
+			<div class="entry-header"><h2>BAccentButton</h2><span class="kind">class</span></div>
 			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;Card.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BView</td></tr>
-				<tr><th>First user</th><td>About R5</td></tr>
+				<tr><th>Declared in</th><td>&lt;AccentButton.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BButton</td></tr>
+				<tr><th>First user</th><td>Sign in, Unlock on the lock screen</td></tr>
 			</table>
-			<p>A rounded area with a group layout inside it. Use it for a heading or a summary that stands on
-			its own. Children are added through <code class="inline">GetLayout()</code>, as with a
-			<code class="inline">BGroupView</code>. A child that adopts its parent's colors, such as a
-			<code class="inline">BStringView</code>, gets the card's face.</p>
+			<p>The one main action of a window, filled with the selection blue, with a bold label one step larger
+			than body text. It is a <code class="inline">BButton</code>: the message, the target,
+			<code class="inline">MakeDefault()</code> and Enter work as usual. It is as wide as its label; for the
+			full row, set an explicit maximum width of <code class="inline">B_SIZE_UNLIMITED</code>.</p>
 
 			<figure class="stage">
-				<div class="shot sys">
-					<div class="sys-panel" style="display:flex;flex-direction:column;gap:12px">
-						<div class="sys-card m-header">
-							<img class="pebble" src="../../distro/artwork/r5-symbol.svg" width="44" height="44" alt="" />
-							<div><div class="m-title">Welcome to R5</div><div class="m-sub">Sign in to start your session</div></div>
-						</div>
-						<div class="sys-card panel-style" style="padding:12px 16px;width:380px">
-							<div class="sys-bold">Processors</div><div>2 &times; AMD Ryzen 5 5625U</div>
-						</div>
+				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:380px">
+					<div class="sys-accent-button">Sign in</div>
+					<div style="display:flex;gap:8px">
+						<div class="sys-accent-button hover" style="flex:1">Hover</div>
+						<div class="sys-accent-button pressed" style="flex:1">Pressed</div>
+						<div class="sys-accent-button disabled" style="flex:1">Disabled</div>
 					</div>
 				</div>
-				<figcaption><span><code>B_CARD_DOCUMENT</code> above, <code>B_CARD_PANEL</code> below</span><span class="badge-mockup">Mockup</span></figcaption>
+				<figcaption><span>Full width, and its states</span><span class="badge-mockup">Mockup</span></figcaption>
 			</figure>
 
 			<div class="use-grid">
-				<div class="use-box yes"><h4>Use it for</h4><p>A heading or summary in its own area: the About heading, the system information, an account summary, the Sign in header.</p></div>
-				<div class="use-box no"><h4>Not for</h4><p>A form the user fills in: that stays on the panel. A stack of pages: that is Haiku's <code class="inline">BCardView</code>.</p></div>
+				<div class="use-box yes"><h4>Use it for</h4><p>The single action the window is for: Sign in, Unlock, Install.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>Every button on a row. Restart, Cancel and the like stay plain <code class="inline">BButton</code>s.</p></div>
 			</div>
 
-			<div class="member"><div class="sig">BCard(const char* name, card_style style = B_CARD_DOCUMENT, orientation orientation = B_VERTICAL);</div>
-				<p><code class="inline">B_CARD_DOCUMENT</code> fills with the document background,
-				<code class="inline">B_CARD_PANEL</code> with the panel color one step darker. The border is one
-				pixel, the corner radius a quarter of the plain font size, the inner margin
-				<code class="inline">B_USE_BIG_SPACING</code>.</p></div>
-			<div class="member"><div class="sig">void SetStyle(card_style style);
-card_style Style() const;</div><p>Changes the fill and the color children adopt.</p></div>
+			<div class="member"><div class="sig">BAccentButton(const char* name, const char* label, BMessage* message = NULL);</div>
+				<p>38 pixels high at a 12 point font. The label is white on a dark accent and black on a light one.</p></div>
 
-<pre class="code"><span class="k">#include</span> <span class="s">&lt;Card.h&gt;</span>
-
-BAppearanceKit::BCard* card = <span class="k">new</span> BAppearanceKit::BCard(<span class="s">"info"</span>,
-	BAppearanceKit::B_CARD_PANEL);
-BLayoutBuilder::Group&lt;&gt;((BGroupLayout*)card-&gt;GetLayout())
-	.Add(<span class="k">new</span> BStringView(<span class="s">"title"</span>, <span class="s">"Processors"</span>))
-	.Add(<span class="k">new</span> BStringView(<span class="s">"value"</span>, <span class="s">"2"</span>));</pre>
-		</section>
-
-		<!-- BPageHeader -->
-		<section class="entry" id="BPageHeader">
-			<div class="entry-header"><h2>BPageHeader</h2><span class="kind">class</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;PageHeader.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BCard</td></tr>
-				<tr><th>First user</th><td>Settings; Users &amp; Accounts is the second</td></tr>
-			</table>
-			<p>The heading card at the top of a page: a small category line (the eyebrow), the title, a
-			description and an icon on the right. It draws itself and has no child views.</p>
-
-			<figure class="stage">
-				<div class="shot sys">
-					<div class="sys-panel">
-						<div class="sys-card m-pagehead">
-							<div class="lines">
-								<div class="m-eyebrow">System</div>
-								<div class="m-pagetitle">Notifications</div>
-								<div class="m-sub">Manage alerts and notifications</div>
-							</div>
-							<span class="hvif" style="width:40px;height:40px">page<br>icon</span>
-						</div>
-					</div>
-				</div>
-				<figcaption><span>Eyebrow, title, subtitle and the page icon</span><span class="badge-mockup">Mockup</span></figcaption>
-			</figure>
-
-			<div class="member"><div class="sig">BPageHeader(const char* name);</div></div>
-			<div class="member"><div class="sig">void SetEyebrow(const char* text);
-void SetTitle(const char* text);
-void SetSubtitle(const char* text);
-void SetIcon(const BBitmap* icon);</div>
-				<p>An empty eyebrow hides that line without leaving a gap. The title is bold, 8 points above the
-				bold font; the subtitle is plain at 70 percent text color. Each line ends with an ellipsis when it
-				does not fit. The icon is <code class="inline">ComposeIconSize(40)</code>; draw any wrench on it
-				before <code class="inline">SetIcon()</code>, which keeps a copy.</p></div>
-
-<pre class="code">BAppearanceKit::BPageHeader* heading = <span class="k">new</span> BAppearanceKit::BPageHeader(<span class="s">"heading"</span>);
-heading-&gt;SetEyebrow(<span class="s">"System"</span>);
-heading-&gt;SetTitle(<span class="s">"Notifications"</span>);
-heading-&gt;SetSubtitle(<span class="s">"Manage alerts and notifications"</span>);
-heading-&gt;SetIcon(icon);</pre>
+<pre class="code">BAppearanceKit::BAccentButton* signIn = <span class="k">new</span> BAppearanceKit::BAccentButton(
+	<span class="s">"signin"</span>, <span class="s">"Sign in"</span>, <span class="k">new</span> BMessage(kAttemptLogin));
+signIn-&gt;SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+window-&gt;SetDefaultButton(signIn);</pre>
 		</section>
 
 		<!-- BActionCard -->
@@ -246,6 +191,281 @@ card-&gt;SetTitle(<span class="s">"System"</span>);
 card-&gt;SetSummary(<span class="s">"Display, sound, notifications, virtual memory, and this computer."</span>);
 card-&gt;SetIcon(icon);
 card-&gt;AddTag(<span class="s">"Display"</span>);</pre>
+		</section>
+
+		<!-- BAdminLockBar -->
+		<section class="entry" id="BAdminLockBar">
+			<div class="entry-header"><h2>BAdminLockBar</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;AdminLock.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BGroupView</td></tr>
+				<tr><th>First user</th><td>Time, Screen, Network, Printers, Repositories, VirtualMemory, Users, Settings; Device Manager</td></tr>
+			</table>
+			<p>The lock for machine settings. A program runs as the signed-in person; a change that needs an
+			administrator goes to Sign in (Login), which checks the grant and makes the change. The bar is a label
+			and an Unlock button. While it is locked, the views in its window are gray; an administrator starts
+			unlocked, and one unlock opens the program for five minutes. <code class="inline">AdminLockBar</code>
+			is a typedef for this class, the name the preferences have always used.</p>
+			<p>It was compiled into each preference under GPL-3.0-or-later. Since November 2026 it is part of
+			<code class="inline">libr5ui.so</code> and MIT, so any program can link it. Login, the side that checks
+			the password, stays GPL and is reached only by messages.</p>
+
+			<figure class="stage">
+				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:380px">
+					<div style="display:flex;align-items:center;gap:8px">
+						<span class="sys-button">Revert</span>
+						<span style="flex:1"></span>
+						<span>Locked</span>
+						<span class="sys-button">Unlock&hellip;</span>
+					</div>
+				</div>
+				<figcaption><span>At the right of a preference's bottom row</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Use it for</h4><p>A window that changes the whole computer: the clock, the screen mode, network, printers, drivers.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>The person's own settings. Those need no administrator and stay unlocked.</p></div>
+			</div>
+
+			<div class="member"><div class="sig">BAdminLockBar();</div>
+				<p>Put it in the window's bottom row. It asks Login when it is attached and watches the grant.</p></div>
+			<div class="member"><div class="sig">void SetExempt(BView* view, bool exempt);</div>
+				<p>Keeps one view usable while the lock is closed, for example the person's own account card in Users.</p></div>
+			<div class="member"><div class="sig">bool AcceptsInput(BHandler* target) const;</div>
+				<p>Whether a click or key for <code class="inline">target</code> goes through now.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_query(bool&amp; administrator, bool&amp; unlocked);
+bool r5_admin_change_allowed();</div>
+				<p>Asks Login. <code class="inline">unlocked</code> is true for an administrator or while a grant runs.
+				Both are false when Login cannot be asked.</p></div>
+			<div class="member"><div class="sig">void r5_admin_prompt_unlock(BMessenger target);
+status_t r5_admin_unlock(const char* name, const char* password, BString&amp; error);
+status_t r5_admin_relock();</div>
+				<p>The unlock window, the same without a window, and ending the grant. On success the window sends
+				<code class="inline">kMsgAdminLockChanged</code> to <code class="inline">target</code>. The password is
+				not logged.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_set_clock(unsigned long seconds);
+status_t r5_admin_set_timezone(int32 offset, const char* name);
+status_t r5_admin_set_clock_gmt(bool gmt);</div>
+				<p>The clock and the time zone, for Time and Settings.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_set_driver_blocked(const char* driver, bool blocked, BString&amp; error);</div>
+				<p>Turns a packaged driver under <code class="inline">/boot/system/add-ons/kernel/</code> off or on for
+				the next start. Login refuses drivers the system needs to start. Device Manager uses it.</p></div>
+
+<pre class="code"><span class="k">#include</span> <span class="s">&lt;AdminLock.h&gt;</span>
+
+BLayoutBuilder::Group&lt;&gt;(bottomRow, B_HORIZONTAL)
+	.Add(fRevertButton)
+	.AddGlue()
+	.Add(<span class="k">new</span> BAppearanceKit::BAdminLockBar());
+
+<span class="k">bool</span> administrator, unlocked;
+<span class="k">if</span> (r5_admin_query(administrator, unlocked) == B_OK &amp;&amp; !unlocked)
+	r5_admin_prompt_unlock(BMessenger(<span class="k">this</span>));	<span class="c">// kMsgAdminLockChanged follows</span></pre>
+		</section>
+
+		<!-- BCard -->
+		<section class="entry" id="BCard">
+			<div class="entry-header"><h2>BCard</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;Card.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BView</td></tr>
+				<tr><th>First user</th><td>About R5</td></tr>
+			</table>
+			<p>A rounded area with a group layout inside it. Use it for a heading or a summary that stands on
+			its own. Children are added through <code class="inline">GetLayout()</code>, as with a
+			<code class="inline">BGroupView</code>. A child that adopts its parent's colors, such as a
+			<code class="inline">BStringView</code>, gets the card's face.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel" style="display:flex;flex-direction:column;gap:12px">
+						<div class="sys-card m-header">
+							<img class="pebble" src="../../distro/artwork/r5-symbol.svg" width="44" height="44" alt="" />
+							<div><div class="m-title">Welcome to R5</div><div class="m-sub">Sign in to start your session</div></div>
+						</div>
+						<div class="sys-card panel-style" style="padding:12px 16px;width:380px">
+							<div class="sys-bold">Processors</div><div>2 &times; AMD Ryzen 5 5625U</div>
+						</div>
+					</div>
+				</div>
+				<figcaption><span><code>B_CARD_DOCUMENT</code> above, <code>B_CARD_PANEL</code> below</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="use-grid">
+				<div class="use-box yes"><h4>Use it for</h4><p>A heading or summary in its own area: the About heading, the system information, an account summary, the Sign in header.</p></div>
+				<div class="use-box no"><h4>Not for</h4><p>A form the user fills in: that stays on the panel. A stack of pages: that is Haiku's <code class="inline">BCardView</code>.</p></div>
+			</div>
+
+			<div class="member"><div class="sig">BCard(const char* name, card_style style = B_CARD_DOCUMENT, orientation orientation = B_VERTICAL);</div>
+				<p><code class="inline">B_CARD_DOCUMENT</code> fills with the document background,
+				<code class="inline">B_CARD_PANEL</code> with the panel color one step darker. The border is one
+				pixel, the corner radius a quarter of the plain font size, the inner margin
+				<code class="inline">B_USE_BIG_SPACING</code>.</p></div>
+			<div class="member"><div class="sig">void SetStyle(card_style style);
+card_style Style() const;</div><p>Changes the fill and the color children adopt.</p></div>
+
+<pre class="code"><span class="k">#include</span> <span class="s">&lt;Card.h&gt;</span>
+
+BAppearanceKit::BCard* card = <span class="k">new</span> BAppearanceKit::BCard(<span class="s">"info"</span>,
+	BAppearanceKit::B_CARD_PANEL);
+BLayoutBuilder::Group&lt;&gt;((BGroupLayout*)card-&gt;GetLayout())
+	.Add(<span class="k">new</span> BStringView(<span class="s">"title"</span>, <span class="s">"Processors"</span>))
+	.Add(<span class="k">new</span> BStringView(<span class="s">"value"</span>, <span class="s">"2"</span>));</pre>
+		</section>
+
+		<!-- BIconView -->
+		<section class="entry" id="BIconView">
+			<div class="entry-header"><h2>BIconView</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;R5IconView.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BView</td></tr>
+				<tr><th>First user</th><td>Sign in, for the pebble and the clock</td></tr>
+			</table>
+			<p>One icon at its own pixel size. The view is exactly as large as the bitmap and never scales it.
+			The header is <code class="inline">R5IconView.h</code> because Haiku already has a private
+			<code class="inline">IconView.h</code>.</p>
+
+			<figure class="stage">
+				<div class="shot">
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><img src="../../distro/artwork/r5-symbol.svg" width="44" height="44" alt="" /><span style="font-size:11px;color:#059669;font-weight:700">Rendered at 44, drawn at 44</span></span>
+					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><canvas class="m-bad" id="stretched" width="44" height="44"></canvas><span style="font-size:11px;color:var(--redline);font-weight:700">Rendered at 40, stretched to 44</span></span>
+				</div>
+				<figcaption><span>Why it exists: a stretched bitmap gets jagged edges</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BIconView(const char* name, const BBitmap* icon = NULL);</div></div>
+			<div class="member"><div class="sig">void SetIcon(const BBitmap* icon);
+const BBitmap* Icon() const;</div><p>The view keeps a copy and changes size with it.</p></div>
+
+<pre class="code">BBitmap* pebble = r5_vector_icon_bitmap(kR5Pebble, <span class="k">sizeof</span>(kR5Pebble), 44);
+BAppearanceKit::BIconView* logo = <span class="k">new</span> BAppearanceKit::BIconView(<span class="s">"logo"</span>, pebble);
+<span class="k">delete</span> pebble;</pre>
+		</section>
+
+		<!-- BPageHeader -->
+		<section class="entry" id="BPageHeader">
+			<div class="entry-header"><h2>BPageHeader</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;PageHeader.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BCard</td></tr>
+				<tr><th>First user</th><td>Settings; Users &amp; Accounts is the second</td></tr>
+			</table>
+			<p>The heading card at the top of a page: a small category line (the eyebrow), the title, a
+			description and an icon on the right. It draws itself and has no child views.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="sys-panel">
+						<div class="sys-card m-pagehead">
+							<div class="lines">
+								<div class="m-eyebrow">System</div>
+								<div class="m-pagetitle">Notifications</div>
+								<div class="m-sub">Manage alerts and notifications</div>
+							</div>
+							<span class="hvif" style="width:40px;height:40px">page<br>icon</span>
+						</div>
+					</div>
+				</div>
+				<figcaption><span>Eyebrow, title, subtitle and the page icon</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BPageHeader(const char* name);</div></div>
+			<div class="member"><div class="sig">void SetEyebrow(const char* text);
+void SetTitle(const char* text);
+void SetSubtitle(const char* text);
+void SetIcon(const BBitmap* icon);</div>
+				<p>An empty eyebrow hides that line without leaving a gap. The title is bold, 8 points above the
+				bold font; the subtitle is plain at 70 percent text color. Each line ends with an ellipsis when it
+				does not fit. The icon is <code class="inline">ComposeIconSize(40)</code>; draw any wrench on it
+				before <code class="inline">SetIcon()</code>, which keeps a copy.</p></div>
+
+<pre class="code">BAppearanceKit::BPageHeader* heading = <span class="k">new</span> BAppearanceKit::BPageHeader(<span class="s">"heading"</span>);
+heading-&gt;SetEyebrow(<span class="s">"System"</span>);
+heading-&gt;SetTitle(<span class="s">"Notifications"</span>);
+heading-&gt;SetSubtitle(<span class="s">"Manage alerts and notifications"</span>);
+heading-&gt;SetIcon(icon);</pre>
+		</section>
+
+		<!-- BPasswordControl -->
+		<section class="entry" id="BPasswordControl">
+			<div class="entry-header"><h2>BPasswordControl</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;PasswordControl.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BControl</td></tr>
+				<tr><th>First user</th><td>Sign in and the lock screen</td></tr>
+			</table>
+			<p>A password field with the eye inside it. The open eye shows the password, the crossed-out eye
+			hides it again. Enter invokes the control's message, or the window's default button. The password is
+			never archived.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="m-stack">
+						<div><div class="m-label">Password</div><div class="sys-field"><span class="placeholder">Enter password</span><svg data-glyph="eye" stroke="#7a7a7a"></svg></div></div>
+						<div><div class="sys-field focus"><span class="text m-dots">&bull;&bull;&bull;</span><svg data-glyph="eye" stroke="#7a7a7a"></svg></div></div>
+						<div><div class="sys-field focus"><span class="text">abc</span><svg data-glyph="eye-off" stroke="#7a7a7a"></svg></div></div>
+					</div>
+				</div>
+				<figcaption><span>Empty with its placeholder, typed with focus, and shown with the eye</span><span class="badge-mockup">Mockup, after the QEMU screenshots</span></figcaption>
+			</figure>
+
+			<div class="member"><div class="sig">BPasswordControl(const char* name, const char* label, const char* text = NULL,
+	BMessage* message = NULL);</div></div>
+			<div class="member"><div class="sig">const char* Text() const;
+void SetText(const char* text);
+BTextView* TextView() const;</div><p>Clear the field after every attempt with <code class="inline">SetText("")</code>.</p></div>
+			<div class="member"><div class="sig">void SetPasswordRevealed(bool revealed);
+bool IsPasswordRevealed() const;</div><p>The same as a click on the eye.</p></div>
+			<div class="member"><div class="sig">void SetPlaceholder(const char* text);
+const char* Placeholder() const;</div><p>Gray text while the field is empty.</p></div>
+
+<pre class="code">BAppearanceKit::BPasswordControl* password = <span class="k">new</span> BAppearanceKit::BPasswordControl(
+	<span class="s">"password"</span>, <span class="s">""</span>, <span class="s">""</span>, <span class="k">new</span> BMessage(kAttemptLogin));
+password-&gt;SetPlaceholder(<span class="s">"Enter password"</span>);</pre>
+		</section>
+
+		<!-- BScreenArrangement -->
+		<section class="entry" id="BScreenArrangement">
+			<div class="entry-header"><h2>BScreenArrangement</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;ScreenArrangement.h&gt;</td></tr>
+				<tr><th>Derived from</th><td>BView, BInvoker</td></tr>
+				<tr><th>First user</th><td>Display; Desktop and Deskbar next</td></tr>
+			</table>
+			<p>One or more screens in their places on the desk, each drawn with
+			<a href="#functions"><code>r5_screen_draw()</code></a>. A click, Space or Enter sends the message with
+			<code class="inline">int32 "be:screen"</code>. With dragging on, a released screen snaps against its
+			neighbor and the modification message is sent. The view does not change the screens itself.</p>
+
+			<figure class="stage">
+				<div class="shot sys">
+					<div class="m-desk">
+						<div class="m-screen selected" style="left:70px;top:28px;width:150px;height:96px"><div class="glass"><span class="deskbar"></span><span class="num">1</span></div><div class="name">Built-in display</div></div>
+						<div class="m-screen" style="left:226px;top:44px;width:120px;height:76px"><div class="glass"><span class="num">2</span></div><div class="name">DELL U2419H</div></div>
+					</div>
+				</div>
+				<figcaption><span>Two screens, the first selected and holding the Deskbar</span><span class="badge-mockup">Mockup</span></figcaption>
+			</figure>
+
+<pre class="code"><span class="k">struct</span> screen_tile {
+	int32		id;			<span class="c">// the caller's id for this screen</span>
+	BRect		frame;		<span class="c">// in desktop coordinates</span>
+	<span class="k">const char</span>*	name;		<span class="c">// copied by SetScreens()</span>
+	<span class="k">bool</span>		main;		<span class="c">// the Deskbar is on this screen</span>
+	<span class="k">bool</span>		enabled;	<span class="c">// false draws it dimmed</span>
+};</pre>
+
+			<div class="member"><div class="sig">BScreenArrangement(const char* name, BMessage* selectionMessage);</div></div>
+			<div class="member"><div class="sig">status_t SetScreens(const screen_tile* tiles, int32 count);
+int32 CountScreens() const;
+bool ScreenAt(int32 index, screen_tile* tile) const;</div>
+				<p>The tiles are copied. One screen is centered and keeps its shape; several are scaled together
+				so the gaps stay.</p></div>
+			<div class="member"><div class="sig">void SetSelected(int32 id);
+int32 Selected() const;</div><p>-1 when none is selected.</p></div>
+			<div class="member"><div class="sig">void SetDraggable(bool draggable);
+void SetModificationMessage(BMessage* message);</div><p>Dragging needs two screens or more. The message is adopted.</p></div>
+			<div class="member"><div class="sig">void SetCaption(const char* caption);</div><p>A line in the lower left; NULL hides it.</p></div>
 		</section>
 
 		<!-- BSidebar -->
@@ -328,50 +548,6 @@ const char* Id() const;</div></div>
 home-&gt;SetEmphasized(<span class="k">true</span>);</pre>
 		</section>
 
-		<!-- BScreenArrangement -->
-		<section class="entry" id="BScreenArrangement">
-			<div class="entry-header"><h2>BScreenArrangement</h2><span class="kind">class</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;ScreenArrangement.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BView, BInvoker</td></tr>
-				<tr><th>First user</th><td>Display; Desktop and Deskbar next</td></tr>
-			</table>
-			<p>One or more screens in their places on the desk, each drawn with
-			<a href="#functions"><code>r5_screen_draw()</code></a>. A click, Space or Enter sends the message with
-			<code class="inline">int32 "be:screen"</code>. With dragging on, a released screen snaps against its
-			neighbor and the modification message is sent. The view does not change the screens itself.</p>
-
-			<figure class="stage">
-				<div class="shot sys">
-					<div class="m-desk">
-						<div class="m-screen selected" style="left:70px;top:28px;width:150px;height:96px"><div class="glass"><span class="deskbar"></span><span class="num">1</span></div><div class="name">Built-in display</div></div>
-						<div class="m-screen" style="left:226px;top:44px;width:120px;height:76px"><div class="glass"><span class="num">2</span></div><div class="name">DELL U2419H</div></div>
-					</div>
-				</div>
-				<figcaption><span>Two screens, the first selected and holding the Deskbar</span><span class="badge-mockup">Mockup</span></figcaption>
-			</figure>
-
-<pre class="code"><span class="k">struct</span> screen_tile {
-	int32		id;			<span class="c">// the caller's id for this screen</span>
-	BRect		frame;		<span class="c">// in desktop coordinates</span>
-	<span class="k">const char</span>*	name;		<span class="c">// copied by SetScreens()</span>
-	<span class="k">bool</span>		main;		<span class="c">// the Deskbar is on this screen</span>
-	<span class="k">bool</span>		enabled;	<span class="c">// false draws it dimmed</span>
-};</pre>
-
-			<div class="member"><div class="sig">BScreenArrangement(const char* name, BMessage* selectionMessage);</div></div>
-			<div class="member"><div class="sig">status_t SetScreens(const screen_tile* tiles, int32 count);
-int32 CountScreens() const;
-bool ScreenAt(int32 index, screen_tile* tile) const;</div>
-				<p>The tiles are copied. One screen is centered and keeps its shape; several are scaled together
-				so the gaps stay.</p></div>
-			<div class="member"><div class="sig">void SetSelected(int32 id);
-int32 Selected() const;</div><p>-1 when none is selected.</p></div>
-			<div class="member"><div class="sig">void SetDraggable(bool draggable);
-void SetModificationMessage(BMessage* message);</div><p>Dragging needs two screens or more. The message is adopted.</p></div>
-			<div class="member"><div class="sig">void SetCaption(const char* caption);</div><p>A line in the lower left; NULL hides it.</p></div>
-		</section>
-
 		<!-- BUserCard -->
 		<section class="entry" id="BUserCard">
 			<div class="entry-header"><h2>BUserCard</h2><span class="kind">class</span></div>
@@ -439,182 +615,6 @@ void SetAvatar(const BBitmap* avatar);</div></div>
 			<div class="member"><div class="sig">const char* Login() const;
 const char* DisplayName() const;
 const char* Role() const;</div></div>
-		</section>
-
-		<!-- BPasswordControl -->
-		<section class="entry" id="BPasswordControl">
-			<div class="entry-header"><h2>BPasswordControl</h2><span class="kind">class</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;PasswordControl.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BControl</td></tr>
-				<tr><th>First user</th><td>Sign in and the lock screen</td></tr>
-			</table>
-			<p>A password field with the eye inside it. The open eye shows the password, the crossed-out eye
-			hides it again. Enter invokes the control's message, or the window's default button. The password is
-			never archived.</p>
-
-			<figure class="stage">
-				<div class="shot sys">
-					<div class="m-stack">
-						<div><div class="m-label">Password</div><div class="sys-field"><span class="placeholder">Enter password</span><svg data-glyph="eye" stroke="#7a7a7a"></svg></div></div>
-						<div><div class="sys-field focus"><span class="text m-dots">&bull;&bull;&bull;</span><svg data-glyph="eye" stroke="#7a7a7a"></svg></div></div>
-						<div><div class="sys-field focus"><span class="text">abc</span><svg data-glyph="eye-off" stroke="#7a7a7a"></svg></div></div>
-					</div>
-				</div>
-				<figcaption><span>Empty with its placeholder, typed with focus, and shown with the eye</span><span class="badge-mockup">Mockup, after the QEMU screenshots</span></figcaption>
-			</figure>
-
-			<div class="member"><div class="sig">BPasswordControl(const char* name, const char* label, const char* text = NULL,
-	BMessage* message = NULL);</div></div>
-			<div class="member"><div class="sig">const char* Text() const;
-void SetText(const char* text);
-BTextView* TextView() const;</div><p>Clear the field after every attempt with <code class="inline">SetText("")</code>.</p></div>
-			<div class="member"><div class="sig">void SetPasswordRevealed(bool revealed);
-bool IsPasswordRevealed() const;</div><p>The same as a click on the eye.</p></div>
-			<div class="member"><div class="sig">void SetPlaceholder(const char* text);
-const char* Placeholder() const;</div><p>Gray text while the field is empty.</p></div>
-
-<pre class="code">BAppearanceKit::BPasswordControl* password = <span class="k">new</span> BAppearanceKit::BPasswordControl(
-	<span class="s">"password"</span>, <span class="s">""</span>, <span class="s">""</span>, <span class="k">new</span> BMessage(kAttemptLogin));
-password-&gt;SetPlaceholder(<span class="s">"Enter password"</span>);</pre>
-		</section>
-
-		<!-- BAccentButton -->
-		<section class="entry" id="BAccentButton">
-			<div class="entry-header"><h2>BAccentButton</h2><span class="kind">class</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;AccentButton.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BButton</td></tr>
-				<tr><th>First user</th><td>Sign in, Unlock on the lock screen</td></tr>
-			</table>
-			<p>The one main action of a window, filled with the selection blue, with a bold label one step larger
-			than body text. It is a <code class="inline">BButton</code>: the message, the target,
-			<code class="inline">MakeDefault()</code> and Enter work as usual. It is as wide as its label; for the
-			full row, set an explicit maximum width of <code class="inline">B_SIZE_UNLIMITED</code>.</p>
-
-			<figure class="stage">
-				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:380px">
-					<div class="sys-accent-button">Sign in</div>
-					<div style="display:flex;gap:8px">
-						<div class="sys-accent-button hover" style="flex:1">Hover</div>
-						<div class="sys-accent-button pressed" style="flex:1">Pressed</div>
-						<div class="sys-accent-button disabled" style="flex:1">Disabled</div>
-					</div>
-				</div>
-				<figcaption><span>Full width, and its states</span><span class="badge-mockup">Mockup</span></figcaption>
-			</figure>
-
-			<div class="use-grid">
-				<div class="use-box yes"><h4>Use it for</h4><p>The single action the window is for: Sign in, Unlock, Install.</p></div>
-				<div class="use-box no"><h4>Not for</h4><p>Every button on a row. Restart, Cancel and the like stay plain <code class="inline">BButton</code>s.</p></div>
-			</div>
-
-			<div class="member"><div class="sig">BAccentButton(const char* name, const char* label, BMessage* message = NULL);</div>
-				<p>38 pixels high at a 12 point font. The label is white on a dark accent and black on a light one.</p></div>
-
-<pre class="code">BAppearanceKit::BAccentButton* signIn = <span class="k">new</span> BAppearanceKit::BAccentButton(
-	<span class="s">"signin"</span>, <span class="s">"Sign in"</span>, <span class="k">new</span> BMessage(kAttemptLogin));
-signIn-&gt;SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
-window-&gt;SetDefaultButton(signIn);</pre>
-		</section>
-
-		<!-- BIconView -->
-		<section class="entry" id="BIconView">
-			<div class="entry-header"><h2>BIconView</h2><span class="kind">class</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;R5IconView.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BView</td></tr>
-				<tr><th>First user</th><td>Sign in, for the pebble and the clock</td></tr>
-			</table>
-			<p>One icon at its own pixel size. The view is exactly as large as the bitmap and never scales it.
-			The header is <code class="inline">R5IconView.h</code> because Haiku already has a private
-			<code class="inline">IconView.h</code>.</p>
-
-			<figure class="stage">
-				<div class="shot">
-					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><img src="../../distro/artwork/r5-symbol.svg" width="44" height="44" alt="" /><span style="font-size:11px;color:#059669;font-weight:700">Rendered at 44, drawn at 44</span></span>
-					<span style="display:flex;flex-direction:column;align-items:center;gap:8px"><canvas class="m-bad" id="stretched" width="44" height="44"></canvas><span style="font-size:11px;color:var(--redline);font-weight:700">Rendered at 40, stretched to 44</span></span>
-				</div>
-				<figcaption><span>Why it exists: a stretched bitmap gets jagged edges</span><span class="badge-mockup">Mockup</span></figcaption>
-			</figure>
-
-			<div class="member"><div class="sig">BIconView(const char* name, const BBitmap* icon = NULL);</div></div>
-			<div class="member"><div class="sig">void SetIcon(const BBitmap* icon);
-const BBitmap* Icon() const;</div><p>The view keeps a copy and changes size with it.</p></div>
-
-<pre class="code">BBitmap* pebble = r5_vector_icon_bitmap(kR5Pebble, <span class="k">sizeof</span>(kR5Pebble), 44);
-BAppearanceKit::BIconView* logo = <span class="k">new</span> BAppearanceKit::BIconView(<span class="s">"logo"</span>, pebble);
-<span class="k">delete</span> pebble;</pre>
-		</section>
-
-		<!-- BAdminLockBar -->
-		<section class="entry" id="BAdminLockBar">
-			<div class="entry-header"><h2>BAdminLockBar</h2><span class="kind">class</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;AdminLock.h&gt;</td></tr>
-				<tr><th>Derived from</th><td>BGroupView</td></tr>
-				<tr><th>First user</th><td>Time, Screen, Network, Printers, Repositories, VirtualMemory, Users, Settings; Device Manager</td></tr>
-			</table>
-			<p>The lock for machine settings. A program runs as the signed-in person; a change that needs an
-			administrator goes to Sign in (Login), which checks the grant and makes the change. The bar is a label
-			and an Unlock button. While it is locked, the views in its window are gray; an administrator starts
-			unlocked, and one unlock opens the program for five minutes. <code class="inline">AdminLockBar</code>
-			is a typedef for this class, the name the preferences have always used.</p>
-			<p>It was compiled into each preference under GPL-3.0-or-later. Since November 2026 it is part of
-			<code class="inline">libr5ui.so</code> and MIT, so any program can link it. Login, the side that checks
-			the password, stays GPL and is reached only by messages.</p>
-
-			<figure class="stage">
-				<div class="shot sys" style="flex-direction:column;align-items:stretch;width:380px">
-					<div style="display:flex;align-items:center;gap:8px">
-						<span class="sys-button">Revert</span>
-						<span style="flex:1"></span>
-						<span>Locked</span>
-						<span class="sys-button">Unlock&hellip;</span>
-					</div>
-				</div>
-				<figcaption><span>At the right of a preference's bottom row</span><span class="badge-mockup">Mockup</span></figcaption>
-			</figure>
-
-			<div class="use-grid">
-				<div class="use-box yes"><h4>Use it for</h4><p>A window that changes the whole computer: the clock, the screen mode, network, printers, drivers.</p></div>
-				<div class="use-box no"><h4>Not for</h4><p>The person's own settings. Those need no administrator and stay unlocked.</p></div>
-			</div>
-
-			<div class="member"><div class="sig">BAdminLockBar();</div>
-				<p>Put it in the window's bottom row. It asks Login when it is attached and watches the grant.</p></div>
-			<div class="member"><div class="sig">void SetExempt(BView* view, bool exempt);</div>
-				<p>Keeps one view usable while the lock is closed, for example the person's own account card in Users.</p></div>
-			<div class="member"><div class="sig">bool AcceptsInput(BHandler* target) const;</div>
-				<p>Whether a click or key for <code class="inline">target</code> goes through now.</p></div>
-			<div class="member"><div class="sig">status_t r5_admin_query(bool&amp; administrator, bool&amp; unlocked);
-bool r5_admin_change_allowed();</div>
-				<p>Asks Login. <code class="inline">unlocked</code> is true for an administrator or while a grant runs.
-				Both are false when Login cannot be asked.</p></div>
-			<div class="member"><div class="sig">void r5_admin_prompt_unlock(BMessenger target);
-status_t r5_admin_unlock(const char* name, const char* password, BString&amp; error);
-status_t r5_admin_relock();</div>
-				<p>The unlock window, the same without a window, and ending the grant. On success the window sends
-				<code class="inline">kMsgAdminLockChanged</code> to <code class="inline">target</code>. The password is
-				not logged.</p></div>
-			<div class="member"><div class="sig">status_t r5_admin_set_clock(unsigned long seconds);
-status_t r5_admin_set_timezone(int32 offset, const char* name);
-status_t r5_admin_set_clock_gmt(bool gmt);</div>
-				<p>The clock and the time zone, for Time and Settings.</p></div>
-			<div class="member"><div class="sig">status_t r5_admin_set_driver_blocked(const char* driver, bool blocked, BString&amp; error);</div>
-				<p>Turns a packaged driver under <code class="inline">/boot/system/add-ons/kernel/</code> off or on for
-				the next start. Login refuses drivers the system needs to start. Device Manager uses it.</p></div>
-
-<pre class="code"><span class="k">#include</span> <span class="s">&lt;AdminLock.h&gt;</span>
-
-BLayoutBuilder::Group&lt;&gt;(bottomRow, B_HORIZONTAL)
-	.Add(fRevertButton)
-	.AddGlue()
-	.Add(<span class="k">new</span> BAppearanceKit::BAdminLockBar());
-
-<span class="k">bool</span> administrator, unlocked;
-<span class="k">if</span> (r5_admin_query(administrator, unlocked) == B_OK &amp;&amp; !unlocked)
-	r5_admin_prompt_unlock(BMessenger(<span class="k">this</span>));	<span class="c">// kMsgAdminLockChanged follows</span></pre>
 		</section>
 
 		<!-- Functions -->

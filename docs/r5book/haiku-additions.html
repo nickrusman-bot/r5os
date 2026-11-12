@@ -29,6 +29,32 @@
 		<div class="note"><strong>Check before you call.</strong> These calls are not in Haiku. A program that should
 		also run on Haiku keeps its own fallback, or builds this part only for R5.</div>
 
+		<!-- BFormattingConventions -->
+		<section class="entry" id="BFormattingConventions">
+			<div class="entry-header"><h2>BFormattingConventions::CoerceFormatForClock()</h2><span class="kind">Locale Kit</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;FormattingConventions.h&gt;</td></tr>
+				<tr><th>Library</th><td>libbe.so</td></tr>
+				<tr><th>Haiku Book</th><td>BFormattingConventions</td></tr>
+			</table>
+
+			<div class="member"><div class="sig">void CoerceFormatForClock(BString&amp; outFormat) const;</div>
+				<p>Rewrites a time pattern so it follows the user's 12- or 24-hour choice. With the 24-hour clock it also
+				rewrites a 12-hour pattern that has no AM/PM marker. With the 12-hour clock it adds AM/PM only when the
+				pattern has none.</p></div>
+
+			<p>Use it when you build or store your own ICU time pattern. A pattern you store yourself is not adjusted
+			later, so a clock that saved an English pattern kept showing 12 hours after the user chose 24. Haiku's
+			<code class="inline">GetTimeFormat()</code> already applies the choice; this call does the same for your own
+			pattern.</p>
+
+<pre class="code">BFormattingConventions conventions;
+BLocale::Default()-&gt;GetFormattingConventions(&amp;conventions);
+
+BString pattern(<span class="s">"h:mm"</span>);
+conventions.CoerceFormatForClock(pattern);	<span class="c">// a 24-hour pattern when the user chose 24 hours</span></pre>
+		</section>
+
 		<!-- BLocaleRoster -->
 		<section class="entry" id="BLocaleRoster">
 			<div class="entry-header"><h2>BLocaleRoster::ApplySettings()</h2><span class="kind">Locale Kit</span></div>
@@ -59,32 +85,6 @@ MyApp::MessageReceived(BMessage* message)
 	}
 	BApplication::MessageReceived(message);
 }</pre>
-		</section>
-
-		<!-- BFormattingConventions -->
-		<section class="entry" id="BFormattingConventions">
-			<div class="entry-header"><h2>BFormattingConventions::CoerceFormatForClock()</h2><span class="kind">Locale Kit</span></div>
-			<table class="facts">
-				<tr><th>Declared in</th><td>&lt;FormattingConventions.h&gt;</td></tr>
-				<tr><th>Library</th><td>libbe.so</td></tr>
-				<tr><th>Haiku Book</th><td>BFormattingConventions</td></tr>
-			</table>
-
-			<div class="member"><div class="sig">void CoerceFormatForClock(BString&amp; outFormat) const;</div>
-				<p>Rewrites a time pattern so it follows the user's 12- or 24-hour choice. With the 24-hour clock it also
-				rewrites a 12-hour pattern that has no AM/PM marker. With the 12-hour clock it adds AM/PM only when the
-				pattern has none.</p></div>
-
-			<p>Use it when you build or store your own ICU time pattern. A pattern you store yourself is not adjusted
-			later, so a clock that saved an English pattern kept showing 12 hours after the user chose 24. Haiku's
-			<code class="inline">GetTimeFormat()</code> already applies the choice; this call does the same for your own
-			pattern.</p>
-
-<pre class="code">BFormattingConventions conventions;
-BLocale::Default()-&gt;GetFormattingConventions(&amp;conventions);
-
-BString pattern(<span class="s">"h:mm"</span>);
-conventions.CoerceFormatForClock(pattern);	<span class="c">// a 24-hour pattern when the user chose 24 hours</span></pre>
 		</section>
 	</main>
 </div>
