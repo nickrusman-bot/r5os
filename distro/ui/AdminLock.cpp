@@ -1,13 +1,14 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
- * Lock for machine settings. See AdminLock.h.
+ * SPDX-License-Identifier: MIT
+ * Relicensed from GPL-3.0-or-later to MIT by the rights holder in November 2026.
+ * Lock for machine settings, part of libr5ui.so. See AdminLock.h.
  */
 
 
 #include "AdminLock.h"
 
-#include "AccountAdmin.h"
+#include "AdminLockProtocol.h"
 
 #include <Alert.h>
 #include <Button.h>
@@ -24,6 +25,9 @@
 
 #include <string.h>
 #include <unistd.h>
+
+
+using BAppearanceKit::BAdminLockBar;
 
 
 static const uint32 kMsgPressUnlock = 'r5ap';
@@ -90,7 +94,7 @@ private:
 static status_t
 ask_login(BMessage& request, BMessage& reply, BString& error)
 {
-	BMessenger login("application/x-vnd.Haiku-Login");
+	BMessenger login(kAdminLockLoginSignature);
 	if (!login.IsValid()) {
 		error = "Sign in must be running.";
 		return B_ERROR;
@@ -204,6 +208,17 @@ r5_admin_set_clock_gmt(bool gmt)
 }
 
 
+status_t
+r5_admin_set_driver_blocked(const char* driver, bool blocked, BString& error)
+{
+	BMessage request(kMsgAdminSetDriverBlocked);
+	request.AddString("driver", driver != NULL ? driver : "");
+	request.AddBool("blocked", blocked);
+	BMessage reply;
+	return ask_login(request, reply, error);
+}
+
+
 class UnlockWindow : public BWindow {
 public:
 	UnlockWindow(BMessenger target)
@@ -277,7 +292,7 @@ r5_admin_prompt_unlock(BMessenger target)
 }
 
 
-AdminLockBar::AdminLockBar()
+BAdminLockBar::BAdminLockBar()
 	:
 	BGroupView(B_HORIZONTAL, B_USE_SMALL_SPACING),
 	fLabel(NULL),
@@ -299,7 +314,7 @@ AdminLockBar::AdminLockBar()
 }
 
 
-AdminLockBar::~AdminLockBar()
+BAdminLockBar::~BAdminLockBar()
 {
 	delete fRunner;
 	delete fWatch;
@@ -310,7 +325,7 @@ AdminLockBar::~AdminLockBar()
 
 
 void
-AdminLockBar::AttachedToWindow()
+BAdminLockBar::AttachedToWindow()
 {
 	BGroupView::AttachedToWindow();
 	fButton->SetTarget(this);
@@ -325,7 +340,7 @@ AdminLockBar::AttachedToWindow()
 
 
 void
-AdminLockBar::DetachedFromWindow()
+BAdminLockBar::DetachedFromWindow()
 {
 	if (fFilter != NULL)
 		Window()->RemoveCommonFilter(fFilter);
@@ -334,7 +349,7 @@ AdminLockBar::DetachedFromWindow()
 
 
 bool
-AdminLockBar::AcceptsInput(BHandler* target) const
+BAdminLockBar::AcceptsInput(BHandler* target) const
 {
 	if (fAdmin || fUnlocked)
 		return true;
@@ -356,7 +371,7 @@ AdminLockBar::AcceptsInput(BHandler* target) const
 
 
 void
-AdminLockBar::MessageReceived(BMessage* message)
+BAdminLockBar::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case kMsgPressUnlock:
@@ -380,7 +395,7 @@ AdminLockBar::MessageReceived(BMessage* message)
 
 
 void
-AdminLockBar::SetExempt(BView* view, bool exempt)
+BAdminLockBar::SetExempt(BView* view, bool exempt)
 {
 	if (view == NULL)
 		return;
@@ -396,7 +411,7 @@ AdminLockBar::SetExempt(BView* view, bool exempt)
 
 
 bool
-AdminLockBar::_IsExempt(BView* view) const
+BAdminLockBar::_IsExempt(BView* view) const
 {
 	for (BView* item = view; item != NULL; item = item->Parent()) {
 		if (fExempt.HasItem(item))
@@ -407,7 +422,7 @@ AdminLockBar::_IsExempt(BView* view) const
 
 
 void
-AdminLockBar::_Reload()
+BAdminLockBar::_Reload()
 {
 	bool was = fUnlocked;
 	bool wasAdmin = fAdmin;
@@ -441,7 +456,7 @@ AdminLockBar::_Reload()
 
 
 void
-AdminLockBar::_Prune()
+BAdminLockBar::_Prune()
 {
 	BWindow* window = Window();
 	for (int32 i = fForced.CountItems() - 1; i >= 0; i--) {
@@ -463,7 +478,7 @@ AdminLockBar::_Prune()
 
 
 void
-AdminLockBar::_DisableTree(BView* view)
+BAdminLockBar::_DisableTree(BView* view)
 {
 	if (view == NULL || is_under(view, this) || _IsExempt(view))
 		return;
@@ -482,7 +497,7 @@ AdminLockBar::_DisableTree(BView* view)
 
 
 void
-AdminLockBar::_SyncControls()
+BAdminLockBar::_SyncControls()
 {
 	if (fSyncing || Window() == NULL)
 		return;

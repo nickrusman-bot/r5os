@@ -36,8 +36,6 @@ def copy_sources() -> None:
     for name in (
         "AccountAdmin.cpp",
         "AccountAdmin.h",
-        "AdminLock.cpp",
-        "AdminLock.h",
         "HomeLock.cpp",
         "HomeLock.h",
         "Users.cpp",
@@ -84,13 +82,16 @@ def patch_jams() -> None:
     )
 
 
-def install_lock(folder: str) -> None:
+def remove_old_lock(folder: str) -> None:
+    # The administrator lock is in libr5ui.so now (public AdminLock.h). The
+    # preference Jamfiles are native in distro/rest and link libr5ui.so.
+    # Remove the copies older runs put here, or they would shadow the header.
     dest = HAIKU / "src" / "preferences" / folder
-    dest.mkdir(parents=True, exist_ok=True)
     for name in ("AdminLock.cpp", "AdminLock.h", "AccountAdmin.h"):
-        shutil.copy2(SRC / name, dest / name)
-        (dest / name).touch()
-        print(f"copied {name} -> {dest}")
+        old = dest / name
+        if old.is_file():
+            old.unlink()
+            print(f"removed old {name} -> {dest}")
 
 
 def retarget_lock(path: pathlib.Path, current: str, desired: str, original: str, tag: str) -> None:
@@ -206,31 +207,15 @@ def patch_machine_paths() -> None:
 
 
 def patch_locks() -> None:
-    install_lock("time")
-    install_lock("screen")
-    install_lock("network")
-    install_lock("printers")
-    install_lock("repositories")
-    install_lock("virtualmemory")
-
-    replace_once(
-        HAIKU / "src/preferences/time/Jamfile",
-        "	ZoneView.cpp\n	;",
-        "	ZoneView.cpp\n	AdminLock.cpp\n	;",
-        "time AdminLock",
-    )
-    replace_once(
-        HAIKU / "src/preferences/screen/Jamfile",
-        "	Utility.cpp\n	: be",
-        "	Utility.cpp\n	AdminLock.cpp\n	: be",
-        "screen AdminLock",
-    )
-    replace_once(
-        HAIKU / "src/preferences/network/Jamfile",
-        "	WirelessNetworkMenuItem.cpp\n\n	: <src!bin!network!ifconfig>MediaTypes.o",
-        "	WirelessNetworkMenuItem.cpp\n	AdminLock.cpp\n\n	: <src!bin!network!ifconfig>MediaTypes.o",
-        "network AdminLock",
-    )
+    for folder in ("time", "screen", "network", "printers", "repositories",
+            "virtualmemory"):
+        remove_old_lock(folder)
+    # Users keeps AccountAdmin.h (copied above); only the lock copies go.
+    for name in ("AdminLock.cpp", "AdminLock.h"):
+        old = HAIKU / "src" / "preferences" / "users" / name
+        if old.is_file():
+            old.unlink()
+            print(f"removed old {name} -> users")
 
     for name in ("BaseView.cpp", "DateTimeView.cpp", "ntp.cpp", "ZoneView.cpp", "TimeWindow.cpp"):
         path = HAIKU / "src/preferences/time" / name
@@ -523,12 +508,6 @@ r5_screen_change_allowed(team_id team)
     )
 
     replace_once(
-        HAIKU / "src/preferences/printers/Jamfile",
-        "\tGlobals.cpp\n\t:\n\tbe\n",
-        "\tGlobals.cpp\n\tAdminLock.cpp\n\t:\n\tbe\n",
-        "printers AdminLock",
-    )
-    replace_once(
         HAIKU / "src/preferences/printers/PrintersWindow.cpp",
         '#include "PrintersWindow.h"\n',
         '#include "PrintersWindow.h"\n\n#include "AdminLock.h"\n',
@@ -545,15 +524,6 @@ r5_screen_change_allowed(team_id team)
         "printers lock bar",
     )
 
-    replace_once(
-        HAIKU / "src/preferences/repositories/Jamfile",
-        "\tTaskTimer.cpp\n"
-        "\t: be package libcolumnlistview.a [ TargetLibstdc++ ] localestub\n",
-        "\tTaskTimer.cpp\n"
-        "\tAdminLock.cpp\n"
-        "\t: be package libcolumnlistview.a [ TargetLibstdc++ ] localestub\n",
-        "repositories AdminLock",
-    )
     replace_once(
         HAIKU / "src/preferences/repositories/RepositoriesWindow.cpp",
         '#include "RepositoriesWindow.h"\n',
@@ -575,15 +545,6 @@ r5_screen_change_allowed(team_id team)
         "repositories lock bar",
     )
 
-    replace_once(
-        HAIKU / "src/preferences/virtualmemory/Jamfile",
-        "\tSettings.cpp\n"
-        "\t$(DRIVER_SETTINGS)\n",
-        "\tSettings.cpp\n"
-        "\tAdminLock.cpp\n"
-        "\t$(DRIVER_SETTINGS)\n",
-        "virtualmemory AdminLock",
-    )
     replace_once(
         HAIKU / "src/preferences/virtualmemory/SettingsWindow.cpp",
         '#include "SettingsWindow.h"\n',

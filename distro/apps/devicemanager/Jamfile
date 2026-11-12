@@ -1,0 +1,133 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+#
+# Device Manager. Distributed under the terms of the MIT License.
+# The header rules below are copied from src/apps/devices/Jamfile (Haiku, MIT).
+
+SubDir HAIKU_TOP src apps devicemanager ;
+
+UsePrivateHeaders shared ;
+UsePrivateHeaders interface ;
+UsePrivateHeaders app ;
+UsePrivateHeaders storage ;
+UsePrivateKernelHeaders ;
+UsePrivateSystemHeaders ;
+
+# Haiku's Devices code is built from its own folder, unchanged.
+local devicesDir = [ FDirName $(HAIKU_TOP) src apps devices ] ;
+SubDirHdrs $(devicesDir) ;
+SEARCH_SOURCE += $(devicesDir) ;
+
+rule ISAPnPHeaderGen
+{
+	SEARCH on $(2) = $(SEARCH_SOURCE) ;
+	SEARCH on $(3) = $(SEARCH_SOURCE) ;
+
+	Depends $(1) : $(2) $(3) ;
+	MakeLocateArch $(<) ;
+	ISAPnPHeaderGen1 $(1) : $(2) $(3) ;
+	LocalClean clean : $(<) ;
+}
+
+actions ISAPnPHeaderGen1
+{
+	grep '^PNP[[:xdigit:]][[:xdigit:]][[:xdigit:]][[:xdigit:]]'  $(2[1]) \
+| $(HOST_AWK) -f $(2[2]) > $(1) ;
+}
+
+ISAPnPHeaderGen [ FGristFiles isapnpids.h ] : isapnp_devids.txt : devlist2h.awk ;
+
+rule PCIHeaderGen
+{
+	SEARCH on $(3) = $(SEARCH_SOURCE) ;
+
+	Depends $(1) : $(2) $(3) ;
+	MakeLocateArch $(<) ;
+	PCIHeaderGen1 $(1) : $(2) $(3) ;
+	LocalClean clean : $(<) ;
+}
+
+actions PCIHeaderGen1
+{
+	$(HOST_AWK) -v HEADERFILE=$(1) -f $(2[2]) $(2[1])
+}
+
+local pciidsFile = pci.ids ;
+SEARCH on $(pciidsFile) = [ FDirName $(HAIKU_TOP) src data ids ] ;
+
+PCIHeaderGen [ FGristFiles pcihdr.h ] : $(pciidsFile) : pci-header.awk ;
+
+rule USBHeaderGen
+{
+	SEARCH on $(3) = $(SEARCH_SOURCE) ;
+
+	Depends $(1) : $(2) $(3) ;
+	MakeLocateArch $(<) ;
+	USBHeaderGen1 $(1) : $(2) $(3) ;
+	LocalClean clean : $(<) ;
+}
+
+actions USBHeaderGen1
+{
+	$(HOST_AWK) -v HEADERFILE=$(1) -f $(2[2]) $(2[1])
+}
+
+local usbidsFile = usb.ids ;
+SEARCH on $(usbidsFile) = [ FDirName $(HAIKU_TOP) src data ids ] ;
+
+USBHeaderGen [ FGristFiles usbhdr.h ] : $(usbidsFile) : usb-header.awk ;
+
+rule ACPIPnPHeaderGen
+{
+	SEARCH on $(2) = $(SEARCH_SOURCE) ;
+
+	Depends $(1) : $(2) $(3) ;
+	MakeLocateArch $(<) ;
+	ACPIPnPHeaderGen1 $(1) : $(2) $(3) ;
+	LocalClean clean : $(<) ;
+}
+
+actions ACPIPnPHeaderGen1
+{
+	$(HOST_PYTHON) $(2[1]) $(2[2-]) > $(1) ;
+}
+
+# files can be downloaded from:
+# - acpi_id_registry.csv: https://uefi.org/uefi-acpi-export
+# - pnp_id_registry.csv: https://uefi.org/uefi-pnp-export
+# Note that they are protected by CloudFlare so you have to download through a browser and pass a
+# robot protection check.
+local acpiidsFiles = acpi_id_registry.csv pnp_id_registry.csv ;
+SEARCH on $(acpiidsFiles) = [ FDirName $(HAIKU_TOP) src data ids ] ;
+
+ACPIPnPHeaderGen [ FGristFiles acpipnpids.h ]
+	:  acpipnplist2h.py : $(acpiidsFiles) ;
+Application DeviceManager :
+	AboutWindow.cpp
+	BlockedDrivers.cpp
+	DeviceItem.cpp
+	DeviceManagerApp.cpp
+	DeviceModel.cpp
+	DriverControl.cpp
+	MainWindow.cpp
+	PropertiesWindow.cpp
+	Report.cpp
+	TurnedOffWindow.cpp
+
+	# From Haiku's Devices
+	Device.cpp
+	DeviceACPI.cpp
+	DevicePCI.cpp
+	DeviceSCSI.cpp
+	DeviceUSB.cpp
+	DriverUtils.cpp
+	dm_wrapper.c
+
+	: be device shared package libr5ui.so libr5icons.so [ TargetLibsupc++ ]
+		[ TargetLibstdc++ ] localestub
+	: DeviceManager.rdef
+;
+
+Includes [ FGristFiles DeviceACPI.cpp ] : [ FGristFiles acpipnpids.h isapnpids.h ] ;
+Includes [ FGristFiles DevicePCI.cpp ] : [ FGristFiles pcihdr.h ] ;
+Includes [ FGristFiles DeviceUSB.cpp ] : [ FGristFiles usbhdr.h ] ;
