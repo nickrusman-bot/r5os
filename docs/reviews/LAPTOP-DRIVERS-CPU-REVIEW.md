@@ -4,7 +4,7 @@
 -->
 # Review: what the 5625U laptop still needs (12 Nov 2026)
 
-For Cursor. Read-only. Sources: `generated/boot-5625u-41/r5-hardware.txt` (listdev), `CHANGELOG.md` on `origin/main` (sticks 48 and later, touchpad, camera), branch `cursor/mt7921-wifi` (`822f3a934c`), PR #4118, `docs/reviews/KERNEL-AMD64-REVIEW.md`, branch `claude/kernel-zen-smt-idle` (PR #4212), the WSL Haiku tree. Nothing was built or booted. The log folders of sticks 42 and later are not in the repository, so their syslog lines are taken from `CHANGELOG.md` only.
+For Cursor. Read-only. Sources: `generated/boot-5625u-41/r5-hardware.txt` (listdev), `CHANGELOG.md` on `origin/main` (sticks 48 and later, touchpad, camera), branch `cursor/mt7921-wifi` (`822f3a934c`), PR #4118, `docs/reviews/KERNEL-AMD64-REVIEW.md`, PR #4212 (merged into `main`), the WSL Haiku tree. Nothing was built or booted. The log folders of sticks 42 and later are not in the repository, so their syslog lines are taken from `CHANGELOG.md` only.
 
 ## Devices on the 5625U
 
@@ -88,7 +88,7 @@ All three are open in `docs/reviews/KERNEL-AMD64-REVIEW.md`. None needs a new dr
 
 `distro/kernel/src/system/kernel/arch/x86/arch_cpu.cpp:902` prints leaf 1 EBX, `0x80000008` ECX and `0x8000001E` EBX. It does not print leaf 1 ECX. Stick 33 listed `invpcid` and not `pcid`. Add `leaf1 ecx` (raw, from `get_current_cpuid`) to the same line. Bit 17 is PCID. If the raw bit is set and the feature line still has no `pcid`, the kernel loses the bit between CPUID and its stored word, which is a bug in the feature table. If the raw bit is clear, the firmware or the CPU hides it and PCID work stops there.
 
-Advice: put this in PR #4212 before its stick. It is one value in one line and the stick for #4212 then answers this question too.
+Advice: PR #4212 is already merged, so this is its own small change. Put it in the same kernel branch as items B and C. It is one value in one line, and that branch's stick then also answers the PCID question.
 
 ### B. The `amd_pstates` race
 
@@ -106,8 +106,8 @@ The AVX2 body and the `setjmp` user copy (same finding) are later rounds, the se
 
 ## Advice: order
 
-1. **PR #4212 + item A** on one stick. That stick already has to prove the Zen SMT map and deep idle.
-2. **Items B and C** in one small kernel branch, on the next combined stick. Both are small and have a clear pass line.
+1. **Items A, B and C** in one small kernel branch from `main`, which already has the merged PR #4212. All three are small and have a clear pass line.
+2. **One stick** for that branch. The same boot also proves what PR #4212 merged (the Zen SMT map and deep idle), which has not been booted on the 5625U yet.
 3. **Wi-Fi and Bluetooth** as their own branch, from air/OS: licensing report first, then the driver with the MT7961 firmware names, then the Bluetooth loader, then the 5625U on a real network. This is the item that makes the laptop usable without a cable.
 4. On the stick of step 2 or 3, also the **checks** for the touch screen and the microphone. No code beyond the logging.
 5. The SD reader, the Sensor Fusion Hub and the IOMMU wait.
