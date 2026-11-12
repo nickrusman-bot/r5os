@@ -173,4 +173,20 @@ r5_vmid_release(struct r5_vmid_mgr* m, uint32_t owner, uint64_t retired)
 	}
 }
 
+/* After a GPU reset. The chip forgot every VMID's page table, so each
+ * slot flushes on its next use. Owners and fences stay: a file that
+ * still holds a tree releases only its own slots later, and a slot
+ * given to a new owner is never cleared by the old one. A reservation
+ * that was held is dropped. */
+static inline void
+r5_vmid_after_reset(struct r5_vmid_mgr* m)
+{
+	uint32_t i;
+	if (m == 0)
+		return;
+	r5_vmid_cancel(m);
+	for (i = 1; i <= 15u; i++)
+		m->slot[i].flushed = ~0ull;
+}
+
 #endif

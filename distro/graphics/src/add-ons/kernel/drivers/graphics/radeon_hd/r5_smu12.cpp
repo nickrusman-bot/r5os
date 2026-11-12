@@ -97,7 +97,10 @@ smu_write(radeon_info* info, uint32 offset, uint32 value)
 }
 
 
-/* __smu_cmn_poll_stat: the response register, or 0 after the timeout. */
+/* __smu_cmn_poll_stat: the response register, or 0 after the timeout.
+ * Linux waits in udelay(1) steps. After the first millisecond this
+ * sleeps between reads, so a slow SMU does not hold a CPU for 2 s; the
+ * wait is at least as long as Linux's. */
 static uint32
 smu_poll(radeon_info* info)
 {
@@ -106,7 +109,12 @@ smu_poll(radeon_info* info)
 		reg = smu_read(info, smu_byte(kSmnC2pMsg90));
 		if (reg != kRespNone)
 			break;
-		spin(1);
+		if (kPollSteps - timeout < 1000)
+			spin(1);
+		else {
+			snooze(10);
+			timeout -= 9;
+		}
 	}
 	return reg;
 }

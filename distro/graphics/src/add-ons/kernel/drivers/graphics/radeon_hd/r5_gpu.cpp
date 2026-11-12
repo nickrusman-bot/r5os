@@ -1987,6 +1987,20 @@ gpu_hang_job_release()
 }
 
 
+/* GPU off. If the CP still runs the hang job, the word it waits for
+ * lets it finish before the pages go. */
+static void
+amd_hang_release()
+{
+	if (sHangWord.cpu != NULL) {
+		((volatile uint32*)sHangWord.cpu)[64 / 4] = 1;
+		r5_gfx9_stage_bytes(sHangWord.cpu, 4096);
+		snooze(1000);
+	}
+	gpu_hang_job_release();
+}
+
+
 /* The marker of stage P, on its own: one WRITE_DATA through VMID 1 to
  * a fresh page, its fence, and the word read back through the kernel
  * mapping. Run after a reset, before new contexts are allowed. */
@@ -2027,7 +2041,6 @@ amd_selftest(void* info)
 				&& back == R5_P_MARK_VALUE;
 		}
 	}
-	dprintf("radeon_hd: mark selftest %s\n", ok ? "ok" : "bad");
 	gpu_stage_release(&page);
 	gpu_stage_release(&ib);
 	return ok ? B_OK : B_ERROR;
@@ -2150,7 +2163,8 @@ r5_gpu_backend_ops gR5GpuOps = {
 	amd_restart,
 	amd_selftest,
 	amd_hang_job,
-	amd_fault_status
+	amd_fault_status,
+	amd_hang_release
 };
 
 

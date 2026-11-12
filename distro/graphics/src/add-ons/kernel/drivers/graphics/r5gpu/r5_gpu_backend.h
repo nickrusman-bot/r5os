@@ -62,10 +62,11 @@ typedef struct r5_gpu_backend_ops {
 	int			(*scanout)(void* info, uint32_t* width, uint32_t* height,
 				uint32_t* bytesPerRow, uint32_t* format, uint64_t* vramOffset,
 				uint64_t* bytes);
-	/* M10 hang policy. Each returns 0 on success. The caller holds the
-	 * GPU lock. reset_mode2 is the SMU mode-2 reset. restart runs the
-	 * fixed start sequences again, in their contract order. selftest
-	 * is the kernel self-test after that restart. */
+	/* M10 hang policy. Each returns 0 on success. reset_mode2 is the
+	 * SMU mode-2 reset and restart runs the fixed start sequences again,
+	 * in their contract order; both run without the GPU lock while
+	 * sResetting keeps the other paths out. selftest is the kernel
+	 * self-test after that restart, called with the lock. */
 	int			(*reset_mode2)(void* info);
 	int			(*restart)(void* info);
 	int			(*selftest)(void* info);
@@ -74,6 +75,8 @@ typedef struct r5_gpu_backend_ops {
 	/* Read and clear the fault status of the GFX hub after a fault was
 	 * taken. 0 when there is none. */
 	int			(*fault_status)(uint32_t* status);
+	/* GPU off: free the gpu_hang_test pages. With the GPU lock. */
+	void		(*hang_release)(void);
 } r5_gpu_backend_ops;
 
 extern r5_gpu_backend_ops gR5GpuOps;

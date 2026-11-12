@@ -103,6 +103,7 @@ static status_t gpu_file_root(gpu_client* client);
 static void gpu_defer_reclaim(uint64 seen);
 static void gpu_prt_release_tree(r5_vm* vm);
 static void gpu_hang_test_step();
+static void gpu_wait_reset();
 
 
 
@@ -676,6 +677,22 @@ gpu_defer_reclaim(uint64 seen)
 }
 
 
+/* Called with the GPU lock, from every path except the retire thread
+ * that runs the reset. Returns with the lock once no reset runs. The
+ * end of a reset (REOPEN or OFF) notifies sEop. */
+static void
+gpu_wait_reset()
+{
+	while (sResetting) {
+		ConditionVariableEntry entry;
+		sEop.Add(&entry);
+		gpu_unlock();
+		entry.Wait(B_RELATIVE_TIMEOUT, 100000);
+		gpu_lock();
+	}
+}
+
+
 static void
 gpu_release_parked(uint64 seen)
 {
@@ -696,8 +713,10 @@ gpu_release_parked(uint64 seen)
 
 
 /* The actions of r5_hang_step, in order. LOG and LOSE were done by the
- * caller. The GPU lock is held throughout; the self-test drops it only
- * while it polls, and gpu_control waits while sResetting is set. */
+ * caller, in the retire thread. sResetting keeps every other path that
+ * may reach the chip out (gpu_wait_reset), so the lock is dropped
+ * while the reset and the restart run; the self-test drops it while it
+ * polls. */
 static void
 gpu_hang_run(uint32 actions)
 {
@@ -705,14 +724,22 @@ gpu_hang_run(uint32 actions)
 		uint32 next = 0;
 		if ((actions & R5_HANG_ACT_RESET) != 0) {
 			sResetting = true;
+			gpu_unlock();
 			bool ok = gR5GpuOps.reset_mode2 != NULL
 				&& gR5GpuOps.reset_mode2(sInfo) == B_OK;
+			gpu_lock();
 			dprintf("radeon_hd: gpu reset mode2 %s\n", ok ? "ok" : "failed");
+			/* The hung CP may read parked buffers until the reset has
+			 * stopped it. A failed reset frees them at OFF. */
+			if (ok)
+				gpu_release_parked(~0ull);
 			next = r5_hang_step(&sHang, ok ? R5_HANG_EV_RESET_OK
 				: R5_HANG_EV_RESET_FAILED, &sHang);
 		} else if ((actions & R5_HANG_ACT_SELFTEST) != 0) {
+			gpu_unlock();
 			bool ok = gR5GpuOps.restart != NULL
 				&& gR5GpuOps.restart(sInfo) == B_OK;
+			gpu_lock();
 			if (ok) {
 				/* Every job of before is gone. The fence now reads the
 				 * last sequence (restart), so nothing parked is left. */
@@ -730,14 +757,18 @@ gpu_hang_run(uint32 actions)
 			sGpuOff = true;
 			gpu_lost(sInfo, "gpu off");
 			gpu_release_parked(~0ull);
+			if (gR5GpuOps.hang_release != NULL)
+				gR5GpuOps.hang_release();
 			sResetting = false;
 			dprintf("radeon_hd: gpu off until reboot: %s\n",
 				r5_hang_why(sHang.why));
 			sEop.NotifyAll();
 		} else if ((actions & R5_HANG_ACT_REOPEN) != 0) {
-			/* VMIDs of files are handed out again and flushed. */
+			/* Owners stay, so a lost file that frees its tree later
+			 * releases only its own slots; every slot flushes on its
+			 * next use. */
 			if (sFileVmidsReady)
-				r5_vmid_init_files(&sFileVmids);
+				r5_vmid_after_reset(&sFileVmids);
 			sLost = false;
 			sResetting = false;
 			sEop.NotifyAll();
@@ -765,7 +796,6 @@ gpu_hang(gpu_job* job, bigtime_t now)
 				scan->lost = true;
 		}
 		gpu_lost(sInfo, "gpu lost watchdog");
-		gpu_release_parked(~0ull);
 	}
 	gpu_hang_run(actions & ~(R5_HANG_ACT_LOG | R5_HANG_ACT_LOSE));
 }
@@ -1408,6 +1438,7 @@ gpu_wait_room(void* info, uint32 dwords)
 		gpu_unlock();
 		entry.Wait(B_RELATIVE_TIMEOUT, deadline - now);
 		gpu_lock();
+		gpu_wait_reset();
 	}
 	return B_OK;
 }
@@ -1497,6 +1528,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 			status_t waited = entry.Wait(
 				B_CAN_INTERRUPT | B_RELATIVE_TIMEOUT, deadline - now);
 			gpu_lock();
+			gpu_wait_reset();
 			status = gpu_ibs_mapped(client, ibs, in.ib_count, in.ring);
 			if (status != B_OK)
 				return status;
@@ -1901,6 +1933,7 @@ gpu_sync_wait_list(gpu_client* client, void* buffer, size_t length)
 		status_t waited = entry.Wait(B_CAN_INTERRUPT | B_RELATIVE_TIMEOUT,
 			deadline - now);
 		gpu_lock();
+		gpu_wait_reset();
 		if (waited == B_INTERRUPTED || waited == B_WOULD_BLOCK)
 			return waited;
 	}
@@ -2382,15 +2415,7 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		return B_UNSUPPORTED;
 
 	gpu_lock();
-	/* A reset holds the lock, except while its self-test polls. Its
-	 * end (REOPEN or OFF) notifies sEop. */
-	while (sResetting) {
-		ConditionVariableEntry entry;
-		sEop.Add(&entry);
-		gpu_unlock();
-		entry.Wait(B_RELATIVE_TIMEOUT, 100000);
-		gpu_lock();
-	}
+	gpu_wait_reset();
 	sInfo = client->info;
 	int perFile = gpu_hw_per_file();
 	if (perFile < 0) {
@@ -2660,6 +2685,7 @@ gpu_wait_value(gpu_client* client, volatile uint64* value, uint64 target,
 		gpu_unlock();
 		entry.Wait(B_RELATIVE_TIMEOUT, left);
 		gpu_lock();
+		gpu_wait_reset();
 	}
 }
 
@@ -2681,7 +2707,8 @@ gpu_fault_retire()
 		}
 		/* AFTER-M8 item 11: the fixed line, with the hub status that
 		 * gmc_v9_0_process_interrupt reads and clears. At most one
-		 * line per second; a fault storm still sets the flags. */
+		 * status line per second; the M5 pasid lines stay one per
+		 * fault, because check-user reads them per VMID. */
 		uint32 status = 0;
 		if (gR5GpuOps.fault_status != NULL)
 			gR5GpuOps.fault_status(&status);
@@ -2694,7 +2721,6 @@ gpu_fault_retire()
 				(unsigned long)status);
 		}
 		if (found == NULL) {
-			if (line)
 			dprintf("radeon_hd: vm fault pasid %lu unknown addr %016llx\n",
 				(unsigned long)pasid, (unsigned long long)addr);
 			continue;
@@ -2702,7 +2728,6 @@ gpu_fault_retire()
 		found->faulted = true;
 		if (sGuilty == NULL)
 			sGuilty = found;
-		if (line)
 		dprintf("radeon_hd: vm fault pasid %lu vmid %lu addr %016llx\n",
 			(unsigned long)pasid, (unsigned long)vmid,
 			(unsigned long long)addr);
@@ -2783,6 +2808,8 @@ gpu_free(void* cookie)
 	if (client == NULL)
 		return B_OK;
 	gpu_lock();
+	/* Freeing buffers writes page tables and flushes the TLB. */
+	gpu_wait_reset();
 	status_t status = B_OK;
 	uint64 seen = gpu_hw_seen();
 	r5_gpu_eop();

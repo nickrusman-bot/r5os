@@ -15,6 +15,7 @@
 
 #include "r5_hang.h"
 #include "r5_hang_ib.h"
+#include "r5_vmid.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -206,6 +207,49 @@ fence_jump()
 }
 
 
+/* Review of PR 4222, item 4. File A (owner 7) had VMID 2 with job 10
+ * when the chip hung; it is lost and keeps its tree. After the reset
+ * the fence reads 10. File B (owner 8) opens and gets a VMID with a
+ * flush. When A later frees its tree, B keeps its slot, and A's slot
+ * never goes to two owners. */
+static int
+vmid_after_reset()
+{
+	r5_vmid_mgr m;
+	r5_vmid_init_files(&m);
+	int flush = 0;
+	uint32_t a = r5_vmid_reserve(&m, 7, 0, 1, &flush);
+	r5_vmid_arm(&m, 10);
+	if (a != 2)
+		return fail("vmid a");
+	r5_vmid_after_reset(&m);
+	flush = 0;
+	uint32_t b = r5_vmid_reserve(&m, 8, 10, 1, &flush);
+	r5_vmid_arm(&m, 11);
+	if (b == 0 || b < 2 || flush != 1)
+		return fail("vmid b after reset");
+	r5_vmid_release(&m, 7, 10);
+	if (m.slot[b].owner != 8)
+		return fail("vmid a release cleared b");
+	for (uint32_t i = 2; i <= 15; i++) {
+		if (i != b && m.slot[i].owner == 8)
+			return fail("vmid b twice");
+	}
+	/* B again, same owner: its slot, flushed once already. */
+	flush = 0;
+	if (r5_vmid_reserve(&m, 8, 10, 1, &flush) != b || flush != 0)
+		return fail("vmid b again");
+	r5_vmid_cancel(&m);
+	/* A held reservation at the hang is dropped by the reset. */
+	r5_vmid_reserve(&m, 9, 11, 1, &flush);
+	r5_vmid_after_reset(&m);
+	if (m.hold != 0 || m.chosen != 0)
+		return fail("vmid hold after reset");
+	sCases++;
+	return 0;
+}
+
+
 /* The hang job: one WAIT_REG_MEM, memory space, equal, on a dword that
  * stays 0 and is compared with 1. scripts/check-pm4.py checks the bits
  * against Mesa sid.h; this checks the layout and the refusals. */
@@ -238,7 +282,8 @@ int
 main()
 {
 	if (one_hang() || two_hangs() || reset_fail() || selftest_fail()
-		|| stray_events() || second_client() || fence_jump() || hang_ib())
+		|| stray_events() || second_client() || fence_jump() || hang_ib()
+		|| vmid_after_reset())
 		return 1;
 	printf("ok hang policy %d cases\n", sCases);
 	return 0;

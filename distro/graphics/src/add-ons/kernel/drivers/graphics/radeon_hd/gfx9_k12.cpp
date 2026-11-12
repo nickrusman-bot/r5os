@@ -859,17 +859,23 @@ k1_install()
 }
 
 
+/* restart is false at boot: K1 exactly as in its contract. After a
+ * reset every end-of-pipe since boot has released the semaphore once,
+ * so only there the old counts are taken first and only the interrupt
+ * of this K1 packet counts. */
 static void
-run_k1()
+run_k1(bool restart)
 {
 	if (!k1_install())
 		return;
-	/* Every end-of-pipe since boot released the semaphore once. Only
-	 * the interrupt of this K1 packet counts. */
-	int32 stale = 0;
-	if (sEopSem >= 0 && get_sem_count(sEopSem, &stale) == B_OK && stale > 0)
-		acquire_sem_etc(sEopSem, stale, B_RELATIVE_TIMEOUT, 0);
-	uint32 eopBefore = sEopCount;
+	uint32 eopBefore = 0;
+	if (restart) {
+		int32 stale = 0;
+		if (sEopSem >= 0 && get_sem_count(sEopSem, &stale) == B_OK
+			&& stale > 0)
+			acquire_sem_etc(sEopSem, stale, B_RELATIVE_TIMEOUT, 0);
+		eopBefore = sEopCount;
+	}
 	bigtime_t started = system_time();
 	if (!ih_on()) {
 		ih_off();
@@ -2132,7 +2138,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	r5_gfx9_copy_firmware(info.fw_version, info.fw_feature, 32);
 	knote("k0 %s fence", ok ? "ok" : "fail");
 	if (ok && irq)
-		run_k1();
+		run_k1(false);
 	if (ok && gart)
 		run_k2();
 	if (ok)
@@ -2145,24 +2151,85 @@ extern "C" bool r5_smu12_mode2_reset(radeon_info* info, uint32* before,
 	uint32* after);
 
 
-/* M10 hang policy, step 1: the mode-2 reset. The interrupt ring is
- * switched off first and the handler ignores it until the restart has
- * programmed a new one. The handler itself stays installed. */
+/* RCC_CONFIG_MEMSIZE, NBIO 7.0 segment 2 (Linux v6.12
+ * nbio_7_0_offset.h:4250-4251, read by nbio_v7_0.c:63-66 get_memsize). */
+static const uint32 kRccConfigMemsize = 0x00c3;
+/* adev->usec_timeout, AMDGPU_MAX_USEC_TIMEOUT 100000, one step per us. */
+static const int32 kMemsizeSteps = 100000;
+static const uint32 kPciHeaderDwords = 16;
+
+
+static uint32
+pci_dword(uint8 offset)
+{
+	return gPCI->read_pci_config(sInfo->pci->bus, sInfo->pci->device,
+		sInfo->pci->function, offset, 4);
+}
+
+
+/* M10 hang policy, step 1: the mode-2 reset, in the frame that Linux
+ * v6.12 amdgpu_device.c:5188-5242 amdgpu_device_mode1_reset puts around
+ * an SMU reset (MIT, Copyright 2008 AMD, Red Hat, Jerome Glisse): keep
+ * the PCI state (5200), clear bus mastering (5202-5203), the SMU
+ * message, the PCI state back (5216), then wait until get_memsize no
+ * longer reads 0xffffffff (5221-5233). Linux's own mode-2 path for
+ * Renoir (soc15.c soc15_asic_reset) sends the message without that
+ * frame; it is added here so the restart never touches a chip that is
+ * not back. The PCI state is the 64-byte header, kept and written back
+ * by this code (Linux's pci_save_state is not used or copied). The
+ * interrupt ring is switched off first and the handler ignores it until
+ * the restart has programmed a new one. The handler stays installed. */
 bool
 r5_gfx9_kernel_reset()
 {
 	if (sInfo == NULL || !sGfx9Started || sInfo->registers_area < 0
-		|| sInfo->registers == 0)
+		|| sInfo->registers == 0 || sInfo->pci == NULL || gPCI == NULL)
 		return false;
 	sIhWbReady = false;
 	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
 	kwrite(sInfo, gc_byte(mmCP_INT_CNTL_RING0), 0);
+
+	uint32 header[kPciHeaderDwords];
+	for (uint32 i = 0; i < kPciHeaderDwords; i++)
+		header[i] = pci_dword((uint8)(i * 4));
+	uint32 command = gPCI->read_pci_config(sInfo->pci->bus,
+		sInfo->pci->device, sInfo->pci->function, PCI_command, 2);
+	gPCI->write_pci_config(sInfo->pci->bus, sInfo->pci->device,
+		sInfo->pci->function, PCI_command, 2,
+		command & ~(uint32)PCI_command_master);
+
 	uint32 before = 0;
 	uint32 after = 0;
 	bool ok = r5_smu12_mode2_reset(sInfo, &before, &after);
 	knote("reset mode2 before %08lx after %08lx", (unsigned long)before,
 		(unsigned long)after);
-	return ok;
+
+	/* The header back, the command word last, as it was before. */
+	for (uint32 i = kPciHeaderDwords - 1; i >= 1; i--) {
+		if (i == 1)
+			continue;
+		if (pci_dword((uint8)(i * 4)) != header[i]) {
+			gPCI->write_pci_config(sInfo->pci->bus, sInfo->pci->device,
+				sInfo->pci->function, (uint8)(i * 4), 4, header[i]);
+		}
+	}
+	gPCI->write_pci_config(sInfo->pci->bus, sInfo->pci->device,
+		sInfo->pci->function, PCI_command, 2, command);
+	if (!ok)
+		return false;
+
+	int32 step = 0;
+	for (; step < kMemsizeSteps; step++) {
+		if (kread(sInfo, nbio_byte(kRccConfigMemsize)) != 0xffffffffu)
+			break;
+		if (step < 1000)
+			spin(1);
+		else
+			snooze(10);
+	}
+	knote("reset mode2 memsize %s after %ld steps",
+		step < kMemsizeSteps ? "ok" : "timeout", (long)step);
+	return step < kMemsizeSteps;
 }
 
 
@@ -2186,7 +2253,7 @@ r5_gfx9_kernel_restart()
 		r5_gfx9_hub_linux();
 	knote("k0 %s fence", ok ? "ok" : "fail");
 	if (ok && sStart.irq)
-		run_k1();
+		run_k1(true);
 	sK2GartMc = 0;
 	sK2GartCpu = NULL;
 	if (ok && sStart.gart)
@@ -2201,9 +2268,13 @@ r5_gfx9_kernel_restart()
 }
 
 
-/* gmc_v9_0_process_interrupt (Linux v6.12 gmc_v9_0.c:660-676) for the
- * GFX hub: a dummy read, the status, then CLEAR_PROTECTION_FAULT_STATUS_ADDR
- * (bit 0 of VM_L2_PROTECTION_FAULT_CNTL, WREG32_P(cntl, 1, ~1)). */
+/* gmc_v9_0_process_interrupt (Linux v6.12 gmc_v9_0.c, MIT, Copyright
+ * 2016 AMD) for the GFX hub, the hub of the GFX ring's faults: the
+ * dummy read for GC before 9.4.2 (656-663), the status (665), then
+ * WREG32_P(hub->vm_l2_pro_fault_cntl, 1, ~1) (675-676), which sets
+ * bit 0, CLEAR_PROTECTION_FAULT_STATUS_ADDR. Linux leaves that bit set
+ * and so does this; the next fault still latches a status. The MM hub
+ * (SDMA, video) is not read: R5 submits only on the GFX ring. */
 int
 r5_gfx9_fault_status(uint32* status)
 {
