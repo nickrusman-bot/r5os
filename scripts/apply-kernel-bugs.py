@@ -50,6 +50,8 @@ def install_kernel_sources() -> None:
         "src/add-ons/kernel/drivers/input/i2c_hid/TouchpadProtocolHandler.cpp",
         "src/add-ons/kernel/drivers/input/i2c_hid/TouchpadProtocolHandler.h",
         "src/add-ons/kernel/drivers/input/hid_shared/HIDReportItem.h",
+        "src/add-ons/kernel/drivers/bus/usb/usb_raw.cpp",
+        "src/add-ons/kernel/drivers/bus/usb/usb_raw.h",
         "src/add-ons/kernel/drivers/input/i2c_elan/Driver.cpp",
         "src/add-ons/kernel/drivers/input/i2c_elan/ELANDevice.cpp",
         "src/add-ons/kernel/drivers/input/i2c_elan/ELANDevice.h",

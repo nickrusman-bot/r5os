@@ -143,6 +143,7 @@ private:
 			uint8				fStreamingInterface;
 			int32				fStreamingIndex;
 			bool				fIsBulk;
+			bool				fIsoStream;
 
 			std::vector<uvc_format> fFormats;
 
