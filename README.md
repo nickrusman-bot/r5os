@@ -17,8 +17,8 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - Dark mode, plus fixes to the Deskbar, Tracker and the desktop icons.
 - **Settings** is one window. Home shows a card per category; the list on the left folds open to the pages of one category, and Search jumps to any page. Pages include Information (your computer at a glance), Display (your screen and workspaces), Appearance, Desktop and Deskbar, Wallpaper, Notifications and Virtual memory. A change applies at once. Revert goes back to how the page was when you opened it, and Defaults to the factory setup. The separate preference programs are still installed.
 - Notifications, with a choice of where they appear on screen.
-- **Device Manager** shows every device in your computer, warns about a device without a driver, and can turn a driver off and on again.
-- Touchpads: a precision touchpad is one device, with clicks, scrolling and gestures. TrackPoints work too.
+- Device Manager, with a warning for devices without a driver.
+- Touchpad gestures and TrackPoint support.
 
 ### Accounts
 - A **sign-in screen** before the desktop starts. **Log out** and **Lock screen** are in the leaf menu.
@@ -37,16 +37,16 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 - A latency choice: Normal, Low latency, or Pro audio.
 - USB sound devices can be set to stereo, 4.0, 5.1 or 7.1. HDMI outputs are labeled as HDMI.
 - Virtual surround for headphones.
-- A USB sound card that stops or changes its settings comes back on its own, and can be unplugged safely.
+- More reliable USB sound cards, which can be unplugged safely.
 - Finer MIDI velocity and controller values. Existing MIDI programs keep working.
-- MIDI 2.0 support, including the clock, start and stop.
-- **MIDI Monitor** shows every message a MIDI keyboard or controller sends.
+- MIDI 2.0 support
+- MIDI Monitor, to see what a MIDI device sends.
 
 ### Graphics
 **Not just any port.** We've done it the Haiku and BeOS way: a native layer between Vulkan and R5.
 
 - Native Vulkan support \*
-- Vulkan programs draw in an ordinary window, on the GPU on AMD Ryzen laptops \*
+- Vulkan in a normal window \*
 - Native OpenGL, running on top of Vulkan \*
 - Your existing Haiku apps keep working, unchanged
 - Software rendering as a fallback
@@ -54,10 +54,8 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 \* In active development. Hardware support is still limited. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
 
 ### Processor
-- On AMD Ryzen, R5 knows which threads share a core, so busy programs spread over the real cores. On processors with fast and efficient cores, busy programs go to the fast cores first. \*\*
-- An idle computer can use the processor's deeper sleep states, also on AMD. \*\*
-
-\*\* New in build 10059. Not yet checked on the reference laptop.
+- Better use of multi-core and hybrid processors.
+- Deeper sleep states when idle, for a cooler laptop and longer battery life.
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
@@ -66,9 +64,9 @@ The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`
 
 ## Not there yet
 
-- No GPU acceleration for the desktop. The desktop is still drawn by the CPU. Copying it to the screen through the GPU works on the reference laptop, as an option for testing only.
-- Wi-Fi on the reference laptop's own MediaTek card is in progress.
-- USB webcams: the camera is found and its stream starts, but a picture is not confirmed yet.
+- No GPU acceleration for the desktop. The desktop is still drawn by the CPU.
+- Wi-Fi on MediaTek cards is in progress.
+- Webcam support is in progress.
 - One graphical session at a time. There is no fast user switching and no guest account.
 - The bundled browser (WebPositive) is weak for today's web.
 - Sleep, backlight and HiDPI on the reference laptop are still open.
@@ -139,7 +137,7 @@ Build an image:
 |---|---|
 | `distro/` | Everything R5 Operating System adds or changes: version, What's new, artwork, apps, drivers and system components. These files are copied into the Haiku tree at build time. |
 | `haiku/` | The Haiku source tree that R5 Operating System builds on. |
-| `docs/r5book/` | The R5Book, a developer guide to the R5 additions (LibR5, the Appearance Kit, MIDI 2.0, Vulkan), in the layout of the Be Book. |
+| `docs/r5book/` | The R5Book, a developer guide in the style of the Be Book. |
 | `docs/` | Design notes and contracts: [roadmap](docs/ROADMAP.md), [graphics](docs/GRAPHICS.md), [multi-user](docs/MULTIUSER.md), [Settings](docs/SETTINGS.md), [icons](docs/ICONS.md), [shared libraries](docs/LIBR5.md), [licensing](docs/LICENSING.md), and more. |
 | `scripts/` | Build, image, virtual-machine and tracker scripts. |
 | `tracker/` | Which open Haiku tickets R5 Operating System has fixed. The overview is [`tracker/STATUS.md`](tracker/STATUS.md). |
@@ -159,8 +157,8 @@ Haiku is the foundation, and its source is where R5 gets many of its fixes. R5 d
 R5 Operating System is **multi-license**:
 
 - Files that come from Haiku keep their original license and copyright, mostly MIT.
-- R5's own code is MIT, so other Haiku-based systems can use it (since 12 Nov 2026). That includes the libraries and headers programs link: the R5 libraries (`libr5icons`, `libr5ui`, `libr5wifi`), the MIDI kit, the R5 GPU interface header and the R5 DRM library.
-- The R5 artwork (logo, wave pebble, splash) stays GPL-3.0-or-later for now.
+- R5's own code is MIT, so other Haiku-based systems can use it. This includes the libraries that apps link against.
+- The R5 artwork is GPL-3.0-or-later.
 - Third-party components keep their own licenses. They are listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Examples are the VirtualBox Guest Additions (GPL-3.0-only), the AMD firmware and Mesa.
 
 The full policy is in [`docs/LICENSING.md`](docs/LICENSING.md). About R5 shows the licenses and credits on the system itself.
