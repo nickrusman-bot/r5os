@@ -1,10 +1,24 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Quiet the USB lines from the 5625U boot
+
+The vanilla stick boot logged four USB lines that are not faults.
+
+CodyCam's `GetNextInput` returns an error when the media roster asks past its one input. That return stays. It is no longer logged.
+
+An isochronous transfer event can arrive after its transfer was already finished: the event-data completion, or the stop when CodyCam quits. xHCI no longer logs that retired TRB as an error. `cancel queued transfers` is not logged when the endpoint has nothing queued.
+
+A default USB alternate with `wMaxPacketSize` 0 is not a configured endpoint. xHCI still refuses it, and does not log it.
+
+The General UDisk rejects SYNCHRONIZE CACHE (`0x35`) with illegal request, invalid field in CDB. That rejection is remembered after one try, and it is not logged. A different failure of that command is still logged.
+
+Not booted after this change. There is no What's new section and `distro/BUILD` stays the same.
+
 ## 2026-11-12 - A camera stream that stays queued
 
 An isochronous camera was read one short transfer at a time, so packets between calls were lost and CodyCam showed no picture. `usb_raw` now keeps four transfers queued (air/OS `0af4c0889e`, jmgasper, MIT) and the UVC add-on reads that stream. CodyCam's errors, the video source it finds, and a successful connect go to the syslog and to `/boot/home/codycam.log`. The webcam add-on writes the same kind of line to the syslog and to `/boot/home/uvc.log`.
 
-Booted on the 5625U from the vanilla stick. CodyCam found the HP True Vision 5MP Camera (`04f2:b767`), connected at 320x240, and the add-on wrote `stream started, 3060 bytes per packet` to the syslog and to `/boot/home/uvc.log`. CodyCam wrote the same connect line to `/boot/home/codycam.log`. Quitting CodyCam is `stopping nodes!`. On that quit, xHCI logged `TRB 0x101f810 was not found in the endpoint` and `cancel queued transfers (0)`. No frame was logged, so a picture is not confirmed. `VideoConsumer::GetNextInput - BAD INDEX` is CodyCam walking past the last input, before the connect and again at release. Earlier in the same boot, hub 2 port 2 failed `ConfigureEndpoint() invalid max_burst_payload` twice; that is a zero burst payload, before CodyCam, and separate from this stream. The `usb_disk` MODE SENSE failures are the General UDisk. There is no What's new section and `distro/BUILD` stays the same.
+Booted on the 5625U from the vanilla stick. CodyCam found the HP True Vision 5MP Camera (`04f2:b767`), connected at 320x240, and the add-on wrote `stream started, 3060 bytes per packet` to the syslog and to `/boot/home/uvc.log`. CodyCam wrote the same connect line to `/boot/home/codycam.log`. Quitting CodyCam is `stopping nodes!`. On that quit, xHCI logged `TRB 0x101f810 was not found in the endpoint` and `cancel queued transfers (0)`. No frame was logged, so a picture is not confirmed. `VideoConsumer::GetNextInput - BAD INDEX` is CodyCam walking past the last input, before the connect and again at release. Earlier in the same boot, hub 2 port 2 failed `ConfigureEndpoint() invalid max_burst_payload` twice; that is a zero burst payload, before CodyCam, and separate from this stream. The `usb_disk` synchronize-cache failures (operation `0x35`) are the General UDisk, which rejects that command. There is no What's new section and `distro/BUILD` stays the same.
 
 ## 2026-11-12 - One touchpad
 

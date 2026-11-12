@@ -527,12 +527,29 @@ usb_disk_operation_bulk(device_lun* lun, uint8* operation, size_t operationLengt
 					return B_ERROR;
 
 				// the operation is complete but has failed at the SCSI level
-				if (operation[0] != SCSI_TEST_UNIT_READY_6) {
+				// SPDX-SnippetBegin
+				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+				// SPDX-License-Identifier: GPL-3.0-or-later
+				// SYNCHRONIZE CACHE on a stick that rejects it is handled
+				// below, after request sense, so the rejection is not logged
+				// five times.
+				if (operation[0] != SCSI_TEST_UNIT_READY_6
+					&& operation[0] != SCSI_SYNCHRONIZE_CACHE_10) {
+				// SPDX-SnippetEnd
 					TRACE_ALWAYS("operation %#" B_PRIx8
 						" failed at the SCSI level\n", operation[0]);
 				}
 
 				result = usb_disk_request_sense(lun, _action);
+				// SPDX-SnippetBegin
+				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+				// SPDX-License-Identifier: GPL-3.0-or-later
+				if (operation[0] == SCSI_SYNCHRONIZE_CACHE_10
+					&& result != B_DEV_INVALID_IOCTL) {
+					TRACE_ALWAYS("operation %#" B_PRIx8
+						" failed at the SCSI level\n", operation[0]);
+				}
+				// SPDX-SnippetEnd
 				return result == B_OK ? B_ERROR : result;
 			}
 		}
@@ -656,8 +673,19 @@ usb_disk_request_sense(device_lun* lun, err_act* _action)
 		| parameter.additional_sense_code_qualifier;
 	scsi_get_sense_asc_info(code, &label, &action, &status);
 
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// Illegal request, invalid field in CDB: the device rejected the
+	// command. usb_disk_synchronize() treats that as "no cache".
+	const bool rejected = parameter.sense_key == SCSI_SENSE_KEY_ILLEGAL_REQUEST
+		&& parameter.additional_sense_code == 0x24
+		&& parameter.additional_sense_code_qualifier == 0x00;
+	// SPDX-SnippetEnd
+
 	if (parameter.sense_key > SCSI_SENSE_KEY_NOT_READY
-		&& parameter.sense_key != SCSI_SENSE_KEY_UNIT_ATTENTION) {
+		&& parameter.sense_key != SCSI_SENSE_KEY_UNIT_ATTENTION
+		&& !rejected) {
 		TRACE_ALWAYS("request_sense: key: 0x%02x; asc: 0x%02x; ascq: 0x%02x; %s\n",
 			parameter.sense_key, parameter.additional_sense_code,
 			parameter.additional_sense_code_qualifier, label ? label : "(unknown)");
@@ -683,6 +711,13 @@ usb_disk_request_sense(device_lun* lun, err_act* _action)
 
 	if (_action != NULL)
 		*_action = action;
+
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	if (rejected)
+		return B_DEV_INVALID_IOCTL;
+	// SPDX-SnippetEnd
 
 	return status;
 }
