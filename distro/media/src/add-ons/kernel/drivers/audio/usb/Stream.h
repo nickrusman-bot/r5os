@@ -27,6 +27,12 @@ public:
 			status_t		Start();
 			status_t		Stop();
 			bool			IsRunning() { return fIsRunning; }
+
+			// UAC 2.0 start, run for every stream before any of them queues
+			// a transfer. RenkuOS a842555ed6.
+			status_t		SelectAlternate(size_t alternate);
+			status_t		ProgramClock();
+			uint8			ClockId() const { return fClockId; }
 			void			OnRemove();
 
 			status_t		GetBuffers(multi_buffer_list* List);
@@ -47,6 +53,7 @@ protected:
 			status_t		fStatus;
 
 			usb_pipe		fStreamEndpoint;
+			const usb_configuration_info* fConfig;
 
 			bool			fIsRunning;
 			area_id			fArea, fKernelArea;
@@ -76,19 +83,32 @@ protected:
 			uint32			fPadded;
 			uint32			fDropped;
 			uint8			fClockId;		// UAC 2.0 clock source, 0 if none
+			usb_pipe		fFeedbackPipe;	// explicit feedback, or 0
+			int32			fFeedbackSample;// 16.16 frames per packet, 0 if none
+			int32			fFeedbackError;
+			uint32			fFeedbackFrame;
+			usb_iso_packet_descriptor fFeedbackPacket;
+			uint8			fFeedbackBytes[4];
+			uint8*			fPlayScratch;
+			uint8*			fPlayCarry;
+			uint32			fPlayCarryFrames;
 // SPDX-SnippetEnd
 
 private:
 			status_t		_ChooseAlternate();
 			status_t		_SetupBuffers();
 			status_t		_QueueNextTransfer(size_t buffer, bool start);
+			status_t		_QueuePlayback(size_t buffer);
+			void			_QueueFeedback();
 	static	void			_TransferCallback(void* cookie, status_t status,
+								void* data, size_t actualLength);
+	static	void			_FeedbackCallback(void* cookie, status_t status,
 								void* data, size_t actualLength);
 			void			_DumpDescriptors();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-			void			_JoinRecorded(size_t buffer);
+			bool			_JoinRecorded(size_t buffer);
 			void			_QueryClockRates();
 // SPDX-SnippetEnd
 };

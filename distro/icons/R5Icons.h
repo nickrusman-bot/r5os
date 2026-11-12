@@ -109,7 +109,8 @@ enum r5_glyph {
 	R5_GLYPH_RESTART = 2,
 	R5_GLYPH_CLOCK = 3,
 	R5_GLYPH_EYE = 4,
-	R5_GLYPH_EYE_OFF = 5
+	R5_GLYPH_EYE_OFF = 5,
+	R5_GLYPH_LOG_OUT = 6
 };
 
 // Draws the glyph inside `frame` of `view`, in `color`. The view's

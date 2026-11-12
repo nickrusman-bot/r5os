@@ -35,6 +35,7 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fDevice(device),
 	fStatus(B_NO_INIT),
 	fStreamEndpoint(0),
+	fConfig(NULL),
 	fIsRunning(false),
 	fArea(-1),
 	fKernelArea(-1),
@@ -56,7 +57,14 @@ Stream::Stream(Device* device, size_t interface, usb_interface_list* List)
 	fActualBytes(NULL),
 	fPadded(0),
 	fDropped(0),
-	fClockId(0)
+	fClockId(0),
+	fFeedbackPipe(0),
+	fFeedbackSample(0),
+	fFeedbackError(0),
+	fFeedbackFrame(0),
+	fPlayScratch(NULL),
+	fPlayCarry(NULL),
+	fPlayCarryFrames(0)
 {
 	memset(&fPlan, 0, sizeof(fPlan));
 }
@@ -73,6 +81,8 @@ Stream::~Stream()
 	delete[] fDescriptors;
 	free(fCarry);
 	free(fActualBytes);
+	free(fPlayScratch);
+	free(fPlayCarry);
 // SPDX-SnippetEnd
 }
 
@@ -117,6 +127,11 @@ Stream::_ChooseAlternate()
 			continue;
 		}
 
+		if (fAlternates[i]->Endpoint() == 0) {
+			TRACE(ERR, "Ignore alternate %d - zero endpoint description.\n", i);
+			continue;
+		}
+
 		if (fAlternates[i]->Format()->fFormatType
 				!= USB_AUDIO_FORMAT_TYPE_I) {
 			TRACE(ERR, "Ignore alternate %d - format type %#02x "
@@ -140,7 +155,8 @@ Stream::_ChooseAlternate()
 		TypeIFormatDescriptor* format
 			= static_cast<TypeIFormatDescriptor*>(fAlternates[i]->Format());
 
-		if (format->fNumChannels < 1 || format->fNumChannels > 16) {
+		if (format->fNumChannels < 1
+			|| format->fNumChannels > kUsbAudioMaxChannels) {
 			TRACE(ERR, "Ignore alternate %d - channel count %d "
 				"is not supported.\n", i, format->fNumChannels);
 			continue;
@@ -301,6 +317,8 @@ Stream::OnRemove()
 		snooze(100);
 
 	gUSBModule->cancel_queued_transfers(fStreamEndpoint);
+	if (fFeedbackPipe != 0)
+		gUSBModule->cancel_queued_transfers(fFeedbackPipe);
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 }
@@ -384,7 +402,13 @@ Stream::_SetupBuffers()
 	fCarry = NULL;
 	free(fActualBytes);
 	fActualBytes = NULL;
+	free(fPlayScratch);
+	fPlayScratch = NULL;
+	free(fPlayCarry);
+	fPlayCarry = NULL;
 	fCarryFrames = 0;
+	fPlayCarryFrames = 0;
+	fFeedbackError = 0;
 	fPadded = fDropped = 0;
 
 	fPlan = plan;
@@ -430,8 +454,16 @@ Stream::_SetupBuffers()
 	if (fIsInput) {
 		fActualBytes = (uint32*)malloc(sizeof(uint32) * plan.packetsPerBuffer);
 		fCarry = (uint8*)malloc(
-			((size_t)usb_audio_carry_capacity(&plan) + 1) * sampleSize);
+			((size_t)plan.framesPerBuffer + 1) * sampleSize);
 		if (fActualBytes == NULL || fCarry == NULL)
+			return B_NO_MEMORY;
+	} else {
+		// Room for the client's buffer plus a few frames held back or pulled
+		// forward when a feedback endpoint is pacing playback.
+		fPlayScratch = (uint8*)malloc(
+			(fRegionBytes + 8 * sampleSize) * kSamplesBufferCount);
+		fPlayCarry = (uint8*)malloc(8 * sampleSize);
+		if (fPlayScratch == NULL || fPlayCarry == NULL)
 			return B_NO_MEMORY;
 	}
 	TRACE(INF, "descriptorsCount:%d\n", fDescriptorsCount);
@@ -470,11 +502,23 @@ Stream::OnSetConfiguration(usb_device device,
 		TRACE(ERR, "NULL configuration. Not set.\n");
 		return B_ERROR;
 	}
+	fConfig = config;
+
+	// The replugged configuration may not have this interface or alternate.
+	// Indexing a missing alt[] is a small non-NULL pointer, so a NULL check
+	// on that address does not catch it. RenkuOS 428e08cd07.
+	if (fInterface >= config->interface_count
+		|| fActiveAlternate >= config->interface[fInterface].alt_count
+		|| config->interface[fInterface].alt == NULL) {
+		TRACE(ERR, "No alternate %" B_PRIuSIZE " of interface %" B_PRIuSIZE
+			" in this configuration. Not set.\n", fActiveAlternate, fInterface);
+		return B_ERROR;
+	}
 
 	usb_interface_info* interface
 		= &config->interface[fInterface].alt[fActiveAlternate];
-	if (interface == NULL) {
-		TRACE(ERR, "NULL interface. Not set.\n");
+	if (fAlternates[fActiveAlternate]->Endpoint() == NULL) {
+		TRACE(ERR, "NULL endpoint. Not set.\n");
 		return B_ERROR;
 	}
 
@@ -490,13 +534,80 @@ Stream::OnSetConfiguration(usb_device device,
 			fStreamEndpoint = interface->endpoint[i].handle;
 			TRACE(INF, "%s Stream Endpoint [address %#04x] handle is: %#010x.\n",
 				fIsInput ? "Input" : "Output", address, fStreamEndpoint);
-			return B_OK;
 		}
+		// Usage type feedback is bits 5:4 == 01.
+		if ((interface->endpoint[i].descr->attributes & 0x30) == 0x10)
+			fFeedbackPipe = interface->endpoint[i].handle;
 	}
+
+	if (fStreamEndpoint != 0)
+		return B_OK;
 
 	TRACE(INF, "%s Stream Endpoint [address %#04x] was not found.\n",
 		fIsInput ? "Input" : "Output", address);
 	return B_ERROR;
+}
+
+
+status_t
+Stream::SelectAlternate(size_t alternate)
+{
+	if (fConfig == NULL || fDevice == NULL)
+		return B_NO_INIT;
+	if (fInterface >= fConfig->interface_count
+		|| fConfig->interface[fInterface].alt == NULL
+		|| alternate >= fConfig->interface[fInterface].alt_count) {
+		return B_ERROR;
+	}
+	return gUSBModule->set_alt_interface(fDevice->fDevice,
+		&fConfig->interface[fInterface].alt[alternate]);
+}
+
+
+status_t
+Stream::ProgramClock()
+{
+	uint32 samplingRate = fAlternates[fActiveAlternate]->GetSamplingRate();
+	size_t actualLength = 0;
+	status_t status = B_OK;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
+		uint8 clock = fClockId;
+		if (clock == 0) {
+			_AudioControl* control = fControlInterface->Find(TerminalLink());
+			clock = control != NULL ? fControlInterface->ResolveClockSource(
+				control->ClockSourceId()) : 0;
+		}
+		if (clock == 0) {
+			dprintf("usb_audio: no clock source to set %" B_PRIu32 " Hz on\n",
+				samplingRate);
+			return B_ERROR;
+		}
+		uint32 rate = samplingRate;
+		status = gUSBModule->send_request(fDevice->fDevice,
+			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,
+			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
+			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
+			sizeof(rate), &rate, &actualLength);
+		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
+			samplingRate, clock, strerror(status));
+		return status;
+	}
+// SPDX-SnippetEnd
+
+	usb_audio_sampling_freq freq = _ASFormatDescriptor::GetSamFreq(samplingRate);
+	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
+	status = gUSBModule->send_request(fDevice->fDevice,
+		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,
+		USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
+		address, sizeof(freq), &freq, &actualLength);
+	TRACE(ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
+		freq.bytes[0], freq.bytes[1], freq.bytes[2],
+		address, actualLength, strerror(status));
+	return status;
 }
 
 
@@ -518,6 +629,8 @@ Stream::Start()
 		for (size_t i = 0; i < kSamplesBufferCount; i++)
 			result = _QueueNextTransfer(i, i == 0);
 		fIsRunning = result == B_OK;
+		if (fIsRunning && !fIsInput)
+			_QueueFeedback();
 	}
 	return result;
 }
@@ -531,6 +644,8 @@ Stream::Stop()
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 	gUSBModule->cancel_queued_transfers(fStreamEndpoint);
+	if (fFeedbackPipe != 0)
+		gUSBModule->cancel_queued_transfers(fFeedbackPipe);
 	while (atomic_get(&fInsideNotify) != 0)
 		snooze(100);
 
@@ -554,6 +669,9 @@ Stream::_QueueNextTransfer(size_t queuedBuffer, bool start)
 		fKernelBuffers + bufferSize * queuedBuffer, bufferSize,
 		fDescriptors + queuedBuffer * packetsCount, packetsCount);
 
+	if (!fIsInput && fFeedbackPipe != 0 && fPlayScratch != NULL)
+		return _QueuePlayback(queuedBuffer);
+
 	status_t status = gUSBModule->queue_isochronous(fStreamEndpoint,
 		fKernelBuffers + bufferSize * queuedBuffer, bufferSize,
 		fDescriptors + queuedBuffer * packetsCount, packetsCount,
@@ -562,6 +680,150 @@ Stream::_QueueNextTransfer(size_t queuedBuffer, bool start)
 
 	TRACE(DTA, "frame:%#010x\n", fStartingFrame);
 	return status;
+}
+
+
+status_t
+Stream::_QueuePlayback(size_t queuedBuffer)
+{
+	// The client's buffer is one exact buffer of frames. A feedback sample
+	// moves one frame into or out of fPlayCarry so the packets follow the
+	// device clock without reading past that buffer.
+	const uint32 fb = fPlan.frameBytes;
+	const uint32 want = fPlan.framesPerBuffer;
+	uint8* client = fKernelBuffers + fRegionBytes * queuedBuffer;
+
+	int32 sample = atomic_get(&fFeedbackSample);
+	if (sample > 0 && fPlan.packetsPerSecond != 0) {
+		int32 nominal = (int32)(((uint64)fPlan.rate << 16)
+			/ fPlan.packetsPerSecond);
+		fFeedbackError += (sample - nominal) * (int32)fPlan.packetsPerBuffer;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		// A device that runs fast can only be followed while frames are
+		// held back. Cap the error so it cannot grow for an hour and wrap
+		// the int32 round to the other sign.
+		if (fFeedbackError > 4 * 65536)
+			fFeedbackError = 4 * 65536;
+		else if (fFeedbackError < -4 * 65536)
+			fFeedbackError = -4 * 65536;
+// SPDX-SnippetEnd
+	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// fPlayCarry holds 8 frames. Hold one more back only while there is
+	// room, or the frame past the eighth would be dropped.
+	int32 adjust = 0;
+	if (fFeedbackError > 65536 && fPlayCarryFrames > 0)
+		adjust = 1;
+	else if (fFeedbackError < -65536 && want > 1 && fPlayCarryFrames < 8)
+		adjust = -1;
+// SPDX-SnippetEnd
+
+	uint32 sent = (uint32)((int32)want + adjust);
+	uint32 have = fPlayCarryFrames + want;
+	if (sent > have)
+		sent = have;
+	if (adjust != 0)
+		fFeedbackError -= adjust * 65536;
+
+	const size_t stride = fRegionBytes + 8 * fb;
+	uint8* scratch = fPlayScratch + queuedBuffer * stride;
+	if (fPlayCarryFrames > 0)
+		memcpy(scratch, fPlayCarry, (size_t)fPlayCarryFrames * fb);
+	uint32 fromClient = sent > fPlayCarryFrames ? sent - fPlayCarryFrames : 0;
+	if (fromClient > want)
+		fromClient = want;
+	if (fromClient > 0) {
+		memcpy(scratch + (size_t)fPlayCarryFrames * fb,
+			client, (size_t)fromClient * fb);
+	}
+	uint32 left = want - fromClient;
+	if (left > 8)
+		left = 8;
+	if (left > 0)
+		memcpy(fPlayCarry, client + (size_t)fromClient * fb, (size_t)left * fb);
+	fPlayCarryFrames = left;
+
+	uint32 accounted = 0;
+	usb_iso_packet_descriptor* descriptors
+		= fDescriptors + queuedBuffer * fPlan.packetsPerBuffer;
+	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++) {
+		uint32 frames = usb_audio_packet_frames(&fPlan, i);
+		if (i + 1 == fPlan.packetsPerBuffer && sent > accounted)
+			frames = sent - accounted;
+		if (frames > fPlan.nominalMaxFrames)
+			frames = fPlan.nominalMaxFrames;
+		accounted += frames;
+		descriptors[i].request_length = (int16)(frames * fb);
+		descriptors[i].actual_length = 0;
+		descriptors[i].status = B_OK;
+	}
+
+	size_t queuedBytes = 0;
+	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++)
+		queuedBytes += (size_t)descriptors[i].request_length;
+
+	return gUSBModule->queue_isochronous(fStreamEndpoint, scratch,
+		queuedBytes, descriptors, fPlan.packetsPerBuffer,
+		&fStartingFrame, USB_ISO_ASAP, Stream::_TransferCallback, this);
+}
+
+
+void
+Stream::_QueueFeedback()
+{
+	if (fFeedbackPipe == 0 || fIsInput)
+		return;
+	fFeedbackPacket.request_length = 4;
+	fFeedbackPacket.actual_length = 0;
+	fFeedbackPacket.status = B_OK;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The stack may write the starting frame after this call returns, so
+	// it is a member, not a local.
+	fFeedbackFrame = 0;
+// SPDX-SnippetEnd
+	gUSBModule->queue_isochronous(fFeedbackPipe, fFeedbackBytes, 4,
+		&fFeedbackPacket, 1, &fFeedbackFrame, USB_ISO_ASAP,
+		Stream::_FeedbackCallback, this);
+}
+
+
+void
+Stream::_FeedbackCallback(void* cookie, status_t status, void* data,
+	size_t actualLength)
+{
+	Stream* stream = (Stream*)cookie;
+	atomic_add(&stream->fInsideNotify, 1);
+	if (status != B_OK || actualLength < 3 || data == NULL
+		|| atomic_get(&stream->fQueueStopped) != 0 || !stream->fIsRunning) {
+		atomic_add(&stream->fInsideNotify, -1);
+		return;
+	}
+
+	uint32 raw = 0;
+	memcpy(&raw, data, actualLength < 4 ? actualLength : 4);
+	int32 perPacket = 0;
+	if (stream->fPlan.packetsPerSecond > 1000) {
+		uint32 micros = 8000 / stream->fPlan.packetsPerSecond;
+		perPacket = (int32)(raw * micros);
+	} else {
+		uint32 frames = 1000 / stream->fPlan.packetsPerSecond;
+		if (frames == 0)
+			frames = 1;
+		perPacket = (int32)((raw & 0x00ffffff) << 2) * (int32)frames;
+	}
+	if (perPacket > 0)
+		atomic_set(&stream->fFeedbackSample, perPacket);
+
+	if (atomic_get(&stream->fQueueStopped) == 0 && stream->fIsRunning)
+		stream->_QueueFeedback();
+	atomic_add(&stream->fInsideNotify, -1);
 }
 
 
@@ -598,8 +860,19 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 	// Recording: join the packets of the buffer that just completed into
 	// exactly one buffer of frames before the reader is woken. The buffer
 	// that completed is the one after fCurrentBuffer.
-	if (stream->fIsInput)
-		stream->_JoinRecorded((stream->fCurrentBuffer + 1) % kSamplesBufferCount);
+	// A short capture stays in the carry and does not wake the reader. The
+	// next transfer finishes the buffer. An empty packet was already turned
+	// into nominal silence, so a missed interval still advances.
+	if (stream->fIsInput
+		&& !stream->_JoinRecorded(
+			(stream->fCurrentBuffer + 1) % kSamplesBufferCount)) {
+		atomic_add(&stream->fProcessedBuffers, -1);
+		stream->fCurrentBuffer
+			= (stream->fCurrentBuffer + 1) % kSamplesBufferCount;
+		stream->_QueueNextTransfer(stream->fCurrentBuffer, false);
+		atomic_add(&stream->fInsideNotify, -1);
+		return;
+	}
 // SPDX-SnippetEnd
 
 	release_sem_etc(stream->fDevice->fBuffersReadySem, 1, B_DO_NOT_RESCHEDULE);
@@ -640,29 +913,40 @@ Stream::_TransferCallback(void* cookie, status_t status, void* data,
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-void
+bool
 Stream::_JoinRecorded(size_t buffer)
 {
 	if (fActualBytes == NULL || fCarry == NULL || fPlan.packetsPerBuffer == 0)
-		return;
+		return false;
 
 	usb_iso_packet_descriptor* descriptors
 		= fDescriptors + buffer * fPlan.packetsPerBuffer;
+	const uint32 frameBytes = fPlan.frameBytes;
+	uint8* region = fKernelBuffers + fRegionBytes * buffer;
 	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++) {
-		fActualBytes[i] = descriptors[i].status == B_OK
-				&& descriptors[i].actual_length > 0
-			? (uint32)descriptors[i].actual_length : 0;
+		if (descriptors[i].status == B_OK && descriptors[i].actual_length > 0) {
+			fActualBytes[i] = (uint32)descriptors[i].actual_length;
+			continue;
+		}
+		// A missed service interval. Silence of the nominal size keeps the
+		// following audio in time. A short but present packet is left short.
+		uint32 frames = usb_audio_packet_frames(&fPlan, i);
+		uint32 bytes = frames * frameBytes;
+		uint32 slot = fPlan.requestFrames * frameBytes;
+		if (bytes > slot)
+			bytes = slot;
+		memset(region + (size_t)i * slot, 0, bytes);
+		fActualBytes[i] = bytes;
 	}
 
-	uint32 before = fPadded + fDropped;
-	usb_audio_compact_record(&fPlan, fKernelBuffers + fRegionBytes * buffer,
-		fActualBytes, fCarry, &fCarryFrames, &fPadded, &fDropped);
-	uint32 after = fPadded + fDropped;
-	// One line per second of frames that had to be repeated or dropped.
-	if (after / fPlan.rate != before / fPlan.rate) {
-		dprintf("usb_audio: record clock drift, %" B_PRIu32 " frames padded, %"
-			B_PRIu32 " dropped so far\n", fPadded, fDropped);
+	uint32 before = fDropped;
+	bool ready = usb_audio_compact_record(&fPlan, region, fActualBytes, fCarry,
+		&fCarryFrames, &fPadded, &fDropped);
+	if (fPlan.rate != 0 && fDropped / fPlan.rate != before / fPlan.rate) {
+		dprintf("usb_audio: record clock drift, %" B_PRIu32
+			" frames dropped so far\n", fDropped);
 	}
+	return ready;
 }
 // SPDX-SnippetEnd
 
@@ -685,6 +969,12 @@ Stream::GetEnabledChannels(uint32& offset, multi_channel_enable* Enable)
 		return B_ERROR;
 
 	for (size_t i = 0; i < cluster->ChannelsCount(); i++) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+		if (offset >= kMaxEnabledChannels)
+			break;
+// SPDX-SnippetEnd
 		B_SET_CHANNEL(Enable->enable_bits, offset++, true);
 		TRACE(INF, "Report channel %d as enabled.\n", offset);
 	}
@@ -700,7 +990,13 @@ Stream::SetEnabledChannels(uint32& offset, multi_channel_enable* Enable)
 	if (cluster == 0)
 		return B_ERROR;
 
-	for (size_t i = 0; i < cluster->ChannelsCount(); i++, offset++) {
+	for (size_t i = 0; i < cluster->ChannelsCount()
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+			&& offset < kMaxEnabledChannels;
+// SPDX-SnippetEnd
+			i++, offset++) {
 		TRACE(INF, "%s channel %d.\n",
 			(B_TEST_CHANNEL(Enable->enable_bits, offset)
 			? "Enable" : "Disable"), offset + 1);
@@ -759,50 +1055,16 @@ Stream::SetGlobalFormat(multi_format_info* Format)
 	if (status != B_OK)
 		return status;
 
-	// set endpoint speed
-	uint32 samplingRate = fAlternates[fActiveAlternate]->GetSamplingRate();
-	size_t actualLength = 0;
-	usb_audio_sampling_freq freq = _ASFormatDescriptor::GetSamFreq(samplingRate);
-	uint8 address = fAlternates[fActiveAlternate]->Endpoint()->fEndpointAddress;
-
-	if (fControlInterface->SpecReleaseNumber() >= 0x0200) {
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
-		// The rate is set on the clock source, not on a selector in front
-		// of it. Init() found it; refuse rather than send clock 0.
-		uint8 clock = fClockId;
-		if (clock == 0) {
-			_AudioControl* control = fControlInterface->Find(TerminalLink());
-			clock = control != NULL ? fControlInterface->ResolveClockSource(
-				control->ClockSourceId()) : 0;
+	// A shared clock is locked while another stream of this device runs.
+	// Rewriting it then is what silences a UMC204HD for the whole capture.
+	for (int i = 0; i < fDevice->fStreams.Count(); i++) {
+		Stream* other = fDevice->fStreams[i];
+		if (other != this && other->IsRunning()) {
+			TRACE(ERR, "clock locked by a running stream\n");
+			return B_OK;
 		}
-		if (clock == 0) {
-			dprintf("usb_audio: no clock source to set %" B_PRIu32 " Hz on\n",
-				samplingRate);
-			return B_ERROR;
-		}
-// SPDX-SnippetEnd
-		uint32 rate = samplingRate;
-		status = gUSBModule->send_request(fDevice->fDevice,
-			USB_REQTYPE_CLASS | USB_REQTYPE_INTERFACE_OUT,
-			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
-			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
-			sizeof(rate), &rate, &actualLength);
-		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
-			samplingRate, clock, strerror(status));
-		return status;
 	}
-
-	status = gUSBModule->send_request(fDevice->fDevice,
-		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,
-		USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
-		address, sizeof(freq), &freq, &actualLength);
-
-	TRACE(ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
-		freq.bytes[0], freq.bytes[1], freq.bytes[2],
-		address, actualLength, strerror(status));
-	return status;
+	return ProgramClock();
 }
 
 

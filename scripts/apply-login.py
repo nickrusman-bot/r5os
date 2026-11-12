@@ -58,6 +58,7 @@ def copy_sources() -> None:
         "SessionLog.h",
         "SignInBackground.cpp",
         "SignInBackground.h",
+        "SignInLook.h",
         "TrayApp.cpp",
         "main.cpp",
         "r5_pebble.inc",

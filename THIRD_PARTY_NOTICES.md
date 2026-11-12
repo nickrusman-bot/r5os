@@ -14,6 +14,12 @@ The Back, Forward, Up, and Home pictures in `libr5icons.so` are unmodified HVIF 
 
 ## Identified in this repository
 
+### USB audio and MIDI behavior from RenkuOS
+
+Location: `distro/media/` `usb_midi`, `multi_audio`, `usb_audio`, the media server, and the media kit.
+
+The files stay Haiku's, MIT, copyright the authors named in each file. The added behavior is ported from RenkuOS commits `fe2de4aa60`, `cb61494f02`, `7405980fad`, `303b85eae5`, `bd571637d2`, `cf885a005b`, `8db4b0d1b4`, `8d3c445d68`, `428e08cd07`, `4b157fb134`, `bc165f5613`, `d1028141c2`, `cf12459a32`, `917e0e9e30`, `2aee4b6c3c`, `e95a210256`, `a842555ed6`, and `b3dc1212e4`. Authors: David Beckman, rations, and atomozero. The Roland cable table is facts about the hardware. No ALSA code is included. The product-name read and the playback pacing from an explicit feedback endpoint are the same ideas as the Media-OS `usb_audio` driver and are written on our file. The Haiku MIT headers stay. The R5 snippets that were already in these files stay GPL-3.0-or-later.
+
 ### PCI segments
 
 The x86 PCI host files are Haiku's. Copyright 2022 Haiku, Inc., and the earlier authors named in `pci.cpp`. License: MIT. The code that keeps a firmware segment other than segment 0 is copyright 2026 R5OS Contributors. Those snippets are GPL-3.0-or-later. The Haiku headers stay.
@@ -37,11 +43,11 @@ Location: `distro/kernel/src/add-ons/kernel/file_systems/bfs/kernel_interface.cp
 The file is Haiku's BFS interface. Copyright the Haiku authors named in the file. License: MIT. One block is haiku-pi `44cc183c0c` (star row 57): the last reference from a finished I/O is released through `vfs_put_vnode()`. Copyright 2026 Witold Bołt. The snippet is distributed as GPL-3.0-or-later. The Haiku header stays.
 ### USB controller
 
-Location: `distro/kernel/src/add-ons/kernel/busses/usb/xhci.cpp`, `xhci.h`, `xhci_hardware.h`, `ehci.cpp`, `distro/kernel/src/add-ons/kernel/bus_managers/usb/Device.cpp`, `Hub.cpp`, `usb_private.h`, `Object.cpp`, `BusManager.cpp`, `Stack.cpp`, and `distro/kernel/src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp`.
+Location: `distro/kernel/src/add-ons/kernel/busses/usb/xhci.cpp`, `xhci.h`, `xhci_hardware.h`, `ehci.cpp`, `ehci.h`, `ehci_hardware.h`, `uhci.cpp`, `uhci.h`, `ohci.cpp`, `ohci.h`, `distro/kernel/src/add-ons/kernel/bus_managers/usb/Device.cpp`, `Hub.cpp`, `usb_private.h`, `Object.cpp`, `BusManager.cpp`, `Stack.cpp`, and `distro/kernel/src/add-ons/kernel/drivers/network/ether/usb_ecm/ECMDevice.cpp`.
 
 The files are Haiku's. Copyright the Haiku authors named in each file. License: MIT. The headers stay. The added blocks stay MIT. They are not relicensed.
 
-haiku-pi `c65ac5a2e6a6383be3e6630ded05b1a29d506166` clears a finished transfer on a VIA VL805 and leaves four empty slots after it. Copyright 2026 Witold Bołt.
+haiku-pi `c65ac5a2e6a6383be3e6630ded05b1a29d506166` clears a finished transfer on a VIA VL805 and left four empty slots after every ring. Copyright 2026 Witold Bołt. RenkuOS `942e51e6d6` and `dc8872b982` replace that pad.
 
 air/OS (airos-works/haiku), copyright jmgasper, unless another author is named:
 
@@ -60,12 +66,34 @@ RenkuOS (RenkuOS/Source), copyright rainygirl:
 
 - `64d38d0286e6ae25d125bc6124bde04ba6e71e3f` stops retrying a port that keeps failing to set up, and power-cycles it only when the hub switches power per port.
 - `14576fdf3c5bc1e59739126b7e5539ab5bba8a45` lets an unplug clear that ignore, and drops the address-0 descriptor read.
+- `03c6ae617edf54bd5b6d8662755042138144fa5d` recovers a UHCI controller from a halt.
+- `9c3906bb98ea605152f2cd0ac37f9756162ab670` does not finish a transfer that was already cancelled while that recovery runs.
 
 RenkuOS, copyright David Beckman:
 
 - `9abfa5e06e0c9f381f1c1e532e6d82003c3a1858` enables that port cap on 64-bit x86.
 - `42ea6ba8c967dd79c4c3196fbf02f7304d9aba2d` looks again as soon as a high-speed controller hands a port to its companion.
 - `cdd493103a956a90295deb22ace647ab9df1f019` explores a controller that starts after the boot volume is mounted from the explore thread.
+- `3f4ee2d0facb1d8cd0a04a3938f4185358408d26` puts the packets of one isochronous transfer in a single buffer, so a short packet does not shift the next one.
+- `8d6303031ecf2800fdcef718646644ec1b674b67` starts an isochronous chain again when the frame it asked for has already passed, on xHCI and on OHCI.
+- `698d1c3159e09ea0245c6756e5c987f12baa6390` gives each EHCI and UHCI controller its own interrupt lock.
+- `eae629d59a211e6161eeefd6c4f6bace3e3f4f06` runs an isochronous callback with the lock released.
+- `c43a4a2f562fc274c7c50949e57117dac95e56f8` transmits an isochronous OUT payload. `0c200ef849a202bac121c5777aaae29cb01aba10` maps the caller's buffers first.
+- `6bdbffb6a85400294f7b8bae64aca459c420d86f` keeps the isochronous chaining anchor per pipe. `d57fdde9ded70c0e6599e0d9b28805fdfb92f99a` places packets per service interval. `f69ee0331005449c26d361aecebb3777469cf8fb` starts the next transfer in the next free frame.
+- `0473f845745184b09b126f065bb8ae3e57a5c0c0` reports what an isochronous OUT transfer actually did. `4512333a5d9ef34bd38c5316f5d9f1474c380bb0` uses the caller's length per packet. `c15045f9749b91b736b82fc94c8a2d8e2f0a7d22` reclaims an isochronous transfer on cancel.
+- `676e5cffa0e27e20aad2aba5e9e4e2d22848bfcf` detaches a descriptor that is still linked before freeing it.
+- `599f04372363519958501400c5649624f1df15bc` survives a UHCI halt instead of panicking. `bb6e0a2b4d807d031835e876c80384f65a00f82b` reschedules UHCI isochronous transfers. `bba308447a8da5fedb587d2df3d03d3fff5434dd` restarts the finisher at the stream's first frame after idle.
+- `d38c595a49ecfd4a6b0482ee8e9c40d9ee4eee32` uses the OHCI length per packet and reports the start frame. `6011739554cbf747d50f0a9aa9db5a2740d97f00` frees an OHCI descriptor at the size it was allocated. `5ed8a3e4c59b9060ef4ad416dbc22849156f7189` unlinks an OHCI isochronous transfer before walking its descriptors.
+
+RenkuOS, copyright atomozero:
+
+- `e28b91f5e8663bbf56ae6c35759ee8e46b777fca` keeps the data toggle of an EHCI transfer that failed. A stall still resets it.
+- `925977a925a7378abb0acf65f434db5f7772f85a` refuses an EHCI transfer with no data instead of queueing a NULL descriptor.
+
+RenkuOS, copyright Bryan Irvine:
+
+- `942e51e6d6295bf24c28ec0c36806a5256509ebf` leaves 32 unused TRBs after a transfer and after an endpoint ring, so a controller that reads ahead does not act on a TRB that gets rewritten.
+- `dc8872b9823656b7b323821cffc4d998970735d2` keeps that space only on the VIA VL805 (PCI 1106:3483). The kernel debugger's allocation size was not changed. The ACPI `_CCA` path in that commit was not added: this driver always has the PCI id.
 
 `scripts/apply-kernel-bugs.py` copies these files.
 

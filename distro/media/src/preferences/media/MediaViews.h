@@ -34,6 +34,7 @@ class MediaWindow;
 
 const uint32 ML_RESTART_MEDIA_SERVER = 'resr';
 const uint32 ML_DEFAULT_CHANNEL_CHANGED = 'chch';
+const uint32 ML_UPDATE_DEFAULTS = 'updf';
 const uint32 ML_USB_CHANNEL_LAYOUT = 'ulyt';
 const uint32 ML_VIRTUAL_SURROUND = 'vsur';
 
@@ -80,6 +81,7 @@ public:
 			void				AddInputNodes(NodeList& nodes);
 			void				AddOutputNodes(NodeList& nodes);
 
+	// Show info as the default. This does not change the server's default.
 	virtual	void				SetDefaultInput(const dormant_node_info* info);
 	virtual	void				SetDefaultOutput(const dormant_node_info* info);
 
@@ -94,10 +96,20 @@ protected:
 
 			BButton*			MakeRestartButton();
 
+	// Make info the server's default, when the user chose it in the menu.
+	virtual	status_t			_ChangeDefaultInput(
+									const dormant_node_info* info);
+	virtual	status_t			_ChangeDefaultOutput(
+									const dormant_node_info* info);
+
+			status_t			_GetNode(const dormant_node_info* info,
+									media_node* node);
 			void				_EmptyMenu(BMenu* menu);
 			MediaWindow*		_MediaWindow() const;
 
 private:
+			void				_ChangeFailed(const dormant_node_info* info,
+									status_t status);
 			void				_PopulateMenu(BMenu* menu, NodeList& nodes,
 									const BMessage& message);
 			NodeMenuItem*		_FindNodeItem(BMenu* menu,
@@ -122,6 +134,12 @@ public:
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				AttachedToWindow();
 	virtual	void				AllAttached();
+
+protected:
+	virtual	status_t			_ChangeDefaultInput(
+									const dormant_node_info* info);
+	virtual	status_t			_ChangeDefaultOutput(
+									const dormant_node_info* info);
 
 private:
 			BMenuField*			_MakeChannelMenu();
@@ -152,6 +170,12 @@ public:
 
 	virtual	void				SetDefaultInput(const dormant_node_info* info);
 	virtual	void				SetDefaultOutput(const dormant_node_info* info);
+
+protected:
+	virtual	status_t			_ChangeDefaultInput(
+									const dormant_node_info* info);
+	virtual	status_t			_ChangeDefaultOutput(
+									const dormant_node_info* info);
 };
 
 #endif

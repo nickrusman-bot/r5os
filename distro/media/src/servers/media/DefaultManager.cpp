@@ -15,6 +15,7 @@
 #include <Path.h>
 #include <TimeSource.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "MediaDebug.h"
 #include "DormantNodeManager.h"
@@ -63,6 +64,8 @@ DefaultManager::DefaultManager()
 	fRoster(NULL)
 {
 	strcpy(fPhysicalAudioOutInputName, "default");
+	for (int32 i = 0; i < 4; i++)
+		fUsingFallback[i] = false;
 	fBeginHeader[0] = 0xab00150b;
 	fBeginHeader[1] = 0x18723462;
 	fBeginHeader[2] = 0x00000002;
@@ -162,6 +165,15 @@ DefaultManager::SaveState(NodeManager *node_manager)
 	for (uint32 i = 0; i < sizeof(default_types) / sizeof(default_types[0]);
 		i++) {
 
+		// A fallback, or no node at all, must not replace the saved device.
+		// One boot without that device would otherwise forget it.
+		BMessage* saved = _SavedDefault(default_types[i]);
+		if (saved != NULL && (media_node_ids[i] == -1
+				|| fUsingFallback[_TypeIndex(default_types[i])])) {
+			list.AddItem(new BMessage(*saved));
+			continue;
+		}
+
 		// we call the node manager to have more infos about nodes
 		dormant_node_info info;
 		media_node node;
@@ -230,14 +242,18 @@ DefaultManager::Set(media_node_id node_id, const char *input_name,
 	TRACE("DefaultManager::Set type : %i, node : %li, input : %li\n", type,
 		node_id, input_id);
 	switch (type) {
+		// An explicit choice replaces a fallback, so it is saved as such.
 		case VIDEO_INPUT:
 			fPhysicalVideoIn = node_id;
+			fUsingFallback[_TypeIndex(kMsgTypeVideoIn)] = false;
 			return B_OK;
 		case AUDIO_INPUT:
 			fPhysicalAudioIn = node_id;
+			fUsingFallback[_TypeIndex(kMsgTypeAudioIn)] = false;
 			return B_OK;
 		case VIDEO_OUTPUT:
 			fPhysicalVideoOut = node_id;
+			fUsingFallback[_TypeIndex(kMsgTypeVideoOut)] = false;
 			return B_OK;
 		case AUDIO_MIXER:
 			return B_ERROR;
@@ -246,6 +262,7 @@ DefaultManager::Set(media_node_id node_id, const char *input_name,
 				return B_OK;
 
 			fPhysicalAudioOut = node_id;
+			fUsingFallback[_TypeIndex(kMsgTypeAudioOut)] = false;
 			fPhysicalAudioOutInputID = input_id;
 			strcpy(fPhysicalAudioOutInputName,
 				input_name ? input_name : "<null>");
@@ -408,6 +425,27 @@ DefaultManager::_RescanThread()
 		if (fPhysicalAudioIn == -1)
 			_FindPhysical(&fPhysicalAudioIn, kMsgTypeAudioIn, true,
 				B_MEDIA_RAW_AUDIO);
+
+		// A fallback goes back to the saved device once that device has a
+		// node. The mixer is reconnected below.
+		if (fPhysicalAudioOut != -1
+			&& fUsingFallback[_TypeIndex(kMsgTypeAudioOut)]) {
+			media_node_id saved = fPhysicalAudioOut;
+			_FindPhysical(&saved, kMsgTypeAudioOut, false, B_MEDIA_RAW_AUDIO,
+				true);
+			if (saved != fPhysicalAudioOut) {
+				fPhysicalAudioOut = saved;
+				fMixerConnected = false;
+			}
+		}
+		if (fPhysicalAudioIn != -1
+			&& fUsingFallback[_TypeIndex(kMsgTypeAudioIn)]) {
+			media_node_id saved = fPhysicalAudioIn;
+			_FindPhysical(&saved, kMsgTypeAudioIn, true, B_MEDIA_RAW_AUDIO,
+				true);
+			fPhysicalAudioIn = saved;
+		}
+
 		if (fAudioMixer == -1)
 			_FindAudioMixer();
 
@@ -447,38 +485,38 @@ DefaultManager::_RescanThread()
 
 void
 DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
-	bool isInput, media_type type)
+	bool isInput, media_type type, bool savedOnly)
 {
 	live_node_info info[MAX_NODE_INFOS];
 	media_format format;
 	int32 count;
 	status_t rv;
-	BMessage *msg = NULL;
 	BPath msgPath;
 	dormant_node_info msgDninfo;
-	int32 input_id;
+	int32 input_id = 0;
 	bool isAudio = (type == B_MEDIA_RAW_AUDIO)
 		|| (type == B_MEDIA_ENCODED_AUDIO);
 
-	for (int32 i = 0; i < fMsgList.CountItems(); i++) {
-		msg = (BMessage *)fMsgList.ItemAt(i);
-		int32 msgType;
-		if (msg->FindInt32(kDefaultManagerType, &msgType) == B_OK
-			&& ((uint32)msgType == default_type)) {
-			const char *name = NULL;
-			const char *path = NULL;
-			msg->FindInt32(kDefaultManagerAddon, &msgDninfo.addon);
-			msg->FindInt32(kDefaultManagerFlavorId, &msgDninfo.flavor_id);
-			msg->FindInt32(kDefaultManagerInput, &input_id);
-			msg->FindString(kDefaultManagerFlavorName, &name);
-			msg->FindString(kDefaultManagerPath, &path);
-			if (name)
-				strcpy(msgDninfo.name, name);
-			if (path)
-				msgPath = BPath(path);
-			break;
-		}
-	}
+	// The old loop stored the message on every pass and left it pointing at
+	// another type when this type had no saved entry.
+	BMessage *msg = _SavedDefault(default_type);
+	if (msg != NULL) {
+		const char *name = NULL;
+		const char *path = NULL;
+		msgDninfo.addon = -1;
+		msgDninfo.flavor_id = -1;
+		msgDninfo.name[0] = '\0';
+		msg->FindInt32(kDefaultManagerAddon, &msgDninfo.addon);
+		msg->FindInt32(kDefaultManagerFlavorId, &msgDninfo.flavor_id);
+		msg->FindInt32(kDefaultManagerInput, &input_id);
+		msg->FindString(kDefaultManagerFlavorName, &name);
+		msg->FindString(kDefaultManagerPath, &path);
+		if (name)
+			strlcpy(msgDninfo.name, name, sizeof(msgDninfo.name));
+		if (path)
+			msgPath = BPath(path);
+	} else if (savedOnly)
+		return;
 
 	format.type = type;
 	count = MAX_NODE_INFOS;
@@ -494,12 +532,23 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 	for (int i = 0; i < count; i++)
 		TRACE("info[%d].name %s\n", i, info[i].name);
 
+	// A flavor id is the device's index in the add-on. One absent USB device
+	// renumbers the rest, so an exact id match can miss a card that is here
+	// under the same name. Match the name from the same add-on, and otherwise
+	// use the first real device for this session without forgetting the saved
+	// one. RenkuOS d1028141c2.
+	media_node_id exactMatch = -1;
+	media_node_id nameMatch = -1;
+	int32 nameMatchIndex = -1;
+	int32 firstReal = -1;
+
 	for (int i = 0; i < count; i++) {
 		if (isAudio) {
 			if (isInput) {
 				if (0 == strcmp(info[i].name, "None In")) {
 					// we keep the Null audio driver if none else matchs
-					*id = info[i].node.node;
+					if (!savedOnly)
+						*id = info[i].node.node;
 					continue;
 				}
 				// skip the Firewire audio driver
@@ -508,9 +557,11 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 			} else {
 				if (0 == strcmp(info[i].name, "None Out")) {
 					// we keep the Null audio driver if none else matchs
-					*id = info[i].node.node;
-					if (msg)
-						fPhysicalAudioOutInputID = input_id;
+					if (!savedOnly) {
+						*id = info[i].node.node;
+						if (msg)
+							fPhysicalAudioOutInputID = input_id;
+					}
 					continue;
 				}
 				// skip the Firewire audio driver
@@ -518,33 +569,101 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 					continue;
 			}
 		}
-		if (msg) {	// we have a default info msg
-			dormant_node_info dninfo;
-			if (fRoster->GetDormantNodeFor(info[i].node,
-					&dninfo) != B_OK) {
-				ERROR("Couldn't GetDormantNodeFor\n");
-				continue;
-			}
-			if (dninfo.flavor_id != msgDninfo.flavor_id
-				|| strcmp(dninfo.name, msgDninfo.name) != 0) {
-				ERROR("Doesn't match flavor or name\n");
-				continue;
-			}
-			BPath path;
-			if (gDormantNodeManager->FindAddOnPath(&path, dninfo.addon) != B_OK
-				|| path != msgPath) {
-				ERROR("Doesn't match : path\n");
-				continue;
-			}
+		if (firstReal < 0)
+			firstReal = i;
+
+		if (msg == NULL)
+			break;
+
+		dormant_node_info dninfo;
+		if (fRoster->GetDormantNodeFor(info[i].node, &dninfo) != B_OK) {
+			ERROR("Couldn't GetDormantNodeFor\n");
+			continue;
 		}
-		TRACE("Default physical %s %s \"%s\" created!\n",
-			isAudio ? "audio" : "video", isInput ? "input" : "output",
-			info[i].name);
-		*id = info[i].node.node;
-		if (msg && isAudio && !isInput)
+		if (strcmp(dninfo.name, msgDninfo.name) != 0) {
+			ERROR("Doesn't match name\n");
+			continue;
+		}
+		BPath path;
+		if (gDormantNodeManager->FindAddOnPath(&path, dninfo.addon) != B_OK
+			|| path != msgPath) {
+			ERROR("Doesn't match : path\n");
+			continue;
+		}
+		if (dninfo.flavor_id == msgDninfo.flavor_id) {
+			exactMatch = info[i].node.node;
+			break;
+		}
+		if (nameMatch < 0) {
+			nameMatch = info[i].node.node;
+			nameMatchIndex = i;
+		}
+	}
+
+	const int32 typeIndex = _TypeIndex(default_type);
+
+	if (msg != NULL && (exactMatch >= 0 || nameMatch >= 0)) {
+		*id = exactMatch >= 0 ? exactMatch : nameMatch;
+		if (exactMatch < 0) {
+			syslog(LOG_NOTICE, "media_server: default %s %s \"%s\" restored by"
+				" name; its flavor id moved from %" B_PRId32 "\n",
+				isAudio ? "audio" : "video", isInput ? "input" : "output",
+				info[nameMatchIndex].name, msgDninfo.flavor_id);
+		}
+		if (isAudio && !isInput)
 			fPhysicalAudioOutInputID = input_id;
+		fUsingFallback[typeIndex] = false;
+		if (savedOnly) {
+			syslog(LOG_NOTICE, "media_server: default %s %s \"%s\" is present"
+				" again; using it\n", isAudio ? "audio" : "video",
+				isInput ? "input" : "output", msgDninfo.name);
+		}
+		TRACE("Default physical %s %s restored!\n",
+			isAudio ? "audio" : "video", isInput ? "input" : "output");
 		return;
 	}
+
+	if (savedOnly || firstReal < 0)
+		return;
+
+	*id = info[firstReal].node.node;
+	if (msg != NULL) {
+		fUsingFallback[typeIndex] = true;
+		syslog(LOG_NOTICE, "media_server: default %s %s \"%s\" not present;"
+			" using \"%s\" until it is\n", isAudio ? "audio" : "video",
+			isInput ? "input" : "output", msgDninfo.name,
+			info[firstReal].name);
+	} else
+		fUsingFallback[typeIndex] = false;
+	TRACE("Default physical %s %s \"%s\" created!\n",
+		isAudio ? "audio" : "video", isInput ? "input" : "output",
+		info[firstReal].name);
+}
+
+
+int32
+DefaultManager::_TypeIndex(uint32 defaultType)
+{
+	switch (defaultType) {
+		case kMsgTypeVideoIn:	return 0;
+		case kMsgTypeVideoOut:	return 1;
+		case kMsgTypeAudioIn:	return 2;
+		default:				return 3;
+	}
+}
+
+
+BMessage*
+DefaultManager::_SavedDefault(uint32 defaultType) const
+{
+	for (int32 i = 0; i < fMsgList.CountItems(); i++) {
+		BMessage* msg = (BMessage*)fMsgList.ItemAt(i);
+		int32 msgType;
+		if (msg->FindInt32(kDefaultManagerType, &msgType) == B_OK
+			&& (uint32)msgType == defaultType)
+			return msg;
+	}
+	return NULL;
 }
 
 

@@ -12,6 +12,7 @@
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "AccountAdmin.h"
+#include "SignInLook.h"
 #include "r5_pebble.inc"
 
 #include <AccentButton.h>
@@ -48,72 +49,6 @@ using BAppearanceKit::BIconView;
 using BAppearanceKit::BPasswordControl;
 using BAppearanceKit::BUserCard;
 using BAppearanceKit::BUserListItem;
-
-
-static const char* kRoleAdministrator = "Administrator";
-static const char* kRoleStandard = "Standard";
-
-
-// One pixel of the mockup (docs/design/login-mockup/sign-in.html). The
-// mockup is drawn for the 12 point system font; a larger system font
-// scales the whole window.
-static float
-px(float value)
-{
-	return value * be_plain_font->Size() / 12.0f;
-}
-
-
-// A whole number of pixels for a square that should be `value` mockup
-// pixels on a side. Layout sizes are one less than the pixel count.
-static float
-px_side(float value)
-{
-	return floorf(px(value) + 0.5f);
-}
-
-
-static BFont
-font_px(const BFont* base, float size)
-{
-	BFont font(base);
-	font.SetSize(floorf(px(size) * 2 + 0.5f) / 2);
-	return font;
-}
-
-
-// The round account picture of the single-account banner.
-class AvatarView : public BView {
-public:
-	AvatarView(const BBitmap** icon, float side)
-		:
-		BView("avatar", B_WILL_DRAW),
-		fIcon(icon),
-		fHighlighted(true)
-	{
-		SetViewUIColor(B_DOCUMENT_BACKGROUND_COLOR);
-		BSize size(side - 1, side - 1);
-		SetExplicitMinSize(size);
-		SetExplicitMaxSize(size);
-	}
-
-	void SetHighlighted(bool highlighted)
-	{
-		fHighlighted = highlighted;
-		Invalidate();
-	}
-
-	virtual void Draw(BRect updateRect)
-	{
-		(void)updateRect;
-		r5_avatar_draw(this, Bounds(), fIcon != NULL ? *fIcon : NULL,
-			fHighlighted);
-	}
-
-private:
-	const BBitmap**	fIcon;
-	bool			fHighlighted;
-};
 
 
 // The "@login" pill after "Signing in as".
@@ -180,30 +115,6 @@ public:
 private:
 	BString			fText;
 };
-
-
-static BStringView*
-make_label(const char* name, const char* text, const BFont& font,
-	color_which background)
-{
-	BStringView* view = new BStringView(name, text);
-	view->SetFont(&font);
-	view->SetViewUIColor(background);
-	view->SetLowUIColor(background);
-	return view;
-}
-
-
-static BBitmap*
-person_icon(float side)
-{
-	// The People icon, as in the mockup. The person file icon if People
-	// is not installed.
-	BBitmap* icon = r5_mime_icon_bitmap("application/x-vnd.Be-PEPL", side);
-	if (icon == NULL)
-		icon = r5_mime_icon_bitmap("application/x-person", side);
-	return icon;
-}
 
 
 static bool

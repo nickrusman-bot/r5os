@@ -275,8 +275,22 @@ static void
 glyph_arc(BView* view, const glyph_space& space, float cx, float cy,
 	float radius, float startAngle, float arcAngle)
 {
-	view->StrokeArc(space.Map(cx, cy), space.Size(radius),
-		space.Size(radius), startAngle, arcAngle);
+	// One open polygon in the same coordinates as glyph_line(), so a ring
+	// and a line through its center line up. StrokeArc() places the arc
+	// by its bounding rectangle, half a pixel off from a line.
+	const int32 kMaxPoints = 65;
+	int32 count = (int32)ceilf(fabsf(arcAngle) / 360.0f * 64) + 1;
+	if (count < 2)
+		count = 2;
+	if (count > kMaxPoints)
+		count = kMaxPoints;
+	BPoint points[kMaxPoints];
+	for (int32 i = 0; i < count; i++) {
+		float angle = (startAngle + arcAngle * i / (count - 1)) * M_PI / 180;
+		points[i] = space.Map(cx + radius * cosf(angle),
+			cy - radius * sinf(angle));
+	}
+	view->StrokePolygon(points, count, fabsf(arcAngle) >= 360.0f);
 }
 
 
@@ -359,6 +373,16 @@ glyph_paint(BView* view, r5_glyph which, BRect frame)
 			break;
 		}
 
+		case R5_GLYPH_LOG_OUT:
+			// An open door frame on the left, an arrow out to the right.
+			glyph_line(view, space, 9, 3, 4, 3);
+			glyph_line(view, space, 4, 3, 4, 21);
+			glyph_line(view, space, 4, 21, 9, 21);
+			glyph_line(view, space, 9, 12, 21, 12);
+			glyph_line(view, space, 16, 7, 21, 12);
+			glyph_line(view, space, 21, 12, 16, 17);
+			break;
+
 		default:
 			break;
 	}
@@ -385,7 +409,7 @@ BBitmap*
 r5_glyph_bitmap(r5_glyph which, float side, rgb_color color)
 {
 	int32 pixels = icon_pixels(side);
-	if (pixels < 1 || which < R5_GLYPH_POWER || which > R5_GLYPH_EYE_OFF)
+	if (pixels < 1 || which < R5_GLYPH_POWER || which > R5_GLYPH_LOG_OUT)
 		return NULL;
 
 	BRect bounds(0, 0, pixels - 1, pixels - 1);

@@ -30,9 +30,10 @@ class XHCIRootHub;
 /* The endpoint ring needs space for 2 TRBs per transfer
  * (one for the link TRB, and one for the Event Data TRB). */
 #define XHCI_ENDPOINT_RING_SIZE	(XHCI_MAX_TRANSFERS * 2)
-// Controllers such as the VIA VL805 fetch past the doorbell TRB.
-#define XHCI_TRB_OVERFETCH		4
-#define XHCI_ENDPOINT_RING_STRIDE	(XHCI_ENDPOINT_RING_SIZE + XHCI_TRB_OVERFETCH)
+// The VIA VL805 fetches TRBs past the end of a ring or a TD. Only that
+// controller keeps this many unused TRBs after them. RenkuOS 942e51e6d6
+// and dc8872b982.
+#define XHCI_TRB_OVERFETCH		32
 
 
 struct xhci_td : public DoublyLinkedListLinkImpl<xhci_td> {
@@ -78,7 +79,7 @@ struct xhci_endpoint {
 		// A halted endpoint is being reset. A transfer linked meanwhile
 		// is rung once that reset has finished.
 
-	xhci_trb*		trbs; // [XHCI_ENDPOINT_RING_STRIDE]
+	xhci_trb*		trbs;
 	phys_addr_t 	trb_addr;
 };
 
@@ -88,7 +89,7 @@ struct xhci_device {
 	uint8 address;
 	area_id trb_area;
 	phys_addr_t trb_addr;
-	struct xhci_trb *trbs; // [XHCI_MAX_ENDPOINTS - 1][XHCI_ENDPOINT_RING_STRIDE]
+	struct xhci_trb *trbs;
 
 	area_id input_ctx_area;
 	phys_addr_t input_ctx_addr;
@@ -259,6 +260,12 @@ private:
 			Stack *				fStack;
 			uint32				fIRQ;
 			bool				fUseMSI;
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 Bryan Irvine
+			// SPDX-License-Identifier: MIT
+			uint32				fTrbPad;
+			uint32				fRingStride;
+			// SPDX-SnippetEnd
 
 			area_id				fErstArea;
 			xhci_erst_element *	fErst;
