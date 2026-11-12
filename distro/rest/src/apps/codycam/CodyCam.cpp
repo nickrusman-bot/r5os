@@ -240,7 +240,11 @@ CodyCam::_SetUpNodes()
 		fWindow->ErrorAlert(text, status);
 		return status;
 	}
-	codycam_log("video source: %s", fProducerNode.name);
+	live_node_info producerInfo;
+	const char* producerName = "unknown";
+	if (fMediaRoster->GetLiveNodeInfo(fProducerNode, &producerInfo) == B_OK)
+		producerName = producerInfo.name;
+	codycam_log("video source: %s", producerName);
 
 	/* create the video consumer node */
 	fVideoConsumer = new VideoConsumer("CodyCam",
@@ -298,7 +302,7 @@ CodyCam::_SetUpNodes()
 			"the video window"), status);
 		return status;
 	}
-	codycam_log("connected to %s, %" B_PRIu32 "x%" B_PRIu32, fProducerNode.name,
+	codycam_log("connected to %s, %" B_PRIu32 "x%" B_PRIu32, producerName,
 		format.u.raw_video.display.line_width,
 		format.u.raw_video.display.line_count);
 
