@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - R5Book: Vulkan, additions to Haiku kits, interface guidelines
+
+Three pages are added to `docs/r5book/`. **Vulkan in a window** describes `VK_RFIVE_view_surface` for application developers: the create info, what `vkQueuePresentKHR` returns on R5, FIFO as the only present mode, the Lavapipe fallback while `gpu_present` is off, and porting. **Additions to Haiku kits** lists the public calls R5 added to existing classes: `BLocaleRoster::ApplySettings()` and `BFormattingConventions::CoerceFormatForClock()`. **Interface guidelines** gathers the rules from `docs/STYLE.md`, `docs/SETTINGS.md` and `AGENTS.md`: forms on the panel, cards, one accent button, icons, settings pages, accounts and words.
+
+`docs/LOOK.md` (rounded window chrome) is a plan and is not in the guidelines. The GPU driver interface is left for a later Driver Kit page. Checked in headless Edge at desktop width.
+
 ## 2026-11-12 - The R5Book, a developer guide to LibR5
 
 `docs/r5book/` is a static HTML guide in the layout of the Be Book and the look of the R5 website: an introduction, the Icons Kit (`libr5icons.so`), the Appearance Kit (`libr5ui.so`, every `BAppearanceKit` class and the `R5UI.h` functions) and the MIDI 2 Kit (the MIDI 2.0 additions to `libmidi2.so`). Each entry has the facts box (declared in, derived from, first user), what it is for and not for, its members, an example, and a picture.

@@ -8,6 +8,9 @@ The developer guide to LibR5 and the MIDI 2 additions, in the layout of the Be B
 | `icons-kit.html` | `libr5icons.so`: predefined icons, icon bitmaps, icon buttons, line glyphs | `distro/icons/R5Icons.h`, `docs/ICONS.md` |
 | `appearance-kit.html` | `libr5ui.so`: every `BAppearanceKit` class and the `R5UI.h` functions | `distro/ui/*.h`, `docs/LIBR5.md`, `docs/APPEARANCE-KIT.md` |
 | `midi2-kit.html` | MIDI 2.0 in `libmidi2.so` | `distro/media/headers/os/midi2`, `docs/MIDI2.md` |
+| `vulkan.html` | Vulkan in a `BView`: `VK_RFIVE_view_surface` | `distro/vulkan/include/vulkan/vulkan_r5.h`, `docs/VULKAN-WSI.md` |
+| `haiku-additions.html` | Public calls R5 added to Haiku classes | the `SPDX-Snippet` parts of the public headers in `distro/` |
+| `guidelines.html` | How an R5 window is put together | `docs/STYLE.md`, `docs/SETTINGS.md`, `AGENTS.md` |
 
 ## Pictures
 
@@ -17,4 +20,4 @@ The next step replaces the mockups with screenshots taken from R5 in QEMU, one p
 
 ## Keeping it current
 
-A change that adds or changes a public call in `libr5icons.so`, `libr5ui.so` or the MIDI 2 headers updates the matching page in the same change: the entry, its members, and its picture. A new class gets an entry with the facts box (declared in, derived from, first user), what it is for and not for, its members, and an example. Add it to the contents in `r5book.js`.
+A change that adds or changes a public call in `libr5icons.so`, `libr5ui.so`, the MIDI 2 headers, `vulkan_r5.h`, or a public Haiku header in `distro/` updates the matching page in the same change: the entry, its members, and its picture. A new class gets an entry with the facts box (declared in, derived from, first user), what it is for and not for, its members, and an example. Add it to the contents in `r5book.js`.

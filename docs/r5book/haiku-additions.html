@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Additions to Haiku kits</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+</head>
+<body data-page="additions">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">libbe</span>
+			<h1>Additions to Haiku kits</h1>
+			<p>Public calls R5 added to classes that Haiku already has. The rest of each class is as the Haiku Book
+			describes it. A program that uses one of these calls runs on R5, not on Haiku.</p>
+		</section>
+
+		<div class="note"><strong>Check before you call.</strong> These calls are not in Haiku. A program that should
+		also run on Haiku keeps its own fallback, or builds this part only for R5.</div>
+
+		<!-- BLocaleRoster -->
+		<section class="entry" id="BLocaleRoster">
+			<div class="entry-header"><h2>BLocaleRoster::ApplySettings()</h2><span class="kind">Locale Kit</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;LocaleRoster.h&gt;</td></tr>
+				<tr><th>Library</th><td>libbe.so</td></tr>
+				<tr><th>Haiku Book</th><td>BLocaleRoster</td></tr>
+			</table>
+
+			<div class="member"><div class="sig">status_t ApplySettings(const BMessage* message);</div>
+				<p>Applies one <code class="inline">B_LOCALE_CHANGED</code> message on top of the settings file. A field
+				that is not in the message keeps its value.</p></div>
+
+			<p>Haiku's <code class="inline">Refresh()</code> rereads the settings file. On R5 the Locale preferences
+			broadcast a change even when the file could not be written, for example when another account owns it. A
+			running program that only calls <code class="inline">Refresh()</code> would then keep the old language,
+			country or clock. Call <code class="inline">ApplySettings()</code> after <code class="inline">Refresh()</code>,
+			so the message wins over a stale file. Deskbar, Tracker and the audio mixer do this.</p>
+
+<pre class="code"><span class="k">void</span>
+MyApp::MessageReceived(BMessage* message)
+{
+	<span class="k">if</span> (message-&gt;what == B_LOCALE_CHANGED) {
+		BLocaleRoster::Default()-&gt;Refresh();
+		BLocaleRoster::Default()-&gt;ApplySettings(message);
+		<span class="c">// redraw anything that shows a date, a time or a number</span>
+		<span class="k">return</span>;
+	}
+	BApplication::MessageReceived(message);
+}</pre>
+		</section>
+
+		<!-- BFormattingConventions -->
+		<section class="entry" id="BFormattingConventions">
+			<div class="entry-header"><h2>BFormattingConventions::CoerceFormatForClock()</h2><span class="kind">Locale Kit</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;FormattingConventions.h&gt;</td></tr>
+				<tr><th>Library</th><td>libbe.so</td></tr>
+				<tr><th>Haiku Book</th><td>BFormattingConventions</td></tr>
+			</table>
+
+			<div class="member"><div class="sig">void CoerceFormatForClock(BString&amp; outFormat) const;</div>
+				<p>Rewrites a time pattern so it follows the user's 12- or 24-hour choice. With the 24-hour clock it also
+				rewrites a 12-hour pattern that has no AM/PM marker. With the 12-hour clock it adds AM/PM only when the
+				pattern has none.</p></div>
+
+			<p>Use it when you build or store your own ICU time pattern. A pattern you store yourself is not adjusted
+			later, so a clock that saved an English pattern kept showing 12 hours after the user chose 24. Haiku's
+			<code class="inline">GetTimeFormat()</code> already applies the choice; this call does the same for your own
+			pattern.</p>
+
+<pre class="code">BFormattingConventions conventions;
+BLocale::Default()-&gt;GetFormattingConventions(&amp;conventions);
+
+BString pattern(<span class="s">"h:mm"</span>);
+conventions.CoerceFormatForClock(pattern);	<span class="c">// a 24-hour pattern when the user chose 24 hours</span></pre>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>
