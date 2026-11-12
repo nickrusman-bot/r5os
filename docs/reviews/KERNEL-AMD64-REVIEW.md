@@ -8,7 +8,7 @@ For Cursor. Read-only review of what the kernel does on the Ryzen 5 5625U, and w
 
 The other forks were not cloned. What they already have is taken from `docs/ROADMAP.md` and from `generated/haiku-pi/REVIEW-1.md`. haiku-pi’s shared fixes are correctness (VM, locks, signals, BFS). air/OS and RenkuOS are the ones with laptop power and idle policy. None of the notes in this tree show an AVX2 `memcpy`, PCID, or a Zen SMT fix in those forks.
 
-**Verdict: the 12 threads are up, and one busy thread already runs at about 4341 MHz. The scheduler is told that those 12 threads are 12 separate cores.** That is the change that can make this laptop faster. Copies and the syscall path come after it. Raising `SMP_MAX_CPUS` and teaching the BIOS loader x2APIC does not change this machine: the log shows APIC ids 0 through 11.
+**Verdict: the 12 threads are up, and one busy thread already runs at about 4341 MHz. The scheduler is told that those 12 threads are 12 separate cores.** That is the change that can make this laptop faster. Copies and the syscall path come after it. For battery, the larger gap is idle: every core stops at C1 (finding 6). Raising `SMP_MAX_CPUS` and teaching the BIOS loader x2APIC does not change this machine: the log shows APIC ids 0 through 11.
 
 `docs/KERNEL.md` already records the 64-CPU cap, the BIOS x2APIC gap, NUMA, hybrid CPUs, and the read-only P-state snapshot. Those are not repeated as new findings. One correction: AMD CPPC is written by `amd_pstates`, which that document does not cover.
 
@@ -23,13 +23,14 @@ General AMD64, so also Intel:
 - **Copies (finding 2).** `memcpy` and `memset` for x86_64 are one implementation for both vendors. AVX2 and ERMS exist on Intel too (the X1 Carbon Gen 8 has AVX2). The `setjmp` around every kernel copy from user memory applies to every 64-bit build. The 32-bit kernel uses a different path.
 - **Syscall clear (finding 3).** `vzeroall` on the fast return is chosen when the XSAVE mask stops at AVX. That is this Ryzen, and an Intel CPU without AVX-512. An Intel CPU with AVX-512 takes the other patch (`xrstor`).
 - **Page tables (finding 4).** Rewriting CR3, no PCID, and ordinary areas in 4 KB pages live in the shared 64-bit paging code. 2 MB pages would help both. PCID is usually present on Intel. On the 5625U the feature line did not list `pcid`, so that work waits until the CPU reports the bit.
-- **Idle (finding 6).** `x86_cstates` uses MONITOR/MWAIT. That instruction is Intel’s; AMD implements it too. A cap on deep C-states applies to both. The module already has an Intel exception (Skylake C5/C6).
+- **Idle cap (finding 6).** A hold on deep C-states for a driver applies to both vendors. The `x86_cstates` module is shared and already has an Intel exception (Skylake C5/C6).
 - **`launch_speedup`, the syscall filter, UMIP and PKU.** These do not depend on the vendor. Enable UMIP and PKU only when the feature bit is set. Both vendors have those bits on recent CPUs.
 
 AMD only:
 
 - **SMT map (finding 1).** The wrong masks come from `detect_amd_cpu_topology()` (leaf `0x80000008`; leaf `0x8000001E` is never read). Intel uses leaf `0xB` or `0x1F`. The scheduler is shared: it trusts the map the architecture code hands it. An AMD leaf does not change the X1 Carbon. The open point there is a different one: hybrid cores are named and then ignored (`docs/KERNEL.md` finding 6).
-- **Frequency (finding 5).** `amd_pstates` writes AMD CPPC and returns at once when the vendor is not AMD. Intel HWP is a different set of MSRs. The 4341 MHz on the 5625U says nothing about the X1.
+- **Frequency (finding 5).** `amd_pstates` writes AMD CPPC and returns at once when the vendor is not AMD. Intel HWP is a different set of MSRs. The 4341 MHz on the 5625U says nothing about the X1. Preferred cores and the shared-globals race in that module are AMD only too.
+- **Deep idle (finding 6).** MWAIT on Zen reports C1 only; the deep state is reached through ACPI `_CST`. Intel reports its deep states through MWAIT, so this gap is AMD only.
 - **IOMMU (finding 7).** `1022:1631` is the AMD IOMMU. Intel is VT-d, a different device and a different driver.
 - **IBPB and SSBD.** The feature bit exists on both. The MSR to write does not match. One call that ignores the vendor hits the wrong register on the other CPU.
 
@@ -49,7 +50,9 @@ The cache ids on that same boot are the real pairs. L1 and L2 are shared by 0–
 
 `docs/KERNEL.md` finding 5 calls the EDX fallback dormant on Zen and asks for a mask print before any change. The print now exists, and the masks are wrong on the reference laptop. The fallback line is not what the log proves. The result of the whole function is.
 
-Fix: take threads-per-core from leaf `0x8000001E` when that leaf exists, and boot the 5625U again. The pass is twelve lines with `smt` 0 and 1 inside each L1 pair, and `scheduler_init` still saying 12 logical CPUs. haiku-pi, air/OS and RenkuOS are not recorded here as already having that leaf.
+Cause (added on review, from the source): the CmpLegacy check at `arch_cpu.cpp:624-629` sets `maxCoreID = maxLogicalID` whenever leaf `0x80000001` ECX bit 1 is set, and Zen sets it. `compute_cpu_hierarchy_masks()` (`:577-594`) then gets `kMaxSMTID = maxLogicalID / maxCoreID = 1`, so the SMT mask is 0 and every CPU gets SMT id 0. That bit meant "no SMT, the logical CPUs are cores" on the K8 dual-cores this code was written for. Without the CmpLegacy line the answer would very likely be the same: on Zen, `ApicIdCoreIdSize` in leaf `0x80000008` sizes the APIC ids of the whole package, threads included. The raw words are not in the log, so that second point is not proven on this machine.
+
+Fix: take threads-per-core from leaf `0x8000001E` (EBX bits 15:8, plus one) when that leaf exists, and compute the core width as the logical width divided by that, instead of the CmpLegacy override. Do this only for family `0x17` and later, so the K8 path stays as it is. Print leaf 1 EBX, `0x80000008` ECX and `0x8000001E` EBX once on CPU 0 in the same boot. Boot the 5625U again. The pass is twelve lines with `smt` 0 and 1 inside each L1 pair, and `scheduler_init` still saying 12 logical CPUs. haiku-pi, air/OS and RenkuOS are not recorded here as already having that leaf.
 
 ## 2. Copies stop at SSE, on a CPU that has AVX2 and ERMS
 
@@ -73,7 +76,7 @@ Fix only after a measurement: a tight `gettimeofday` or `null` syscall loop on t
 
 ## 4. TLB flushes and page size
 
-`arch_cpu.cpp:1784-1816`. A full flush writes CR3. A range flush is `invlpg` one page at a time. PCID and INVPCID are named (`arch_cpu.cpp:454`, `:507`) and have no other use.
+`arch_cpu.cpp:1784-1816`. A full flush writes CR3. A range flush is `invlpg` one page at a time, with no limit after which it falls back to one CR3 write, so unmapping a large area costs one `invlpg` per page. PCID and INVPCID are named (`arch_cpu.cpp:454`, `:507`) and have no other use.
 
 Stick 33’s feature line includes `invpcid` and does not include `pcid`. Leaf 1 ECX bit 17 was clear in the word this kernel stored. INVPCID without PCID does nothing useful. A raw leaf 1 dump on the next stick comes before any PCID work. The flush code is the same either way: a context switch rewrites CR3.
 
@@ -96,17 +99,25 @@ Stick 41, `generated/boot-5625u-41/r5-cpu.txt`, after one second busy on that th
 
 Desired 0 with a min and a max is hardware-autonomous. EPP 0 is the performance bias this module writes in low-latency mode. Single-thread boost is already there. What is missing is a preference the user can set, and any reaction to load inside the scheduler. `docs/KERNEL.md` finding 8 describes the snapshot only.
 
+Added on review: the cores do not all report the same highest performance. Stick 33 prints CPPC capabilities `0xba572a10` (highest 186) from the CPU that ran `init_pstates()`. Stick 41 reads `cppc_cap 0xb5572a10` (highest 181) on CPU 3. These are AMD preferred cores: some cores boost higher than others. The scheduler does not know this and puts a single busy thread on any core. Using that ranking is AMD only, and needs a print of CAP1 on all twelve CPUs first.
+
+Also added on review: `set_normal_pstate()` (`amd_pstates.cpp:66-82`) runs on all CPUs at the same time through `call_all_cpus_sync()`, and writes the CAP1 fields into the shared globals `sHWPHighest` and the others before it reads them back for its own request. One CPU can therefore write another CPU’s highest value as its own max. Stick 41 shows CPU 3 with max 181, matching its own cap, so the log does not show the race. It is a read of the code. The fix is local variables. The check is a request dump on every CPU.
+
 air/OS `power_daemon` (lid, AC, battery, suspend to idle) and RenkuOS’s “stay out of a deep idle state when a driver asks” are the fork pieces `docs/ROADMAP.md` already lists under power. They are not in this kernel. This finding is AMD CPPC. Intel HWP is a separate module.
 
-## 6. Idle is MWAIT, and deep states stay available in low-latency mode
+## 6. Idle stops at C1 on this machine
 
-`x86_cstates.cpp:77-104`. Idle picks a deeper MWAIT state as the idle time grows. Low-latency mode only changes the step (500 µs against 125 µs) and turns off `mwait` in the spin wait. It does not cap the deepest state.
+Corrected on review. The first version said the C-state line was missing from stick 33 and that deep states stay available. The line is there: stick 33 line 1871, `using x86 C-States: C0, C1`, right before `found cpuidle module: power/cpuidle/x86_cstates/v1`.
 
-Stick 33: `found cpuidle module: power/cpuidle/x86_cstates/v1`. The following `using x86 C-States:` line is not in that file, so the exact C-states accepted on that boot are not on record. CPU 0 does list `monitor` and `mwaitx`. The idle path uses `monitor`/`mwait`, not `mwaitx`.
+`x86_cstates.cpp:128-190` builds its list from CPUID leaf 5 (MWAIT sub-states). On this Zen 3 that leaf reports C1 only, so the module has one state, and every idle is `mwait` with hint 0, which is C1. `x86_cstates.cpp:77-104` picks a deeper state as the idle time grows, but there is no deeper state to pick. Low-latency mode changes the step and the spin wait, and with one state that makes no difference.
 
-`arch_cpu.cpp:1477-1481` is `hlt`, used when no idle module is loaded. On this boot the module loaded.
+AMD reaches its deep core state (CC6) through the ACPI `_CST` table, usually an I/O port read, not through MWAIT. The tree has a module for that, `src/add-ons/kernel/power/cpuidle/x86_acpi_cstates/acpi_cpuidle.cpp`, and it is built. The image does not contain it: `build/jam/packages/Haiku:114` lists only `x86_cstates`. It has not been tried on this laptop. Its quirks are written for Intel.
 
-This is the RenkuOS gap: a driver that cannot tolerate a deep C-state has no way to say so. Audio and NVMe on this laptop are the reason to care. A cap, or a per-driver hold, wants a stick where the C-state line is actually in the syslog. The module is shared with Intel.
+So an idle 5625U stays in C1 on every core. That costs battery and heat; it does not slow anything down. This is the biggest power gap in this review, and it is AMD only: Intel reports its deep states in leaf 5, so the X1 should get them from `x86_cstates`.
+
+`arch_cpu.cpp:1477-1481` is `hlt`, used when no idle module is loaded. On this boot the module loaded. CPU 0 lists `monitor` and `mwaitx`. The idle path uses `monitor`/`mwait`, not `mwaitx`.
+
+The RenkuOS gap (a driver that cannot tolerate a deep C-state has no way to say so) only matters once a deep state exists. Order: first the ACPI module in a test image, one 5625U boot that prints the `_CST` states it accepts and does not hang on resume from idle, then a hold for audio and NVMe.
 
 ## 7. Functions the hardware log shows, and the kernel does not use
 
@@ -136,7 +147,8 @@ RenkuOS `restrict_syscalls()` is the per-team filter in `docs/ROADMAP.md`. It is
 2. Finding 2, memcpy only, with a timed buffer on the same machine. The `setjmp` user-copy change is its own boot, because it is a fault path. Both are general AMD64.
 3. Finding 3 only if a syscall loop shows a cost worth the risk. General AMD64.
 4. 2 MB pages (finding 4) when a large-area workload exists. PCID after a raw leaf 1 line that either shows the bit or explains its absence. General AMD64.
-5. Power preference and idle cap (findings 5 and 6) as the laptop-power track already in the roadmap, next to air/OS and RenkuOS, not as a new CPU driver. CPPC is AMD. The idle cap is shared.
-6. `launch_speedup` in the image is a package choice. The IOMMU driver is a separate project, per vendor.
+5. Deep idle on the 5625U (finding 6): the ACPI C-state module in a test image, one boot, no other change. AMD only. This is the battery item; it can run in parallel with steps 2–4 because it touches no shared code.
+6. Power preference, preferred cores and idle cap (findings 5 and 6) as the laptop-power track already in the roadmap, next to air/OS and RenkuOS, not as a new CPU driver. The shared-globals fix in `amd_pstates` is small, and its check is a request dump on every CPU. CPPC is AMD. The idle cap is shared.
+7. `launch_speedup` in the image is a package choice. The IOMMU driver is a separate project, per vendor.
 
 Per `AGENTS.md`, a later change still needs a build, a boot, and a `CHANGELOG.md` line that says where it was tested. This review did not boot.
