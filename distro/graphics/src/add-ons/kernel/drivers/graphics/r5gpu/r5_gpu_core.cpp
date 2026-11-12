@@ -736,9 +736,10 @@ gpu_hang_run(uint32 actions)
 				: R5_HANG_EV_RESET_FAILED, &sHang);
 		} else if ((actions & R5_HANG_ACT_SELFTEST) != 0) {
 			gpu_unlock();
-			bool ok = gR5GpuOps.restart != NULL
+			bool restarted = gR5GpuOps.restart != NULL
 				&& gR5GpuOps.restart(sInfo) == B_OK;
 			gpu_lock();
+			bool ok = restarted;
 			if (ok) {
 				/* The CP is stopped and the hub is programmed again,
 				 * so the page-table writes of a release reach it. */
@@ -751,10 +752,16 @@ gpu_hang_run(uint32 actions)
 				ok = gR5GpuOps.selftest != NULL
 					&& gR5GpuOps.selftest(sInfo) == B_OK && !sLost;
 			}
-			dprintf("radeon_hd: gpu selftest after reset %s\n",
-				ok ? "ok" : "failed");
-			next = r5_hang_step(&sHang, ok ? R5_HANG_EV_SELFTEST_OK
-				: R5_HANG_EV_SELFTEST_FAILED, &sHang);
+			/* A restart that failed is part of the reset; no self-test
+			 * ran, so there is no self-test line. */
+			if (!restarted) {
+				next = r5_hang_step(&sHang, R5_HANG_EV_RESET_FAILED, &sHang);
+			} else {
+				dprintf("radeon_hd: gpu selftest after reset %s\n",
+					ok ? "ok" : "failed");
+				next = r5_hang_step(&sHang, ok ? R5_HANG_EV_SELFTEST_OK
+					: R5_HANG_EV_SELFTEST_FAILED, &sHang);
+			}
 		} else if ((actions & R5_HANG_ACT_OFF) != 0) {
 			sGpuOff = true;
 			gpu_lost(sInfo, "gpu off");
@@ -775,6 +782,8 @@ gpu_hang_run(uint32 actions)
 			 * next use. */
 			if (sFileVmidsReady)
 				r5_vmid_after_reset(&sFileVmids);
+			/* The guilty file keeps its own flag while it is lost. */
+			sGuilty = NULL;
 			sLost = false;
 			sResetting = false;
 			sEop.NotifyAll();
@@ -2483,8 +2492,12 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 			client->contexts--;
 			sContexts--;
 			/* The lost context is gone. A new one on this file works. */
-			if (client->contexts == 0)
+			if (client->contexts == 0 && client->lost) {
 				client->lost = false;
+				client->guilty = false;
+				if (sGuilty == client)
+					sGuilty = NULL;
+			}
 			status = B_OK;
 		}
 	} else if (op == R5_GPU_BO_CREATE)
@@ -2715,13 +2728,15 @@ gpu_fault_retire()
 		/* AFTER-M8 item 11: the fixed line, with the hub status that
 		 * gmc_v9_0_process_interrupt reads and clears. At most one
 		 * status line per second; the M5 pasid lines stay one per
-		 * fault, because check-user reads them per VMID. */
-		uint32 status = 0;
-		if (gR5GpuOps.fault_status != NULL)
-			gR5GpuOps.fault_status(&status);
+		 * fault, because check-user reads them per VMID. The status is
+		 * read and cleared once per line; it latches the first fault
+		 * since the last clear. */
 		bigtime_t now = system_time();
 		bool line = sFaultLineAt == 0 || now - sFaultLineAt >= 1000000;
 		if (line) {
+			uint32 status = 0;
+			if (gR5GpuOps.fault_status != NULL)
+				gR5GpuOps.fault_status(&status);
 			sFaultLineAt = now;
 			dprintf("radeon_hd: vm fault vmid %lu addr %016llx status %08lx\n",
 				(unsigned long)vmid, (unsigned long long)addr,

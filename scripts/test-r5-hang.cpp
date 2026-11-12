@@ -131,6 +131,26 @@ selftest_fail()
 }
 
 
+/* The reset answered ok, but the restart (PSP load, K1, K2) failed. No
+ * self-test ran, so the reason is the reset, not the self-test. */
+static int
+restart_fail()
+{
+	r5_hang s;
+	memset(&s, 0, sizeof(s));
+	if (step(&s, R5_HANG_EV_HANG, kFirst, R5_HANG_RESETTING, "rs hang")
+		|| step(&s, R5_HANG_EV_RESET_OK, R5_HANG_ACT_SELFTEST,
+			R5_HANG_TESTING, "rs reset")
+		|| step(&s, R5_HANG_EV_RESET_FAILED, R5_HANG_ACT_OFF, R5_HANG_OFF,
+			"rs restart"))
+		return 1;
+	if (strcmp(r5_hang_why(s.why), "reset failed") != 0)
+		return fail("rs why");
+	sCases++;
+	return 0;
+}
+
+
 /* Results that do not fit the state change nothing. */
 static int
 stray_events()
@@ -282,6 +302,7 @@ int
 main()
 {
 	if (one_hang() || two_hangs() || reset_fail() || selftest_fail()
+		|| restart_fail()
 		|| stray_events() || second_client() || fence_jump() || hang_ib()
 		|| vmid_after_reset())
 		return 1;

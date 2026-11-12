@@ -101,6 +101,10 @@ r5_hang_step(const r5_hang* in, uint32_t event, r5_hang* out)
 				actions = R5_HANG_ACT_REOPEN;
 			} else if (event == R5_HANG_EV_SELFTEST_FAILED)
 				actions = r5_hang_off(&next, R5_HANG_WHY_SELFTEST_FAILED);
+			else if (event == R5_HANG_EV_RESET_FAILED) {
+				/* The restart after the reset failed: no self-test. */
+				actions = r5_hang_off(&next, R5_HANG_WHY_RESET_FAILED);
+			}
 			break;
 		default:
 			break;
