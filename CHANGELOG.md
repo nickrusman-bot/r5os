@@ -2,7 +2,7 @@
 
 ## 2026-11-12 - VirtualBox waits until a build is done
 
-`scripts/run-vbox-r5.ps1` stops with "A jam or QEMU run is busy in WSL; try again when it is done." while `/home/nickr/r5os/.jam.lock` is held or `jam` / `qemu-system-x86` runs in WSL, so it no longer copies a half-written `r5-os.image`. The check runs once at the start, not during the copy. Tested: busy (a real jam held the lock; also a 20 s test lock); free only with a scratch lock and non-matching process names, because a jam was running.
+`scripts/run-vbox-r5.ps1` stops with "A jam or QEMU run is busy in WSL; try again when it is done." while `/home/nickr/r5os/.jam.lock` is held or `jam` / `qemu-system-x86` runs in WSL, so it no longer copies a half-written `r5-os.image`. The check runs once, just before the image is converted (a current VDI is still booted while a jam runs), not during the copy. Only exit 1 of `flock` / `pgrep` counts as the answer; any other code stops with "Cannot ask WSL ...". Tested: busy (a real jam held the lock; also a 20 s test lock); free only with a scratch lock and non-matching process names, because a jam was running.
 
 ## 2026-11-12 - Wi-Fi works on the 5625U; the Deskbar list shows each network once
 

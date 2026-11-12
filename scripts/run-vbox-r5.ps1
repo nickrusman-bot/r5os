@@ -46,10 +46,18 @@ function Get-RawImagePath {
 
 function Assert-WslIdle {
 	# jam and QEMU hold this lock; a copy now gives a broken image.
+	# flock -n and pgrep both exit 1 for "busy" / "none found"; any other
+	# code means WSL could not answer.
 	wsl -e flock -n /home/nickr/r5os/.jam.lock true
-	$busy = ($LASTEXITCODE -ne 0)
+	$busy = ($LASTEXITCODE -eq 1)
+	if ($LASTEXITCODE -gt 1 -or $LASTEXITCODE -lt 0) {
+		throw "Cannot ask WSL about the jam lock: exit $LASTEXITCODE"
+	}
 	if (-not $busy) {
 		wsl -e bash -lc "pgrep -x jam >/dev/null || pgrep -x qemu-system-x86 >/dev/null"
+		if ($LASTEXITCODE -gt 1 -or $LASTEXITCODE -lt 0) {
+			throw "Cannot ask WSL about running jobs: exit $LASTEXITCODE"
+		}
 		$busy = ($LASTEXITCODE -eq 0)
 	}
 	if ($busy) {
@@ -77,7 +85,6 @@ function Get-BridgeName([string]$vbox, [string]$preferred) {
 }
 
 $vbox = Find-VBoxManage
-Assert-WslIdle
 $raw = Get-RawImagePath
 $outDir = Join-Path $PSScriptRoot "..\generated"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
@@ -140,6 +147,7 @@ if (-not $ForceConvert -and (Test-Path $vdi) -and $rawEpoch -match '^\d+$') {
 if ($reuse) {
 	Write-Host "  reusing $vdi (raw not newer; -ForceConvert to rebuild)"
 } else {
+	Assert-WslIdle
 	if (Test-Path $vdi) {
 		& $vbox closemedium disk $vdi --delete 2>$null | Out-Null
 		Remove-Item -Force $vdi -ErrorAction SilentlyContinue
