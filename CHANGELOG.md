@@ -18,7 +18,15 @@ Not taken, and why: the arm64 and device-tree parts of `7abf76e985` (air/OS has 
 
 Limits: the air/OS measurements are from a Threadripper 1950X, a Ryzen 7640U and a Ryzen AI 5 340, not from R5. What the 5625U firmware puts in `_CST` is not known yet. Intel hybrid and Zen 5c are not tested on R5 (no such machine). ARM64 not built.
 
-Tested: `jam -q kernel_x86_64 x86_acpi_cstates x86_cstates` in WSL, no warnings in the changed files. `scripts/apply-overlay.sh` exit 0; `x86_acpi_cstates` appears once in the package list.
+Tested: `jam -q kernel_x86_64 x86_acpi_cstates x86_cstates` in WSL, no warnings in the changed files. From an LF clone of this branch in WSL (`110b185145`): `scripts/apply-overlay.sh` exit 0, `x86_acpi_cstates` once in the package list; `scripts/jam-r5-raw.sh` `jam_exit=0`, `mesa_exit=0`, `mesa_packages_ok`; `jam -q @r5-anyboot` exit 0 (2156724224 bytes, 14:58). QEMU TCG, image as a snapshot, 1 socket × 2 cores × 2 threads, two boots, no panic, the second reached the R5 welcome screen (screendump):
+
+- `-cpu qemu64`: `R5 CPU topology: leaf1 ebx 0x00040800 80000008 ecx 0x00002003 8000001e ebx 0x00000000 smt mask 0x0 core mask 0x3`; not Zen, so the old AMD path, four CPUs with `smt 0`, as before.
+- `-cpu EPYC-Rome,+topoext`: leaf `0x8000001E` EBX is `0x100` (two threads per core), but TCG does not offer `topoext` in leaf `0x80000001` (QEMU warns), so the Zen path correctly stands back and the masks are the old ones. The Zen path itself was not exercised: this WSL has no KVM.
+- `no valid cpuidle module found` on both: QEMU's firmware has no `_CST` and its CPU model no MWAIT C-states, so neither module loads. Not a test of deep idle.
+
+Not tested: the Zen path, deep idle, Zen 5c and Intel hybrid on hardware. That is the 5625U stick (SMT ids inside the six L1 pairs, which cpuidle module is found, the `_CST` states, a responsive desktop after idle).
+
+Stick check: `scripts/check-pre-stick.py`, run from the LF clone, matched all 56 radeon sources, the 20 Login sources and the four binaries to `110b185145`, then stopped on "Login in the image is the unmerged Sign in screen". That marker (`Sign in to start your session`) is now in `distro/login/LoginView.cpp` on main, so the check is out of date, not the image. Run from the Windows checkout the same script fails earlier on CR LF (`accelerant.cpp` differs only by line endings). The first two image builds from the Windows checkout failed for the same reason: the overlay copied CR LF files and `USBWebcamHeaderGen1` broke on the webcam Jamfile. Building from an LF clone avoids both.
 
 ## 2026-11-12 - media_server and Media fixes from the review
 
