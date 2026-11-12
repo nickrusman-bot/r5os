@@ -26,6 +26,7 @@ class BButton;
 class BCheckBox;
 class BMenu;
 class BMenuField;
+class BMessageRunner;
 class BString;
 class BStringView;
 
@@ -134,6 +135,7 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				AttachedToWindow();
+	virtual	void				DetachedFromWindow();
 
 protected:
 	virtual	status_t			_ChangeDefaultInput(
@@ -142,6 +144,12 @@ protected:
 									const dormant_node_info* info);
 
 private:
+			// The administrator lock for the three driver settings menus.
+			void				_RefreshLock();
+			void				_UpdateLock();
+			void				_SaveFailed(const char* what,
+									const BString& error, status_t status);
+
 			BMenuField*			_MakeChannelMenu();
 			BMenuField*			_MakeLayoutMenu();
 			BMenuField*			_MakeLatencyMenu();
@@ -160,6 +168,19 @@ private:
 			BMenu*				fSurroundMenu;
 			BStringView*		fLatencyHint;
 			BCheckBox* 			fVolumeCheckBox;
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			BMenuField*			fLayoutField;
+			BMenuField*			fLatencyField;
+			BMenuField*			fSurroundField;
+			BButton*			fLockButton;
+			BMessageRunner*		fLockRunner;
+			// True for an account that cannot write the driver settings.
+			bool				fNeedsLock;
+			bool				fUnlocked;
+			bool				fHasUsbAudio;
+			// SPDX-SnippetEnd
 };
 
 

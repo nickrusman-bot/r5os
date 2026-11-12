@@ -22,6 +22,7 @@ static const uint32 kMsgAdminSetClock = 'r5at';
 static const uint32 kMsgAdminSetTimezone = 'r5az';
 static const uint32 kMsgAdminSetClockGmt = 'r5ag';
 static const uint32 kMsgAdminSetDriverBlocked = 'r5dv';
+static const uint32 kMsgAdminSetDriverSetting = 'r5ds';
 
 
 #endif

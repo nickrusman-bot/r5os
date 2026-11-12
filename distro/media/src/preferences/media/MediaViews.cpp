@@ -10,6 +10,7 @@
 
 #include "MediaViews.h"
 
+#include <AdminLock.h>
 #include <Alert.h>
 #include <AutoDeleter.h>
 #include <Box.h>
@@ -27,6 +28,7 @@
 #include <MediaRoster.h>
 #include <MenuField.h>
 #include <MenuItem.h>
+#include <MessageRunner.h>
 #include <Path.h>
 #include <PopUpMenu.h>
 #include <String.h>
@@ -43,6 +45,8 @@
 #include <unistd.h>
 
 #include "MediaWindow.h"
+
+#include <R5Icons.h>
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -346,231 +350,40 @@ ChannelMenuItem::Invoke(BMessage* message)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// The HDA and usb_audio drivers read their settings with
-// load_driver_settings() in the kernel. There B_USER_SETTINGS_DIRECTORY is
-// always kUserSettingsDirectory (headers/private/system/directories.h), not
-// the home of the person running Media. The mixer runs in media_addon_server,
-// a system service, and reads the same place. So these files are written
-// there, and only someone who may write that directory can change them.
-static const char* kKernelSettingsDirectory = "/boot/home/config/settings";
-static const char* kDriverSettingsSubdirectory = "kernel/drivers";
-
-// Larger than any settings file Media writes. A bigger file is left alone
-// instead of being cut off.
-static const off_t kMaxSettingsFileSize = 1024 * 1024;
+// The HDA and usb_audio drivers read these files with load_driver_settings()
+// in the kernel, and the mixer reads virtual_surround in media_addon_server.
+// Both read the administrator's kernel/drivers directory, not the home of the
+// person running Media (libr5ui, r5_driver_settings_*()). A standard account
+// writes them through Login after unlocking.
 
 static const char* kLatencyKeys[] = {
 	"play_buffer_frames",
 	"record_buffer_frames"
 };
 static const char* kLayoutKeys[] = { "channel_layout" };
+static const char* kSurroundKeys[] = { "virtual_surround" };
+
+static const uint32 kMsgMediaLock = 'mlck';
+static const uint32 kMsgMediaLockRefresh = 'mlcr';
+// The grant runs out after a few minutes; the lock follows it.
+static const bigtime_t kLockRefreshInterval = 15000000;
 
 
 static status_t
-driver_settings_path(const char* fileName, char* path, size_t pathSize)
+save_setting(const char* fileName, const char* const* keys, int32 keyCount,
+	const BString& lines, bool replaceFile, BString& error)
 {
-	if (snprintf(path, pathSize, "%s/%s/%s", kKernelSettingsDirectory,
-			kDriverSettingsSubdirectory, fileName) >= (int)pathSize)
-		return B_NAME_TOO_LONG;
-	return B_OK;
-}
-
-
-static bool
-can_write_driver_settings()
-{
-	// The directory may not exist yet. Then the nearest existing parent
-	// decides whether it can be made.
-	char path[B_PATH_NAME_LENGTH];
-	if (snprintf(path, sizeof(path), "%s/%s", kKernelSettingsDirectory,
-			kDriverSettingsSubdirectory) >= (int)sizeof(path))
-		return false;
-
-	while (true) {
-		if (access(path, F_OK) == 0)
-			return access(path, W_OK) == 0;
-		char* slash = strrchr(path, '/');
-		if (slash == NULL || slash == path)
-			return false;
-		*slash = '\0';
+	status_t status;
+	if (r5_driver_settings_writable()) {
+		status = r5_driver_settings_write(fileName, keys, keyCount,
+			lines.String(), replaceFile);
+		if (status != B_OK)
+			error = strerror(status);
+	} else {
+		status = r5_admin_set_driver_setting(fileName, keys, keyCount,
+			lines.String(), replaceFile, error);
 	}
-}
-
-
-static status_t
-make_driver_settings_directory(char* failedPath, size_t pathSize)
-{
-	// BPath::SetTo and create_directory both walk the path with a BEntry.
-	// That left kernel/drivers on disk and never created the file, so each
-	// level is made with mkdir().
-	char directory[B_PATH_NAME_LENGTH];
-	const char* levels[] = { "kernel", kDriverSettingsSubdirectory };
-	for (uint32 i = 0; i < B_COUNT_OF(levels); i++) {
-		if (snprintf(directory, sizeof(directory), "%s/%s",
-				kKernelSettingsDirectory, levels[i]) >= (int)sizeof(directory))
-			return B_NAME_TOO_LONG;
-		if (mkdir(directory, 0755) < 0 && errno != EEXIST) {
-			status_t error = errno != 0 ? errno : B_ERROR;
-			strlcpy(failedPath, directory, pathSize);
-			return error;
-		}
-	}
-	return B_OK;
-}
-
-
-static status_t
-read_settings_file(const char* fileName, BString& text)
-{
-	text.Truncate(0);
-
-	char path[B_PATH_NAME_LENGTH];
-	status_t status = driver_settings_path(fileName, path, sizeof(path));
-	if (status != B_OK)
-		return status;
-
-	int fd = open(path, O_RDONLY);
-	if (fd < 0)
-		return errno != 0 ? errno : B_ERROR;
-
-	struct stat st;
-	if (fstat(fd, &st) != 0) {
-		status = errno != 0 ? errno : B_ERROR;
-		close(fd);
-		return status;
-	}
-	if (st.st_size > kMaxSettingsFileSize) {
-		close(fd);
-		return B_FILE_TOO_LARGE;
-	}
-	if (st.st_size == 0) {
-		close(fd);
-		return B_OK;
-	}
-
-	char* buffer = text.LockBuffer((int32)st.st_size);
-	if (buffer == NULL) {
-		close(fd);
-		return B_NO_MEMORY;
-	}
-	ssize_t length = read(fd, buffer, (size_t)st.st_size);
-	status = length < 0 ? (errno != 0 ? errno : B_ERROR) : B_OK;
-	close(fd);
-	text.UnlockBuffer(length > 0 ? (int32)length : 0);
 	return status;
-}
-
-
-static bool
-is_settings_key(const BString& line, const char* key)
-{
-	int32 length = (int32)strlen(key);
-	if (!line.StartsWith(key))
-		return false;
-	if (line.Length() == length)
-		return true;
-	char next = line.ByteAt(length);
-	return next == ' ' || next == '\t' || next == '\r';
-}
-
-
-static bool
-read_setting(const char* fileName, const char* key, BString& value)
-{
-	BString text;
-	if (read_settings_file(fileName, text) != B_OK)
-		return false;
-
-	int32 start = 0;
-	while (start < text.Length()) {
-		int32 end = text.FindFirst('\n', start);
-		if (end < 0)
-			end = text.Length();
-		BString line;
-		text.CopyInto(line, start, end - start);
-		line.RemoveAll("\r");
-		if (is_settings_key(line, key)) {
-			line.Remove(0, (int32)strlen(key));
-			value = line.Trim();
-			return true;
-		}
-		start = end + 1;
-	}
-	return false;
-}
-
-
-static status_t
-write_settings_text(const char* path, const BString& text)
-{
-	// A temporary file and rename(), so a crash or a full disk never leaves
-	// an empty file. rename() also replaces a file owned by root in a
-	// directory this person may write.
-	char tempPath[B_PATH_NAME_LENGTH];
-	if (snprintf(tempPath, sizeof(tempPath), "%s.tmp", path)
-			>= (int)sizeof(tempPath))
-		return B_NAME_TOO_LONG;
-
-	int fd = open(tempPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-	if (fd < 0)
-		return errno != 0 ? errno : B_ERROR;
-
-	status_t status = B_OK;
-	ssize_t written = write(fd, text.String(), (size_t)text.Length());
-	if (written != (ssize_t)text.Length())
-		status = written < 0 && errno != 0 ? errno : B_ERROR;
-	else if (fsync(fd) != 0)
-		status = errno != 0 ? errno : B_ERROR;
-	close(fd);
-
-	if (status == B_OK && rename(tempPath, path) != 0)
-		status = errno != 0 ? errno : B_ERROR;
-	if (status != B_OK)
-		unlink(tempPath);
-	return status;
-}
-
-
-// Replaces the lines that start with one of keys by lines. The other lines
-// of the file stay.
-static status_t
-write_setting(const char* fileName, const char* const* keys, uint32 keyCount,
-	const BString& lines, char* writtenPath, size_t pathSize)
-{
-	status_t status = driver_settings_path(fileName, writtenPath, pathSize);
-	if (status != B_OK)
-		return status;
-	status = make_driver_settings_directory(writtenPath, pathSize);
-	if (status != B_OK)
-		return status;
-
-	BString text;
-	status = read_settings_file(fileName, text);
-	if (status != B_OK && status != B_ENTRY_NOT_FOUND)
-		return status;
-
-	BString kept;
-	int32 start = 0;
-	while (start < text.Length()) {
-		int32 end = text.FindFirst('\n', start);
-		if (end < 0)
-			end = text.Length();
-		BString line;
-		text.CopyInto(line, start, end - start);
-		bool replaced = false;
-		for (uint32 i = 0; i < keyCount; i++) {
-			if (is_settings_key(line, keys[i])) {
-				replaced = true;
-				break;
-			}
-		}
-		if (!replaced)
-			kept << line << "\n";
-		start = end + 1;
-	}
-	kept << lines;
-
-	return write_settings_text(writtenPath, kept);
 }
 
 
@@ -578,7 +391,8 @@ static int32
 read_latency_frames()
 {
 	BString value;
-	if (!read_setting("hda.settings", "play_buffer_frames", value))
+	if (r5_driver_settings_read("hda.settings", "play_buffer_frames", value)
+			!= B_OK)
 		return 0;
 	int32 frames = atoi(value.String());
 	return frames == 256 || frames == 128 ? frames : 0;
@@ -586,16 +400,15 @@ read_latency_frames()
 
 
 static status_t
-write_latency_file(const char* fileName, int32 frames, char* writtenPath,
-	size_t pathSize)
+write_latency_file(const char* fileName, int32 frames, BString& error)
 {
 	BString lines;
 	if (frames == 256 || frames == 128) {
 		lines << "play_buffer_frames " << frames << "\n";
 		lines << "record_buffer_frames " << frames << "\n";
 	}
-	return write_setting(fileName, kLatencyKeys, B_COUNT_OF(kLatencyKeys),
-		lines, writtenPath, pathSize);
+	return save_setting(fileName, kLatencyKeys, B_COUNT_OF(kLatencyKeys),
+		lines, false, error);
 }
 
 
@@ -603,7 +416,7 @@ static int32
 read_channel_layout()
 {
 	BString value;
-	if (!read_setting("usb_audio", "channel_layout", value))
+	if (r5_driver_settings_read("usb_audio", "channel_layout", value) != B_OK)
 		return 0;
 	int32 channels = atoi(value.String());
 	return channels >= 1 && channels <= 16 ? channels : 0;
@@ -611,15 +424,15 @@ read_channel_layout()
 
 
 static status_t
-write_channel_layout(int32 channels, char* writtenPath, size_t pathSize)
+write_channel_layout(int32 channels, BString& error)
 {
 	BString lines;
 	if (channels >= 1 && channels <= 16)
 		lines << "channel_layout " << channels << "\n";
 	else
 		lines << "channel_layout auto\n";
-	return write_setting("usb_audio", kLayoutKeys, B_COUNT_OF(kLayoutKeys),
-		lines, writtenPath, pathSize);
+	return save_setting("usb_audio", kLayoutKeys, B_COUNT_OF(kLayoutKeys),
+		lines, false, error);
 }
 
 
@@ -627,26 +440,20 @@ static bool
 read_virtual_surround()
 {
 	BString value;
-	return read_setting("virtual_surround", "virtual_surround", value)
+	return r5_driver_settings_read("virtual_surround", "virtual_surround",
+			value) == B_OK
 		&& value == "on";
 }
 
 
 static status_t
-write_virtual_surround(bool enabled, char* writtenPath, size_t pathSize)
+write_virtual_surround(bool enabled, BString& error)
 {
-	status_t status = driver_settings_path("virtual_surround", writtenPath,
-		pathSize);
-	if (status != B_OK)
-		return status;
-	status = make_driver_settings_directory(writtenPath, pathSize);
-	if (status != B_OK)
-		return status;
-
 	// The mixer only reads the first line of this file, so the whole file is
 	// this one line.
-	BString text(enabled ? "virtual_surround on\n" : "virtual_surround off\n");
-	return write_settings_text(writtenPath, text);
+	BString lines(enabled ? "virtual_surround on\n" : "virtual_surround off\n");
+	return save_setting("virtual_surround", kSurroundKeys,
+		B_COUNT_OF(kSurroundKeys), lines, true, error);
 }
 
 
@@ -698,7 +505,9 @@ AudioSettingsView::AudioSettingsView()
 		.AddMenuField(_MakeLayoutMenu(), 0, 2, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
 		.AddMenuField(_MakeLatencyMenu(), 0, 3, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
 		.AddMenuField(_MakeSurroundMenu(), 0, 4, B_ALIGN_HORIZONTAL_UNSET, 1, 3, 1)
-		.Add(fLatencyHint = new BStringView("latency hint", ""), 0, 5, 3);
+		.Add(fLatencyHint = new BStringView("latency hint", ""), 0, 5, 2)
+		.Add(fLockButton = new BButton("lock", "", new BMessage(kMsgMediaLock)),
+			2, 5);
 
 	defaultsBox->AddChild(defaultsGridView);
 
@@ -706,26 +515,23 @@ AudioSettingsView::AudioSettingsView()
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 	// SPDX-License-Identifier: GPL-3.0-or-later
 	// The drivers and the mixer read these files from the administrator's
-	// settings. Someone who cannot write there sees the values but cannot
-	// change them.
-	BMenuField* layoutField
+	// settings. Someone who cannot write there unlocks them with an
+	// administrator password, as in Settings; Login then writes them.
+	fLayoutField
 		= dynamic_cast<BMenuField*>(defaultsBox->FindView("layoutMenuField"));
-	BMenuField* latencyField
+	fLatencyField
 		= dynamic_cast<BMenuField*>(defaultsBox->FindView("latencyMenuField"));
-	BMenuField* surroundField
+	fSurroundField
 		= dynamic_cast<BMenuField*>(defaultsBox->FindView("surroundMenuField"));
-	if (!can_write_driver_settings()) {
-		if (layoutField != NULL)
-			layoutField->SetEnabled(false);
-		if (latencyField != NULL)
-			latencyField->SetEnabled(false);
-		if (surroundField != NULL)
-			surroundField->SetEnabled(false);
-		fLatencyHint->SetText(B_TRANSLATE(
-			"Only an administrator can change the USB layout, latency and "
-			"virtual surround."));
-	} else if (!has_usb_audio_device() && layoutField != NULL)
-		layoutField->SetEnabled(false);
+	fLockRunner = NULL;
+	fNeedsLock = !r5_driver_settings_writable();
+	fUnlocked = !fNeedsLock;
+	fHasUsbAudio = has_usb_audio_device();
+	float lockHeight = fLockButton->PreferredSize().Height();
+	r5_button_set_lock(fLockButton, true, lockHeight);
+	if (!fNeedsLock)
+		fLockButton->Hide();
+	_UpdateLock();
 	// SPDX-SnippetEnd
 
 	BLayoutBuilder::Group<>(this)
@@ -761,7 +567,80 @@ AudioSettingsView::AttachedToWindow()
 	fLatencyMenu->SetTargetForItems(thisMessenger);
 	fSurroundMenu->SetTargetForItems(thisMessenger);
 	fVolumeCheckBox->SetTarget(thisMessenger);
+
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	fLockButton->SetTarget(thisMessenger);
+	if (fNeedsLock && fLockRunner == NULL) {
+		BMessage refresh(kMsgMediaLockRefresh);
+		fLockRunner = new BMessageRunner(thisMessenger, &refresh,
+			kLockRefreshInterval);
+		_RefreshLock();
+	}
+	// SPDX-SnippetEnd
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+void
+AudioSettingsView::DetachedFromWindow()
+{
+	delete fLockRunner;
+	fLockRunner = NULL;
+	SettingsView::DetachedFromWindow();
+}
+
+
+void
+AudioSettingsView::_RefreshLock()
+{
+	if (!fNeedsLock)
+		return;
+	bool unlocked = r5_admin_change_allowed();
+	if (unlocked != fUnlocked) {
+		fUnlocked = unlocked;
+		_UpdateLock();
+	}
+}
+
+
+void
+AudioSettingsView::_UpdateLock()
+{
+	if (fNeedsLock) {
+		r5_button_set_lock(fLockButton, !fUnlocked,
+			fLockButton->Frame().IsValid() ? fLockButton->Frame().Height()
+				: fLockButton->PreferredSize().Height());
+	}
+	if (fLayoutField != NULL)
+		fLayoutField->SetEnabled(fUnlocked && fHasUsbAudio);
+	if (fLatencyField != NULL)
+		fLatencyField->SetEnabled(fUnlocked);
+	if (fSurroundField != NULL)
+		fSurroundField->SetEnabled(fUnlocked);
+
+	if (fNeedsLock && !fUnlocked) {
+		fLatencyHint->SetText(B_TRANSLATE(
+			"Unlock to change the USB layout, latency and virtual surround."));
+	} else if (fNeedsLock)
+		fLatencyHint->SetText("");
+}
+
+
+void
+AudioSettingsView::_SaveFailed(const char* what, const BString& error,
+	status_t status)
+{
+	BString text(what);
+	text << "\n" << (error.Length() > 0 ? error.String() : strerror(status));
+	(new BAlert("media settings", text.String(), B_TRANSLATE("OK")))->Go();
+	// A grant that ran out shows the lock closed again.
+	_RefreshLock();
+}
+// SPDX-SnippetEnd
 
 
 void
@@ -798,13 +677,11 @@ AudioSettingsView::MessageReceived(BMessage* message)
 			int32 channels = 0;
 			if (message->FindInt32("channels", &channels) != B_OK)
 				break;
-			char path[B_PATH_NAME_LENGTH];
-			path[0] = '\0';
-			status_t status = write_channel_layout(channels, path, sizeof(path));
+			BString error;
+			status_t status = write_channel_layout(channels, error);
 			if (status != B_OK) {
-				BString text(B_TRANSLATE("Could not save the channel layout."));
-				text << "\n" << path << "\n" << strerror(status);
-				(new BAlert("layout", text.String(), B_TRANSLATE("OK")))->Go();
+				_SaveFailed(B_TRANSLATE("Could not save the channel layout."),
+					error, status);
 				// The menu marked the new item already. Show what is saved.
 				mark_item(fLayoutMenu, "channels", read_channel_layout());
 				break;
@@ -818,29 +695,20 @@ AudioSettingsView::MessageReceived(BMessage* message)
 			int32 frames = 0;
 			if (message->FindInt32("frames", &frames) != B_OK)
 				break;
-			char path[B_PATH_NAME_LENGTH];
-			path[0] = '\0';
+			BString error;
 			const int32 previous = read_latency_frames();
-			status_t status = write_latency_file("hda.settings", frames, path,
-				sizeof(path));
+			status_t status = write_latency_file("hda.settings", frames, error);
 			if (status == B_OK) {
-				char usbPath[B_PATH_NAME_LENGTH];
-				usbPath[0] = '\0';
-				status = write_latency_file("usb_audio", frames, usbPath,
-					sizeof(usbPath));
+				status = write_latency_file("usb_audio", frames, error);
 				if (status != B_OK) {
-					if (usbPath[0] != '\0')
-						strlcpy(path, usbPath, sizeof(path));
 					// Both drivers keep the same choice.
-					char ignored[B_PATH_NAME_LENGTH];
-					write_latency_file("hda.settings", previous, ignored,
-						sizeof(ignored));
+					BString ignored;
+					write_latency_file("hda.settings", previous, ignored);
 				}
 			}
 			if (status != B_OK) {
-				BString text(B_TRANSLATE("Could not save the latency choice."));
-				text << "\n" << path << "\n" << strerror(status);
-				(new BAlert("latency", text.String(), B_TRANSLATE("OK")))->Go();
+				_SaveFailed(B_TRANSLATE("Could not save the latency choice."),
+					error, status);
 				mark_item(fLatencyMenu, "frames", read_latency_frames());
 				break;
 			}
@@ -858,14 +726,11 @@ AudioSettingsView::MessageReceived(BMessage* message)
 			int32 enabled = 0;
 			if (message->FindInt32("enabled", &enabled) != B_OK)
 				break;
-			char path[B_PATH_NAME_LENGTH];
-			path[0] = '\0';
-			status_t status = write_virtual_surround(enabled != 0, path,
-				sizeof(path));
+			BString error;
+			status_t status = write_virtual_surround(enabled != 0, error);
 			if (status != B_OK) {
-				BString text(B_TRANSLATE("Could not save virtual surround."));
-				text << "\n" << path << "\n" << strerror(status);
-				(new BAlert("surround", text.String(), B_TRANSLATE("OK")))->Go();
+				_SaveFailed(B_TRANSLATE("Could not save virtual surround."),
+					error, status);
 				mark_item(fSurroundMenu, "enabled",
 					read_virtual_surround() ? 1 : 0);
 				break;
@@ -874,6 +739,17 @@ AudioSettingsView::MessageReceived(BMessage* message)
 				"Virtual surround saved. Restart media services to apply."));
 			break;
 		}
+		case kMsgMediaLock:
+			if (fUnlocked)
+				r5_admin_relock();
+			else
+				r5_admin_prompt_unlock(BMessenger(this));
+			_RefreshLock();
+			break;
+		case kMsgAdminLockChanged:
+		case kMsgMediaLockRefresh:
+			_RefreshLock();
+			break;
 
 		// SPDX-SnippetEnd
 		default:
