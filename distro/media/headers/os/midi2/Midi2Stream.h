@@ -14,6 +14,8 @@
 
 #include <OS.h>
 
+#include <Midi2Identity.h>
+
 
 const uint16 B_MIDI2_STREAM_ENDPOINT_DISCOVERY = 0x000;
 const uint16 B_MIDI2_STREAM_ENDPOINT_INFO = 0x001;
@@ -125,6 +127,16 @@ midi2_stream_text(uint8 status, uint8 first, const char* text, uint32 words[4]);
 status_t
 midi2_stream_reply(const midi2_endpoint* endpoint, const uint32* request,
 	uint32* replies, size_t capacity, size_t* _count);
+
+
+
+/* Sets the Device Identity (manufacturer, family, model, revision), the
+ * endpoint name and the product instance ID from the program's own
+ * identity. name and productId may be NULL to keep the current ones; they
+ * are cut to 14 characters. B_BAD_VALUE for a byte above 0x7F. */
+status_t
+midi2_endpoint_set_identity(midi2_endpoint* endpoint,
+	const midi2_identity* identity, const char* name, const char* productId);
 
 
 

@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10058 - Safe unplugging and small USB sound adapters
+Unplugging a MIDI device while a program uses it no longer risks a crash. USB sound adapters that run at full speed, such as some small USB-C adapters, now play and record at the right rate.
+
 R5 2026.1-dev Build 10057 - Steadier USB sound and MIDI
 A USB sound card that stops, or whose settings change while it plays, comes back on its own instead of leaving sound silent. Sound card names with accents show correctly in Media. Programs now receive the MIDI clock, start and stop from MIDI 2.0 devices. A USB MIDI 2.0 device is switched to MIDI 2.0.
 

@@ -18,6 +18,8 @@
 #include <Errors.h>
 #include <OS.h>
 
+#include <Midi2Identity.h>
+
 
 /* Universal SysEx, sub-id 0x0D, MIDI-CI version 1.
  * Property Exchange sub-ids are from the MIDI-CI specification.
@@ -248,6 +250,15 @@ status_t
 midi2_pe_subscription_full(const midi2_pe_catalog* catalog, char* header,
 	size_t headerCapacity, size_t* headerLength, const uint8** body,
 	size_t* bodyLength);
+
+
+
+/* Writes the DeviceInfo resource of the catalog from the program's own
+ * identity. B_BAD_VALUE for a byte above 0x7F, a name with '"', '\' or a
+ * control character, or a result that does not fit. */
+status_t
+midi2_pe_catalog_set_identity(midi2_pe_catalog* catalog,
+	const midi2_identity* identity);
 
 
 

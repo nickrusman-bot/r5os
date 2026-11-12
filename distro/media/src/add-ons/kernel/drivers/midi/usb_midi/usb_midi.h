@@ -96,12 +96,16 @@ typedef struct usbmidi_device_info
 
 	bool active;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	/* USB MIDI 2.0 endpoints carry Universal MIDI Packets, not CIN packets.
 	 * ump_protocol is 1 until a Stream Configuration selects 2.
 	 */
 	bool ump_endpoint;
 	uint8 ump_protocol;
 	struct usb_midi_translate_state translate;
+// SPDX-SnippetEnd
 
 	/* work area for transfer */
 	int bus_status;
@@ -121,6 +125,10 @@ typedef struct usbmidi_device_info
 // SPDX-License-Identifier: GPL-3.0-or-later
 	bool out_is_interrupt;
 		/* USB MIDI 2.0 allows an interrupt OUT endpoint too. */
+	int32 open_count;
+		/* Open cookies on ports of this device. */
+	bool removed;
+		/* Unplugged; freed when open_count drops to 0. */
 // SPDX-SnippetEnd
 
 	uint16 vendor_id;
@@ -143,6 +151,9 @@ typedef struct usbmidi_port_info
 	char name[40];	/* complete pathname of this port */
 	struct ring_buffer* rbuf;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	/* UMP packets for B_MIDI_READ_UMP. read() expands the same queue to
 	 * MIDI 1.0 bytes. sysex_hold keeps a short CIN fragment across packets.
 	 */
@@ -156,12 +167,19 @@ typedef struct usbmidi_port_info
 	uint8 ump_pending_pos;
 	uint8 sysex_hold[2];
 	uint8 sysex_hold_len;
+// SPDX-SnippetEnd
 
 	int cable;	/* index of this port */
 	bool has_in, has_out;
 
 	int open;
 	struct driver_cookie* open_fd;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	bool removed;
+		/* Unplugged while open; usb_midi_free() frees it. */
+// SPDX-SnippetEnd
 
 } usbmidi_port_info;
 

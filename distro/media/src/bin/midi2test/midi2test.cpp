@@ -1002,6 +1002,48 @@ test_more()
 			== B_OK
 		&& discovery[0] == 0xf0000101 && discovery[1] == 0x00000011,
 		"endpoint discovery packet");
+
+	{
+		// A program's own identity, here a made-up three-byte SysEx ID.
+		midi2_identity identity = {};
+		identity.manufacturer[0] = 0x00;
+		identity.manufacturer[1] = 0x21;
+		identity.manufacturer[2] = 0x09;
+		identity.model[0] = 3;
+		identity.manufacturerName = "Example";
+		identity.modelName = "Synth";
+		identity.versionName = "1.2";
+		midi2_endpoint own;
+		midi2_endpoint_init(&own);
+		uint32 words[4];
+		expect(own.manufacturer[0] == B_MIDI2_NONCOMMERCIAL_ID
+			&& midi2_endpoint_set_identity(&own, &identity, "Example Synth",
+				NULL) == B_OK
+			&& strcmp(own.name, "Example Synth") == 0
+			&& own.manufacturer[1] == 0x21,
+			"endpoint takes the program's identity");
+		midi2_stream_identity(&own, words);
+		expect(words[1] == 0x00002109 && ((words[2] >> 8) & 0x7f) == 3,
+			"device identity carries the program's SysEx ID and model");
+
+		midi2_pe_catalog own_catalog;
+		midi2_pe_catalog_init(&own_catalog);
+		expect(midi2_pe_catalog_set_identity(&own_catalog, &identity) == B_OK
+			&& strstr(own_catalog.deviceInfo,
+				"\"manufacturerId\":[0,33,9],\"manufacturer\":\"Example\"")
+				!= NULL,
+			"DeviceInfo is written from the program's identity");
+		identity.modelName = "Bad\"name";
+		expect(midi2_pe_catalog_set_identity(&own_catalog, &identity)
+				== B_BAD_VALUE,
+			"a name that needs escaping is refused");
+		identity.modelName = "Synth";
+		identity.manufacturer[1] = 0x80;
+		expect(midi2_endpoint_set_identity(&own, &identity, NULL, NULL)
+				== B_BAD_VALUE,
+			"an 8-bit identity byte is refused");
+	}
+
 	midi2_endpoint endpoint;
 	midi2_endpoint_init(&endpoint);
 	uint32 replies[8 * 4];

@@ -106,9 +106,13 @@ create_usbmidi_port(usbmidi_device_info* devinfo,
 	port->next = NULL;
 	port->open = 0;
 	port->open_fd = NULL;
+	port->removed = false;
 	port->has_in = has_in;
 	port->has_out = has_out;
 	port->rbuf = create_ring_buffer(1024);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	port->ump_capacity = 64;
 	port->ump_packets = (midi_ump_packet*)malloc(
 		sizeof(midi_ump_packet) * port->ump_capacity);
@@ -125,6 +129,7 @@ create_usbmidi_port(usbmidi_device_info* devinfo,
 		free(port);
 		return NULL;
 	}
+// SPDX-SnippetEnd
 
 	devinfo->ports[cable] = port;
 	devinfo->port_count++;
@@ -144,8 +149,12 @@ remove_port(usbmidi_port_info* port)
 		delete_ring_buffer(port->rbuf);
 		port->rbuf = NULL;
 	}
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	free(port->ump_packets);
 	port->ump_packets = NULL;
+// SPDX-SnippetEnd
 	port->device->port_count--;
 	DPRINTF_INFO((MY_ID "remove_port %p done\n", port));
 
@@ -172,8 +181,12 @@ create_device(const usb_device* usbDevice, const usb_device_descriptor* deviceDe
 		return NULL;
 
 	memset(midiDevice, 0, sizeof(usbmidi_device_info));
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	/* No Stream Configuration yet: MIDI 1.0 protocol. */
 	midiDevice->ump_protocol = 1;
+// SPDX-SnippetEnd
 
 	midiDevice->sem_lock = sem = create_sem(1, DRIVER_NAME "_lock");
 	if (sem < 0) {
@@ -294,6 +307,9 @@ static const int CINbytes[] = {	/* See USB-MIDI Spec */
 usb_module_info* gUSBModule = NULL;
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 static uint32
 ump_word_count(uint32 first)
 {
@@ -344,15 +360,11 @@ deliver_ump_packet(void* cookie, uint32_t group, const uint32_t* words,
 {
 	usbmidi_device_info* midiDevice = (usbmidi_device_info*)cookie;
 	usbmidi_port_info* port = group < 16 ? midiDevice->ports[group] : NULL;
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
 	/* The device reports its protocol with a Stream Configuration
 	 * Notification (status 0x006). 0x005 is the Request, which only the host
 	 * sends, so the protocol never changed before. */
 	if ((words[0] >> 28) == 0xfu && ((words[0] >> 16) & 0x3ffu) == 0x006u
 		&& count >= 1) {
-// SPDX-SnippetEnd
 		uint8 protocol = (uint8)((words[0] >> 8) & 0xffu);
 		if (protocol == 1 || protocol == 2)
 			midiDevice->ump_protocol = protocol;
@@ -368,6 +380,7 @@ interpret_ump_buffer(usbmidi_device_info* midiDevice)
 	usb_midi_walk_ump((const uint8*)midiDevice->buffer, midiDevice->actual_length,
 		deliver_ump_packet, midiDevice);
 }
+// SPDX-SnippetEnd
 
 
 static void
@@ -457,10 +470,14 @@ usb_midi_read_callback(void* cookie, status_t status,
 		midiDevice->timestamp = system_time();	/* not used... */
 		midiDevice->consecutive_read_errors = 0;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 		if (midiDevice->ump_endpoint)
 			interpret_ump_buffer(midiDevice);
 		else
 			interpret_midi_buffer(midiDevice);
+// SPDX-SnippetEnd
 	}
 
 	release_sem(midiDevice->sem_lock);
@@ -939,29 +956,58 @@ usb_midi_removed(void* cookie)
 
 	DPRINTF_INFO((MY_ID "usb_midi_removed(%s)\n", midiDevice->name));
 	midiDevice->active = false;
-	for (int cable = 0; cable < 16; cable++) {
-		usbmidi_port_info* port = midiDevice->ports[cable];
-		if (port == NULL)
-			continue;
-		midiDevice->ports[cable] = NULL;
-		DPRINTF_DEBUG((MY_ID "removing port %d\n", cable));
-		remove_port_info(port);
-		if (port->open_fd != NULL) {
-			port->open_fd->port = NULL;
-			port->open_fd->device = NULL;
-			delete_sem(port->open_fd->sem_cb);
-				/* done here to ensure read is freed */
-		}
-		remove_port(port);
-	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* A program can still be inside read(), write() or ioctl() on a port of
+	 * this device. Those hooks hold the device and port pointers, so both
+	 * used to be freed under them. Now a port that is open, and the device
+	 * while any of its ports is open, stay allocated until usb_midi_free().
+	 * The hooks see active == false and return; deleting the semaphore
+	 * wakes a blocked reader.
+	 */
 	if (midiDevice->ept_in != NULL)
 		gUSBModule->cancel_queued_transfers(midiDevice->ept_in->handle);
 	if (midiDevice->ept_out != NULL)
 		gUSBModule->cancel_queued_transfers(midiDevice->ept_out->handle);
-	DPRINTF_DEBUG((MY_ID "usb_midi_removed: doing remove: %s\n",
-		midiDevice->name));
-	remove_device(midiDevice);
+
+	usbmidi_port_info* ports[16];
+	for (int cable = 0; cable < 16; cable++) {
+		ports[cable] = midiDevice->ports[cable];
+		if (ports[cable] != NULL)
+			remove_port_info(ports[cable]);
+	}
+
+	acquire_sem(usbmidi_port_list_lock);
+	for (int cable = 0; cable < 16; cable++) {
+		usbmidi_port_info* port = ports[cable];
+		if (port == NULL)
+			continue;
+		DPRINTF_DEBUG((MY_ID "removing port %d\n", cable));
+		if (port->open_fd != NULL) {
+			delete_sem(port->open_fd->sem_cb);
+			port->removed = true;
+			ports[cable] = NULL;
+				/* freed by usb_midi_free() */
+		}
+	}
+	bool freeDevice = midiDevice->open_count == 0;
+	midiDevice->removed = true;
+	release_sem(usbmidi_port_list_lock);
+
+	for (int cable = 0; cable < 16; cable++) {
+		if (ports[cable] != NULL) {
+			midiDevice->ports[cable] = NULL;
+			remove_port(ports[cable]);
+		}
+	}
+	if (freeDevice) {
+		DPRINTF_DEBUG((MY_ID "usb_midi_removed: doing remove: %s\n",
+			midiDevice->name));
+		remove_device(midiDevice);
+	}
+// SPDX-SnippetEnd
 	return B_OK;
 }
 
@@ -1029,6 +1075,16 @@ usb_midi_open(const char* name, uint32 flags,
 	cookie->device = port->device;
 
 	acquire_sem(usbmidi_port_list_lock);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	if (port->device->removed) {
+		delete_sem(cookie->sem_cb);
+		free(cookie);
+		release_sem(usbmidi_port_list_lock);
+		return B_ENTRY_NOT_FOUND;
+	}
+// SPDX-SnippetEnd
 	if (port->open_fd != NULL) {
 		/* there can only be one open channel to the device */
 		delete_sem(cookie->sem_cb);
@@ -1036,14 +1092,19 @@ usb_midi_open(const char* name, uint32 flags,
 		release_sem(usbmidi_port_list_lock);
 		return B_BUSY;
 	}
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	port->ump_head = 0;
 	port->ump_tail = 0;
 	port->ump_count = 0;
 	port->ump_pending_len = 0;
 	port->ump_pending_pos = 0;
 	port->sysex_hold_len = 0;
+// SPDX-SnippetEnd
 	port->open_fd = cookie;
 	port->open++;
+	port->device->open_count++;
 	release_sem(usbmidi_port_list_lock);
 
 	*out_cookie = cookie;
@@ -1053,6 +1114,9 @@ usb_midi_open(const char* name, uint32 flags,
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 static bool
 pop_ump_packet(usbmidi_port_info* port, midi_ump_packet* packet)
 {
@@ -1132,6 +1196,7 @@ read_ump_as_midi1(driver_cookie* cookie, void* buf, size_t* num_bytes)
 	*num_bytes = 0;
 	return B_ERROR;
 }
+// SPDX-SnippetEnd
 
 
 static status_t
@@ -1146,8 +1211,12 @@ usb_midi_read(driver_cookie* cookie, off_t position,
 	if (midiDevice == NULL || !midiDevice->active)
 		return B_ERROR;	/* already unplugged */
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	if (midiDevice->ump_endpoint)
 		return read_ump_as_midi1(cookie, buf, num_bytes);
+// SPDX-SnippetEnd
 
 	DPRINTF_DEBUG((MY_ID "usb_midi_read: (%" B_PRIuSIZE " byte buffer at %"
 		B_PRIdOFF " cookie %p)\n", *num_bytes, position, cookie));
@@ -1231,6 +1300,9 @@ const uint8 CINcode[] = {	/* see USB-MIDI Spec */
 };
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 static void
 store_le32(uint8* out, uint32 word)
 {
@@ -1253,9 +1325,6 @@ queue_out(usbmidi_device_info* midiDevice, const void* data, size_t size)
 		return status;
 
 	memcpy(midiDevice->out_buffer, data, size);
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
 	if (midiDevice->out_is_interrupt) {
 		status = gUSBModule->queue_interrupt(midiDevice->ept_out->handle,
 			midiDevice->out_buffer, size,
@@ -1265,7 +1334,6 @@ queue_out(usbmidi_device_info* midiDevice, const void* data, size_t size)
 			midiDevice->out_buffer, size,
 			(usb_callback_func)usb_midi_write_callback, midiDevice);
 	}
-// SPDX-SnippetEnd
 	if (status != B_OK) {
 		DPRINTF_ERR((MY_ID "midi write queue_bulk() error 0x%" B_PRIx32 "\n",
 			status));
@@ -1488,9 +1556,6 @@ write_sysex_as_ump(driver_cookie* cookie, const uint8* midiseq, size_t* num_byte
 }
 
 
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
 static status_t
 write_midi1_as_ump(driver_cookie* cookie, const uint8* midiseq,
 	size_t* num_bytes, uint8 midicode, uint8 cin)
@@ -1557,8 +1622,12 @@ usb_midi_write(driver_cookie* cookie, off_t position,
 	if (!midiDevice || !midiDevice->active)
 		return B_ERROR;		/* already unplugged */
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 	if (midiDevice->ump_endpoint)
 		return write_midi1_as_ump(cookie, midiseq, num_bytes, midicode, cin);
+// SPDX-SnippetEnd
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
@@ -1666,6 +1735,9 @@ usb_midi_control(driver_cookie* cookie, uint32 op, void* data, size_t len)
 		return B_ERROR; // already disconnected
 
 	switch (op) {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
 		case B_MIDI_WRITE_UMP:
 		{
 			midi_ump_packet packet;
@@ -1698,6 +1770,7 @@ usb_midi_control(driver_cookie* cookie, uint32 op, void* data, size_t len)
 				return B_BAD_ADDRESS;
 			return B_OK;
 		}
+// SPDX-SnippetEnd
 
 		case B_MIDI_GET_PORT_INFO:
 		{
@@ -1789,6 +1862,34 @@ usb_midi_free(driver_cookie* cookie)
 	assert(cookie != NULL);
 	usbmidi_device_info* midiDevice = cookie->device;
 	DPRINTF_INFO((MY_ID "usb_midi_free(%p device=%p)\n", cookie, midiDevice));
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	/* The last reference to a port or device that was unplugged while open
+	 * frees it here; no hook of this cookie can run any more. */
+	usbmidi_port_info* port = cookie->port;
+	bool freePort = false;
+	bool freeDevice = false;
+	acquire_sem(usbmidi_port_list_lock);
+	if (midiDevice != NULL) {
+		midiDevice->open_count--;
+		freeDevice = midiDevice->removed && midiDevice->open_count == 0;
+	}
+	if (port != NULL)
+		freePort = port->removed;
+	release_sem(usbmidi_port_list_lock);
+
+	if (freePort) {
+		if (midiDevice != NULL && port->cable >= 0 && port->cable < 16
+			&& midiDevice->ports[port->cable] == port) {
+			midiDevice->ports[port->cable] = NULL;
+		}
+		remove_port(port);
+	}
+	if (freeDevice)
+		remove_device(midiDevice);
+// SPDX-SnippetEnd
 
 	free(cookie);
 

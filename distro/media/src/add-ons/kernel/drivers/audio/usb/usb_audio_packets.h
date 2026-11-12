@@ -151,6 +151,8 @@ usb_audio_carry_capacity(const usb_audio_packet_plan* plan)
 // publishes nothing and is not padded by repeating the last frame: capture
 // then follows the device clock instead of the host's. `carry` holds one
 // buffer of frames. Returns true when `region` starts with a whole buffer.
+// This function never pads: `padded` is left as it is, and the driver adds
+// the silence it puts in for a missed packet itself.
 // RenkuOS b3dc1212e4, on this join.
 inline bool
 usb_audio_compact_record(const usb_audio_packet_plan* plan, uint8_t* region,
@@ -210,6 +212,11 @@ usb_audio_compact_record(const usb_audio_packet_plan* plan, uint8_t* region,
 		return false;
 	}
 
+	// The rest can be almost a whole buffer: after a short capture was held
+	// back, the next one brings two. That is audio, not drift, so it is
+	// kept; capping it here dropped most of a buffer on a slow device clock
+	// (the host test catches that). The latency this costs is at most one
+	// buffer; a smaller buffer in Media is the way to lower it.
 	uint32_t rest = total - want;
 	if (rest > carryCap) {
 		*dropped += rest - carryCap;

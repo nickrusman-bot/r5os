@@ -1,5 +1,25 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - The open points of the USB audio and MIDI review (build 10058)
+
+The smaller points left open in build 10057 (`docs/reviews/USB-AUDIO-MIDI2-REVIEW.md`, status section).
+
+Unplug (`usb_midi`): a port that is open when the device is unplugged, and the device while any of its ports is open, are no longer freed under the program. `usb_midi_removed` cancels the transfers, takes the ports off the list, wakes a blocked reader, and frees only what is not open. `usb_midi_free` frees the rest with the last cookie (`open_count`, `removed`). `usb_midi_open` refuses a removed device. Remaining window: Haiku's `search_port_info` returns a port without holding the list lock, so an open that races the unplug itself is not covered (that is `devlist.cpp`, not changed here).
+
+Bus speed: the USB bus manager answers `usb_ioctl(B_USB_IOCTL_GET_DEVICE_SPEED)` with the device's speed (new MIT header `<usb/R5USBSpeed.h>`, values checked against `usb_speed` at compile time; `usb.cpp` copied into `distro/kernel` and added to `apply-kernel-bugs.py`). The module structure is unchanged; an older stack returns `B_DEV_INVALID_IOCTL` and `usb_audio` falls back to the guess. Before, every UAC 2.0 device was taken for high speed.
+
+`usb_audio`: the silence put in for a missed record packet is counted in `fPadded` and logged once per second of it. `_QueryClockRates` gives the clock's rates only to alternates whose terminal runs from that clock.
+
+Not changed, after a look: the recording carry. It can hold almost a whole buffer, but that is audio, not drift: after a short capture is held back, the next transfer brings two buffers. A cap of 4 ms dropped most of a buffer on a slow device clock; `test-usb-audio-packets` failed (`44100 Hz drift -1: buffer 2 frame 176 is 880, want 617`) and the cap was taken out again. The latency is at most one buffer; a smaller buffer in Media lowers it. The review point was wrong on that.
+
+MIDI 1.0 devices stay MIDI 1.0 bytes through `midi_server`: handing them over as UMP would change what an existing program's `Data()` receives. Documented in `docs/MIDI2.md` (Limits), with the `UMP1` marker.
+
+Manufacturer ID: R5 itself never presents itself to a MIDI device; only `midi2test` and the fuzzer use the kit's catalogs. The identity is the program's: new `<Midi2Identity.h>` (`midi2_identity`, `B_MIDI2_NONCOMMERCIAL_ID`), `midi2_pe_catalog_set_identity` (writes DeviceInfo, refuses 8-bit bytes and names that would need JSON escaping) and `midi2_endpoint_set_identity`, added at the end of `libmidi2.so`; the existing calls are unchanged and still default to `0x7D`. So R5 does not buy a SysEx ID now; `docs/ROADMAP.md` keeps the item for the case that R5 ships its own MIDI 2.0 device. `midi2test` checks the new calls (built, not run); the same checks passed in a host build with ASan/UBSan, and `fuzz-midi2` property and stream ran 60 s `ok`.
+
+Licensing: the R5 UMP code in `usb_midi.cpp` and `usb_midi.h` is inside SPDX snippet tags (20 in the source file, no code changed by the tagging; the 3 Nov entry said they were there).
+
+Tested: `jam -q usb usb_audio usb_midi` in WSL, no warnings (`-Werror`). Host: `test-usb-audio-packets` and `test-usb-midi-sysex` `ok`, `fuzz-midi2 kernel` 60 s `ok` with ASan/UBSan. No image, no boot, no USB sound card or MIDI device; unplug and the speed request are not run.
+
 ## 2026-11-12 - USB audio and MIDI fixes from the review (build 10057)
 
 Points 2 to 16 of `docs/reviews/USB-AUDIO-MIDI2-REVIEW.md`, and three of its smaller points. Point 1 was #4203.
