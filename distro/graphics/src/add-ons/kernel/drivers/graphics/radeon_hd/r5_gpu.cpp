@@ -205,14 +205,16 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 	out.vendor = 0x1002;
 	out.device = info->pci->device_id;
 	out.revision = info->pci->revision;
+	/* The settings file is read before the lock. */
+	bool render = gpu_render_enabled();
 	gpu_lock();
 	/* Off until reboot: no render, and lost for every file. */
-	if (gpu_render_enabled() && !sGpuOff)
+	if (render && !sGpuOff)
 		out.capabilities = R5_GPU_CAP_RENDER;
 	if (gpu_gone(client))
 		out.capabilities |= R5_GPU_CAP_LOST;
 	if (gpu_gone(client) && client != NULL
-		&& (client == sGuilty || client->faulted))
+		&& (client == sGuilty || client->guilty || client->faulted))
 		out.capabilities |= R5_GPU_CAP_GUILTY;
 	out.va_offset = R5_GPU_VA_OFFSET;
 	out.va_max = R5_GPU_VA_MAX;

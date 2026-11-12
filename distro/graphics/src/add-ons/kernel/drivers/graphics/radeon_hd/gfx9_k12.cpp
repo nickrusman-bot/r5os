@@ -62,9 +62,6 @@ static uint32 sLastRing = 0;
 static uint8 sFirstRaw[4][32];
 static area_id sSystemArea = -1;
 static bool sGfx9Started = false;
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: MIT
 /* The boot choices, so a restart after a reset runs the same stages. */
 static struct {
 	bool	workload;
@@ -73,8 +70,6 @@ static struct {
 	bool	gart;
 	uint64	vramBytes;
 } sStart;
-static bool sK1Ok = false;
-// SPDX-SnippetEnd
 static bool sGpuDebug = false;
 static bool sInvRange = true;
 static bool sHubLinux = false;
@@ -832,16 +827,13 @@ ih_on()
 }
 
 
-static void
-run_k1()
+/* The vector and the handler. Once per boot: a restart after a reset
+ * keeps them and only programs the ring again. */
+static bool
+k1_install()
 {
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: MIT
-	/* After a reset (r5_gfx9_kernel_restart) the vector and the handler
-	 * from boot stay. Only the ring below is programmed again. */
-	if (!sIhInstalled) {
-// SPDX-SnippetEnd
+	if (sIhInstalled)
+		return true;
 	sIrq = sInfo->pci->u.h0.interrupt_line;
 	sMsi = false;
 	if (gPCI != NULL && gPCI->get_msi_count(sInfo->pci->bus,
@@ -860,10 +852,24 @@ run_k1()
 	if (install_io_interrupt_handler(sIrq, ih_handler, sInfo, 0) != B_OK) {
 		knote("k1 fail %s irq %lu install", sMsi ? "msi" : "legacy",
 			(unsigned long)sIrq);
-		return;
+		return false;
 	}
 	sIhInstalled = true;
-	}
+	return true;
+}
+
+
+static void
+run_k1()
+{
+	if (!k1_install())
+		return;
+	/* Every end-of-pipe since boot released the semaphore once. Only
+	 * the interrupt of this K1 packet counts. */
+	int32 stale = 0;
+	if (sEopSem >= 0 && get_sem_count(sEopSem, &stale) == B_OK && stale > 0)
+		acquire_sem_etc(sEopSem, stale, B_RELATIVE_TIMEOUT, 0);
+	uint32 eopBefore = sEopCount;
 	bigtime_t started = system_time();
 	if (!ih_on()) {
 		ih_off();
@@ -877,8 +883,7 @@ run_k1()
 	if (armed && sEopSem >= 0)
 		waited = acquire_sem_etc(sEopSem, 1, B_RELATIVE_TIMEOUT, 200000);
 	bigtime_t elapsed = system_time() - started;
-	if (waited == B_OK && sEopCount > 0) {
-		sK1Ok = true;
+	if (waited == B_OK && sEopCount > eopBefore) {
 		knote("k1 ok %s irq %lu eop %lu client %lu src %lu ring %lu",
 			sMsi ? "msi" : "legacy", (unsigned long)sIrq,
 			(unsigned long)sEopCount, (unsigned long)sLastClient,
@@ -1125,16 +1130,12 @@ run_k2()
 		pte[i] = dummyPte;
 
 	void* system = NULL;
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: MIT
 	/* A restart after a reset runs K2 again. The GPU no longer reads
 	 * the boot copy: the mode-2 reset came first. */
 	if (sSystemArea >= 0) {
 		delete_area(sSystemArea);
 		sSystemArea = -1;
 	}
-// SPDX-SnippetEnd
 	sSystemArea = create_area("r5 gfx9 gart", &system, B_ANY_KERNEL_ADDRESS,
 		1024 * 1024, B_FULL_LOCK, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 	if (sSystemArea < 0 || system == NULL) {
@@ -2119,15 +2120,11 @@ r5_gfx9_kernel_start(radeon_info& info)
 	uint64 vramBytes = (uint64)info.shared_info->frame_buffer_size * 1024;
 	memset(&sResults, 0, sizeof(sResults));
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_KERNEL;
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: MIT
 	sStart.workload = workload;
 	sStart.compute = compute;
 	sStart.irq = irq;
 	sStart.gart = gart;
 	sStart.vramBytes = vramBytes;
-// SPDX-SnippetEnd
 	r5_gfx9_prepare(&sHost, vramBytes);
 	bool ok = r5_gfx9_start(&sHost, pci, vramBytes, workload, compute, &sResults);
 	if (ok)
@@ -2144,9 +2141,6 @@ r5_gfx9_kernel_start(radeon_info& info)
 }
 
 
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: MIT
 extern "C" bool r5_smu12_mode2_reset(radeon_info* info, uint32* before,
 	uint32* after);
 
@@ -2191,7 +2185,6 @@ r5_gfx9_kernel_restart()
 	if (ok)
 		r5_gfx9_hub_linux();
 	knote("k0 %s fence", ok ? "ok" : "fail");
-	sK1Ok = false;
 	if (ok && sStart.irq)
 		run_k1();
 	sK2GartMc = 0;
@@ -2225,4 +2218,3 @@ r5_gfx9_fault_status(uint32* status)
 	kwrite(sInfo, gc_byte(mmVM_L2_PROTECTION_FAULT_CNTL), cntl | 1u);
 	return 1;
 }
-// SPDX-SnippetEnd

@@ -121,6 +121,8 @@ struct gpu_client {
 	/* This file had a context when the GPU hung. Its submits and waits
 	 * fail until it destroys that context (M10 hang policy). */
 	bool			lost;
+	/* A job of this file was the one that hung. */
+	bool			guilty;
 	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };

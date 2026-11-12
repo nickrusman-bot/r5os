@@ -757,6 +757,9 @@ gpu_hang(gpu_job* job, bigtime_t now)
 	if ((actions & R5_HANG_ACT_LOSE) != 0) {
 		if (sGuilty == NULL)
 			sGuilty = job->owner;
+		/* Per file, so the file of a second hang is guilty as well. */
+		if (job->owner != NULL)
+			job->owner->guilty = true;
 		for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
 			if (scan->contexts > 0)
 				scan->lost = true;
@@ -2379,10 +2382,13 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		return B_UNSUPPORTED;
 
 	gpu_lock();
-	/* A reset holds the lock, except while its self-test polls. */
+	/* A reset holds the lock, except while its self-test polls. Its
+	 * end (REOPEN or OFF) notifies sEop. */
 	while (sResetting) {
+		ConditionVariableEntry entry;
+		sEop.Add(&entry);
 		gpu_unlock();
-		snooze(10000);
+		entry.Wait(B_RELATIVE_TIMEOUT, 100000);
 		gpu_lock();
 	}
 	sInfo = client->info;
@@ -2788,6 +2794,9 @@ gpu_free(void* cookie)
 			if (sync != NULL && sync->owner == client)
 				sJobs[i].syncs[n] = NULL;
 		}
+		/* The watchdog reads the owner of a job that hangs later. */
+		if (sJobs[i].owner == client)
+			sJobs[i].owner = NULL;
 	}
 	for (uint32 i = 0; i < client->handleCount; i++) {
 		uint32 handle = client->handles[i];
