@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Wi-Fi works on the 5625U; the Deskbar list shows each network once
+
+Stick 51 (`7df60ccc53`, the code of `main` after PR #4215, sha256 `f5d21996…`): the owner joined a WPA2 network with the MT7921 and reports that Wi-Fi works. No kernel panic. No syslog was collected for this boot, so DHCP and the transfer speed are not on record. Bluetooth and a long idle were not reported.
+
+The network list in the Deskbar showed most networks several times. A scan returns one entry per access point, and NetworkStatus made a menu row for each, so a mesh or a router on 2.4 and 5 GHz appeared once per access point. It now groups by name with `GroupWirelessNetworks()` from `<R5WiFiNetworkList.h>`, the same rule the Wi-Fi page in Settings uses: one row per network, its strongest access point, and hidden networks without a name left out. The network in use stays marked. "<no wireless networks found>" now also shows when only hidden networks are around. `distro/rest/src/apps/networkstatus/NetworkStatusView.cpp`, MIT snippet. Tested: `jam -q NetworkStatus` builds with no warnings in that file. No image built and nothing booted.
+
 ## 2026-11-12 - Kernel panic when joining a WPA network: the link domain has no address module (build 10060)
 
 Stick 50 (`d6b2471ed4`, sha256 `177cbd31…`): the NetworkStatus menu no longer crashes, the network list shows, and joining "Skynet" with a password got through association. Then the kernel stopped in KDL (photo): `PANIC: vm_page_fault: unhandled page fault in kernel space at 0xb0`, thread `wpa_supplicant thread`, in `get_interface_address()` ← `datalink_is_local_address()` ← `datalink_send_routed_data()` ← `socket_send()` ← `sendto` from `wpa_supplicant` `l2_packet_send()` ← `wpa_supplicant_send_2_of_4()`: message 2 of the WPA 4-way handshake. The syslog on disk ends before the join; the KDL screen is the evidence.
