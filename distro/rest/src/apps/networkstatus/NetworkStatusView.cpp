@@ -522,16 +522,30 @@ NetworkStatusView::MouseDown(BPoint point)
 		// Sort only the networks: the menu also holds the Wi-Fi settings
 		// item and the current network, and CompareSignalStrength() reads
 		// every item it is given as a WirelessNetworkMenuItem.
-		std::vector<BMenuItem*> networkItems;
+		// A scan returns one entry per access point, so a mesh or a router
+		// on 2.4 and 5 GHz showed up several times. Group by name, as the
+		// Wi-Fi page in Settings does (<R5WiFiNetworkList.h>): one row per
+		// network, its strongest access point, hidden names left out.
+		const char* connectedName = NULL;
 		for (uint32 i = 0; i < networksCount; i++) {
-			const wireless_network& network = networks[i];
+			if (associated.find(networks[i].address) != associated.end()) {
+				connectedName = networks[i].name;
+				break;
+			}
+		}
+		std::vector<WirelessNetworkGroup> groups
+			= GroupWirelessNetworks(networks, networksCount, connectedName);
+
+		std::vector<BMenuItem*> networkItems;
+		for (size_t i = 0; i < groups.size(); i++) {
+			const wireless_network& network = groups[i].network;
 			BMessage* message = new BMessage(kMsgJoinNetwork);
 			message->AddString("device", wifiInterface);
 			message->AddString("name", network.name);
 			message->AddFlat("address", &network.address);
 
 			BMenuItem* item = new WirelessNetworkMenuItem(network, message);
-			if (associated.find(network.address) != associated.end())
+			if (groups[i].connected)
 				item->SetMarked(true);
 			networkItems.push_back(item);
 		}
@@ -544,7 +558,7 @@ NetworkStatusView::MouseDown(BPoint point)
 		for (size_t i = 0; i < networkItems.size(); i++)
 			menu->AddItem(networkItems[i]);
 
-		if (networksCount == 0) {
+		if (networkItems.empty()) {
 			BMenuItem* item = new BMenuItem(
 				B_TRANSLATE("<no wireless networks found>"), NULL);
 			item->SetEnabled(false);
