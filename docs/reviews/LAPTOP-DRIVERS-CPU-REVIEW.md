@@ -80,6 +80,26 @@ On Renoir/Cezanne laptops the built-in microphones are usually digital and run t
 
 Accelerometer and lid angle, used for rotating the screen and for knowing that the laptop is folded into a tablet. On this 2-in-1 it matters more than on an ordinary laptop. Linux `amd_sfh` is GPL-2.0 and not a source; no fork was found with one. Also needs screen rotation in app_server, which R5 does not have. Not now; note it as a 2-in-1 item on the roadmap.
 
+### 7. WPA3 (after Wi-Fi works with WPA2)
+
+WPA3-Personal is two things: SAE (the password exchange that replaces the WPA2 handshake) and PMF, protected management frames (802.11w), which WPA3 makes mandatory. Read in the WSL Haiku tree, not built:
+
+- `wpa_supplicant-2.11.haiku.1-1` is in the image (`build/jam/repositories/HaikuPorts/x86_64`). Version 2.11 can do SAE and PMF when they are built in. Whether the HaikuPorts recipe sets `CONFIG_SAE` was not checked; the recipe is not in this tree.
+- The FreeBSD `net80211` copy that the air/OS MediaTek driver uses (`src/libs/compat/freebsd_wlan`) has SAE only as constants in `ieee80211.h` and `_ieee80211.h`, and no PMF at all (no `mfp` in `ieee80211_var.h` or `ieee80211_ioctl.h`). That is the real gap.
+- The OpenBSD stack (`openbsd_wlan`) has PMF code, but OpenBSD has no WPA3, so it has no SAE.
+- The MT7921/MT7922 firmware does WPA3 under Linux. Whether air/OS `mt7922wifi` installs a management-frame key was not checked; its commits mention only encrypting what the stack marks protected.
+
+What it takes, in order:
+
+1. `wpa_supplicant` built with SAE and PMF. Small: read the recipe, turn the options on.
+2. SAE authentication frames in `net80211`: the stack passes them between `wpa_supplicant` and the card, and the RSN element carries the SAE key management suite. Medium.
+3. PMF in `net80211`: protected deauthentication and disassociation, the integrity group key (BIP), and the SA query. Large and security-sensitive; a correct build is not a test.
+4. The driver installs the management-frame keys in the card, or the stack does BIP in software. Medium, depends on the firmware.
+5. The Wi-Fi settings offer WPA3 and the WPA2/WPA3 transition mode.
+6. Test on the 5625U with a real router: a WPA3-only network and a transition-mode network. QEMU cannot test this.
+
+Advice: most home routers run WPA2/WPA3 transition mode, so R5 joins them with WPA2 once section 1 works. Make WPA3 its own project after that, starting with PMF in `net80211`. First check whether air/OS or RenkuOS already have PMF or SAE in their stack; that was not read for this review. FreeBSD upstream is a possible source, but whether it has PMF now is not known here. Do not mention WPA3 in What's new or on the website until a WPA3-only network has been joined.
+
 ## CPU items (kernel)
 
 All three are open in `docs/reviews/KERNEL-AMD64-REVIEW.md`. None needs a new driver.
