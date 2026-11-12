@@ -60,6 +60,7 @@ FILES = (
     "src/kits/device/USBEndpoint.cpp",
     "headers/os/device/USBKit.h",
     "headers/os/midi2/Midi2Defs.h",
+    "headers/os/midi2/Midi2Identity.h",
     "headers/os/midi2/Midi2Property.h",
     "headers/os/midi2/Midi2Profile.h",
     "headers/os/midi2/Midi2Stream.h",

@@ -20,6 +20,12 @@
 #include "Settings.h"
 #include "UsbAudioFormat.h"
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include <usb/R5USBSpeed.h>
+// SPDX-SnippetEnd
+
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
@@ -290,6 +296,17 @@ Stream::_QueryClockRates()
 		_ASFormatDescriptor* base = fAlternates[i]->Format();
 		if (base == NULL || base->fFormatType != USB_AUDIO_FORMAT_TYPE_I)
 			continue;
+		// Only alternates whose terminal runs from this clock get its
+		// rates. In practice all of them do, but that was not checked.
+		if (fAlternates[i]->Interface() != NULL) {
+			_AudioControl* other = fControlInterface->Find(
+				fAlternates[i]->Interface()->fTerminalLink);
+			uint8 otherClock = other != NULL
+				? fControlInterface->ResolveClockSource(other->ClockSourceId())
+				: 0;
+			if (otherClock != 0 && otherClock != clock)
+				continue;
+		}
 		TypeIFormatDescriptor* format
 			= static_cast<TypeIFormatDescriptor*>(base);
 		format->fSampleFrequencyType = parsed.rateCount;
@@ -369,8 +386,18 @@ Stream::_SetupBuffers()
 	// its share of an exact frame count per buffer.
 	uint16 uacVersion = fControlInterface != NULL
 		? fControlInterface->SpecReleaseNumber() : 0x0100;
-	bool highSpeed = usb_audio_high_speed(uacVersion, samplingRate, sampleSize,
-		endpoint->fMaxPacketSize);
+	// Ask the bus manager for the speed the device runs at. Only a stack
+	// without that request falls back to the guess, which took every UAC 2.0
+	// device for high speed and got some full-speed USB-C adapters wrong.
+	bool highSpeed;
+	uint32 speed = (uint32)fDevice->fDevice;
+	if (gUSBModule->usb_ioctl(B_USB_IOCTL_GET_DEVICE_SPEED, &speed,
+			sizeof(speed)) == B_OK) {
+		highSpeed = speed >= B_USB_SPEED_HIGH;
+	} else {
+		highSpeed = usb_audio_high_speed(uacVersion, samplingRate, sampleSize,
+			endpoint->fMaxPacketSize);
+	}
 
 	// 0 keeps the historical 2048 frames per buffer. A Media preference
 	// writes 256 or 128. The count is rounded up to whole packets with an
@@ -970,6 +997,7 @@ Stream::_JoinRecorded(size_t buffer)
 		= fDescriptors + buffer * fPlan.packetsPerBuffer;
 	const uint32 frameBytes = fPlan.frameBytes;
 	uint8* region = fKernelBuffers + fRegionBytes * buffer;
+	const uint32 paddedBefore = fPadded;
 	for (uint32 i = 0; i < fPlan.packetsPerBuffer; i++) {
 		if (descriptors[i].status == B_OK && descriptors[i].actual_length > 0) {
 			fActualBytes[i] = (uint32)descriptors[i].actual_length;
@@ -984,6 +1012,8 @@ Stream::_JoinRecorded(size_t buffer)
 			bytes = slot;
 		memset(region + (size_t)i * slot, 0, bytes);
 		fActualBytes[i] = bytes;
+		// Count the silence put in, so a haltering capture shows in the log.
+		fPadded += bytes / frameBytes;
 	}
 
 	uint32 before = fDropped;
@@ -992,6 +1022,10 @@ Stream::_JoinRecorded(size_t buffer)
 	if (fPlan.rate != 0 && fDropped / fPlan.rate != before / fPlan.rate) {
 		dprintf("usb_audio: record clock drift, %" B_PRIu32
 			" frames dropped so far\n", fDropped);
+	}
+	if (fPlan.rate != 0 && fPadded / fPlan.rate != paddedBefore / fPlan.rate) {
+		dprintf("usb_audio: missed record packets, %" B_PRIu32
+			" frames of silence so far\n", fPadded);
 	}
 	return ready;
 }

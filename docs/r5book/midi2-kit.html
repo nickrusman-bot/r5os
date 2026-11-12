@@ -253,7 +253,7 @@ status_t midi2_profile_respond(midi2_profile_catalog* catalog, ...);</div></div>
 		<section class="entry" id="discovery">
 			<div class="entry-header"><h2 class="plain">Endpoint and Function Block discovery</h2><span class="kind">&lt;Midi2Stream.h&gt;</span></div>
 			<p>UMP Stream messages (type 0xF, four words) ask a MIDI 2.0 endpoint who it is, what its function blocks
-			are, and which protocol to use. The local endpoint is named <code class="inline">R5OS</code>, with one
+			are, and which protocol to use. The local endpoint is named <code class="inline">R5</code>, with one
 			bidirectional function block on group 0. It runs MIDI 1.0 protocol until a Stream Configuration message
 			selects another.</p>
 			<div class="member"><div class="sig">status_t midi2_stream_endpoint_discovery(uint8 filter, uint32 words[4]);
@@ -263,16 +263,65 @@ status_t midi2_stream_block_discovery(uint8 block, uint8 filter, uint32 words[4]
 				Block 0xFF asks for every block.</p></div>
 			<div class="member"><div class="sig">void midi2_endpoint_init(midi2_endpoint* endpoint);
 status_t midi2_stream_configure(midi2_endpoint* endpoint, const uint32* request);
-midi2_stream_identity(...), midi2_stream_reply(...)</div></div>
+midi2_stream_identity(...), midi2_stream_reply(...)</div>
+				<p>Who the endpoint says it is comes from <a href="#identity">your program's identity</a>.</p></div>
+		</section>
+
+		<!-- Identity -->
+		<section class="entry" id="identity">
+			<div class="entry-header"><h2 class="plain">Your program's identity</h2><span class="kind">&lt;Midi2Identity.h&gt;</span></div>
+			<p>A MIDI 2.0 program that answers discovery or Property Exchange tells the other side who made it: a
+			manufacturer SysEx ID, a family, a model and a revision. That identity is your program's, not R5's. R5
+			itself never presents itself to a MIDI device.</p>
+			<p><code class="inline">midi2_endpoint_init</code> and <code class="inline">midi2_pe_catalog_init</code> start
+			with <code class="inline">B_MIDI2_NONCOMMERCIAL_ID</code> (0x7D), the ID for educational and non-commercial
+			use. A free hobby program may keep it. A program that is published, by a company or for sale, sets its own
+			SysEx ID from the MIDI Association.</p>
+			<div class="member"><div class="sig">struct midi2_identity {
+	uint8 manufacturer[3];   <span class="c">// { id, 0, 0 } or { 0x00, b1, b2 }, 7-bit bytes</span>
+	uint8 family[2], model[2], revision[4];
+	const char* manufacturerName, *familyName, *modelName, *versionName;
+};</div>
+				<p>The names go into the DeviceInfo resource. They may not contain <code class="inline">"</code>,
+				<code class="inline">\</code> or control characters; <code class="inline">NULL</code> is an empty
+				name.</p></div>
+			<div class="member"><div class="sig">status_t midi2_endpoint_set_identity(midi2_endpoint* endpoint,
+	const midi2_identity* identity, const char* name, const char* productId);</div>
+				<p>Sets the UMP Device Identity, and the endpoint name and product instance ID unless they are
+				<code class="inline">NULL</code> (cut to 14 characters). <code class="inline">B_BAD_VALUE</code> for a
+				byte above 0x7F.</p></div>
+			<div class="member"><div class="sig">status_t midi2_pe_catalog_set_identity(midi2_pe_catalog* catalog,
+	const midi2_identity* identity);</div>
+				<p>Writes the DeviceInfo resource of a Property Exchange catalog. <code class="inline">B_BAD_VALUE</code>
+				for a byte above 0x7F, a name that would need escaping, or a result that does not fit.</p></div>
+
+<pre class="code">midi2_identity identity = {};
+identity.manufacturer[0] = 0x00;	<span class="c">// your three-byte SysEx ID</span>
+identity.manufacturer[1] = 0x21;
+identity.manufacturer[2] = 0x09;
+identity.model[0] = 3;
+identity.manufacturerName = <span class="s">"Example"</span>;
+identity.modelName = <span class="s">"Synth"</span>;
+identity.versionName = <span class="s">"1.2"</span>;
+
+midi2_endpoint endpoint;
+midi2_endpoint_init(&amp;endpoint);
+midi2_endpoint_set_identity(&amp;endpoint, &amp;identity, <span class="s">"Example Synth"</span>, NULL);
+
+midi2_pe_catalog catalog;
+midi2_pe_catalog_init(&amp;catalog);
+midi2_pe_catalog_set_identity(&amp;catalog, &amp;identity);</pre>
 		</section>
 
 		<!-- USB -->
 		<section class="entry" id="usb">
 			<div class="entry-header"><h2 class="plain">USB MIDI 2.0 descriptors</h2><span class="kind">&lt;Midi2Usb.h&gt;</span></div>
 			<p>Write and read the USB descriptors of a MIDI 2.0 interface: the standard interface descriptor,
-			the class-specific header (version 2.0), and a Group Terminal Block. Alternate setting 0 is the MIDI 1.0
-			interface; a later one is MIDI 2.0. <code class="inline">usb_midi</code> uses this to pick the protocol
-			of an endpoint.</p>
+			the class-specific header (version 2.0), and a Group Terminal Block (type 0x26, subtype 0x02; 0x01 is the
+			header in front of the blocks). Alternate setting 0 is the MIDI 1.0 interface; a later one is MIDI 2.0.
+			<code class="inline">usb_midi</code> selects that MIDI 2.0 alternate when a device has one, and reads the
+			Group Terminal Blocks from the device with a <code class="inline">GET_DESCRIPTOR</code> request, since they
+			are not in the configuration descriptor. Each group becomes one port.</p>
 			<div class="member"><div class="sig">status_t midi2_usb_write_interface(...);   status_t midi2_usb_parse_interface(...);
 status_t midi2_usb_write_header(...);      status_t midi2_usb_parse_header(...);
 status_t midi2_usb_write_group_terminal(...); status_t midi2_usb_parse_group_terminal(...);</div></div>
