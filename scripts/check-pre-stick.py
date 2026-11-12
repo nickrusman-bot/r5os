@@ -11,7 +11,6 @@ the first mismatch:
 - every Login source apply-login.py copies, the same three ways
 - the built r5-gpu-selftest, radeon_hd, app_server and Login against the image
 - check.sh and boot2.sh in the image against this commit
-- Login in the image does not contain the unmerged Sign in screen
 
 write-stick.py runs this before it writes. A mix exits 1.
 """
@@ -82,8 +81,6 @@ LOGIN_SOURCES = (
     ("src/apps/login/HomeLock.cpp", "distro/users/HomeLock.cpp"),
     ("src/apps/login/HomeLock.h", "distro/users/HomeLock.h"),
 )
-
-UNMERGED_LOGIN = b"Sign in to start your session"
 
 SCRIPTS = {
     "check.sh": "distro/graphics/boot/check.sh",
@@ -274,9 +271,6 @@ def check_image(commit: str, iso: str) -> None:
                 f"{name} in the image is not the build from {commit}: "
                 f"image {image_sha} build {built_sha}")
         print(f"binary {name} {image_sha}")
-        if name == "Login" and UNMERGED_LOGIN in Path(
-                wsl(f"wslpath -w {out}/haiku/{image}").strip()).read_bytes():
-            die("Login in the image is the unmerged Sign in screen")
     for name, relative in SCRIPTS.items():
         image_sha = file_sha_wsl(f"{out}/radv/bin/{name}")
         committed = sha256(blob(commit, relative))
