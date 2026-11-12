@@ -614,12 +614,33 @@ Device::_ReadProductString(usb_device device, uint8 index, char* output,
 	if (status < B_OK || actualLength < 2)
 		return;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+	// The string is UTF-16LE. Taking the low byte of each character made a
+	// name with é or ü invalid UTF-8 in Media. A surrogate pair becomes '?'.
 	size_t chars = (actualLength - 2) / 2;
-	if (chars > outputMax - 1)
-		chars = outputMax - 1;
-	for (size_t i = 0; i < chars; i++)
-		output[i] = raw[2 + i * 2];
-	output[chars] = '\0';
+	size_t used = 0;
+	for (size_t i = 0; i < chars; i++) {
+		uint16 c = raw[2 + i * 2] | ((uint16)raw[3 + i * 2] << 8);
+		if (c >= 0xd800 && c <= 0xdfff)
+			c = '?';
+		size_t need = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+		if (used + need > outputMax - 1)
+			break;
+		if (need == 1)
+			output[used++] = (char)c;
+		else if (need == 2) {
+			output[used++] = (char)(0xc0 | (c >> 6));
+			output[used++] = (char)(0x80 | (c & 0x3f));
+		} else {
+			output[used++] = (char)(0xe0 | (c >> 12));
+			output[used++] = (char)(0x80 | ((c >> 6) & 0x3f));
+			output[used++] = (char)(0x80 | (c & 0x3f));
+		}
+	}
+	output[used] = '\0';
+// SPDX-SnippetEnd
 }
 
 
@@ -1047,7 +1068,7 @@ Device::_SetupEndpoints()
 				{
 					Stream* stream = new(std::nothrow) Stream(this, i,
 						&config->interface[i]);
-					if (stream->Init() == B_OK) {
+					if (stream != NULL && stream->Init() == B_OK) {
 						// put the stream in the correct order:
 						// first output that input ones.
 						if (stream->IsInput())

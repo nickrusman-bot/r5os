@@ -24,7 +24,7 @@ const uint8 B_MIDI2_USB_MS_HEADER = 0x01;
 const uint8 B_MIDI2_USB_GROUP_TERMINAL_TYPE = 0x26;
 /* GR_TRM_BLOCK is subtype 0x02; 0x01 is the header in front of the blocks
  * (USB-MIDI 2.0 Appendix A, the same values as Linux midi-v2.h).
- * Development builds up to 10055 used 0x01 here. */
+ * Development builds up to 10056 used 0x01 here. */
 const uint8 B_MIDI2_USB_GROUP_TERMINAL_SUBTYPE = 0x02;
 const uint16 B_MIDI2_USB_VERSION = 0x0200;
 

@@ -592,7 +592,7 @@ Stream::ProgramClock()
 			USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
 			(clock << 8) | (fControlInterface->InterfaceNumber() & 0xff),
 			sizeof(rate), &rate, &actualLength);
-		TRACE(ERR, "UAC2 set_speed %lu clock %u: %s\n",
+		TRACE(status == B_OK ? INF : ERR, "UAC2 set_speed %lu clock %u: %s\n",
 			samplingRate, clock, strerror(status));
 		return status;
 	}
@@ -604,7 +604,7 @@ Stream::ProgramClock()
 		USB_REQTYPE_CLASS | USB_REQTYPE_ENDPOINT_OUT,
 		USB_AUDIO_SET_CUR, USB_AUDIO_SAMPLING_FREQ_CONTROL << 8,
 		address, sizeof(freq), &freq, &actualLength);
-	TRACE(ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
+	TRACE(status == B_OK ? INF : ERR, "set_speed %02x%02x%02x for ep %#x %d: %s\n",
 		freq.bytes[0], freq.bytes[1], freq.bytes[2],
 		address, actualLength, strerror(status));
 	return status;
