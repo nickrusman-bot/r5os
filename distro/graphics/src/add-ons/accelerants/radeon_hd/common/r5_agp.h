@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * AGP aperture from amdgpu_gmc_set_agp_default and
  * gfxhub_v1_0_init_system_aperture_regs. amdgpu_agp defaults to -1, so

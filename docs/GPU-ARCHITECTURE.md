@@ -261,7 +261,7 @@ R5 provides everything around that.
 | 7 | **One diagnostic standard** | The same log keys, error budget, and dumps (ring, IB, fault) for every driver. |
 | 8 | **One front end per vendor in the R5 DRM library** | The translation from a Mesa driver's Linux calls (RADV, ANV, NVK, Turnip, Panfrost and others) to the R5 GPU interface, with a table that documents each mapping. Mesa stays unchanged. |
 | 9 | **The porting guide** | The steps R5 took on the 5625U, as a checklist with the test that proves each step: start the GPU, first fence, interrupt, GART, address space, user submit, the Mesa driver, presentation. |
-| 10 | **Clear licences** | The interface header, the R5 DRM library, the common core and the backend interface are MIT. A backend is MIT or GPL-3.0-or-later, as its author chooses (see "Licensing"). |
+| 10 | **Clear licences** | The interface header, the R5 DRM library, the common core and the backend interface are MIT. A backend is MIT (see "Licensing"). |
 
 **Phases:**
 1. **Within M5 and M6** (partly done): write the op contracts (required and optional), make the self-test stages vendor-neutral, and finish the diagnostic standard.
@@ -274,11 +274,11 @@ The same path serves a new AMD generation (for example GC 11 in the Ryzen 7640U,
 
 - The R5 GPU interface (the kernel header) and the R5 DRM library are R5's own code, and they are **MIT** (decided by the user, 5 Nov 2026). Mesa, RADV and every Vulkan or OpenGL application load that library. With GPL-3.0, those applications would become part of a GPL-3.0 combination. Haiku's own driver interfaces are MIT for the same reason. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`.
 - The **common GPU core and the backend interface** are **MIT** (decided by the user, 7 Nov 2026). These are the files in `src/add-ons/kernel/drivers/graphics/r5gpu/` (`r5_gpu_core.cpp`, `r5_gpu_backend.h`, `r5_gpu_internal.h`). The reason is the GPU Driver Kit: the contract between hardware and software is MIT throughout, like Haiku's own driver interfaces, so that Haiku and other Haiku forks (several accept only MIT) can take the core and write drivers for it. That code is R5's own, moved out of `r5_gpu.cpp`, so R5 may relicense it. This is a deliberate exception to the GPL-3.0 default in `AGENTS.md`, per file, not a bulk header change.
-- **A GPU backend** is MIT or GPL-3.0-or-later, as its author chooses. GPL-2.0-only code is never part of a backend.
-- The GFX9 start code in the kernel add-on (`gfx9_start.cpp`) is GPL-3.0-or-later (decided by the user, 5 Nov 2026). Applications do not link it.
-- The kernel driver `radeon_hd` stays as it is: the Haiku parts MIT, the R5 snippets GPL-3.0-or-later.
+- **A GPU backend** is MIT, like all R5 code since 12 Nov 2026. GPL-2.0-only code is never part of a backend.
+- The GFX9 start code in the kernel add-on (`gfx9_start.cpp`) was GPL-3.0-or-later (decided by the user, 5 Nov 2026) and is MIT since 12 Nov 2026. Applications do not link it.
+- The kernel driver `radeon_hd` stays as it is: the Haiku parts MIT, the R5 snippets MIT too since 12 Nov 2026.
 - Mesa and libdrm headers are MIT. Most files of Linux `amdgpu` carry an MIT-style notice from AMD, and most of `i915` is `SPDX-License-Identifier: MIT`. The Linux kernel as a whole is GPL-2.0, and some DRM core files are GPL-2.0-only. So: register offsets, values and their order are taken as facts. A single file or table may be taken over only when that file itself is MIT, with its notice kept, a row in `THIRD_PARTY_NOTICES.md`, and never from a GPL-2.0-only file.
-- VulkanTeapot is forked from GLTeapot. The files it takes over keep their notices: the Be Sample Code License (Be Incorporated, 1991–1999) and MIT (Haiku, 2008). The new Vulkan code is GPL-3.0-or-later. The teapot geometry comes from a source with a known license, recorded in `THIRD_PARTY_NOTICES.md`; GLTeapot itself does not carry it (it calls `auxSolidTeapot`).
+- VulkanTeapot is forked from GLTeapot. The files it takes over keep their notices: the Be Sample Code License (Be Incorporated, 1991–1999) and MIT (Haiku, 2008). The new Vulkan code is MIT. The teapot geometry comes from a source with a known license, recorded in `THIRD_PARTY_NOTICES.md`; GLTeapot itself does not carry it (it calls `auxSolidTeapot`).
 - New components get a row in `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md`.
 
 ## Open decisions

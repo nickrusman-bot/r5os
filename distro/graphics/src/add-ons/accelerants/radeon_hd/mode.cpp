@@ -11,10 +11,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -160,7 +159,7 @@ radeon_dpms_set(uint8 id, int mode)
 {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
 		ERROR("%s: R5 radeon_hd: DCN, skip encoder DPMS\n", __func__);
 		gInfo->dpms_mode = mode;
@@ -211,7 +210,7 @@ radeon_set_display_mode(display_mode* mode)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (!radeon_hd_uses_dce(gInfo->shared_info->chipsetID)) {
 		// Do not program a DCE CRTC, PLL, or encoder on DCN.
 		ERROR("%s: R5 radeon_hd: DCN, keep the boot scanout\n", __func__);

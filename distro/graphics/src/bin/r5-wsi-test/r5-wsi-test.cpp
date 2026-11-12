@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Opens a window and clears it to one colour for 100 frames through
  * VK_RFIVE_view_surface. Reads one pixel back from the screen.

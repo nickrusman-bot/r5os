@@ -8,10 +8,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -251,7 +250,7 @@ detect_crt_ranges(uint32 crtid)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool r5_display_is_dcn();
 // SPDX-SnippetEnd
 
@@ -286,7 +285,7 @@ detect_displays()
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (r5_display_is_dcn()) {
 				ERROR("%s: connector(%" B_PRIu32
 					"): R5 radeon_hd: DCN, skip AUX\n", __func__, id);
@@ -320,7 +319,7 @@ detect_displays()
 			}
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			if (!gDisplay[displayIndex]->attached
 				&& gConnector[id]->type == VIDEO_CONNECTOR_EDP
 				&& gInfo->shared_info->has_edid) {
@@ -360,7 +359,7 @@ detect_displays()
 		// If no display found yet, try more standard detection methods
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (gDisplay[displayIndex]->attached == false && !r5_display_is_dcn()) {
 // SPDX-SnippetEnd
 			TRACE("%s: connector(%" B_PRIu32 "): bit-banging ddc for EDID.\n",
@@ -612,7 +611,7 @@ display_crtc_dpms(uint8 crtcID, int mode)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (r5_display_is_dcn()) {
 		ERROR("%s: R5 radeon_hd: DCN, skip DPMS\n", __func__);
 		gDisplay[crtcID]->powered = (mode == B_DPMS_ON);
@@ -649,7 +648,7 @@ display_crtc_dpms(uint8 crtcID, int mode)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 r5_display_is_dcn()
 {
@@ -673,7 +672,7 @@ display_dce45_crtc_load_lut(uint8 crtcID)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (r5_display_is_dcn()) {
 		TRACE("%s: R5 radeon_hd: DCN, skip DCE 5 CRTC registers\n",
 			__func__);
@@ -880,7 +879,7 @@ display_crtc_fb_set(uint8 crtcID, display_mode* mode)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (r5_display_is_dcn()) {
 		TRACE("%s: R5 radeon_hd: DCN, skip DCE 5 CRTC registers\n",
 			__func__);

@@ -10,10 +10,9 @@
  */
 
 /*
- * R5OS modifications in this file are GPL-3.0-or-later. They are wrapped in
- * SPDX-Snippet markers. The Haiku copyright and the MIT License above still
- * cover the original work. A build that ships both follows GPL-3.0-or-later,
- * and the MIT notices stay on the Haiku portions.
+ * R5OS modifications in this file are MIT, like the original work. They are
+ * wrapped in SPDX-Snippet markers. The copyright and license notice above still
+ * cover the original work.
  */
 
 
@@ -33,7 +32,7 @@
 #include <SupportDefs.h>
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 #include <driver_settings.h>
 
 #include "r5_gpu.h"
@@ -72,7 +71,7 @@ const struct supported_device {
 	uint8		displayStepping = 0;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	/* gfxhub aperture high + 1. amdgpu_device.c:2139. */
 	uint8		aperturePlus = 0;
 // SPDX-SnippetEnd
@@ -532,7 +531,7 @@ const struct supported_device {
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	// Families from here were inside `#if 0` for Haiku R1/beta5.
 	// PCI IDs follow Linux amdgpu_drv.c v6.12, except 0x163f which that
 	// file no longer lists and which Linux v5.15 calls CHIP_VANGOGH.
@@ -752,7 +751,7 @@ char* gDeviceNames[MAX_CARDS + 1];
 radeon_info* gDeviceInfo[MAX_CARDS];
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static char* sR5GpuName = NULL;
 static const char* sR5Published[3];
 extern device_hooks gR5GpuHooks;
@@ -763,7 +762,7 @@ mutex gLock;
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 radeon_hd_pci_class(const pci_info& info)
 {
@@ -784,7 +783,7 @@ radeon_hd_pci_class(const pci_info& info)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static bool
 radeon_hd_family_untested(uint16 chipsetID)
 {
@@ -803,7 +802,7 @@ get_next_radeon_hd(int32* _cookie, pci_info &info, uint32 &type)
 	for (; gPCI->get_nth_pci_info(index, &info) == B_OK; index++) {
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		// VGA, display-other, or a processing accelerator. The zero row
 		// is the IP-discovery fallback, not a real PCI ID.
 		if (!radeon_hd_pci_class(info))
@@ -853,7 +852,7 @@ publish_devices(void)
 	TRACE("%s\n", __func__);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (sR5Published[0] != NULL)
 		return sR5Published;
 // SPDX-SnippetEnd
@@ -939,7 +938,7 @@ init_driver(void)
 		gDeviceInfo[found]->pciID = kSupportedDevices[type].pciID;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (gDeviceInfo[found]->pciID == 0)
 			gDeviceInfo[found]->pciID = info->device_id;
 		gDeviceInfo[found]->doorbell_area = -1;
@@ -959,7 +958,7 @@ init_driver(void)
 			kSupportedDevices[type].deviceName, info->revision);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 		if (kSupportedDevices[type].pciID == 0) {
 			ERROR("%s: pci 1002:%04x claimed by IP discovery, "
 				"display version unknown\n", __func__, info->device_id);
@@ -973,7 +972,7 @@ init_driver(void)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (found > 0) {
 		int kernel = 0;
 		int irq = 0;
@@ -1025,7 +1024,7 @@ uninit_driver(void)
 	char* name;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	free(sR5GpuName);
 	sR5GpuName = NULL;
 	sR5Published[0] = NULL;
@@ -1053,7 +1052,7 @@ find_device(const char* name)
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 	if (sR5GpuName != NULL && !strcmp(name, sR5GpuName))
 		return &gR5GpuHooks;
 // SPDX-SnippetEnd

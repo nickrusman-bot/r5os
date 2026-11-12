@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Draws the freeglut Newell teapot, or a cube with --cube, through Vulkan.
  * --selftest draws the same frame on two explicitly chosen devices and

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * AMD backend for the render node /dev/gpu/radeon_hd/<n>. The graphics
  * node is unchanged. This file fills r5_gpu_backend_ops and keeps the

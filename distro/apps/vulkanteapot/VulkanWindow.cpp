@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-late
+ * SPDX-License-Identifier: MIT
  *
  * VulkanTeapot --window. The picture is a swapchain in an ordinary
  * window. --selftest does not call this file.

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later
+/* SPDX-License-Identifier: MIT
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  *
  * generated from gfx9_compute.s, do not edit by hand

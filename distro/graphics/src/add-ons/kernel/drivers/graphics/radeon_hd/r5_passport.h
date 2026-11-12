@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Fills the AMD device block from the chip row, the discovery binary,
  * and the ATOM tables. The GFX9 ring is not touched.

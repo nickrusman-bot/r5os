@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Compare two RGBA frames. A pixel is over the limit when any channel
  * differs by more than maxChannel. shareTenths is that count in tenths

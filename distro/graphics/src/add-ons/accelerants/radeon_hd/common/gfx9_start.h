@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * The user chose this license for the shared GFX9 start on 5 Nov 2026.
  * The accelerant and the kernel driver both include this header.
