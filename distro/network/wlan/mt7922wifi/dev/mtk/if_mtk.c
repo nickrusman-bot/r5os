@@ -1054,8 +1054,7 @@ mtk_attach(device_t dev)
 	}
 	if (sc->sc_patch_name == NULL)
 		return ENXIO;
-	device_printf(dev, "firmware %s, %s
-", sc->sc_patch_name,
+	device_printf(dev, "firmware %s, %s\n", sc->sc_patch_name,
 		sc->sc_ram_name);
 /* SPDX-SnippetEnd */
 	mtx_init(&sc->sc_cmdmtx, "mtk commands", MTX_NETWORK_LOCK, MTX_DEF);

@@ -49,6 +49,16 @@
 			["midi2-kit.html#usb", "USB descriptors", true],
 			["midi2-kit.html#drivers", "Drivers", true],
 		]},
+		{ title: "Wi-Fi Kit", file: "wifi-kit.html", items: [
+			["wifi-kit.html", "Overview"],
+			["wifi-kit.html#view", "WiFiView", true],
+			["wifi-kit.html#controller", "WiFiController", true],
+			["wifi-kit.html#state", "WiFiState", true],
+			["wifi-kit.html#glyphs", "Glyphs", true],
+			["wifi-kit.html#list", "Scan results", true],
+			["wifi-kit.html#roster", "BNetworkRoster", true],
+			["wifi-kit.html#settings", "Where people see it", true],
+		]},
 		{ title: "Vulkan", file: "vulkan.html", items: [
 			["vulkan.html", "Vulkan in a window"],
 			["vulkan.html#surface", "vkCreateViewSurfaceRFIVE", true],

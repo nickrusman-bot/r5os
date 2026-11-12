@@ -233,6 +233,16 @@ air/OS (airos-works/haiku), copyright jmgasper:
 
 The line that prints the raw CPUID words of the topology is R5's own, GPL-3.0-or-later, in SPDX-Snippet tags.
 
+### Wi-Fi, Bluetooth and the Wi-Fi Kit
+
+The MediaTek MT7921/MT7922 Wi-Fi driver `mt7922wifi` (`distro/network/wlan/mt7922wifi`), the Wi-Fi panel, state machine and glyphs in `libr5wifi.so` (`distro/wifi/lib`), the WiFi program (`distro/wifi/app`), and the MediaTek Bluetooth loader `h2mediatek` in Haiku's `h2generic` (`distro/kernel/src/add-ons/kernel/drivers/bluetooth/h2/h2generic`) are from air/OS (`github.com/airos-works/haiku`), copyright 2026 Haiku, Inc., written by jmgasper. License: MIT. They are not relicensed. The driver is the state of air/OS `e3c4cc898c3ecb8f1f05aff79987e3f9a5f8f8a9`; the Wi-Fi Kit is the WiFi preferences, `WirelessNetworkList.h` and `BNetworkRoster::AddPersistentNetwork(network, password)` of `295ea77d36e80c0ee65d23f7e277292eac0a5ff4` (itself `4ba582512b3ab95535530ceaa08c8e4291993dc6`) with the icons of `206f54fad9be69bb3fe2325de808d2b720ee7b8d`; the Bluetooth loader is `70bebdce2ed7da0353d3dd3b72874b884cc8f320`, `d970346c43b51ef7a9b6f0feac04bb866a97d626`, the h2generic part of `295ea77d36`, and `63151e84e14ab9773ee03a530e7c9558d618fb54` (`44e20014ac289d130f263fe5acbb23e3ca93aeed` is taken and reverted, as air/OS did in `5f37ae22f74b131311732d0fcde1b42be09235ad`). The HE media types and the transmit-rate ioctl header are the matching hunks of `295ea77d36`.
+
+R5 changes, all MIT except where marked: the firmware file names per PCI part in the driver (an SPDX snippet, GPL-3.0-or-later), the panel as `WiFiView` in a shared library with `R5WiFi` header names, and `_reserved` fields.
+
+The FreeBSD network and wireless layers Haiku runs these drivers on (`src/libs/compat/freebsd_network`, `src/libs/compat/freebsd_wlan`) keep their own licenses (Haiku's MIT, FreeBSD's BSD). The fixes taken into them are air/OS commits: `db88e0c67ce4f7be26c2aaec5f825c21c6514322`, `01d5a4d53a4941b1baf96a4f05a7c3e04bf2f1c9`, `bdc484fbe61ad70f338c05b877829d9d6957bf19`, `291ad13a8aa04883e92e2ce63246a113c8a454f5`, `4797f2fb9ce4e3b4a9851a9beee991aa2c7928cb` and `efd664942774869d6790b0305486e4618a427943` by jmgasper; `2307520ffbb1b75fb44dd1768cbe0da1044f5992`, `d341df45ce30a91c83ebf20c3c68c148334a2b23`, `e6027d523b3265c4bfe1364b697e47982787fab3` and `a9899f43add1b82d87bbe4169fc94a331c7ec638` by Felipe De Bene; `db80c70462b2842adff39e8b2ec3e2e6de448703`, `5b2e7b33b001202d3bebdfe2d015f13236a4bf8a`, `69fac4c61ddb5674a84cbc36c9cfa1203fe4bf7d`, `745966932b6dab32906d7ac9c0c20968327cffab` and `88320aa9666f4d8b646115a3add80129624ca5e2` by Ian. `scripts/apply-kernel-bugs.py` and `scripts/apply-wireless.py` copy them.
+
+`memcpy` for x86_64 (`distro/kernel/src/system/libroot/posix/string/arch/x86_64/memcpy.cpp`) and its test are Haiku's, MIT, with air/OS `6178b691d287eac6f53f4726589c29327012ee8c` by jmgasper (MIT): no `rep movsb` when source and destination are less than 16 bytes apart modulo the page size.
+
 ### Device Manager
 
 Device Manager is MIT. It builds Haiku's Devices code unchanged from `src/apps/devices` (`dm_wrapper.c`, `Device*.cpp`, `DriverUtils.cpp`): MIT, copyright 2006-2026 Haiku, Inc., authors Pieter Panman and Leo Rouleau as named in those files. Its icon is the Devices icon, MIT, copyright Haiku, Inc. Hardware names come from the lists in Haiku's `src/data/ids`, the same ones Devices uses. The PCI ID list (Martin Mares and Albert Pool, pci-ids.ucw.cz) may be distributed under GPL-2.0-or-later or BSD-3-Clause; Device Manager uses it under BSD-3-Clause. The USB ID list (maintained by Stephen J. Gowdy, linux-usb.org) states no license in the file; it is not yet reviewed beyond that. ACPI and PnP names come from the UEFI registry files Haiku ships in the same folder. The R5 parts are copyright 2026 R5OS Contributors, MIT.
@@ -272,6 +282,16 @@ Location: `distro/fonts/manrope`. Installed on the image at `data/settings/fonts
 | `manrope-regular.ttf`, `manrope-bold.ttf` | Manrope, Mikhail Sharanda, 2018. Mirko Velimirovic and Mikhail Sharanda made the variable family in 2019. These two files are the unmodified static fonts from `googlefonts/manrope`. | OFL-1.1 |
 
 Copyright line in the font's license file: Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope). No Reserved Font Name is declared after that line. The files are not modified, so the name stays Manrope. `OFL.txt` and `FONTLOG.txt` ship next to the fonts. The SPDX text is `LICENSES/OFL-1.1.txt`. The same files are installed under `data/fonts/ttfonts`. app_server uses Manrope Regular and Bold as the default plain and bold fonts when the user has not saved a font choice. The fixed font stays Noto Sans Mono. Noto Sans remains the fallback if Manrope is missing.
+
+### MediaTek MT7921 firmware
+
+Location: `distro/firmware/mediatek`. Installed at `system/non-packaged/data/firmware/mt7922wifi/` (Wi-Fi) and `system/non-packaged/data/firmware/h2generic/` (Bluetooth), each with `LICENCE.mediatek`.
+
+| Piece | Project | License |
+|---|---|---|
+| `WIFI_MT7961_patch_mcu_1_2_hdr.bin` (version 20260224110909a), `WIFI_RAM_CODE_MT7961_1.bin` (20260224110949), `BT_RAM_CODE_MT7961_1_2_hdr.bin` (20260224111243) | MediaTek Inc., via linux-firmware (git.kernel.org, 12 Nov 2026) | `LICENCE.mediatek` (`LicenseRef-LICENCE.mediatek`) |
+
+The blobs are unmodified. sha256 starts: `WIFI_MT7961_patch_mcu_1_2_hdr.bin` `a276c06c2b772adb`, `WIFI_RAM_CODE_MT7961_1.bin` `b94217a951518a9c`, `BT_RAM_CODE_MT7961_1_2_hdr.bin` `7a440a0f7404c73a`. MediaTek allows use and redistribution with devices that contain MediaTek chipsets, but not in a form that would require the files themselves to be covered by the GPL or LGPL. R5 ships them as separate files that the drivers read at run time, the same way as the AMD firmware. This is not an open-source license. The text is `LICENSES/LICENCE.mediatek`. MediaTek does not endorse R5.
 
 ### AMD family 19h microcode
 

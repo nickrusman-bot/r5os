@@ -59,6 +59,8 @@ def install_kernel_sources() -> None:
         "src/tests/system/libroot/posix/string/memcpy_test.cpp",
         # air/OS: the FreeBSD network and wireless layers the MediaTek Wi-Fi
         # driver and wpa_supplicant need (THIRD_PARTY_NOTICES.md)
+        "src/libs/compat/freebsd_network/compat/net/if_media.h",
+        "src/libs/compat/freebsd_wlan/net80211/ieee80211_ioctl.h",
         "src/libs/compat/freebsd_network/bus.cpp",
         "src/libs/compat/freebsd_network/condvar.cpp",
         "src/libs/compat/freebsd_network/device_hooks.c",

@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10060 - Wi-Fi in Settings
+Settings has a Wi-Fi page under Network: turn Wi-Fi on or off, see the networks around you, join one with its password, and forget a network you no longer use. On a computer with Wi-Fi, the network icon in the Deskbar shows the Wi-Fi arcs, and its menu has Wi-Fi settings. Laptops with a MediaTek MT7921 or MT7922 Wi-Fi card, such as many AMD Ryzen laptops, get a driver for it and for its Bluetooth. The separate WiFi program is also installed.
+
 R5 2026.1-dev Build 10059 - Faster on several cores, cooler when idle
 On AMD Ryzen processors, R5 now knows which threads share a core, so busy programs spread over the real cores instead of crowding one. On processors with fast and efficient cores, such as recent Intel laptops and AMD Ryzen AI, busy programs go to the fast cores first. An idle computer can now use the processor's deeper sleep states, also on AMD, which saves battery and keeps it cooler.
 

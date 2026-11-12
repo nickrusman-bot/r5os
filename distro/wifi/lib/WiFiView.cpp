@@ -255,7 +255,10 @@ WiFiView::AttachedToWindow()
 	// The controls talk to this view, not to the window it sits in
 	target_invokers(this, this);
 	fDeviceMenu->SetTargetForItems(this);
-	Window()->SetDefaultButton(fJoinButton);
+	// In Settings the window's own controls keep Enter; the password field
+	// joins on Enter by itself.
+	if (!fSettingsPage)
+		Window()->SetDefaultButton(fJoinButton);
 	Window()->SetPulseRate(350000);
 
 	if (fController == NULL) {
@@ -706,7 +709,7 @@ WiFiView::_ShowPrompt(const char* name, uint32 authentication)
 
 	if (fPromptBox->IsHidden())
 		fPromptBox->Show();
-	if (Window() != NULL)
+	if (Window() != NULL && !fSettingsPage)
 		Window()->SetDefaultButton(fPromptJoinButton);
 	fPasswordControl->MakeFocus(true);
 	_UpdateButtons();
@@ -721,7 +724,7 @@ WiFiView::_HidePrompt()
 	fPromptName = "";
 	if (!fPromptBox->IsHidden())
 		fPromptBox->Hide();
-	if (Window() != NULL)
+	if (Window() != NULL && !fSettingsPage)
 		Window()->SetDefaultButton(fJoinButton);
 	_UpdateButtons();
 }

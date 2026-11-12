@@ -14,6 +14,7 @@ The R5Book (`docs/r5book/index.html`) shows each part with a picture, what it is
 |---|---|---|---|
 | `libr5icons.so` | `<R5Icons.h>` | `distro/icons` | Icons and icon buttons. `docs/ICONS.md` |
 | `libr5ui.so` | `<R5UI.h>` | `distro/ui` | The screen picture, cards, the sidebar, the page heading, and the administrator lock (`<AdminLock.h>`). It links `libr5icons.so` because a locked sidebar row draws `R5_ICON_LOCKED` |
+| `libr5wifi.so` | `<R5WiFi.h>` | `distro/wifi/lib` | The Wi-Fi panel (`WiFiView`), the Wi-Fi state machine (`WiFiController`), the network list, and the Wi-Fi glyphs. From air/OS, MIT. Regular image only. See "Wi-Fi Kit" below |
 
 `scripts/apply-icons.py` and `scripts/apply-r5ui.py` copy the sources into the Haiku tree, copy the header to `headers/os/interface/`, and add the library to the regular image and the minimum image. On a running system the files are `/system/lib/libr5icons.so` and `/system/lib/libr5ui.so`. The soname is the file name, with no version suffix, the same way `libbe.so` is named.
 
@@ -335,3 +336,19 @@ BLayoutBuilder::Group<>(this, B_HORIZONTAL)
 ```
 
 The message codes Login answers are in `distro/ui/AdminLockProtocol.h` (private) and `distro/users/AccountAdmin.h`, with the same values. A code that shipped does not change.
+
+## Wi-Fi Kit
+
+`libr5wifi.so`, headers in `headers/os/net/`: `<R5WiFi.h>` (`WiFiController`, `WiFiState`, `WiFiNetworkInfo`, `WiFiLinkDetails`, the message codes), `<R5WiFiView.h>` (`WiFiView`), `<R5WiFiListView.h>` (`NetworkListView`, `SignalView`), `<R5WiFiJoinOther.h>` (`JoinOtherWindow`), and the header-only `<R5WiFiGlyphs.h>`, `<R5WiFiIconPaths.h>` and `<R5WiFiNetworkList.h>`. The R5Book page is `docs/r5book/wifi-kit.html`.
+
+The code is air/OS's WiFi preferences (MIT, jmgasper; `THIRD_PARTY_NOTICES.md`). R5 moved the window's content into `WiFiView` so that the WiFi program (`distro/wifi/app`) and the Wi-Fi page in Settings (`distro/settings/WiFiModule.cpp`) share one panel, renamed the headers with an `R5WiFi` prefix, and gave `WiFiController` and `WiFiView` `_reserved[8]`. `WiFiState` and the structures it holds are read with `Unarchive()`; fields are only added at the end.
+
+| Call | What it does |
+|---|---|
+| `WiFiView(bool settingsPage = false)` | The whole panel. It starts a `WiFiController` when attached to a window and stops it when detached. `settingsPage` drops the icon and insets and leaves the window's default button alone |
+| `WiFiController(target, component, scanInterval)`, `Start()` | The state machine on its own thread. Stop it with `B_QUIT_REQUESTED` |
+| `kMsgWiFiScan`, `kMsgWiFiJoin`, `kMsgWiFiLeave`, `kMsgWiFiForget`, `kMsgWiFiSetPower`, `kMsgWiFiSelectDevice`, `kMsgWiFiRefresh`, `kMsgWiFiSetScanInterval` | Requests to the controller. The fields are in the R5Book page |
+| `kMsgWiFiStateChanged`, `kMsgWiFiJoinResult` | What the target receives |
+| `DrawWiFiTrayIcon()`, `DrawWiFiSignalBars()`, `DrawWiFiLock()` | The arcs, header only. The Deskbar network icon uses them without loading the library into Deskbar |
+
+`BNetworkRoster::AddPersistentNetwork(const wireless_network&, const char* password)` is an addition to Haiku's `libbnetapi.so` (air/OS), not to this library; the one-argument call stays. `scripts/apply-wireless.py` copies the library, the WiFi program and the headers, and adds `libr5wifi.so` and WiFi to the regular image.

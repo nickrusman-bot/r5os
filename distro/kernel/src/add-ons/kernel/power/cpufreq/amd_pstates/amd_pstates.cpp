@@ -87,8 +87,7 @@ set_normal_pstate(void* /* dummy */, int cpu)
 	x86_write_msr(MSR_AMD_CPPC_REQ, request & 0xffffffff);
 
 	dprintf("R5 CPPC: cpu %d cap1 0x%08" B_PRIx64 " request 0x%08" B_PRIx64
-		"
-", cpu, cap1 & 0xffffffff,
+		"\n", cpu, cap1 & 0xffffffff,
 		x86_read_msr(MSR_AMD_CPPC_REQ) & 0xffffffff);
 // SPDX-SnippetEnd
 }

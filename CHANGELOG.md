@@ -1,5 +1,25 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Wi-Fi in Settings, MediaTek Wi-Fi and Bluetooth, three kernel items (build 10060)
+
+From `docs/reviews/LAPTOP-DRIVERS-CPU-REVIEW.md` (PR #4213) and the open items of `docs/reviews/KERNEL-AMD64-REVIEW.md`. The SD card reader (PR #4118) is left out on purpose: there is no usable source for the RTS5228 setup.
+
+Wi-Fi driver: air/OS `mt7922wifi` (state of `e3c4cc898c`) in `distro/network/wlan/mt7922wifi`, in the regular image for x86_64 only. air/OS loaded MT7922 firmware for every part, also for the MT7921 (`14c3:7961`) in the 5625U. The part table now names the files per PCI id (MT7921: `WIFI_MT7961_patch_mcu_1_2_hdr.bin`, `WIFI_RAM_CODE_MT7961_1.bin`; MT7922 unchanged), and attach logs `firmware <patch>, <ram>`. The firmware is in `distro/firmware/mediatek`, unmodified from linux-firmware, installed in `system/non-packaged/data/firmware/mt7922wifi`.
+
+Dependencies taken with it, after reading what air/OS changed beside the driver: the FreeBSD network and wireless layers had fixes made during the same bring-up that the driver relies on at run time. Without `db88e0c67c` wpa_supplicant's station-mode request before every scan fails with ENXIO; without `01d5a4d53a` the receive queue grows without limit; `bdc484fbe6` stops a log line per ioctl; the 3 Nov set (`2307520ffb`, `db80c70462`, `5b2e7b33b0`, `69fac4c61d`, `d341df45ce`, `e6027d523b`, `a9899f43ad`, `745966932b`, `88320aa966`, `4797f2fb9c`, `efd6649427`) fixes scans, association and the taskqueue; `291ad13a8a` skips a USB device without a configuration. The HE (802.11ax) media types and the transmit-rate ioctl header come from `295ea77d36`; `IFM_MMASK` grows from 0x7 to 0xf, which also fixes VHT2G (0x8), already outside the old mask. Not taken: suspend, ARM64, Raspberry Pi and OpenBSD-layer changes.
+
+Bluetooth: air/OS's MediaTek loader in h2generic (`70bebdce2e`, `d970346c43`, the h2generic part of `295ea77d36`, `63151e84e1`; `44e20014ac` taken and reverted as air/OS did). It loads `BT_RAM_CODE_MT7961_1_2_hdr.bin` from `system/non-packaged/data/firmware/h2generic`. Bluetooth preferences stay Haiku's.
+
+Wi-Fi Kit: `libr5wifi.so` (MIT, `distro/wifi/lib`, `docs/LIBR5.md`, R5Book `wifi-kit.html`): air/OS's WiFi preferences (state of `206f54fad9`) split into a shared library. Its window became `WiFiView`, used by the WiFi program (`distro/wifi/app`, installed) and by a new Settings page, Wi-Fi, under Network ("Connect to wireless networks", icon from the WiFi program with the wrench, no lock, Revert and Defaults disabled because joining has no values to put back). `BNetworkRoster::AddPersistentNetwork(network, password)` is added beside the one-argument call (air/OS), and `GetNextPersistentNetwork()` now advances its cookie. Settings accepts `--page <id>`.
+
+Deskbar: one network icon, as before. NetworkStatus (`distro/rest/src/apps/networkstatus`) draws the Wi-Fi arcs when a Wi-Fi adapter exists, whatever else is connected, and the wired icon otherwise; its "Wi-Fi…" item became "Wi-Fi settings…" and opens the Settings page. The arcs come from the header-only `<R5WiFiGlyphs.h>`, so no Wi-Fi code is loaded into Deskbar. Its sources now come from `distro/rest`; `scripts/apply-wifi.py` no longer string-patches `NetworkStatusView.cpp` or its Jamfile. air/OS's separate WiFiStatus applet and wifiautojoin are not taken; net_server already rejoins saved networks.
+
+Kernel: the `R5 CPU topology:` line also prints leaf 1 ECX raw and as stored (bit 17 is PCID). `amd_pstates` keeps the CPPC values per CPU instead of in shared globals that every CPU wrote at once, and logs `R5 CPPC: cpu <n> cap1 … request …` for each CPU. air/OS `6178b691d2`: `memcpy` keeps its SSE loop when source and destination are less than 16 bytes apart modulo 4 KB, where `rep movsb` was about 14 times slower (Threadripper 1950X), plus `memcpy_test`.
+
+Mistakes and limits: `launch_speedup` was planned and dropped: it no longer compiles (old hash table API), which is why Haiku does not ship it. Two log strings in this change first had a real line break instead of `
+`; fixed before the build. The Settings page is a native page; moving Network itself into Settings is the next round. Not tested: Wi-Fi on any real network, Bluetooth with a phone, the Settings page with a real adapter, ARM64.
+
+
 ## 2026-11-12 - CPU topology, scheduler and deep idle from air/OS (build 10059)
 
 Stick 47 (the 14:58 anyboot of `110b185145`, sha256 `54829e08…`), one boot on the 5625U, logs in `generated/boot-5625u-47/syslog`:

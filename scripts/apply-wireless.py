@@ -10,8 +10,7 @@ Copies, with idempotent Jam and image hooks only:
 - BNetworkRoster with the additive AddPersistentNetwork(network, password)
   (distro/network/netapi),
 - the MediaTek Wi-Fi and Bluetooth firmware (distro/firmware/mediatek) into
-  system/non-packaged/data/firmware/{mt7922wifi,h2generic},
-- launch_speedup into the image.
+  system/non-packaged/data/firmware/{mt7922wifi,h2generic}.
 """
 from __future__ import annotations
 
@@ -139,12 +138,6 @@ def hook_image() -> None:
     insert_once(regular,
         "AddFilesToHaikuImage home config settings : $(shortcutsSettingsFile) ;\n",
         JAM_BLOCK, MARK, "MediaTek firmware")
-    package = HAIKU / "build/jam/packages/Haiku"
-    insert_once(package,
-        "AddFilesToPackage add-ons kernel bus_managers : "
-        "$(SYSTEM_ADD_ONS_BUS_MANAGERS) ;\n",
-        "AddFilesToPackage add-ons kernel file_cache : launch_speedup ;\n",
-        "kernel file_cache : launch_speedup", "launch_speedup")
 
 
 def main() -> int:
