@@ -50,6 +50,26 @@ status_t r5_admin_set_clock_gmt(bool gmt);
 status_t r5_admin_set_driver_blocked(const char* driver, bool blocked,
 	BString& error);
 
+// Driver settings: files in the kernel/drivers directory that the kernel
+// reads (load_driver_settings()), which is the administrator's settings, not
+// the signed-in person's. DriverSettings.cpp.
+// True when this program may write that directory itself.
+bool r5_driver_settings_writable();
+// The value after key on its line. B_NAME_NOT_FOUND without that line.
+status_t r5_driver_settings_read(const char* fileName, const char* key,
+	BString& value);
+// Replaces the lines that start with one of keys by lines (each ending in a
+// newline) and keeps the others. With replaceFile the file is only lines.
+// Written to a temporary file and renamed.
+status_t r5_driver_settings_write(const char* fileName,
+	const char* const* keys, int32 keyCount, const char* lines,
+	bool replaceFile);
+// The same write through Login, which checks the grant and only accepts the
+// files and keys it knows (the Media settings).
+status_t r5_admin_set_driver_setting(const char* fileName,
+	const char* const* keys, int32 keyCount, const char* lines,
+	bool replaceFile, BString& error);
+
 
 namespace BAppearanceKit {
 

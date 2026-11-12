@@ -9,6 +9,7 @@
 #include "AccountAdmin.h"
 #include "DesktopWindow.h"
 #include "DriverAdmin.h"
+#include "DriverSettingsAdmin.h"
 #include "HomeLock.h"
 #include "LockWindow.h"
 #include "LoginWindow.h"
@@ -204,6 +205,14 @@ LoginApp::MessageReceived(BMessage* message)
 			// Device Manager turns a driver off or on (DriverAdmin.cpp).
 			BMessage reply;
 			handle_driver_admin_message(message, reply);
+			message->SendReply(&reply);
+			break;
+		}
+		case kMsgAdminSetDriverSetting:
+		{
+			// Media writes a driver setting (DriverSettingsAdmin.cpp).
+			BMessage reply;
+			handle_driver_settings_admin_message(message, reply);
 			message->SendReply(&reply);
 			break;
 		}

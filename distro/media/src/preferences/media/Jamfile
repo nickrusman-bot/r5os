@@ -1,0 +1,24 @@
+SubDir HAIKU_TOP src preferences media ;
+
+# Haiku's Jamfile (MIT). R5 links libr5ui.so and libr5icons.so for the
+# administrator lock on the Latency, USB layout and Virtual surround menus.
+
+UsePrivateHeaders media midi shared ;
+
+Application Media :
+	Media.cpp
+	MediaIcons.cpp
+	MediaListItem.cpp
+	MediaViews.cpp
+	MediaWindow.cpp
+	MidiSettingsView.cpp
+	: media midi be libr5ui.so libr5icons.so localestub [ TargetLibsupc++ ]
+	: media.rdef
+	;
+
+DoCatalogs Media
+	: x-vnd.Haiku-Media
+	: MediaViews.cpp
+	  MediaWindow.cpp
+	  MidiSettingsView.cpp
+;

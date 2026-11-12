@@ -38,6 +38,7 @@ FILES = (
     "AdminLock.cpp",
     "AdminLock.h",
     "AdminLockProtocol.h",
+    "DriverSettings.cpp",
 )
 
 

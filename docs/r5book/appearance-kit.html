@@ -199,7 +199,7 @@ card-&gt;AddTag(<span class="s">"Display"</span>);</pre>
 			<table class="facts">
 				<tr><th>Declared in</th><td>&lt;AdminLock.h&gt;</td></tr>
 				<tr><th>Derived from</th><td>BGroupView</td></tr>
-				<tr><th>First user</th><td>Time, Screen, Network, Printers, Repositories, VirtualMemory, Users, Settings; Device Manager</td></tr>
+				<tr><th>First user</th><td>Time, Screen, Network, Printers, Repositories, VirtualMemory, Users, Settings; Device Manager; Media (the calls, not the bar)</td></tr>
 			</table>
 			<p>The lock for machine settings. A program runs as the signed-in person; a change that needs an
 			administrator goes to Sign in (Login), which checks the grant and makes the change. The bar is a label
@@ -250,6 +250,38 @@ status_t r5_admin_set_clock_gmt(bool gmt);</div>
 			<div class="member"><div class="sig">status_t r5_admin_set_driver_blocked(const char* driver, bool blocked, BString&amp; error);</div>
 				<p>Turns a packaged driver under <code class="inline">/boot/system/add-ons/kernel/</code> off or on for
 				the next start. Login refuses drivers the system needs to start. Device Manager uses it.</p></div>
+			<div class="member"><div class="sig">bool r5_driver_settings_writable();
+status_t r5_driver_settings_read(const char* fileName, const char* key, BString&amp; value);
+status_t r5_driver_settings_write(const char* fileName, const char* const* keys, int32 keyCount,
+	const char* lines, bool replaceFile);</div>
+				<p>Driver settings: the files a driver reads with <code class="inline">load_driver_settings()</code>.
+				The kernel reads them from the administrator's <code class="inline">config/settings/kernel/drivers</code>,
+				not from the signed-in person's home, so these calls always use that folder. <code class="inline">writable</code>
+				says whether this program may write there itself. <code class="inline">read</code> gives the text after
+				<code class="inline">key</code> on its line, or <code class="inline">B_NAME_NOT_FOUND</code>.
+				<code class="inline">write</code> replaces the lines that start with one of <code class="inline">keys</code>
+				by <code class="inline">lines</code> and keeps the rest; with <code class="inline">replaceFile</code> the
+				file is only <code class="inline">lines</code>. It writes a temporary file and renames it, so a crash never
+				leaves an empty file. <code class="inline">fileName</code> is a name in that folder, without a slash.</p></div>
+			<div class="member"><div class="sig">status_t r5_admin_set_driver_setting(const char* fileName, const char* const* keys,
+	int32 keyCount, const char* lines, bool replaceFile, BString&amp; error);</div>
+				<p>The same write through Login, for a standard account with a grant. Login accepts only the
+				settings it knows, today those of Media: the buffer size (<code class="inline">play_buffer_frames</code>,
+				<code class="inline">record_buffer_frames</code>) in <code class="inline">hda.settings</code> and
+				<code class="inline">usb_audio</code>, the USB channel layout, and virtual surround. Anything else is
+				refused.</p></div>
+
+<pre class="code"><span class="k">static const char*</span> kKeys[] = { <span class="s">"channel_layout"</span> };
+BString error;
+status_t status;
+<span class="k">if</span> (r5_driver_settings_writable()) {
+	status = r5_driver_settings_write(<span class="s">"usb_audio"</span>, kKeys, 1,
+		<span class="s">"channel_layout 6\n"</span>, <span class="k">false</span>);
+} <span class="k">else</span> {
+	<span class="c">// Gray until r5_admin_change_allowed(); then Login writes it.</span>
+	status = r5_admin_set_driver_setting(<span class="s">"usb_audio"</span>, kKeys, 1,
+		<span class="s">"channel_layout 6\n"</span>, <span class="k">false</span>, error);
+}</pre>
 
 <pre class="code"><span class="k">#include</span> <span class="s">&lt;AdminLock.h&gt;</span>
 

@@ -219,6 +219,21 @@ r5_admin_set_driver_blocked(const char* driver, bool blocked, BString& error)
 }
 
 
+status_t
+r5_admin_set_driver_setting(const char* fileName, const char* const* keys,
+	int32 keyCount, const char* lines, bool replaceFile, BString& error)
+{
+	BMessage request(kMsgAdminSetDriverSetting);
+	request.AddString("file", fileName != NULL ? fileName : "");
+	for (int32 i = 0; keys != NULL && i < keyCount; i++)
+		request.AddString("key", keys[i] != NULL ? keys[i] : "");
+	request.AddString("lines", lines != NULL ? lines : "");
+	request.AddBool("replace", replaceFile);
+	BMessage reply;
+	return ask_login(request, reply, error);
+}
+
+
 class UnlockWindow : public BWindow {
 public:
 	UnlockWindow(BMessenger target)

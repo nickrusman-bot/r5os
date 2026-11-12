@@ -37,5 +37,6 @@ SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
 	IconView.cpp
 	AccentButton.cpp
 	AdminLock.cpp
+	DriverSettings.cpp
 	: be libr5icons.so [ TargetLibstdc++ ]
 	;

@@ -37,6 +37,10 @@ const uint32 kMsgAdminSetProfile = 'r5af';
 // Device Manager: block or unblock one packaged kernel driver. Fields
 // "driver" (string, the driver file under /boot/system) and "blocked" (bool).
 const uint32 kMsgAdminSetDriverBlocked = 'r5dv';
+// Media: write a driver setting in kernel/drivers. Fields "file" (string),
+// "key" (strings, the lines replaced), "lines" (string) and "replace" (bool).
+// Login only accepts the files and keys in DriverSettingsAdmin.cpp.
+const uint32 kMsgAdminSetDriverSetting = 'r5ds';
 
 // How long an administrator password keeps one preference app unlocked.
 static const int32 kAdminGrantSeconds = 5 * 60;

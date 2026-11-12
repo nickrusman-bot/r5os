@@ -318,6 +318,10 @@ Since November 2026 this is part of `libr5ui.so` and is MIT. It was GPL-3.0-or-l
 | `r5_admin_relock()` | Ends this program's grant |
 | `r5_admin_set_clock(seconds)`, `r5_admin_set_timezone(offset, name)`, `r5_admin_set_clock_gmt(gmt)` | The clock and time zone (Time, Settings) |
 | `r5_admin_set_driver_blocked(driver, blocked, error)` | Turns a packaged driver under `/boot/system/add-ons/kernel/` off (`blocked` true) or on for the next start, in `/boot/system/settings/packages`. Login refuses drivers the system needs to start (the list of Haiku's Devices `IsCriticalDriver()`) |
+| `r5_driver_settings_writable()` | True when this program may write the driver settings directory itself. That is `/boot/home/config/settings/kernel/drivers`, the directory `load_driver_settings()` reads in the kernel (`kUserSettingsDirectory`), not the signed-in person's home |
+| `r5_driver_settings_read(file, key, value)` | The text after `key` on its line in that file. `B_NAME_NOT_FOUND` without the line. Reads the whole file (up to 1 MB) |
+| `r5_driver_settings_write(file, keys, keyCount, lines, replaceFile)` | Replaces the lines that start with one of `keys` by `lines` and keeps the rest; with `replaceFile` the file is only `lines`. Writes a temporary file and renames it. `file` is a name in that directory, no `/` |
+| `r5_admin_set_driver_setting(file, keys, keyCount, lines, replaceFile, error)` | The same write through Login, with the grant. Login only accepts the Media settings: `play_buffer_frames` and `record_buffer_frames` (128, 256) in `hda.settings` and `usb_audio`, `channel_layout` (1 to 16, `auto`) in `usb_audio`, and `virtual_surround` (`on`, `off`) |
 
 `BAppearanceKit::BAdminLockBar` is the lock row: a label and an Unlock button. Views in its window that are not exempt are disabled while the lock is closed; `SetExempt(view, true)` keeps one usable (the person's own account card in Users). `AdminLockBar` is a typedef for it, the name the preferences have always used. The class keeps `_reserved[4]` so it can get fields later.
 

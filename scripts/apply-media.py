@@ -55,6 +55,7 @@ FILES = (
     "src/preferences/media/MediaViews.h",
     "src/preferences/media/MediaWindow.cpp",
     "src/preferences/media/MediaWindow.h",
+    "src/preferences/media/Jamfile",
     "src/kits/interface/MenuField.cpp",
     "src/kits/device/USBEndpoint.cpp",
     "headers/os/device/USBKit.h",

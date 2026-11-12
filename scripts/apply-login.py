@@ -46,6 +46,8 @@ def copy_sources() -> None:
         "DesktopWindow.h",
         "DriverAdmin.cpp",
         "DriverAdmin.h",
+        "DriverSettingsAdmin.cpp",
+        "DriverSettingsAdmin.h",
         "Jamfile",
         "Login.rdef",
         "LockWindow.cpp",
