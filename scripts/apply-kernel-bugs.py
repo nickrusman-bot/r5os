@@ -51,6 +51,8 @@ def install_kernel_sources() -> None:
         "src/add-ons/kernel/power/cpuidle/x86_acpi_cstates/acpi_cpuidle.cpp",
         "src/system/kernel/arch/x86/apic.cpp",
         "src/system/kernel/arch/x86/ioapic.cpp",
+        # air/OS 3683cfbe47: choose the cpuidle module before using it
+        "src/system/kernel/cpu.cpp",
         # R5: no USB modules in the BIOS CD floppy archive (size limit)
         "build/jam/images/FloppyBootImage",
         # R5: the AMD CPPC values stay per CPU (no shared globals)

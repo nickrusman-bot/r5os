@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - Boot panic on the 5625U: the idle module was swapped under running CPUs (build 10060)
+
+Stick 48 (build 10060, `873776597e`) stopped at boot in the kernel debugger: `PANIC: SMEP violation user-mapped address 0xffffffff8255cc90 touched from kernel`, thread `main2`, CPU 7. The stack: `cpu_init_post_modules` → `load_cpuidle_module` → `put_module` → `unload_kernel_add_on` → `vm_delete_area` → `X86VMTranslationMap::Flush` → `x86_cstates_text + 0xc90`. The other CPUs already run when the cpuidle modules are loaded. `load_cpuidle_module()` installed the first module it found (`x86_cstates`, rank 0.8) at once, then found `x86_acpi_cstates` (0.9), put the first one and unloaded its code while CPUs were idling in it; the TLB shootdown waited in `cpu_wait()` through the old module. The fault on the freed text is reported as SMEP.
+
+Why now: on stick 47 `x86_acpi_cstates` refused (wrong ACPI processor ids), so only one module was ever installed. The MADT fix (`30da1eeda2`, PR #4212, on `main`) made the ACPI module valid, and that exposed this. air/OS fixed exactly this in `3683cfbe47` ("kernel: choose the cpuidle and cpufreq modules before using one"), merged together with the MADT and ACPI-idle commits as one set (`b5ea454b46`, "idle module selection, MADT processor IDs, x86_acpi_cstates"). R5 took two of the three. Mistake: the dependency check for this round looked at the network and Bluetooth layers and not again at the kernel set from #4212.
+
+Change: `distro/kernel/src/system/kernel/cpu.cpp` with `3683cfbe47` (jmgasper, MIT): the best cpuidle and cpufreq module is chosen first, the others are put before anyone uses them, and only then is the chosen one published (`using cpuidle module <name>`). `scripts/apply-kernel-bugs.py` copies it.
+
+`main` is affected too since #4212: a machine whose firmware gives `x86_acpi_cstates` valid processors panics at boot. QEMU never takes this path (no `_CST`), which is why the QEMU boots passed. Tested: kernel builds; not booted on the 5625U yet.
+
 ## 2026-11-12 - Wi-Fi in Settings, MediaTek Wi-Fi and Bluetooth, three kernel items (build 10060)
 
 From `docs/reviews/LAPTOP-DRIVERS-CPU-REVIEW.md` (PR #4213) and the open items of `docs/reviews/KERNEL-AMD64-REVIEW.md`. The SD card reader (PR #4118) is left out on purpose: there is no usable source for the RTS5228 setup.
