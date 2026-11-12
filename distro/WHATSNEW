@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10059 - Faster on several cores, cooler when idle
+On AMD Ryzen processors, R5 now knows which threads share a core, so busy programs spread over the real cores instead of crowding one. On processors with fast and efficient cores, such as recent Intel laptops and AMD Ryzen AI, busy programs go to the fast cores first. An idle computer can now use the processor's deeper sleep states, also on AMD, which saves battery and keeps it cooler.
+
 R5 2026.1-dev Build 10058 - Safe unplugging and small USB sound adapters
 Unplugging a MIDI device while a program uses it no longer risks a crash. USB sound adapters that run at full speed, such as some small USB-C adapters, now play and record at the right rate.
 

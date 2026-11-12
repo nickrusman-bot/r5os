@@ -602,9 +602,56 @@ get_cpu_legacy_initial_apic_id(int /* currentCPU */)
 }
 
 
-static inline status_t
-detect_amd_cpu_topology(uint32 maxBasicLeaf, uint32 maxExtendedLeaf)
+static uint32
+get_amd_extended_apic_id(int /* currentCPU */)
 {
+	cpuid_info cpuid;
+	get_current_cpuid(&cpuid, 0x8000001e, 0);
+	return cpuid.regs.eax;
+}
+
+
+/*!	Zen and later: CPUID 0x80000008 ECX[15:12] is the width of the APIC IDs
+	of all the threads of a package, and 0x8000001E says how many of them
+	share a core. The legacy reading took that width for the number of cores,
+	so that every thread looked like a core of its own: the scheduler then put
+	two busy threads on the two halves of one core while whole cores idled.
+*/
+static inline status_t
+detect_zen_cpu_topology(uint32 maxExtendedLeaf)
+{
+	if (maxExtendedLeaf < 0x8000001e
+		|| !x86_check_feature(IA32_FEATURE_AMD_EXT_TOPOLOGY,
+			FEATURE_EXT_AMD_ECX)) {
+		return B_UNSUPPORTED;
+	}
+
+	cpuid_info cpuid;
+	get_current_cpuid(&cpuid, 0x8000001e, 0);
+	int threadsPerCore = next_power_of_2(((cpuid.regs.ebx >> 8) & 0xff) + 1);
+
+	get_current_cpuid(&cpuid, 0x80000008, 0);
+	int apicIDSize = (cpuid.regs.ecx >> 12) & 0xf;
+	int maxLogicalID = apicIDSize != 0 ? 1 << apicIDSize
+		: next_power_of_2((cpuid.regs.ecx & 0xff) + 1);
+	if (maxLogicalID < threadsPerCore)
+		return B_UNSUPPORTED;
+
+	sGetCPUTopologyID = get_amd_extended_apic_id;
+	compute_cpu_hierarchy_masks(maxLogicalID, maxLogicalID / threadsPerCore);
+	return B_OK;
+}
+
+
+static inline status_t
+detect_amd_cpu_topology(cpu_ent* cpu, uint32 maxBasicLeaf,
+	uint32 maxExtendedLeaf)
+{
+	if (cpu->arch.family + cpu->arch.extended_family >= 0x17
+		&& detect_zen_cpu_topology(maxExtendedLeaf) == B_OK) {
+		return B_OK;
+	}
+
 	sGetCPUTopologyID = get_cpu_legacy_initial_apic_id;
 
 	cpuid_info cpuid;
@@ -643,7 +690,7 @@ detect_amd_cache_topology(uint32 maxExtendedLeaf)
 	if (maxExtendedLeaf < 0x8000001d)
 		return;
 
-	uint8 hierarchyLevels[CPU_MAX_CACHE_LEVEL];
+	uint32 hierarchyLevels[CPU_MAX_CACHE_LEVEL];
 	int maxCacheLevel = 0;
 
 	int currentLevel = 0;
@@ -657,9 +704,9 @@ detect_amd_cache_topology(uint32 maxExtendedLeaf)
 			break;
 
 		int cacheLevel = (cpuid.regs.eax >> 5) & 0x7;
-		int coresCount = next_power_of_2(((cpuid.regs.eax >> 14) & 0x3f) + 1);
+		// the number of logical processors sharing the cache (SMT included)
 		hierarchyLevels[cacheLevel - 1]
-			= coresCount * (sHierarchyMask[CPU_TOPOLOGY_SMT] + 1);
+			= next_power_of_2(((cpuid.regs.eax >> 14) & 0xfff) + 1);
 		maxCacheLevel = std::max(maxCacheLevel, cacheLevel);
 
 		currentLevel++;
@@ -829,10 +876,36 @@ detect_cpu_topology(int currentCPU, cpu_ent* cpu, uint32 maxBasicLeaf,
 		if (x86_check_feature(IA32_FEATURE_HTT, FEATURE_COMMON)) {
 			if (cpu->arch.vendor == VENDOR_AMD
 				|| cpu->arch.vendor == VENDOR_HYGON) {
-				result = detect_amd_cpu_topology(maxBasicLeaf, maxExtendedLeaf);
+				result = detect_amd_cpu_topology(cpu, maxBasicLeaf,
+					maxExtendedLeaf);
 
 				if (result == B_OK)
 					detect_amd_cache_topology(maxExtendedLeaf);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+				// The raw words behind the SMT and core masks, once, so a
+				// boot log shows what the topology was built from.
+				cpuid_info raw;
+				get_current_cpuid(&raw, 1, 0);
+				uint32 leaf1 = raw.regs.ebx;
+				uint32 leaf8 = 0;
+				uint32 leaf1e = 0;
+				if (maxExtendedLeaf >= 0x80000008) {
+					get_current_cpuid(&raw, 0x80000008, 0);
+					leaf8 = raw.regs.ecx;
+				}
+				if (maxExtendedLeaf >= 0x8000001e) {
+					get_current_cpuid(&raw, 0x8000001e, 0);
+					leaf1e = raw.regs.ebx;
+				}
+				dprintf("R5 CPU topology: leaf1 ebx 0x%08" B_PRIx32
+					" 80000008 ecx 0x%08" B_PRIx32 " 8000001e ebx 0x%08"
+					B_PRIx32 " smt mask 0x%" B_PRIx32 " core mask 0x%"
+					B_PRIx32 "\n", leaf1, leaf8, leaf1e,
+					sHierarchyMask[CPU_TOPOLOGY_SMT],
+					sHierarchyMask[CPU_TOPOLOGY_CORE]);
+// SPDX-SnippetEnd
 			}
 
 			if (cpu->arch.vendor == VENDOR_INTEL) {
@@ -1372,6 +1445,27 @@ detect_cpu(int currentCPU, bool full = true)
 		detect_amd_patch_level(cpu);
 
 	cpu->arch.hybrid_type = get_hybrid_cpu_type();
+	// Efficiency cores do about 60 % of a performance core's work at the
+	// same load (the scheduler prefers the faster ones).
+	if (cpu->arch.hybrid_type == 0x40)
+		cpu->capacity = 1024;
+	else if (cpu->arch.hybrid_type == 0x20)
+		cpu->capacity = 600;
+	else
+		cpu->capacity = 0;
+
+	// AMD parts with two core designs (Zen 5 with Zen 5c: Strix, Krackan)
+	// say which this is in CPUID 0x80000026. The compact cores reach a lower
+	// clock with the same design: on a Ryzen AI 5 340 they did 75 % of the
+	// work of the others, single-threaded and at full speed.
+	if ((cpu->arch.vendor == VENDOR_AMD || cpu->arch.vendor == VENDOR_HYGON)
+		&& maxExtendedLeaf >= 0x80000026) {
+		get_current_cpuid(&cpuid, 0x80000026, 0);
+		if ((cpuid.regs.eax & (1u << 30)) != 0) {
+			// heterogeneous: EBX[31:28] is 0 for performance cores
+			cpu->capacity = (cpuid.regs.ebx >> 28) == 0 ? 1024 : 768;
+		}
+	}
 
 #if DUMP_FEATURE_STRING
 	dump_feature_string(currentCPU, cpu);

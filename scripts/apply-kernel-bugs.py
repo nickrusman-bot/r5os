@@ -37,6 +37,20 @@ def install_kernel_sources() -> None:
         "src/system/kernel/device_manager/IORequest.h",
         "src/system/kernel/debug/user_debugger.cpp",
         "src/system/kernel/scheduler/scheduler.cpp",
+        # air/OS: SMT topology on Zen, cores of several speeds, and the
+        # scheduler placement that uses them (docs/KERNEL.md)
+        "headers/private/kernel/cpu.h",
+        "src/system/kernel/scheduler/low_latency.cpp",
+        "src/system/kernel/scheduler/power_saving.cpp",
+        "src/system/kernel/scheduler/scheduler_cpu.cpp",
+        "src/system/kernel/scheduler/scheduler_cpu.h",
+        "src/system/kernel/scheduler/scheduler_thread.cpp",
+        "src/system/kernel/scheduler/scheduler_thread.h",
+        # air/OS: deep idle through ACPI _CST, also on AMD, and the ACPI
+        # processor ids it matches CPUs by (only enabled MADT entries)
+        "src/add-ons/kernel/power/cpuidle/x86_acpi_cstates/acpi_cpuidle.cpp",
+        "src/system/kernel/arch/x86/apic.cpp",
+        "src/system/kernel/arch/x86/ioapic.cpp",
         "src/add-ons/kernel/file_systems/bfs/Volume.cpp",
         "src/add-ons/kernel/drivers/disk/usb/usb_disk/usb_disk.cpp",
         "src/add-ons/kernel/file_systems/bfs/kernel_interface.cpp",
@@ -223,12 +237,27 @@ def install_i2c_hid_package() -> None:
     )
 
 
+def install_acpi_cstates_package() -> None:
+    # The module is built and was not installed. air/OS 2c48d1ae0 adds it
+    # before x86_cstates; on AMD it ranks above x86_cstates when the
+    # firmware has a state deeper than C1, elsewhere x86_cstates stays.
+    insert_once(
+        HAIKU / "build/jam/packages/Haiku",
+        "AddFilesToPackage add-ons kernel power cpuidle :\n\tx86_cstates@x86,x86_64\n",
+        "AddFilesToPackage add-ons kernel power cpuidle :\n"
+        "\tx86_acpi_cstates@x86,x86_64\n\tx86_cstates@x86,x86_64\n",
+        "\tx86_acpi_cstates@x86,x86_64\n",
+        "x86_acpi_cstates package",
+    )
+
+
 def main() -> int:
     install_smp_boot()
     install_kernel_sources()
     install_pstate()
     install_usb_stability()
     install_i2c_hid_package()
+    install_acpi_cstates_package()
     return 0
 
 

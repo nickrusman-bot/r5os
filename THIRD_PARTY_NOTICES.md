@@ -219,6 +219,20 @@ The MIT text used for covered files is `LICENSES/MIT.txt`. The Unlicense text is
 
 R5-owned source in this tree is GPL-3.0-or-later where the file is ours as a whole. The list of those paths, and the Haiku files that stay on their own license, is in `docs/LICENSING.md`.
 
+### CPU topology, scheduler and deep idle
+
+The files are Haiku's x86 CPU code, CPU header, scheduler, and ACPI C-state module: `arch_cpu.cpp`, `cpu.h`, `low_latency.cpp`, `power_saving.cpp`, `scheduler.cpp`, `scheduler_cpu.cpp`, `scheduler_cpu.h`, `scheduler_thread.cpp`, `scheduler_thread.h`, `acpi_cpuidle.cpp`, `apic.cpp`, and `ioapic.cpp`. Copyright the Haiku authors named in each file. License: MIT. The headers stay. The changes below stay MIT and are not relicensed. `scripts/apply-kernel-bugs.py` copies them and adds `x86_acpi_cstates` to the image.
+
+air/OS (airos-works/haiku), copyright jmgasper:
+
+- `49eda6ac001a7f1e7d32ab9d65f7ee2c39582277` reads the SMT threads of an AMD Zen core from CPUID `0x8000001E`, and marks Zen 5c cores as slower. The cache sharing is no longer counted twice.
+- `7abf76e98596d58cf3b796f9cd92f9016b199c9c` gives each CPU a speed (`cpu_ent::capacity`), set for Intel hybrid cores, and the scheduler prefers the faster cores. The arm64 and device-tree parts of that commit were not taken.
+- `1376a518e2accbf222e1c69bc7528f7af03bf314`, `71eadca3af904d365bcc4ccd5448d44bbb928db6`, `a4ddc48124a93dc20169128216f9f7965580d488`, `f100985748f98d988411799151f9fdf0cd0ab673`, `3fbd41c840a4cfaf93532b44c1e9e5f243440157`, `1aa18e8aa529e5a7de1c7af1c4fb3361488b55ea`, `10c5b544a8d3b35eabd4e972a9769a8407f5b4b1`, `f1d93470320dec9f7e3aeb2d56dcb7abe5914c63`, `417666ae7744b470bb18621bac7cde9a346ed023`, and `c3de7f3ac6bbc8fb3ff485ea063ef493516fb4be` place threads on idle, SMT and faster cores in both scheduler modes, and fix the cases those changes found.
+- `2c48d1ae0ca03c267b2bd278aef39567f8d80ce2`, `32a4200329c6e4b9fc8830e9af63e5f5b212fb8f`, and `e24004dc25f370061be94abbc1009a88e0a71433` let the ACPI C-state module run on AMD and newer firmware, and choose the state by how long a CPU stays idle.
+- `30da1eeda2b5e7d5d49d28b7ebcd95305b54e5df` takes the ACPI processor ids only from enabled MADT entries (`apic.cpp`, `ioapic.cpp`), so the ACPI C-state module can match every CPU.
+
+The line that prints the raw CPUID words of the topology is R5's own, GPL-3.0-or-later, in SPDX-Snippet tags.
+
 ### Device Manager
 
 Device Manager is MIT. It builds Haiku's Devices code unchanged from `src/apps/devices` (`dm_wrapper.c`, `Device*.cpp`, `DriverUtils.cpp`): MIT, copyright 2006-2026 Haiku, Inc., authors Pieter Panman and Leo Rouleau as named in those files. Its icon is the Devices icon, MIT, copyright Haiku, Inc. Hardware names come from the lists in Haiku's `src/data/ids`, the same ones Devices uses. The PCI ID list (Martin Mares and Albert Pool, pci-ids.ucw.cz) may be distributed under GPL-2.0-or-later or BSD-3-Clause; Device Manager uses it under BSD-3-Clause. The USB ID list (maintained by Stephen J. Gowdy, linux-usb.org) states no license in the file; it is not yet reviewed beyond that. ACPI and PnP names come from the UEFI registry files Haiku ships in the same folder. The R5 parts are copyright 2026 R5OS Contributors, MIT.

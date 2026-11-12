@@ -358,14 +358,17 @@ def main_stick(boot, list_root):
     if not shell32.IsUserAnAdmin():
         log_path = str(ROOT / "generated" / "read-stick-logs.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        args = " ".join('"%s"' % a if " " in a else a for a in sys.argv[1:])
-        params = '"%s" %s > "%s" 2>&1' % (os.path.abspath(__file__), args, log_path)
+        # ShellExecute has no shell, so "> file" would reach argparse as
+        # arguments. The elevated run writes its own log instead.
+        params = subprocess.list2cmdline(
+            [os.path.abspath(__file__)] + sys.argv[1:] + ["--log", log_path])
         info = ShellExecuteInfo()
         info.cbSize = ctypes.sizeof(info)
         info.fMask = 0x40
         info.lpVerb = "runas"
         info.lpFile = sys.executable
         info.lpParameters = params
+        info.lpDirectory = os.getcwd()
         info.nShow = 0
         if not shell32.ShellExecuteExW(ctypes.byref(info)):
             die("elevation was refused or failed")
@@ -406,15 +409,21 @@ def main_stick(boot, list_root):
 
     class StickRaw:
         def read(self, at, size):
+            # A raw disk only reads whole sectors: read the covering range
+            # and cut the asked bytes out of it.
+            start = at - at % 512
+            end = at + size
+            length = end - start
+            length += (-length) % 512
             moved = ctypes.c_longlong()
-            kernel32.SetFilePointerEx(handle, ctypes.c_longlong(at), ctypes.byref(moved), 0)
-            buf = ctypes.create_string_buffer(size)
+            kernel32.SetFilePointerEx(handle, ctypes.c_longlong(start), ctypes.byref(moved), 0)
+            buf = ctypes.create_string_buffer(length)
             got = wintypes.DWORD()
-            if not kernel32.ReadFile(handle, buf, size, ctypes.byref(got), None):
-                die("read failed %u" % ctypes.get_last_error())
-            if got.value != size:
+            if not kernel32.ReadFile(handle, buf, length, ctypes.byref(got), None):
+                die("read failed %u at %u" % (kernel32.GetLastError(), at))
+            if got.value != length:
                 die("short read at %u" % at)
-            return buf.raw
+            return buf.raw[at - start:at - start + size]
 
     query = (ctypes.c_uint32 * 3)(0, 0, 0)
     out = ctypes.create_string_buffer(512)
@@ -445,7 +454,11 @@ def main():
     parser.add_argument("--boot", type=int, help="write generated/boot-5625u-N")
     parser.add_argument("--list-root", action="store_true",
                         help="print the volume root and copy nothing")
+    parser.add_argument("--log", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.log:
+        log = open(args.log, "w", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log
     if args.image:
         return main_image(args.image, args.boot, args.list_root)
     return main_stick(args.boot, args.list_root)
