@@ -51,6 +51,8 @@ def install_kernel_sources() -> None:
         "src/add-ons/kernel/power/cpuidle/x86_acpi_cstates/acpi_cpuidle.cpp",
         "src/system/kernel/arch/x86/apic.cpp",
         "src/system/kernel/arch/x86/ioapic.cpp",
+        # R5: no USB modules in the BIOS CD floppy archive (size limit)
+        "build/jam/images/FloppyBootImage",
         # R5: the AMD CPPC values stay per CPU (no shared globals)
         "src/add-ons/kernel/power/cpufreq/amd_pstates/amd_pstates.cpp",
         # air/OS 6178b691d2: memcpy leaves rep movsb under 4K aliasing
