@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 /**
  * Shared Header and Footer Component for R5 Operating System Website.
  * Ensures 100% pixel-perfect consistency across all website pages.

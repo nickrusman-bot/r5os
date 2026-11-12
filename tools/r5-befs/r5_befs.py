@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """Read-only BeFS reader for disk images and physical drives.
 
 The on-disk layout is the Be File System (superblock, inodes, B+ trees).

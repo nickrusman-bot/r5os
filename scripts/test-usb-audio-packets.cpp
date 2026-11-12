@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Host test for the usb_audio packet plan and the recording join
  * (distro/media/src/add-ons/kernel/drivers/audio/usb/usb_audio_packets.h).

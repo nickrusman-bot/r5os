@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 """Copy the boot logs off the USB stick (the General UDisk). Read only.
 
 Run it from Windows Python, after the 5625U has been shut down and the

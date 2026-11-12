@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: MIT
 #
 # Build standalone r5-befs.exe with PyInstaller.
 # Without arguments, r5-befs.exe opens the GUI reader.

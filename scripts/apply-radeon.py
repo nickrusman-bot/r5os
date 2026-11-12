@@ -2,7 +2,7 @@
 """Copy the R5OS radeon_hd sources into the Haiku tree.
 
 The files under distro/graphics/ keep the Haiku MIT header. R5OS changes are
-marked with SPDX-Snippet and are GPL-3.0-or-later. They replace the same path
+marked with SPDX-Snippet and are MIT. They replace the same path
 in the Haiku tree. A missing source file fails the apply.
 """
 from __future__ import annotations
