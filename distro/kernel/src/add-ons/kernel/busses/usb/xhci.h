@@ -64,6 +64,13 @@ struct xhci_endpoint {
 	uint8			status;
 
 	uint16			max_burst_payload;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 jmgasper
+// SPDX-License-Identifier: MIT
+	// One transaction. Bits 11-12 of a USB 2 wMaxPacketSize are not part of it.
+	// air/OS 6d877da057.
+	uint16			max_packet_size;
+// SPDX-SnippetEnd
 
 	DoublyLinkedList<xhci_td> td_list;
 	uint8			used;
