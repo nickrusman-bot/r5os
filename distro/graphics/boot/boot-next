@@ -8,13 +8,18 @@
 # the order 1, 2, 3, 4. "boot-next 1b" writes the M6 contract settings plus
 # gpu_opengl true; "boot-next 1" removes the file.
 #
-# For the host tests: R5_HOME moves the home, BOOT_NEXT_YES=0 never
+# For the host tests: R5_HOME and R5_USER_SETTINGS move the paths, BOOT_NEXT_YES=0 never
 # restarts.
 
-home=${R5_HOME:-/boot/home}
+# finddir gives the Haiku directories; the fallback is for the host tests.
+fd() {
+	finddir "$1" 2>/dev/null || echo "$2"
+}
+
+home=${R5_HOME:-$(fd B_USER_DIRECTORY /boot/home)}
 m10=$home/m10
-file=$home/config/settings/kernel/drivers/radeon_hd
-sysfile=${R5_SYSTEM_SETTINGS:-/boot/system/settings/kernel/drivers/radeon_hd}
+file=${R5_USER_SETTINGS:-$(fd B_USER_SETTINGS_DIRECTORY "$home/config/settings")}/kernel/drivers/radeon_hd
+sysfile=${R5_SYSTEM_SETTINGS:-$(fd B_SYSTEM_SETTINGS_DIRECTORY /boot/system/settings)/kernel/drivers/radeon_hd}
 mkdir -p "$m10"
 
 # The boot that just ran: the note, else no note means boot 1.

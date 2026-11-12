@@ -10,20 +10,25 @@
 # reused: the next one is boot<k>-2, boot<k>-3, ...
 #
 # For the host tests: R5_HOME, R5_SYSLOG, R5_SYSTEM_SETTINGS and
-# R5_NODE_DIR and R5_BIN move the paths, CHECK_WAIT=0 does not wait, CHECK_LIVE=0 runs
+# R5_NODE_DIR, R5_USER_SETTINGS, R5_CACHE and R5_BIN move the paths, CHECK_WAIT=0 does not wait, CHECK_LIVE=0 runs
 # no program.
 
-home=${R5_HOME:-/boot/home}
-syslog=${R5_SYSLOG:-/boot/system/var/log/syslog}
-sysset=${R5_SYSTEM_SETTINGS:-/boot/system/settings/kernel/drivers/radeon_hd}
+# finddir gives the Haiku directories; the fallback is for the host tests.
+fd() {
+	finddir "$1" 2>/dev/null || echo "$2"
+}
+
+home=${R5_HOME:-$(fd B_USER_DIRECTORY /boot/home)}
+syslog=${R5_SYSLOG:-$(fd B_SYSTEM_LOG_DIRECTORY /boot/system/var/log)/syslog}
+sysset=${R5_SYSTEM_SETTINGS:-$(fd B_SYSTEM_SETTINGS_DIRECTORY /boot/system/settings)/kernel/drivers/radeon_hd}
 nodes=${R5_NODE_DIR:-/dev/gpu/radeon_hd}
 wait_s=${CHECK_WAIT:-900}
 live=${CHECK_LIVE:-1}
 bin=${R5_BIN:-/bin}
 m10=$home/m10
-cache=$home/config/cache
+cache=${R5_CACHE:-$(fd B_USER_CACHE_DIRECTORY "$home/config/cache")}
 selftest=$cache/r5-gpu-selftest.txt
-settings=$home/config/settings/kernel/drivers/radeon_hd
+settings=${R5_USER_SETTINGS:-$(fd B_USER_SETTINGS_DIRECTORY "$home/config/settings")}/kernel/drivers/radeon_hd
 bad=0
 
 mkdir -p "$m10"
