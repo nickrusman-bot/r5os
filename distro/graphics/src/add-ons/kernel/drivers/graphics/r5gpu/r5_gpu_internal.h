@@ -118,6 +118,11 @@ struct gpu_client {
 	r5_file_tree*	tree;
 	/* Set by the retire thread when this file's PASID faults. */
 	bool			faulted;
+	/* This file had a context when the GPU hung. Its submits and waits
+	 * fail until it destroys that context (M10 hang policy). */
+	bool			lost;
+	/* A job of this file was the one that hung. */
+	bool			guilty;
 	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
 };
@@ -145,6 +150,19 @@ extern gpu_client* sGuilty;
 extern int32 sContexts;
 extern r5_pasid_ida sPasids;
 extern gpu_client* sClientList;
+/* M10: the GPU is off until the next boot, and a reset is running. */
+extern bool sGpuOff;
+extern bool sResetting;
+/* gpu_hang_test <n> from the radeon_hd settings. 0 is off. */
+extern uint32 sHangTest;
+
+
+/* The device, or this file's context, is gone. */
+static inline bool
+gpu_gone(const gpu_client* client)
+{
+	return sLost || (client != NULL && client->lost);
+}
 
 void gpu_cache_log_settings();
 bool gpu_debug_enabled();

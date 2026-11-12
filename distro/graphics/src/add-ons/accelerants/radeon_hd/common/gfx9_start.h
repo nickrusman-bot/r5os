@@ -200,4 +200,12 @@ void r5_gfx9_ring_waited(void);
 /* waits, highest used dwords, and the ring length. Does not submit. */
 void r5_gfx9_ring_fill(uint32* waits, uint32* maxFill, uint32* dwords);
 
+/* M10 hang policy (kernel only). The mode-2 reset, the fixed start
+ * sequences again, the user fence after that restart, and the GFX hub
+ * fault status read and cleared. */
+bool r5_gfx9_kernel_reset();
+bool r5_gfx9_kernel_restart();
+void r5_gfx9_after_restart(void);
+int r5_gfx9_fault_status(uint32* status);
+
 #endif

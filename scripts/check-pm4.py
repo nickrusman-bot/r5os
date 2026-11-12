@@ -41,6 +41,7 @@ SOURCES = (
     "distro/graphics/src/add-ons/accelerants/radeon_hd/gfx9_compute_ib.h",
     "distro/graphics/src/bin/r5-gpu-isolation/r5_isolation_ib.h",
     "distro/graphics/src/bin/r5-gpu-selftest/r5_selftest_ib.h",
+    "distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_hang_ib.h",
 )
 
 
@@ -599,7 +600,7 @@ def main():
         print("emitter printed no streams", file=sys.stderr)
         return 1
     names = [name for name, _words in streams]
-    for need in ("kernel-ring", "isolation", "selftest-ib", "compute-submit", "vm-switch"):
+    for need in ("kernel-ring", "isolation", "selftest-ib", "compute-submit", "vm-switch", "hang-ib"):
         if need not in names:
             fail(errors, "emitter", "missing %s" % need)
     for name, words in streams:
