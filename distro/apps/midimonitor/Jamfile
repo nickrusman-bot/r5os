@@ -1,0 +1,9 @@
+SubDir HAIKU_TOP src apps midimonitor ;
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+Application MidiMonitor :
+	MidiMonitor.cpp
+	: be midi2 [ TargetLibstdc++ ]
+	: MidiMonitor.rdef
+	;

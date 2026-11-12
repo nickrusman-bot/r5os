@@ -21,6 +21,15 @@
 #include <String.h>
 #include <midi_driver.h>
 #include <Midi2Defs.h>
+#include <Midi2Translate.h>
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static void write_midi1(int fd, const uint32* words, size_t wordCount);
+// SPDX-SnippetEnd
+
 
 MidiPortConsumer::MidiPortConsumer(int fd, const char* name)
 	:
@@ -47,9 +56,16 @@ MidiPortConsumer::Data(uchar* data, size_t length,
 		for (size_t i = 0; i < 4; i++)
 			packet.words[i] = i < wordCount ? words[i] : 0;
 		if (ioctl(fFileDescriptor, B_MIDI_WRITE_UMP, &packet, sizeof(packet))
-				!= B_OK) {
-			perror("Error sending UMP to driver");
+				== 0) {
+			return;
 		}
+		// ioctl() returns -1 and sets errno. A driver without UMP support
+		// gets the same message as MIDI 1.0 bytes, one event per write().
+		if (errno != B_DEV_INVALID_IOCTL && errno != B_UNSUPPORTED) {
+			perror("Error sending UMP to driver");
+			return;
+		}
+		write_midi1(fFileDescriptor, words, wordCount);
 		return;
 	}
 	// SPDX-SnippetEnd
@@ -58,6 +74,48 @@ MidiPortConsumer::Data(uchar* data, size_t length,
 		perror("Error sending data to driver");
 	}
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static void
+write_midi1(int fd, const uint32* words, size_t wordCount)
+{
+	uint8 bytes[12];
+	int length = 0;
+	uint32 messageType = words[0] >> 28;
+	if (messageType == 0x4 && wordCount == 2)
+		length = midi2_channel_voice_to_midi1(words, wordCount, bytes);
+	else if ((messageType == 0x1 || messageType == 0x2) && wordCount == 1) {
+		bytes[0] = (words[0] >> 16) & 0xff;
+		bytes[1] = (words[0] >> 8) & 0xff;
+		bytes[2] = words[0] & 0xff;
+		uint8 kind = bytes[0] & 0xf0;
+		if (messageType == 0x2)
+			length = (kind == 0xc0 || kind == 0xd0) ? 2 : 3;
+		else if (bytes[0] >= 0xf8 || bytes[0] == 0xf6)
+			length = 1;
+		else if (bytes[0] == 0xf1 || bytes[0] == 0xf3)
+			length = 2;
+		else if (bytes[0] == 0xf2)
+			length = 3;
+	}
+
+	int offset = 0;
+	while (offset < length) {
+		uint8 kind = bytes[offset] & 0xf0;
+		int eventLength = length - offset;
+		if (messageType == 0x4)
+			eventLength = (kind == 0xc0 || kind == 0xd0) ? 2 : 3;
+		if (write(fd, bytes + offset, eventLength) == -1) {
+			perror("Error sending data to driver");
+			return;
+		}
+		offset += eventLength;
+	}
+}
+// SPDX-SnippetEnd
 
 
 // #pragma mark -
@@ -125,8 +183,14 @@ MidiPortProducer::GetData()
 	while (fKeepRunning) {
 		if (readUmp) {
 			midi_ump_packet packet;
-			status_t umpStatus = ioctl(fFileDescriptor, B_MIDI_READ_UMP,
-				&packet, sizeof(packet));
+			// ioctl() returns -1 and puts the status in errno. Comparing the
+			// return value with B_UNSUPPORTED never matched, so the reader
+			// stopped on its first call and no MIDI device gave input.
+			status_t umpStatus = B_OK;
+			if (ioctl(fFileDescriptor, B_MIDI_READ_UMP, &packet,
+					sizeof(packet)) < 0) {
+				umpStatus = errno;
+			}
 			if (umpStatus == B_OK) {
 				if (packet.word_count >= 1 && packet.word_count <= 4) {
 					SprayUMP(packet.words, packet.word_count,

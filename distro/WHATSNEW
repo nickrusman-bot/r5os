@@ -1,3 +1,6 @@
+R5 2026.1-dev Build 10055 - See what your MIDI controller sends
+MIDI keyboards and controllers send their notes and knobs to programs again. MIDI Monitor, in the Applications menu, shows every message a MIDI device sends, one line each: the time, the device, the channel, what the message means and its bytes. You can show one device, pause the list, and hide the clock.
+
 R5 2026.1-dev Build 10054 - Vulkan in a window
 Vulkan programs can draw in an ordinary window. On AMD Ryzen laptops this uses the GPU, as an experimental option, with software as the fallback.
 

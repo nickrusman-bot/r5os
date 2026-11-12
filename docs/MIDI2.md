@@ -94,7 +94,7 @@ MyConsumer::Data(uchar* data, size_t length, bool atomic, bigtime_t time)
 }
 ```
 
-`midi_server` reads `B_MIDI_READ_UMP` from a MIDI 2.0 port and sprays that packet, so `Data` on a connected consumer has the same full value. The 7-bit hooks still run. A port that does not implement the ioctl is read as MIDI 1.0 bytes, as before. `read()` expands one packet from that queue into MIDI 1.0 bytes. `midi_server` uses the ioctl for a MIDI 2.0 port and does not also `read()` it, so each packet is sprayed once.
+`midi_server` reads `B_MIDI_READ_UMP` from a MIDI 2.0 port and sprays that packet, so `Data` on a connected consumer has the same full value. The 7-bit hooks still run. A port that does not implement the ioctl is read as MIDI 1.0 bytes, as before. `read()` expands one packet from that queue into MIDI 1.0 bytes. `midi_server` uses the ioctl for a MIDI 2.0 port and does not also `read()` it, so each packet is sprayed once. `ioctl()` returns -1 and sets `errno`; `midi_server` reads the status from `errno` (before build 10055 it compared the return value and stopped reading every port on the first call).
 
 ## Property Exchange
 
@@ -192,7 +192,7 @@ These are UMP Stream messages, message type `0xF`, four words. The format is 0 (
 
 ## Drivers
 
-`midi_server` sends a recognised UMP with `ioctl(fd, B_MIDI_WRITE_UMP, &packet)`. The argument is `midi_ump_packet` from `<midi_driver.h>`: `word_count` and `words[4]`, native `uint32`. A buffer that is not a UMP still goes out with `write()`, unchanged.
+`midi_server` sends a recognised UMP with `ioctl(fd, B_MIDI_WRITE_UMP, &packet)`. The argument is `midi_ump_packet` from `<midi_driver.h>`: `word_count` and `words[4]`, native `uint32`. A buffer that is not a UMP still goes out with `write()`, unchanged. When the driver does not know `B_MIDI_WRITE_UMP` (`ioctl()` fails with `errno` `B_DEV_INVALID_IOCTL` or `B_UNSUPPORTED`), `midi_server` writes the same message as MIDI 1.0 bytes, one event per `write()`. Type 0x3 SysEx is not sent that way.
 
 `usb_midi` looks at the class-specific MIDI header on the streaming interface. A version below 2.0 keeps USB MIDI 1.0 CIN packets. On that endpoint a type 0x4 packet becomes the MIDI 1.0 messages in Appendix D, Translation (D.2), one CIN packet each. D.2.8 returns `B_UNSUPPORTED`.
 
