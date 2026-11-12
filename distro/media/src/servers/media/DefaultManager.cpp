@@ -208,7 +208,7 @@ DefaultManager::SaveState(NodeManager *node_manager)
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// What is written is now the saved default. NodeManager calls this right
 	// after every Set(), so a device chosen in this session is the one the
 	// rescan restores, not the one that was saved at startup.
@@ -434,7 +434,7 @@ DefaultManager::_RescanThread()
 				fMixerConnected = false;
 				// SPDX-SnippetBegin
 				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-				// SPDX-License-Identifier: GPL-3.0-or-later
+				// SPDX-License-Identifier: MIT
 				// The mixer still holds its output for the dead input, and
 				// the dead node was usually the time source too.
 				_DisconnectMixerFromOutput();
@@ -461,7 +461,7 @@ DefaultManager::_RescanThread()
 			B_MEDIA_RAW_AUDIO);
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		_RestoreSaved(&fPhysicalVideoOut, kMsgTypeVideoOut, false,
 			B_MEDIA_RAW_VIDEO);
 		_RestoreSaved(&fPhysicalVideoOut, kMsgTypeVideoOut, false,
@@ -640,7 +640,7 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 				info[nameMatchIndex].name, msgDninfo.flavor_id);
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			if (nameMatchCount > 1) {
 				syslog(LOG_NOTICE, "media_server: %" B_PRId32 " devices are"
 					" named \"%s\"; took the first, which may be another one"
@@ -667,7 +667,7 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 	if (firstReal < 0) {
 		// SPDX-SnippetBegin
 		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-		// SPDX-License-Identifier: GPL-3.0-or-later
+		// SPDX-License-Identifier: MIT
 		// Only a "None" node stands in. It must not replace the saved device
 		// either.
 		if (msg != NULL && *id != -1)
@@ -693,7 +693,7 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 bool
 DefaultManager::_CopySavedDefault(uint32 defaultType, BMessage& saved) const
 {
@@ -919,7 +919,7 @@ DefaultManager::_ConnectMixerToOutput()
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// The default time source can be a node that was just unplugged.
 	// GetTimeSource() does no reference counting; finish releases nothing.
 	bool haveTimeSource = fRoster->GetTimeSource(&timesource) == B_OK;

@@ -73,7 +73,7 @@ protected:
 			int32			fQueueStopped;
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			int32			fTransferErrors;
 			usb_audio_packet_plan fPlan;
 			size_t			fRegionBytes;	// one buffer's packets, in bytes
@@ -107,7 +107,7 @@ private:
 			void			_DumpDescriptors();
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			bool			_JoinRecorded(size_t buffer);
 			void			_QueryClockRates();
 // SPDX-SnippetEnd

@@ -65,7 +65,7 @@ private:
 
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// The rescan thread and the server looper both use the saved
 			// defaults and the fallback flags. These take fSavedLock.
 			bool				_CopySavedDefault(uint32 defaultType,
@@ -102,7 +102,7 @@ private:
 			bool				fUsingFallback[4];
 			// SPDX-SnippetBegin
 			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-			// SPDX-License-Identifier: GPL-3.0-or-later
+			// SPDX-License-Identifier: MIT
 			// Guards fMsgList and fUsingFallback.
 	mutable	BLocker				fSavedLock;
 			// SPDX-SnippetEnd

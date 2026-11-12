@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: MIT
  *
  * Isochronous packet plan for a usb_audio stream. The driver and the host
  * test (scripts/test-usb-audio-packets.cpp) include this file, so both run

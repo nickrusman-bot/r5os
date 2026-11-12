@@ -26,7 +26,7 @@
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void write_midi1(int fd, const uint32* words, size_t wordCount);
 // SPDX-SnippetEnd
 
@@ -49,7 +49,7 @@ MidiPortConsumer::Data(uchar* data, size_t length,
 	size_t wordCount = 0;
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	if (midi2_ump_from_payload(data, length, words, 4, &wordCount) == B_OK) {
 		midi_ump_packet packet;
 		packet.word_count = (uint32)wordCount;
@@ -78,7 +78,7 @@ MidiPortConsumer::Data(uchar* data, size_t length,
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 static void
 write_midi1(int fd, const uint32* words, size_t wordCount)
 {
@@ -174,7 +174,7 @@ MidiPortProducer::GetData()
 
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// A MIDI 2.0 driver queues the original packet. read() still returns
 	// MIDI 1.0 bytes for a program that does not use this ioctl. This reader
 	// uses the packet, so NoteOn stays 7-bit and Data() keeps the full value.

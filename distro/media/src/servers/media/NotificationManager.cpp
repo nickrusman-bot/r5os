@@ -92,7 +92,7 @@ NotificationManager::RequestNotifications(BMessage *msg)
 	media_node nodeCopy;
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// ASSERT is gone in a release build. Without this check a request
 	// without a node copied from an uninitialized pointer.
 	if (msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize) != B_OK
@@ -141,7 +141,7 @@ NotificationManager::CancelNotifications(BMessage *msg)
 	media_node nodeCopy;
 	// SPDX-SnippetBegin
 	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-	// SPDX-License-Identifier: GPL-3.0-or-later
+	// SPDX-License-Identifier: MIT
 	// ASSERT is gone in a release build. Without this check a request
 	// without a node copied from an uninitialized pointer.
 	if (msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize) != B_OK

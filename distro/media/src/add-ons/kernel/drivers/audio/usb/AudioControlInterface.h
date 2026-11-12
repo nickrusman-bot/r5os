@@ -238,7 +238,7 @@ public:
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			int32			SourceCount() { return fSources.Count(); }
 			uint8			Source(int32 index) { return fSources[index]; }
 
@@ -256,7 +256,7 @@ public:
 
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			uint8			Source() { return fSource; }
 
 protected:
@@ -312,7 +312,7 @@ public:
 			status_t		ListMixControls(multi_mix_control_info* Info);
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 			uint8			ResolveClockSource(uint8 clockId);
 // SPDX-SnippetEnd
 
