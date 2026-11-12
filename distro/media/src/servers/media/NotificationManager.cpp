@@ -90,8 +90,17 @@ NotificationManager::RequestNotifications(BMessage *msg)
 	msg->FindInt32(NOTIFICATION_PARAM_WHAT, &what);
 	const void* nodeData;
 	media_node nodeCopy;
-	msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize);
-	ASSERT(nodeSize == sizeof(media_node));
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// ASSERT is gone in a release build. Without this check a request
+	// without a node copied from an uninitialized pointer.
+	if (msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize) != B_OK
+		|| nodeSize != sizeof(media_node)) {
+		ERROR("NotificationManager: request without a valid node\n");
+		return;
+	}
+	// SPDX-SnippetEnd
 	// The node in the message is not aligned.
 	memcpy((void*)&nodeCopy, nodeData, sizeof(nodeCopy));
 	node = &nodeCopy;
@@ -130,8 +139,17 @@ NotificationManager::CancelNotifications(BMessage *msg)
 	msg->FindInt32(NOTIFICATION_PARAM_WHAT, &what);
 	const void* nodeData;
 	media_node nodeCopy;
-	msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize);
-	ASSERT(nodeSize == sizeof(media_node));
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// ASSERT is gone in a release build. Without this check a request
+	// without a node copied from an uninitialized pointer.
+	if (msg->FindData("node", B_RAW_TYPE, &nodeData, &nodeSize) != B_OK
+		|| nodeSize != sizeof(media_node)) {
+		ERROR("NotificationManager: request without a valid node\n");
+		return;
+	}
+	// SPDX-SnippetEnd
 	// The node in the message is not aligned.
 	memcpy((void*)&nodeCopy, nodeData, sizeof(nodeCopy));
 	node = &nodeCopy;

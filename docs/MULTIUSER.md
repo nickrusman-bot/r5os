@@ -317,7 +317,7 @@ Deskbar shows the same Preferences list to everyone (build 10009). Nothing is hi
 | Sounds | yes | |
 | Notifications | yes | |
 | E-mail | yes | accounts in `~/config/settings` |
-| Media | yes | |
+| Media | yes | The USB layout, Latency and Virtual surround menus are machine settings: the drivers read them in the kernel and the mixer in media_addon_server (system service), both from `/boot/home/config/settings/kernel/drivers`. Media writes them there and grays those three menus when that directory is not writable for the account. There is no lock for them yet. |
 | Locale | yes | Locale Kit catalogs, not this preflet’s own `find_directory` |
 | FileTypes | yes | user overrides; system types stay in the system |
 | Joysticks | yes (on the image) | `find_directory`; keep personal |

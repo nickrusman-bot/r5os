@@ -23,6 +23,7 @@
 #include <LayoutBuilder.h>
 #include <Locale.h>
 #include <MediaRoster.h>
+#include <MessageRunner.h>
 #include <MediaTheme.h>
 #include <Resources.h>
 #include <Roster.h>
@@ -44,6 +45,16 @@
 
 const uint32 ML_SELECTED_NODE = 'MlSN';
 const uint32 ML_RESTART_THREAD_FINISHED = 'MlRF';
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+static const uint32 kMsgRefreshDevices = 'MlRD';
+// Long enough to catch the input and output notices of one card.
+static const bigtime_t kRefreshDelay = 300000;
+// Time for media_server's rescan to pick its default after a refresh.
+static const bigtime_t kDefaultsSettleDelay = 1500000;
+// SPDX-SnippetEnd
 
 
 class NodeListItemUpdater : public MediaListItem::Visitor {
@@ -188,7 +199,8 @@ MediaWindow::MediaWindow(BRect frame)
 	fVideoOutputs(5),
 	fInitCheck(B_OK),
 	fRestartThread(-1),
-	fRestartAlert(NULL)
+	fRestartAlert(NULL),
+	fRefreshRunner(NULL)
 {
 	_InitWindow();
 
@@ -203,6 +215,7 @@ MediaWindow::MediaWindow(BRect frame)
 
 MediaWindow::~MediaWindow()
 {
+	delete fRefreshRunner;
 	_EmptyNodeLists();
 	_ClearParamView();
 
@@ -373,14 +386,40 @@ MediaWindow::MessageReceived(BMessage* message)
 		case B_MEDIA_SERVER_STARTED:
 			_WatchFlavors();
 			// fall through
-		case B_MEDIA_FLAVORS_CHANGED:
-		case ML_UPDATE_DEFAULTS:
 		case B_MEDIA_SERVER_QUIT:
 		{
 			PRINT_OBJECT(*message);
 			_InitMedia(false);
 			break;
 		}
+
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		case B_MEDIA_FLAVORS_CHANGED:
+			// One card sends several of these in a row.
+			_ScheduleRefresh();
+			break;
+
+		case kMsgRefreshDevices:
+		{
+			delete fRefreshRunner;
+			fRefreshRunner = NULL;
+			_InitMedia(false);
+			// media_server switches the default after the add-on server has
+			// rescanned. Show its choice once more when that is done.
+			BMessageRunner::StartSending(BMessenger(this),
+				new BMessage(ML_UPDATE_DEFAULTS), kDefaultsSettleDelay, 1);
+			break;
+		}
+
+		case ML_UPDATE_DEFAULTS:
+			// Only the default menus can be out of date.
+			Lock();
+			_ShowDefaults();
+			Unlock();
+			break;
+		// SPDX-SnippetEnd
 
 		default:
 			BWindow::MessageReceived(message);
@@ -444,7 +483,7 @@ status_t
 MediaWindow::_InitMedia(bool first)
 {
 	status_t err = B_OK;
-	BMediaRoster* roster = BMediaRoster::Roster(&err);
+	BMediaRoster::Roster(&err);
 
 	if (first && err != B_OK) {
 		BAlert* alert = new BAlert("start_media_server",
@@ -506,37 +545,7 @@ MediaWindow::_InitMedia(bool first)
 	fListView->SortItems(&MediaListItem::Compare);
 	_UpdateListViewMinWidth();
 
-	// Show the server's default nodes. Setting them again would save a
-	// fallback as the user's choice.
-	media_node defaultNode;
-	dormant_node_info nodeInfo;
-	int32 outputID;
-	BString outputName;
-
-	if (roster->GetAudioInput(&defaultNode) == B_OK) {
-		roster->GetDormantNodeFor(defaultNode, &nodeInfo);
-		fAudioView->SetDefaultInput(&nodeInfo);
-			// this causes our listview to be updated as well
-	}
-
-	if (roster->GetAudioOutput(&defaultNode, &outputID, &outputName) == B_OK) {
-		roster->GetDormantNodeFor(defaultNode, &nodeInfo);
-		fAudioView->SetDefaultOutput(&nodeInfo);
-		fAudioView->SetDefaultChannel(outputID);
-			// this causes our listview to be updated as well
-	}
-
-	if (roster->GetVideoInput(&defaultNode) == B_OK) {
-		roster->GetDormantNodeFor(defaultNode, &nodeInfo);
-		fVideoView->SetDefaultInput(&nodeInfo);
-			// this causes our listview to be updated as well
-	}
-
-	if (roster->GetVideoOutput(&defaultNode) == B_OK) {
-		roster->GetDormantNodeFor(defaultNode, &nodeInfo);
-		fVideoView->SetDefaultOutput(&nodeInfo);
-			// this causes our listview to be updated as well
-	}
+	_ShowDefaults();
 
 	if (first)
 		fListView->Select(fListView->IndexOf(mixer));
@@ -549,6 +558,70 @@ MediaWindow::_InitMedia(bool first)
 
 	return B_OK;
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+void
+MediaWindow::_ShowDefaults()
+{
+	// Show the server's default nodes. Setting them again would save a
+	// fallback as the user's choice. Each Get*() takes a node reference.
+	BMediaRoster* roster = BMediaRoster::Roster();
+	if (roster == NULL)
+		return;
+
+	media_node defaultNode;
+	dormant_node_info nodeInfo;
+	int32 outputID;
+	BString outputName;
+
+	if (roster->GetAudioInput(&defaultNode) == B_OK) {
+		if (roster->GetDormantNodeFor(defaultNode, &nodeInfo) == B_OK)
+			fAudioView->SetDefaultInput(&nodeInfo);
+				// this causes our listview to be updated as well
+		roster->ReleaseNode(defaultNode);
+	}
+
+	if (roster->GetAudioOutput(&defaultNode, &outputID, &outputName) == B_OK) {
+		if (roster->GetDormantNodeFor(defaultNode, &nodeInfo) == B_OK) {
+			fAudioView->SetDefaultOutput(&nodeInfo);
+			fAudioView->SetDefaultChannel(outputID);
+		}
+		roster->ReleaseNode(defaultNode);
+	}
+
+	if (roster->GetVideoInput(&defaultNode) == B_OK) {
+		if (roster->GetDormantNodeFor(defaultNode, &nodeInfo) == B_OK)
+			fVideoView->SetDefaultInput(&nodeInfo);
+		roster->ReleaseNode(defaultNode);
+	}
+
+	if (roster->GetVideoOutput(&defaultNode) == B_OK) {
+		if (roster->GetDormantNodeFor(defaultNode, &nodeInfo) == B_OK)
+			fVideoView->SetDefaultOutput(&nodeInfo);
+		roster->ReleaseNode(defaultNode);
+	}
+}
+
+
+void
+MediaWindow::_ScheduleRefresh()
+{
+	if (fRefreshRunner != NULL)
+		return;
+
+	BMessage refresh(kMsgRefreshDevices);
+	fRefreshRunner = new BMessageRunner(BMessenger(this), &refresh,
+		kRefreshDelay, 1);
+	if (fRefreshRunner->InitCheck() != B_OK) {
+		delete fRefreshRunner;
+		fRefreshRunner = NULL;
+		_InitMedia(false);
+	}
+}
+// SPDX-SnippetEnd
 
 
 void

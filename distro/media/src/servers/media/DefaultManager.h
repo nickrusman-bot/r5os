@@ -63,6 +63,22 @@ private:
 			static	int32		_TypeIndex(uint32 defaultType);
 			BMessage*			_SavedDefault(uint32 defaultType) const;
 
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			// The rescan thread and the server looper both use the saved
+			// defaults and the fallback flags. These take fSavedLock.
+			bool				_CopySavedDefault(uint32 defaultType,
+									BMessage& saved) const;
+			bool				_IsFallback(uint32 defaultType) const;
+			void				_SetFallback(uint32 defaultType,
+									bool fallback);
+			void				_RestoreSaved(volatile media_node_id* id,
+									uint32 defaultType, bool isInput,
+									media_type type);
+			void				_DisconnectMixerFromOutput();
+			// SPDX-SnippetEnd
+
 private:
 			volatile bool 		fMixerConnected;
 			volatile media_node_id fPhysicalVideoOut;
@@ -84,6 +100,12 @@ private:
 			// is standing in because the saved device was absent. SaveState()
 			// then keeps the saved preference.
 			bool				fUsingFallback[4];
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			// Guards fMsgList and fUsingFallback.
+	mutable	BLocker				fSavedLock;
+			// SPDX-SnippetEnd
 
 			uint32				fBeginHeader[3];
 			uint32				fEndHeader[3];

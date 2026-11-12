@@ -70,6 +70,13 @@ typedef std::vector<media_node> NodeVector;
 // fInfoMap, for every node it instantiated on request. RenkuOS bc165f5613.
 static const uint32 kMsgNodeInstantiated = 'mnin';
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+// The control thread posts this for ADD_ON_SERVER_RESCAN_ADD_ON_FLAVORS.
+static const uint32 kMsgRescanFlavors = 'mrsf';
+// SPDX-SnippetEnd
+
 
 struct AddOnInfo {
 			media_addon_id		id;
@@ -107,6 +114,14 @@ private:
 			void				_DestroyInstantiatedFlavors(AddOnInfo& info);
 
 			void				_ScanAddOnFlavors(BMediaAddOn* addOn);
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			void				_RescanAddOnFlavors(media_addon_id id);
+			void				_PruneActiveFlavors(AddOnInfo& info);
+			bool				_HasInstanceOf(const AddOnInfo& info,
+									const flavor_info* flavor);
+			// SPDX-SnippetEnd
 
 			port_id				_ControlPort() const { return fControlPort; }
 
@@ -384,9 +399,38 @@ MediaAddonServer::MessageReceived(BMessage* message)
 			if (found == fInfoMap.end())
 				break;
 
-			found->second.active_flavors.push_back(node);
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			// Drop nodes that are gone first, or the list only grows and the
+			// add-on is never unloaded again.
+			_PruneActiveFlavors(found->second);
+			bool known = false;
+			NodeVector& active = found->second.active_flavors;
+			for (size_t i = 0; i < active.size(); i++) {
+				if (active[i].node == node.node) {
+					known = true;
+					break;
+				}
+			}
+			if (!known)
+				active.push_back(node);
+			// SPDX-SnippetEnd
 			break;
 		}
+
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		case kMsgRescanFlavors:
+		{
+			media_addon_id addOnID;
+			if (message->FindInt32("add_on_id", &addOnID) != B_OK)
+				break;
+			_RescanAddOnFlavors(addOnID);
+			break;
+		}
+		// SPDX-SnippetEnd
 
 		default:
 			BApplication::MessageReceived(message);
@@ -426,37 +470,17 @@ MediaAddonServer::_HandleMessage(int32 code, const void* data, size_t size)
 
 		case ADD_ON_SERVER_RESCAN_ADD_ON_FLAVORS:
 		{
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			// The rescan reads and changes fInfoMap. Only the application
+			// looper touches that map, so the work is done there.
 			const add_on_server_rescan_flavors_command* command = static_cast<
 				const add_on_server_rescan_flavors_command*>(data);
-			BMediaAddOn* addOn
-				= gDormantNodeManager->GetAddOn(command->add_on_id);
-			if (addOn == NULL) {
-				ERROR("rescan flavors: Can't find a addon object for id %d\n",
-					(int)command->add_on_id);
-				break;
-			}
-			_ScanAddOnFlavors(addOn);
-			InfoMap::iterator found = fInfoMap.find(command->add_on_id);
-			if (found != fInfoMap.end()) {
-				// GetAddOn() above holds one reference. If the add-on was
-				// already kept for live nodes, drop that extra reference.
-				// If it was unloaded, this reference becomes the one we keep
-				// for the nodes we are about to create.
-				bool alreadyHeld = found->second.addon != NULL;
-				if (!alreadyHeld)
-					found->second.addon = addOn;
-				// A newly published sound device stays dormant until this
-				// runs. Startup already does it; a hot-plug rescan did not
-				// (Haiku #12777).
-				_InstantiatePhysicalInputsAndOutputs(found->second);
-				if (alreadyHeld)
-					gDormantNodeManager->PutAddOn(command->add_on_id);
-				else
-					_PutAddonIfPossible(found->second);
-				server_rescan_defaults_command cmd;
-				SendToServer(SERVER_RESCAN_DEFAULTS, &cmd, sizeof(cmd));
-			} else
-				gDormantNodeManager->PutAddOn(command->add_on_id);
+			BMessage rescan(kMsgRescanFlavors);
+			rescan.AddInt32("add_on_id", command->add_on_id);
+			PostMessage(&rescan);
+			// SPDX-SnippetEnd
 			break;
 		}
 
@@ -758,6 +782,91 @@ MediaAddonServer::_PutAddonIfPossible(AddOnInfo& info)
 }
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+void
+MediaAddonServer::_RescanAddOnFlavors(media_addon_id id)
+{
+	BMediaAddOn* addOn = gDormantNodeManager->GetAddOn(id);
+	if (addOn == NULL) {
+		ERROR("rescan flavors: Can't find a addon object for id %d\n",
+			(int)id);
+		return;
+	}
+	_ScanAddOnFlavors(addOn);
+
+	InfoMap::iterator found = fInfoMap.find(id);
+	if (found == fInfoMap.end()) {
+		gDormantNodeManager->PutAddOn(id);
+		return;
+	}
+
+	// GetAddOn() above holds one reference. If the add-on was already kept
+	// for live nodes, drop that extra reference. If it was unloaded, this
+	// reference becomes the one we keep for the nodes we are about to create.
+	bool alreadyHeld = found->second.addon != NULL;
+	if (!alreadyHeld)
+		found->second.addon = addOn;
+	// A newly published sound device stays dormant until this runs. Startup
+	// already does it; a hot-plug rescan did not (Haiku #12777).
+	_InstantiatePhysicalInputsAndOutputs(found->second);
+	if (alreadyHeld)
+		gDormantNodeManager->PutAddOn(id);
+	else {
+		_PruneActiveFlavors(found->second);
+		_PutAddonIfPossible(found->second);
+	}
+
+	server_rescan_defaults_command cmd;
+	SendToServer(SERVER_RESCAN_DEFAULTS, &cmd, sizeof(cmd));
+}
+
+
+void
+MediaAddonServer::_PruneActiveFlavors(AddOnInfo& info)
+{
+	NodeVector::iterator iterator = info.active_flavors.begin();
+	while (iterator != info.active_flavors.end()) {
+		media_node node;
+		if (fMediaRoster->GetNodeFor(iterator->node, &node) == B_OK) {
+			fMediaRoster->ReleaseNode(node);
+			iterator++;
+		} else
+			iterator = info.active_flavors.erase(iterator);
+	}
+}
+
+
+bool
+MediaAddonServer::_HasInstanceOf(const AddOnInfo& info,
+	const flavor_info* flavor)
+{
+	// A flavor id is the device's index in the add-on. After an unplug the
+	// next device can take an index that a live node still has, so the name
+	// must match too. When it cannot be checked, count it as present, as the
+	// id-only check did.
+	media_node_id ids[8];
+	int32 count = B_COUNT_OF(ids);
+	if (fMediaRoster->GetInstancesFor(info.id, flavor->internal_id, ids,
+			&count) != B_OK || count <= 0)
+		return false;
+
+	for (int32 i = 0; i < count; i++) {
+		media_node node;
+		if (fMediaRoster->GetNodeFor(ids[i], &node) != B_OK)
+			continue;
+		dormant_node_info dormant;
+		status_t status = fMediaRoster->GetDormantNodeFor(node, &dormant);
+		fMediaRoster->ReleaseNode(node);
+		if (status != B_OK || strcmp(dormant.name, flavor->name) == 0)
+			return true;
+	}
+	return false;
+}
+// SPDX-SnippetEnd
+
+
 void
 MediaAddonServer::_InstantiatePhysicalInputsAndOutputs(AddOnInfo& info)
 {
@@ -772,10 +881,7 @@ MediaAddonServer::_InstantiatePhysicalInputsAndOutputs(AddOnInfo& info)
 			continue;
 		}
 		if ((flavorinfo->kinds & (B_PHYSICAL_INPUT | B_PHYSICAL_OUTPUT)) != 0) {
-			media_node_id existingId = -1;
-			int32 existingCount = 1;
-			if (fMediaRoster->GetInstancesFor(info.id, flavorinfo->internal_id,
-					&existingId, &existingCount) == B_OK && existingCount > 0)
+			if (_HasInstanceOf(info, flavorinfo))
 				continue;
 
 			media_node node;

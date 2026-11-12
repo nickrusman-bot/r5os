@@ -102,8 +102,9 @@ protected:
 	virtual	status_t			_ChangeDefaultOutput(
 									const dormant_node_info* info);
 
+			// release is true when the caller must ReleaseNode() the node.
 			status_t			_GetNode(const dormant_node_info* info,
-									media_node* node);
+									media_node* node, bool* release);
 			void				_EmptyMenu(BMenu* menu);
 			MediaWindow*		_MediaWindow() const;
 
@@ -133,7 +134,6 @@ public:
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				AttachedToWindow();
-	virtual	void				AllAttached();
 
 protected:
 	virtual	status_t			_ChangeDefaultInput(

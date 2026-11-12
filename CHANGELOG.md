@@ -1,5 +1,21 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-12 - media_server and Media fixes from the review
+
+All points of `docs/reviews/MEDIA-SERVER-REVIEW.md` (#4207). No What's new section; `distro/BUILD` stays the same.
+
+media_server (`DefaultManager`): when the output node is gone, the mixer is disconnected through the roster (that also tells the producer when the consumer is dead, so the mixer frees its one output) and `fTimeSource` is cleared, so the next card gets a live time source. `_ConnectMixerToOutput()` checks `GetTimeSource()` before `SetTimeSourceFor()`. `Set(AUDIO_OUTPUT)` clears the fallback flag before its early return, so choosing the device that stands in is saved. `SaveState()` makes what it writes the saved default in memory (`fMsgList`); `NodeManager` calls it after every `Set()`, so a device chosen in this session is the one the rescan restores. `fMsgList` and the fallback flags are behind a lock, and `_FindPhysical()` works on a copy. Video defaults also go back to the saved device. A "None" node that stands in no longer replaces the saved device. Two devices with the same name are logged when the name match picks one.
+
+media_addon_server: the flavor rescan runs on the application looper (posted from the control thread), because it changes `fInfoMap` and `active_flavors`, which the looper also changes. Nodes that are gone are dropped from `active_flavors` before adding one and before the add-on is put, and a node is not added twice. A live instance only counts as present when its name matches the flavor; after an unplug the next card can take the flavor id that an old node still has. (Correction to review point 8: a stale entry does not cost the 50 ms wait at quit; `StopNode()` fails first and the loop skips it.)
+
+Media kit: `NotificationManager` returns when a request has no valid node, instead of copying from an uninitialized pointer.
+
+Media preferences: every node reference that Media takes is released (`_GetNode()` says when; a node Media instantiates itself is kept, as `SetAudioOutput(dormant_node_info)` does); the four default `Get*()` calls in the window were never released either. Choosing the marked device sends the choice again. A burst of `B_MEDIA_FLAVORS_CHANGED` gives one refresh after 300 ms, and the default menus are shown again 1.5 s later, after media_server's rescan; `ML_UPDATE_DEFAULTS` only updates the default menus. The latency, layout and surround files are read and written by one helper: the whole file is read (up to 1 MB; a larger file is left alone), and written to a temporary file that is renamed. Reading creates nothing. They go to `/boot/home/config/settings/kernel/drivers`, the directory the kernel reads (`kUserSettingsDirectory`) and media_addon_server reads; before, a standard account wrote its own home and nothing read it. Those three menus are gray for an account that cannot write there, and the USB layout menu is gray without a USB sound card (`/dev/audio/hmulti/usb`). A failed save marks the saved value again, and a failed `usb_audio` latency write puts `hda.settings` back. The "Restart media services" hint appears after a change, not from the start. The duplicate `AllAttached()` is gone. R5 parts carry SPDX-Snippet GPL-3.0-or-later tags (also the older latency, layout and surround code).
+
+Limits: a USB card plugged in while Media is open does not enable the USB layout menu until Media is opened again. Two identical cards still match the first by name. The flavor-name check cannot tell two cards with the same name apart. A standard account has no lock for these three menus yet.
+
+Tested: `jam -q media_server media_addon_server Media` in WSL, with these files copied into the build tree; no warnings or errors. No image was built and nothing was booted: the WSL tree is shared with the USB audio round, and QEMU has no USB sound card to unplug. The four tests at the end of the review (unplug while playing, choose the fallback, choose another card and replug it, two USB cards) were not run.
+
 ## 2026-11-12 - USB audio and MIDI fixes from the review (build 10057)
 
 Points 2 to 16 of `docs/reviews/USB-AUDIO-MIDI2-REVIEW.md`, and three of its smaller points. Point 1 was #4203.

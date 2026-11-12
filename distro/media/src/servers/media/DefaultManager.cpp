@@ -58,6 +58,7 @@ DefaultManager::DefaultManager()
 	fTimeSource(-1),
 	fAudioMixer(-1),
 	fPhysicalAudioOutInputID(0),
+	fSavedLock("saved defaults"),
 	fRescanThread(-1),
 	fRescanRequested(0),
 	fRescanLock("rescan default manager"),
@@ -167,10 +168,10 @@ DefaultManager::SaveState(NodeManager *node_manager)
 
 		// A fallback, or no node at all, must not replace the saved device.
 		// One boot without that device would otherwise forget it.
-		BMessage* saved = _SavedDefault(default_types[i]);
-		if (saved != NULL && (media_node_ids[i] == -1
-				|| fUsingFallback[_TypeIndex(default_types[i])])) {
-			list.AddItem(new BMessage(*saved));
+		BMessage saved;
+		if (_CopySavedDefault(default_types[i], saved)
+			&& (media_node_ids[i] == -1 || _IsFallback(default_types[i]))) {
+			list.AddItem(new BMessage(saved));
 			continue;
 		}
 
@@ -205,6 +206,21 @@ DefaultManager::SaveState(NodeManager *node_manager)
 		TRACE("message %s added\n", info.name);
 	}
 
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// What is written is now the saved default. NodeManager calls this right
+	// after every Set(), so a device chosen in this session is the one the
+	// rescan restores, not the one that was saved at startup.
+	{
+		BAutolock locker(fSavedLock);
+		for (int32 i = 0; i < fMsgList.CountItems(); i++)
+			delete (BMessage*)fMsgList.ItemAt(i);
+		fMsgList.MakeEmpty();
+		fMsgList.AddList(&list);
+	}
+	// SPDX-SnippetEnd
+
 	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE | B_ERASE_FILE);
 
 	if (file.Write(fBeginHeader, sizeof(uint32)*3) < (int32)sizeof(uint32)*3)
@@ -225,7 +241,7 @@ DefaultManager::SaveState(NodeManager *node_manager)
 			return B_ERROR;
 		if (settings->Flatten(&file) < B_OK)
 			return B_ERROR;
-		delete settings;
+		// fMsgList owns settings now.
 	}
 	if (file.Write(fEndHeader, sizeof(uint32)*3) < (int32)sizeof(uint32)*3)
 		return B_ERROR;
@@ -245,24 +261,26 @@ DefaultManager::Set(media_node_id node_id, const char *input_name,
 		// An explicit choice replaces a fallback, so it is saved as such.
 		case VIDEO_INPUT:
 			fPhysicalVideoIn = node_id;
-			fUsingFallback[_TypeIndex(kMsgTypeVideoIn)] = false;
+			_SetFallback(kMsgTypeVideoIn, false);
 			return B_OK;
 		case AUDIO_INPUT:
 			fPhysicalAudioIn = node_id;
-			fUsingFallback[_TypeIndex(kMsgTypeAudioIn)] = false;
+			_SetFallback(kMsgTypeAudioIn, false);
 			return B_OK;
 		case VIDEO_OUTPUT:
 			fPhysicalVideoOut = node_id;
-			fUsingFallback[_TypeIndex(kMsgTypeVideoOut)] = false;
+			_SetFallback(kMsgTypeVideoOut, false);
 			return B_OK;
 		case AUDIO_MIXER:
 			return B_ERROR;
 		case AUDIO_OUTPUT:
+			// Choosing the device that stands in is still a choice. Clear the
+			// flag first, so SaveState() keeps it instead of the absent one.
+			_SetFallback(kMsgTypeAudioOut, false);
 			if (fPhysicalAudioOut == node_id && fPhysicalAudioOutInputID == input_id)
 				return B_OK;
 
 			fPhysicalAudioOut = node_id;
-			fUsingFallback[_TypeIndex(kMsgTypeAudioOut)] = false;
 			fPhysicalAudioOutInputID = input_id;
 			strcpy(fPhysicalAudioOutInputName,
 				input_name ? input_name : "<null>");
@@ -414,8 +432,14 @@ DefaultManager::_RescanThread()
 				// that was plugged in after startup (Haiku #12776, #12777).
 				fPhysicalAudioOut = -1;
 				fMixerConnected = false;
-				fPhysicalAudioOutFromMixer.node = media_node::null;
-				fMixerToPhysicalAudioOut.node = media_node::null;
+				// SPDX-SnippetBegin
+				// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+				// SPDX-License-Identifier: GPL-3.0-or-later
+				// The mixer still holds its output for the dead input, and
+				// the dead node was usually the time source too.
+				_DisconnectMixerFromOutput();
+				fTimeSource = -1;
+				// SPDX-SnippetEnd
 			} else
 				fRoster->ReleaseNode(existing);
 		}
@@ -428,23 +452,25 @@ DefaultManager::_RescanThread()
 
 		// A fallback goes back to the saved device once that device has a
 		// node. The mixer is reconnected below.
-		if (fPhysicalAudioOut != -1
-			&& fUsingFallback[_TypeIndex(kMsgTypeAudioOut)]) {
-			media_node_id saved = fPhysicalAudioOut;
-			_FindPhysical(&saved, kMsgTypeAudioOut, false, B_MEDIA_RAW_AUDIO,
-				true);
-			if (saved != fPhysicalAudioOut) {
-				fPhysicalAudioOut = saved;
-				fMixerConnected = false;
-			}
-		}
-		if (fPhysicalAudioIn != -1
-			&& fUsingFallback[_TypeIndex(kMsgTypeAudioIn)]) {
-			media_node_id saved = fPhysicalAudioIn;
-			_FindPhysical(&saved, kMsgTypeAudioIn, true, B_MEDIA_RAW_AUDIO,
-				true);
-			fPhysicalAudioIn = saved;
-		}
+		media_node_id previousOut = fPhysicalAudioOut;
+		_RestoreSaved(&fPhysicalAudioOut, kMsgTypeAudioOut, false,
+			B_MEDIA_RAW_AUDIO);
+		if (fPhysicalAudioOut != previousOut)
+			fMixerConnected = false;
+		_RestoreSaved(&fPhysicalAudioIn, kMsgTypeAudioIn, true,
+			B_MEDIA_RAW_AUDIO);
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		_RestoreSaved(&fPhysicalVideoOut, kMsgTypeVideoOut, false,
+			B_MEDIA_RAW_VIDEO);
+		_RestoreSaved(&fPhysicalVideoOut, kMsgTypeVideoOut, false,
+			B_MEDIA_ENCODED_VIDEO);
+		_RestoreSaved(&fPhysicalVideoIn, kMsgTypeVideoIn, true,
+			B_MEDIA_RAW_VIDEO);
+		_RestoreSaved(&fPhysicalVideoIn, kMsgTypeVideoIn, true,
+			B_MEDIA_ENCODED_VIDEO);
+		// SPDX-SnippetEnd
 
 		if (fAudioMixer == -1)
 			_FindAudioMixer();
@@ -499,7 +525,10 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 
 	// The old loop stored the message on every pass and left it pointing at
 	// another type when this type had no saved entry.
-	BMessage *msg = _SavedDefault(default_type);
+	// A copy: SaveState() on the server looper replaces fMsgList.
+	BMessage savedCopy;
+	BMessage *msg = _CopySavedDefault(default_type, savedCopy)
+		? &savedCopy : NULL;
 	if (msg != NULL) {
 		const char *name = NULL;
 		const char *path = NULL;
@@ -540,6 +569,7 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 	media_node_id exactMatch = -1;
 	media_node_id nameMatch = -1;
 	int32 nameMatchIndex = -1;
+	int32 nameMatchCount = 0;
 	int32 firstReal = -1;
 
 	for (int i = 0; i < count; i++) {
@@ -598,9 +628,8 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 			nameMatch = info[i].node.node;
 			nameMatchIndex = i;
 		}
+		nameMatchCount++;
 	}
-
-	const int32 typeIndex = _TypeIndex(default_type);
 
 	if (msg != NULL && (exactMatch >= 0 || nameMatch >= 0)) {
 		*id = exactMatch >= 0 ? exactMatch : nameMatch;
@@ -609,10 +638,19 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 				" name; its flavor id moved from %" B_PRId32 "\n",
 				isAudio ? "audio" : "video", isInput ? "input" : "output",
 				info[nameMatchIndex].name, msgDninfo.flavor_id);
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			if (nameMatchCount > 1) {
+				syslog(LOG_NOTICE, "media_server: %" B_PRId32 " devices are"
+					" named \"%s\"; took the first, which may be another one"
+					" of them\n", nameMatchCount, msgDninfo.name);
+			}
+			// SPDX-SnippetEnd
 		}
 		if (isAudio && !isInput)
 			fPhysicalAudioOutInputID = input_id;
-		fUsingFallback[typeIndex] = false;
+		_SetFallback(default_type, false);
 		if (savedOnly) {
 			syslog(LOG_NOTICE, "media_server: default %s %s \"%s\" is present"
 				" again; using it\n", isAudio ? "audio" : "video",
@@ -623,22 +661,99 @@ DefaultManager::_FindPhysical(volatile media_node_id *id, uint32 default_type,
 		return;
 	}
 
-	if (savedOnly || firstReal < 0)
+	if (savedOnly)
 		return;
+
+	if (firstReal < 0) {
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: GPL-3.0-or-later
+		// Only a "None" node stands in. It must not replace the saved device
+		// either.
+		if (msg != NULL && *id != -1)
+			_SetFallback(default_type, true);
+		// SPDX-SnippetEnd
+		return;
+	}
 
 	*id = info[firstReal].node.node;
 	if (msg != NULL) {
-		fUsingFallback[typeIndex] = true;
+		_SetFallback(default_type, true);
 		syslog(LOG_NOTICE, "media_server: default %s %s \"%s\" not present;"
 			" using \"%s\" until it is\n", isAudio ? "audio" : "video",
 			isInput ? "input" : "output", msgDninfo.name,
 			info[firstReal].name);
 	} else
-		fUsingFallback[typeIndex] = false;
+		_SetFallback(default_type, false);
 	TRACE("Default physical %s %s \"%s\" created!\n",
 		isAudio ? "audio" : "video", isInput ? "input" : "output",
 		info[firstReal].name);
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+bool
+DefaultManager::_CopySavedDefault(uint32 defaultType, BMessage& saved) const
+{
+	BAutolock locker(fSavedLock);
+	BMessage* msg = _SavedDefault(defaultType);
+	if (msg == NULL)
+		return false;
+	saved = *msg;
+	return true;
+}
+
+
+bool
+DefaultManager::_IsFallback(uint32 defaultType) const
+{
+	BAutolock locker(fSavedLock);
+	return fUsingFallback[_TypeIndex(defaultType)];
+}
+
+
+void
+DefaultManager::_SetFallback(uint32 defaultType, bool fallback)
+{
+	BAutolock locker(fSavedLock);
+	fUsingFallback[_TypeIndex(defaultType)] = fallback;
+}
+
+
+void
+DefaultManager::_RestoreSaved(volatile media_node_id* id, uint32 defaultType,
+	bool isInput, media_type type)
+{
+	// A fallback goes back to the saved device once that device has a node.
+	if (*id == -1 || !_IsFallback(defaultType))
+		return;
+
+	media_node_id saved = *id;
+	_FindPhysical(&saved, defaultType, isInput, type, true);
+	*id = saved;
+}
+
+
+void
+DefaultManager::_DisconnectMixerFromOutput()
+{
+	// The roster tells the producer even when the consumer has gone, so the
+	// mixer frees its one output. Without that, GetFreeOutputsFor() finds
+	// none and the next card is never connected.
+	if (fPhysicalAudioOutFromMixer.node != media_node::null) {
+		status_t status = fRoster->Disconnect(fMixerToPhysicalAudioOut,
+			fPhysicalAudioOutFromMixer);
+		if (status != B_OK) {
+			TRACE("DefaultManager: disconnect from the old output returned "
+				"%s\n", strerror(status));
+		}
+	}
+	fMixerToPhysicalAudioOut.node = media_node::null;
+	fPhysicalAudioOutFromMixer.node = media_node::null;
+}
+// SPDX-SnippetEnd
 
 
 int32
@@ -802,8 +917,17 @@ DefaultManager::_ConnectMixerToOutput()
 	// we now have the mixer and soundcard nodes,
 	// find a free input/output and connect them
 
-	fRoster->GetTimeSource(&timesource);
-	fRoster->SetTimeSourceFor(soundcard.node, timesource.node);
+	// SPDX-SnippetBegin
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// SPDX-License-Identifier: GPL-3.0-or-later
+	// The default time source can be a node that was just unplugged.
+	// GetTimeSource() does no reference counting; finish releases nothing.
+	bool haveTimeSource = fRoster->GetTimeSource(&timesource) == B_OK;
+	if (haveTimeSource)
+		fRoster->SetTimeSourceFor(soundcard.node, timesource.node);
+	else
+		TRACE("DefaultManager: no time source for the soundcard\n");
+	// SPDX-SnippetEnd
 
 	rv = fRoster->GetFreeOutputsFor(mixer, &output, 1, &count,
 		B_MEDIA_RAW_AUDIO);
@@ -918,7 +1042,8 @@ DefaultManager::_ConnectMixerToOutput()
 finish:
 	fRoster->ReleaseNode(mixer);
 	fRoster->ReleaseNode(soundcard);
-	fRoster->ReleaseNode(timesource);
+	if (haveTimeSource)
+		fRoster->ReleaseNode(timesource);
 	return rv;
 }
 

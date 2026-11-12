@@ -27,6 +27,7 @@
 
 
 class BCardLayout;
+class BMessageRunner;
 class BSeparatorView;
 class MidiSettingsView;
 
@@ -61,6 +62,12 @@ private:
 			void				_InitWindow();
 			status_t			_InitMedia(bool first);
 			void				_WatchFlavors();
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			void				_ShowDefaults();
+			void				_ScheduleRefresh();
+			// SPDX-SnippetEnd
 
 			void				_FindNodes();
 			void				_FindNodes(media_type type, uint64 kind,
@@ -112,6 +119,12 @@ private:
 			status_t			fInitCheck;
 			thread_id			fRestartThread;
 			BAlert*				fRestartAlert;
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: GPL-3.0-or-later
+			// One refresh for a burst of B_MEDIA_FLAVORS_CHANGED.
+			BMessageRunner*		fRefreshRunner;
+			// SPDX-SnippetEnd
 };
 
 
