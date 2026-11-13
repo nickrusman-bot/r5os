@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - M9 and M10 done: the graphics chip is the default on the 5625U (build 10061)
+
+The M10 stick, five rounds on 13 Nov, image `cursor/m9-m10-stick` (= PR #4226). Round 5 (`32fd154126`): boot 1 (only `gpu_selftest true`) every `check` line PASS: `radeon_hd: gpu available`, RADV device 0, Zink on RADV, GLTeapot window on Zink, about 2200 FPS. Boot 2 (`gpu_hang_test 1`): one hang, `reset psp ring stop ok 80030000`, `gpu reset mode2 ok`, `gpu selftest after reset ok`, Zink and RADV again. Boot 3 (`gpu_hang_test 2`): `gpu off until reboot: second hang`, then llvmpipe and Lavapipe. Boot 4 (`gpu false`): the self-test and `window driver llvmpipe: gpu off`; GLTeapot about 1000 FPS. `docs/GRAPHICS.md` `GFX9 reset on GC 9.3` is now fixed; `AGENTS.md` and the M9/M10 rows say so. What's new and build 10061.
+
+The way there: round 1 had no PSP ring stop, so the restart failed (`PSP ring init 0x80020115`); Deskbar crashed on a cut-short settings file (fixed in libbe, #4232). Rounds 3-5 added a periodic sync to keep logs after the power button; it held the block cache lock and stalled every program 10-25 s (slowness report, side session). The self-test ran again at the next Sign in and froze the machine in round 4; Login now starts it once per boot, after Tracker and Deskbar.
+
+Open (not claimed as done): as standard account `test`, r5-gl-test and VulkanTeapot timed out (180 s, no output) in round 5; `check` hung in boot 4; the speed without the periodic sync is not yet measured on the 5625U; the shutdown time and the long press at power-off are not measured (the heartbeat now syncs and the syslog has time stamps for the next stick); `0x1636`/`0x1638` stay opt-in until one is tested. Separate PRs: AMD microcode (#4231), a Mesa release build. The CPU already boosts (APERF/MPERF about 3.0 GHz average); CPPC is an idea for later.
+
 ## 2026-11-13 - M10 stick, first run: boot 1 passed, the reset did not come back; Deskbar crash
 
 Stick (13 Nov), image `cursor/m9-m10-stick` at `7ea2f881f2`. Boot 1 (only `gpu_selftest true`): every `check` line PASS: `radeon_hd: gpu available`, RADV device 0, `egl: opengl zink: zink Vulkan 1.4(AMD Radeon Graphics (RADV RENOIR))`, VulkanTeapot and `gl` `pixels ok max 2`, every GLTeapot window action ok; GLTeapot from Demos at about 2200 FPS (user). As the standard account `test`, `check-user`: r5-gl-test and VulkanTeapot on RADV, isolation owner unchanged and fault seen; only `isolation: exit 0` failed.
