@@ -1002,6 +1002,9 @@ radeon_gpu_ring_boot(uint32 ringType)
 				"gfx9_workload", false, true);
 			compute = get_driver_boolean_parameter(settings,
 				"gfx9_compute", false, true);
+			/* M10: "gpu false" turns off every GPU path, this one too. */
+			if (!get_driver_boolean_parameter(settings, "gpu", true, true))
+				gfx9Ring = false;
 			unload_driver_settings(settings);
 		}
 		if (!gfx9Ring) {

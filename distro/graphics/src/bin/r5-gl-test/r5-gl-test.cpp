@@ -24,10 +24,12 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -44,10 +46,29 @@ static const int kSampleAt[][2] = {
 };
 
 
-// True when the radeon_hd settings and the render node make Mesa's EGL driver
-// choose Zink (M9 decision 3): gpu_opengl true, no gpu false, no forced
-// failure, and an entry under /dev/gpu/<driver>/. The settings file is chosen
-// the way the EGL driver chooses it.
+// R5 GPU interface (r5_gpu.h): the first 32 bytes of GET_INFO end with the
+// capabilities. R5_GPU_CAP_AVAILABLE is 8.
+static bool
+gpu_available(const char* node)
+{
+	int fd = open(node, O_RDWR | O_CLOEXEC);
+	if (fd < 0)
+		return false;
+	uint32_t info[8];
+	memset(info, 0, sizeof(info));
+	info[0] = sizeof(info);
+	bool available = ioctl(fd, 30479u, info, sizeof(info)) == 0
+		&& (info[7] & 8u) != 0;
+	close(fd);
+	return available;
+}
+
+
+// True when the radeon_hd settings, the render node and the GPU's
+// availability bit make Mesa's EGL driver choose Zink (M9 decision 3, M10):
+// no gpu_opengl false, no gpu false, no forced failure, an entry under
+// /dev/gpu/<driver>/, and the bit set. The settings file is chosen the way
+// the EGL driver chooses it.
 static bool
 zink_asked()
 {
@@ -63,14 +84,15 @@ zink_asked()
 		handle = load_driver_settings(kSettings[i]);
 		break;
 	}
-	if (handle == NULL)
-		return false;
-	bool asked = get_driver_boolean_parameter(handle, "gpu_opengl", false,
-			true)
-		&& get_driver_boolean_parameter(handle, "gpu", true, true)
-		&& !get_driver_boolean_parameter(handle, "gpu_opengl_fail", false,
-			true);
-	unload_driver_settings(handle);
+	// No file: nothing turns Zink off; the bit decides.
+	bool asked = true;
+	if (handle != NULL) {
+		asked = get_driver_boolean_parameter(handle, "gpu_opengl", true, true)
+			&& get_driver_boolean_parameter(handle, "gpu", true, true)
+			&& !get_driver_boolean_parameter(handle, "gpu_opengl_fail", false,
+				true);
+		unload_driver_settings(handle);
+	}
 	if (!asked)
 		return false;
 
@@ -90,7 +112,10 @@ zink_asked()
 		struct dirent* entry;
 		while ((entry = readdir(nodes)) != NULL) {
 			if (entry->d_name[0] != '.') {
-				node = true;
+				char nodePath[B_PATH_NAME_LENGTH];
+				snprintf(nodePath, sizeof(nodePath), "%s/%s", path,
+					entry->d_name);
+				node = gpu_available(nodePath);
 				break;
 			}
 		}
@@ -373,9 +398,9 @@ run_selftest(const char* self, bool zinkCpu)
 	if (strncmp(rendererA, "llvmpipe", 8) == 0
 		&& strncmp(rendererB, "llvmpipe", 8) == 0) {
 		if (!zinkCpu && zink_asked()) {
-			// The settings ask for Zink and nothing in them asks for the
-			// fallback, so llvmpipe here means Zink did not start.
-			printf("pixels FAIL llvmpipe only, gpu_opengl true asks for"
+			// The GPU is available and nothing in the settings asks for
+			// the fallback, so llvmpipe here means Zink did not start.
+			printf("pixels FAIL llvmpipe only, the gpu is available for"
 				" zink\n");
 			return 3;
 		}

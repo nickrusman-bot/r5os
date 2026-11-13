@@ -1,5 +1,11 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Combined stick after M10: everything open from M10 passes
+
+Image `d0856ac3bf` (main with the Deskbar hang fix #4235 and the Mesa release build #4234, plus AMD microcode #4231). Boot 1 (`gpu_selftest true` only): `check` PASS (24 lines). As standard account `test`, `check-user` PASS: r5-gl-test (Zink on RADV) and VulkanTeapot (RADV) `pixels ok max 2`, exits after 1 and 5 s (round 5: time-outs after 180 s); the isolation test hung the ring as before, and the reset brought it back: `[125.799] gpu hang ring gfx seq 1662 after 10004 ms`, `[125.824] reset psp ring stop ok 80030000`, `[125.825] gpu reset mode2 ok`, `[125.944] gpu selftest after reset ok`. Deskbar: Terminal opened and closed from Deskbar, no hang. Boot 4 (`gpu false`): `check` PASS (round 5 hung). Shutdown of boot 1: 9 s from `boot-next` to the last heartbeat. Syslog time stamps work (`KERN: [0.173] …`).
+
+Speed: much better than rounds 3-5 (no periodic sync), but some self-test stages are still slower than round 1: vulkaninfo 5.5 s (1.6), gl 11.4 s (0.7), window tests 11-18 s (8-9). Not explained yet (a cold shader cache on a fresh stick is a candidate).
+
 ## 2026-11-13 - AMD processors load their microcode update again
 
 Problem: on the Ryzen 5 5625U every thread logged `find_microcode_amd incorrect alignment` and `no fw update found for this cpu`, so the CPU kept the BIOS microcode (`0xa50000f`). The matching patch in `microcode_amd_fam19h.bin` (equiv `a500`, 5568 bytes) starts at an offset that is 4 mod 16, and the loader skipped any patch that was not 16-byte aligned.
@@ -8,7 +14,63 @@ What changed (`distro/kernel/src/system/kernel/arch/x86/arch_cpu.cpp`):
 - A patch that is not aligned is copied into one 16-byte aligned buffer that lives as long as the kernel, the way Linux copies a patch out of the container before loading it (`arch/x86/kernel/cpu/microcode/amd.c`). It is read only through that pointer, also by the other threads.
 - A thread that already reports the new level (the second thread of a core shares its microcode) logs `already at revision` instead of `update failed`.
 
-Tested: the kernel compiles (`jam kernel_x86_64`). On the 5625U, one boot of the M10 stick (round 4, with only the first part of this change) logged `CPU 0: updated from revision 0xa50000f to 0xa500012`, and six threads `update failed`, which this change turns into `already at revision`. That boot had a separate GPU self-test freeze; the change was taken out of the next M10 stick so the two do not mix. Not tested: a boot with exactly this PR. QEMU cannot test it (no microcode under a hypervisor).
+Tested on the 5625U (combined stick, 13 Nov, image `d0856ac3bf` = main + this PR): `CPU 0: updated from revision 0xa50000f to 0xa500012`, the other first threads the same, the second threads `already at revision 0xa500012`; boots 1 and 4 PASS. QEMU cannot test it (no microcode under a hypervisor). Not tested: other AMD families.
+## 2026-11-13 - Deskbar no longer hangs after an app it started quits (kernel, upstream Haiku fix)
+
+Problem: in QEMU, after closing Terminal or AboutSystem started from Deskbar, Deskbar stopped drawing. Three of its threads (`w>Twitcher`, `w>Deskbar`, `_BMediaRoster_`) used about 52 s CPU each; `strace` showed an endless `block_thread(0x0, 0x0) = B_INTERRUPTED (0 us)`.
+
+Cause: `_user_block_thread()` wrote `B_INTERRUPTED` (or a timeout) into `user_thread->wait_status` when a signal interrupted the wait. libroot's `rw_lock_wait()` (used by `BLooperList` since Haiku b6441edfac) retries on `B_INTERRUPTED` without resetting `wait_status`, so every retry returned at once, and the real wake-up from `_kern_unblock_thread()` was ignored because `wait_status` was no longer positive. One signal (here most likely SIGCHLD when the child app quit) left the waiting threads spinning forever. Upstream Haiku ticket #20020.
+
+What changed: `distro/kernel/src/system/kernel/thread.cpp` takes Haiku `cf3a20899c` (10 Nov 2026, Haiku MIT; an upstream import, not an R5 change): the interrupt or timeout is no longer stored in `wait_status`, and `user_unblock_thread()` refuses a positive status and wakes with `B_OK`.
+
+Tested (QEMU/KVM, not on hardware): a small test (`blocktest`, private syscalls, not in the image) waits like `rw_lock_wait()`, gets SIGUSR1, then is woken. Old image (main at 3958ead4a6): `loops=4692233 result=0x1 FAIL` (wake-up lost, busy loop). Image with the fix: `loops=2 result=0x0 PASS`. The Deskbar hang itself did not reproduce on demand in four tries on the old image (timing-dependent), so the Deskbar result rests on the matching signature (`strace`) and the test above. The test image was jammed without `pin-mesa-packages.sh`, because the shared WSL tree pin holds newer Mesa packages from another branch.
+
+## 2026-11-13 - Mesa as a release build (faster shader compiles)
+
+Problem: Mesa (RADV, Zink, llvmpipe, Lavapipe) was built `debugoptimized`: asserts and NIR/ACO validation stayed on, so shader compiles and program starts were slower than in a distribution build (slowness report for the 5625U, item 4).
+
+What changed: `distro/mesa/build-radv.sh` configures `-Dbuildtype=release -Db_ndebug=true` (meson reports `buildtype release`, `optimization 3`, `b_ndebug true`). New packages `mesa-25.3.6-5`, `mesa_radv-25.3.6-7`, `mesa_lavapipe-25.3.6-4`; the pin, the install check, `check-egl-vendor.py`, `check-pre-stick.py` and `distro/gpu/COMPAT` move along. No source change.
+
+Tested: see the PR (QEMU, the software paths). Not tested: RADV on the 5625U (next combined stick).
+
+## 2026-11-13 - M9 and M10 done: the graphics chip is the default on the 5625U (build 10061)
+
+The M10 stick, five rounds on 13 Nov, image `cursor/m9-m10-stick` (= PR #4226). Round 5 (`32fd154126`): boot 1 (only `gpu_selftest true`) every `check` line PASS: `radeon_hd: gpu available`, RADV device 0, Zink on RADV, GLTeapot window on Zink, about 2200 FPS. Boot 2 (`gpu_hang_test 1`): one hang, `reset psp ring stop ok 80030000`, `gpu reset mode2 ok`, `gpu selftest after reset ok`, Zink and RADV again. Boot 3 (`gpu_hang_test 2`): `gpu off until reboot: second hang`, then llvmpipe and Lavapipe. Boot 4 (`gpu false`): the self-test and `window driver llvmpipe: gpu off`; GLTeapot about 1000 FPS. `docs/GRAPHICS.md` `GFX9 reset on GC 9.3` is now fixed; `AGENTS.md` and the M9/M10 rows say so. What's new and build 10061.
+
+The way there: round 1 had no PSP ring stop, so the restart failed (`PSP ring init 0x80020115`); Deskbar crashed on a cut-short settings file (fixed in libbe, #4232). Rounds 3-5 added a periodic sync to keep logs after the power button; it held the block cache lock and stalled every program 10-25 s (slowness report, side session). The self-test ran again at the next Sign in and froze the machine in round 4; Login now starts it once per boot, after Tracker and Deskbar.
+
+Open (not claimed as done): as standard account `test`, r5-gl-test and VulkanTeapot timed out (180 s, no output) in round 5; `check` hung in boot 4; the speed without the periodic sync is not yet measured on the 5625U; the shutdown time and the long press at power-off are not measured (the heartbeat now syncs and the syslog has time stamps for the next stick); `0x1636`/`0x1638` stay opt-in until one is tested. Separate PRs: AMD microcode (#4231), a Mesa release build. The CPU already boosts (APERF/MPERF about 3.0 GHz average); CPPC is an idea for later.
+
+## 2026-11-13 - M10 stick, first run: boot 1 passed, the reset did not come back; Deskbar crash
+
+Stick (13 Nov), image `cursor/m9-m10-stick` at `7ea2f881f2`. Boot 1 (only `gpu_selftest true`): every `check` line PASS: `radeon_hd: gpu available`, RADV device 0, `egl: opengl zink: zink Vulkan 1.4(AMD Radeon Graphics (RADV RENOIR))`, VulkanTeapot and `gl` `pixels ok max 2`, every GLTeapot window action ok; GLTeapot from Demos at about 2200 FPS (user). As the standard account `test`, `check-user`: r5-gl-test and VulkanTeapot on RADV, isolation owner unchanged and fault seen; only `isolation: exit 0` failed.
+
+Found:
+- The isolation client's write faults (`vm fault vmid 4 addr 0000000080000000`), and the faulting job stalls the ring. Before M10 the watchdog declared the device lost (ECANCELED); now it is a hang and a reset, and the client's own 10 s wait returned `B_TIMED_OUT` first. `r5-gpu-isolation` accepts both; the guarantee (owner unchanged) is checked by the parent as before. A fault that stalls the ring still costs a reset: open.
+- The reset did not come back, in boot 1 (after the isolation hang) and in boot 2 (`gpu_hang_test 1`): `gpu reset mode2 ok`, then `PSP ring init 0x80020115`, `k0 fail fence`, `gpu off until reboot: reset failed`. Linux v6.12 stops the PSP ring before a reset (`psp_suspend()` -> `psp_v12_0_ring_stop()`: `GFX_CTRL_CMD_ID_DESTROY_RINGS` to `C2PMSG_64`, 20 ms, bit 31). `r5_gfx9_kernel_reset()` now does the same first (`r5_gfx9_psp_ring_stop()`, `radeon_hd: reset psp ring stop ok|timeout <hex>`). The boot path is unchanged. Recorded in the `GFX9 reset on GC 9.3` draft.
+- Deskbar crashed twice in boot 2 in `TReplicantTray::LoadAddOn` -> `BMessage::AddString`. Its add-on list `~/config/settings/deskbar/replicants` was 254 bytes with a header that says 321 (cut short by the restart after a save); `Unflatten()` failed and left `fAddOnSettings` half built. Deskbar now reads the file into a message of its own and keeps only paths that load. `read-stick-logs.py` copies that file.
+- The card was too short: it did not say plainly to open Terminal and type `check`. Boots 3 and 4 did not run.
+
+## 2026-11-13 - The graphics chip is used by default on the 5625U (M10 step 7, draft, not booted)
+
+Problem: the GPU path (RADV, Zink, the render node) stayed opt-in per machine, through about ten radeon_hd switches. M10 makes it the default on the one GC 9.3 machine that passed M4-M8, and keeps software as the fallback.
+
+What changed:
+- The four checks at boot (`r5_gpu_checks.h`, pure functions): the device-table row is `release-supported` (`r5Level`; only `0x15e7`), the five GFX blobs match their sha256 (`r5_gfx9_firmware.h`, hashed in the kernel with `r5_sha256.h`; before, only the build checked them), the fixed GFX9 start passes (K0 fence with readback, K1, K2; no new GPU work), and no `gpu false`. One line per boot: `radeon_hd: gpu available` or `radeon_hd: gpu not available: <opt-out|not release-supported|switched off|firmware|selftest>`.
+- `R5_GPU_CAP_AVAILABLE` (8), additive in `GET_INFO`, cleared when the GPU is turned off after a hang. A failed check on a release-supported GPU refuses contexts and submits for the boot.
+- On a release-supported GPU these default to on: `gfx9_ring`, `gfx9_kernel`, `gfx9_irq`, `gfx9_gart`, `gfx9_vmids`, `gfx9_vmid_per_file`, `gfx9_pasid_map`, `gpu_render`. `false` turns one off; `gpu false` turns all off, the accelerant's own GFX9 path too. `gfx9_workload`, `gfx9_compute`, `gpu_selftest` and app_server's copy stay opt-in. `0x1636` and `0x1638` keep the opt-in until one is tested.
+- EGL (`haiku-zink-available.patch`, `mesa-25.3.6-4`): with `gpu_opengl` not set, Zink when the bit is set; new reason `egl: opengl llvmpipe: gpu not available`. The WSI (`mesa_radv-25.3.6-6`) presents through RADV when the bit is set (`gpu_present false` turns it off). `r5-gl-test` (`vulkanteapot-1.0.0-4`) follows the bit. The standard-account limit of M9 is gone for the default case.
+- Mistakes found: the M10 stick scripts from the stick-tooling PR (`check`, `boot-next`, `check-user`) were never packed, so the image still had the M8 ones; `mesa_radv-25.3.6-6` packs them. And `boot-next 1` removed the settings file, so Login would not start the self-test and `gpu_hang_test` (boots 2 and 3) would never start; boots 1-3 now write `gpu_selftest true` and nothing else besides the test switch.
+- A new Windows worktree checks out CRLF; `apply-overlay.sh` copied CRLF Jamfiles into the Haiku tree and the jam failed in usb_webcam. Checked out `distro` and `scripts` with LF and jammed again.
+
+Host test: `scripts/test-r5-gpu-checks.cpp`, `ok gpu checks 49 cases` (including the real blobs). QEMU (KVM, no AMD GPU, radeon_hd does not attach), branch `claude/m10-gpu-default`: with no settings file the desktop comes up, no `egl:` and no `radeon_hd: gpu` line, `pixels ok llvmpipe only` (r5-gl-test) and `pixels ok lavapipe only` (VulkanTeapot); with `gpu false` the line `egl: opengl llvmpipe: gpu off` and the same pass lines; `boot-next`, `check` and `check-user` are in `/boot/system/bin`. Screendump `docs/images/gpu-m10-qemu-default.png`. Not tested: the 5625U (every check, the defaults, Zink and RADV by default, `gpu false`), a standard account.
+## 2026-11-13 - Programs no longer crash on a settings file that was cut short
+
+Problem: on the 5625U, Deskbar crashed at start and media_server at shutdown, both in `BMessage::_AddField`. Their settings files had been cut short by the power button: the file had its new size but old blocks (Deskbar's `replicants`: a header for 22 fields in 254 bytes). `BMessage::Unflatten()` read the header, then a short field table, and returned an error without resetting the message: `field_count` stayed 22 over a half-read table, and the next `Add*()` walked garbage.
+
+What changed: `distro/desktop/src/kits/app/Message.cpp` (Haiku `src/kits/app/Message.cpp`, MIT, copied unchanged, then one R5 snippet): a short read of the field table frees it and resets the header, as the data read right below already did. A program that unflattens a damaged file now gets an empty message and an error, and can go on.
+
+Tested: see the PR (QEMU, a small program that unflattens the real 254-byte file from the stick and then adds a field). Not tested on the 5625U.
 
 ## 2026-11-13 - Printers, Mail tray menu and the Tracker version column (not built, not booted)
 

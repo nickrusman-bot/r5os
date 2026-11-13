@@ -224,7 +224,12 @@ foreign(void)
 		if (submit_write(mine, ibVa, 14) == 0)
 			_exit(5);
 		fprintf(stderr, "client errno %d\n", errno);
-		_exit(errno == ECANCELED ? 0 : 6);
+		// M10: the faulting job stalls the ring; the watchdog then resets
+		// the GPU and marks this context lost (ECANCELED). The client's own
+		// wait has the same 10 s limit and can return B_TIMED_OUT first
+		// (M10 stick, boot 1). Either way the write was refused; the
+		// owner's buffer is checked by the parent.
+		_exit(errno == ECANCELED || errno == B_TIMED_OUT ? 0 : 6);
 	}
 	close(fds[0]);
 	if (write(fds[1], &va, sizeof(va)) != (ssize_t)sizeof(va))

@@ -3,6 +3,7 @@
 # VulkanTeapot is the default. vkcube, GLTeapot and GLTeapot-zink-cpu are the
 # others. GLTeapot-zink-cpu runs GLTeapot through Zink on Lavapipe.
 OUT=/tmp/r5-wsi-window-app.txt
+gl=0
 if [ $# -ge 1 ]; then
 	prog=$1
 else
@@ -19,6 +20,7 @@ vkcube)
 	set --
 	;;
 GLTeapot|GLTeapot-zink-cpu)
+	gl=1
 	APP=application/x-vnd.Haiku-GLTeapot
 	prog=/boot/system/demos/GLTeapot
 	export R5_GL_TRACE=1
@@ -37,7 +39,7 @@ pid=$!
 ready=0
 driver=
 i=0
-while [ "$i" -lt 30 ]; do
+while [ "$i" -lt 60 ]; do
 	if [ "$ready" -eq 0 ] && hey "$APP" get Title of Window 0 >/dev/null 2>&1; then
 		ready=1
 	fi
@@ -46,7 +48,10 @@ while [ "$i" -lt 30 ]; do
 		if [ -z "$driver" ]; then
 			driver=$(sed -n 's/^egl: opengl //p' "$OUT" | head -n 1)
 		fi
-		if [ -z "$driver" ]; then
+		# An OpenGL program names its driver only in the egl line. Zink's
+		# own "Selected GPU" line comes first, and on a slow start it was
+		# taken instead (M10 stick, round 3).
+		if [ -z "$driver" ] && [ "$gl" -eq 0 ]; then
 			driver=$(sed -n 's/^Selected GPU [0-9]*: \(.*\), type: .*/\1/p' "$OUT" | head -n 1)
 		fi
 	fi

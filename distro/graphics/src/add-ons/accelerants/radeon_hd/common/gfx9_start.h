@@ -65,6 +65,8 @@ struct r5_gfx9_user_ib {
 };
 
 bool r5_gfx9_ring_ready();
+/* M10 reset: stop the PSP ring before a mode-2 reset, as Linux does. */
+bool r5_gfx9_psp_ring_stop(uint32* _seen);
 bool r5_gfx9_user_room(uint32 dwords);
 /* Dwords this user job will append, including the 256-dword pad. */
 uint32 r5_gfx9_user_commit_dwords(uint32 count);

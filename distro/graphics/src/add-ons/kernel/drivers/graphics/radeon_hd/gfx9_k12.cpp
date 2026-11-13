@@ -14,6 +14,8 @@
 #include "r5_vm.h"
 #include "r5_vmid.h"
 #include "r5_gpu.h"
+#include "r5_gfx9_firmware.h"
+#include "r5_sha256.h"
 #include "r5_span.h"
 #include "r5_vram_pool.h"
 #include "radeon_hd_private.h"
@@ -36,6 +38,9 @@ extern "C" status_t vm_set_area_memory_type(area_id id,
 #include <stdarg.h>
 
 extern "C" void r5_gpu_retire_wake();
+extern "C" int r5_gpu_switch_named(void* settings, const char* name);
+extern "C" void r5_gpu_report_checks(int switchedOff, int firmwareOk,
+	int selftestOk);
 
 
 static radeon_info* sInfo = NULL;
@@ -2041,6 +2046,50 @@ r5_gfx9_take_priv(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
 }
 
 
+/* The four checks are reported once per boot, also when radeon_hd is
+ * opened again after a start that stopped early. */
+static bool sChecksReported = false;
+
+
+static void
+report_checks(bool switchedOff, int firmwareOk, int selftestOk)
+{
+	if (sChecksReported)
+		return;
+	sChecksReported = true;
+	r5_gpu_report_checks(switchedOff ? 1 : 0, firmwareOk, selftestOk);
+}
+
+
+/* Check 2: each blob the start loads for this GPU matches its sha256 in
+ * r5_gfx9_firmware.h. Read through the same path as the start. */
+static bool
+firmware_ok(uint32 pci)
+{
+	const char* stem = r5_gfx9_fw_stem_for((uint16)pci);
+	if (stem == NULL)
+		return false;
+	for (size_t i = 0; i < sizeof(kR5Gfx9FirmwareParts)
+			/ sizeof(kR5Gfx9FirmwareParts[0]); i++) {
+		char name[48];
+		snprintf(name, sizeof(name), "%s_%s.bin", stem,
+			kR5Gfx9FirmwareParts[i]);
+		const char* expected = r5_gfx9_firmware_sha256(name);
+		size_t bytes = 0;
+		uint8* blob = kfirmware(NULL, name, &bytes);
+		bool ok = blob != NULL && expected != NULL
+			&& r5_sha256_matches(blob, bytes, expected);
+		free(blob);
+		if (!ok) {
+			knote("firmware %s %s", name,
+				blob == NULL ? "missing" : "sha256 mismatch");
+			return false;
+		}
+	}
+	return true;
+}
+
+
 void
 r5_gfx9_kernel_start(radeon_info& info)
 {
@@ -2060,53 +2109,61 @@ r5_gfx9_kernel_start(radeon_info& info)
 	info.shared_info->gfx9_owner = R5_GFX9_OWNER_NONE;
 	info.shared_info->gfx9_text[0] = 0;
 	info.shared_info->gfx9_text_used = 0;
-	bool ring = false;
 	bool workload = false;
 	bool compute = false;
-	bool kernel = false;
-	bool irq = false;
-	bool gart = false;
 	void* settings = load_driver_settings("radeon_hd");
+	/* M10: on a release-supported GPU these are on unless the settings
+	 * say false; elsewhere they stay opt-in (r5_gpu_checks.h). The
+	 * workload and compute stages stay test stages, always opt-in. */
+	bool ring = r5_gpu_switch_named(settings, "gfx9_ring") != 0;
+	bool kernel = r5_gpu_switch_named(settings, "gfx9_kernel") != 0;
+	bool irq = r5_gpu_switch_named(settings, "gfx9_irq") != 0;
+	bool gart = r5_gpu_switch_named(settings, "gfx9_gart") != 0;
+	sFaultIrq = irq;
+	sVmids = r5_gpu_switch_named(settings, "gfx9_vmids") != 0;
+	sVmidPerFile = r5_gpu_switch_named(settings, "gfx9_vmid_per_file") != 0;
 	if (settings != NULL) {
-		ring = get_driver_boolean_parameter(settings, "gfx9_ring", false, true);
 		workload = get_driver_boolean_parameter(settings, "gfx9_workload",
 			false, true);
 		compute = get_driver_boolean_parameter(settings, "gfx9_compute",
 			false, true);
-		kernel = get_driver_boolean_parameter(settings, "gfx9_kernel",
-			false, true);
-		irq = get_driver_boolean_parameter(settings, "gfx9_irq", false, true);
-		sFaultIrq = irq;
-		gart = get_driver_boolean_parameter(settings, "gfx9_gart", false, true);
 		sGpuDebug = get_driver_boolean_parameter(settings, "gpu_debug",
 			false, true);
 		sInvRange = get_driver_boolean_parameter(settings, "gfx9_inv_range",
 			true, true);
 		sHubLinux = get_driver_boolean_parameter(settings, "gfx9_hub_linux",
 			false, true);
-		sVmids = get_driver_boolean_parameter(settings, "gfx9_vmids",
-			false, true);
-		sVmidPerFile = get_driver_boolean_parameter(settings,
-			"gfx9_vmid_per_file", false, true);
 		sWcGtt = get_driver_boolean_parameter(settings, "gfx9_wc_gtt",
 			false, true);
-		if (sVmidPerFile && r5_vmid_file_ok(1, sVmids ? 1 : 0) == 0) {
-			knote("gfx9_vmid_per_file needs gfx9_vmids");
-			sVmidPerFile = false;
-		}
-		r5_gfx9_set_file_pasid(sVmidPerFile ? 1 : 0);
 		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
 			"gfx9_ce_meta", false, true) ? 1 : 0);
 		unload_driver_settings(settings);
 	}
+	if (sVmidPerFile && r5_vmid_file_ok(1, sVmids ? 1 : 0) == 0) {
+		knote("gfx9_vmid_per_file needs gfx9_vmids");
+		sVmidPerFile = false;
+	}
+	r5_gfx9_set_file_pasid(sVmidPerFile ? 1 : 0);
 	uint32 pci = info.pciID;
-	if (!ring || !kernel)
-		return;
 	if (pci != 0x15e7 && pci != 0x1636 && pci != 0x1638)
 		return;
-	sGfx9Started = true;
-	if (!map_pool(info))
+	/* The checks are reported once per boot, on every GC 9.3 device. */
+	bool switchedOff = !ring || !kernel || !irq || !gart;
+	if (sChecksReported && !sGfx9Started)
 		return;
+	if (!ring || !kernel) {
+		report_checks(switchedOff, 0, 0);
+		return;
+	}
+	if (!firmware_ok(pci)) {
+		report_checks(switchedOff, 0, 0);
+		return;
+	}
+	sGfx9Started = true;
+	if (!map_pool(info)) {
+		report_checks(switchedOff, 1, 0);
+		return;
+	}
 
 	memset(&sHost, 0, sizeof(sHost));
 	sHost.read32 = kread;
@@ -2138,13 +2195,18 @@ r5_gfx9_kernel_start(radeon_info& info)
 		r5_gfx9_hub_linux();
 	r5_gfx9_copy_firmware(info.fw_version, info.fw_feature, 32);
 	knote("k0 %s fence", ok ? "ok" : "fail");
-	if (ok && irq)
-		run_k1(false);
+	bool k1 = !irq || (ok && run_k1(false));
+	sK2GartMc = 0;
 	if (ok && gart)
 		run_k2();
+	bool k2 = !gart || sK2GartMc != 0;
 	if (ok)
 		map_carveout(info);
 	publish();
+	/* Check 3, the boot self-test: the fixed start with its own limits
+	 * (the K0 fence and its readback, K1, K2), the same test as after a
+	 * reset (r5_gfx9_kernel_restart). */
+	report_checks(switchedOff, 1, ok && k1 && k2);
 }
 
 
@@ -2189,6 +2251,13 @@ r5_gfx9_kernel_reset()
 	sIhWbReady = false;
 	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
 	kwrite(sInfo, gc_byte(mmCP_INT_CNTL_RING0), 0);
+	/* Linux suspends PSP before the reset (r5_gfx9_psp_ring_stop). A
+	 * failed stop is logged; the reset still runs, and the restart's ring
+	 * create then decides. */
+	uint32 pspSeen = 0;
+	bool pspStopped = r5_gfx9_psp_ring_stop(&pspSeen);
+	dprintf("radeon_hd: reset psp ring stop %s %08lx\n",
+		pspStopped ? "ok" : "timeout", (unsigned long)pspSeen);
 
 	uint32 header[kPciHeaderDwords];
 	for (uint32 i = 0; i < kPciHeaderDwords; i++)

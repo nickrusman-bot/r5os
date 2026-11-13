@@ -7,18 +7,18 @@ Vulkan device there.
 | Package | What it is |
 |---|---|
 | libdrm 2.4.124 | `libdrm.so.2` and `libdrm_amdgpu.so.1`. AMDGPU ioctls become R5 GPU calls |
-| mesa_zink 25.3.6 | EGL vendor. llvmpipe by default. `gpu_opengl true` in the radeon_hd settings selects Zink when a render node exists (`docs/GPU-OPENGL.md`). `GALLIUM_DRIVER=zink` selects Zink. Provides `mesa` |
+| mesa_zink 25.3.6 | EGL vendor. Zink when the GPU's availability bit is set, llvmpipe otherwise; `gpu_opengl false` in the radeon_hd settings turns Zink off (`docs/GPU-OPENGL.md`). `GALLIUM_DRIVER=zink` selects Zink. Provides `mesa` |
 | mesa_lavapipe 25.3.6 | Vulkan software driver |
-| mesa_radv 25.3.6 | `libvulkan_radeon.so` and `add-ons/vulkan/icd.d/radeon_icd.json` |
+| mesa_radv 25.3.6 | `libvulkan_radeon.so` and `add-ons/vulkan/icd.d/radeon_icd.json`, version `25.3.6-7`. RADV presents to a window when the availability bit is set (`gpu_present false` turns it off). Also carries the stick scripts (`check`, `boot-next`, `check-user`) |
 | vulkan_loader 1.4.367 | Khronos loader, built by R5 (`1.4.367-4`). The loader's device sort is on, so a GPU comes before Lavapipe |
 | VulkanTeapot | Offscreen Newell teapot. `--selftest` prints the device and sample pixels |
 
 RADV is not the default for GC 9.3. The ring, the workload, and compute stay
 off until the radeon_hd driver settings say so.
 
-The package is named `mesa`, version `25.3.6-3`. It provides `mesa`,
+The package is named `mesa`, version `25.3.6-5`. It provides `mesa`,
 `mesa_zink` and `mesa_eglvnd`. `haiku/build/jam/BuildFeatures` fetches
-`file: base mesa`. `mesa-25.3.6-1` and `mesa-25.3.6-2` are not in the pin and
+`file: base mesa`. `mesa-25.3.6-1` to `mesa-25.3.6-4` are not in the pin and
 not in the download directory: they own the same EGL file. `mesa_devel` and `mesa_lavapipe` require
 `mesa == 25.3.6`.
 

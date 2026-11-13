@@ -18,6 +18,7 @@
  */
 
 #include "r5_gpu_internal.h"
+#include "r5_gpu_checks.h"
 #include "r5_cs.h"
 #include "r5_defer.h"
 #include "r5_hang.h"
@@ -264,14 +265,63 @@ gpu_refuse(const char* op, const char* why, status_t status, uint32 handle,
 bool
 gpu_render_enabled()
 {
-	bool enabled = false;
 	void* settings = load_driver_settings("radeon_hd");
-	if (settings != NULL) {
-		enabled = get_driver_boolean_parameter(settings, "gpu_render",
-			false, true);
+	bool enabled = r5_gpu_switch_named(settings, "gpu_render") != 0;
+	if (settings != NULL)
 		unload_driver_settings(settings);
-	}
 	return enabled;
+}
+
+
+// #pragma mark - M10 which path is used
+
+
+static uint32 sLevel = R5_GPU_LEVEL_NONE;
+static int sOptOut = 0;
+bool sAvailable = false;
+
+
+extern "C" void
+r5_gpu_set_level(uint32_t level, int optOut)
+{
+	sLevel = level;
+	sOptOut = optOut ? 1 : 0;
+	/* r5_gpu_init read the cached switches before the level was known. */
+	gpu_cache_log_settings();
+}
+
+
+extern "C" int
+r5_gpu_switch_named(void* settings, const char* name)
+{
+	int named = -1;
+	if (settings != NULL) {
+		/* Named when the two possible defaults give different answers. */
+		bool ifOff = get_driver_boolean_parameter(settings, name, false, true);
+		bool ifOn = get_driver_boolean_parameter(settings, name, true, true);
+		if (ifOff == ifOn)
+			named = ifOn ? 1 : 0;
+	}
+	return r5_gpu_switch(sLevel, sOptOut, named);
+}
+
+
+extern "C" void
+r5_gpu_report_checks(int switchedOff, int firmwareOk, int selftestOk)
+{
+	const char* reason = r5_gpu_check_reason(sLevel, sOptOut, switchedOff,
+		firmwareOk, selftestOk);
+	gpu_lock();
+	sAvailable = reason == NULL && !sGpuOff;
+	/* Refuse new contexts and submits, as after a second hang. A GPU
+	 * that was never release-supported keeps its development path. */
+	if (reason != NULL && sLevel == R5_GPU_LEVEL_RELEASE)
+		sGpuOff = true;
+	gpu_unlock();
+	if (reason == NULL)
+		dprintf("radeon_hd: gpu available\n");
+	else
+		dprintf("radeon_hd: gpu not available: %s\n", reason);
 }
 
 

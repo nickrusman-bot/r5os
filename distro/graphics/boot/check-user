@@ -23,6 +23,7 @@ report=$keep/check-user.txt
 bad=0
 live=${CHECK_LIVE:-1}
 bin=${R5_BIN:-/bin}
+syslog=${R5_SYSLOG:-/boot/system/var/log/syslog}
 
 emit() {
 	printf '%s\n' "$1" | tee -a "$report"
@@ -54,8 +55,16 @@ runlive() {
 	shift
 	: > "$keep/$name.txt"
 	if [ "$live" -eq 1 ]; then
-		timeout 180 "$@" > "$keep/$name.txt" 2>&1
-		echo "exit $?" >> "$keep/$name.txt"
+		# R5_GL_TRACE and RADV_DEBUG=startup say how far a program got.
+		start=$(date +%s)
+		R5_GL_TRACE=1 RADV_DEBUG=startup timeout 180 "$@" > "$keep/$name.txt" 2>&1
+		rc=$?
+		echo "exit $rc after $(( $(date +%s) - start )) s" >> "$keep/$name.txt"
+		if [ "$rc" -eq 124 ]; then
+			# The kernel's view of the GPU when the program did not finish.
+			grep 'radeon_hd' "$syslog" 2>/dev/null | tail -n 60 				> "$keep/$name-syslog.txt"
+		fi
+		sync
 	fi
 }
 
@@ -90,5 +99,7 @@ if [ "$bad" -eq 0 ]; then
 else
 	emit FAIL
 fi
+# On the stick even after the power button.
+sync
 echo "check-user: files in $keep"
 [ "$bad" -eq 0 ]

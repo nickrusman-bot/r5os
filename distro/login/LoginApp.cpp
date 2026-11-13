@@ -608,7 +608,12 @@ LoginApp::_LaunchSessionHooks()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
-	if (gpu_selftest_requested()) {
+	// Once per boot: Login stays the same process across log out and sign
+	// in. The self-test's stages are meant to run before any other GPU
+	// client; a second run at the next sign-in froze the 5625U (M10 stick).
+	static bool sGpuSelftestStarted = false;
+	if (gpu_selftest_requested() && !sGpuSelftestStarted) {
+		sGpuSelftestStarted = true;
 		status = _LaunchSessionApp("/system/bin/r5-gpu-selftest");
 		if (status != B_OK)
 			r5_session_log("r5-gpu-selftest: %s", strerror(status));

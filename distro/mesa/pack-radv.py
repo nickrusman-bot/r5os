@@ -3,7 +3,7 @@
 
 The previous file kept the name mesa_radv-25.3.6-1. An older copy of that
 same name, from 9 Nov, could be the one the image installed. The new name
-is mesa_radv-25.3.6-5, so a cached 25.3.6-4 cannot be installed in its place.
+is mesa_radv-25.3.6-7, so a cached older build cannot be installed in its place.
 """
 import shutil
 import subprocess
@@ -40,7 +40,7 @@ def main() -> None:
     root = Path(sys.argv[1])
     out_dir = root / "distro" / "packages" / "x86_64"
     previous = out_dir / "mesa_radv-25.3.6-1-x86_64.hpkg"
-    dest = out_dir / "mesa_radv-25.3.6-5-x86_64.hpkg"
+    dest = out_dir / "mesa_radv-25.3.6-7-x86_64.hpkg"
     stage = Path("/tmp/r5-radv-pkg")
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
@@ -61,9 +61,9 @@ def main() -> None:
         (bindir / name).chmod(0o755)
     info = stage / ".PackageInfo"
     text = info.read_text(encoding="utf-8")
-    text = text.replace("version\t\t\t25.3.6-1", "version\t\t\t25.3.6-5")
-    text = text.replace("mesa_radv = 25.3.6-1", "mesa_radv = 25.3.6-5")
-    if "25.3.6-5" not in text:
+    text = text.replace("version\t\t\t25.3.6-1", "version\t\t\t25.3.6-7")
+    text = text.replace("mesa_radv = 25.3.6-1", "mesa_radv = 25.3.6-7")
+    if "25.3.6-7" not in text:
         raise SystemExit("package version was not bumped")
     info.write_text(text, encoding="utf-8")
     if dest.exists():
