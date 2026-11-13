@@ -1870,16 +1870,13 @@ Compositor::_ShareRetire()
 }
 
 
-/*!	1 when the ring has passed the image's present mark, 0 when not yet,
-	-1 when the import is gone. FENCE_WAIT with timeout 0: the compose
-	never waits for a program.
+/*!	Whether the ring has passed an image's present mark (from
+	r5_drm_mark_get). FENCE_WAIT with timeout 0: the compose never waits
+	for a program.
 */
 bool
-Compositor::_ShareReady(uint32 importId)
+Compositor::_ShareReady(uint64 sequence)
 {
-	uint64 sequence = 0;
-	if (fVulkan == NULL || fVulkan->markGet(importId, &sequence) != 0)
-		return false;
 	if (sequence == 0)
 		return true;
 	r5_gpu_fence wait;
@@ -1914,7 +1911,7 @@ Compositor::_ShareFrame(ShareDrawList& draws, BRegion& retry)
 				share->broken = true;
 				continue;
 			}
-			if (_ShareReady(next.importId)) {
+			if (_ShareReady(sequence)) {
 				int32 old = share->current;
 				share->current = share->pending;
 				share->pending = -1;

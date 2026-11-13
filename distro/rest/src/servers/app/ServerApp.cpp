@@ -3641,20 +3641,18 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			uint32 count = 0;
 			link.Read<int32>(&viewToken);
 			status_t status = link.Read<uint32>(&count);
-			compositor_share_image images[kMaxShareImages];
-			for (uint32 i = 0; status == B_OK && i < count; i++) {
-				compositor_share_image image;
-				link.Read(image.token, sizeof(image.token));
-				link.Read<sem_id>(&image.sem);
-				link.Read<uint32>(&image.width);
-				link.Read<uint32>(&image.height);
-				link.Read<uint32>(&image.pitch);
-				status = link.Read<uint32>(&image.format);
-				if (i < kMaxShareImages)
-					images[i] = image;
-			}
+			// The rest of a refused message is skipped by the link.
 			if (status == B_OK && count > kMaxShareImages)
 				status = B_BAD_VALUE;
+			compositor_share_image images[kMaxShareImages];
+			for (uint32 i = 0; status == B_OK && i < count; i++) {
+				link.Read(images[i].token, sizeof(images[i].token));
+				link.Read<sem_id>(&images[i].sem);
+				link.Read<uint32>(&images[i].width);
+				link.Read<uint32>(&images[i].height);
+				link.Read<uint32>(&images[i].pitch);
+				status = link.Read<uint32>(&images[i].format);
+			}
 
 			int32 shareId = -1;
 			Compositor* compositor = fDesktop->GetCompositor();

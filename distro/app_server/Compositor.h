@@ -123,7 +123,7 @@ private:
 									BRegion& retry);
 			void				_ShareFree(Share* share);
 			void				_ShareRetire();
-			bool				_ShareReady(uint32 importId);
+			bool				_ShareReady(uint64 sequence);
 			void				_TurnOff(const char* reason);
 			bool				_RestartAfterReset();
 			void				_Report();

@@ -70,6 +70,8 @@ FILES = (
     "headers/private/r5gpu/r5_gpu_checks.h",
     "headers/private/r5gpu/r5_sha256.h",
     "headers/private/r5gpu/r5_vram_pool.h",
+    # M11 step 3b: the sharing logic (r5_share.h), host-tested.
+    "headers/private/r5gpu/r5_share.h",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/Jamfile",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd_private.h",
     "headers/private/graphics/radeon_hd/radeon_hd.h",
