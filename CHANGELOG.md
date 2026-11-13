@@ -1,5 +1,22 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Printers, Mail tray menu and the Tracker version column (not built, not booted)
+
+Three small bugs from Haiku Trac, picked from `generated/issues-2/BRIEF.md`. Each cause was read in the source; nothing was built or run. Copies of Haiku files are in `distro/rest/` (applied by `apply-rest-native.py`); the Tracker file was already an R5 copy in `distro/desktop/`. R5 lines are in SPDX-Snippet blocks (MIT).
+
+- Printers: "No pending jobs" no longer repeats itself ("No pending jobsNo…") after Make default. Cause: `BStringFormat::Format()` appends to its output, and `PrinterItem::UpdatePendingJobs()` did not clear `fPendingJobs` first. `PrinterListView.cpp`. [#2266](https://github.com/r5-operating-system/r5os/issues/2266), Trac 16103.
+- Mail tray menu: "Open Inbox Folder", "Open Mail Folder" and "Open Draft" can be translated. Cause: these items are file names in `~/config/settings/Mail/Menu Links` and were shown as they are on disk. The three standard names now go through `B_TRANSLATE`; other links keep their file name. Limit: the Dutch lines are not in a catalog yet (R5 has no own catalogs in `distro/`; that belongs with #4044). `src/servers/mail/DeskbarView.cpp`. [#2227](https://github.com/r5-operating-system/r5os/issues/2227), Trac 16002.
+- Tracker: the Version column (in Open with… and in Tracker windows) shows the version number (`major.middle.minor`) instead of the version's free-text `short_info`, which often held a description. `distro/desktop/src/kits/tracker/WidgetAttributeText.cpp`. [#3405](https://github.com/r5-operating-system/r5os/issues/3405), Trac 19128.
+
+Dropped from the brief, with the reason:
+- Input "Accept first click" (#2489): app_server saves and loads the value; the cause is not visible without a test, and the fix would be in app_server.
+- Input device names (#2253): the name is also the key for the settings and the list; translating it needs a separate display name.
+- Input duplicate keyboard (#2174) and Mail menus cut off (#2924): need a reproduction.
+- Mail reply account (#3526): there is a setting for this ("account from mail"); the default is the default account. Changing the default is a product choice.
+- Sounds names (#2042), Locale Defaults (#2285), Shortcuts wording (#3175), ProcessController (#3719, #2073), Dutch catalogs (#4044): larger, a design choice, or need a screen test.
+
+Not tested: no jam, no QEMU boot. The GitHub issues stay open and the tracker is unchanged until a test boot.
+
 ## 2026-11-12 - OpenGL through Zink: the driver choice and the window path (M9 steps 1-4, QEMU only)
 
 Problem: Zink was built into `libEGL_mesa` but could not show a frame. `haiku_swap_buffers()` presents with `flush_frontbuffer()`, and `zink_flush_frontbuffer()` returns at once without a kopper swapchain. Recorded in QEMU before the change: `GALLIUM_DRIVER=zink LIBGL_ALWAYS_SOFTWARE=1 GLTeapot` opened a white window, printed nothing, and kept running.
