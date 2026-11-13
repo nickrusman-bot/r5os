@@ -93,12 +93,10 @@ SCRIPTS = {
     "check-user": "distro/graphics/boot/check-user",
 }
 
-HOME = (
-    "m8-run",
-    "m8-boot2",
-    "m8-show",
-    "check.sh",
-)
+# Files planted in /boot/home (plant-m8-stick.sh, M8). The M10 stick runs
+# check, boot-next and check-user from /boot/system/bin, so nothing is
+# planted.
+HOME = ()
 
 STRINGS = (b"gpu_isolation_test", b"window vkcube")
 
