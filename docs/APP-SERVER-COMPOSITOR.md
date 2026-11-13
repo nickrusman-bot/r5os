@@ -288,27 +288,21 @@ The messages:
 
 ### Pass and fail lines (for step 3b)
 
-One line per test, from the 3b row of the brief. A test program, `r5-share-test`, prints them; app_server prints the `zero-copy off` lines.
+Changed in step 3b (user, 13 Nov 2026): the refusal rules are cases of the host test, each with the error it returns; the machine runs a short conformance check with ordinary calls (`r5-share-check`, like `r5-gpu-isolation`); the job that never finishes is the M10 test switch `gpu_hang_test`, no new shader. A failure prints the same text with `fail` and the reason.
 
-| Test | Pass line |
-|---|---|
-| another team imports a number | `r5-share-test: import by other team refused: pass` |
-| a guessed number, and a number forwarded from another team into this team's message | `r5-share-test: guessed or forwarded number refused: pass` |
-| 1000 guessed numbers | `r5-share-test: 1000 guessed numbers refused: pass` |
-| the same number twice | `r5-share-test: second import refused: pass` |
-| an export not imported within 5 s | `r5-share-test: expired number refused: pass` |
-| more than 32 pending exports | `r5-share-test: export limit refused: pass` |
-| exporter killed before the import | `r5-share-test: killed before import, gtt returned: pass` |
-| exporter killed after the import | `r5-share-test: killed after import, still readable, gtt returned at close: pass` |
-| a size that lies | `app_server: window <id> zero-copy off: size` and `r5-share-test: lying size refused: pass` |
-| a semaphore of another team in the once-message | `app_server: window <id> zero-copy off: sem` and `r5-share-test: other team's semaphore refused: pass` |
-| no free in time | `r5-share-test: acquire timeout gives out of date: pass` |
-| a submit that never finishes | `r5-share-test: stuck image, desktop composes, previous frame kept: pass` |
-| one program allocating until refused | `r5-share-test: per-file limit, app_server still allocates: pass` |
-| programs allocating until only the reserve is left | `r5-share-test: reserve kept for app_server: pass` |
-| Lavapipe | `app_server: window <id> zero-copy off: lavapipe` |
+| Test | Where | Pass line |
+|---|---|---|
+| import by another team, a forwarded number, a guessed number, a second import, an expired number, the export limit, the per-file limit, the reserve, the system limit, a lost exporter, a semaphore of another team, the reference count, a size that lies | host test (`scripts/test-r5-share.cpp`, `r5_share.h`), each case with its error | `ok gpu share <n> cases` |
+| the import id after close, a reused fd number, RADV's import and query path | host test (`scripts/test-ac-drm.sh`) | `ok ac drm family RV cu 7 firmware map share` |
+| an import by a program that is not app_server | the machine: `r5-share-check` | `r5-share-check: import by a program that is not app_server refused: pass` |
+| the same number offered twice (needs the compositor on RADV) | the machine: `r5-share-check` | `r5-share-check: second import of the same number refused: pass` |
+| the exporter stopped before an import | the stick script: `r5-share-check count`, `r5-share-check hold &`, `kill` it, `r5-share-check count` | the two `r5-share-check: buffers <n>` lines show the same number |
+| a size that lies, a semaphore of another team | app_server, once per window | `app_server: window <id> zero-copy off: size`, `... off: sem` |
+| a job that never finishes, with VulkanTeapot open | the stick: `gpu_hang_test 1` (M10) | `app_server: gpu compositor restarted after reset`; the teapot window shows its window background, then turns again |
+| Lavapipe | QEMU or VirtualBox | `app_server: window <id> zero-copy off: lavapipe` |
+| the two scanout ways (decision 4) | the stick, `gpu_debug`, once with and once without `gpu_compositor_scanout true` | `app_server: present median <us> (vulkan)` and `... (cpu)`, both in `CHANGELOG.md` |
 
-A failure prints the same text with `fail` and the reason. "GTT returned" is read with `R5_GPU_GET_COUNTERS` before and after, as the M5 counters are.
+An acquire timeout (`VK_TIMEOUT`, decision 5) has no test of its own: a program that waits with `UINT64_MAX`, as VulkanTeapot does, never sees it.
 
 ### Open questions (step 3a)
 
