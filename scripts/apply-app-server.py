@@ -24,6 +24,8 @@ def main() -> int:
     copy("ServerConfig.h", config)
     local = HAIKU / "src" / "servers" / "app" / "drawing" / "interface" / "local"
     copy("AccelerantHWInterface.cpp", local / "AccelerantHWInterface.cpp")
+    # M11 step 3b: SoftwareCursorFrame for the compositor's scanout copy.
+    copy("AccelerantHWInterface.h", local / "AccelerantHWInterface.h")
     copy("GPUCopy.cpp", local / "GPUCopy.cpp")
     copy("GPUCopy.h", local / "GPUCopy.h")
     copy("GPUCopyBands.h", local / "GPUCopyBands.h")

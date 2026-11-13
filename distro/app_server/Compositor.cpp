@@ -38,6 +38,7 @@
 
 #include "Desktop.h"
 #include "DrawingEngine.h"
+#include "AccelerantHWInterface.h"
 #include "GPUCopy.h"
 #include "HWInterface.h"
 #include "RenderingBuffer.h"
@@ -254,6 +255,9 @@ struct CompositorVulkan {
 	// imported from app_server's own exports.
 	bool						scanActive;
 	uint32						scanGeneration;
+	// The GPUCopy generation of the last attempt that failed: no new
+	// export until the back buffer or the scanout is a new one.
+	uint32						scanFailedGeneration;
 	VkBuffer					back;
 	VkDeviceMemory				backMemory;
 	uint32						backPitch;
@@ -1554,7 +1558,22 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 
 	// Decision 4: the damaged rows of the back buffer onto the scanout, in
 	// this submit, under this fence. Each pitch is its buffer's own.
+	// The race with the software cursor: from here until _Present has drawn
+	// the cursor, the GPU writes the back buffer and the front, which the
+	// mouse thread reads and writes (MoveCursorTo, under the parallel
+	// lock). The exclusive lock keeps it out for that time, usually a
+	// millisecond; a late fence holds the cursor that long.
+	bool exclusive = false;
 	if (vk->scanActive) {
+		exclusive = fScreen->LockExclusiveAccess();
+		// The software cursor's rectangle is not copied: _DrawCursor puts
+		// it on the front, blended from the new back buffer, as
+		// CopyBackToFront leaves it out. So it never shows without cursor.
+		BRegion copy(damage);
+		clipping_rect cursor;
+		if (static_cast<AccelerantHWInterface*>(fScreen)
+				->SoftwareCursorFrame(&cursor))
+			copy.Exclude(cursor);
 		VkMemoryBarrier toCopy = {};
 		toCopy.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 		toCopy.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -1563,14 +1582,14 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &toCopy, 0, NULL, 0, NULL);
 		uint32 count = 0;
-		for (int32 i = 0; i < damage.CountRects(); i++) {
-			clipping_rect r = damage.RectAtInt(i);
+		for (int32 i = 0; i < copy.CountRects(); i++) {
+			clipping_rect r = copy.RectAtInt(i);
 			count += r.bottom - r.top + 1;
 		}
-		VkBufferCopy* regions = new(std::nothrow) VkBufferCopy[count];
+		VkBufferCopy* regions = new(std::nothrow) VkBufferCopy[count + 1];
 		uint32 n = 0;
-		for (int32 i = 0; regions != NULL && i < damage.CountRects(); i++) {
-			clipping_rect r = damage.RectAtInt(i);
+		for (int32 i = 0; regions != NULL && i < copy.CountRects(); i++) {
+			clipping_rect r = copy.RectAtInt(i);
 			for (int32 y = r.top; y <= r.bottom; y++) {
 				regions[n].srcOffset = (uint64)y * vk->backPitch
 					+ (uint64)r.left * 4;
@@ -1639,6 +1658,8 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 		}
 	}
 	if (failure != NULL) {
+		if (exclusive)
+			fScreen->UnlockExclusiveAccess();
 		if (compare) {
 			for (int32 i = 0; i < layers.CountItems(); i++)
 				layers.ItemAt(i)->entry->iface->UnlockExclusiveAccess();
@@ -1666,6 +1687,8 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 	}
 
 	_Present(damage);
+	if (exclusive)
+		fScreen->UnlockExclusiveAccess();
 	return true;
 }
 
@@ -1979,7 +2002,10 @@ Compositor::_ScanoutPrepare(RenderingBuffer* back)
 	if (!fWantScanout || fOnLavapipe || vk == NULL || !vk->canImport
 		|| back == NULL)
 		return false;
-	if (vk->scanActive && vk->scanGeneration == GPUCopy::Generation())
+	uint32 current = GPUCopy::Generation();
+	if (vk->scanActive && vk->scanGeneration == current)
+		return false;
+	if (!vk->scanActive && vk->scanFailedGeneration == current)
 		return false;
 
 	bool was = vk->scanActive;
@@ -2003,6 +2029,7 @@ Compositor::_ScanoutPrepare(RenderingBuffer* back)
 		reason = "import";
 	if (reason != NULL) {
 		_ScanoutFree(vk);
+		vk->scanFailedGeneration = GPUCopy::Generation();
 		if (!fScanoutLogged) {
 			fScanoutLogged = true;
 			log_line("scanout through vulkan off: %s", reason);
@@ -2358,8 +2385,13 @@ Compositor::SharePresent(team_id team, int32 viewToken, int32 shareId,
 				break;
 			}
 		}
-		if (share == NULL || share->ended || share->broken || !fActive
-			|| index >= share->count)
+		// B_BAD_VALUE: not the view's swapchain any more (a newer one
+		// replaced it); the program's new swapchain still shares.
+		// B_NOT_ALLOWED: this view takes no shared images now (a lost
+		// import, a reset, the CPU mode); the program takes the copy path.
+		if (share == NULL || share->ended || index >= share->count)
+			return B_BAD_VALUE;
+		if (share->broken || !fActive)
 			return B_NOT_ALLOWED;
 		if ((int32)index != share->current && (int32)index != share->pending) {
 			if (share->pending >= 0)

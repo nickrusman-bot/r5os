@@ -15,6 +15,7 @@
 #include <OS.h>
 
 #include <new>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -87,6 +88,9 @@ copy_times sGpuTimes;
 // front (decision 4).
 uint32 sGeneration = 1;
 thread_id sFrontCurrent = -1;
+// The scanout and its handle: GPUCopy::Copy (a CopyBackToFront caller) and
+// the compositor's thread (ExportForCompositor) both reach them.
+pthread_mutex_t sScanLock = PTHREAD_MUTEX_INITIALIZER;
 
 
 void
@@ -577,7 +581,10 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 	if (bandCount == 0)
 		return true;
 	r5_gpu_scanout scan;
-	if (!ensure_scanout(back, &scan))
+	pthread_mutex_lock(&sScanLock);
+	bool scanOk = ensure_scanout(back, &scan);
+	pthread_mutex_unlock(&sScanLock);
+	if (!scanOk)
 		return false;
 	if (scan.bytes_per_row != back->BytesPerRow()
 		|| scan.width != back->Width() || scan.height != back->Height()) {
@@ -669,15 +676,16 @@ GPUCopy::ExportForCompositor(RenderingBuffer* back, uint8 backToken[16],
 		|| sBackHandle == 0)
 		return false;
 	r5_gpu_scanout scan;
-	if (!ensure_scanout(back, &scan))
-		return false;
-	if (scan.width != back->Width() || scan.height != back->Height())
-		return false;
-	if (!export_bo(sBackHandle, backToken) || !export_bo(sScanHandle, scanToken))
-		return false;
-	*scanPitch = scan.bytes_per_row;
-	*generation = sGeneration;
-	return true;
+	pthread_mutex_lock(&sScanLock);
+	bool ok = ensure_scanout(back, &scan)
+		&& scan.width == back->Width() && scan.height == back->Height()
+		&& export_bo(sBackHandle, backToken) && export_bo(sScanHandle, scanToken);
+	if (ok) {
+		*scanPitch = scan.bytes_per_row;
+		*generation = sGeneration;
+	}
+	pthread_mutex_unlock(&sScanLock);
+	return ok;
 }
 
 

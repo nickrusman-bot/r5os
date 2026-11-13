@@ -192,6 +192,8 @@ struct r5_swapchain {
 	uint64_t present_count;
 };
 
+static void r5_share_off_once(struct r5_surface *surface, const char *reason);
+
 static struct r5_surface *
 r5_surface_from_icd(VkIcdSurfaceBase *base)
 {
@@ -534,40 +536,57 @@ r5_acquire_shared(struct r5_swapchain *chain,
 			pthread_mutex_unlock(&chain->mu);
 			return VK_SUCCESS;
 		}
-		/* The one app_server got first is the first it gives back. */
+		/* app_server gives an image back when it leaves its current or
+		 * pending place, which is not always the oldest one (a pending
+		 * image that is overtaken goes back at once). So every image it
+		 * holds is tried without waiting first; only then is the oldest
+		 * waited on, for at most one refresh period, and all are tried
+		 * again. */
 		struct r5_image *oldest = NULL;
+		bool freed = false;
 		for (uint32_t i = 0; i < count; i++) {
 			struct r5_image *image = &chain->images[i];
-			if (image->with_server && !image->held
-				&& (oldest == NULL || image->presented < oldest->presented))
+			if (!image->with_server || image->held)
+				continue;
+			status_t got = acquire_sem_etc(image->free_sem, 1,
+				B_RELATIVE_TIMEOUT, 0);
+			if (got == B_OK) {
+				image->with_server = false;
+				freed = true;
+			} else if (got != B_WOULD_BLOCK && got != B_TIMED_OUT
+				&& got != B_INTERRUPTED)
+				chain->lost = true;
+			else if (oldest == NULL || image->presented < oldest->presented)
 				oldest = image;
 		}
+		if (freed || chain->lost)
+			continue;
 		if (oldest == NULL || info->timeout == 0) {
 			pthread_mutex_unlock(&chain->mu);
 			return VK_TIMEOUT;
 		}
 		sem_id sem = oldest->free_sem;
-		pthread_mutex_unlock(&chain->mu);
-		status_t got;
-		if (forever)
-			got = acquire_sem(sem);
-		else {
+		bigtime_t slice = chain->refresh > 0 ? chain->refresh : 16667;
+		if (!forever) {
 			bigtime_t left = deadline - system_time();
-			got = left > 0 ? acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, left)
-				: B_TIMED_OUT;
+			if (left <= 0) {
+				pthread_mutex_unlock(&chain->mu);
+				return VK_TIMEOUT;
+			}
+			if (left < slice)
+				slice = left;
 		}
+		pthread_mutex_unlock(&chain->mu);
+		status_t got = acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, slice);
 		pthread_mutex_lock(&chain->mu);
-		if (got == B_INTERRUPTED)
-			continue;
-		if (got == B_TIMED_OUT || got == B_WOULD_BLOCK) {
-			pthread_mutex_unlock(&chain->mu);
-			return VK_TIMEOUT;
-		}
-		if (got != B_OK) {
-			chain->lost = true;
+		if (got == B_OK) {
+			oldest->with_server = false;
 			continue;
 		}
-		oldest->with_server = false;
+		if (got == B_TIMED_OUT || got == B_WOULD_BLOCK
+			|| got == B_INTERRUPTED)
+			continue;
+		chain->lost = true;
 	}
 }
 
@@ -714,10 +733,13 @@ r5_present_shared(struct r5_swapchain *chain, uint32_t image_index)
 	}
 	pthread_mutex_lock(&chain->mu);
 	if (code != B_OK) {
-		/* app_server stopped taking this view's images (a window
-		 * without zero-copy now, a lost device). A new swapchain takes
+		/* B_BAD_VALUE: this swapchain is not the view's one any more (a
+		 * newer one replaced it after a resize); the new one shares.
+		 * Anything else: app_server stopped taking this view's images (a
+		 * reset, the CPU mode, a lost import), and a new swapchain takes
 		 * the copy path. */
-		surface->no_share = true;
+		if (code != B_BAD_VALUE)
+			r5_share_off_once(surface, "present refused");
 		chain->out_of_date = true;
 		image->held = false;
 		pthread_cond_broadcast(&chain->cv);
@@ -974,8 +996,15 @@ r5_create_shared(struct r5_surface *surface, VkDevice device,
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 	uint32_t count = R5_SHARE_IMAGES;
-	if (info->minImageCount > count)
+	if (info->minImageCount > count) {
+		static bool sLogged;
+		if (!sLogged) {
+			sLogged = true;
+			syslog(LOG_INFO, "r5 wsi: zero-copy off: %u images asked",
+				info->minImageCount);
+		}
 		return VK_ERROR_INITIALIZATION_FAILED;
+	}
 
 	struct r5_swapchain *chain = (struct r5_swapchain *)vk_zalloc(allocator,
 		sizeof(*chain), 8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);

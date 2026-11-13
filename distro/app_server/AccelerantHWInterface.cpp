@@ -1431,6 +1431,27 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 // #pragma mark -
 
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+bool
+AccelerantHWInterface::SoftwareCursorFrame(clipping_rect* frame)
+{
+	if (!fFloatingOverlaysLock.Lock())
+		return false;
+	IntRect cursor = _CursorFrame();
+	fFloatingOverlaysLock.Unlock();
+	if (!cursor.IsValid())
+		return false;
+	frame->left = cursor.left;
+	frame->top = cursor.top;
+	frame->right = cursor.right;
+	frame->bottom = cursor.bottom;
+	return true;
+}
+// SPDX-SnippetEnd
+
+
 void
 AccelerantHWInterface::_DrawCursor(IntRect area) const
 {
