@@ -273,6 +273,8 @@ p + section.entry,
 	font-weight: 800;
 	letter-spacing: -0.02em;
 	font-family: 'JetBrains Mono', monospace;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .entry-header h2.plain {

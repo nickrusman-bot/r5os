@@ -89,7 +89,9 @@
 			["haiku-additions.html", "Additions to Haiku kits"],
 			["haiku-additions.html#BFormattingConventions", "BFormattingConventions", true],
 			["haiku-additions.html#BLocaleRoster", "BLocaleRoster", true],
+			["haiku-additions.html#BUSBEndpoint", "BUSBEndpoint", true],
 			["haiku-additions.html#decorator", "Decorator hooks", true],
+			["haiku-additions.html#wheel-phase", "Scroll phase", true],
 			["haiku-additions.html#usb-speed", "USB device speed", true],
 		]},
 		{ title: "Guidelines", file: "guidelines.html", items: [
