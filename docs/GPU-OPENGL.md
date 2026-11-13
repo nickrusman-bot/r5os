@@ -45,17 +45,18 @@ Once per process, in `haiku_initialize_impl()`, in this order:
 | # | Condition | Driver | Syslog line |
 |---|---|---|---|
 | 1 | `LIBGL_ALWAYS_SOFTWARE`, `GALLIUM_DRIVER` or EGL's force-software option is set | as before | none |
-| 2 | `gpu_opengl` is not `true` | llvmpipe | none |
+| 2 | `gpu_opengl false` | llvmpipe | none |
 | 3 | `gpu false` | llvmpipe | `egl: opengl llvmpipe: gpu off` |
 | 4 | `gpu_opengl_fail true` (test switch) | llvmpipe | `egl: opengl llvmpipe: forced failure` |
-| 5 | no entry under `/dev/gpu/<driver>/` | llvmpipe | `egl: opengl llvmpipe: no render node` |
-| 6 | Zink cannot start | llvmpipe | `egl: opengl llvmpipe: zink failed` |
-| 7 | otherwise | Zink | `egl: opengl zink: <renderer>` |
+| 5 | no entry under `/dev/gpu/<driver>/` | llvmpipe | `egl: opengl llvmpipe: no render node` with `gpu_opengl true`; none when `gpu_opengl` is not set |
+| 6 | the node's `GET_INFO` has no `R5_GPU_CAP_AVAILABLE` (M10) | llvmpipe | `egl: opengl llvmpipe: gpu not available` |
+| 7 | Zink cannot start | llvmpipe | `egl: opengl llvmpipe: zink failed` |
+| 8 | otherwise | Zink | `egl: opengl zink: <renderer>` |
 
 - The settings are the radeon_hd driver settings, read with `load_driver_settings()`: `/boot/home/config/settings/kernel/drivers/radeon_hd`, then `/boot/system/settings/kernel/drivers/radeon_hd` (the order the R5 DRM library uses). The first file that exists is used. A file that exists but cannot be read, such as the administrator's file for a standard account, means "not set"; the system file is not read in its place. Not tested as a standard account.
-- Limit until M10: `/boot/home` is 0711 and the administrator's settings are private, so a standard account cannot read `gpu_opengl true` there. It gets llvmpipe with no line, while the administrator gets Zink. The R5 DRM library's `gpu_debug` has the same limit. The availability bit (M10, PR C) replaces this file for the choice.
+- M10: with no `gpu_opengl` in the settings, the availability bit decides, so a standard account that cannot read the administrator's file gets Zink like the administrator. Only an explicit `gpu_opengl false`, `gpu false` or `gpu_opengl_fail` in the administrator's private file is not seen by a standard account. The R5 DRM library's `gpu_debug` has the same limit.
 - A key without a value (`gpu_opengl` alone) means true, as for every R5 kernel switch.
-- `gpu_opengl true` is opt-in for now. It becomes the default with the availability check (M10).
+- M10: Zink is the default when the bit is set. The kernel sets it after the four checks at boot (`docs/GPU-ARCHITECTURE.md`, "Which path is used"). `gpu_opengl true` forces case 5's line on a machine with no GPU; on a GPU without the bit it still gets llvmpipe. The patch is `distro/mesa/patches/haiku-zink-available.patch`, on top of `haiku-zink-present.patch`.
 - With `R5_GL_TRACE=1` every line also goes to stderr. Cases 1 and 2 then print `egl: opengl <zink|llvmpipe>: <renderer>` to stderr only; the window test reads that line.
 - When no driver can start at all, `eglInitialize` fails with `EGL_NOT_INITIALIZED`. Before, the EGL driver used a NULL screen and crashed.
 - A running program never moves to llvmpipe. A failure after start is the program's failure.
