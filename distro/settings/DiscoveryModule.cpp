@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: MIT
  *
  * Discovery, under Network: this computer's name and its .local name,
- * whether other devices may find it, what it shares (SSH, FTP), and the
- * devices r5-mdns can find. Like Display, a change is applied at once
- * after AdminChangeAllowed(). Rename… is the same sethostname() as on
- * Information. The services are written the way the Network program's
- * SSH and FTP add-ons do it.
+ * whether other devices may find it, what it shares, and the devices
+ * r5-mdns can find. Like Display, a change is applied at once after
+ * AdminChangeAllowed(). Rename… is the same sethostname() as on
+ * Information. The services are the Network program's own service add-ons
+ * (Network Settings), with their list items and views, so every service
+ * add-on shows up here.
  */
 
 
@@ -22,6 +23,8 @@
 #include <Alert.h>
 #include <Button.h>
 #include <CheckBox.h>
+#include <Directory.h>
+#include <Entry.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <GridView.h>
@@ -29,22 +32,40 @@
 #include <LayoutBuilder.h>
 #include <ListView.h>
 #include <NetworkSettings.h>
+#include <NetworkSettingsAddOn.h>
+#include <ObjectList.h>
 #include <Path.h>
+#include <PathFinder.h>
 #include <ScrollView.h>
 #include <String.h>
+#include <StringList.h>
 #include <StringView.h>
 #include <TextControl.h>
+#include <TextView.h>
 #include <Window.h>
 
 #include <r5_mdns.h>
 
+#include <map>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <vector>
+
+// kMsgSettingsItemUpdated and gNetworkWindow, which the add-on classes use
+#include "NetworkWindow.h"
+#include "ServiceView.h"
 
 
-using BNetworkKit::BNetworkServiceSettings;
 using BNetworkKit::BNetworkSettings;
+using BNetworkKit::BNetworkSettingsAddOn;
+using BNetworkKit::BNetworkSettingsItem;
+using BNetworkKit::BNetworkSettingsListener;
+
+
+// The add-ons tell the window of the Network program that an item
+// changed. In Settings that is the Discovery page.
+BMessenger gNetworkWindow;
 
 
 static const char* kModuleId = "discovery";
@@ -53,7 +74,7 @@ static const char* kDiscoveryFile = "network/discovery";
 static const uint32 kMsgRename = 'dsrn';
 static const uint32 kMsgApplyName = 'dsan';
 static const uint32 kMsgDiscoverable = 'dsdv';
-static const uint32 kMsgService = 'dssv';
+static const uint32 kMsgServiceSelected = 'dssl';
 static const uint32 kMsgRefresh = 'dsrf';
 static const uint32 kMsgFound = 'dsfd';
 
@@ -61,21 +82,16 @@ static const uint32 kMsgFound = 'dsfd';
 struct DiscoverySetup {
 	BString		name;
 	bool		discoverable;
-	bool		ssh;
-	bool		ftp;
 
 	DiscoverySetup()
 		:
-		discoverable(true),
-		ssh(false),
-		ftp(false)
+		discoverable(true)
 	{
 	}
 
 	bool operator==(const DiscoverySetup& other) const
 	{
-		return name == other.name && discoverable == other.discoverable
-			&& ssh == other.ssh && ftp == other.ftp;
+		return name == other.name && discoverable == other.discoverable;
 	}
 
 	bool operator!=(const DiscoverySetup& other) const
@@ -173,44 +189,6 @@ apply_discoverable(bool discoverable)
 }
 
 
-// ServiceView::IsEnabled() of the Network program.
-static bool
-service_running(const char* name)
-{
-	BNetworkSettings settings;
-	BMessage service;
-	if (settings.GetService(name, service) != B_OK)
-		return false;
-	return BNetworkServiceSettings(service).IsRunning();
-}
-
-
-// SSHServiceView::Enable() and ServiceView::Enable() / Disable() of the
-// Network program. The image has the sshd login already.
-static status_t
-apply_service(const char* name, bool enabled)
-{
-	BNetworkSettings settings;
-	if (!enabled)
-		return settings.RemoveService(name);
-
-	BNetworkServiceSettings service;
-	service.SetName(name);
-	if (strcmp(name, "ssh") == 0) {
-		service.SetStandAlone(true);
-		service.AddArgument("/bin/sshd");
-		service.AddArgument("-D");
-	} else
-		service.AddArgument("ftpd");
-
-	BMessage message;
-	status_t status = service.GetMessage(message);
-	if (status != B_OK)
-		return status;
-	return settings.AddService(message);
-}
-
-
 // #pragma mark - views
 
 
@@ -228,7 +206,8 @@ private:
 };
 
 
-DiscoveryRenameWindow::DiscoveryRenameWindow(const char* name, const BMessenger& target)
+DiscoveryRenameWindow::DiscoveryRenameWindow(const char* name,
+	const BMessenger& target)
 	:
 	BWindow(BRect(0, 0, 360, 120), "Rename", B_TITLED_WINDOW,
 		B_NOT_RESIZABLE | B_AUTO_UPDATE_SIZE_LIMITS | B_CLOSE_ON_ESCAPE),
@@ -351,13 +330,17 @@ public:
 	virtual						~DiscoveryView();
 
 	virtual	void				AttachedToWindow();
+	virtual	void				AllAttached();
+	virtual	void				DetachedFromWindow();
 	virtual	void				MessageReceived(BMessage* message);
 
 			void				Reload();
 
 private:
 			BBox*				_Box(const char* title, BGroupView*& group);
-			BStringView*		_Hint(const char* text);
+			void				_ShowService();
+			void				_Fill(BView* view);
+			void				_SettingsUpdated(uint32 type);
 			void				_Search();
 	static	int32				_SearchThread(void* data);
 
@@ -366,8 +349,8 @@ private:
 			BStringView*		fLocalName;
 			LinkControl*		fRename;
 			BCheckBox*			fDiscoverable;
-			BCheckBox*			fSsh;
-			BCheckBox*			fFtp;
+			BListView*			fServices;
+			BGroupView*			fServiceShell;
 			BListView*			fDevices;
 			BButton*			fRefresh;
 			thread_id			fSearcher;
@@ -377,6 +360,7 @@ private:
 class DiscoveryModule : public SettingsModule {
 public:
 								DiscoveryModule();
+	virtual						~DiscoveryModule();
 
 	virtual	const char*			Identifier() const { return kModuleId; }
 	virtual	const char*			Name() const { return "Discovery"; }
@@ -386,8 +370,8 @@ public:
 										"this network"; }
 	virtual	const char*			Keywords() const
 									{ return "network bonjour mdns local name "
-										"hostname ssh ftp share printer "
-										"airplay"; }
+										"hostname ssh ftp telnet share "
+										"printer airplay"; }
 	virtual	bool				RequiresAdmin() const { return true; }
 	virtual	BView*				CreateView(SettingsContext* context,
 									BRect frame);
@@ -401,14 +385,29 @@ public:
 			void				ClearView() { fView = NULL; }
 			const DiscoverySetup& Current() const { return fCurrent; }
 			void				UserEdited(const DiscoverySetup& setup);
+			void				ServicesChanged();
+
+			BNetworkSettings&	Settings() { return fSettings; }
+			int32				CountServices() const
+									{ return fServices.size(); }
+			BNetworkSettingsItem* ServiceAt(int32 index) const
+									{ return fServices[index]; }
+			BNetworkSettingsItem* ServiceFor(BListItem* item) const;
 
 private:
+			void				_LoadAddOns();
 			status_t			_Apply(const DiscoverySetup& to);
+			bool				_ServiceOn(const char* name);
 
 			SettingsContext*	fContext;
 			DiscoveryView*		fView;
 			DiscoverySetup		fCurrent;
 			DiscoverySetup		fOpened;
+
+			BNetworkSettings	fSettings;
+			BObjectList<BNetworkSettingsAddOn> fAddOns;
+			std::vector<BNetworkSettingsItem*> fServices;
+			bool				fLoaded;
 };
 
 
@@ -450,25 +449,33 @@ DiscoveryView::DiscoveryView(DiscoveryModule* module)
 			.End()
 		.Add(localLabel, 0, 1)
 		.Add(fLocalName, 1, 1);
+	// extra space is glue outside the form (docs/STYLE.md)
 	BLayoutBuilder::Group<>(group)
-		.Add(grid)
-		.Add(fDiscoverable)
-		.Add(_Hint("Rename… is the same name as on Information."));
+		.AddGroup(B_HORIZONTAL, 0)
+			.Add(grid, 0)
+			.AddGlue(1)
+			.End()
+		.Add(fDiscoverable);
 
-	// Shared from this computer
+	// Shared from this computer: the Network program's service add-ons
 	BBox* sharedBox = _Box("Shared from this computer", group);
-	fSsh = new BCheckBox("ssh", "Remote login (SSH)",
-		new BMessage(kMsgService));
-	fFtp = new BCheckBox("ftp", "File transfer (FTP)",
-		new BMessage(kMsgService));
+	fServices = new BListView("services");
+	fServices->SetSelectionMessage(new BMessage(kMsgServiceSelected));
+	BScrollView* servicesScroll = new BScrollView("services scroll",
+		fServices, 0, false, false);
+	// the list on the left, the chosen service's text and button beside it,
+	// as in the Network program
+	servicesScroll->SetExplicitMinSize(BSize(u * 150, u * 170));
+	servicesScroll->SetExplicitMaxSize(BSize(u * 150, B_SIZE_UNLIMITED));
+	fServiceShell = new BGroupView(B_VERTICAL, 0);
 	BLayoutBuilder::Group<>(group)
-		.Add(fSsh)
-		.Add(_Hint("Port 22 · password or key"))
-		.Add(fFtp)
-		.Add(_Hint("Not encrypted"))
-		.Add(_Hint("An item that is on is also announced, so other devices "
-			"list it."))
-		.AddGlue();
+		.AddGroup(B_HORIZONTAL, u * 10, 0)
+			.Add(servicesScroll, 0)
+			.Add(fServiceShell, 1)
+			.End()
+		.AddGlue(1)
+		.Add(network_hint("An item that is on is also announced, so other "
+			"devices list it."), 0);
 
 	// Find devices
 	BBox* findBox = _Box("Find devices (Bonjour)", group);
@@ -478,18 +485,31 @@ DiscoveryView::DiscoveryView(DiscoveryModule* module)
 	fRefresh = new BButton("refresh", "Refresh", new BMessage(kMsgRefresh));
 	BLayoutBuilder::Group<>(group)
 		.Add(scroll)
-		.AddGroup(B_HORIZONTAL)
-			.Add(_Hint("Programs can reach a .local name. Printers and "
-				"speakers in this list are also offered by Printers and "
-				"AirPlay."))
-			.Add(fRefresh)
+		.AddGroup(B_HORIZONTAL, u * 10)
+			.Add(network_hint("Programs can reach a .local name. Printers "
+				"and speakers in this list are also offered by Printers and "
+				"AirPlay."), 1)
+			.Add(fRefresh, 0)
 			.End();
 
+	// two columns as wide as each other
+	BGroupView* left = new BGroupView(B_VERTICAL, u * 12);
+	BLayoutBuilder::Group<>(left)
+		.Add(computerBox, 0)
+		.Add(sharedBox, 1);
+	// This computer gets no extra height (weight 0); Shared takes the rest.
+
+	// Find devices takes about a third of the width.
+	BSize wide(B_SIZE_UNLIMITED, B_SIZE_UNLIMITED);
+	left->SetExplicitMinSize(BSize(u * 300, B_SIZE_UNSET));
+	left->SetExplicitPreferredSize(BSize(u * 300, B_SIZE_UNSET));
+	left->SetExplicitMaxSize(wide);
+	findBox->SetExplicitMinSize(BSize(u * 150, B_SIZE_UNSET));
+	findBox->SetExplicitPreferredSize(BSize(u * 150, B_SIZE_UNSET));
+	findBox->SetExplicitMaxSize(wide);
+
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, u * 12)
-		.AddGroup(B_VERTICAL, u * 12, 1)
-			.Add(computerBox)
-			.Add(sharedBox, 1)
-			.End()
+		.Add(left, 2)
 		.Add(findBox, 1);
 }
 
@@ -500,6 +520,10 @@ DiscoveryView::~DiscoveryView()
 		status_t result;
 		wait_for_thread(fSearcher, &result);
 	}
+	// The services' list items and views belong to the add-ons.
+	while (fServiceShell->CountChildren() > 0)
+		fServiceShell->ChildAt(0)->RemoveSelf();
+	fServices->MakeEmpty();
 	while (fDevices->CountItems() > 0)
 		delete fDevices->RemoveItem((int32)0);
 	if (fModule != NULL)
@@ -521,30 +545,47 @@ DiscoveryView::_Box(const char* title, BGroupView*& group)
 }
 
 
-BStringView*
-DiscoveryView::_Hint(const char* text)
-{
-	BStringView* hint = new BStringView("hint", text);
-	BFont font(be_plain_font);
-	font.SetSize(be_plain_font->Size() * 0.9f);
-	hint->SetFont(&font);
-	hint->SetHighColor(network_quiet_color(140));
-	hint->SetExplicitMinSize(BSize(network_unit() * 40, B_SIZE_UNSET));
-	return hint;
-}
-
-
 void
 DiscoveryView::AttachedToWindow()
 {
 	BGroupView::AttachedToWindow();
 	fRename->SetTarget(this);
 	fDiscoverable->SetTarget(this);
-	fSsh->SetTarget(this);
-	fFtp->SetTarget(this);
+	fServices->SetTarget(this);
 	fRefresh->SetTarget(this);
+
+	gNetworkWindow = BMessenger(this);
+	fModule->Settings().StartMonitoring(BMessenger(this));
+	for (int32 i = 0; i < fModule->CountServices(); i++)
+		fServices->AddItem(fModule->ServiceAt(i)->ListItem());
+	if (fServices->CountItems() > 0)
+		fServices->Select(0);
+
 	Reload();
 	_Search();
+}
+
+
+void
+DiscoveryView::AllAttached()
+{
+	BGroupView::AllAttached();
+
+	// Controls on a filled box paint the window grey by default.
+	rgb_color fill = network_box_fill();
+	fDiscoverable->SetViewColor(fill);
+	fDiscoverable->SetLowColor(fill);
+	fRename->SetViewColor(fill);
+	fRename->SetLowColor(fill);
+}
+
+
+void
+DiscoveryView::DetachedFromWindow()
+{
+	fModule->Settings().StopMonitoring(BMessenger(this));
+	gNetworkWindow = BMessenger();
+	BGroupView::DetachedFromWindow();
 }
 
 
@@ -557,8 +598,52 @@ DiscoveryView::Reload()
 	local << ".local";
 	fLocalName->SetText(local);
 	fDiscoverable->SetValue(setup.discoverable);
-	fSsh->SetValue(setup.ssh);
-	fFtp->SetValue(setup.ftp);
+	_SettingsUpdated(BNetworkSettings::kMsgServiceSettingsUpdated);
+}
+
+
+// NetworkWindow::_SelectItem() of the Network program.
+void
+DiscoveryView::_ShowService()
+{
+	while (fServiceShell->CountChildren() > 0)
+		fServiceShell->ChildAt(0)->RemoveSelf();
+	BNetworkSettingsItem* item = fModule->ServiceFor(
+		fServices->ItemAt(fServices->CurrentSelection()));
+	if (item != NULL && item->View() != NULL) {
+		fServiceShell->GroupLayout()->AddView(item->View());
+		_Fill(item->View());
+	}
+}
+
+
+// The add-on's view uses the window grey; on this filled box it takes the
+// fill, as the other controls do.
+void
+DiscoveryView::_Fill(BView* view)
+{
+	rgb_color fill = network_box_fill();
+	view->SetViewColor(fill);
+	view->SetLowColor(fill);
+	view->Invalidate();
+	for (int32 i = 0; i < view->CountChildren(); i++)
+		_Fill(view->ChildAt(i));
+}
+
+
+// NetworkWindow::_BroadcastSettingsUpdate() of the Network program.
+void
+DiscoveryView::_SettingsUpdated(uint32 type)
+{
+	for (int32 i = 0; i < fServices->CountItems(); i++) {
+		BNetworkSettingsListener* listener
+			= dynamic_cast<BNetworkSettingsListener*>(fServices->ItemAt(i));
+		if (listener != NULL)
+			listener->SettingsUpdated(type);
+	}
+	for (int32 i = 0; i < fModule->CountServices(); i++)
+		fModule->ServiceAt(i)->SettingsUpdated(type);
+	fServices->Invalidate();
 }
 
 
@@ -640,16 +725,29 @@ DiscoveryView::MessageReceived(BMessage* message)
 		}
 
 		case kMsgDiscoverable:
-		case kMsgService:
 		{
 			DiscoverySetup setup = fModule->Current();
 			setup.discoverable = fDiscoverable->Value() == B_CONTROL_ON;
-			setup.ssh = fSsh->Value() == B_CONTROL_ON;
-			setup.ftp = fFtp->Value() == B_CONTROL_ON;
 			fModule->UserEdited(setup);
 			Reload();
 			break;
 		}
+
+		case kMsgServiceSelected:
+			_ShowService();
+			break;
+
+		case BNetworkSettings::kMsgInterfaceSettingsUpdated:
+		case BNetworkSettings::kMsgNetworkSettingsUpdated:
+		case BNetworkSettings::kMsgServiceSettingsUpdated:
+			_SettingsUpdated(message->what);
+			fModule->ServicesChanged();
+			break;
+
+		case kMsgSettingsItemUpdated:
+			fServices->Invalidate();
+			fModule->ServicesChanged();
+			break;
 
 		case kMsgRefresh:
 			_Search();
@@ -672,9 +770,10 @@ DiscoveryView::MessageReceived(BMessage* message)
 					i++) {
 				fDevices->AddItem(new DeviceItem(name, detail));
 			}
-			if (fDevices->IsEmpty())
+			if (fDevices->IsEmpty()) {
 				fDevices->AddItem(new DeviceItem("Nothing found",
 					"No device answered on this network."));
+			}
 			break;
 		}
 
@@ -695,8 +794,83 @@ DiscoveryView::MessageReceived(BMessage* message)
 DiscoveryModule::DiscoveryModule()
 	:
 	fContext(NULL),
-	fView(NULL)
+	fView(NULL),
+	fAddOns(10),
+	fLoaded(false)
 {
+}
+
+
+DiscoveryModule::~DiscoveryModule()
+{
+	for (size_t i = 0; i < fServices.size(); i++)
+		delete fServices[i];
+	for (int32 i = 0; i < fAddOns.CountItems(); i++) {
+		BNetworkSettingsAddOn* addOn = fAddOns.ItemAt(i);
+		image_id image = addOn->Image();
+		delete addOn;
+		unload_add_on(image);
+	}
+}
+
+
+// NetworkWindow::_ScanAddOns() of the Network program, for the service
+// items only.
+void
+DiscoveryModule::_LoadAddOns()
+{
+	if (fLoaded)
+		return;
+	fLoaded = true;
+
+	BStringList paths;
+	BPathFinder::FindPaths(B_FIND_PATH_ADD_ONS_DIRECTORY, "Network Settings",
+		paths);
+
+	// one add-on per name, the first one found
+	std::map<BString, BPath> addOns;
+	for (int32 i = 0; i < paths.CountStrings(); i++) {
+		BDirectory directory(paths.StringAt(i));
+		BEntry entry;
+		while (directory.GetNextEntry(&entry) == B_OK) {
+			BPath path;
+			if (entry.GetPath(&path) == B_OK
+				&& addOns.find(path.Leaf()) == addOns.end())
+				addOns[path.Leaf()] = path;
+		}
+	}
+
+	std::map<BString, BPath>::const_iterator iterator = addOns.begin();
+	for (; iterator != addOns.end(); iterator++) {
+		image_id image = load_add_on(iterator->second.Path());
+		if (image < 0)
+			continue;
+
+		BNetworkSettingsAddOn* (*instantiate)(image_id image,
+			BNetworkSettings& settings);
+		if (get_image_symbol(image, "instantiate_network_settings_add_on",
+				B_SYMBOL_TYPE_TEXT, (void**)&instantiate) != B_OK) {
+			unload_add_on(image);
+			continue;
+		}
+		BNetworkSettingsAddOn* addOn = instantiate(image, fSettings);
+		if (addOn == NULL) {
+			unload_add_on(image);
+			continue;
+		}
+		fAddOns.AddItem(addOn);
+
+		// DNS and the host name call themselves services too; a service
+		// here is one with an Enable button (ServiceView): FTP, SSH, Telnet.
+		uint32 cookie = 0;
+		while (BNetworkSettingsItem* item = addOn->CreateNextItem(cookie)) {
+			if (item->Type() == BNetworkKit::B_NETWORK_SETTINGS_TYPE_SERVICE
+				&& dynamic_cast<ServiceView*>(item->View()) != NULL)
+				fServices.push_back(item);
+			else
+				delete item;
+		}
+	}
 }
 
 
@@ -705,8 +879,20 @@ DiscoveryModule::CreateView(SettingsContext* context, BRect frame)
 {
 	(void)frame;
 	fContext = context;
+	_LoadAddOns();
 	fView = new DiscoveryView(this);
 	return fView;
+}
+
+
+BNetworkSettingsItem*
+DiscoveryModule::ServiceFor(BListItem* item) const
+{
+	for (size_t i = 0; item != NULL && i < fServices.size(); i++) {
+		if (fServices[i]->ListItem() == item)
+			return fServices[i];
+	}
+	return NULL;
 }
 
 
@@ -716,8 +902,6 @@ DiscoveryModule::LoadSettings(SettingsContext* context)
 	fContext = context;
 	fCurrent.name = host_name();
 	fCurrent.discoverable = read_discoverable();
-	fCurrent.ssh = service_running("ssh");
-	fCurrent.ftp = service_running("ftp");
 	fOpened = fCurrent;
 	if (fView != NULL)
 		fView->Reload();
@@ -725,7 +909,8 @@ DiscoveryModule::LoadSettings(SettingsContext* context)
 }
 
 
-// Applied in UserEdited(), as Display does.
+// Applied in UserEdited(), as Display does. The services apply
+// themselves through their Enable button.
 status_t
 DiscoveryModule::SaveSettings(SettingsContext* context)
 {
@@ -738,38 +923,22 @@ status_t
 DiscoveryModule::_Apply(const DiscoverySetup& to)
 {
 	status_t result = B_OK;
-	status_t status = B_OK;
 	if (to.name != fCurrent.name) {
-		if (sethostname(to.name, to.name.Length()) != 0)
-			status = B_ERROR;
-		if (status != B_OK) {
-			result = status;
+		if (sethostname(to.name, to.name.Length()) == 0)
+			fCurrent.name = to.name;
+		else {
+			result = B_ERROR;
 			BAlert* alert = new BAlert("Rename",
 				"The name could not be saved.", "OK", NULL, NULL,
 				B_WIDTH_AS_USUAL, B_WARNING_ALERT);
 			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 			alert->Go(NULL);
-		} else
-			fCurrent.name = to.name;
+		}
 	}
 	if (to.discoverable != fCurrent.discoverable) {
-		status = apply_discoverable(to.discoverable);
+		status_t status = apply_discoverable(to.discoverable);
 		if (status == B_OK)
 			fCurrent.discoverable = to.discoverable;
-		else
-			result = status;
-	}
-	if (to.ssh != fCurrent.ssh) {
-		status = apply_service("ssh", to.ssh);
-		if (status == B_OK)
-			fCurrent.ssh = to.ssh;
-		else
-			result = status;
-	}
-	if (to.ftp != fCurrent.ftp) {
-		status = apply_service("ftp", to.ftp);
-		if (status == B_OK)
-			fCurrent.ftp = to.ftp;
 		else
 			result = status;
 	}
@@ -787,6 +956,13 @@ DiscoveryModule::UserEdited(const DiscoverySetup& setup)
 {
 	if (fContext != NULL && fContext->AdminChangeAllowed())
 		_Apply(setup);
+	ServicesChanged();
+}
+
+
+void
+DiscoveryModule::ServicesChanged()
+{
 	if (fContext != NULL)
 		fContext->NotifyChanged(Identifier());
 }
@@ -799,6 +975,10 @@ DiscoveryModule::RevertSettings(SettingsContext* context)
 	if (context == NULL || !context->AdminChangeAllowed())
 		return B_PERMISSION_DENIED;
 	status_t status = _Apply(fOpened);
+	for (size_t i = 0; i < fServices.size(); i++) {
+		if (fServices[i]->IsRevertable())
+			fServices[i]->Revert();
+	}
 	if (fView != NULL)
 		fView->Reload();
 	context->NotifyChanged(Identifier());
@@ -809,14 +989,30 @@ DiscoveryModule::RevertSettings(SettingsContext* context)
 bool
 DiscoveryModule::IsModified() const
 {
-	return fCurrent != fOpened;
+	if (fCurrent != fOpened)
+		return true;
+	for (size_t i = 0; i < fServices.size(); i++) {
+		if (fServices[i]->IsRevertable())
+			return true;
+	}
+	return false;
+}
+
+
+bool
+DiscoveryModule::_ServiceOn(const char* name)
+{
+	BMessage service;
+	return fSettings.GetService(name, service) == B_OK;
 }
 
 
 bool
 DiscoveryModule::CanApplyDefaults() const
 {
-	return !fCurrent.discoverable || fCurrent.ssh || fCurrent.ftp;
+	DiscoveryModule* self = const_cast<DiscoveryModule*>(this);
+	return !fCurrent.discoverable || self->_ServiceOn("ssh")
+		|| self->_ServiceOn("ftp");
 }
 
 
@@ -830,6 +1026,11 @@ DiscoveryModule::ApplyDefaults(SettingsContext* context)
 	DiscoverySetup factory;
 	factory.name = fCurrent.name;
 	status_t status = _Apply(factory);
+	// ServiceView::Disable() of the Network program
+	if (_ServiceOn("ssh"))
+		fSettings.RemoveService("ssh");
+	if (_ServiceOn("ftp"))
+		fSettings.RemoveService("ftp");
 	if (fView != NULL)
 		fView->Reload();
 	context->NotifyChanged(Identifier());

@@ -4,8 +4,9 @@ SubDir HAIKU_TOP src preferences settings ;
 
 UsePrivateHeaders interface shared app net ;
 
-# Connections uses the address field and the link speed of the Network
-# program, unchanged (src/preferences/network, src/bin/network/ifconfig).
+# Connections and Discovery use the address field, the link speed and the
+# service add-on classes of the Network program, unchanged
+# (src/preferences/network, src/bin/network/ifconfig).
 UsePublicHeaders [ FDirName add-ons network_settings ] ;
 SubDirHdrs $(HAIKU_TOP) src preferences network ;
 SubDirHdrs $(HAIKU_TOP) src bin network ifconfig ;
@@ -33,9 +34,12 @@ Application Settings :
 	DiscoveryModule.cpp
 	NetworkPage.cpp
 	IPAddressControl.cpp
+	NetworkSettingsAddOn.cpp
+	ServiceListItem.cpp
+	ServiceView.cpp
 	: <src!bin!network!ifconfig>MediaTypes.o
 		be tracker translation shared libr5icons.so libr5ui.so libr5wifi.so
-		bnetapi network [ TargetLibstdc++ ]
+		bnetapi network [ TargetLibstdc++ ] localestub
 	: Settings.rdef
 	;
 

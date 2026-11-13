@@ -9,6 +9,7 @@
 #include "SettingsFont.h"
 
 #include <ControlLook.h>
+#include <TextView.h>
 
 
 float
@@ -31,6 +32,25 @@ rgb_color
 network_box_fill()
 {
 	return r5_settings_tile_fill();
+}
+
+
+BTextView*
+network_hint(const char* text)
+{
+	BTextView* view = new BTextView("hint");
+	view->MakeEditable(false);
+	view->MakeSelectable(false);
+	view->SetStylable(true);
+	view->SetInsets(0, 0, 0, 0);
+	view->SetViewColor(network_box_fill());
+	view->SetLowColor(network_box_fill());
+	BFont font(be_plain_font);
+	font.SetSize(be_plain_font->Size() * 0.9f);
+	rgb_color color = network_quiet_color(140);
+	view->SetFontAndColor(&font, B_FONT_ALL, &color);
+	view->SetText(text);
+	return view;
 }
 
 
@@ -92,6 +112,39 @@ BoxTitle::Draw(BRect updateRect)
 	SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
 	DrawString(Text(), BPoint(bounds.left, y));
 	SetDrawingMode(B_OP_COPY);
+}
+
+
+// #pragma mark - BoxCheckBox
+
+
+BoxCheckBox::BoxCheckBox(const char* name, const char* label,
+	BMessage* message)
+	:
+	BCheckBox(name, label, message)
+{
+	SetFont(r5_settings_bold_font());
+}
+
+
+void
+BoxCheckBox::Draw(BRect updateRect)
+{
+	BRect bounds = Bounds();
+	float line = bounds.top + floorf(bounds.Height() / 2.0f);
+	BBox* box = dynamic_cast<BBox*>(Parent());
+	if (box != NULL)
+		line = box->TopBorderOffset() - Frame().top;
+	BRect top = bounds;
+	top.bottom = line;
+	BRect bottom = bounds;
+	bottom.top = line + 1;
+	SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+	FillRect(top);
+	SetHighColor(network_box_fill());
+	FillRect(bottom);
+	SetLowColor(network_box_fill());
+	BCheckBox::Draw(updateRect);
 }
 
 
@@ -195,7 +248,9 @@ LinkControl::LinkControl(const char* name, const char* label,
 	:
 	BControl(name, label, message, B_WILL_DRAW | B_NAVIGABLE)
 {
-	SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
+	// always on a filled box
+	SetViewColor(network_box_fill());
+	SetLowColor(network_box_fill());
 }
 
 

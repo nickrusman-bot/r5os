@@ -10,14 +10,21 @@
 
 
 #include <Box.h>
+#include <CheckBox.h>
 #include <Control.h>
 #include <String.h>
 #include <StringView.h>
 
 
+class BTextView;
+
+
 float		network_unit();
 rgb_color	network_quiet_color(uint8 amount);
 rgb_color	network_box_fill();
+
+// A quiet hint on a filled box that wraps instead of being cut off.
+BTextView*	network_hint(const char* text);
 
 
 // Display's box: the fill starts at the top border line.
@@ -33,6 +40,17 @@ public:
 class BoxTitle : public BStringView {
 public:
 								BoxTitle(const char* text);
+
+	virtual	void				Draw(BRect updateRect);
+};
+
+
+// A switch as the box title, as Enable virtual memory, drawn like
+// BoxTitle: window grey above the border line, fill below.
+class BoxCheckBox : public BCheckBox {
+public:
+								BoxCheckBox(const char* name,
+									const char* label, BMessage* message);
 
 	virtual	void				Draw(BRect updateRect);
 };

@@ -23,6 +23,8 @@
 #include <Button.h>
 #include <CheckBox.h>
 #include <ControlLook.h>
+#include <Deskbar.h>
+#include <Roster.h>
 #include <File.h>
 #include <FindDirectory.h>
 #include <GridLayout.h>
@@ -31,6 +33,7 @@
 #include <LayoutBuilder.h>
 #include <LayoutItem.h>
 #include <ListView.h>
+#include <MenuBar.h>
 #include <MenuField.h>
 #include <MenuItem.h>
 #include <MessageRunner.h>
@@ -72,6 +75,10 @@ static const uint32 kMsgApply = 'cnap';
 static const uint32 kMsgEditDns = 'cned';
 static const uint32 kMsgDnsChosen = 'cndc';
 static const uint32 kMsgTick = 'cntk';
+static const uint32 kMsgDeskbar = 'cndb';
+
+static const char* kNetworkStatusSignature
+	= "application/x-vnd.Haiku-NetworkStatus";
 
 enum {
 	kModeAuto = 0,
@@ -248,6 +255,20 @@ apply_up(const char* name, bool up)
 	if (((flags & IFF_UP) != 0) == up)
 		return B_OK;
 	return interface.SetFlags(up ? flags | IFF_UP : flags & ~IFF_UP);
+}
+
+
+// NetworkWindow::_ShowReplicant() of the Network program.
+static status_t
+apply_deskbar(bool show)
+{
+	if (!show) {
+		BDeskbar deskbar;
+		return deskbar.RemoveItem("NetworkStatus");
+	}
+	const char* argv[] = { "--deskbar", NULL };
+	status_t status = be_roster->Launch(kNetworkStatusSignature, 1, argv);
+	return status == B_ALREADY_RUNNING ? B_OK : status;
 }
 
 
@@ -619,11 +640,13 @@ public:
 									{ return fCurrent[index]; }
 			const InterfaceSetup* Find(const char* name) const;
 			const DnsSetup&		Dns() const { return fDns; }
+			bool				Deskbar() const { return fDeskbar; }
 
 			// apply false: only shown, as a manual address before Apply
 			void				UserEdited(const InterfaceSetup& setup,
 									bool apply);
 			void				UserEditedDns(const DnsSetup& dns);
+			void				UserEditedDeskbar(bool show);
 
 private:
 			status_t			_Apply(const InterfaceSetup& from,
@@ -637,6 +660,8 @@ private:
 			std::vector<InterfaceSetup> fOpened;
 			DnsSetup			fDns;
 			DnsSetup			fDnsOpened;
+			bool				fDeskbar;
+			bool				fDeskbarOpened;
 };
 
 
@@ -655,6 +680,8 @@ public:
 private:
 			BBox*				_Box(const char* name, const char* title,
 									BGridView*& grid);
+			BBox*				_AddressBox(const char* name,
+									const char* title, BGroupView*& group);
 			BMenuField*			_ModeField(const char* label,
 									const char* automatic, int family,
 									BPopUpMenu*& menu);
@@ -664,9 +691,9 @@ private:
 			void				_ShowSelected();
 			void				_ShowLive();
 			void				_UpdateEnabled();
-			void				_SetRowVisible(BGridLayout* grid, int32 row,
-									bool visible);
+			void				_ShowManualRows(const InterfaceSetup& setup);
 			void				_ReadFields(int family, AddressSetup& setup);
+			void				_FillManual6(const char* name);
 			const InterfaceSetup* _Selected() const;
 
 			ConnectionsModule*	fModule;
@@ -674,20 +701,22 @@ private:
 			BMessageRunner*		fTicker;
 
 			BListView*			fList;
+			BCheckBox*			fDeskbar;
 			BBox*				fDeviceBox;
 			BCheckBox*			fUp;
 			ValueField*			fStatus;
 			ValueField*			fHardware;
 
+			BMenuField*			fMode4;
 			BPopUpMenu*			fMode4Menu;
 			IPAddressControl*	fAddress4;
 			IPAddressControl*	fMask4;
 			IPAddressControl*	fRouter4;
 			BButton*			fApply4;
-			BStringView*		fHint4;
 
+			BMenuField*			fMode6;
 			BPopUpMenu*			fMode6Menu;
-			BGridLayout*		fGrid6;
+			BStringView*		fAddressesLabel;
 			BGroupView*			fAddresses6;
 			IPAddressControl*	fAddress6;
 			IPAddressControl*	fMask6;
@@ -716,13 +745,16 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	BScrollView* scroll = new BScrollView("connections scroll", fList, 0,
 		false, false);
 	grid->GridLayout()->AddView(scroll, 0, 0);
+	// the Network program's switch, in the room the list leaves free
+	fDeskbar = new BCheckBox("deskbar", "Show in Deskbar",
+		new BMessage(kMsgDeskbar));
+	grid->GridLayout()->AddView(fDeskbar, 0, 1);
 	listBox->SetExplicitMinSize(BSize(u * 196, B_SIZE_UNSET));
 	listBox->SetExplicitMaxSize(BSize(u * 196, B_SIZE_UNLIMITED));
 
 	// the card: the title is the switch, as Enable virtual memory
 	fDeviceBox = new FilledBox("device box");
-	fUp = new BCheckBox("up", "Ethernet", new BMessage(kMsgUp));
-	fUp->SetFont(r5_settings_bold_font());
+	fUp = new BoxCheckBox("up", "Ethernet", new BMessage(kMsgUp));
 	fDeviceBox->SetLabel(fUp);
 	BGridView* deviceGrid = new BGridView(u * 12, u * 6);
 	deviceGrid->SetViewColor(network_box_fill());
@@ -741,9 +773,15 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 		.Add(hardwareLabel, 0, 1)
 		.Add(fHardware, 1, 1);
 
+	// IPv4 and IPv6 are built as InterfaceAddressView of the Network
+	// program builds them: the labels right-aligned through the layout
+	// builder, Apply in its own row under the grid.
+	float minimumWidth = be_control_look->DefaultItemSpacing() * 15;
+
 	// IPv4
-	BBox* box4 = _Box("ipv4 box", "IPv4", grid);
-	BMenuField* mode4 = _ModeField("Configure:", "Automatic (DHCP)", AF_INET,
+	BGroupView* group4;
+	BBox* box4 = _AddressBox("ipv4 box", "IPv4", group4);
+	fMode4 = _ModeField("Configure:", "Automatic (DHCP)", AF_INET,
 		fMode4Menu);
 	fAddress4 = new IPAddressControl(AF_INET, "Address:", "address4");
 	fMask4 = new IPAddressControl(AF_INET, "Subnet mask:", "mask4");
@@ -751,25 +789,27 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	BMessage* apply4 = new BMessage(kMsgApply);
 	apply4->AddInt32("family", AF_INET);
 	fApply4 = new BButton("apply4", "Apply", apply4);
-	fHint4 = new BStringView("hint4", "");
-	BLayoutBuilder::Grid<>(grid)
-		.AddMenuField(mode4, 0, 0)
-		.AddTextControl(fAddress4, 0, 1)
-		.AddTextControl(fMask4, 0, 2)
-		.AddTextControl(fRouter4, 0, 3)
-		.Add(fHint4, 1, 4)
-		.Add(fApply4, 1, 5);
+	BLayoutBuilder::Group<>(group4)
+		.AddGrid()
+			.AddMenuField(fMode4, 0, 0, B_ALIGN_RIGHT)
+			.AddTextControl(fAddress4, 0, 1, B_ALIGN_RIGHT)
+			.AddTextControl(fMask4, 0, 2, B_ALIGN_RIGHT)
+			.AddTextControl(fRouter4, 0, 3, B_ALIGN_RIGHT)
+			.End()
+		.AddGroup(B_HORIZONTAL)
+			.AddGlue()
+			.Add(fApply4)
+			.End()
+		.AddGlue();
 
 	// IPv6
-	BBox* box6 = _Box("ipv6 box", "IPv6", grid);
-	fGrid6 = grid->GridLayout();
-	BMenuField* mode6 = _ModeField("Configure:", "Automatic", AF_INET6,
-		fMode6Menu);
-	mode6->SetToolTip("Automatic uses router advertisements (SLAAC) and "
+	BGroupView* group6;
+	BBox* box6 = _AddressBox("ipv6 box", "IPv6", group6);
+	fMode6 = _ModeField("Configure:", "Automatic", AF_INET6, fMode6Menu);
+	fMode6->SetToolTip("Automatic uses router advertisements (SLAAC) and "
 		"DHCPv6.");
-	BStringView* addressesLabel = new BStringView("addresses label",
-		"Addresses:");
-	addressesLabel->SetAlignment(B_ALIGN_RIGHT);
+	fAddressesLabel = new BStringView("addresses label", "Addresses:");
+	fAddressesLabel->SetAlignment(B_ALIGN_RIGHT);
 	fAddresses6 = new BGroupView(B_VERTICAL, u * 3);
 	fAddresses6->SetViewColor(network_box_fill());
 	fAddress6 = new IPAddressControl(AF_INET6, "Address:", "address6");
@@ -778,14 +818,20 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	BMessage* apply6 = new BMessage(kMsgApply);
 	apply6->AddInt32("family", AF_INET6);
 	fApply6 = new BButton("apply6", "Apply", apply6);
-	BLayoutBuilder::Grid<>(grid)
-		.AddMenuField(mode6, 0, 0)
-		.Add(addressesLabel, 0, 1)
-		.Add(fAddresses6, 1, 1)
-		.AddTextControl(fAddress6, 0, 2)
-		.AddTextControl(fMask6, 0, 3)
-		.AddTextControl(fRouter6, 0, 4)
-		.Add(fApply6, 1, 5);
+	BLayoutBuilder::Group<>(group6)
+		.AddGrid()
+			.AddMenuField(fMode6, 0, 0, B_ALIGN_RIGHT)
+			.Add(fAddressesLabel, 0, 1)
+			.Add(fAddresses6, 1, 1)
+			.AddTextControl(fAddress6, 0, 2, B_ALIGN_RIGHT)
+			.AddTextControl(fMask6, 0, 3, B_ALIGN_RIGHT)
+			.AddTextControl(fRouter6, 0, 4, B_ALIGN_RIGHT)
+			.End()
+		.AddGroup(B_HORIZONTAL)
+			.AddGlue()
+			.Add(fApply6)
+			.End()
+		.AddGlue();
 
 	// DNS
 	BBox* boxDns = _Box("dns box", "DNS", grid);
@@ -807,21 +853,28 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	IPAddressControl* fields[] = { fAddress4, fMask4, fRouter4, fAddress6,
 		fMask6, fRouter6 };
 	for (size_t i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
-		fields[i]->SetAlignment(B_ALIGN_RIGHT, B_ALIGN_LEFT);
+		fields[i]->TextView()->SetExplicitMinSize(
+			BSize(minimumWidth, B_SIZE_UNSET));
 		fields[i]->TextView()->SetFontAndColor(be_fixed_font);
 	}
-	BFont hint(be_plain_font);
-	hint.SetSize(be_plain_font->Size() * 0.9f);
-	fHint4->SetFont(&hint);
-	fHint4->SetHighColor(network_quiet_color(140));
+
+	// IPv4 and IPv6 are as wide as each other
+	BSize half(u * 220, B_SIZE_UNSET);
+	box4->SetExplicitMinSize(half);
+	box4->SetExplicitPreferredSize(half);
+	box6->SetExplicitMinSize(half);
+	box6->SetExplicitPreferredSize(half);
+	BSize wide(B_SIZE_UNLIMITED, B_SIZE_UNSET);
+	box4->SetExplicitMaxSize(wide);
+	box6->SetExplicitMaxSize(wide);
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, u * 12)
 		.Add(listBox)
 		.AddGroup(B_VERTICAL, u * 12)
 			.Add(fDeviceBox)
 			.AddGroup(B_HORIZONTAL, u * 12)
-				.Add(box4)
-				.Add(box6)
+				.Add(box4, 1)
+				.Add(box6, 1)
 				.End()
 			.Add(boxDns)
 			.AddGlue()
@@ -848,6 +901,21 @@ ConnectionsView::_Box(const char* name, const char* title, BGridView*& grid)
 	grid->GridLayout()->SetInsets(u * 12, u * 8, u * 12, u * 12);
 	grid->GridLayout()->SetColumnWeight(1, 1);
 	box->AddChild(grid);
+	return box;
+}
+
+
+BBox*
+ConnectionsView::_AddressBox(const char* name, const char* title,
+	BGroupView*& group)
+{
+	float u = network_unit();
+	BBox* box = new FilledBox(name);
+	box->SetLabel(new BoxTitle(title));
+	group = new BGroupView(B_VERTICAL, u * 6);
+	group->SetViewColor(network_box_fill());
+	group->GroupLayout()->SetInsets(u * 12, u * 8, u * 12, u * 12);
+	box->AddChild(group);
 	return box;
 }
 
@@ -896,6 +964,7 @@ ConnectionsView::AttachedToWindow()
 	BGroupView::AttachedToWindow();
 	fList->SetTarget(this);
 	fUp->SetTarget(this);
+	fDeskbar->SetTarget(this);
 	fMode4Menu->SetTargetForItems(this);
 	fMode6Menu->SetTargetForItems(this);
 	fApply4->SetTarget(this);
@@ -914,6 +983,17 @@ void
 ConnectionsView::AllAttached()
 {
 	BGroupView::AllAttached();
+
+	// Controls in a filled box paint the window grey by default. The switch
+	// sits on the border line, so the box shows through it.
+	rgb_color fill = network_box_fill();
+	BView* controls[] = { fDeskbar, fMode4, fMode6, fAddress4, fMask4,
+		fRouter4, fAddress6, fMask6, fRouter6 };
+	for (size_t i = 0; i < sizeof(controls) / sizeof(controls[0]); i++) {
+		controls[i]->SetViewColor(fill);
+		controls[i]->SetLowColor(fill);
+	}
+
 	_ShowSelected();
 }
 
@@ -930,6 +1010,7 @@ ConnectionsView::DetachedFromWindow()
 void
 ConnectionsView::Reload()
 {
+	fDeskbar->SetValue(fModule->Deskbar() ? B_CONTROL_ON : B_CONTROL_OFF);
 	_FillList();
 	_ShowSelected();
 }
@@ -966,14 +1047,36 @@ ConnectionsView::_FillList()
 }
 
 
-void
-ConnectionsView::_SetRowVisible(BGridLayout* grid, int32 row, bool visible)
+static void
+show_view(BView* view, bool show)
 {
-	for (int32 column = 0; column < grid->CountColumns(); column++) {
-		BLayoutItem* item = grid->ItemAt(column, row);
-		if (item != NULL)
-			item->SetVisible(visible);
-	}
+	if (show && view->IsHidden(view))
+		view->Show();
+	else if (!show && !view->IsHidden(view))
+		view->Hide();
+}
+
+
+// Manual shows the fields to type in and Apply; automatic and off show
+// what the card has. Hide() and Show() once the window is shown
+// (docs/STYLE.md); a BTextControl's layout items follow its view.
+void
+ConnectionsView::_ShowManualRows(const InterfaceSetup& setup)
+{
+	if (Window() == NULL)
+		return;
+	bool manual4 = setup.ipv4.mode == kModeManual;
+	bool manual6 = setup.ipv6.mode == kModeManual;
+	show_view(fApply4, manual4);
+	show_view(fAddressesLabel, !manual6);
+	show_view(fAddresses6, !manual6);
+	show_view(fAddress6, manual6);
+	show_view(fMask6, manual6);
+	show_view(fApply6, manual6);
+
+	// the fields move a little; draw the page again, or the old label
+	// pieces stay where the fields were
+	Invalidate();
 }
 
 
@@ -1004,14 +1107,7 @@ ConnectionsView::_ShowSelected()
 		fRouter6->SetText(setup->ipv6.router);
 	}
 
-	// automatic and off show what the card has; manual is typed in
-	bool manual6 = setup->ipv6.mode == kModeManual;
-	if (Window() != NULL) {
-		_SetRowVisible(fGrid6, 1, !manual6);
-		_SetRowVisible(fGrid6, 2, manual6);
-		_SetRowVisible(fGrid6, 3, manual6);
-	}
-
+	_ShowManualRows(*setup);
 	_ShowLive();
 	_UpdateEnabled();
 }
@@ -1053,12 +1149,6 @@ ConnectionsView::_ShowLive()
 		fMask4->SetText(mask4);
 		fRouter4->SetText(router4);
 	}
-	if (setup->ipv4.mode == kModeManual)
-		fHint4->SetText("Apply puts this address on the card.");
-	else if (setup->ipv4.mode == kModeOff)
-		fHint4->SetText("IPv4 is off on this connection.");
-	else
-		fHint4->SetText("Manual makes these fields editable.");
 
 	// every IPv6 address of the card, one per line
 	while (fAddresses6->CountChildren() > 0) {
@@ -1118,6 +1208,30 @@ ConnectionsView::_UpdateEnabled()
 }
 
 
+// The first address that is not link-local, as the IPv4 fields show the
+// DHCP address.
+void
+ConnectionsView::_FillManual6(const char* name)
+{
+	BNetworkInterface interface(name);
+	BNetworkInterfaceAddress address;
+	for (int32 i = 0; i < interface.CountAddresses(); i++) {
+		if (interface.GetAddressAt(i, address) != B_OK
+			|| address.Address().Family() != AF_INET6
+			|| address.Address().IsEmpty()
+			|| address.Address().IsLinkLocal())
+			continue;
+		fAddress6->SetText(address.Address().ToString());
+		fMask6->SetText(address.Mask().ToString());
+		break;
+	}
+	BNetworkAddress gateway;
+	if (interface.GetDefaultGateway(AF_INET6, gateway) == B_OK
+		&& !gateway.IsEmpty())
+		fRouter6->SetText(gateway.ToString());
+}
+
+
 void
 ConnectionsView::_ReadFields(int family, AddressSetup& setup)
 {
@@ -1158,6 +1272,12 @@ ConnectionsView::MessageReceived(BMessage* message)
 			_ShowLive();
 			break;
 
+		case kMsgDeskbar:
+			fModule->UserEditedDeskbar(fDeskbar->Value() == B_CONTROL_ON);
+			fDeskbar->SetValue(fModule->Deskbar() ? B_CONTROL_ON
+				: B_CONTROL_OFF);
+			break;
+
 		case kMsgRefreshPage:
 			Reload();
 			break;
@@ -1186,16 +1306,14 @@ ConnectionsView::MessageReceived(BMessage* message)
 			AddressSetup& address = family == AF_INET ? setup.ipv4 : setup.ipv6;
 			if (mode == kModeManual) {
 				// start from what the card has now, nothing is applied yet
+				if (family == AF_INET6)
+					_FillManual6(setup.name);
 				_ReadFields(family, address);
 				address.mode = kModeManual;
 				fModule->UserEdited(setup, false);
 				_SetMode(family == AF_INET ? fMode4Menu : fMode6Menu, mode);
+				_ShowManualRows(setup);
 				_UpdateEnabled();
-				if (Window() != NULL && family == AF_INET6) {
-					_SetRowVisible(fGrid6, 1, false);
-					_SetRowVisible(fGrid6, 2, true);
-					_SetRowVisible(fGrid6, 3, true);
-				}
 				break;
 			}
 			address = AddressSetup();
@@ -1256,7 +1374,9 @@ ConnectionsView::MessageReceived(BMessage* message)
 ConnectionsModule::ConnectionsModule()
 	:
 	fContext(NULL),
-	fView(NULL)
+	fView(NULL),
+	fDeskbar(true),
+	fDeskbarOpened(true)
 {
 }
 
@@ -1305,6 +1425,8 @@ ConnectionsModule::LoadSettings(SettingsContext* context)
 	fOpened = fCurrent;
 	fDns = read_dns();
 	fDnsOpened = fDns;
+	fDeskbar = BDeskbar().HasItem("NetworkStatus");
+	fDeskbarOpened = fDeskbar;
 
 	if (fView != NULL)
 		fView->Reload();
@@ -1366,6 +1488,16 @@ ConnectionsModule::UserEdited(const InterfaceSetup& setup, bool apply)
 
 
 void
+ConnectionsModule::UserEditedDeskbar(bool show)
+{
+	if (fContext != NULL && fContext->AdminChangeAllowed()
+		&& apply_deskbar(show) == B_OK)
+		fDeskbar = show;
+	_Changed();
+}
+
+
+void
 ConnectionsModule::UserEditedDns(const DnsSetup& dns)
 {
 	fDns = dns;
@@ -1401,6 +1533,8 @@ ConnectionsModule::RevertSettings(SettingsContext* context)
 		if (status != B_OK)
 			result = status;
 	}
+	if (fDeskbar != fDeskbarOpened && apply_deskbar(fDeskbarOpened) == B_OK)
+		fDeskbar = fDeskbarOpened;
 	fCurrent = fOpened;
 	fActive = fOpened;
 	fDns = fDnsOpened;
@@ -1418,7 +1552,7 @@ ConnectionsModule::IsModified() const
 		if (fCurrent[i] != fOpened[i])
 			return true;
 	}
-	return fDns != fDnsOpened;
+	return fDns != fDnsOpened || fDeskbar != fDeskbarOpened;
 }
 
 
