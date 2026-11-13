@@ -25,6 +25,17 @@ Mistakes and fixes during this step:
 Tested (host, WSL, 13 Nov 2026): `ok gpu share 65 cases` (`scripts/test-r5-share.cpp`); `scripts/test-ac-drm.sh` with libdrm's `amdgpu_bo.c` rebuilt from patch 5 in a temporary copy: every new check passes and `ok ac drm family RV cu 7 firmware map share` (RADV's `ac_drm_bo_import` and `ac_drm_bo_query_info`); without patch 5 exactly the size check fails. `-fsyntax-only -Wall` with the Haiku cross compiler: `r5_gpu_core.cpp`, `r5_gpu.cpp`, `Compositor.cpp`, `ServerApp.cpp`, `GPUCopy.cpp`, `AccelerantHWInterface.cpp`, `r5-share-check.cpp`; `wsi_common_haiku.cpp` with its command from `build-radv`. Manual SMAP review of the kernel diff: user memory only through `gpu_copy_in`/`gpu_copy_out`.
 
 Not tested: no jam, no libdrm or Mesa build in the shared tree, no new `mesa_radv` package, no QEMU or SMAP boot yet (asked first). On the 5625U nothing: the real export and import, `r5-share-check`, the stuck job, the scanout import and both present times, and the measurement of the slot limits (1024, 512 and 64 are starting values). The library test still has one failure that is on `origin/main` too (the guilty flag after a reset).
+## 2026-11-13 - Stick scripts: the new SanDisk test stick
+
+Problem: the new test stick, a SanDisk Ultra USB 3, was not accepted. `scripts/write-stick.py` and `scripts/read-stick-logs.py` only took a USB disk whose Windows FriendlyName is `General UDisk`.
+
+What changed:
+- Both scripts have one list, `STICK_NAMES`: `USB SanDisk 3.2Gen1` (the name Get-Disk reports for the SanDisk, 61504880640 bytes) and `General UDisk`. The old stick keeps working.
+- The safety rules are the same: BusType USB, exactly one matching disk, disk 0 refused. With both sticks plugged in, the scripts stop. `write-stick.py --name` still picks one name by hand.
+- AGENTS.md: the stick line names the list instead of the General UDisk.
+- `tools/r5-befs` needs no change: it lists every removable or USB disk except disk 0, and Win32_DiskDrive reports the SanDisk as `Removable Media`.
+
+Tested: both scripts parse. The name match against Get-Disk on the Windows machine found exactly disk 2, the SanDisk. Not tested: a write, a read-back, or reading logs from the SanDisk (no image written yet), and whether R5 runs the stick at USB 3 speed (R5 has no UAS driver).
 
 ## 2026-11-13 - M11 step 2: the compositor core (A1), behind gpu_compositor
 

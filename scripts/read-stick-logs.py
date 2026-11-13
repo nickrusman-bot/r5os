@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
 # SPDX-License-Identifier: MIT
-"""Copy the boot logs off the USB stick (the General UDisk). Read only.
+"""Copy the boot logs off the USB stick. Read only.
 
 Run it from Windows Python, after the 5625U has been shut down and the
 stick is plugged back in:
@@ -23,7 +23,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STICK_NAME = "General UDisk"
+# FriendlyName of the test sticks, as Get-Disk shows them (same list as
+# write-stick.py).
+STICK_NAMES = ("USB SanDisk 3.2Gen1", "General UDisk")
 
 # Paths on the boot volume. The first hit wins for each output name.
 WANTED = (
@@ -448,10 +450,10 @@ def main_stick(boot, list_root):
         print("disk %u: %s %s" % (number, disk["FriendlyName"], disk["BusType"]))
         if number == 0:
             continue
-        if str(disk["FriendlyName"]) == STICK_NAME and str(disk["BusType"]) == "USB":
+        if str(disk["FriendlyName"]) in STICK_NAMES and str(disk["BusType"]) == "USB":
             chosen.append(number)
     if len(chosen) != 1:
-        die("need exactly one USB disk named %r, found %u" % (STICK_NAME, len(chosen)))
+        die("need exactly one USB disk named one of %r, found %u" % (STICK_NAMES, len(chosen)))
     number = chosen[0]
     if number == 0:
         die("refusing disk 0")
@@ -507,7 +509,7 @@ def main_stick(boot, list_root):
 
 def main():
     parser = argparse.ArgumentParser(description="Read R5 boot logs from the stick")
-    parser.add_argument("--image", help="raw image instead of the General UDisk")
+    parser.add_argument("--image", help="raw image instead of the stick")
     parser.add_argument("--boot", type=int, help="write generated/boot-5625u-N")
     parser.add_argument("--list-root", action="store_true",
                         help="print the volume root and copy nothing")
