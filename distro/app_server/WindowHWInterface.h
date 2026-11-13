@@ -12,6 +12,8 @@
 
 #include <Referenceable.h>
 
+#include <Region.h>
+
 #include "HWInterface.h"
 #include "WindowBuffer.h"
 
@@ -61,12 +63,18 @@ public:
 			int32				Left() const { return fLeft; }
 			int32				Top() const { return fTop; }
 
+	// M11 step 4: what this window changed since the last compose, for
+	// the glass of the windows above it. Under the compositor's damage
+	// lock.
+			BRegion&			ContentDamage() { return fContentDamage; }
+
 private:
 			Compositor*			fCompositor;
 			BReference<WindowBuffer> fBuffer;
 			int32				fLeft;
 			int32				fTop;
 			WindowBufferView	fView;
+			BRegion				fContentDamage;
 };
 
 

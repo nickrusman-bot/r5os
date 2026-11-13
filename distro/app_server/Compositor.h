@@ -37,6 +37,7 @@ class Desktop;
 class DrawingEngine;
 class HWInterface;
 class RenderingBuffer;
+class View;
 class Window;
 class WindowBuffer;
 class WindowHWInterface;
@@ -63,8 +64,22 @@ public:
 			void				ClippingChanged();
 			void				SetBackgroundColor(rgb_color color);
 
-	// Any thread: a part of the screen needs a new compose.
+	// Any thread: a part of the screen needs a new compose. With a source,
+	// that window changed it (its own drawing or its move): the glass of
+	// the windows above it is blurred again there (M11 step 4).
 			void				Damage(const BRegion& region);
+			void				Damage(const BRegion& region,
+									WindowHWInterface* source);
+
+	// M11 step 4: the user's window effects (<WindowEffects.h>). The first
+	// at start, the second with all windows locked.
+			void				SetInitialEffects(uint32 effects,
+									int32 strength);
+			void				SetEffects(uint32 effects, int32 strength);
+	// Whether a glass view's background is drawn with alpha 0 now.
+			bool				GlassActive() const;
+	// All windows locked: a view of this window was marked or unmarked.
+			void				GlassViewChanged(Window* window, View* view);
 
 	// The screen rectangle the window's buffer covers; false without a
 	// buffer. Drawing is limited to it, whatever the window's regions say.
@@ -112,7 +127,25 @@ private:
 			void				_ComposeLoop();
 			bool				_Compose(const BRegion& damage,
 									const LayerList& layers,
-									const ShareDrawList& shares);
+									const ShareDrawList& shares,
+									bool effects);
+			// M11 step 4
+			bool				_PrepareEffects(BRegion& damage,
+									const LayerList& layers,
+									const BRegion& generic);
+			bool				_EnsureShadowMask(Layer* layer);
+			bool				_EnsureGlassCache(Layer* layer,
+									const BRegion& glass);
+			bool				_EnsureScratch();
+			void				_RecordBlur(Layer* layer, uint64 frame,
+									uint32 frameStride);
+			void				_RecordShadow(Layer* layer,
+									const BRegion& damage, uint64 frame,
+									uint32 frameStride);
+			void				_RecordGlass(Layer* layer,
+									const BRegion& damage, uint64 frame,
+									uint32 frameStride);
+			void				_DropEffects();
 			void				_Present(const BRegion& damage);
 			bool				_Compare(const BRegion& damage,
 									const LayerList& layers,
@@ -190,6 +223,13 @@ private:
 			bigtime_t			fReportStart;
 			bigtime_t			fCpuAtReport;
 			bigtime_t			fLateLogged;
+
+			// M11 step 4: written with all windows locked, read by the
+			// compose thread once per frame.
+	volatile uint32				fEffects;
+	volatile int32				fStrength;
+			BRegion				fGenericDamage;
+			bool				fEffectsLogged;
 };
 
 
