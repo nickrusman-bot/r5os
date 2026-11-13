@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Deskbar no longer hangs after an app it started quits (kernel, upstream Haiku fix)
+
+Problem: in QEMU, after closing Terminal or AboutSystem started from Deskbar, Deskbar stopped drawing. Three of its threads (`w>Twitcher`, `w>Deskbar`, `_BMediaRoster_`) used about 52 s CPU each; `strace` showed an endless `block_thread(0x0, 0x0) = B_INTERRUPTED (0 us)`.
+
+Cause: `_user_block_thread()` wrote `B_INTERRUPTED` (or a timeout) into `user_thread->wait_status` when a signal interrupted the wait. libroot's `rw_lock_wait()` (used by `BLooperList` since Haiku b6441edfac) retries on `B_INTERRUPTED` without resetting `wait_status`, so every retry returned at once, and the real wake-up from `_kern_unblock_thread()` was ignored because `wait_status` was no longer positive. One signal (here most likely SIGCHLD when the child app quit) left the waiting threads spinning forever. Upstream Haiku ticket #20020.
+
+What changed: `distro/kernel/src/system/kernel/thread.cpp` takes Haiku `cf3a20899c` (10 Nov 2026, Haiku MIT; an upstream import, not an R5 change): the interrupt or timeout is no longer stored in `wait_status`, and `user_unblock_thread()` refuses a positive status and wakes with `B_OK`.
+
+Tested (QEMU/KVM, not on hardware): a small test (`blocktest`, private syscalls, not in the image) waits like `rw_lock_wait()`, gets SIGUSR1, then is woken. Old image (main at 3958ead4a6): `loops=4692233 result=0x1 FAIL` (wake-up lost, busy loop). Image with the fix: `loops=2 result=0x0 PASS`. The Deskbar hang itself did not reproduce on demand in four tries on the old image (timing-dependent), so the Deskbar result rests on the matching signature (`strace`) and the test above. The test image was jammed without `pin-mesa-packages.sh`, because the shared WSL tree pin holds newer Mesa packages from another branch.
+
 ## 2026-11-13 - Mesa as a release build (faster shader compiles)
 
 Problem: Mesa (RADV, Zink, llvmpipe, Lavapipe) was built `debugoptimized`: asserts and NIR/ACO validation stayed on, so shader compiles and program starts were slower than in a distribution build (slowness report for the 5625U, item 4).
