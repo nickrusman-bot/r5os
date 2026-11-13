@@ -1,0 +1,10 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 pfp 197 mec 483
+stage vulkaninfo
+ERROR: [Loader Message] Code 0 : terminator_CreateDevice: Failed in ICD /boot/system/lib/libvulkan_radeon.so vkCreateDevice call
+ERROR: [Loader Message] Code 0 : vkCreateDevice:  Failed to create device chain.
+terminate called after throwing an instance of 'VulkanException'
+  what():  /home/nickr/r5os/mesa-build/Vulkan-Tools-1.4.367/vulkaninfo/vulkaninfo.h:1909:vkCreateDevice failed with ERROR_OUT_OF_DEVICE_MEMORY
+Abort
+stage VulkanTeapot
+vkCreateDevice (-2)

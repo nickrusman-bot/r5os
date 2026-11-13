@@ -1,0 +1,101 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 0 feature 0 pfp 0 mec 0
+rb num 2 mask 3
+stage bo
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+device 2147459072
+stage P
+R5_GPU_STAGE_P -1 errno -2147483633
+stage vulkaninfo
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+radv/amdgpu: failed to initialize device.
+WARNING: [../src/amd/vulkan/radv_physical_device.c:2269] Code 0 : failed to initialize winsys (VK_ERROR_INITIALIZATION_FAILED)
+ERROR: [Loader Message] Code 0 : setup_loader_term_phys_devs: Call to 'vkEnumeratePhysicalDevices' in ICD /boot/system/lib/libvulkan_radeon.so failed with error code -3
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.4.367
+
+
+Instance Extensions: count = 10
+-------------------------------
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_headless_surface                : extension revision 1
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_portability_enumeration         : extension revision 1
+VK_LUNARG_direct_driver_loading        : extension revision 1
+
+Instance Layers:
+----------------
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.4.328
+	driverVersion      = 25.3.6
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 21.1.8, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 25.3.6 (LLVM 21.1.8)
+	conformanceVersion = 1.3.1.1
+	deviceUUID         = 6d657361-3235-2e33-2e36-000000000000
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000
+exit 0
+stage VulkanTeapot (sam)
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+radv/amdgpu: failed to initialize device.
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+radv/amdgpu: failed to initialize device.
+vkQueueWaitIdle 0
+device llvmpipe (LLVM 21.1.8, 256 bits)
+deviceType 4
+driverID 13
+frames 1
+fps 0
+readback type 0 flags 0000000f heap 0
+pixel 24 24 262e38ff
+pixel 192 80 262e38ff
+pixel 192 192 853b16ff
+pixel 192 134 a64a1cff
+pixel 90 192 873c17ff
+pixel 280 192 692e11ff
+pixel-vram 192 192 853b16ff
+pixels ok
+vkDeviceWaitIdle 0
+exit 0
+stage VulkanTeapot
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+radv/amdgpu: failed to initialize device.
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+radv/amdgpu: failed to initialize device.
+vkQueueWaitIdle 0
+device llvmpipe (LLVM 21.1.8, 256 bits)
+deviceType 4
+driverID 13
+frames 1
+fps 0
+readback type 0 flags 0000000f heap 0
+pixel 24 24 262e38ff
+pixel 192 80 262e38ff
+pixel 192 192 853b16ff
+pixel 192 134 a64a1cff
+pixel 90 192 873c17ff
+pixel 280 192 692e11ff
+pixel-vram 192 192 853b16ff
+pixels ok
+vkDeviceWaitIdle 0
+exit 0
+stage selftest
+R5_GPU_SELFTEST -1 errno -2147483633
+stage bo
+_amdgpu_device_initialize: AMDGPU_INFO_ACCEL_WORKING = 0
+device 2147459072

@@ -23,6 +23,45 @@ What changed:
 - A new Windows worktree checks out CRLF; `apply-overlay.sh` copied CRLF Jamfiles into the Haiku tree and the jam failed in usb_webcam. Checked out `distro` and `scripts` with LF and jammed again.
 
 Host test: `scripts/test-r5-gpu-checks.cpp`, `ok gpu checks 49 cases` (including the real blobs). QEMU (KVM, no AMD GPU, radeon_hd does not attach), branch `claude/m10-gpu-default`: with no settings file the desktop comes up, no `egl:` and no `radeon_hd: gpu` line, `pixels ok llvmpipe only` (r5-gl-test) and `pixels ok lavapipe only` (VulkanTeapot); with `gpu false` the line `egl: opengl llvmpipe: gpu off` and the same pass lines; `boot-next`, `check` and `check-user` are in `/boot/system/bin`. Screendump `docs/images/gpu-m10-qemu-default.png`. Not tested: the 5625U (every check, the defaults, Zink and RADV by default, `gpu false`), a standard account.
+## 2026-11-13 - Programs no longer crash on a settings file that was cut short
+
+Problem: on the 5625U, Deskbar crashed at start and media_server at shutdown, both in `BMessage::_AddField`. Their settings files had been cut short by the power button: the file had its new size but old blocks (Deskbar's `replicants`: a header for 22 fields in 254 bytes). `BMessage::Unflatten()` read the header, then a short field table, and returned an error without resetting the message: `field_count` stayed 22 over a half-read table, and the next `Add*()` walked garbage.
+
+What changed: `distro/desktop/src/kits/app/Message.cpp` (Haiku `src/kits/app/Message.cpp`, MIT, copied unchanged, then one R5 snippet): a short read of the field table frees it and resets the header, as the data read right below already did. A program that unflattens a damaged file now gets an empty message and an error, and can go on.
+
+Tested: see the PR (QEMU, a small program that unflattens the real 254-byte file from the stick and then adds a field). Not tested on the 5625U.
+
+## 2026-11-13 - Printers, Mail tray menu and the Tracker version column (not built, not booted)
+
+Three small bugs from Haiku Trac, picked from `generated/issues-2/BRIEF.md`. Each cause was read in the source; nothing was built or run. Copies of Haiku files are in `distro/rest/` (applied by `apply-rest-native.py`); the Tracker file was already an R5 copy in `distro/desktop/`. R5 lines are in SPDX-Snippet blocks (MIT).
+
+- Printers: "No pending jobs" no longer repeats itself ("No pending jobsNo…") after Make default. Cause: `BStringFormat::Format()` appends to its output, and `PrinterItem::UpdatePendingJobs()` did not clear `fPendingJobs` first. `PrinterListView.cpp`. [#2266](https://github.com/r5-operating-system/r5os/issues/2266), Trac 16103.
+- Mail tray menu: "Open Inbox Folder", "Open Mail Folder" and "Open Draft" can be translated. Cause: these items are file names in `~/config/settings/Mail/Menu Links` and were shown as they are on disk. The three standard names now go through `B_TRANSLATE`; other links keep their file name. Limit: the Dutch lines are not in a catalog yet (R5 has no own catalogs in `distro/`; that belongs with #4044). `src/servers/mail/DeskbarView.cpp`. [#2227](https://github.com/r5-operating-system/r5os/issues/2227), Trac 16002.
+- Tracker: the Version column (in Open with… and in Tracker windows) shows the version number (`major.middle.minor`) instead of the version's free-text `short_info`, which often held a description. `distro/desktop/src/kits/tracker/WidgetAttributeText.cpp`. [#3405](https://github.com/r5-operating-system/r5os/issues/3405), Trac 19128.
+
+Dropped from the brief, with the reason:
+- Input "Accept first click" (#2489): app_server saves and loads the value; the cause is not visible without a test, and the fix would be in app_server.
+- Input device names (#2253): the name is also the key for the settings and the list; translating it needs a separate display name.
+- Input duplicate keyboard (#2174) and Mail menus cut off (#2924): need a reproduction.
+- Mail reply account (#3526): there is a setting for this ("account from mail"); the default is the default account. Changing the default is a product choice.
+- Sounds names (#2042), Locale Defaults (#2285), Shortcuts wording (#3175), ProcessController (#3719, #2073), Dutch catalogs (#4044): larger, a design choice, or need a screen test.
+
+Not tested: no jam, no QEMU boot. On the user's decision (13 Nov 2026) the three issues are closed and the tracker says `fixed` with "not built and not tested"; they go into the next test build, and a needed follow-up is commented on the issue.
+
+## 2026-11-13 - Small fixes in Terminal, CharacterMap, ShowImage, MediaPlayer, Expander and open (not built, not booted)
+
+Six small application bugs from Haiku Trac, picked from `generated/issues-1/BRIEF.md`. Each cause was read in the source; nothing was built or run. The changed Haiku files are copied into `distro/rest/` (applied by `apply-rest-native.py`), with the R5 lines in SPDX-Snippet blocks (MIT).
+
+- Terminal links a path with `+` (`mkdir c++`, Alt+Ctrl over it). Cause: the link check for file names used the selection word characters (`:@-./_~`). A separate `kPathAdditionalWordCharacters` with `+` is used for links only; double-click selection is unchanged. `TermConst.cpp/.h`, `TermViewStates.cpp/.h`. [#1602](https://github.com/r5-operating-system/r5os/issues/1602), Trac 13596.
+- CharacterMap: Alt+C copies the selected character. Cause: the filter field keeps the focus, so the default copy shortcut went to its empty selection. The window now takes Alt+C: text selected in the filter field is copied as before, otherwise the character. `CharacterWindow.cpp`. [#3944](https://github.com/r5-operating-system/r5os/issues/3944), Trac 20306.
+- ShowImage: the window zoom button fits the window to the image instead of going full screen. Full screen stays on the View menu, the toolbar and Enter; in full screen the zoom button leaves it. `ShowImageWindow.cpp`. [#3310](https://github.com/r5-operating-system/r5os/issues/3310), Trac 18869.
+- MediaPlayer: a clip shorter than one video frame (25 fps) no longer crashes with a divide error. Cause, from the Trac debug report: `Controller::_TimePosition()` divides by `_FrameDuration()`, which is 0 for such a clip. Guarded there, in `TimePositionFor()` and in the resume question. `Controller.cpp`. [#2455](https://github.com/r5-operating-system/r5os/issues/2455), Trac 16600.
+- Expander shows the error when the unpack command is missing, instead of a blank window. Cause: when the command fails at once, its output closes before its error is read, and the error was dropped. The rest of the error output is passed to the window before the end. Limit: while only listing the contents, the window still ignores errors (unchanged). `ExpanderThread.cpp`. [#2271](https://github.com/r5-operating-system/r5os/issues/2271), Trac 16114.
+- `open` accepts a URL with spaces. Cause: `BUrl(url, true)` does not encode (`SetUrlString` drops the result of `UrlEncode`), and a space makes the URL invalid. `open` now passes spaces as `%20`. `libbe` is not changed: fixing the flag there would double-encode URLs that other programs already pass encoded. `src/bin/open.cpp`. [#2384](https://github.com/r5-operating-system/r5os/issues/2384), Trac 16405.
+
+Dropped from the brief: StyledEdit font menu (#1965, the ticket is only a screenshot) and `pkgman search` width (#3232, the table truncates on purpose; wrapping is a larger change).
+
+Not tested: no jam, no QEMU boot, no hardware. On the user's decision (13 Nov 2026) the six issues are closed and the tracker says `fixed` with "not built and not tested"; they go into the next test build, and a needed follow-up is commented on the issue.
 
 ## 2026-11-12 - OpenGL through Zink: the driver choice and the window path (M9 steps 1-4, QEMU only)
 
