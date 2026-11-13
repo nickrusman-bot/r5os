@@ -38,6 +38,7 @@
 
 #include "Desktop.h"
 #include "DrawingEngine.h"
+#include "GPUCopy.h"
 #include "HWInterface.h"
 #include "RenderingBuffer.h"
 #include "ServerApp.h"
@@ -73,6 +74,10 @@ struct settings {
 	bool	lavapipe;
 	bool	fail;
 	bool	debug;
+	// M11 step 3b, decision 4: the frame is the back buffer and one
+	// vkCmdCopyBuffer puts it on the scanout. Opt-in until the stick has
+	// measured both ways.
+	bool	scanout;
 };
 
 
@@ -103,6 +108,8 @@ load_settings(settings& out)
 			out.fail = true;
 		if (strncmp(line, "gpu_debug true", 14) == 0)
 			out.debug = true;
+		if (strncmp(line, "gpu_compositor_scanout true", 27) == 0)
+			out.scanout = true;
 	}
 	fclose(file);
 }
@@ -200,7 +207,8 @@ thread_cpu_time()
 	F(vkResetFences) \
 	F(vkWaitForFences) \
 	F(vkQueueSubmit) \
-	F(vkDeviceWaitIdle)
+	F(vkDeviceWaitIdle) \
+	F(vkCmdCopyBuffer)
 
 #define VK_DECLARE(name) PFN_##name name;
 
@@ -241,6 +249,17 @@ struct CompositorVulkan {
 	r5_token_to_fd_hook			tokenToFd;
 	r5_mark_get_hook			markGet;
 	r5_import_size_hook			importSize;
+
+	// M11 step 3b, decision 4: GPUCopy's back buffer and the scanout,
+	// imported from app_server's own exports.
+	bool						scanActive;
+	uint32						scanGeneration;
+	VkBuffer					back;
+	VkDeviceMemory				backMemory;
+	uint32						backPitch;
+	VkBuffer					scanout;
+	VkDeviceMemory				scanoutMemory;
+	uint32						scanPitch;
 };
 
 
@@ -369,6 +388,7 @@ Compositor::Create(Desktop* desktop, HWInterface* screen)
 		return NULL;
 	compositor->fDebug = options.debug;
 	compositor->fForceFail = options.fail;
+	compositor->fWantScanout = options.scanout;
 
 	const char* reason = NULL;
 	uint64 gttBytes = 0;
@@ -430,6 +450,10 @@ Compositor::Compositor(Desktop* desktop, HWInterface* screen)
 	fOnLavapipe(false),
 	fDebug(false),
 	fForceFail(false),
+	fWantScanout(false),
+	fScanoutLogged(false),
+	fFrontByVulkan(false),
+	fPresentCount(0),
 	fRestarted(false),
 	fGeneration(0),
 	fEntryLock("compositor entries"),
@@ -797,6 +821,7 @@ Compositor::_ExitVulkan()
 	// are loaded in this order, so the last one tells all were.
 	if (vk->device != VK_NULL_HANDLE && vk->vkDeviceWaitIdle != NULL) {
 		vk->vkDeviceWaitIdle(vk->device);
+		_ScanoutFree(vk);
 		// M11 step 3b: the imports of shared views go with this device;
 		// the programs get a refusal at their next present.
 		{
@@ -1344,6 +1369,11 @@ Compositor::_ComposeLoop()
 			damage.Set(BRect(0, 0, (float)fFrameWidth - 1,
 				(float)fFrameHeight - 1));
 		}
+		// Decision 4: between two composes the GPU is idle (each one waits
+		// for its fence), so a new back buffer or scanout is imported here.
+		if (_ScanoutPrepare(back))
+			damage.Set(BRect(0, 0, (float)fFrameWidth - 1,
+				(float)fFrameHeight - 1));
 		BRegion screen(BRect(0, 0, (float)fFrameWidth - 1,
 			(float)fFrameHeight - 1));
 		damage.IntersectWith(&screen);
@@ -1421,12 +1451,12 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 		| VK_ACCESS_SHADER_WRITE_BIT;
 
 	VkDescriptorBufferInfo frameInfo = {};
-	frameInfo.buffer = vk->frame;
+	frameInfo.buffer = vk->scanActive ? vk->back : vk->frame;
 	frameInfo.range = VK_WHOLE_SIZE;
 
 	compose_rect rect;
 	memset(&rect, 0, sizeof(rect));
-	rect.frameStride = fFrameWidth;
+	rect.frameStride = vk->scanActive ? vk->backPitch / 4 : fFrameWidth;
 
 	for (int32 layerIndex = -1; layerIndex < layers.CountItems();
 			layerIndex++) {
@@ -1522,13 +1552,52 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 		}
 	}
 
+	// Decision 4: the damaged rows of the back buffer onto the scanout, in
+	// this submit, under this fence. Each pitch is its buffer's own.
+	if (vk->scanActive) {
+		VkMemoryBarrier toCopy = {};
+		toCopy.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+		toCopy.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		toCopy.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		vk->vkCmdPipelineBarrier(vk->commands,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &toCopy, 0, NULL, 0, NULL);
+		uint32 count = 0;
+		for (int32 i = 0; i < damage.CountRects(); i++) {
+			clipping_rect r = damage.RectAtInt(i);
+			count += r.bottom - r.top + 1;
+		}
+		VkBufferCopy* regions = new(std::nothrow) VkBufferCopy[count];
+		uint32 n = 0;
+		for (int32 i = 0; regions != NULL && i < damage.CountRects(); i++) {
+			clipping_rect r = damage.RectAtInt(i);
+			for (int32 y = r.top; y <= r.bottom; y++) {
+				regions[n].srcOffset = (uint64)y * vk->backPitch
+					+ (uint64)r.left * 4;
+				regions[n].dstOffset = (uint64)y * vk->scanPitch
+					+ (uint64)r.left * 4;
+				regions[n].size = (uint64)(r.right - r.left + 1) * 4;
+				n++;
+			}
+		}
+		if (regions != NULL && n > 0)
+			vk->vkCmdCopyBuffer(vk->commands, vk->back, vk->scanout, n,
+				regions);
+		delete[] regions;
+		// Without memory for the list the back buffer still holds the
+		// frame; _Present then lets CopyBackToFront take it to the front.
+		fFrontByVulkan = regions != NULL;
+	} else
+		fFrontByVulkan = false;
+
 	VkMemoryBarrier toHost = {};
 	toHost.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-	toHost.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	toHost.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT
+		| VK_ACCESS_TRANSFER_WRITE_BIT;
 	toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
 	vk->vkCmdPipelineBarrier(vk->commands,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0,
-		1, &toHost, 0, NULL, 0, NULL);
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &toHost, 0, NULL, 0, NULL);
 	vk->vkEndCommandBuffer(vk->commands);
 
 	VkSubmitInfo submit = {};
@@ -1611,8 +1680,18 @@ Compositor::_Present(const BRegion& damage)
 	if (!fScreen->LockParallelAccess())
 		return;
 
+	bigtime_t started = system_time();
 	RenderingBuffer* back = fScreen->BackBuffer();
-	if (back != NULL && back->Width() == fFrameWidth
+	if (fFrontByVulkan && back != NULL) {
+		// Decision 4: the back buffer and the front are both this frame
+		// already. Invalidate only draws the cursor where the copy went.
+		GPUCopy::SetFrontCurrent(true);
+		fScreen->InvalidateRegion(damage);
+		GPUCopy::SetFrontCurrent(false);
+	} else if (fVulkan->scanActive && back != NULL) {
+		// The compose wrote the back buffer itself: no CPU copy.
+		fScreen->InvalidateRegion(damage);
+	} else if (back != NULL && back->Width() == fFrameWidth
 		&& back->Height() == fFrameHeight) {
 		const uint8* frame = (const uint8*)fVulkan->frameBits;
 		uint32 frameRow = fFrameWidth * 4;
@@ -1628,6 +1707,10 @@ Compositor::_Present(const BRegion& damage)
 		}
 		fScreen->InvalidateRegion(damage);
 	}
+	bigtime_t took = system_time() - started;
+	if (fPresentCount < (int32)(sizeof(fPresentSamples)
+			/ sizeof(fPresentSamples[0])))
+		fPresentSamples[fPresentCount++] = took;
 	fScreen->UnlockParallelAccess();
 }
 
@@ -1642,6 +1725,14 @@ Compositor::_Compare(const BRegion& damage, const LayerList& layers,
 	if (fScratch == NULL)
 		return false;
 	uint32 stride = fFrameWidth;
+	// Decision 4: the GPU wrote into the back buffer, with its own pitch.
+	const uint32* frame = fVulkan->frameBits;
+	uint32 frameStride = fFrameWidth;
+	RenderingBuffer* back = fScreen->BackBuffer();
+	if (fVulkan->scanActive && back != NULL) {
+		frame = (const uint32*)back->Bits();
+		frameStride = back->BytesPerRow() / 4;
+	}
 	for (int32 i = 0; i < damage.CountRects(); i++) {
 		clipping_rect r = damage.RectAtInt(i);
 		for (int32 y = r.top; y <= r.bottom; y++) {
@@ -1667,7 +1758,6 @@ Compositor::_Compare(const BRegion& damage, const LayerList& layers,
 			}
 		}
 	}
-	const uint32* frame = fVulkan->frameBits;
 	BRegion checked(damage);
 	checked.Exclude(&shared);
 	for (int32 i = 0; i < checked.CountRects(); i++) {
@@ -1675,7 +1765,8 @@ Compositor::_Compare(const BRegion& damage, const LayerList& layers,
 		for (int32 y = r.top; y <= r.bottom; y++) {
 			for (int32 x = r.left; x <= r.right; x++) {
 				uint32 at = y * stride + x;
-				if (((fScratch[at] ^ frame[at]) & 0x00ffffff) != 0) {
+				uint32 framed = frame[y * frameStride + x];
+				if (((fScratch[at] ^ framed) & 0x00ffffff) != 0) {
 					log_line("compose compare MISMATCH at %" B_PRId32 ",%"
 						B_PRId32, x, y);
 					return false;
@@ -1783,6 +1874,149 @@ Compositor::_TurnOff(const char* reason)
 	fDesktop->UnlockAllWindows();
 	// The device goes when the compose thread ends, after its last
 	// references to the window buffers are gone.
+}
+
+
+//	#pragma mark - scanout (M11 step 3b, decision 4)
+
+
+//!	Frees the imports of the back buffer and the scanout. GPU idle.
+void
+Compositor::_ScanoutFree(CompositorVulkan* vk)
+{
+	if (vk->back != VK_NULL_HANDLE)
+		vk->vkDestroyBuffer(vk->device, vk->back, NULL);
+	if (vk->backMemory != VK_NULL_HANDLE)
+		vk->vkFreeMemory(vk->device, vk->backMemory, NULL);
+	if (vk->scanout != VK_NULL_HANDLE)
+		vk->vkDestroyBuffer(vk->device, vk->scanout, NULL);
+	if (vk->scanoutMemory != VK_NULL_HANDLE)
+		vk->vkFreeMemory(vk->device, vk->scanoutMemory, NULL);
+	vk->back = VK_NULL_HANDLE;
+	vk->backMemory = VK_NULL_HANDLE;
+	vk->scanout = VK_NULL_HANDLE;
+	vk->scanoutMemory = VK_NULL_HANDLE;
+	vk->scanActive = false;
+}
+
+
+//!	One import of app_server's own export: a VkBuffer over it.
+static bool
+import_own(CompositorVulkan* vk, const uint8 token[16], uint64 size,
+	VkBufferUsageFlags usage, bool deviceLocal, VkBuffer* _buffer,
+	VkDeviceMemory* _memory)
+{
+	VkExternalMemoryBufferCreateInfo external = {};
+	external.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
+	external.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.pNext = &external;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	if (vk->vkCreateBuffer(vk->device, &bufferInfo, NULL, _buffer)
+			!= VK_SUCCESS) {
+		*_buffer = VK_NULL_HANDLE;
+		return false;
+	}
+	VkMemoryRequirements requirements;
+	vk->vkGetBufferMemoryRequirements(vk->device, *_buffer, &requirements);
+	VkPhysicalDeviceMemoryProperties memory;
+	vk->vkGetPhysicalDeviceMemoryProperties(vk->physical, &memory);
+	uint32 type = UINT32_MAX;
+	for (uint32 i = 0; i < memory.memoryTypeCount; i++) {
+		if ((requirements.memoryTypeBits & (1u << i)) == 0)
+			continue;
+		bool local = (memory.memoryTypes[i].propertyFlags
+			& VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0;
+		if (type == UINT32_MAX || (deviceLocal && local)
+			|| (!deviceLocal && i == vk->memoryType)) {
+			type = i;
+			if ((deviceLocal && local) || (!deviceLocal && i == vk->memoryType))
+				break;
+		}
+	}
+	int fd = -1;
+	uint32 id = 0;
+	team_id self = getpid();
+	if (type == UINT32_MAX
+		|| vk->tokenToFd(-1, token, self, &fd, &id) != 0)
+		return false;
+	VkImportMemoryFdInfoKHR import = {};
+	import.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
+	import.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+	import.fd = fd;
+	VkMemoryAllocateInfo allocateInfo = {};
+	allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocateInfo.pNext = &import;
+	allocateInfo.allocationSize = requirements.size;
+	allocateInfo.memoryTypeIndex = type;
+	if (vk->vkAllocateMemory(vk->device, &allocateInfo, NULL, _memory)
+			!= VK_SUCCESS) {
+		*_memory = VK_NULL_HANDLE;
+		close(fd);
+		return false;
+	}
+	uint64 bytes = 0;
+	if (vk->importSize(id, &bytes) != 0 || requirements.size > bytes
+		|| size > bytes)
+		return false;
+	return vk->vkBindBufferMemory(vk->device, *_buffer, *_memory, 0)
+		== VK_SUCCESS;
+}
+
+
+/*!	Before a compose: imports GPUCopy's back buffer and the scanout when
+	gpu_compositor_scanout is on and they are new (the first frame, a mode
+	change). True when the way changed, so the whole screen is damaged.
+	The GPU is idle here: the last compose waited for its fence.
+*/
+bool
+Compositor::_ScanoutPrepare(RenderingBuffer* back)
+{
+	CompositorVulkan* vk = fVulkan;
+	if (!fWantScanout || fOnLavapipe || vk == NULL || !vk->canImport
+		|| back == NULL)
+		return false;
+	if (vk->scanActive && vk->scanGeneration == GPUCopy::Generation())
+		return false;
+
+	bool was = vk->scanActive;
+	_ScanoutFree(vk);
+	uint8 backToken[16];
+	uint8 scanToken[16];
+	uint32 scanPitch = 0;
+	uint32 generation = 0;
+	const char* reason = NULL;
+	if (!GPUCopy::ExportForCompositor(back, backToken, scanToken, &scanPitch,
+			&generation))
+		reason = "back buffer not on the gpu";
+	else if (!import_own(vk, backToken,
+			(uint64)back->BytesPerRow() * back->Height(),
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+				| VK_BUFFER_USAGE_TRANSFER_SRC_BIT, false, &vk->back,
+			&vk->backMemory)
+		|| !import_own(vk, scanToken, (uint64)scanPitch * back->Height(),
+			VK_BUFFER_USAGE_TRANSFER_DST_BIT, true, &vk->scanout,
+			&vk->scanoutMemory))
+		reason = "import";
+	if (reason != NULL) {
+		_ScanoutFree(vk);
+		if (!fScanoutLogged) {
+			fScanoutLogged = true;
+			log_line("scanout through vulkan off: %s", reason);
+		}
+		return was;
+	}
+	vk->backPitch = back->BytesPerRow();
+	vk->scanPitch = scanPitch;
+	vk->scanGeneration = generation;
+	vk->scanActive = true;
+	log_line("scanout through vulkan %" B_PRIu32 "x%" B_PRIu32
+		" back pitch %" B_PRIu32 " scanout pitch %" B_PRIu32,
+		back->Width(), back->Height(), vk->backPitch, vk->scanPitch);
+	return true;
 }
 
 
@@ -2185,6 +2419,24 @@ Compositor::_Report()
 	}
 	log_line("compose median %" B_PRId64 " us cpu %" B_PRId64
 		" ms per 10 s", median, (cpu - fCpuAtReport) / 1000);
+	// Decision 4: the time after the fence, per way, for the stick report
+	// (vulkan: the cursor only; cpu: the copy into the back buffer plus
+	// CopyBackToFront, the M8 DMA_DATA copy when gpu_app_server is on).
+	if (fPresentCount > 0) {
+		for (int32 i = 1; i < fPresentCount; i++) {
+			bigtime_t value = fPresentSamples[i];
+			int32 j = i - 1;
+			while (j >= 0 && fPresentSamples[j] > value) {
+				fPresentSamples[j + 1] = fPresentSamples[j];
+				j--;
+			}
+			fPresentSamples[j + 1] = value;
+		}
+		log_line("present median %" B_PRId64 " us (%s)",
+			fPresentSamples[fPresentCount / 2],
+			fVulkan != NULL && fVulkan->scanActive ? "vulkan" : "cpu");
+		fPresentCount = 0;
+	}
 	log_line("window memory %" B_PRIu64 " MB", fWindowBytes / (1024 * 1024));
 
 	fSampleCount = 0;

@@ -1401,6 +1401,10 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
+	// M11 step 3b, decision 4: the compositor's Vulkan copy put this frame
+	// on the front already; HWInterface::Invalidate draws the cursor.
+	if (GPUCopy::FrontCurrent())
+		return;
 	clipping_rect bounds;
 	if (GPUCopy::Copy(region, fBackBuffer.Get(), fFrontBuffer.Get(),
 			&bounds)) {

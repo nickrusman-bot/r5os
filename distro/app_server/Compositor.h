@@ -36,6 +36,7 @@ static const uint32 kMaxShareImages = 4;
 class Desktop;
 class DrawingEngine;
 class HWInterface;
+class RenderingBuffer;
 class Window;
 class WindowBuffer;
 class WindowHWInterface;
@@ -124,6 +125,8 @@ private:
 			void				_ShareFree(Share* share);
 			void				_ShareRetire();
 			bool				_ShareReady(uint64 sequence);
+			void				_ScanoutFree(CompositorVulkan* vk);
+			bool				_ScanoutPrepare(RenderingBuffer* back);
 			void				_TurnOff(const char* reason);
 			bool				_RestartAfterReset();
 			void				_Report();
@@ -137,6 +140,13 @@ private:
 			bool				fOnLavapipe;
 			bool				fDebug;
 			bool				fForceFail;
+			// M11 step 3b, decision 4: gpu_compositor_scanout.
+			bool				fWantScanout;
+			bool				fScanoutLogged;
+			// This frame's front was written by the Vulkan copy.
+			bool				fFrontByVulkan;
+			bigtime_t			fPresentSamples[128];
+			int32				fPresentCount;
 			bool				fRestarted;
 			uint32				fGeneration;
 
