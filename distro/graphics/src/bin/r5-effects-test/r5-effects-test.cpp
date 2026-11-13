@@ -215,6 +215,9 @@ private:
 		if (fWindowSeconds <= 0)
 			fWindowSeconds = 30;
 		BRect frame(120, 120, 520, 400);
+		// the glass window lies over the tick window and the desktop
+		if (glass)
+			frame.Set(600, 140, 1000, 420);
 		if (tick)
 			frame.Set(260, 220, 760, 560);
 		if (slide) {
@@ -233,11 +236,18 @@ private:
 				: glass ? "Glass" : tick ? "Tick" : "Plain", look,
 			B_NORMAL_WINDOW_FEEL,
 			B_QUIT_ON_WINDOW_CLOSE | B_ASYNCHRONOUS_CONTROLS);
-		window->AddChild(new TextView(window->Bounds(), glass || full,
-			tick));
-		if (glass || full)
-			_Check(set_window_glass(window, true));
+		TextView* view = new TextView(window->Bounds(), glass || full, tick);
+		window->AddChild(view);
 		window->Show();
+		if (glass || full) {
+			// The window's top view, and the view that fills it: a child
+			// with its own colour stays opaque otherwise.
+			_Check(set_window_glass(window, true));
+			if (window->Lock()) {
+				_Check(set_view_glass(view, true));
+				window->Unlock();
+			}
+		}
 		SetPulseRate(fWindowSeconds * 1000000LL);
 		return 0;
 	}
