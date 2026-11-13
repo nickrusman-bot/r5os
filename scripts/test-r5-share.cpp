@@ -310,6 +310,16 @@ errors()
 		failed |= check(r5_share_error(cases[i].reason) == cases[i].error,
 			cases[i].what);
 
+	/* Only app_server: effective uid 0 and the path. A program that sets
+	 * argv[0] to app_server's path as an ordinary user is refused; so is
+	 * root under another path. */
+	failed |= check(r5_share_compositor_caller(0, 1), "app_server allowed");
+	failed |= check(!r5_share_compositor_caller(1000, 1),
+		"argv[0] app_server as a user refused");
+	failed |= check(!r5_share_compositor_caller(0, 0),
+		"root under another path refused");
+	failed |= check(!r5_share_compositor_caller(1000, 0), "user refused");
+
 	/* The "free again" semaphore of another team is refused. */
 	failed |= check(r5_share_sem_ok(kClient, kClient), "own semaphore");
 	failed |= check(!r5_share_sem_ok(kOther, kClient),

@@ -36,6 +36,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 
 extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
@@ -2428,7 +2429,11 @@ gpu_ih_counts(void* buffer, size_t length)
 
 
 /* The path is the one load_image stored in the team info. It is not a
- * value from the ioctl. Roster resolves /system to /boot/system. */
+ * value from the ioctl. Roster resolves /system to /boot/system.
+ * M11 step 3b: that path is argv[0], which any program
+ * sets with execv; so the calling team must also have effective uid 0
+ * (r5_share_compositor_caller, host-tested). R5_GPU_SCANOUT_BO had the
+ * same hole since M8. */
 static bool
 gpu_caller_is_app_server()
 {
@@ -2439,13 +2444,14 @@ gpu_caller_is_app_server()
 		"/system/servers/app_server",
 		"/boot/system/servers/app_server"
 	};
+	int path = 0;
 	for (uint32 i = 0; i < sizeof(kPaths) / sizeof(kPaths[0]); i++) {
 		size_t length = strlen(kPaths[i]);
 		if (strncmp(info.args, kPaths[i], length) == 0
 			&& (info.args[length] == '\0' || info.args[length] == ' '))
-			return true;
+			path = 1;
 	}
-	return false;
+	return r5_share_compositor_caller((uint32)geteuid(), path) != 0;
 }
 
 

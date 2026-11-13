@@ -294,6 +294,7 @@ Changed in step 3b (user, 13 Nov 2026): the refusal rules are cases of the host 
 |---|---|---|
 | import by another team, a forwarded number, a guessed number, a second import, an expired number, the export limit, the per-file limit, the reserve, the system limit, a lost exporter, a semaphore of another team, the reference count, a size that lies | host test (`scripts/test-r5-share.cpp`, `r5_share.h`), each case with its error | `ok gpu share <n> cases` |
 | the import id after close, a reused fd number, RADV's import and query path | host test (`scripts/test-ac-drm.sh`) | `ok ac drm family RV cu 7 firmware map share` |
+| a program that sets argv[0] to app_server's path, run as a user (the caller check needs effective uid 0 and the path) | host test, and the machine: `r5-share-check` | `r5-share-check: argv[0] app_server as a user refused: pass` |
 | an import by a program that is not app_server | the machine: `r5-share-check` | `r5-share-check: import by a program that is not app_server refused: pass` |
 | the same number offered twice (needs the compositor on RADV) | the machine: `r5-share-check` | `r5-share-check: second import of the same number refused: pass` |
 | the exporter stopped before an import | the stick script: `r5-share-check count`, `r5-share-check hold &`, `kill` it, `r5-share-check count` | the two `r5-share-check: buffers <n>` lines show the same number |

@@ -15,6 +15,7 @@ What changed:
 Decided during this step (user, 13 Nov 2026; "Decided in step 3b" in the design): the present mark through library ids on both sides; `r5_drm_import_size` for app_server's size check; the frame is the back buffer (option A); an acquire timeout is `VK_TIMEOUT`; the refusal rules are host-test cases and the machine runs a short check, the stuck job is `gpu_hang_test`.
 
 Mistakes and fixes during this step:
+- **Security, a fault since M8:** `gpu_caller_is_app_server()` trusted only the path in `team_info.args`, and that is argv[0], which any program sets with `execv`. A fake app_server could call `R5_GPU_SCANOUT_BO` (since M8), and now `BO_IMPORT` with another program's `client_team`. The calling team must now also run with effective uid 0 (`geteuid()`); the path stays the second check (`r5_share_compositor_caller`, host-tested; `r5-share-check` runs a copy of itself with argv[0] set to app_server's path as a user and expects `B_NOT_ALLOWED`). Not yet checked on a boot that app_server itself runs with effective uid 0.
 - `r5_share.h` was missing from the copy list of `apply-radeon.py`; the jam would have failed. Added.
 - My first WSI block tried sharing before the format check, and its destroy could call `delete_sem(0)` for a copy swapchain; fixed before it was applied.
 - `ShareImages` took `fEntryLock` while holding `fShareLock` (the reverse order of `RemoveWindow`); fixed. A removed window could match a share by `NULL == NULL`; fixed.
@@ -25,6 +26,7 @@ Mistakes and fixes during this step:
 Tested (host, WSL, 13 Nov 2026): `ok gpu share 65 cases` (`scripts/test-r5-share.cpp`); `scripts/test-ac-drm.sh` with libdrm's `amdgpu_bo.c` rebuilt from patch 5 in a temporary copy: every new check passes and `ok ac drm family RV cu 7 firmware map share` (RADV's `ac_drm_bo_import` and `ac_drm_bo_query_info`); without patch 5 exactly the size check fails. `-fsyntax-only -Wall` with the Haiku cross compiler: `r5_gpu_core.cpp`, `r5_gpu.cpp`, `Compositor.cpp`, `ServerApp.cpp`, `GPUCopy.cpp`, `AccelerantHWInterface.cpp`, `r5-share-check.cpp`; `wsi_common_haiku.cpp` with its command from `build-radv`. Manual SMAP review of the kernel diff: user memory only through `gpu_copy_in`/`gpu_copy_out`.
 
 Not tested: no jam, no libdrm or Mesa build in the shared tree, no new `mesa_radv` package, no QEMU or SMAP boot yet (asked first). On the 5625U nothing: the real export and import, `r5-share-check`, the stuck job, the scanout import and both present times, and the measurement of the slot limits (1024, 512 and 64 are starting values). The library test still has one failure that is on `origin/main` too (the guilty flag after a reset).
+
 ## 2026-11-13 - Stick scripts: the new SanDisk test stick
 
 Problem: the new test stick, a SanDisk Ultra USB 3, was not accepted. `scripts/write-stick.py` and `scripts/read-stick-logs.py` only took a USB disk whose Windows FriendlyName is `General UDisk`.

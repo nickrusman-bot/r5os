@@ -178,6 +178,17 @@ r5_share_slot_check(uint32_t live, uint32_t handles, int callerIsAppServer)
 }
 
 
+/* Only app_server may import, and take the scanout. The path in the team
+ * info is argv[0], which any program chooses with execv, so it is only
+ * the second check: the calling team must also run with effective uid 0.
+ * (Found in M11 step 3b; R5_GPU_SCANOUT_BO had the same hole since M8.) */
+static inline int
+r5_share_compositor_caller(uint32_t effectiveUid, int pathIsAppServer)
+{
+	return effectiveUid == 0 && pathIsAppServer;
+}
+
+
 /* The error each refusal returns, so the host test checks it. The kernel
  * turns these into B_NOT_ALLOWED, B_BAD_VALUE, B_NO_MEMORY and
  * ECANCELED. */
