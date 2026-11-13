@@ -90,6 +90,9 @@ FILES = (
     # M11 step 3b: the conformance check of buffer sharing.
     "src/bin/r5-share-check/Jamfile",
     "src/bin/r5-share-check/r5-share-check.cpp",
+    # M11 step 4: sets the window effects from a shell, opens a glass window.
+    "src/bin/r5-effects-test/Jamfile",
+    "src/bin/r5-effects-test/r5-effects-test.cpp",
 )
 
 
@@ -213,6 +216,24 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
             raise SystemExit("share-check anchor missing in regular image")
         regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
         print("patched regular image share-check")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin r5-effects-test ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin r5-share-check ;\n"
+        if anchor not in text:
+            raise SystemExit("effects-test anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile effects-test")
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += r5-effects-test ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += r5-share-check ;\n"
+        if anchor not in text:
+            raise SystemExit("effects-test anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image effects-test")
 
     launch = haiku / "data" / "launch" / "user"
     text = launch.read_text(encoding="utf-8")

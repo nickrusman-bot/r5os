@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+SubDir HAIKU_TOP src bin r5-effects-test ;
+
+Application r5-effects-test :
+	r5-effects-test.cpp
+	: be libr5ui.so [ TargetLibsupc++ ]
+	;
