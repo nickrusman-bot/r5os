@@ -505,8 +505,9 @@ r5_get_wsi_image(struct wsi_swapchain *wsi_chain, uint32_t image_index)
 }
 
 /* A shared image is free when app_server released its semaphore. The
- * wait is the program's own timeout; nothing in that time is
- * VK_ERROR_OUT_OF_DATE_KHR, so the program makes a new swapchain. */
+ * wait is the program's own timeout; nothing in that time is VK_TIMEOUT,
+ * as the Vulkan specification says and as the copy path does (decided in
+ * step 3b). A semaphore that is gone makes the surface lost. */
 static VkResult
 r5_acquire_shared(struct r5_swapchain *chain,
 	const VkAcquireNextImageInfoKHR *info, uint32_t *image_index)
@@ -560,7 +561,7 @@ r5_acquire_shared(struct r5_swapchain *chain,
 			continue;
 		if (got == B_TIMED_OUT || got == B_WOULD_BLOCK) {
 			pthread_mutex_unlock(&chain->mu);
-			return VK_ERROR_OUT_OF_DATE_KHR;
+			return VK_TIMEOUT;
 		}
 		if (got != B_OK) {
 			chain->lost = true;
