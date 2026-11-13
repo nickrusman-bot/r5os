@@ -138,7 +138,10 @@ if [ "$ans" = y ]; then
 	rm -f "$m10/alive"
 	date +%s > "$m10/shutdown-start"
 	echo "$cur" > "$m10/shutdown-boot"
-	( while :; do date +%s > "$m10/alive"; sleep 1; done ) > /dev/null 2>&1 &
+	sync
+	# Each beat is synced, or it never reaches the stick (M10 round 5:
+	# "not measured (no heartbeat)").
+	( while :; do date +%s > "$m10/alive"; sync; sleep 1; done ) > /dev/null 2>&1 &
 	beat=$!
 	if ! shutdown -r; then
 		kill "$beat"
