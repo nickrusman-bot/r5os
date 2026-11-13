@@ -18,16 +18,13 @@ vkcube)
 	APP=application/x-vnd.R5OS-vkcube
 	set --
 	;;
-GLTeapot)
+GLTeapot|GLTeapot-zink-cpu)
 	APP=application/x-vnd.Haiku-GLTeapot
 	prog=/boot/system/demos/GLTeapot
 	export R5_GL_TRACE=1
-	set --
-	;;
-GLTeapot-zink-cpu)
-	APP=application/x-vnd.Haiku-GLTeapot
-	prog=/boot/system/demos/GLTeapot
-	export R5_GL_TRACE=1 GALLIUM_DRIVER=zink LIBGL_ALWAYS_SOFTWARE=1
+	if [ "$base" = GLTeapot-zink-cpu ]; then
+		export GALLIUM_DRIVER=zink LIBGL_ALWAYS_SOFTWARE=1
+	fi
 	set --
 	;;
 *)

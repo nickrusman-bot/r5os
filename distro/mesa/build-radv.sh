@@ -29,10 +29,16 @@ if ! grep -q 'wsi_view_r5_init_wsi' "$MESA/src/amd/vulkan/radv_wsi.c" \
 	|| ! grep -q 'ifndef VK_USE_PLATFORM_VIEW_RFIVE' "$MESA/src/amd/vulkan/radv_wsi.c"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-radv-view-surface.patch"
 fi
+# Haiku EGL links Zink. The M9 patch below needs this one first.
+if ! grep -q 'driver_zink, idep_xmlconfig' "$MESA/src/egl/meson.build"; then
+	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-zink-link.patch"
+fi
 # M9: a Zink frame is read back into the window's bitmap, and the EGL driver
-# chooses Zink when the radeon_hd settings say gpu_opengl true.
+# chooses Zink when the radeon_hd settings say gpu_opengl true. The last
+# grep is the newest hunk, so an older revision of the patch fails loudly.
 if ! grep -q 'present_data' "$MESA/src/gallium/frontends/hgl/hgl_context.h" \
-	|| ! grep -q 'r5_gl_create_screen' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
+	|| ! grep -q 'r5_gl_create_screen' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp" \
+	|| ! grep -q 'No driver could start' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-zink-present.patch"
 fi
 

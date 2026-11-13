@@ -154,8 +154,8 @@ run_pbuffer(const char* file)
 		return 1;
 	}
 
-	printf("gl driver %s\n", (const char*)glGetString(GL_RENDERER));
-	printf("gl version %s\n", (const char*)glGetString(GL_VERSION));
+	printf("gl driver %s\n", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+	printf("gl version %s\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 
 	uint8_t checker[4 * 4 * 4];
 	for (int y = 0; y < 4; y++) {
@@ -250,8 +250,8 @@ run_child(const char* self, const char* environment, const char* file,
 static uint8_t*
 read_frame(const char* file)
 {
-	size_t bytes = (size_t)kSize * kSize * 4;
-	uint8_t* frame = (uint8_t*)malloc(bytes);
+	size_t bytes = static_cast<size_t>(kSize) * kSize * 4;
+	uint8_t* frame = static_cast<uint8_t*>(malloc(bytes));
 	FILE* in = fopen(file, "rb");
 	if (frame == NULL || in == NULL || fread(frame, bytes, 1, in) != 1) {
 		free(frame);
@@ -266,8 +266,11 @@ read_frame(const char* file)
 static int
 run_selftest(const char* self, bool zinkCpu)
 {
-	const char* fileA = "/tmp/r5-gl-test-a.rgba";
-	const char* fileB = "/tmp/r5-gl-test-b.rgba";
+	// One pair of files per process: another account may have left its own.
+	char fileA[64];
+	char fileB[64];
+	snprintf(fileA, sizeof(fileA), "/tmp/r5-gl-test-%d-a.rgba", static_cast<int>(getpid()));
+	snprintf(fileB, sizeof(fileB), "/tmp/r5-gl-test-%d-b.rgba", static_cast<int>(getpid()));
 	char rendererA[256];
 	char rendererB[256];
 	int failA = run_child(self,
@@ -277,6 +280,8 @@ run_selftest(const char* self, bool zinkCpu)
 		sizeof(rendererB));
 	uint8_t* a = failA ? NULL : read_frame(fileA);
 	uint8_t* b = failB ? NULL : read_frame(fileB);
+	unlink(fileA);
+	unlink(fileB);
 	if (a == NULL || b == NULL) {
 		printf("pixels FAIL run %s\n", a == NULL ? "A" : "B");
 		free(a);
@@ -286,7 +291,8 @@ run_selftest(const char* self, bool zinkCpu)
 	printf("compared %s and %s\n", rendererA, rendererB);
 	int share = 0;
 	int worst = 0;
-	int mismatch = r5_pixels_compare(a, b, (uint32_t)(kSize * kSize), 2,
+	int mismatch = r5_pixels_compare(a, b, static_cast<uint32_t>(kSize * kSize),
+		2,
 		&share, &worst);
 	free(a);
 	free(b);

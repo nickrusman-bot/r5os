@@ -55,6 +55,7 @@ Once per process, in `haiku_initialize_impl()`, in this order:
 - The settings are the radeon_hd driver settings, read with `load_driver_settings()`: `/boot/home/config/settings/kernel/drivers/radeon_hd`, then `/boot/system/settings/kernel/drivers/radeon_hd` (the order the R5 DRM library uses). A file that cannot be read means "not set".
 - `gpu_opengl true` is opt-in for now. It becomes the default with the availability check (M10).
 - With `R5_GL_TRACE=1` every line also goes to stderr. Cases 1 and 2 then print `egl: opengl <zink|llvmpipe>: <renderer>` to stderr only; the window test reads that line.
+- When no driver can start at all, `eglInitialize` fails with `EGL_NOT_INITIALIZED`. Before, the EGL driver used a NULL screen and crashed.
 - A running program never moves to llvmpipe. A failure after start is the program's failure.
 
 ## Showing a Zink frame
@@ -80,4 +81,18 @@ Not in M9: frames straight to the screen, swap interval, and `BGLView::SwapBuffe
 
 ## Results
 
-See `CHANGELOG.md` for each run. QEMU proves the hook through Zink on Lavapipe. The 5625U (RADV) has not run it yet.
+QEMU with KVM, 13 Nov 2026, branch `claude/m9-opengl-zink-fc7eb3`. The 5625U (RADV) has not run it yet.
+
+| Check | Result |
+|---|---|
+| no setting | `egl lines in syslog 0` |
+| `gpu_opengl true` | `egl: opengl llvmpipe: no render node` (once per program) |
+| plus `gpu_opengl_fail true` | `egl: opengl llvmpipe: forced failure` |
+| stage `gl` | `pixels ok llvmpipe only`, `gl ms per frame` 0.463 and 0.466 |
+| stage `gl zink-cpu` | `pixels ok max 2 share 0.6% limit 1%`, Zink on Lavapipe 0.979 ms, llvmpipe 0.442 ms |
+| window `GLTeapot-zink-cpu` | `window driver zink: zink Vulkan 1.4(llvmpipe …)`, every action `ok`, `device lost no` |
+| present (Zink on Lavapipe) | median 1.2–1.6 ms per frame for GLTeapot's window |
+
+The 0.6% in the Zink compare is edge pixels of the triangles; the largest channel difference there is 204.
+
+![GLTeapot on Zink in QEMU](images/gpu-opengl-qemu-glteapot.png)
