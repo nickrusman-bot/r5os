@@ -61,6 +61,8 @@ static int gDeferRetire;
 static int gJobAgeUs;
 static int gWatch;
 static int gLost;
+/* GET_INFO also sets R5_GPU_CAP_GUILTY (this file's job hung). */
+static int gGuilty;
 static uint64_t gPageVa;
 static uint64_t gPageBytes;
 static uint64_t gPagePte;
@@ -298,6 +300,8 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		info->capabilities = R5_GPU_CAP_RENDER;
 		if (gLost)
 			info->capabilities |= R5_GPU_CAP_LOST;
+		if (gGuilty)
+			info->capabilities |= R5_GPU_CAP_GUILTY;
 		info->vram_bytes = 256ull << 20;
 		info->gtt_bytes = 256ull << 20;
 		info->va_offset = R5_GPU_VA_OFFSET;
@@ -2229,13 +2233,30 @@ main(void)
 		query.in.ctx_id = 1;
 		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
 		CHECK(query.out.state.flags == 0);
+		/* docs/GRAPHICS.md, GFX9 reset: every file with a context is
+		 * lost, only the file whose job hung is guilty. A lost file
+		 * without R5_GPU_CAP_GUILTY is an innocent reset. */
 		gLost = 1;
+		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
+		query.in.ctx_id = 1;
+		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
+		CHECK(query.out.state.flags == AMDGPU_CTX_QUERY2_FLAGS_RESET);
+		CHECK(query.out.state.reset_status == AMDGPU_CTX_INNOCENT_RESET);
+		gGuilty = 1;
 		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
 		query.in.ctx_id = 1;
 		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
 		CHECK(query.out.state.flags == (AMDGPU_CTX_QUERY2_FLAGS_RESET
 			| AMDGPU_CTX_QUERY2_FLAGS_GUILTY));
+		CHECK(query.out.state.reset_status == AMDGPU_CTX_GUILTY_RESET);
+		/* Guilty without lost (cleared together at context destroy)
+		 * reports no reset. */
 		gLost = 0;
+		query.in.op = AMDGPU_CTX_OP_QUERY_STATE2;
+		query.in.ctx_id = 1;
+		CHECK(drmIoctl(fd, DRM_IOCTL_AMDGPU_CTX, &query) == 0);
+		CHECK(query.out.state.flags == 0);
+		gGuilty = 0;
 	}
 
 	uint32_t fwVer = 0;
