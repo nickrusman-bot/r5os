@@ -15,7 +15,7 @@ Dropped from the brief, with the reason:
 - Mail reply account (#3526): there is a setting for this ("account from mail"); the default is the default account. Changing the default is a product choice.
 - Sounds names (#2042), Locale Defaults (#2285), Shortcuts wording (#3175), ProcessController (#3719, #2073), Dutch catalogs (#4044): larger, a design choice, or need a screen test.
 
-Not tested: no jam, no QEMU boot. The GitHub issues stay open and the tracker is unchanged until a test boot.
+Not tested: no jam, no QEMU boot. On the user's decision (13 Nov 2026) the three issues are closed and the tracker says `fixed` with "not built and not tested"; they go into the next test build, and a needed follow-up is commented on the issue.
 
 ## 2026-11-13 - Small fixes in Terminal, CharacterMap, ShowImage, MediaPlayer, Expander and open (not built, not booted)
 
@@ -30,7 +30,7 @@ Six small application bugs from Haiku Trac, picked from `generated/issues-1/BRIE
 
 Dropped from the brief: StyledEdit font menu (#1965, the ticket is only a screenshot) and `pkgman search` width (#3232, the table truncates on purpose; wrapping is a larger change).
 
-Not tested: no jam, no QEMU boot, no hardware. The GitHub issues stay open and the tracker is unchanged until a test boot.
+Not tested: no jam, no QEMU boot, no hardware. On the user's decision (13 Nov 2026) the six issues are closed and the tracker says `fixed` with "not built and not tested"; they go into the next test build, and a needed follow-up is commented on the issue.
 
 ## 2026-11-12 - OpenGL through Zink: the driver choice and the window path (M9 steps 1-4, QEMU only)
 
