@@ -2046,6 +2046,21 @@ r5_gfx9_take_priv(r5_gfx9_ib_now* ib1, r5_gfx9_ib_now* ib2)
 }
 
 
+/* The four checks are reported once per boot, also when radeon_hd is
+ * opened again after a start that stopped early. */
+static bool sChecksReported = false;
+
+
+static void
+report_checks(bool switchedOff, int firmwareOk, int selftestOk)
+{
+	if (sChecksReported)
+		return;
+	sChecksReported = true;
+	r5_gpu_report_checks(switchedOff ? 1 : 0, firmwareOk, selftestOk);
+}
+
+
 /* Check 2: each blob the start loads for this GPU matches its sha256 in
  * r5_gfx9_firmware.h. Read through the same path as the start. */
 static bool
@@ -2134,17 +2149,19 @@ r5_gfx9_kernel_start(radeon_info& info)
 		return;
 	/* The checks are reported once per boot, on every GC 9.3 device. */
 	bool switchedOff = !ring || !kernel || !irq || !gart;
+	if (sChecksReported && !sGfx9Started)
+		return;
 	if (!ring || !kernel) {
-		r5_gpu_report_checks(switchedOff, 0, 0);
+		report_checks(switchedOff, 0, 0);
 		return;
 	}
 	if (!firmware_ok(pci)) {
-		r5_gpu_report_checks(switchedOff, 0, 0);
+		report_checks(switchedOff, 0, 0);
 		return;
 	}
 	sGfx9Started = true;
 	if (!map_pool(info)) {
-		r5_gpu_report_checks(switchedOff, 1, 0);
+		report_checks(switchedOff, 1, 0);
 		return;
 	}
 
@@ -2189,7 +2206,7 @@ r5_gfx9_kernel_start(radeon_info& info)
 	/* Check 3, the boot self-test: the fixed start with its own limits
 	 * (the K0 fence and its readback, K1, K2), the same test as after a
 	 * reset (r5_gfx9_kernel_restart). */
-	r5_gpu_report_checks(switchedOff, 1, ok && k1 && k2);
+	report_checks(switchedOff, 1, ok && k1 && k2);
 }
 
 

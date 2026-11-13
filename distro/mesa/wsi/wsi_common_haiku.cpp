@@ -256,8 +256,12 @@ r5_read_settings(void)
 	while (fgets(line, sizeof(line), file) != NULL) {
 		char key[64];
 		char value[64];
-		if (sscanf(line, " %63s %63s", key, value) != 2)
+		// A key without a value means true, as in the kernel's reader.
+		int fields = sscanf(line, " %63s %63s", key, value);
+		if (fields < 1)
 			continue;
+		if (fields == 1)
+			strcpy(value, "true");
 		if (key[0] == '#')
 			continue;
 		bool on = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;

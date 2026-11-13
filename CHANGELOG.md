@@ -1,5 +1,19 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - The graphics chip is used by default on the 5625U (M10 step 7, draft, not booted)
+
+Problem: the GPU path (RADV, Zink, the render node) stayed opt-in per machine, through about ten radeon_hd switches. M10 makes it the default on the one GC 9.3 machine that passed M4-M8, and keeps software as the fallback.
+
+What changed:
+- The four checks at boot (`r5_gpu_checks.h`, pure functions): the device-table row is `release-supported` (`r5Level`; only `0x15e7`), the five GFX blobs match their sha256 (`r5_gfx9_firmware.h`, hashed in the kernel with `r5_sha256.h`; before, only the build checked them), the fixed GFX9 start passes (K0 fence with readback, K1, K2; no new GPU work), and no `gpu false`. One line per boot: `radeon_hd: gpu available` or `radeon_hd: gpu not available: <opt-out|not release-supported|switched off|firmware|selftest>`.
+- `R5_GPU_CAP_AVAILABLE` (8), additive in `GET_INFO`, cleared when the GPU is turned off after a hang. A failed check on a release-supported GPU refuses contexts and submits for the boot.
+- On a release-supported GPU these default to on: `gfx9_ring`, `gfx9_kernel`, `gfx9_irq`, `gfx9_gart`, `gfx9_vmids`, `gfx9_vmid_per_file`, `gfx9_pasid_map`, `gpu_render`. `false` turns one off; `gpu false` turns all off, the accelerant's own GFX9 path too. `gfx9_workload`, `gfx9_compute`, `gpu_selftest` and app_server's copy stay opt-in. `0x1636` and `0x1638` keep the opt-in until one is tested.
+- EGL (`haiku-zink-available.patch`, `mesa-25.3.6-4`): with `gpu_opengl` not set, Zink when the bit is set; new reason `egl: opengl llvmpipe: gpu not available`. The WSI (`mesa_radv-25.3.6-6`) presents through RADV when the bit is set (`gpu_present false` turns it off). `r5-gl-test` (`vulkanteapot-1.0.0-4`) follows the bit. The standard-account limit of M9 is gone for the default case.
+- Mistakes found: the M10 stick scripts from the stick-tooling PR (`check`, `boot-next`, `check-user`) were never packed, so the image still had the M8 ones; `mesa_radv-25.3.6-6` packs them. And `boot-next 1` removed the settings file, so Login would not start the self-test and `gpu_hang_test` (boots 2 and 3) would never start; boots 1-3 now write `gpu_selftest true` and nothing else besides the test switch.
+- A new Windows worktree checks out CRLF; `apply-overlay.sh` copied CRLF Jamfiles into the Haiku tree and the jam failed in usb_webcam. Checked out `distro` and `scripts` with LF and jammed again.
+
+Host test: `scripts/test-r5-gpu-checks.cpp`, `ok gpu checks 49 cases` (including the real blobs). Not tested: the 5625U (every check, the defaults, Zink and RADV by default, `gpu false`), a standard account.
+
 ## 2026-11-12 - OpenGL through Zink: the driver choice and the window path (M9 steps 1-4, QEMU only)
 
 Problem: Zink was built into `libEGL_mesa` but could not show a frame. `haiku_swap_buffers()` presents with `flush_frontbuffer()`, and `zink_flush_frontbuffer()` returns at once without a kopper swapchain. Recorded in QEMU before the change: `GALLIUM_DRIVER=zink LIBGL_ALWAYS_SOFTWARE=1 GLTeapot` opened a white window, printed nothing, and kept running.
