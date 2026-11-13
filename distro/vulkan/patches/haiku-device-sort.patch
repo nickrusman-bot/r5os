@@ -1,0 +1,11 @@
+--- a/loader/CMakeLists.txt
++++ b/loader/CMakeLists.txt
+@@ -94,7 +94,7 @@
+ 
+ if(WIN32)
+     list(APPEND NORMAL_LOADER_SRCS loader_windows.c dirent_on_windows.c)
+-elseif(CMAKE_SYSTEM_NAME MATCHES "Linux|BSD|DragonFly|GNU")
++elseif(CMAKE_SYSTEM_NAME MATCHES "Linux|BSD|DragonFly|GNU|Haiku")
+     list(APPEND NORMAL_LOADER_SRCS loader_linux.c)
+     target_compile_definitions(loader_specific_options INTERFACE LOADER_ENABLE_LINUX_SORT)
+ endif()

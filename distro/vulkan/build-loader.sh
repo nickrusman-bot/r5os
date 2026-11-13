@@ -24,7 +24,7 @@ fi
 export PATH="$SRCROOT/cmake-3.31.8-linux-x86_64/bin:$SRCROOT:$PATH"
 PKG="$HAIKU/generated.x86_64/objects/linux/x86_64/release/tools/package/package"
 STAGE="$SRCROOT/vulkan-loader-pkg"
-OUT="$ROOT/distro/packages/x86_64/vulkan_loader-1.4.367-3-x86_64.hpkg"
+OUT="$ROOT/distro/packages/x86_64/vulkan_loader-1.4.367-4-x86_64.hpkg"
 
 if [[ ! -f "$TARBALL" ]]; then
 	curl -L --fail -o "$TARBALL" "$URL"
@@ -56,6 +56,9 @@ for i, part in enumerate(parts):
 print("haiku portability applied")
 PY
 patch -p1 --forward --batch -d "$WORK" < "$ROOT/distro/vulkan/patches/view-surface.patch"
+# M9: the loader's device sort (a GPU before a CPU) is on for Linux only.
+# Zink takes physical device 0, so Haiku turns it on too.
+patch -p1 --forward --batch -d "$WORK" < "$ROOT/distro/vulkan/patches/haiku-device-sort.patch"
 
 rm -rf "$HDR_PREFIX"
 cmake -S "$HEADERS" -B "$HDR_PREFIX/build" -DCMAKE_INSTALL_PREFIX="$HDR_PREFIX/install" -DCMAKE_BUILD_TYPE=Release
@@ -102,10 +105,10 @@ cp -a "$ROOT/distro/vulkan/include/vulkan/vk_icd.h" "$STAGE/develop/headers/vulk
 
 cat > "$STAGE/.PackageInfo" <<'EOF'
 name			vulkan_loader
-version			1.4.367-3
+version			1.4.367-4
 architecture		x86_64
 summary			"Vulkan loader with the view surface"
-description		"The Khronos Vulkan loader 1.4.367, built by R5, with VK_RFIVE_view_surface. The structure type is the Khronos value for extension 732."
+description		"The Khronos Vulkan loader 1.4.367, built by R5, with VK_RFIVE_view_surface and the device sort (GPU before CPU). The structure type is the Khronos value for extension 732."
 packager		"R5OS <r5os@localhost>"
 vendor			"R5OS"
 copyrights {

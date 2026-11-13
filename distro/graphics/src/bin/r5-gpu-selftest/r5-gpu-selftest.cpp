@@ -706,6 +706,22 @@ isolation_requested()
 }
 
 
+/* M9: true when /dev/gpu/radeon_hd/0 could not be opened. Zink then runs
+ * on Lavapipe, so QEMU proves the present path on every boot. */
+static bool sNoRenderNode = false;
+
+
+static void
+run_gl_stages(FILE* out)
+{
+	run_stage(out, "gl", "/bin/r5-gl-test --selftest 2>&1", 120);
+	if (sNoRenderNode) {
+		run_stage(out, "gl zink-cpu",
+			"/bin/r5-gl-test --selftest --zink-cpu 2>&1", 120);
+	}
+}
+
+
 static void
 run_window_tests(FILE* out)
 {
@@ -721,6 +737,14 @@ run_window_tests(FILE* out)
 		180);
 	run_stage(out, "window vkcube",
 		"/bin/r5-wsi-window-test.sh vkcube > /boot/home/win-vkcube.txt", 180);
+	run_stage(out, "window GLTeapot",
+		"/bin/r5-wsi-window-test.sh GLTeapot > /boot/home/win-glteapot.txt",
+		180);
+	if (sNoRenderNode) {
+		run_stage(out, "window GLTeapot zink-cpu",
+			"/bin/r5-wsi-window-test.sh GLTeapot-zink-cpu"
+			" > /boot/home/win-glteapot-zink-cpu.txt", 180);
+	}
 }
 
 
@@ -813,6 +837,7 @@ main()
 
 	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
 	if (fd < 0) {
+		sNoRenderNode = true;
 		fprintf(out, "stage render node t %lld: not available, no supported GPU\n",
 			(long long)system_time());
 		fprintf(out, "stage bo t %lld: not available, no supported GPU\n",
@@ -825,6 +850,7 @@ main()
 			"/bin/VulkanTeapot --cube --selftest 2>&1", 180);
 		run_pair(out, "VulkanTeapot A", "VulkanTeapot B",
 			"/bin/VulkanTeapot --selftest 2>&1", 180);
+		run_gl_stages(out);
 		run_window_tests(out);
 	} else {
 		uint8_t bytes[sizeof(r5_gpu_info) + sizeof(r5_gpu_amd_info)];
@@ -947,6 +973,8 @@ main()
 						run_pair(out, "VulkanTeapot A", "VulkanTeapot B",
 							"/bin/VulkanTeapot --selftest 2>&1", 180);
 					}
+					if (!device_lost())
+						run_gl_stages(out);
 					run_window_tests(out);
 					if (device_lost()) {
 						skip_lost(out, "selftest");
