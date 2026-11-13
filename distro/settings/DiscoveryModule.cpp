@@ -469,11 +469,12 @@ DiscoveryView::DiscoveryView(DiscoveryModule* module)
 	servicesScroll->SetExplicitMaxSize(BSize(u * 150, B_SIZE_UNLIMITED));
 	fServiceShell = new BGroupView(B_VERTICAL, 0);
 	BLayoutBuilder::Group<>(group)
-		.AddGroup(B_HORIZONTAL, u * 10, 0)
+		// the row takes the free height, so the service's text is never
+		// cut off; the hint stays at the bottom of the box
+		.AddGroup(B_HORIZONTAL, u * 10, 1)
 			.Add(servicesScroll, 0)
 			.Add(fServiceShell, 1)
 			.End()
-		.AddGlue(1)
 		.Add(network_hint("An item that is on is also announced, so other "
 			"devices list it."), 0);
 
