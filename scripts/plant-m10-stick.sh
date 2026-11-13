@@ -21,12 +21,19 @@ mkdir -p "$STAGE"
 GIT="/mnt/c/Program Files/Git/bin/git.exe"
 WINROOT=$(wslpath -w "$ROOT")
 "$GIT" -C "$WINROOT" show "HEAD:distro/graphics/boot/radeon_hd" > "$STAGE/radeon_hd"
+# Haiku's own switches (kernel debug.cpp, syslog_daemon syslog_output.cpp):
+# a time on every syslog line, and room for a whole stick run (round 5 lost
+# boot 1 when the 512 KiB log rotated). "true" must be written out.
+printf 'syslog_time_stamps true
+syslog_max_size 4M
+' > "$STAGE/kernel"
 "$BFS" --start-offset 6291456 "$IMG" <<EOT
 mkdir myfs/home/config
 mkdir myfs/home/config/settings
 mkdir myfs/home/config/settings/kernel
 mkdir myfs/home/config/settings/kernel/drivers
 put $STAGE/radeon_hd myfs/home/config/settings/kernel/drivers/radeon_hd
+put $STAGE/kernel myfs/home/config/settings/kernel/drivers/kernel
 quit
 EOT
 echo planted
