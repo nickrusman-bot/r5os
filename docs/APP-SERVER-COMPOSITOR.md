@@ -118,6 +118,197 @@ The R5 decorator implements all three. app_server adds the glass views of the wi
 - app_server imports them with `R5_GPU_BO_IMPORT` and creates a Vulkan image for each. On present, the client sends the image index and a sync object that its rendering signals; the compose waits on it before it samples that image, and signals one back when it is done, so the client can reuse the image.
 - Whether an interface call is needed for sharing a sync object between teams is checked in step 3. If one is needed, it is additive (`R5_GPU_OP_BASE + 32` onward), vendor-neutral, and documented in the header and `docs/GPU-ARCHITECTURE.md` in the same change.
 - When export or import fails, or on Lavapipe, the M7 copy into a `BBitmap` stays, and app_server logs `app_server: window <id> zero-copy off: <reason>` once per window.
+- The design that step 3a worked out from decision 15 is the next section. Where it and this list differ, the next section counts.
+
+## Zero-copy design (step 3a, 13 Nov 2026)
+
+Paper only: nothing below is built yet. It works decision 15 of the brief out, as refined by decision 15b (where they differ, 15b counts) and by the user's choice for the token (13 Nov 2026), against the source as it is on `main` after step 2. Every point names the file it was checked in. What does not fit the source is under [Open questions (step 3a)](#open-questions-step-3a).
+
+### What the source has today
+
+- **Kernel** (`distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/`): `R5_GPU_BO_EXPORT` (`+ 17`) and `R5_GPU_BO_IMPORT` (`+ 18`) return `B_UNSUPPORTED` (`r5_gpu_core.cpp`, before the GPU lock). There is no structure for them in `r5_gpu.h`. A buffer is one slot in the global table `sBo[kMaxBo]`; `kMaxBo` and the per-file `kMaxClientBo` are both 256 (`r5_gpu_internal.h`), so one program can take every slot. The handle is the slot number plus one. A slot has exactly one `owner` (the open file), one user area (`area`, `mapTeam`) and the memory itself (`kernelArea`, `vramOffset`). `gpu_bo_get` refuses a handle of another file. A file that closes while its GPU work runs **parks** its buffers (`parked`, `parkSequence`), and the retire thread frees them after that fence (`gpu_release_parked`). There is no reference count. `borrowed` marks the framebuffer from `R5_GPU_SCANOUT_BO`: release unmaps it and does not free it.
+- **Submits:** the kernel gets no buffer list (`r5_translate.c` skips `AMDGPU_CHUNK_ID_BO_HANDLES`); a submit is IBs, waits and signals, and sets `client->lastSequence`, a number on the one GFX ring. `FENCE_WAIT` takes any sequence and a timeout (`gpu_fence_wait`), so timeout 0 asks without waiting.
+- **The app_server check:** `gpu_caller_is_app_server()` compares the path that `load_image` stored in `team_info.args` with `/system/servers/app_server` and `/boot/system/servers/app_server`. `R5_GPU_SCANOUT_BO` uses it.
+- **Areas:** a GTT buffer is a kernel area (`create_area`, deliberately not `B_CLONEABLE_AREA`) plus a clone into the one team that maps it (`vm_clone_area`, `BO_MAP`). Areas are used for the CPU mapping, but no other team can clone one. Sharing does not go through areas.
+- **Randomness in the Haiku kernel:** `secure_random_value()` (`src/system/kernel/util/Random.cpp`) is a hash of a counter, the time, the thread, the CPU and the last values. The random bus manager (`src/add-ons/kernel/bus_managers/random/driver.cpp`) offers other kernel code only `queue_randomness` (module `bus_managers/random/controller/driver_v1`, used by the `ccp` and `virtio_rng` drivers to put entropy in); reading is only through `/dev/random` and the user-only `RANDOM_GET_ENTROPY` generic syscall. The design below does not need it.
+- **The R5 DRM library** (`distro/graphics/libdrm-r5/r5_translate.c`): `PRIME_HANDLE_TO_FD`, `PRIME_FD_TO_HANDLE`, `GEM_METADATA` and `GEM_OP` end in `r5_unknown` (`ENOSYS`). The libdrm patches are the four in `patches/`, applied by `haiku.py`.
+- **The WSI** (`distro/mesa/wsi/wsi_common_haiku.cpp`): on RADV a `WSI_IMAGE_TYPE_CPU` swapchain with `wsi_configure_buffer_image` (a device image blitted into a linear buffer), then a CPU copy of the rows into a `BBitmap` per image, shown with `BView::SetViewBitmap()` (the link message `AS_VIEW_SET_VIEW_BITMAP`, `src/servers/app/ServerWindow.cpp`). Present waits for `BWindow::Sync()`.
+- **app_server** has two GPU files: RADV's (the Vulkan device of `Compositor.cpp`) and the one of the M8 copy (`GPUCopy.cpp` opens `/dev/gpu/radeon_hd/0` itself and holds the `R5_GPU_SCANOUT_BO` handle).
+
+### How RADV and libdrm import a buffer fd
+
+Checked in Mesa 25.3.6 (WSL tree, `src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c`, `src/amd/common/ac_linux_drm.c`) and libdrm 2.4.124 (`amdgpu/amdgpu_bo.c`):
+
+1. `vkAllocateMemory` with `VkImportMemoryFdInfoKHR` calls `radv_amdgpu_winsys_bo_from_fd` and, on success, closes the fd (`radv_device_memory.c`).
+2. **RADV does no `lseek` of its own.** `radv_amdgpu_winsys_bo_from_fd` calls `ac_drm_bo_import`, then `ac_drm_bo_query_info`, then maps the buffer with `GEM_VA`. The only `lseek` calls in `src/amd/vulkan`, `src/amd/common` and `src/vulkan/wsi` are in `radv_android.c` and the virtio winsys, neither built for R5. The `lseek(fd, 0, SEEK_END)` for the size is in libdrm's `amdgpu_bo_import`, after `drmPrimeFDToHandle`.
+3. `ac_drm_bo_query_info` sends `DRM_AMDGPU_GEM_METADATA` (get) and then `DRM_AMDGPU_GEM_OP` (`AMDGPU_GEM_OP_GET_GEM_CREATE_INFO`: `bo_size`, `alignment`, `domains`, `domain_flags`). **With `ENOSYS` today**, either one returns non-zero, and RADV fails the import: `vkAllocateMemory` returns `VK_ERROR_UNKNOWN` (`error_query`), and `vkGetMemoryFdPropertiesKHR` returns `VK_ERROR_INVALID_EXTERNAL_HANDLE`. `GEM_METADATA` set (`radv_amdgpu_winsys_bo_set_metadata`) ignores its result, and RADV only sends it for GFX12 DCC.
+4. `vkGetMemoryFdPropertiesKHR` (dma-buf) imports the fd, queries it and frees it again (`radv_amdgpu_bo_get_flags_from_fd`).
+5. Export: `vkGetMemoryFdKHR` is `amdgpu_bo_export(dma_buf_fd)`, that is `drmPrimeHandleToFD`, an ioctl the library sees.
+
+So the token-to-fd step fits without a change in RADV: everything RADV does reaches the library as an ioctl, and the one `lseek` is in libdrm (15b: the fifth libdrm patch).
+
+### The structures
+
+Additive, in `r5_gpu.h`, version 1. Calls `+ 17` and `+ 18` keep their numbers and start to work. The present mark (below) is one new call at the first free number, `+ 32` (`R5_GPU_SCANOUT_BO` is `+ 31`). No sync-object calls are added (15b).
+
+```c
+#define R5_GPU_SHARE_TOKEN_BYTES 16u	/* opaque, 128 bits */
+#define R5_GPU_SHARE_COMPOSITOR 1u	/* the only target in version 1 */
+#define R5_GPU_SHARE_TEAM 2u		/* one named team; refused in version 1 */
+
+/* R5_GPU_BO_EXPORT (+ 17) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;		/* in: a buffer of the calling file */
+	uint32_t	target;		/* in: R5_GPU_SHARE_COMPOSITOR */
+	int32_t		target_team;	/* in: for R5_GPU_SHARE_TEAM; 0 now */
+	uint32_t	flags;		/* in: 0 */
+	uint64_t	bytes;		/* out: the real size */
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* out */
+} r5_gpu_bo_export;
+
+/* R5_GPU_BO_IMPORT (+ 18) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* in */
+	int32_t		client_team;	/* in: ServerApp::ClientTeam() */
+	uint32_t	flags;		/* in: 0 */
+	uint32_t	handle;		/* out: a new handle in the calling file */
+	uint32_t	domain;		/* out: R5_GPU_DOMAIN_* */
+	uint32_t	bo_flags;	/* out: the flags of BO_CREATE */
+	uint32_t	_pad;
+	uint64_t	bytes;		/* out: the real size */
+} r5_gpu_bo_import;
+
+/* R5_GPU_BO_PRESENT_MARK (+ 32) */
+#define R5_GPU_MARK_SET 1u	/* exporter: record the file's last submit */
+#define R5_GPU_MARK_GET 2u	/* importer: read what was recorded */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;		/* in: the caller's own handle */
+	uint32_t	op;		/* in: SET or GET */
+	uint64_t	sequence;	/* out: the ring number recorded */
+} r5_gpu_bo_mark;
+```
+
+### The token: an export number
+
+The BeOS way (user, 13 Nov 2026): the token is an **export number, like an `area_id`**: unique, never reused. It is not a secret, and the kernel does not need a random source for it.
+
+- **What it is:** a 64-bit counter of the kernel driver, which only goes up, mixed with `secure_random_value()` so that numbers are not consecutive. It sits in an **opaque 128-bit field**: programs and app_server only copy it, so its contents can change later without a new structure. No copy of the random bus manager, no cryptography in the driver.
+- **The safety boundary is the kernel's rights check, not the number.** An import succeeds only when all of these hold:
+  - the caller is app_server (`gpu_caller_is_app_server()`); anyone else gets `B_NOT_ALLOWED` (refusal `BO_IMPORT caller`);
+  - the export was pinned to the exporting team at export, and that team is the `client_team` app_server passes, the `ClientTeam()` of the connection the message came on; otherwise `B_NOT_ALLOWED` (`BO_IMPORT team`);
+  - the number has not been imported yet: one use (`B_BAD_VALUE`, `BO_IMPORT token`, the same as a number that never existed);
+  - it is younger than 5 s (`BO_IMPORT expired`).
+- **So a guessed or forwarded number from another team is refused**, whoever writes it into app_server's message: the team pinned at export is not the team of the connection.
+- **Target:** only `R5_GPU_SHARE_COMPOSITOR` in version 1. `R5_GPU_SHARE_TEAM` and a non-zero `target_team` are refused with `B_BAD_VALUE` until a later version uses them.
+- **The pending export** is a record `{number, backing, exporter file, exporter team, made at, target}`. The import that matches removes it. A record older than 5 s is removed at the next export or import and by the watchdog (`gpu_watchdog`, which already runs). At most **32 pending exports per file** (`B_NO_MEMORY`, `BO_EXPORT limit`). Exports not yet imported are removed when their file closes (`gpu_free`).
+- 5 s and 32 are starting values (15b).
+
+### The reference count
+
+Today a slot is the memory and the handle at the same time. Sharing splits it:
+
+- a **backing** record: `refs`, `domain`, `flags`, `bytes`, `vramOffset`, `kernelArea`, `kernel`, `borrowed`, and the present mark (`readySequence`);
+- the **slot** per file, as today: `owner`, `ranges`, `area` and `mapTeam` (the CPU mapping stays per team), `parked`, `parkSequence`, `hold`, and a pointer to its backing.
+
+`refs` counts each live slot (also a parked one: that is how GPU work in flight is counted, because a parked slot is freed by the retire thread after its fence) and each pending export. `gpu_bo_release` unmaps that slot's ranges, deletes that slot's user area and drops one reference. Only the last reference frees the VRAM or deletes the kernel area. A `borrowed` backing (the scanout) is never freed. So the program that frees its handle or crashes takes only its own slot; what app_server imported stays valid until app_server closes it.
+
+### Ready and free (15b: no shared sync objects)
+
+- **Ready, at present.** When the program presents image *i*, the WSI calls `BO_PRESENT_MARK` with `SET` on that image's buffer. The kernel records the calling file's `lastSequence` on the backing; the program cannot give a number. Mesa's WSI submits the blit into the linear buffer before it calls the swapchain's present, so that number covers the frame. If another thread of the program submitted in between, the number is later than needed: the frame waits a little longer, it is never shown too early.
+- **The compose never waits.** At the start of a frame app_server calls `BO_PRESENT_MARK` with `GET` on its imported handle, then `FENCE_WAIT` with that number and timeout 0. Passed: it samples the new image. Not passed: that window keeps its previous image.
+- **Free again** goes back as a link message to the program after app_server's compose fence, the frame no longer samples that image. The WSI waits for it before `vkAcquireNextImageKHR` hands the image out again, with the program's own timeout.
+
+### The link message
+
+New messages next to `SetViewBitmap` (15b); the CPU path stays as it is. **No change in libbe** (user, 13 Nov 2026):
+
+- The WSI opens its own `BPrivate::AppServerLink`, the way `libr5ui` will for `set_view_glass()` (decision 13, "What programs and developers see"). The view is named by `_get_object_token_(view)` (`headers/private/app/AppMisc.h`).
+- New codes go at the end of `ServerProtocol.h`, before `AS_LAST_CODE` (the R5 copy in `distro/`).
+- app_server's `ServerApp` of that connection looks up the window and the view by that token, and refuses a view of another application.
+- `ServerApp::ClientTeam()` of that connection is the team app_server passes to `BO_IMPORT`, and the kernel compares it with the team it pinned at export.
+
+The messages:
+
+- **Once per swapchain (program → app_server):** the view token, the image count, and per image the export number, width, height, pitch and format. The reply has one status per image, so the WSI can fall back to the copy path at once.
+- **Per present (program → app_server):** the view token and the image index, after `BO_PRESENT_MARK`.
+- **Free again (app_server → program):** see open question 1.
+- **Once at the end (program → app_server):** the swapchain is gone; app_server closes its imports after the next fence.
+
+### The R5 DRM library and the fifth libdrm patch
+
+- **Export side (the program).** `vkGetMemoryFdKHR` reaches `PRIME_HANDLE_TO_FD`; the library calls `BO_EXPORT` with target compositor and returns a local fd that stands for the number, recorded in a small table `fd → number, bytes`. A new library call, `r5_drm_fd_to_token(fd, token)`, gives the WSI the number for the message.
+- **Import side (app_server).** A new library call, `r5_drm_token_to_fd(device_fd, token, client_team, &fd)`, makes a local fd for a number that arrived in the message. app_server passes it in `VkImportMemoryFdInfoKHR`. RADV's `PRIME_FD_TO_HANDLE` reaches the library, which calls `BO_IMPORT` once with the number and `client_team`, removes the entry and returns the new handle.
+- **The size:** a fifth R5 patch in libdrm (`patches/`, read by `haiku.py`): `amdgpu_bo_import` asks the R5 library for the size (`r5_drm_import_bytes(fd)`, from `bytes` of `BO_IMPORT`) instead of `lseek(fd, 0, SEEK_END)`. No `shm_open`, no RADV patch.
+- **`GEM_OP` and `GEM_METADATA`** are translated: `GEM_OP` (`GET_GEM_CREATE_INFO`) returns the real size and domain from the kernel (`bytes`, `domain`, `bo_flags`), alignment 4096; `GEM_METADATA` (get) returns neutral values for a linear image: flags 0, tiling 0, no UMD metadata. Shared swapchain images are linear; the cost of linear rendering is measured in 3b.
+- **app_server does not call `vkGetMemoryFdPropertiesKHR`** on such an fd: RADV imports and frees it there (step 4), which would use up the one import. app_server picks the memory type from `domain`.
+- What the local fd itself is (it only needs a number the program can close) is decided in 3b inside the library; with the libdrm patch it no longer needs a size.
+- The library calls are additive, MIT, and documented in `docs/GPU-ARCHITECTURE.md` in the same change.
+
+### The WSI
+
+- On RADV the swapchain becomes a `WSI_IMAGE_TYPE_DRM` swapchain with a linear, exportable buffer (the prime path of `wsi_common_drm.c`: `wsi_configure_prime_image`, `wsi_create_prime_image_mem`, then `vkGetMemoryFdKHR`). Only `wsi_common_haiku.cpp` (R5's own file) changes; the common Mesa WSI files are used as they are, without the explicit-sync semaphores.
+- When export or the first message fails, the WSI keeps today's path (the CPU copy into a `BBitmap`). On Lavapipe there is no render node, so the WSI does not try, and app_server logs `app_server: window <id> zero-copy off: lavapipe`.
+- The WSI changes, so a new `mesa_radv` package follows with the pin and the libdrm symbol check (`docs/GPU-ARCHITECTURE.md`, "Updating Mesa").
+
+### app_server's import and check
+
+- In the GPU mode only, on RADV only. For each image: `r5_drm_token_to_fd` with `ClientTeam()` of that window's `ServerApp`, `vkAllocateMemory` with the import, a `VkBuffer` over it (the compose reads `VkBuffer`s, decision 16).
+- **app_server believes the kernel:** it checks the width, height, pitch and format from the message against `bytes` of `BO_IMPORT` (`pitch × height ≤ bytes`, pitch at least `width × 4`, a format the copy path accepts). A wrong value refuses that window's zero-copy (`zero-copy off: size`), and the copy path stays.
+- The imported buffer is one more source per window in the compose of step 2, back to front, with the same barriers.
+
+### The scanout import into Vulkan
+
+- app_server's M8 file (`GPUCopy.cpp`) already holds the scanout handle. It exports it with `BO_EXPORT` (app_server is the target and its own team), and the Vulkan device imports it with `r5_drm_token_to_fd`, as a `VkBuffer` in VRAM.
+- After the compose, a `vkCmdCopyBuffer` of the damaged rows from the frame buffer into the scanout, in the same submit, signalled by the same fence. That replaces the CPU copy into the back buffer and the M8 `DMA_DATA` copy, only if it measures no worse. The pointer is drawn after it, as today.
+- A mode change gives a new scanout: the old import is closed after the next fence, and the new one is exported and imported again.
+
+### The reset path
+
+- The M10 policy marks each file with a context `lost`. app_server's imported slots go with its lost device when the compositor restarts it (decision 14, step 2). The backing of a program's buffer stays until the program's slot goes too.
+- Pending exports of a lost file stay until they expire or that file closes; an import of them after the reset is refused (`BO_IMPORT lost`).
+- **After the restart a Vulkan window shows its window background until the program presents again** (15b): programs get `VK_ERROR_DEVICE_LOST` and make a new swapchain. No CPU copy is kept for this.
+
+### Limits on buffer slots
+
+`kMaxBo` and `kMaxClientBo` are both 256 today (`r5_gpu_internal.h`), so one program can take every slot and no one else, app_server included, gets a buffer.
+
+- **Starting values for 3b:** the system limit goes well up, to 1024, and the per-file limit is half of it, 512. Both are starting values, not the result of a measurement.
+- **A file that hits its limit** gets `B_NO_MEMORY`, as today, plus one line per file: `radeon_hd: buffer limit <n> reached, team <id>`.
+- **The measurement** (user, 13 Nov 2026): the self-test reads `bo_count` from `R5_GPU_GET_COUNTERS` before and after VulkanTeapot, on the next stick, in a boot that runs anyway (no boot of its own). The real values follow from that count and replace the starting values, recorded in `CHANGELOG.md`.
+
+### Pass and fail lines (for step 3b)
+
+One line per test, from the 3b row of the brief. A test program, `r5-share-test`, prints them; app_server prints the `zero-copy off` lines.
+
+| Test | Pass line |
+|---|---|
+| another team imports a number | `r5-share-test: import by other team refused: pass` |
+| a guessed number, and a number forwarded from another team into this team's message | `r5-share-test: guessed or forwarded number refused: pass` |
+| 1000 guessed numbers | `r5-share-test: 1000 guessed numbers refused: pass` |
+| the same number twice | `r5-share-test: second import refused: pass` |
+| an export not imported within 5 s | `r5-share-test: expired number refused: pass` |
+| more than 32 pending exports | `r5-share-test: export limit refused: pass` |
+| exporter killed before the import | `r5-share-test: killed before import, gtt returned: pass` |
+| exporter killed after the import | `r5-share-test: killed after import, still readable, gtt returned at close: pass` |
+| a size that lies | `app_server: window <id> zero-copy off: size` and `r5-share-test: lying size refused: pass` |
+| a submit that never finishes | `r5-share-test: stuck image, desktop composes, previous frame kept: pass` |
+| one program allocating until refused | `r5-share-test: per-file limit, app_server still allocates: pass` |
+| Lavapipe | `app_server: window <id> zero-copy off: lavapipe` |
+
+A failure prints the same text with `fail` and the reason. "GTT returned" is read with `R5_GPU_GET_COUNTERS` before and after, as the M5 counters are.
+
+### Open questions (step 3a)
+
+1. **How "free again" reaches the program.** `AppServerLink` is a request and reply channel: the program asks, `ServerApp` answers on the link's reply port, and the link is locked for that application while it waits (`src/kits/app/AppServerLink.cpp`). app_server cannot send on it by itself after its compose fence, and a reply held back until the fence would block every other call of that application to app_server. Options:
+   - **a.** The WSI makes a port of its own and sends its id in the once-message; after each compose fence app_server writes the free indexes to that port with `write_port_etc` and timeout 0. The WSI waits on that port in `vkAcquireNextImageKHR`. One message per fence, no lock on the link.
+   - **b.** The WSI asks per image ("is image *i* free?") on the link, and app_server answers at once from what its last fence released. The WSI polls; no new port.
+   - Recommendation: **a**, because it does not poll and keeps the link free. It is not literally "a link message", which is why it is asked here.
 
 ## The direct-window pause (decision 9)
 
