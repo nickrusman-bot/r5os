@@ -62,7 +62,8 @@ int sDebugOn = -1;
 int sSelftestOn = -1;
 int sSubmitLogOn = -1;
 int sDeferred = 0;
-static r5_defer sDefer[256];
+/* One deferred VRAM free per backing at most (M11 step 3b: kMaxBo). */
+static r5_defer sDefer[kMaxBo];
 
 gpu_bo sBo[kMaxBo];
 gpu_backing sBacking[kMaxBo];
@@ -592,7 +593,7 @@ gpu_backing_drop(gpu_backing* backing)
 	if (!r5_share_ref_drop(&backing->refs))
 		return;
 	if (backing->domain == R5_GPU_DOMAIN_VRAM && !backing->borrowed) {
-		if (!sDeferred || !r5_defer_add(sDefer, 256, backing->vramOffset))
+		if (!sDeferred || !r5_defer_add(sDefer, kMaxBo, backing->vramOffset))
 			gpu_hw_vram_free(backing->vramOffset);
 	}
 	if (backing->kernelArea >= 0)
@@ -802,7 +803,7 @@ gpu_bo_get(gpu_client* client, uint32 handle)
 void
 gpu_defer_stamp(uint64 sequence)
 {
-	r5_defer_stamp(sDefer, 256, sequence);
+	r5_defer_stamp(sDefer, kMaxBo, sequence);
 }
 
 
@@ -810,7 +811,7 @@ static void
 gpu_defer_reclaim(uint64 seen)
 {
 	uint64 page = 0;
-	while (r5_defer_take(sDefer, 256, seen, &page)) {
+	while (r5_defer_take(sDefer, kMaxBo, seen, &page)) {
 		dprintf("radeon_hd: deferred page %llx reused\n",
 			(unsigned long long)page);
 		gpu_hw_vram_free(page);
