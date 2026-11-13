@@ -150,8 +150,8 @@ These tasks move from the accelerant into the kernel driver:
 
 Not built yet; the design is `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy design (step 3a)", with its open questions. In short:
 
-- `BO_EXPORT` (`+ 17`) and `BO_IMPORT` (`+ 18`) keep their numbers and start to work. Export returns a 128-bit token from the kernel for one target; in version 1 the only target is the compositor, and only `/system/servers/app_server` may import (the check of `R5_GPU_SCANOUT_BO`). A token works once, expires when it is not imported in time, and each file has a limit of pending exports.
-- Two additive, vendor-neutral calls at the first free numbers: `SYNCOBJ_EXPORT` (`+ 32`) and `SYNCOBJ_IMPORT` (`+ 33`), with the same token rule.
+- `BO_EXPORT` (`+ 17`) and `BO_IMPORT` (`+ 18`) keep their numbers and start to work. Export returns an export number in an opaque 128-bit field: unique and never reused, like an `area_id` (a 64-bit counter mixed with `secure_random_value()`), not a secret. The safety boundary is the kernel's check at import: only `/system/servers/app_server` (the check of `R5_GPU_SCANOUT_BO`), only for the team pinned at export (app_server passes `ClientTeam()`), once, within 5 s. At most 32 pending exports per file.
+- One additive, vendor-neutral call at the first free number: `BO_PRESENT_MARK` (`+ 32`). The exporter records on its buffer the ring number of its file's last submit; the kernel takes the number itself. app_server reads it and asks `FENCE_WAIT` with timeout 0. No sync objects are shared between teams.
 - A buffer gets a reference count: each file's handle, each pending export, and a parked handle for GPU work in flight. The memory goes with the last reference.
 - Haiku has no dma-buf, and no area is used for sharing (the kernel area of a buffer is not cloneable).
 
@@ -164,7 +164,7 @@ Not built yet; the design is `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy design 
 - Only implements what Mesa (RADV, Zink and the winsys) actually calls. Everything else returns `-ENOSYS` and logs once.
 - **Symbol check.** A script lists which libdrm symbols the Mesa build imports (`nm -D` / `readelf --dyn-syms` on the RADV ICD and libgallium). It checks that the library exports them all. That runs at every Mesa update.
 - Talks only to the R5 GPU interface. It does not touch the hardware.
-- **Sharing (M11 step 3a, design):** `PRIME_HANDLE_TO_FD` / `PRIME_FD_TO_HANDLE` and `SYNCOBJ_HANDLE_TO_FD` / `FD_TO_HANDLE` map to the export and import calls through a local fd that stands for a token, so RADV keeps its ordinary `VK_KHR_external_memory_fd` path without a patch. Two new library calls, `r5_drm_fd_to_token` and `r5_drm_token_to_fd`, give the WSI and app_server the token. `GEM_METADATA` and `GEM_OP` are added because RADV queries an imported buffer with them.
+- **Sharing (M11 step 3a, design):** `PRIME_HANDLE_TO_FD` / `PRIME_FD_TO_HANDLE` map to the export and import calls through a local fd that stands for an export number, so RADV keeps its ordinary `VK_KHR_external_memory_fd` path without a patch. Two new library calls, `r5_drm_fd_to_token` and `r5_drm_token_to_fd`, give the WSI and app_server the number. A fifth R5 libdrm patch makes `amdgpu_bo_import` take the size from the library instead of `lseek`. `GEM_OP` (real size and domain) and `GEM_METADATA` (neutral values for a linear image) are added, because RADV fails an import when they return `ENOSYS`.
 
 ## Release mechanism
 
