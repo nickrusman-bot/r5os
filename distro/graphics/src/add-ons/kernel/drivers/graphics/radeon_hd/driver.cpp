@@ -36,10 +36,17 @@
 #include <driver_settings.h>
 
 #include "r5_gpu.h"
+#include "r5_gpu_checks.h"
 // SPDX-SnippetEnd
 
 extern "C" void r5_gpu_init();
 extern "C" void r5_gpu_uninit();
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+extern "C" void r5_gpu_set_level(uint32_t level, int optOut);
+extern "C" int r5_gpu_switch_named(void* settings, const char* name);
+// SPDX-SnippetEnd
 
 
 #define TRACE_DRIVER
@@ -74,6 +81,9 @@ const struct supported_device {
 // SPDX-License-Identifier: MIT
 	/* gfxhub aperture high + 1. amdgpu_device.c:2139. */
 	uint8		aperturePlus = 0;
+	/* R5 support level (r5_gpu_checks.h). Only a release-supported row
+	 * gets the GPU by default. */
+	uint8		r5Level = R5_GPU_LEVEL_NONE;
 // SPDX-SnippetEnd
 } kSupportedDevices[] = {
 	// Marketing Names: Radeon X?00
@@ -633,8 +643,9 @@ const struct supported_device {
 	// soc15_need_reset_on_init is true for that chip and false for
 	// Raven and Picasso above. 1636 and 164c load renoir firmware.
 	// 15e7 and 1638 load green_sardine. All four are DCN 2.1.
-	// 0x15e7 is the Ryzen 5 5625U.
-	{0x15e7, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir (Barcelo)", RHD_DISPLAY_DCN, 2, 1, 0, 1},
+	// 0x15e7 is the Ryzen 5 5625U, the only GC 9.3 machine tested (M10).
+	{0x15e7, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir (Barcelo)", RHD_DISPLAY_DCN, 2, 1, 0, 1,
+		R5_GPU_LEVEL_RELEASE},
 	{0x1636, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Renoir", RHD_DISPLAY_DCN, 2, 1, 0, 1},
 	{0x1638, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Cezanne", RHD_DISPLAY_DCN, 2, 1, 0, 1},
 	{0x164c, 0, 0, RADEON_RENOIR, CHIP_APU, "Radeon Lucienne", RHD_DISPLAY_DCN, 2, 1, 0, 1},
@@ -953,6 +964,7 @@ init_driver(void)
 		gDeviceInfo[found]->displayStepping = kSupportedDevices[type].displayStepping;
 		gDeviceInfo[found]->chipsetFlags = kSupportedDevices[type].chipsetFlags;
 		gDeviceInfo[found]->aperturePlus = kSupportedDevices[type].aperturePlus;
+		gDeviceInfo[found]->r5Level = kSupportedDevices[type].r5Level;
 
 		ERROR("%s: GPU(%" B_PRId32 ") %s, revision = 0x%x\n", __func__, found,
 			kSupportedDevices[type].deviceName, info->revision);
@@ -974,19 +986,17 @@ init_driver(void)
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
 	if (found > 0) {
-		int kernel = 0;
-		int irq = 0;
-		int gart = 0;
+		/* M10: "gpu false" is the opt-out. The level is that of the first
+		 * device, the one the GPU interface drives. */
 		void* settings = load_driver_settings("radeon_hd");
-		if (settings != NULL) {
-			kernel = get_driver_boolean_parameter(settings,
-				"gfx9_kernel", false, true) ? 1 : 0;
-			irq = get_driver_boolean_parameter(settings,
-				"gfx9_irq", false, true) ? 1 : 0;
-			gart = get_driver_boolean_parameter(settings,
-				"gfx9_gart", false, true) ? 1 : 0;
+		int optOut = settings != NULL
+			&& !get_driver_boolean_parameter(settings, "gpu", true, true);
+		r5_gpu_set_level(gDeviceInfo[0]->r5Level, optOut);
+		int kernel = r5_gpu_switch_named(settings, "gfx9_kernel");
+		int irq = r5_gpu_switch_named(settings, "gfx9_irq");
+		int gart = r5_gpu_switch_named(settings, "gfx9_gart");
+		if (settings != NULL)
 			unload_driver_settings(settings);
-		}
 		sR5Published[0] = gDeviceNames[0];
 		sR5Published[1] = NULL;
 		/* No node unless the kernel, the interrupt and the GART are on.

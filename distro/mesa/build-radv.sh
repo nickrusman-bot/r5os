@@ -41,6 +41,11 @@ if ! grep -q 'present_data' "$MESA/src/gallium/frontends/hgl/hgl_context.h" \
 	|| ! grep -q 'another account' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-zink-present.patch"
 fi
+# M10: Zink by default when the GPU's availability bit is set; the reason
+# "gpu not available" when it is not. Needs the M9 patch above.
+if ! grep -q 'r5_gl_gpu_available' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
+	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-zink-available.patch"
+fi
 
 cd "$MESA"
 setup="python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup build-radv"

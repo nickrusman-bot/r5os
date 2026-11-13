@@ -153,6 +153,8 @@ extern gpu_client* sClientList;
 /* M10: the GPU is off until the next boot, and a reset is running. */
 extern bool sGpuOff;
 extern bool sResetting;
+/* M10: the four checks at boot passed (R5_GPU_CAP_AVAILABLE). */
+extern bool sAvailable;
 /* gpu_hang_test <n> from the radeon_hd settings. 0 is off. */
 extern uint32 sHangTest;
 

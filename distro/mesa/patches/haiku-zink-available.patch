@@ -1,0 +1,133 @@
+--- a/src/egl/drivers/haiku/egl_haiku.cpp
++++ b/src/egl/drivers/haiku/egl_haiku.cpp
+@@ -33,6 +33,9 @@
+ // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+ // SPDX-License-Identifier: MIT
+ #include <dirent.h>
++#include <fcntl.h>
++#include <sys/ioctl.h>
++#include <unistd.h>
+ #include <new>
+ #include <stdarg.h>
+ #include <stdlib.h>
+@@ -364,7 +367,9 @@
+ 
+ struct r5_gl_settings {
+    bool gpuOff;
+-   bool opengl;
++   // M10: -1 when the settings do not name gpu_opengl. The GPU's
++   // availability bit then decides.
++   int opengl;
+    bool forceFail;
+ };
+ 
+@@ -375,6 +380,7 @@
+ r5_gl_read_settings(struct r5_gl_settings *settings)
+ {
+    memset(settings, 0, sizeof(*settings));
++   settings->opengl = -1;
+    void *handle = NULL;
+    for (size_t i = 0; i < sizeof(kR5Settings) / sizeof(kR5Settings[0]);
+         i++) {
+@@ -388,16 +394,20 @@
+       return;
+    settings->gpuOff = !get_driver_boolean_parameter(handle, "gpu", true, true);
+    // A key without a value means true, as for every R5 kernel switch.
+-   settings->opengl = get_driver_boolean_parameter(handle, "gpu_opengl",
+-                                                   false, true);
++   bool ifOff = get_driver_boolean_parameter(handle, "gpu_opengl", false,
++                                             true);
++   bool ifOn = get_driver_boolean_parameter(handle, "gpu_opengl", true, true);
++   if (ifOff == ifOn)
++      settings->opengl = ifOn ? 1 : 0;
+    settings->forceFail = get_driver_boolean_parameter(handle,
+       "gpu_opengl_fail", false, true);
+    unload_driver_settings(handle);
+ }
+ 
+-// Any entry under /dev/gpu/<driver>/. No driver name is assumed.
++// Any entry under /dev/gpu/<driver>/. No driver name is assumed. The
++// path of the first one is written to node.
+ static bool
+-r5_gl_render_node(void)
++r5_gl_render_node(char *node, size_t nodeSize)
+ {
+    DIR *gpu = opendir("/dev/gpu");
+    if (gpu == NULL)
+@@ -412,9 +422,10 @@
+       DIR *nodes = opendir(path);
+       if (nodes == NULL)
+          continue;
+-      struct dirent *node;
+-      while ((node = readdir(nodes)) != NULL) {
+-         if (node->d_name[0] != '.') {
++      struct dirent *entry;
++      while ((entry = readdir(nodes)) != NULL) {
++         if (entry->d_name[0] != '.') {
++            snprintf(node, nodeSize, "%s/%s", path, entry->d_name);
+             found = true;
+             break;
+          }
+@@ -425,6 +436,28 @@
+    return found;
+ }
+ 
++// R5 GPU interface (r5_gpu.h, MIT): GET_INFO is the first call. Its first
++// 32 bytes are size, version, api_major, api_minor, vendor, device,
++// revision and capabilities. R5_GPU_CAP_AVAILABLE is set when the four
++// checks at boot passed and the GPU was not turned off since.
++#define R5_GPU_GET_INFO_OP 30479u
++#define R5_GPU_CAP_AVAILABLE_BIT 8u
++
++static bool
++r5_gl_gpu_available(const char *node)
++{
++   int fd = open(node, O_RDWR | O_CLOEXEC);
++   if (fd < 0)
++      return false;
++   uint32_t info[8];
++   memset(info, 0, sizeof(info));
++   info[0] = sizeof(info);
++   bool available = ioctl(fd, R5_GPU_GET_INFO_OP, info, sizeof(info)) == 0
++      && (info[7] & R5_GPU_CAP_AVAILABLE_BIT) != 0;
++   close(fd);
++   return available;
++}
++
+ static bool
+ r5_gl_is_zink(struct pipe_screen *screen)
+ {
+@@ -442,8 +475,8 @@
+                 screen->get_name(screen));
+ }
+ 
+-// M9 decision 3. The order of these checks is fixed. A line is written once
+-// per process.
++// M9 decision 3, with M10's availability bit. The order of these checks is
++// fixed. A line is written once per process.
+ static struct pipe_screen *
+ r5_gl_create_screen(_EGLDisplay *disp, struct sw_winsys *winsys)
+ {
+@@ -463,14 +496,18 @@
+    r5_gl_read_settings(&settings);
+    const char *reason = NULL;
+    struct pipe_screen *screen = NULL;
+-   if (!settings.opengl)
+-      reason = NULL; // 2. not asked for: no line
++   char node[B_PATH_NAME_LENGTH];
++   if (settings.opengl == 0)
++      reason = NULL; // 2. turned off: no line
+    else if (settings.gpuOff)
+       reason = "gpu off";
+    else if (settings.forceFail)
+       reason = "forced failure";
+-   else if (!r5_gl_render_node())
+-      reason = "no render node";
++   else if (!r5_gl_render_node(node, sizeof(node)))
++      // No GPU at all: a line only when the settings asked for Zink.
++      reason = settings.opengl == 1 ? "no render node" : NULL;
++   else if (!r5_gl_gpu_available(node))
++      reason = "gpu not available";
+    else {
+       screen = sw_screen_create_zink(winsys, NULL, false);
+       if (screen == NULL)

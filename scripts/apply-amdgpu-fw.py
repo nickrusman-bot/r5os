@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import re
 import sys
 
 HAIKU = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/nickr/r5os/haiku")
@@ -30,30 +31,13 @@ NAMES = (
 )
 
 # The eleven blobs in THIRD_PARTY_NOTICES.md. Checked before any copy.
-SHA256 = {
-    "renoir_pfp.bin":
-        "0c815572cc466d6c1e608e1d36ab16f35660179e19f0feeabc448b85e8158af4",
-    "renoir_me.bin":
-        "38574ad3c583f3965cf1c4be84f9d0c3818511781c03733b28f07683061b1189",
-    "renoir_ce.bin":
-        "b4ea0bf5d589d82ccef52e54536221f094b66b648514b14f03cf4ad50f9a4f72",
-    "renoir_rlc.bin":
-        "66f4397c2e9d19af245f9da290c8678eb1a51cc815fa7864a9383c2cd0db319d",
-    "renoir_mec.bin":
-        "0e4c6712f75af494c3fd70386bc07739cab3aafd77c4fe8efb46c0bc1ae4eba6",
-    "green_sardine_pfp.bin":
-        "94e1474b3c8d422e35661d2d584297d891464c173ebf4ad45536277bdf7bdcdc",
-    "green_sardine_me.bin":
-        "671af908c8d631e659895d62db2e6bffc1d2c87d6db4c08246be0216f468fb9c",
-    "green_sardine_ce.bin":
-        "3bba10cff48ec51eb63e78078456596258c9fea2e8b38d91d02be66c0aca70fd",
-    "green_sardine_rlc.bin":
-        "66f4397c2e9d19af245f9da290c8678eb1a51cc815fa7864a9383c2cd0db319d",
-    "green_sardine_mec.bin":
-        "0e4c6712f75af494c3fd70386bc07739cab3aafd77c4fe8efb46c0bc1ae4eba6",
-    "green_sardine_mec2.bin":
-        "0e4c6712f75af494c3fd70386bc07739cab3aafd77c4fe8efb46c0bc1ae4eba6",
-}
+# The table is the one the kernel checks at boot (r5_gfx9_firmware.h).
+TABLE = (pathlib.Path(__file__).resolve().parents[1]
+    / "distro/graphics/src/add-ons/accelerants/radeon_hd/common/r5_gfx9_firmware.h")
+SHA256 = dict(re.findall(r'\{"([a-z_0-9]+\.bin)",\s*"([0-9a-f]{64})"\}',
+    TABLE.read_text(encoding="utf-8")))
+if len(SHA256) != 11:
+    raise SystemExit(f"{TABLE.name}: {len(SHA256)} blobs, expected 11")
 
 JAM_BLOCK = """
 # r5AmdGpuFw GFX 9.3 firmware. The accelerant reads this path.

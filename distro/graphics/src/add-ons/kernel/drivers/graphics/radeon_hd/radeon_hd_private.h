@@ -80,6 +80,8 @@ struct radeon_info {
 	uint32			fw_feature[32];
 	/* gfxhub aperture high + 1. From kSupportedDevices. */
 	uint8			aperturePlus;
+	/* R5 support level of the table row (r5_gpu_checks.h). */
+	uint8			r5Level;
 // SPDX-SnippetEnd
 };
 
