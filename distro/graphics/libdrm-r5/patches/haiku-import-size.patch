@@ -1,0 +1,26 @@
+--- a/amdgpu/amdgpu_bo.c	2026-11-13 22:11:21.753312520 +0100
++++ b/amdgpu/amdgpu_bo.c	2026-11-13 22:11:21.765426002 +0100
+@@ -272,6 +272,15 @@
+ 		if (r)
+ 			goto unlock;
+ 
++#if defined(__HAIKU__) || defined(R5_HOST_TEST)
++		/* R5: the fd stands for an export number, not a dma-buf. The
++		 * size is the one BO_IMPORT returned. */
++		size = (off_t)r5_drm_import_bytes(shared_handle);
++		if (size <= 0) {
++			r = -EINVAL;
++			goto free_bo_handle;
++		}
++#else
+ 		/* Query the buffer size. */
+ 		size = lseek(shared_handle, 0, SEEK_END);
+ 		if (size == (off_t)-1) {
+@@ -279,6 +288,7 @@
+ 			goto free_bo_handle;
+ 		}
+ 		lseek(shared_handle, 0, SEEK_SET);
++#endif
+ 
+ 		dma_buf_size = size;
+ 		shared_handle = handle;

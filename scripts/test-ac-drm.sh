@@ -35,6 +35,7 @@ gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE \
 gcc -std=c11 -O2 -DR5_HOST_TEST -D_GNU_SOURCE \
 	-I"$WIN/distro/graphics/headers/private/r5gpu" \
 	-I"$WIN/distro/graphics/src/add-ons/accelerants/radeon_hd/common" \
+	-I"$WIN/distro/graphics/libdrm-r5" \
 	"${INC[@]}" \
 	-c -o /tmp/test-r5-libdrm.o "$WIN/scripts/test-r5-libdrm.c"
 gcc -o /tmp/test-ac-drm \

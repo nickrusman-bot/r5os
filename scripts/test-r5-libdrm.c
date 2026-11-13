@@ -88,6 +88,13 @@ static void *gMem[256];
 static size_t gBytes[256];
 static uint32_t gDomain[256];
 static uint32_t gBoFlags[256];
+/* M11 step 3b: the slot whose memory a slot stands for (an import), the
+ * present mark per memory, and the pending exports of the fake kernel. */
+static uint32_t gBacking[256];
+static uint64_t gMark[256];
+static uint8_t gExportToken[8][R5_GPU_SHARE_TOKEN_BYTES];
+static uint32_t gExportSlot[8];
+static uint32_t gExportCount;
 static uint64_t gVramUsed;
 
 #define HOST_BO_SLOTS 256u
@@ -418,6 +425,7 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 		gBytes[bo->handle - 1] = 0;
 		gDomain[bo->handle - 1] = 0;
 		gBoFlags[bo->handle - 1] = 0;
+		gBacking[bo->handle - 1] = 0;
 		if (gBoArea[bo->handle - 1] > 0)
 			r5_area_destroy(gBoArea[bo->handle - 1]);
 		gBoArea[bo->handle - 1] = 0;
@@ -842,6 +850,68 @@ r5_host_ioctl(int fd, unsigned long op, void *buf, size_t bytes)
 			gSyncSubmitted[dst - 1] = dstPoint;
 		return 0;
 	}
+	if (op == R5_GPU_BO_EXPORT) {
+		r5_gpu_bo_export *ex = buf;
+		if (bytes < sizeof(*ex) || ex->handle == 0 || ex->handle > HOST_BO_SLOTS
+			|| gMem[ex->handle - 1] == NULL
+			|| ex->target != R5_GPU_SHARE_COMPOSITOR
+			|| gExportCount >= 8)
+			return host_err(EINVAL);
+		uint32_t n = gExportCount++;
+		memset(gExportToken[n], 0, R5_GPU_SHARE_TOKEN_BYTES);
+		gExportToken[n][0] = (uint8_t)(0xa0 + n);
+		gExportToken[n][15] = 0x5a;
+		gExportSlot[n] = ex->handle;
+		memcpy(ex->token, gExportToken[n], R5_GPU_SHARE_TOKEN_BYTES);
+		ex->bytes = gBytes[ex->handle - 1];
+		return 0;
+	}
+	if (op == R5_GPU_BO_IMPORT) {
+		r5_gpu_bo_import *im = buf;
+		if (bytes < sizeof(*im))
+			return host_err(EINVAL);
+		for (uint32_t n = 0; n < gExportCount; n++) {
+			if (gExportSlot[n] == 0 || memcmp(gExportToken[n], im->token,
+					R5_GPU_SHARE_TOKEN_BYTES) != 0)
+				continue;
+			uint32_t source = gExportSlot[n];
+			for (uint32_t i = 0; i < HOST_BO_SLOTS; i++) {
+				if (gMem[i] != NULL)
+					continue;
+				gMem[i] = calloc(1, gBytes[source - 1]);
+				if (gMem[i] == NULL)
+					return host_err(ENOMEM);
+				gBytes[i] = gBytes[source - 1];
+				gDomain[i] = gDomain[source - 1];
+				gBoFlags[i] = gBoFlags[source - 1];
+				gBacking[i] = gBacking[source - 1] != 0
+					? gBacking[source - 1] : source;
+				/* One use. */
+				gExportSlot[n] = 0;
+				im->handle = i + 1;
+				im->domain = gDomain[i];
+				im->bo_flags = gBoFlags[i];
+				im->bytes = gBytes[i];
+				return 0;
+			}
+			return host_err(ENOMEM);
+		}
+		return host_err(EINVAL);
+	}
+	if (op == R5_GPU_BO_PRESENT_MARK) {
+		r5_gpu_bo_mark *mark = buf;
+		if (bytes < sizeof(*mark) || mark->handle == 0
+			|| mark->handle > HOST_BO_SLOTS || gMem[mark->handle - 1] == NULL)
+			return host_err(EINVAL);
+		uint32_t memory = gBacking[mark->handle - 1] != 0
+			? gBacking[mark->handle - 1] : mark->handle;
+		if (mark->op == R5_GPU_MARK_SET)
+			gMark[memory - 1] = gSequence + 1000u * memory;
+		else if (mark->op != R5_GPU_MARK_GET)
+			return host_err(EINVAL);
+		mark->sequence = gMark[memory - 1];
+		return 0;
+	}
 	gEnosys++;
 	return host_err(ENOSYS);
 }
@@ -947,15 +1017,30 @@ drmGetPrimaryDeviceNameFromFd(int fd)
 int
 drmPrimeHandleToFD(int fd, uint32_t handle, uint32_t flags, int *prime_fd)
 {
-	(void)fd; (void)handle; (void)flags; (void)prime_fd;
-	return -1;
+	/* As xf86drm.c: through drmIoctl, so the translator sees it. */
+	struct drm_prime_handle args;
+	memset(&args, 0, sizeof(args));
+	args.fd = -1;
+	args.handle = handle;
+	args.flags = flags;
+	int ret = drmIoctl(fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &args);
+	if (ret)
+		return ret;
+	*prime_fd = args.fd;
+	return 0;
 }
 
 int
 drmPrimeFDToHandle(int fd, int prime_fd, uint32_t *handle)
 {
-	(void)fd; (void)prime_fd; (void)handle;
-	return -1;
+	struct drm_prime_handle args;
+	memset(&args, 0, sizeof(args));
+	args.fd = prime_fd;
+	int ret = drmIoctl(fd, DRM_IOCTL_PRIME_FD_TO_HANDLE, &args);
+	if (ret)
+		return ret;
+	*handle = args.handle;
+	return 0;
 }
 
 int
@@ -1435,6 +1520,227 @@ binary_replay(int node)
 }
 
 
+/* M11 step 3b ("Decided in step 3b" in docs/APP-SERVER-COMPOSITOR.md):
+ * an import is known by its own id, not by the fd number. RADV closes
+ * the fd after the import; the number comes back for the next one. */
+static uint32_t
+share_new_bo(int node, uint64_t bytes)
+{
+	union drm_amdgpu_gem_create gem;
+	memset(&gem, 0, sizeof(gem));
+	gem.in.bo_size = bytes;
+	gem.in.domains = AMDGPU_GEM_DOMAIN_GTT;
+	gem.in.domain_flags = AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+	if (drmCommandWriteRead(node, DRM_AMDGPU_GEM_CREATE, &gem,
+			sizeof(gem)) != 0)
+		return 0;
+	return gem.out.handle;
+}
+
+
+static uint32_t
+share_import(int node, int fd)
+{
+	struct drm_prime_handle prime;
+	memset(&prime, 0, sizeof(prime));
+	prime.fd = fd;
+	if (drmIoctl(node, DRM_IOCTL_PRIME_FD_TO_HANDLE, &prime) != 0)
+		return 0;
+	return prime.handle;
+}
+
+
+static int
+share_export(int node, uint32_t handle, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES])
+{
+	struct drm_prime_handle prime;
+	memset(&prime, 0, sizeof(prime));
+	prime.handle = handle;
+	prime.flags = DRM_CLOEXEC | DRM_RDWR;
+	if (drmIoctl(node, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) != 0)
+		return -1;
+	if (r5_drm_fd_to_token(prime.fd, token) != 0) {
+		close(prime.fd);
+		return -1;
+	}
+	/* The program sends the number and closes its fd. */
+	close(prime.fd);
+	return 0;
+}
+
+
+static void
+share_ids(int node)
+{
+	uint8_t first[R5_GPU_SHARE_TOKEN_BYTES];
+	uint8_t second[R5_GPU_SHARE_TOKEN_BYTES];
+	uint32_t a = share_new_bo(node, 8192);
+	uint32_t b = share_new_bo(node, 16384);
+	CHECK(a != 0 && b != 0);
+	CHECK(share_export(node, a, first) == 0);
+	CHECK(share_export(node, b, second) == 0);
+	CHECK(memcmp(first, second, sizeof(first)) != 0);
+
+	/* The program marks both at present. */
+	r5_gpu_bo_mark mark;
+	memset(&mark, 0, sizeof(mark));
+	mark.size = (uint32_t)sizeof(mark);
+	mark.version = 1;
+	mark.op = R5_GPU_MARK_SET;
+	mark.handle = a;
+	CHECK(r5_host_ioctl(node, R5_GPU_BO_PRESENT_MARK, &mark, sizeof(mark)) == 0);
+	uint64_t markA = mark.sequence;
+	mark.handle = b;
+	CHECK(r5_host_ioctl(node, R5_GPU_BO_PRESENT_MARK, &mark, sizeof(mark)) == 0);
+	uint64_t markB = mark.sequence;
+	CHECK(markA != markB);
+
+	/* app_server: the first number, imported the way RADV does it. */
+	int fd1 = -1;
+	uint32_t id1 = 0;
+	CHECK(r5_drm_token_to_fd(-1, first, 77, &fd1, &id1) == 0);
+	CHECK(fd1 >= 0 && id1 != 0);
+	CHECK(r5_drm_import_bytes(fd1) < 0);
+	uint32_t imported1 = share_import(node, fd1);
+	CHECK(imported1 != 0);
+	CHECK(r5_drm_import_bytes(fd1) == 8192);
+	/* A second import of the same fd is refused (one use). */
+	CHECK(share_import(node, fd1) == 0);
+	CHECK(errno == EINVAL);
+	close(fd1);
+
+	/* The second number gets the fd number back, and its own id. */
+	int fd2 = -1;
+	uint32_t id2 = 0;
+	CHECK(r5_drm_token_to_fd(-1, second, 77, &fd2, &id2) == 0);
+	CHECK(fd2 == fd1);
+	CHECK(id2 != 0 && id2 != id1);
+	uint32_t imported2 = share_import(node, fd2);
+	CHECK(imported2 != 0 && imported2 != imported1);
+	CHECK(r5_drm_import_bytes(fd2) == 16384);
+	/* Asked once: the row is free, the id is not. */
+	CHECK(r5_drm_import_bytes(fd2) < 0);
+	close(fd2);
+
+	/* No mix-up: each id reads its own buffer's mark. */
+	uint64_t seen = 0;
+	CHECK(r5_drm_mark_get(id1, &seen) == 0 && seen == markA);
+	CHECK(r5_drm_mark_get(id2, &seen) == 0 && seen == markB);
+	CHECK(r5_drm_mark_get(0, &seen) != 0);
+	CHECK(r5_drm_mark_get(id2 + 100, &seen) != 0);
+
+	/* GEM_OP and GEM_METADATA of an imported buffer. */
+	struct drm_amdgpu_gem_create_in info;
+	struct drm_amdgpu_gem_op op;
+	memset(&info, 0, sizeof(info));
+	memset(&op, 0, sizeof(op));
+	op.handle = imported2;
+	op.op = AMDGPU_GEM_OP_GET_GEM_CREATE_INFO;
+	op.value = (uint64_t)(uintptr_t)&info;
+	CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_OP, &op, sizeof(op)) == 0);
+	CHECK(info.bo_size == 16384 && info.alignment == 4096);
+	CHECK(info.domains == AMDGPU_GEM_DOMAIN_GTT);
+	CHECK((info.domain_flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC) != 0);
+	op.handle = a;
+	CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_OP, &op, sizeof(op)) != 0);
+	struct drm_amdgpu_gem_metadata meta;
+	memset(&meta, 0xff, sizeof(meta));
+	meta.handle = imported2;
+	meta.op = AMDGPU_GEM_METADATA_OP_GET_METADATA;
+	CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_METADATA, &meta,
+		sizeof(meta)) == 0);
+	CHECK(meta.data.flags == 0 && meta.data.tiling_info == 0
+		&& meta.data.data_size_bytes == 0);
+
+	/* GEM_CLOSE ends the id: mark_get fails, app_server takes the copy
+	 * path for that window. The other id stays. */
+	struct drm_gem_close closing;
+	memset(&closing, 0, sizeof(closing));
+	closing.handle = imported1;
+	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
+	CHECK(r5_drm_mark_get(id1, &seen) != 0);
+	CHECK(r5_drm_mark_get(id2, &seen) == 0 && seen == markB);
+	op.handle = imported1;
+	CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_OP, &op, sizeof(op)) != 0);
+
+	/* A number nobody exported: the fd is made, the import is refused,
+	 * and no id reads a mark. */
+	uint8_t guessed[R5_GPU_SHARE_TOKEN_BYTES];
+	int fd3 = -1;
+	uint32_t id3 = 0;
+	memset(guessed, 0x33, sizeof(guessed));
+	CHECK(r5_drm_token_to_fd(-1, guessed, 77, &fd3, &id3) == 0);
+	CHECK(share_import(node, fd3) == 0);
+	CHECK(r5_drm_mark_get(id3, &seen) != 0);
+	close(fd3);
+	/* An fd that is not ours has no number. */
+	CHECK(r5_drm_fd_to_token(node, guessed) != 0);
+	/* 200 exports with fd_to_token and close: the table of 64 rows
+	 * never fills, because each row is free after its one use. */
+	{
+		int fills = 0;
+		for (int i = 0; i < 200; i++) {
+			struct drm_prime_handle prime;
+			memset(&prime, 0, sizeof(prime));
+			prime.handle = b;
+			gExportCount = 0;
+			if (drmIoctl(node, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) != 0
+				|| r5_drm_fd_to_token(prime.fd, guessed) != 0)
+				fills++;
+			if (prime.fd > 0)
+				close(prime.fd);
+		}
+		CHECK(fills == 0);
+		gExportCount = 0;
+	}
+
+	closing.handle = imported2;
+	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
+	CHECK(r5_drm_mark_get(id2, &seen) != 0);
+	closing.handle = a;
+	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
+	closing.handle = b;
+	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
+}
+
+
+/* The same path through libdrm: amdgpu_bo_export gives the fd, and
+ * amdgpu_bo_import takes the size from BO_IMPORT (fifth R5 patch), not
+ * from lseek, which on a /dev/null fd would say 0. */
+static void
+share_libdrm(amdgpu_device_handle dev)
+{
+	struct amdgpu_bo_alloc_request request;
+	amdgpu_bo_handle bo = NULL;
+	uint32_t exported = 0;
+	uint8_t token[R5_GPU_SHARE_TOKEN_BYTES];
+	memset(&request, 0, sizeof(request));
+	request.alloc_size = 3 * 4096;
+	request.phys_alignment = 4096;
+	request.preferred_heap = AMDGPU_GEM_DOMAIN_GTT;
+	CHECK(amdgpu_bo_alloc(dev, &request, &bo) == 0);
+	CHECK(amdgpu_bo_export(bo, amdgpu_bo_handle_type_dma_buf_fd,
+		&exported) == 0);
+	CHECK(r5_drm_fd_to_token((int)exported, token) == 0);
+	close((int)exported);
+
+	int fd = -1;
+	uint32_t id = 0;
+	CHECK(r5_drm_token_to_fd(-1, token, 77, &fd, &id) == 0);
+	struct amdgpu_bo_import_result result;
+	memset(&result, 0, sizeof(result));
+	CHECK(amdgpu_bo_import(dev, amdgpu_bo_handle_type_dma_buf_fd,
+		(uint32_t)fd, &result) == 0);
+	CHECK(result.alloc_size == 3 * 4096);
+	close(fd);
+	uint64_t seen = 1;
+	CHECK(r5_drm_mark_get(id, &seen) == 0);
+	CHECK(result.buf_handle != NULL && amdgpu_bo_free(result.buf_handle) == 0);
+	CHECK(r5_drm_mark_get(id, &seen) != 0);
+	CHECK(amdgpu_bo_free(bo) == 0);
+}
+
+
 static int
 radv_replay(int fd)
 {
@@ -1747,11 +2053,14 @@ radv_replay(int fd)
 		moved.handle = handles[0];
 		CHECK(drmIoctl(node, DRM_IOCTL_SYNCOBJ_HANDLE_TO_FD, &moved) != 0);
 		CHECK(errno == ENOSYS);
+		/* M11 step 3b: PRIME is translated; handle 0 is refused. */
 		struct drm_prime_handle prime;
 		memset(&prime, 0, sizeof(prime));
 		CHECK(drmIoctl(node, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) != 0);
-		CHECK(errno == ENOSYS);
+		CHECK(errno == EINVAL);
 	}
+	share_ids(node);
+	share_libdrm(dev);
 	submit_zero(node);
 	binary_replay(node);
 
