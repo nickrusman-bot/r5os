@@ -12,7 +12,7 @@ What changed:
 - Mistakes found: the M10 stick scripts from the stick-tooling PR (`check`, `boot-next`, `check-user`) were never packed, so the image still had the M8 ones; `mesa_radv-25.3.6-6` packs them. And `boot-next 1` removed the settings file, so Login would not start the self-test and `gpu_hang_test` (boots 2 and 3) would never start; boots 1-3 now write `gpu_selftest true` and nothing else besides the test switch.
 - A new Windows worktree checks out CRLF; `apply-overlay.sh` copied CRLF Jamfiles into the Haiku tree and the jam failed in usb_webcam. Checked out `distro` and `scripts` with LF and jammed again.
 
-Host test: `scripts/test-r5-gpu-checks.cpp`, `ok gpu checks 49 cases` (including the real blobs). Not tested: the 5625U (every check, the defaults, Zink and RADV by default, `gpu false`), a standard account.
+Host test: `scripts/test-r5-gpu-checks.cpp`, `ok gpu checks 49 cases` (including the real blobs). QEMU (KVM, no AMD GPU, radeon_hd does not attach), branch `claude/m10-gpu-default`: with no settings file the desktop comes up, no `egl:` and no `radeon_hd: gpu` line, `pixels ok llvmpipe only` (r5-gl-test) and `pixels ok lavapipe only` (VulkanTeapot); with `gpu false` the line `egl: opengl llvmpipe: gpu off` and the same pass lines; `boot-next`, `check` and `check-user` are in `/boot/system/bin`. Screendump `docs/images/gpu-m10-qemu-default.png`. Not tested: the 5625U (every check, the defaults, Zink and RADV by default, `gpu false`), a standard account.
 
 ## 2026-11-12 - OpenGL through Zink: the driver choice and the window path (M9 steps 1-4, QEMU only)
 
