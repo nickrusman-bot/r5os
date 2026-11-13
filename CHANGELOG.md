@@ -18,8 +18,7 @@ What changed:
 Mistakes and fixes during this step:
 - app_server crashed in `Painter::StraightLine` while Deskbar (created at -1000,-1000) and the notification window (at x -4) drew their border. First the Painter view became invalid for a window fully off the left or top, and Painter kept its old buffer; fixed by keeping the view valid. Then the real cause, found with temporary serial diagnostics: Painter multiplies a row by an unsigned stride, so it cannot draw at a negative coordinate. `Window::_ClipToBuffer` now limits every drawable region to the window's buffer and to x >= 0, y >= 0, and logs `draw outside buffer` once per window if a region ever reaches past the buffer. A part off the left or top is drawn when it comes on screen.
 - The first interactive test ran without the compositor: the settings file was written to a WSL `/tmp` that was emptied between two calls. The test was repeated with the setting checked in the image.
-- Two inserted log strings got a real newline instead of `
-`; fixed before building.
+- Two inserted log strings got a real newline instead of the `\n` escape; fixed before building.
 
 Tested (QEMU, KVM, usernet, Lavapipe, 13 Nov 2026), copy A with `gpu_compositor true` and `gpu_debug true`: `app_server: vulkan queue family 0 flags 0x7`, `app_server: gpu compositor on lavapipe: no render node`, `app_server: window memory type 0 flags 0xf`, `compose late 100 ms` twice (the first frames), `compose compare ok` 21 times, never `MISMATCH`, never `draw outside buffer`, no crash. Measured: `compose median` 4647 to 5302 us, cpu 572 to 613 ms per 10 s, window memory 8 MB. The user ran the test card: Pulse, ActivityMonitor and Clock half covered and then uncovered (correct at once), dragging past the left edge, resizing from the edges, switching workspace; all worked. Copy B without the setting: a full boot log with no line containing `compositor`.
 
