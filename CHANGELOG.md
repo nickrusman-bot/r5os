@@ -1,5 +1,31 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - M11 step 3b: Vulkan windows without a copy (A2) and the scanout through Vulkan, behind gpu_compositor
+
+Problem: a Vulkan window was copied by the CPU into a `BBitmap` every frame, and the composed screen went through a CPU copy into the back buffer and the M8 `DMA_DATA` copy. Step 3b builds the 3a design (`docs/APP-SERVER-COMPOSITOR.md`, #4251, #4252) and decision 15b.
+
+What changed:
+- Kernel (`r5gpu`): `R5_GPU_BO_EXPORT` (`+ 17`) and `R5_GPU_BO_IMPORT` (`+ 18`) work, `R5_GPU_BO_PRESENT_MARK` (`+ 32`) is new (`r5_gpu.h`). A buffer's memory is a backing with a reference count, apart from each file's handle. An export number is a counter times an odd constant plus two `secure_random_value()` words, in an opaque 128-bit field. An import succeeds only for app_server, for the team pinned at export, once, within 5 s; at most 32 pending exports per file, removed with their file and by the watchdog. Slots: 1024, 512 per file, the last 64 only for app_server; `radeon_hd: buffer limit <n> reached, team <id>` once per file. `GET_INFO` `vram_usage`/`gtt_usage` count backings. The logic is `r5_share.h` (pure, host-tested); `apply-radeon.py` copies it.
+- R5 DRM library: `PRIME_HANDLE_TO_FD`/`PRIME_FD_TO_HANDLE` through export numbers and local `/dev/null` fds; `GEM_OP` (size, domain and flags from `BO_IMPORT`) and `GEM_METADATA` (neutral). New calls, MIT: `r5_drm_fd_to_token` (with an export id), `r5_drm_token_to_fd` (with an import id), `r5_drm_import_bytes`, `r5_drm_mark_get`, `r5_drm_mark_set`, `r5_drm_import_size`. An import is kept by its id, not by the fd number; `GEM_CLOSE` ends it. Fifth libdrm patch `haiku-import-size.patch`: `amdgpu_bo_import` takes the size from the library instead of `lseek`.
+- WSI (`wsi_common_haiku.cpp`): on RADV a view swapchain first tries a `WSI_IMAGE_TYPE_DRM` swapchain with three linear, exported buffers (prime path, `same_gpu = false`), one free semaphore per image, the present mark before each present, and its own `AppServerLink` (no change in libbe). New link codes `AS_R5_SHARE_IMAGES`, `_PRESENT`, `_END` at the end of an R5 copy of `ServerProtocol.h` (`distro/rest`). A refusal keeps the `BBitmap` copy path; Lavapipe says it does not share. An acquire timeout is `VK_TIMEOUT`.
+- app_server: `ServerApp` finds the view by its token in that application's token space; the team for `BO_IMPORT` is the connection's. The compositor imports each image (RADV only), refuses a semaphore of another team (`zero-copy off: sem`) and a size the kernel does not back (`zero-copy off: size`, through `r5_drm_import_size`, 64-bit), and draws the current image over its window. A presented image is shown once `FENCE_WAIT` with timeout 0 says the ring passed its mark; until then the previous one stays and the view is composed again next period. The image it replaces goes back with `release_sem_etc`.
+- Scanout (decision 4, own commit, `gpu_compositor_scanout true`, off by default): the frame is `GPUCopy`'s GTT back buffer; `GPUCopy` exports it and the scanout to app_server itself, the compositor imports both, and one `vkCmdCopyBuffer` of the damaged rows (each buffer's own pitch) runs in the compose submit. After the fence `InvalidateRegion` only draws the cursor (`GPUCopy::FrontCurrent`, per thread). A mode change imports again before the next compose. `gpu_debug` logs `present median <us> (vulkan|cpu)`.
+- `r5-share-check` (in the image next to `r5-wsi-test`): an import by a program that is not app_server, the same number offered twice, and `hold`/`count` for the stick script with `kill`.
+
+Decided during this step (user, 13 Nov 2026; "Decided in step 3b" in the design): the present mark through library ids on both sides; `r5_drm_import_size` for app_server's size check; the frame is the back buffer (option A); an acquire timeout is `VK_TIMEOUT`; the refusal rules are host-test cases and the machine runs a short check, the stuck job is `gpu_hang_test`.
+
+Mistakes and fixes during this step:
+- `r5_share.h` was missing from the copy list of `apply-radeon.py`; the jam would have failed. Added.
+- My first WSI block tried sharing before the format check, and its destroy could call `delete_sem(0)` for a copy swapchain; fixed before it was applied.
+- `ShareImages` took `fEntryLock` while holding `fShareLock` (the reverse order of `RemoveWindow`); fixed. A removed window could match a share by `NULL == NULL`; fixed.
+- The scanout's fallback copied the step 2 frame, which that frame does not write; it now takes the back buffer as it is.
+- Review: the image count is checked before the images are read; the mark is read once per frame.
+- A safety filter stopped two attempts at a larger test program; the test was set up again as above, at the user's request.
+
+Tested (host, WSL, 13 Nov 2026): `ok gpu share 65 cases` (`scripts/test-r5-share.cpp`); `scripts/test-ac-drm.sh` with libdrm's `amdgpu_bo.c` rebuilt from patch 5 in a temporary copy: every new check passes and `ok ac drm family RV cu 7 firmware map share` (RADV's `ac_drm_bo_import` and `ac_drm_bo_query_info`); without patch 5 exactly the size check fails. `-fsyntax-only -Wall` with the Haiku cross compiler: `r5_gpu_core.cpp`, `r5_gpu.cpp`, `Compositor.cpp`, `ServerApp.cpp`, `GPUCopy.cpp`, `AccelerantHWInterface.cpp`, `r5-share-check.cpp`; `wsi_common_haiku.cpp` with its command from `build-radv`. Manual SMAP review of the kernel diff: user memory only through `gpu_copy_in`/`gpu_copy_out`.
+
+Not tested: no jam, no libdrm or Mesa build in the shared tree, no new `mesa_radv` package, no QEMU or SMAP boot yet (asked first). On the 5625U nothing: the real export and import, `r5-share-check`, the stuck job, the scanout import and both present times, and the measurement of the slot limits (1024, 512 and 64 are starting values). The library test still has one failure that is on `origin/main` too (the guilty flag after a reset).
+
 ## 2026-11-13 - M11 step 2: the compositor core (A1), behind gpu_compositor
 
 Problem: M11 composes the desktop on the GPU. Step 2 is the core: one buffer per window, a compose with Vulkan, the fallback, and the compare and measurement of decision 7 and 14.
