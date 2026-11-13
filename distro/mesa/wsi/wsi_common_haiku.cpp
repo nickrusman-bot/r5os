@@ -50,6 +50,10 @@
 #include <syslog.h>
 
 #include <assert.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 #include <new>
 #include <pthread.h>
 #include <stdio.h>
@@ -227,7 +231,10 @@ r5_fill_capabilities(struct r5_surface *surface, VkSurfaceCapabilitiesKHR *caps)
 }
 
 static bool gSettingsReady;
-static bool gGpuPresent;
+// M10: -1 when the settings do not name gpu_present. The GPU's
+// availability bit then decides (r5_gpu_available).
+static int gGpuPresent = -1;
+static bool gGpuPresentOff;
 static bool gGpuPresentFail;
 static bool gRefused;
 
@@ -249,24 +256,66 @@ r5_read_settings(void)
 	while (fgets(line, sizeof(line), file) != NULL) {
 		char key[64];
 		char value[64];
-		if (sscanf(line, " %63s %63s", key, value) != 2)
+		// A key without a value means true, as in the kernel's reader.
+		int fields = sscanf(line, " %63s %63s", key, value);
+		if (fields < 1)
 			continue;
+		if (fields == 1)
+			strcpy(value, "true");
 		if (key[0] == '#')
 			continue;
 		bool on = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
 		if (strcmp(key, "gpu_present") == 0)
-			gGpuPresent = on;
+			gGpuPresent = on ? 1 : 0;
+		else if (strcmp(key, "gpu") == 0)
+			gGpuPresentOff = !on;
 		else if (strcmp(key, "gpu_present_fail") == 0)
 			gGpuPresentFail = on;
 	}
 	fclose(file);
 }
 
+// R5 GPU interface (r5_gpu.h, MIT): the first 32 bytes of GET_INFO end
+// with the capabilities. R5_GPU_CAP_AVAILABLE (8) is set when the four
+// checks at boot passed and the GPU was not turned off since.
+static bool
+r5_gpu_available(void)
+{
+	static int available = -1;
+	if (available >= 0)
+		return available != 0;
+	available = 0;
+	DIR *gpu = opendir("/dev/gpu");
+	if (gpu == NULL)
+		return false;
+	struct dirent *driver;
+	while (available == 0 && (driver = readdir(gpu)) != NULL) {
+		if (driver->d_name[0] == '.')
+			continue;
+		char path[B_PATH_NAME_LENGTH];
+		snprintf(path, sizeof(path), "/dev/gpu/%s/0", driver->d_name);
+		int fd = open(path, O_RDWR | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+		uint32_t info[8];
+		memset(info, 0, sizeof(info));
+		info[0] = sizeof(info);
+		if (ioctl(fd, 30479u, info, sizeof(info)) == 0
+			&& (info[7] & 8u) != 0)
+			available = 1;
+		close(fd);
+	}
+	closedir(gpu);
+	return available != 0;
+}
+
 static bool
 r5_radv_may_present(void)
 {
 	r5_read_settings();
-	return gGpuPresent && !gGpuPresentFail;
+	if (gGpuPresentOff || gGpuPresentFail || gGpuPresent == 0)
+		return false;
+	return gGpuPresent == 1 || r5_gpu_available();
 }
 
 static void

@@ -81,4 +81,18 @@ typedef struct r5_gpu_backend_ops {
 
 extern r5_gpu_backend_ops gR5GpuOps;
 
+/* M10, "Which path is used". The vendor driver sets the support level
+ * of the device's table row and the opt-out ("gpu false") once, before
+ * it publishes anything. r5_gpu_switch_named reads one switch from an
+ * open settings handle (NULL is no file): its value when named,
+ * otherwise the default from r5_gpu_checks.h. After the GPU start the
+ * vendor driver reports what it found; the core writes the one line
+ * (r5_gpu_check_reason) and sets R5_GPU_CAP_AVAILABLE. A failed check
+ * on a release-supported GPU turns it off for this boot, as after a
+ * second hang, without that log line. */
+extern "C" void r5_gpu_set_level(uint32_t level, int optOut);
+extern "C" int r5_gpu_switch_named(void* settings, const char* name);
+extern "C" void r5_gpu_report_checks(int switchedOff, int firmwareOk,
+	int selftestOk);
+
 #endif

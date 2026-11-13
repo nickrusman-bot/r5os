@@ -144,10 +144,10 @@ def zink():
         "}\n"
     )
     info(root / ".PackageInfo", """name\t\t\tmesa
-version\t\t\t25.3.6-3
+version\t\t\t25.3.6-4
 architecture\t\tx86_64
 summary\t\t\t"Mesa EGL with llvmpipe and Zink"
-description\t\t"EGL vendor for libglvnd. llvmpipe is the default. gpu_opengl true in the radeon_hd settings selects Zink when a render node exists. GALLIUM_DRIVER=zink selects Zink."
+description\t\t"EGL vendor for libglvnd. Zink when the GPU is available, llvmpipe otherwise. gpu_opengl false in the radeon_hd settings turns Zink off. GALLIUM_DRIVER=zink selects Zink."
 packager\t\t"R5OS <r5os@localhost>"
 vendor\t\t\t"R5OS"
 copyrights\t\t"1999-2026 Brian Paul and others"
@@ -167,7 +167,7 @@ requires {
 \tvulkan_loader >= 1.4.367
 }
 """)
-    create(root, OUT / "mesa-25.3.6-3-x86_64.hpkg")
+    create(root, OUT / "mesa-25.3.6-4-x86_64.hpkg")
 
 
 if __name__ == "__main__":

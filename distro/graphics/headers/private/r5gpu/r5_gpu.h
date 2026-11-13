@@ -69,6 +69,11 @@ enum {
 #define R5_GPU_CAP_LOST 2u
 /* This file's job caused the loss. Other files keep CAP_LOST only. */
 #define R5_GPU_CAP_GUILTY 4u
+/* M10: the four checks at boot passed ("radeon_hd: gpu available") and
+ * the GPU was not turned off since. Programs use the GPU by default only
+ * when this bit is set (Zink for OpenGL, RADV presenting). Older callers
+ * ignore it. A caller may read only the first 32 bytes of GET_INFO. */
+#define R5_GPU_CAP_AVAILABLE 8u
 
 static inline int
 r5_gpu_query_guilty(uint32_t caps)

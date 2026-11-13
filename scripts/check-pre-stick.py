@@ -32,10 +32,10 @@ OFFSET = "6291456"
 
 PACKAGES = (
     "mesa_lavapipe-25.3.6-3-x86_64.hpkg",
-    "mesa_radv-25.3.6-5-x86_64.hpkg",
-    "vulkan_loader-1.4.367-3-x86_64.hpkg",
+    "mesa_radv-25.3.6-6-x86_64.hpkg",
+    "vulkan_loader-1.4.367-4-x86_64.hpkg",
     "vulkan_tools-1.4.367-2-x86_64.hpkg",
-    "vulkanteapot-1.0.0-2-x86_64.hpkg",
+    "vulkanteapot-1.0.0-4-x86_64.hpkg",
 )
 
 HAIKU_PKG = "haiku-r1~beta6_r5_2026.1_dev-1-x86_64.hpkg"
@@ -88,14 +88,15 @@ SCRIPTS = {
     "m8-run": "distro/graphics/boot/m8-run",
     "m8-boot2": "distro/graphics/boot/m8-boot2",
     "m8-show": "distro/graphics/boot/m8-show",
+    "check": "distro/graphics/boot/check",
+    "boot-next": "distro/graphics/boot/boot-next",
+    "check-user": "distro/graphics/boot/check-user",
 }
 
-HOME = (
-    "m8-run",
-    "m8-boot2",
-    "m8-show",
-    "check.sh",
-)
+# Files planted in /boot/home (plant-m8-stick.sh, M8). The M10 stick runs
+# check, boot-next and check-user from /boot/system/bin, so nothing is
+# planted.
+HOME = ()
 
 STRINGS = (b"gpu_isolation_test", b"window vkcube")
 
@@ -224,8 +225,8 @@ def extract(iso_wsl: str, out: str) -> None:
         f"'{BFS}' --start-offset {OFFSET} '{iso_wsl}' <<EOF\n"
         + "\n".join(gets) + "\nquit\nEOF\n"
         f"'{PKG}' extract -C {out}/haiku {out}/{HAIKU_PKG}\n"
-        f"'{PKG}' extract -C {out}/radv {out}/mesa_radv-25.3.6-5-x86_64.hpkg\n"
-        f"'{PKG}' extract -C {out}/teapot {out}/vulkanteapot-1.0.0-2-x86_64.hpkg\n"
+        f"'{PKG}' extract -C {out}/radv {out}/mesa_radv-25.3.6-6-x86_64.hpkg\n"
+        f"'{PKG}' extract -C {out}/teapot {out}/vulkanteapot-1.0.0-4-x86_64.hpkg\n"
         f"test -s {out}/haiku/bin/r5-gpu-selftest\n"
         f"test -s {out}/haiku/servers/app_server\n"
         f"test -s {out}/haiku/apps/Login\n"
@@ -234,6 +235,9 @@ def extract(iso_wsl: str, out: str) -> None:
         f"test -s {out}/radv/bin/m8-run\n"
         f"test -s {out}/radv/bin/m8-boot2\n"
         f"test -s {out}/radv/bin/m8-show\n"
+        f"test -s {out}/radv/bin/check\n"
+        f"test -s {out}/radv/bin/boot-next\n"
+        f"test -s {out}/radv/bin/check-user\n"
         f"test -s {out}/teapot/bin/r5-wsi-window-test.sh\n"
         f"mkdir -p {out}/home\n"
         f"'{BFS}' --start-offset {OFFSET} '{iso_wsl}' <<EOF\n"

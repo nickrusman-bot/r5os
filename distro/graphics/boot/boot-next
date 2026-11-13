@@ -9,7 +9,9 @@
 # of app_server on (the marker self-test must pass), "boot-next 6" the
 # optional forced failure of that copy.
 # "boot-next 1b" writes the M6 contract settings plus
-# gpu_opengl true; "boot-next 1" removes the file.
+# gpu_opengl true. Every boot adds gpu_selftest true: Login starts the
+# self-test only then, and gpu_hang_test starts after it. Boots 1, 2 and 3
+# keep every GPU switch at its default.
 #
 # The shutdown time: right before the restart a background loop writes the
 # time to ~/m10/alive every second. check in the next boot reports the span
@@ -62,7 +64,7 @@ if [ "$done_check" -ne 1 ]; then
 fi
 
 case $next in
-1) lines= ;;
+1) lines="gpu_selftest true" ;;
 1b) lines="gfx9_ring true
 gfx9_kernel true
 gfx9_irq true
@@ -74,9 +76,12 @@ gfx9_vmid_per_file true
 gfx9_pasid_map true
 gpu_present true
 gpu_opengl true" ;;
-2) lines="gpu_hang_test 1" ;;
-3) lines="gpu_hang_test 2" ;;
-4) lines="gpu false" ;;
+2) lines="gpu_selftest true
+gpu_hang_test 1" ;;
+3) lines="gpu_selftest true
+gpu_hang_test 2" ;;
+4) lines="gpu false
+gpu_selftest true" ;;
 5|6) lines="gfx9_ring true
 gfx9_kernel true
 gfx9_irq true
@@ -133,7 +138,10 @@ if [ "$ans" = y ]; then
 	rm -f "$m10/alive"
 	date +%s > "$m10/shutdown-start"
 	echo "$cur" > "$m10/shutdown-boot"
-	( while :; do date +%s > "$m10/alive"; sleep 1; done ) > /dev/null 2>&1 &
+	sync
+	# Each beat is synced, or it never reaches the stick (M10 round 5:
+	# "not measured (no heartbeat)").
+	( while :; do date +%s > "$m10/alive"; sync; sleep 1; done ) > /dev/null 2>&1 &
 	beat=$!
 	if ! shutdown -r; then
 		kill "$beat"

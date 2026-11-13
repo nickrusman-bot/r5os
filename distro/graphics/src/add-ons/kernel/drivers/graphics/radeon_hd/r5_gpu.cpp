@@ -81,8 +81,8 @@ gpu_cache_log_settings()
 			false, true);
 		r5_gfx9_set_flush_fence(get_driver_boolean_parameter(settings,
 			"gfx9_flush_fence", false, true) ? 1 : 0);
-		r5_gfx9_set_pasid_map(get_driver_boolean_parameter(settings,
-			"gfx9_pasid_map", false, true) ? 1 : 0);
+		r5_gfx9_set_pasid_map(r5_gpu_switch_named(settings,
+			"gfx9_pasid_map"));
 		r5_gfx9_set_ce_meta(get_driver_boolean_parameter(settings,
 			"gfx9_ce_meta", false, true) ? 1 : 0);
 		r5_gfx9_set_cond_exec(get_driver_boolean_parameter(settings,
@@ -94,7 +94,7 @@ gpu_cache_log_settings()
 		unload_driver_settings(settings);
 	} else {
 		r5_gfx9_set_flush_fence(0);
-		r5_gfx9_set_pasid_map(0);
+		r5_gfx9_set_pasid_map(r5_gpu_switch_named(NULL, "gfx9_pasid_map"));
 		r5_gfx9_set_ce_meta(0);
 		r5_gfx9_set_cond_exec(0);
 		r5_gfx9_set_gds_switch(0);
@@ -216,6 +216,8 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 	if (gpu_gone(client) && client != NULL
 		&& (client == sGuilty || client->guilty || client->faulted))
 		out.capabilities |= R5_GPU_CAP_GUILTY;
+	if (sAvailable && !sGpuOff)
+		out.capabilities |= R5_GPU_CAP_AVAILABLE;
 	out.va_offset = R5_GPU_VA_OFFSET;
 	out.va_max = R5_GPU_VA_MAX;
 	/* amdgpu_kms.c for this VM: the hole ends at AMDGPU_GMC_HOLE_END
