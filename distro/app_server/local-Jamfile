@@ -13,8 +13,23 @@ UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter ] ;
 UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter drawing_modes ] ;
 UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter font_support ] ;
 
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app decorator ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app stackandtile ] ;
+UseBuildFeatureHeaders freetype ;
+Includes [ FGristFiles Compositor.cpp WindowBuffer.cpp WindowHWInterface.cpp ]
+	: [ BuildFeatureAttribute freetype : headers ] ;
+
+# M11: the compositor loads Vulkan at run time (VK_NO_PROTOTYPES). The
+# headers are the R5 Vulkan headers on the build host, as for r5-wsi-test.
+ObjectC++Flags Compositor.cpp :
+	-I/home/nickr/r5os/mesa-build/vulkan-headers-r5/install/include
+	;
+
 StaticLibrary libaslocal.a :
 	AccelerantBuffer.cpp
 	AccelerantHWInterface.cpp
+	Compositor.cpp
 	GPUCopy.cpp
+	WindowBuffer.cpp
+	WindowHWInterface.cpp
 ;

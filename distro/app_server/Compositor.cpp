@@ -1,0 +1,1598 @@
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: MIT
+ *
+ * M11 A1: compose only, with exactly the pixels of the CPU mode. Every
+ * window draws into its own buffer (WindowHWInterface). The compose
+ * thread copies the damaged parts of the background and of each window,
+ * back to front, into a frame with one compute shader, waits for the
+ * fence, and puts the frame on the screen through the screen's back
+ * buffer and CopyBackToFront: the CPU row copy on Lavapipe, the M8
+ * DMA_DATA copy on RADV when gpu_app_server is on.
+ */
+
+
+#include "Compositor.h"
+
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <new>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <syslog.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+
+#include <Autolock.h>
+#include <FindDirectory.h>
+
+#include <r5_gpu.h>
+
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
+
+#include "Desktop.h"
+#include "DrawingEngine.h"
+#include "HWInterface.h"
+#include "RenderingBuffer.h"
+#include "Window.h"
+#include "WindowBuffer.h"
+#include "WindowHWInterface.h"
+
+#include "compositor_shaders.h"
+
+
+static const bigtime_t kFenceSlice = 100000;
+static const bigtime_t kFenceLimit = 15000000;
+static const bigtime_t kReportInterval = 10000000;
+
+
+static void
+log_line(const char* format, ...)
+{
+	char line[256];
+	va_list args;
+	va_start(args, format);
+	vsnprintf(line, sizeof(line), format, args);
+	va_end(args);
+	fprintf(stderr, "app_server: %s\n", line);
+	syslog(LOG_INFO, "app_server: %s\n", line);
+}
+
+
+struct settings {
+	bool	want;
+	bool	lavapipe;
+	bool	fail;
+	bool	debug;
+};
+
+
+/*!	Read the way GPUCopy reads gpu_app_server: the radeon_hd settings of
+	the account app_server runs as.
+*/
+static void
+load_settings(settings& out)
+{
+	memset(&out, 0, sizeof(out));
+	char path[B_PATH_NAME_LENGTH];
+	if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,
+			sizeof(path)) != B_OK)
+		return;
+	if (strlcat(path, "/kernel/drivers/radeon_hd", sizeof(path))
+			>= sizeof(path))
+		return;
+	FILE* file = fopen(path, "r");
+	if (file == NULL)
+		return;
+	char line[256];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		if (strncmp(line, "gpu_compositor true", 19) == 0)
+			out.want = true;
+		if (strncmp(line, "gpu_compositor_lavapipe true", 28) == 0)
+			out.lavapipe = true;
+		if (strncmp(line, "gpu_compositor_fail true", 24) == 0)
+			out.fail = true;
+		if (strncmp(line, "gpu_debug true", 14) == 0)
+			out.debug = true;
+	}
+	fclose(file);
+}
+
+
+/*!	Whether the GPU passed its checks at boot (R5_GPU_CAP_AVAILABLE) and
+	is not lost now. The bit decides RADV or Lavapipe, not the settings.
+*/
+static bool
+gpu_available(uint64* _gttBytes, const char** _reason)
+{
+	int fd = open("/dev/gpu/radeon_hd/0", O_RDWR);
+	if (fd < 0) {
+		*_reason = "no render node";
+		return false;
+	}
+	r5_gpu_info info;
+	memset(&info, 0, sizeof(info));
+	info.size = sizeof(info);
+	info.version = 1;
+	bool ok = ioctl(fd, R5_GPU_GET_INFO, &info, sizeof(info)) == 0;
+	close(fd);
+	if (!ok) {
+		*_reason = "no gpu info";
+		return false;
+	}
+	if ((info.capabilities & R5_GPU_CAP_AVAILABLE) == 0) {
+		*_reason = "gpu not available";
+		return false;
+	}
+	if ((info.capabilities & R5_GPU_CAP_LOST) != 0) {
+		*_reason = "gpu lost";
+		return false;
+	}
+	if (_gttBytes != NULL)
+		*_gttBytes = info.gtt_bytes;
+	return true;
+}
+
+
+static bigtime_t
+thread_cpu_time()
+{
+	thread_info info;
+	if (get_thread_info(find_thread(NULL), &info) != B_OK)
+		return 0;
+	return info.user_time + info.kernel_time;
+}
+
+
+//	#pragma mark - Vulkan
+
+
+#define VK_INSTANCE_FUNCTIONS(F) \
+	F(vkDestroyInstance) \
+	F(vkEnumeratePhysicalDevices) \
+	F(vkGetPhysicalDeviceProperties) \
+	F(vkGetPhysicalDeviceQueueFamilyProperties) \
+	F(vkGetPhysicalDeviceMemoryProperties) \
+	F(vkEnumerateDeviceExtensionProperties) \
+	F(vkCreateDevice) \
+	F(vkGetDeviceProcAddr)
+
+#define VK_DEVICE_FUNCTIONS(F) \
+	F(vkDestroyDevice) \
+	F(vkGetDeviceQueue) \
+	F(vkCreateBuffer) \
+	F(vkDestroyBuffer) \
+	F(vkGetBufferMemoryRequirements) \
+	F(vkAllocateMemory) \
+	F(vkFreeMemory) \
+	F(vkBindBufferMemory) \
+	F(vkMapMemory) \
+	F(vkCreateShaderModule) \
+	F(vkDestroyShaderModule) \
+	F(vkCreateDescriptorSetLayout) \
+	F(vkDestroyDescriptorSetLayout) \
+	F(vkCreatePipelineLayout) \
+	F(vkDestroyPipelineLayout) \
+	F(vkCreateComputePipelines) \
+	F(vkDestroyPipeline) \
+	F(vkCreateCommandPool) \
+	F(vkDestroyCommandPool) \
+	F(vkAllocateCommandBuffers) \
+	F(vkBeginCommandBuffer) \
+	F(vkEndCommandBuffer) \
+	F(vkResetCommandBuffer) \
+	F(vkCmdBindPipeline) \
+	F(vkCmdPushConstants) \
+	F(vkCmdPushDescriptorSetKHR) \
+	F(vkCmdDispatch) \
+	F(vkCmdPipelineBarrier) \
+	F(vkCreateFence) \
+	F(vkDestroyFence) \
+	F(vkResetFences) \
+	F(vkWaitForFences) \
+	F(vkQueueSubmit) \
+	F(vkDeviceWaitIdle)
+
+#define VK_DECLARE(name) PFN_##name name;
+
+
+struct CompositorVulkan {
+	void*						library;
+	PFN_vkGetInstanceProcAddr	vkGetInstanceProcAddr;
+	PFN_vkCreateInstance		vkCreateInstance;
+	VK_INSTANCE_FUNCTIONS(VK_DECLARE)
+	VK_DEVICE_FUNCTIONS(VK_DECLARE)
+
+	VkInstance					instance;
+	VkPhysicalDevice			physical;
+	VkDevice					device;
+	VkQueue						queue;
+	uint32						memoryType;
+	VkDescriptorSetLayout		setLayout;
+	VkPipelineLayout			pipelineLayout;
+	VkPipeline					pipeline;
+	VkCommandPool				commandPool;
+	VkCommandBuffer				commands;
+	VkFence						fence;
+
+	VkBuffer					frame;
+	VkDeviceMemory				frameMemory;
+	uint32*						frameBits;
+	char						deviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
+};
+
+
+struct compose_rect {
+	uint32	sourceX;
+	uint32	sourceY;
+	uint32	sourceStride;
+	uint32	frameX;
+	uint32	frameY;
+	uint32	frameStride;
+	uint32	width;
+	uint32	height;
+	uint32	fill;
+	uint32	color;
+};
+
+
+//	#pragma mark - Entry and Layer
+
+
+/*!	A window the compositor knows. It owns the window's interface, which
+	must outlive the window's engine and every compose that reads it.
+*/
+struct Compositor::Entry : public BReferenceable {
+	Entry(Window* window, WindowHWInterface* iface)
+		:
+		window(window),
+		iface(iface),
+		lastShown(0)
+	{
+	}
+
+	virtual ~Entry()
+	{
+		delete iface;
+	}
+
+	Window*				window;
+	WindowHWInterface*	iface;
+	bigtime_t			lastShown;
+};
+
+
+/*!	One window in the compose, back to front. A copy taken under the
+	Desktop lock, so the compose thread never needs that lock.
+*/
+struct Compositor::Layer {
+	BReference<Entry>			entry;
+	BReference<WindowBuffer>	buffer;
+	int32						left;
+	int32						top;
+	BRegion						shape;
+};
+
+
+//	#pragma mark - Compositor
+
+
+Compositor*
+Compositor::Create(Desktop* desktop, HWInterface* screen)
+{
+	settings options;
+	load_settings(options);
+	if (!options.want)
+		return NULL;
+
+	Compositor* compositor = new(std::nothrow) Compositor(desktop, screen);
+	if (compositor == NULL)
+		return NULL;
+	compositor->fDebug = options.debug;
+	compositor->fForceFail = options.fail;
+
+	const char* reason = NULL;
+	uint64 gttBytes = 0;
+	bool radv = !options.lavapipe && gpu_available(&gttBytes, &reason);
+	if (options.lavapipe)
+		reason = "forced";
+
+	if (radv) {
+		const char* radvReason = NULL;
+		if (compositor->_InitVulkan(true, &radvReason) == B_OK) {
+			compositor->fBudget = gttBytes / 2;
+			if (compositor->fBudget == 0) {
+				// no GTT size from the driver: the Lavapipe rule
+				system_info info;
+				get_system_info(&info);
+				compositor->fBudget = (uint64)info.max_pages * B_PAGE_SIZE / 4;
+			}
+			log_line("gpu compositor on radv (%s)",
+				compositor->fVulkan->deviceName);
+		} else {
+			reason = radvReason;
+			radv = false;
+		}
+	}
+	if (!radv) {
+		const char* lavapipeReason = NULL;
+		if (compositor->_InitVulkan(false, &lavapipeReason) != B_OK) {
+			// Lavapipe cannot start either: the CPU mode, nothing else
+			// logged (docs/APP-SERVER-COMPOSITOR.md).
+			delete compositor;
+			return NULL;
+		}
+		compositor->fOnLavapipe = true;
+		system_info info;
+		get_system_info(&info);
+		compositor->fBudget = (uint64)info.max_pages * B_PAGE_SIZE / 4;
+		log_line("gpu compositor on lavapipe: %s", reason);
+	}
+
+	if (compositor->_Init() != B_OK) {
+		delete compositor;
+		return NULL;
+	}
+	return compositor;
+}
+
+
+Compositor::Compositor(Desktop* desktop, HWInterface* screen)
+	:
+	fDesktop(desktop),
+	fScreen(screen),
+	fVulkan(NULL),
+	fActive(false),
+	fOnLavapipe(false),
+	fDebug(false),
+	fForceFail(false),
+	fRestarted(false),
+	fGeneration(0),
+	fEntryLock("compositor entries"),
+	fEntries(20),
+	fLayerLock("compositor layers"),
+	fLayers(NULL),
+	fBackground(0xff000000),
+	fDamageLock("compositor damage"),
+	fWakePending(false),
+	fWakeSem(-1),
+	fThread(-1),
+	fQuit(false),
+	fOutOfMemory(false),
+	fPeriod(0),
+	fLastCompose(0),
+	fFrameWidth(0),
+	fFrameHeight(0),
+	fScratch(NULL),
+	fWindowBytes(0),
+	fBudget(0),
+	fFrames(0),
+	fSampleCount(0),
+	fReportStart(0),
+	fCpuAtReport(0),
+	fLateLogged(0)
+{
+}
+
+
+Compositor::~Compositor()
+{
+	if (fThread >= 0) {
+		fQuit = true;
+		release_sem(fWakeSem);
+		status_t result;
+		wait_for_thread(fThread, &result);
+	}
+	if (fWakeSem >= 0)
+		delete_sem(fWakeSem);
+	delete fLayers;
+	_ExitVulkan();
+	free(fScratch);
+}
+
+
+status_t
+Compositor::_Init()
+{
+	fLayers = new(std::nothrow) LayerList(20);
+	fWakeSem = create_sem(0, "compositor wake");
+	if (fLayers == NULL || fWakeSem < 0)
+		return B_NO_MEMORY;
+
+	_UpdatePeriod();
+	fActive = true;
+	fReportStart = system_time();
+
+	fThread = spawn_thread(_ComposeThread, "compositor",
+		B_URGENT_DISPLAY_PRIORITY, this);
+	if (fThread < 0) {
+		fActive = false;
+		return fThread;
+	}
+	resume_thread(fThread);
+	return B_OK;
+}
+
+
+status_t
+Compositor::_InitVulkan(bool radv, const char** _reason)
+{
+	_ExitVulkan();
+
+	CompositorVulkan* vk = new(std::nothrow) CompositorVulkan;
+	if (vk == NULL) {
+		*_reason = "no memory";
+		return B_NO_MEMORY;
+	}
+	memset(vk, 0, sizeof(*vk));
+	fVulkan = vk;
+	// buffers of an earlier device are not freed through this one
+	fGeneration++;
+
+	vk->library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+	if (vk->library == NULL)
+		vk->library = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+	if (vk->library == NULL) {
+		*_reason = "no vulkan loader";
+		return B_ERROR;
+	}
+	vk->vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(vk->library,
+		"vkGetInstanceProcAddr");
+	if (vk->vkGetInstanceProcAddr == NULL) {
+		*_reason = "no vulkan loader";
+		return B_ERROR;
+	}
+	vk->vkCreateInstance = (PFN_vkCreateInstance)vk->vkGetInstanceProcAddr(
+		NULL, "vkCreateInstance");
+
+	VkApplicationInfo app = {};
+	app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	app.pApplicationName = "app_server";
+	app.apiVersion = VK_API_VERSION_1_1;
+	VkInstanceCreateInfo instanceInfo = {};
+	instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instanceInfo.pApplicationInfo = &app;
+	if (vk->vkCreateInstance == NULL
+		|| vk->vkCreateInstance(&instanceInfo, NULL, &vk->instance)
+			!= VK_SUCCESS) {
+		*_reason = "no vulkan instance";
+		return B_ERROR;
+	}
+
+#define VK_LOAD_INSTANCE(name) \
+	vk->name = (PFN_##name)vk->vkGetInstanceProcAddr(vk->instance, #name); \
+	if (vk->name == NULL) { *_reason = "vulkan " #name; return B_ERROR; }
+	VK_INSTANCE_FUNCTIONS(VK_LOAD_INSTANCE)
+
+	// RADV is any device that is not a CPU; Lavapipe is the CPU device.
+	uint32 count = 8;
+	VkPhysicalDevice devices[8];
+	if (vk->vkEnumeratePhysicalDevices(vk->instance, &count, devices)
+			< VK_SUCCESS || count == 0) {
+		*_reason = "no vulkan device";
+		return B_ERROR;
+	}
+	vk->physical = VK_NULL_HANDLE;
+	for (uint32 i = 0; i < count; i++) {
+		VkPhysicalDeviceProperties properties;
+		vk->vkGetPhysicalDeviceProperties(devices[i], &properties);
+		bool isCpu = properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU;
+		if (isCpu != radv) {
+			vk->physical = devices[i];
+			strlcpy(vk->deviceName, properties.deviceName,
+				sizeof(vk->deviceName));
+			break;
+		}
+	}
+	if (vk->physical == VK_NULL_HANDLE) {
+		*_reason = radv ? "radv not found" : "lavapipe not found";
+		return B_ERROR;
+	}
+
+	uint32 extensionCount = 0;
+	vk->vkEnumerateDeviceExtensionProperties(vk->physical, NULL,
+		&extensionCount, NULL);
+	VkExtensionProperties* extensions
+		= new(std::nothrow) VkExtensionProperties[extensionCount + 1];
+	bool pushDescriptor = false;
+	if (extensions != NULL) {
+		vk->vkEnumerateDeviceExtensionProperties(vk->physical, NULL,
+			&extensionCount, extensions);
+		for (uint32 i = 0; i < extensionCount; i++) {
+			if (strcmp(extensions[i].extensionName,
+					VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME) == 0)
+				pushDescriptor = true;
+		}
+		delete[] extensions;
+	}
+	if (!pushDescriptor) {
+		*_reason = "no push descriptor";
+		return B_ERROR;
+	}
+
+	uint32 familyCount = 8;
+	VkQueueFamilyProperties families[8];
+	vk->vkGetPhysicalDeviceQueueFamilyProperties(vk->physical, &familyCount,
+		families);
+	// The queue stays a graphics queue (decision 16): the R5 DRM library
+	// accepts only GFX submissions, so a compute-only family would make
+	// every submit fail. The compose is a compute dispatch on that queue.
+	uint32 family = UINT32_MAX;
+	for (uint32 i = 0; i < familyCount; i++) {
+		log_line("vulkan queue family %" B_PRIu32 " flags %#" B_PRIx32, i,
+			(uint32)families[i].queueFlags);
+		const VkQueueFlags wanted = VK_QUEUE_GRAPHICS_BIT
+			| VK_QUEUE_COMPUTE_BIT;
+		if (family == UINT32_MAX
+			&& (families[i].queueFlags & wanted) == wanted)
+			family = i;
+	}
+	if (family == UINT32_MAX) {
+		*_reason = "no graphics queue";
+		return B_ERROR;
+	}
+
+	// Host-visible and coherent memory for the window buffers and the
+	// frame: Painter writes the window buffers, the compose reads them.
+	// Host-cached first. DEVICE_LOCAL is not excluded: RADV may mark GTT
+	// that way on an APU (decision 5).
+	VkPhysicalDeviceMemoryProperties memory;
+	vk->vkGetPhysicalDeviceMemoryProperties(vk->physical, &memory);
+	vk->memoryType = UINT32_MAX;
+	const VkMemoryPropertyFlags wanted = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+		| VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	for (int pass = 0; pass < 2 && vk->memoryType == UINT32_MAX; pass++) {
+		for (uint32 i = 0; i < memory.memoryTypeCount; i++) {
+			VkMemoryPropertyFlags flags = memory.memoryTypes[i].propertyFlags;
+			if ((flags & wanted) != wanted)
+				continue;
+			// first pass: also cached, because Painter reads what it
+			// blends
+			if (pass == 0 && (flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) == 0)
+				continue;
+			vk->memoryType = i;
+			break;
+		}
+	}
+	if (vk->memoryType == UINT32_MAX) {
+		*_reason = "no host memory";
+		return B_ERROR;
+	}
+
+	float priority = 1.0f;
+	VkDeviceQueueCreateInfo queueInfo = {};
+	queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueInfo.queueFamilyIndex = family;
+	queueInfo.queueCount = 1;
+	queueInfo.pQueuePriorities = &priority;
+	const char* deviceExtensions[] = { VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME };
+	VkDeviceCreateInfo deviceInfo = {};
+	deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceInfo.queueCreateInfoCount = 1;
+	deviceInfo.pQueueCreateInfos = &queueInfo;
+	deviceInfo.enabledExtensionCount = 1;
+	deviceInfo.ppEnabledExtensionNames = deviceExtensions;
+	if (vk->vkCreateDevice(vk->physical, &deviceInfo, NULL, &vk->device)
+			!= VK_SUCCESS) {
+		*_reason = "no vulkan device";
+		return B_ERROR;
+	}
+
+#define VK_LOAD_DEVICE(name) \
+	vk->name = (PFN_##name)vk->vkGetDeviceProcAddr(vk->device, #name); \
+	if (vk->name == NULL) { *_reason = "vulkan " #name; return B_ERROR; }
+	VK_DEVICE_FUNCTIONS(VK_LOAD_DEVICE)
+
+	vk->vkGetDeviceQueue(vk->device, family, 0, &vk->queue);
+
+	VkShaderModuleCreateInfo shaderInfo = {};
+	shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderInfo.codeSize = sizeof(kComposeSpirv);
+	shaderInfo.pCode = kComposeSpirv;
+	VkShaderModule shader;
+	if (vk->vkCreateShaderModule(vk->device, &shaderInfo, NULL, &shader)
+			!= VK_SUCCESS) {
+		*_reason = "shader";
+		return B_ERROR;
+	}
+
+	VkDescriptorSetLayoutBinding bindings[2] = {};
+	for (int i = 0; i < 2; i++) {
+		bindings[i].binding = i;
+		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		bindings[i].descriptorCount = 1;
+		bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	}
+	VkDescriptorSetLayoutCreateInfo setInfo = {};
+	setInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	setInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+	setInfo.bindingCount = 2;
+	setInfo.pBindings = bindings;
+	VkPushConstantRange range = {};
+	range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	range.size = sizeof(compose_rect);
+	VkPipelineLayoutCreateInfo layoutInfo = {};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount = 1;
+	layoutInfo.pSetLayouts = &vk->setLayout;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &range;
+	VkComputePipelineCreateInfo pipelineInfo = {};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	pipelineInfo.stage.sType
+		= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	pipelineInfo.stage.module = shader;
+	pipelineInfo.stage.pName = "main";
+	bool pipelineOk
+		= vk->vkCreateDescriptorSetLayout(vk->device, &setInfo, NULL,
+			&vk->setLayout) == VK_SUCCESS
+		&& vk->vkCreatePipelineLayout(vk->device, &layoutInfo, NULL,
+			&vk->pipelineLayout) == VK_SUCCESS;
+	if (pipelineOk) {
+		pipelineInfo.layout = vk->pipelineLayout;
+		pipelineOk = vk->vkCreateComputePipelines(vk->device, VK_NULL_HANDLE,
+			1, &pipelineInfo, NULL, &vk->pipeline) == VK_SUCCESS;
+	}
+	vk->vkDestroyShaderModule(vk->device, shader, NULL);
+	if (!pipelineOk) {
+		*_reason = "pipeline";
+		return B_ERROR;
+	}
+
+	VkCommandPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolInfo.queueFamilyIndex = family;
+	VkCommandBufferAllocateInfo commandInfo = {};
+	commandInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandInfo.commandBufferCount = 1;
+	VkFenceCreateInfo fenceInfo = {};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	if (vk->vkCreateCommandPool(vk->device, &poolInfo, NULL, &vk->commandPool)
+			!= VK_SUCCESS) {
+		*_reason = "command pool";
+		return B_ERROR;
+	}
+	commandInfo.commandPool = vk->commandPool;
+	if (vk->vkAllocateCommandBuffers(vk->device, &commandInfo, &vk->commands)
+			!= VK_SUCCESS
+		|| vk->vkCreateFence(vk->device, &fenceInfo, NULL, &vk->fence)
+			!= VK_SUCCESS) {
+		*_reason = "command buffer";
+		return B_ERROR;
+	}
+	return B_OK;
+}
+
+
+void
+Compositor::_ExitVulkan()
+{
+	CompositorVulkan* vk = fVulkan;
+	if (vk == NULL)
+		return;
+	fVulkan = NULL;
+
+	// A device that failed half way has some functions not loaded; they
+	// are loaded in this order, so the last one tells all were.
+	if (vk->device != VK_NULL_HANDLE && vk->vkDeviceWaitIdle != NULL) {
+		vk->vkDeviceWaitIdle(vk->device);
+		if (vk->frame != VK_NULL_HANDLE)
+			vk->vkDestroyBuffer(vk->device, vk->frame, NULL);
+		if (vk->frameMemory != VK_NULL_HANDLE)
+			vk->vkFreeMemory(vk->device, vk->frameMemory, NULL);
+		if (vk->fence != VK_NULL_HANDLE)
+			vk->vkDestroyFence(vk->device, vk->fence, NULL);
+		if (vk->commandPool != VK_NULL_HANDLE)
+			vk->vkDestroyCommandPool(vk->device, vk->commandPool, NULL);
+		if (vk->pipeline != VK_NULL_HANDLE)
+			vk->vkDestroyPipeline(vk->device, vk->pipeline, NULL);
+		if (vk->pipelineLayout != VK_NULL_HANDLE)
+			vk->vkDestroyPipelineLayout(vk->device, vk->pipelineLayout, NULL);
+		if (vk->setLayout != VK_NULL_HANDLE)
+			vk->vkDestroyDescriptorSetLayout(vk->device, vk->setLayout, NULL);
+	}
+	if (vk->device != VK_NULL_HANDLE && vk->vkDestroyDevice != NULL)
+		vk->vkDestroyDevice(vk->device, NULL);
+	if (vk->instance != VK_NULL_HANDLE && vk->vkDestroyInstance != NULL)
+		vk->vkDestroyInstance(vk->instance, NULL);
+	if (vk->library != NULL)
+		dlclose(vk->library);
+	delete vk;
+	fFrameWidth = 0;
+	fFrameHeight = 0;
+}
+
+
+static bool
+allocate_host_buffer(CompositorVulkan* vk, uint64 bytes, VkBuffer* _buffer,
+	VkDeviceMemory* _memory, void** _bits)
+{
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = bytes;
+	bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	if (vk->vkCreateBuffer(vk->device, &bufferInfo, NULL, _buffer)
+			!= VK_SUCCESS)
+		return false;
+
+	VkMemoryRequirements requirements;
+	vk->vkGetBufferMemoryRequirements(vk->device, *_buffer, &requirements);
+	VkMemoryAllocateInfo allocateInfo = {};
+	allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocateInfo.allocationSize = requirements.size;
+	allocateInfo.memoryTypeIndex = vk->memoryType;
+	if ((requirements.memoryTypeBits & (1u << vk->memoryType)) == 0
+		|| vk->vkAllocateMemory(vk->device, &allocateInfo, NULL, _memory)
+			!= VK_SUCCESS) {
+		vk->vkDestroyBuffer(vk->device, *_buffer, NULL);
+		return false;
+	}
+	if (vk->vkBindBufferMemory(vk->device, *_buffer, *_memory, 0)
+			!= VK_SUCCESS
+		|| vk->vkMapMemory(vk->device, *_memory, 0, VK_WHOLE_SIZE, 0, _bits)
+			!= VK_SUCCESS) {
+		vk->vkDestroyBuffer(vk->device, *_buffer, NULL);
+		vk->vkFreeMemory(vk->device, *_memory, NULL);
+		return false;
+	}
+	return true;
+}
+
+
+WindowBuffer*
+Compositor::_AllocateBuffer(uint32 width, uint32 height)
+{
+	if (fVulkan == NULL || width == 0 || height == 0)
+		return NULL;
+	uint64 bytes = (uint64)width * height * 4;
+	if (fWindowBytes + bytes > fBudget)
+		return NULL;
+
+	VkBuffer buffer;
+	VkDeviceMemory memory;
+	void* bits;
+	if (!allocate_host_buffer(fVulkan, bytes, &buffer, &memory, &bits))
+		return NULL;
+
+	WindowBuffer* windowBuffer = new(std::nothrow) WindowBuffer(this, bits,
+		width, height, (uint64)buffer, (uint64)memory, fGeneration);
+	if (windowBuffer == NULL) {
+		fVulkan->vkDestroyBuffer(fVulkan->device, buffer, NULL);
+		fVulkan->vkFreeMemory(fVulkan->device, memory, NULL);
+		return NULL;
+	}
+	atomic_add64((int64*)&fWindowBytes, bytes);
+
+	static bool sLogged = false;
+	if (!sLogged) {
+		sLogged = true;
+		VkPhysicalDeviceMemoryProperties memory;
+		fVulkan->vkGetPhysicalDeviceMemoryProperties(fVulkan->physical,
+			&memory);
+		log_line("window memory type %" B_PRIu32 " flags %#" B_PRIx32,
+			fVulkan->memoryType,
+			(uint32)memory.memoryTypes[fVulkan->memoryType].propertyFlags);
+	}
+	return windowBuffer;
+}
+
+
+void
+Compositor::_FreeBuffer(WindowBuffer* buffer, uint64 vulkanBuffer,
+	uint64 vulkanMemory)
+{
+	atomic_add64((int64*)&fWindowBytes, -(int64)buffer->Bytes());
+	if (fVulkan == NULL || buffer->Generation() != fGeneration)
+		return;
+	fVulkan->vkDestroyBuffer(fVulkan->device, (VkBuffer)vulkanBuffer, NULL);
+	fVulkan->vkFreeMemory(fVulkan->device, (VkDeviceMemory)vulkanMemory,
+		NULL);
+}
+
+
+/*!	Allocates a window buffer. Over the budget, the buffers of windows that
+	are not on screen now (hidden, minimised, on another workspace) go
+	first, the one shown longest ago first; such a window draws all of
+	itself again when it shows. Called with all windows and the entry list
+	locked. A window without a buffer draws nothing: its drawable regions
+	are empty (Window::_ClipToBuffer).
+*/
+WindowBuffer*
+Compositor::_AllocateOrMakeRoom(uint32 width, uint32 height,
+	const Entry* keep)
+{
+	WindowBuffer* buffer = _AllocateBuffer(width, height);
+	int32 workspace = fDesktop->CurrentWorkspace();
+	while (buffer == NULL) {
+		Entry* oldest = NULL;
+		for (int32 i = 0; i < fEntries.CountItems(); i++) {
+			Entry* entry = fEntries.ItemAt(i);
+			if (entry == keep || entry->iface->Buffer() == NULL
+				|| entry->window == NULL)
+				continue;
+			// only windows that are not on screen now
+			if (!entry->window->IsHidden()
+				&& entry->window->InWorkspace(workspace))
+				continue;
+			if (oldest == NULL || entry->lastShown < oldest->lastShown)
+				oldest = entry;
+		}
+		if (oldest == NULL)
+			return NULL;
+		oldest->iface->SetBuffer(NULL, 0, 0);
+		buffer = _AllocateBuffer(width, height);
+	}
+	return buffer;
+}
+
+
+bool
+Compositor::_EnsureFrame(uint32 width, uint32 height)
+{
+	CompositorVulkan* vk = fVulkan;
+	if (width == fFrameWidth && height == fFrameHeight && vk->frame != 0)
+		return true;
+
+	if (vk->frame != VK_NULL_HANDLE) {
+		vk->vkDestroyBuffer(vk->device, vk->frame, NULL);
+		vk->vkFreeMemory(vk->device, vk->frameMemory, NULL);
+		vk->frame = VK_NULL_HANDLE;
+		vk->frameMemory = VK_NULL_HANDLE;
+	}
+	free(fScratch);
+	fScratch = NULL;
+	fFrameWidth = 0;
+	fFrameHeight = 0;
+
+	void* bits;
+	if (!allocate_host_buffer(vk, (uint64)width * height * 4, &vk->frame,
+			&vk->frameMemory, &bits))
+		return false;
+	vk->frameBits = (uint32*)bits;
+	fFrameWidth = width;
+	fFrameHeight = height;
+	if (fDebug)
+		fScratch = (uint32*)malloc((size_t)width * height * 4);
+	_UpdatePeriod();
+	return true;
+}
+
+
+/*!	One refresh period of the current display mode. Without a pixel clock
+	there is no period, and the compose runs as soon as damage arrives.
+*/
+void
+Compositor::_UpdatePeriod()
+{
+	display_mode mode;
+	memset(&mode, 0, sizeof(mode));
+	fScreen->GetMode(&mode);
+	bigtime_t period = 0;
+	if (mode.timing.pixel_clock > 0 && mode.timing.h_total > 0
+		&& mode.timing.v_total > 0) {
+		period = (bigtime_t)mode.timing.h_total * mode.timing.v_total
+			* 1000 / mode.timing.pixel_clock;
+	}
+	if (period == 0) {
+		static bool sLogged = false;
+		if (!sLogged) {
+			sLogged = true;
+			log_line("compose period unknown");
+		}
+	}
+	fPeriod = period;
+}
+
+
+//	#pragma mark - windows
+
+
+DrawingEngine*
+Compositor::CreateWindowEngine(WindowHWInterface** _iface)
+{
+	WindowHWInterface* iface = new(std::nothrow) WindowHWInterface(this);
+	if (iface == NULL || iface->Initialize() != B_OK) {
+		delete iface;
+		return NULL;
+	}
+	DrawingEngine* engine = iface->CreateDrawingEngine();
+	if (engine == NULL) {
+		delete iface;
+		return NULL;
+	}
+	*_iface = iface;
+	return engine;
+}
+
+
+void
+Compositor::AddWindow(Window* window, WindowHWInterface* iface)
+{
+	Entry* entry = new(std::nothrow) Entry(window, iface);
+	if (entry == NULL)
+		return;
+	BAutolock _(fEntryLock);
+	if (!fEntries.AddItem(entry))
+		entry->ReleaseReference();
+}
+
+
+void
+Compositor::RemoveWindow(Window* window)
+{
+	BAutolock _(fEntryLock);
+	Entry* entry = _FindEntry(window);
+	if (entry == NULL)
+		return;
+	fEntries.RemoveItem(entry);
+	entry->window = NULL;
+	entry->ReleaseReference();
+}
+
+
+bool
+Compositor::BufferBounds(Window* window, clipping_rect* _bounds)
+{
+	BAutolock _(fEntryLock);
+	Entry* entry = _FindEntry(window);
+	if (entry == NULL || entry->iface->Buffer() == NULL)
+		return false;
+	WindowBuffer* buffer = entry->iface->Buffer();
+	_bounds->left = entry->iface->Left();
+	_bounds->top = entry->iface->Top();
+	_bounds->right = _bounds->left + (int32)buffer->Width() - 1;
+	_bounds->bottom = _bounds->top + (int32)buffer->Height() - 1;
+	return true;
+}
+
+
+Compositor::Entry*
+Compositor::_FindEntry(Window* window) const
+{
+	for (int32 i = 0; i < fEntries.CountItems(); i++) {
+		Entry* entry = fEntries.ItemAt(i);
+		if (entry->window == window)
+			return entry;
+	}
+	return NULL;
+}
+
+
+/*!	Called at the end of every clipping rebuild, with all windows locked.
+	Allocates the buffer of a window on its first show and on a resize,
+	moves the Painter view on a move, and damages what changed on screen.
+*/
+void
+Compositor::ClippingChanged()
+{
+	if (!fActive)
+		return;
+
+	LayerList* layers = new(std::nothrow) LayerList(20);
+	if (layers == NULL)
+		return;
+
+	BObjectList<Window, false> fresh(10);
+	BRegion damage;
+	int32 workspace = fDesktop->CurrentWorkspace();
+
+	fEntryLock.Lock();
+	for (Window* window = fDesktop->CurrentWindows().FirstWindow();
+			window != NULL; window = window->NextWindow(workspace)) {
+		if (window->IsHidden() || window->IsOffscreenWindow())
+			continue;
+		Entry* entry = _FindEntry(window);
+		if (entry == NULL)
+			continue;
+
+		BRegion full;
+		window->GetFullRegion(&full);
+		if (!full.Frame().IsValid())
+			continue;
+		clipping_rect bounds = full.FrameInt();
+		uint32 width = bounds.right - bounds.left + 1;
+		uint32 height = bounds.bottom - bounds.top + 1;
+
+		WindowHWInterface* iface = entry->iface;
+		WindowBuffer* buffer = iface->Buffer();
+		if (buffer == NULL || buffer->Width() != width
+			|| buffer->Height() != height) {
+			WindowBuffer* newBuffer = _AllocateOrMakeRoom(width, height,
+				entry);
+			if (newBuffer == NULL) {
+				fEntryLock.Unlock();
+				delete layers;
+				// Not enough room for a window on this workspace: the
+				// CPU mode for the rest of the session. The compose
+				// thread switches, because that takes the window lock.
+				BAutolock damageLock(fDamageLock);
+				fOutOfMemory = true;
+				release_sem(fWakeSem);
+				return;
+			}
+			if (buffer != NULL) {
+				// Keep what was drawn where the two overlap on screen; the
+				// window draws the new parts itself. The overlap is found
+				// in screen coordinates, so a window that grows to the left
+				// or to the top (an outline, an edge drag) keeps its pixels
+				// in place.
+				int32 left = max_c(bounds.left, iface->Left());
+				int32 top = max_c(bounds.top, iface->Top());
+				int32 right = min_c(bounds.right,
+					iface->Left() + (int32)buffer->Width() - 1);
+				int32 bottom = min_c(bounds.bottom,
+					iface->Top() + (int32)buffer->Height() - 1);
+				for (int32 y = top; y <= bottom && left <= right; y++) {
+					memcpy((uint8*)newBuffer->Bits()
+							+ (y - bounds.top) * newBuffer->BytesPerRow()
+							+ (left - bounds.left) * 4,
+						(uint8*)buffer->Bits()
+							+ (y - iface->Top()) * buffer->BytesPerRow()
+							+ (left - iface->Left()) * 4,
+						(right - left + 1) * 4);
+				}
+			} else {
+				fresh.AddItem(window);
+			}
+			iface->SetBuffer(newBuffer, bounds.left, bounds.top);
+			newBuffer->ReleaseReference();
+		} else if (iface->Left() != bounds.left || iface->Top() != bounds.top)
+			iface->SetBuffer(buffer, bounds.left, bounds.top);
+
+		entry->lastShown = system_time();
+		Layer* layer = new(std::nothrow) Layer;
+		if (layer == NULL)
+			continue;
+		layer->entry.SetTo(entry);
+		layer->buffer.SetTo(iface->Buffer());
+		layer->left = bounds.left;
+		layer->top = bounds.top;
+		layer->shape = full;
+		layers->AddItem(layer);
+	}
+	fEntryLock.Unlock();
+
+	// What changed on screen: a window that came, went, moved, changed
+	// shape or changed its place in the stack.
+	fLayerLock.Lock();
+	LayerList* old = fLayers;
+	int32 count = max_c(old->CountItems(), layers->CountItems());
+	for (int32 i = 0; i < count; i++) {
+		Layer* before = old->ItemAt(i);
+		Layer* after = layers->ItemAt(i);
+		if (before != NULL && after != NULL
+			&& before->entry.Get() == after->entry.Get()
+			&& before->buffer.Get() == after->buffer.Get()
+			&& before->left == after->left && before->top == after->top
+			&& before->shape == after->shape)
+			continue;
+		if (before != NULL)
+			damage.Include(&before->shape);
+		if (after != NULL)
+			damage.Include(&after->shape);
+	}
+	fLayers = layers;
+	fLayerLock.Unlock();
+	delete old;
+
+	// A window that got its first buffer draws all of it once.
+	for (int32 i = 0; i < fresh.CountItems(); i++) {
+		Window* window = fresh.ItemAt(i);
+		BRegion full;
+		window->GetFullRegion(&full);
+		window->ProcessDirtyRegion(full, full);
+	}
+
+	Damage(damage);
+}
+
+
+void
+Compositor::SetBackgroundColor(rgb_color color)
+{
+	uint32 pixel = 0xff000000 | ((uint32)color.red << 16)
+		| ((uint32)color.green << 8) | color.blue;
+	if (pixel == fBackground)
+		return;
+	fBackground = pixel;
+	BRegion screen(BRect(0, 0, (float)fFrameWidth - 1,
+		(float)fFrameHeight - 1));
+	Damage(screen);
+}
+
+
+void
+Compositor::Damage(const BRegion& region)
+{
+	if (!fActive || region.CountRects() == 0)
+		return;
+	BAutolock _(fDamageLock);
+	fDamage.Include(&region);
+	if (!fWakePending) {
+		fWakePending = true;
+		release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
+	}
+}
+
+
+//	#pragma mark - compose thread
+
+
+status_t
+Compositor::_ComposeThread(void* data)
+{
+	Compositor* compositor = (Compositor*)data;
+	compositor->_ComposeLoop();
+	if (!compositor->fActive)
+		compositor->_ExitVulkan();
+	return B_OK;
+}
+
+
+void
+Compositor::_ComposeLoop()
+{
+	fCpuAtReport = thread_cpu_time();
+
+	while (true) {
+		status_t status = acquire_sem_etc(fWakeSem, 1, B_RELATIVE_TIMEOUT,
+			fDebug ? kReportInterval : B_INFINITE_TIMEOUT);
+		if (status != B_OK && status != B_TIMED_OUT)
+			return;
+		if (fDebug)
+			_Report();
+
+		// app_server ends: no switch, the desktop is going away
+		if (fQuit)
+			return;
+		if (fOutOfMemory) {
+			_TurnOff("window memory");
+			return;
+		}
+		if (status == B_TIMED_OUT)
+			continue;
+
+		// at most once per refresh period
+		if (fPeriod > 0) {
+			bigtime_t next = fLastCompose + fPeriod;
+			if (system_time() < next)
+				snooze_until(next, B_SYSTEM_TIMEBASE);
+		}
+
+		BRegion damage;
+		{
+			BAutolock _(fDamageLock);
+			fWakePending = false;
+			damage = fDamage;
+			fDamage.MakeEmpty();
+		}
+
+		// the frame follows the screen size (a mode change)
+		RenderingBuffer* back = fScreen->BackBuffer();
+		if (back == NULL)
+			continue;
+		if (back->Width() != fFrameWidth || back->Height() != fFrameHeight) {
+			if (!_EnsureFrame(back->Width(), back->Height())) {
+				_TurnOff("window memory");
+				return;
+			}
+			damage.Set(BRect(0, 0, (float)fFrameWidth - 1,
+				(float)fFrameHeight - 1));
+		}
+		BRegion screen(BRect(0, 0, (float)fFrameWidth - 1,
+			(float)fFrameHeight - 1));
+		damage.IntersectWith(&screen);
+		if (damage.CountRects() == 0)
+			continue;
+
+		LayerList layers(20);
+		{
+			BAutolock _(fLayerLock);
+			for (int32 i = 0; i < fLayers->CountItems(); i++) {
+				Layer* source = fLayers->ItemAt(i);
+				Layer* copy = new(std::nothrow) Layer;
+				if (copy == NULL)
+					continue;
+				copy->entry = source->entry;
+				copy->buffer = source->buffer;
+				copy->left = source->left;
+				copy->top = source->top;
+				copy->shape = source->shape;
+				layers.AddItem(copy);
+			}
+		}
+
+		fLastCompose = system_time();
+		if (!_Compose(damage, layers)) {
+			if (!fActive)
+				return;
+			// keep the damage for the next try after a restart
+			Damage(damage);
+		}
+	}
+}
+
+
+/*!	Records one frame: the background in the damage, then each window's
+	part of the damage, back to front. Waits for the fence, then puts the
+	damage on the screen. Returns false when the GPU mode ended.
+*/
+bool
+Compositor::_Compose(const BRegion& damage, const LayerList& layers)
+{
+	CompositorVulkan* vk = fVulkan;
+	fFrames++;
+	bool compare = fDebug && fFrames % 100 == 1;
+	uint32 background = fBackground;
+
+	// A compare frame keeps the windows from drawing until the CPU copy
+	// is done, so both read the same pixels. The window lock is never
+	// held here.
+	if (compare) {
+		for (int32 i = 0; i < layers.CountItems(); i++)
+			layers.ItemAt(i)->entry->iface->LockExclusiveAccess();
+	}
+
+	vk->vkResetCommandBuffer(vk->commands, 0);
+	VkCommandBufferBeginInfo begin = {};
+	begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vk->vkBeginCommandBuffer(vk->commands, &begin);
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->pipeline);
+
+	VkMemoryBarrier between = {};
+	between.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	between.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	between.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+		| VK_ACCESS_SHADER_WRITE_BIT;
+
+	VkDescriptorBufferInfo frameInfo = {};
+	frameInfo.buffer = vk->frame;
+	frameInfo.range = VK_WHOLE_SIZE;
+
+	compose_rect rect;
+	memset(&rect, 0, sizeof(rect));
+	rect.frameStride = fFrameWidth;
+
+	for (int32 layerIndex = -1; layerIndex < layers.CountItems();
+			layerIndex++) {
+		Layer* layer = layerIndex >= 0 ? layers.ItemAt(layerIndex) : NULL;
+		BRegion part(damage);
+		if (layer != NULL) {
+			if (!layer->buffer.IsSet())
+				continue;
+			part.IntersectWith(&layer->shape);
+			if (part.CountRects() == 0)
+				continue;
+		}
+
+		VkDescriptorBufferInfo sourceInfo = frameInfo;
+		if (layer != NULL)
+			sourceInfo.buffer = (VkBuffer)layer->buffer->VulkanBuffer();
+		VkWriteDescriptorSet writes[2] = {};
+		for (int i = 0; i < 2; i++) {
+			writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writes[i].dstBinding = i;
+			writes[i].descriptorCount = 1;
+			writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		}
+		writes[0].pBufferInfo = &sourceInfo;
+		writes[1].pBufferInfo = &frameInfo;
+		vk->vkCmdPushDescriptorSetKHR(vk->commands,
+			VK_PIPELINE_BIND_POINT_COMPUTE, vk->pipelineLayout, 0, 2, writes);
+
+		rect.fill = layer == NULL ? 1 : 0;
+		rect.color = background;
+		rect.sourceStride = layer != NULL ? layer->buffer->Width() : 0;
+		for (int32 i = 0; i < part.CountRects(); i++) {
+			clipping_rect r = part.RectAtInt(i);
+			rect.frameX = r.left;
+			rect.frameY = r.top;
+			rect.width = r.right - r.left + 1;
+			rect.height = r.bottom - r.top + 1;
+			if (layer != NULL) {
+				rect.sourceX = r.left - layer->left;
+				rect.sourceY = r.top - layer->top;
+			}
+			vk->vkCmdPushConstants(vk->commands, vk->pipelineLayout,
+				VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(rect), &rect);
+			vk->vkCmdDispatch(vk->commands, (rect.width + 15) / 16,
+				(rect.height + 15) / 16, 1);
+		}
+		// the next layer writes over this one
+		vk->vkCmdPipelineBarrier(vk->commands,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &between, 0, NULL,
+			0, NULL);
+	}
+
+	VkMemoryBarrier toHost = {};
+	toHost.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	toHost.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+	vk->vkCmdPipelineBarrier(vk->commands,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0,
+		1, &toHost, 0, NULL, 0, NULL);
+	vk->vkEndCommandBuffer(vk->commands);
+
+	VkSubmitInfo submit = {};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &vk->commands;
+	vk->vkResetFences(vk->device, 1, &vk->fence);
+	bigtime_t started = system_time();
+	VkResult result = vk->vkQueueSubmit(vk->queue, 1, &submit, vk->fence);
+	bool forced = fForceFail;
+	if (forced) {
+		// gpu_compositor_fail: the first submit counts as failed
+		fForceFail = false;
+		result = VK_ERROR_UNKNOWN;
+	}
+
+	// Decision 14: a late fence is not a failure. Keep the last frame,
+	// keep collecting damage, and wait on; the watchdog decides first.
+	const char* failure = NULL;
+	if (result != VK_SUCCESS)
+		failure = forced ? "forced failure" : "submit";
+	while (failure == NULL) {
+		result = vk->vkWaitForFences(vk->device, 1, &vk->fence, VK_TRUE,
+			kFenceSlice * 1000);
+		if (result == VK_SUCCESS)
+			break;
+		if (result != VK_TIMEOUT) {
+			failure = "device lost";
+			break;
+		}
+		bigtime_t late = system_time() - started;
+		if (late >= kFenceLimit) {
+			failure = "fence timeout";
+			break;
+		}
+		if (system_time() - fLateLogged >= 1000000) {
+			fLateLogged = system_time();
+			log_line("compose late %" B_PRId64 " ms", late / 1000);
+		}
+	}
+	if (failure != NULL) {
+		if (compare) {
+			for (int32 i = 0; i < layers.CountItems(); i++)
+				layers.ItemAt(i)->entry->iface->UnlockExclusiveAccess();
+		}
+		// one restart after a successful reset (RADV only)
+		if (!fOnLavapipe && !fRestarted && strcmp(failure, "device lost") == 0
+			&& _RestartAfterReset())
+			return false;
+		_TurnOff(failure);
+		return false;
+	}
+
+	bigtime_t took = system_time() - started;
+	if (fSampleCount < (int32)(sizeof(fSamples) / sizeof(fSamples[0])))
+		fSamples[fSampleCount++] = took;
+
+	if (compare) {
+		_Compare(damage, layers, background);
+		for (int32 i = 0; i < layers.CountItems(); i++)
+			layers.ItemAt(i)->entry->iface->UnlockExclusiveAccess();
+	}
+
+	_Present(damage);
+	return true;
+}
+
+
+/*!	Copies the composed damage into the screen's back buffer and lets the
+	screen interface put it on the front: the row copy, or the M8 DMA_DATA
+	copy when gpu_app_server is on. The cursor is drawn there, as before.
+*/
+void
+Compositor::_Present(const BRegion& damage)
+{
+	if (!fScreen->LockParallelAccess())
+		return;
+
+	RenderingBuffer* back = fScreen->BackBuffer();
+	if (back != NULL && back->Width() == fFrameWidth
+		&& back->Height() == fFrameHeight) {
+		const uint8* frame = (const uint8*)fVulkan->frameBits;
+		uint32 frameRow = fFrameWidth * 4;
+		uint8* bits = (uint8*)back->Bits();
+		uint32 backRow = back->BytesPerRow();
+		for (int32 i = 0; i < damage.CountRects(); i++) {
+			clipping_rect r = damage.RectAtInt(i);
+			uint32 bytes = (r.right - r.left + 1) * 4;
+			for (int32 y = r.top; y <= r.bottom; y++) {
+				memcpy(bits + y * backRow + r.left * 4,
+					frame + y * frameRow + r.left * 4, bytes);
+			}
+		}
+		fScreen->InvalidateRegion(damage);
+	}
+	fScreen->UnlockParallelAccess();
+}
+
+
+/*!	gpu_debug: the same frame on the CPU, from the same window buffers,
+	compared with what the GPU wrote. Colour channels only.
+*/
+bool
+Compositor::_Compare(const BRegion& damage, const LayerList& layers,
+	uint32 background)
+{
+	if (fScratch == NULL)
+		return false;
+	uint32 stride = fFrameWidth;
+	for (int32 i = 0; i < damage.CountRects(); i++) {
+		clipping_rect r = damage.RectAtInt(i);
+		for (int32 y = r.top; y <= r.bottom; y++) {
+			for (int32 x = r.left; x <= r.right; x++)
+				fScratch[y * stride + x] = background;
+		}
+	}
+	for (int32 l = 0; l < layers.CountItems(); l++) {
+		Layer* layer = layers.ItemAt(l);
+		if (!layer->buffer.IsSet())
+			continue;
+		BRegion part(damage);
+		part.IntersectWith(&layer->shape);
+		const uint32* source = (const uint32*)layer->buffer->Bits();
+		uint32 sourceStride = layer->buffer->Width();
+		for (int32 i = 0; i < part.CountRects(); i++) {
+			clipping_rect r = part.RectAtInt(i);
+			for (int32 y = r.top; y <= r.bottom; y++) {
+				memcpy(fScratch + y * stride + r.left,
+					source + (y - layer->top) * sourceStride
+						+ (r.left - layer->left),
+					(r.right - r.left + 1) * 4);
+			}
+		}
+	}
+	const uint32* frame = fVulkan->frameBits;
+	for (int32 i = 0; i < damage.CountRects(); i++) {
+		clipping_rect r = damage.RectAtInt(i);
+		for (int32 y = r.top; y <= r.bottom; y++) {
+			for (int32 x = r.left; x <= r.right; x++) {
+				uint32 at = y * stride + x;
+				if (((fScratch[at] ^ frame[at]) & 0x00ffffff) != 0) {
+					log_line("compose compare MISMATCH at %" B_PRId32 ",%"
+						B_PRId32, x, y);
+					return false;
+				}
+			}
+		}
+	}
+	log_line("compose compare ok");
+	return true;
+}
+
+
+/*!	Decision 14: after the GPU was reset and passed its self-test, make the
+	device once more on RADV. Every window buffer is new, so every window
+	draws once. Returns false when the GPU does not come back.
+*/
+bool
+Compositor::_RestartAfterReset()
+{
+	fRestarted = true;
+	bigtime_t until = system_time() + kFenceLimit;
+	const char* reason = NULL;
+	while (!gpu_available(NULL, &reason)) {
+		if (system_time() >= until)
+			return false;
+		snooze(500000);
+	}
+
+	if (!fDesktop->LockAllWindows())
+		return false;
+
+	// Every engine points at memory of the lost device. Park each engine
+	// on the screen first; Painter keeps that attachment until the window
+	// gets a new buffer, so a hidden window never writes freed memory.
+	fEntryLock.Lock();
+	for (int32 i = 0; i < fEntries.CountItems(); i++) {
+		Entry* entry = fEntries.ItemAt(i);
+		if (entry->window != NULL
+			&& entry->window->GetDrawingEngine() != NULL)
+			entry->window->GetDrawingEngine()->SetHWInterface(fScreen);
+		entry->iface->SetBuffer(NULL, 0, 0);
+	}
+	fEntryLock.Unlock();
+	{
+		BAutolock _(fLayerLock);
+		fLayers->MakeEmpty();
+	}
+
+	const char* initReason = NULL;
+	RenderingBuffer* back = fScreen->BackBuffer();
+	bool ok = back != NULL && _InitVulkan(true, &initReason) == B_OK
+		&& _EnsureFrame(back->Width(), back->Height());
+	if (ok) {
+		// all buffers are new now: every window draws once
+		ClippingChanged();
+		fEntryLock.Lock();
+		for (int32 i = 0; i < fEntries.CountItems(); i++) {
+			Entry* entry = fEntries.ItemAt(i);
+			if (entry->window != NULL
+				&& entry->window->GetDrawingEngine() != NULL)
+				entry->window->GetDrawingEngine()->SetHWInterface(entry->iface);
+		}
+		fEntryLock.Unlock();
+		log_line("gpu compositor restarted after reset");
+	}
+	fDesktop->UnlockAllWindows();
+	return ok;
+}
+
+
+/*!	The CPU mode for the rest of the session (decision 11): every window's
+	engine goes back to the screen, the desktop redraws, and the window
+	buffers are freed. Never back to the GPU mode in this session.
+*/
+void
+Compositor::_TurnOff(const char* reason)
+{
+	if (!fDesktop->LockAllWindows())
+		return;
+
+	fActive = false;
+	fEntryLock.Lock();
+	for (int32 i = 0; i < fEntries.CountItems(); i++) {
+		Entry* entry = fEntries.ItemAt(i);
+		if (entry->window != NULL
+			&& entry->window->GetDrawingEngine() != NULL)
+			entry->window->GetDrawingEngine()->SetHWInterface(fScreen);
+		entry->iface->SetBuffer(NULL, 0, 0);
+	}
+	fEntryLock.Unlock();
+	{
+		BAutolock _(fLayerLock);
+		fLayers->MakeEmpty();
+	}
+	log_line("gpu compositor off: %s", reason);
+
+	fDesktop->CompositorTurnedOff();
+	fDesktop->UnlockAllWindows();
+	// The device goes when the compose thread ends, after its last
+	// references to the window buffers are gone.
+}
+
+
+void
+Compositor::_Report()
+{
+	bigtime_t now = system_time();
+	if (now - fReportStart < kReportInterval)
+		return;
+
+	bigtime_t cpu = thread_cpu_time();
+	bigtime_t median = 0;
+	if (fSampleCount > 0) {
+		// insertion sort: at most 128 samples
+		for (int32 i = 1; i < fSampleCount; i++) {
+			bigtime_t value = fSamples[i];
+			int32 j = i - 1;
+			while (j >= 0 && fSamples[j] > value) {
+				fSamples[j + 1] = fSamples[j];
+				j--;
+			}
+			fSamples[j + 1] = value;
+		}
+		median = fSamples[fSampleCount / 2];
+	}
+	log_line("compose median %" B_PRId64 " us cpu %" B_PRId64
+		" ms per 10 s", median, (cpu - fCpuAtReport) / 1000);
+	log_line("window memory %" B_PRIu64 " MB", fWindowBytes / (1024 * 1024));
+
+	fSampleCount = 0;
+	fCpuAtReport = cpu;
+	fReportStart = now;
+}

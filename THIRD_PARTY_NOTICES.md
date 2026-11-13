@@ -334,6 +334,14 @@ Location: `distro/graphics/third_party/mesa-25.3.6/src/amd/common/sid.h`. Read b
 
 The file is unmodified. sha256 `ab108b90f8d4443eaf6742f1bf6f4454fc43bd5c9f3373cb1e02f1f0cf5308d3`. The permission text stays in the file. AMD does not endorse R5.
 
+### Shader compiler (build tool)
+
+`glslangValidator` from glslang 16.6.0 (Khronos Group) compiles the compositor's GLSL to SPIR-V on the build host (`scripts/gen-compositor-shaders.sh`). Nothing of glslang is in the image: only SPIR-V generated from R5's own MIT shader source.
+
+| Piece | Project | License |
+|---|---|---|
+| `glslangValidator` 16.6.0 | KhronosGroup/glslang (Google, Inc., The Khronos Group Inc., and others) | BSD-3-Clause, BSD-2-Clause, MIT, Apache-2.0, NVIDIA and Khronos licences per file; the generated parser `glslang_tab.cpp` is GPL-3.0-or-later WITH Bison-exception-2.2 |
+
 ## Not included
 
 The Linux `amdgpu` driver is not imported. The clear-state table above is the only file taken from that tree.

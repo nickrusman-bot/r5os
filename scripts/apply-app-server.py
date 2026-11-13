@@ -28,6 +28,10 @@ def main() -> int:
     copy("GPUCopy.h", local / "GPUCopy.h")
     copy("GPUCopyBands.h", local / "GPUCopyBands.h")
     copy("local-Jamfile", local / "Jamfile")
+    for name in ("Compositor.cpp", "Compositor.h", "WindowBuffer.cpp",
+            "WindowBuffer.h", "WindowHWInterface.cpp", "WindowHWInterface.h"):
+        copy(name, local / name)
+    copy("compositor/compositor_shaders.h", local / "compositor_shaders.h")
     return 0
 
 

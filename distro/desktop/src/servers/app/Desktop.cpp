@@ -74,6 +74,11 @@
 #include "Window.h"
 #include "Workspace.h"
 #include "WorkspacesView.h"
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+#include "Compositor.h"
+// SPDX-SnippetEnd
 
 #if TEST_MODE
 #	include "EventStream.h"
@@ -476,6 +481,11 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 
 	fUserID(userID),
 	fTargetScreen(strdup(targetScreen)),
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	fCompositor(NULL),
+// SPDX-SnippetEnd
 	fSettings(NULL),
 	fSharedReadOnlyArea(-1),
 	fApplicationsLock("application list"),
@@ -528,6 +538,11 @@ Desktop::Desktop(uid_t userID, const char* targetScreen)
 
 Desktop::~Desktop()
 {
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	delete fCompositor;
+// SPDX-SnippetEnd
 	delete_area(fSharedReadOnlyArea);
 	delete_port(fMessagePort);
 
@@ -665,6 +680,14 @@ Desktop::Init()
 	// draw the background
 
 	fScreenRegion = fVirtualScreen.Frame();
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11: the compositor, when gpu_compositor is set. Without it, or
+	// when no Vulkan device starts, the desktop is the CPU mode.
+	fCompositor = Compositor::Create(this, fVirtualScreen.HWInterface());
+// SPDX-SnippetEnd
 
 	BRegion stillAvailableOnScreen;
 	_RebuildClippingForAllWindows(stillAvailableOnScreen);
@@ -1603,6 +1626,15 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 		return;
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	if (fCompositor != NULL && fCompositor->IsActive()) {
+		_MoveWindowComposed(window, (int32)x, (int32)y);
+		return;
+	}
+// SPDX-SnippetEnd
+
 	// the dirty region starts with the visible area of the window being moved
 	BRegion newDirtyRegion(window->VisibleRegion());
 
@@ -1674,6 +1706,15 @@ Desktop::ResizeWindowBy(Window* window, float x, float y)
 		NotifyWindowResized(window);
 		return;
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	if (fCompositor != NULL && fCompositor->IsActive()) {
+		_ResizeWindowComposed(window, (int32)x, (int32)y);
+		return;
+	}
+// SPDX-SnippetEnd
 
 	// The dirty region for the inside of the window is constructed by the window itself in
 	// ResizeBy()
@@ -3594,6 +3635,13 @@ Desktop::_RebuildClippingForAllWindows(BRegion& stillAvailableOnScreen)
 			stillAvailableOnScreen.Exclude(&window->VisibleRegion());
 		}
 	}
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+
+	if (fCompositor != NULL)
+		fCompositor->ClippingChanged();
+// SPDX-SnippetEnd
 }
 
 
@@ -3604,7 +3652,12 @@ Desktop::_TriggerWindowRedrawing(BRegion& dirtyRegion, BRegion& exposeRegion)
 	for (Window* window = CurrentWindows().LastWindow(); window != NULL;
 			window = window->PreviousWindow(fCurrentWorkspace)) {
 		if (!window->IsHidden()
-			&& dirtyRegion.Intersects(window->VisibleRegion().Frame()))
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+			// in the GPU mode a window also draws its covered parts
+			&& dirtyRegion.Intersects(window->DrawableRegion().Frame()))
+// SPDX-SnippetEnd
 			window->ProcessDirtyRegion(dirtyRegion, exposeRegion);
 	}
 }
@@ -3617,6 +3670,20 @@ Desktop::_SetBackground(BRegion& background)
 	// in the clipping region rebuild, but it is
 	// ok actually, because it also avoids trails on
 	// moving windows
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	if (fCompositor != NULL && fCompositor->IsActive()) {
+		// The compose fills the background under the windows. If the
+		// GPU mode ends, CompositorTurnedOff() forgets this region so
+		// the CPU mode fills all of it.
+		fBackgroundRegion = background;
+		fCompositor->SetBackgroundColor(fWorkspaces[fCurrentWorkspace].Color());
+		fCompositor->Damage(background);
+		return;
+	}
+// SPDX-SnippetEnd
 
 	// remember the region not covered by any windows
 	// and redraw the dirty background
@@ -3633,6 +3700,119 @@ Desktop::_SetBackground(BRegion& background)
 		}
 	}
 }
+
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+/*!	GPU mode: moves a window without a blit and without redrawing the
+	windows below; the compositor puts the window at its new place. Only a
+	part that was at a negative screen coordinate, and so never drawn, is
+	drawn now. All windows are locked.
+*/
+void
+Desktop::_MoveWindowComposed(Window* window, int32 x, int32 y)
+{
+	BRegion before;
+	window->GetFullRegion(&before);
+
+	bool direct = false;
+	if (window->ServerWindow()->IsDirectlyAccessing()) {
+		window->ServerWindow()->HandleDirectConnection(B_DIRECT_STOP);
+		direct = true;
+	}
+
+	window->MoveBy(x, y);
+
+	BRegion background;
+	_RebuildClippingForAllWindows(background);
+	_SetBackground(background);
+
+	// The part of the window that was left of or above the screen edge
+	// has no pixels in the buffer yet.
+	clipping_rect frame = before.FrameInt();
+	if (frame.left < 0 || frame.top < 0) {
+		BRegion onScreen(BRect(0, 0, 32767, 32767));
+		BRegion drawn(before);
+		drawn.IntersectWith(&onScreen);
+		drawn.OffsetBy(x, y);
+		BRegion revealed;
+		window->GetFullRegion(&revealed);
+		revealed.IntersectWith(&onScreen);
+		revealed.Exclude(&drawn);
+		if (revealed.CountRects() > 0)
+			window->ProcessDirtyRegion(revealed, revealed);
+	}
+
+	_WindowChanged(window);
+
+	if (direct) {
+		window->ServerWindow()->HandleDirectConnection(
+			B_DIRECT_START | B_BUFFER_MOVED | B_CLIPPING_MODIFIED);
+	}
+
+	NotifyWindowMoved(window);
+}
+
+
+/*!	GPU mode: resizes a window. The compositor gives it a buffer of the new
+	size with the old contents; the window draws its new parts. Windows
+	below are not redrawn. All windows are locked.
+*/
+void
+Desktop::_ResizeWindowComposed(Window* window, int32 x, int32 y)
+{
+	BRegion previousContent;
+	window->GetContentRegion(&previousContent);
+
+	bool direct = false;
+	if (window->ServerWindow()->IsDirectlyAccessing()) {
+		window->ServerWindow()->HandleDirectConnection(B_DIRECT_STOP);
+		direct = true;
+	}
+
+	BRegion dirty;
+	window->ResizeBy(x, y, &dirty);
+
+	BRegion background;
+	_RebuildClippingForAllWindows(background);
+	_SetBackground(background);
+
+	BRegion expose;
+	window->GetContentRegion(&expose);
+	expose.Exclude(&previousContent);
+	dirty.Include(&expose);
+	dirty.IntersectWith(&window->DrawableRegion());
+	if (dirty.CountRects() > 0)
+		window->ProcessDirtyRegion(dirty, expose);
+
+	_WindowChanged(window);
+
+	if (direct) {
+		window->ServerWindow()->HandleDirectConnection(
+			B_DIRECT_START | B_BUFFER_RESIZED | B_CLIPPING_MODIFIED);
+	}
+
+	NotifyWindowResized(window);
+}
+
+
+/*!	The compositor ended the GPU mode. Every window's engine draws to the
+	screen again; redraw the whole desktop the CPU-mode way.
+*/
+void
+Desktop::CompositorTurnedOff()
+{
+	fBackgroundRegion.MakeEmpty();
+	BRegion background;
+	_RebuildClippingForAllWindows(background);
+	_SetBackground(background);
+	BRegion screen(fScreenRegion);
+	MarkDirty(screen);
+}
+
+
+// SPDX-SnippetEnd
 
 
 //!	The all window lock must be held when calling this function.
