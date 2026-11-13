@@ -39,22 +39,23 @@ Voer stap 4 uit van `generated/gpu-m11/BRIEF.md`: de schaduw (A3), het frosted g
 
 **Eerst twee dingen op papier, dan stoppen:**
 1. **Het alfakanaal (besluit 16).** Painter schrijft in een gewone 32-bits buffer geen betrouwbare alfa. De compositor gebruikt doorzichtigheid daarom alleen binnen het glasgebied (de tab, de kaderlijn, en views die om glas vroegen); daarbuiten is elk pixel ondoorzichtig, wat er ook in de alfa staat. Kijk in de bron welke tekenroutines van Painter in de `B_ALPHA_COMPOSITE`-modi goede alfa schrijven (tekst, vlakken, lijnen, bitmaps, gradiënten). Schrijf op: klein genoeg om glas-views (`set_view_glass()`) nu goed te doen, of te groot, dan komen glas-views in M12 en krijgt M11 glas op de tab en de kaderlijn (de call bestaat dan wel, wordt bewaard, en werkt vanaf M12).
-2. **Het uiterlijk.** Twee of drie varianten van schaduw (grootte, zachtheid) en glas (blurniveau, doorzichtigheid van de tab), elk als schermafbeelding in QEMU op Lavapipe van hetzelfde bureaublad, met een actief en een inactief venster. Naast elkaar, met de waarden erbij.
+2. **Het uiterlijk is gekozen:** drie sterktes, Quiet, Balanced (standaard) en Glassy, met de startwaarden uit besluit 8 in de brief. Geen varianten meer maken.
 
-Leg beide aan mij voor en stop. Ik kies; daarna bouw je de rest.
+Leg punt 1 aan mij voor en stop. Ik kies; daarna bouw je de rest.
 
 **Bouwen (na mijn keuze), volgens besluit 16:**
 - het kopiepad van stap 2 zonder effecten blijft onaangeroerd; de effecten in een tweede compute-pipeline (uitpakken, mengen, eigen bilineaire filtering), op de GFX-wachtrij, één submit en één fence per beeld;
 - schaduw: een masker per venster, één keer vervaagd bij aanmaken en vergroten, bewaard; de omvang uit `GetShadowExtent()`; damage aan de schaduwkant groter;
 - glas: Dual Kawase (startwaarde twee niveaus), een bewaard resultaat per glasvlak, alleen opnieuw bij damage eronder of als het glasvenster beweegt; de blur alleen voor (damage plus blurstraal) ∩ glasgebied; het glasgebied uit `GetGlassRegion()` van de R5-decorator plus de glas-views;
 - de calls precies zoals in het ontwerp: `<WindowEffects.h>`, namespace `BAppearanceKit`, `window_effects()`, `set_window_effects()`, `set_window_glass()`, `set_view_glass()`, de vlaggen `B_WINDOW_SHADOW` en `B_WINDOW_FROSTED_GLASS` (en `B_WINDOW_ANIMATIONS` gereserveerd voor 4b). Via een eigen `AppServerLink`, nieuwe codes aan het eind van `ServerProtocol.h`. Niets in `libbe`, geen `B_TRANSPARENT_COLOR`. app_server bewaart de twee waarden in zijn `appearance`-bestand; een oud bestand zonder de sleutels betekent beide aan;
+- de sterkte in drie stappen (besluit 8): de call `window_effect_strength()` / `set_window_effect_strength()`, de waarden in één tabel, kleinere schaduw voor inactieve vensters en menu's, een schuif (of menu) met Quiet / Balanced / Glassy en de hint "Less effect uses less CPU";
 - het vak "Window effects" met "Shadow" en "Frosted glass" op Look and feel van Appearance, in Settings én in het losse Appearance-programma. Een wijziging werkt meteen; Defaults zet beide aan; Revert zet terug wat er was toen de pagina openging. De Settings-indeling van `AGENTS.md` blijft. Logregels `app_server: shadow on/off`, `frosted on/off`;
 - in de CPU-modus worden de calls en vinkjes geaccepteerd en bewaard, zonder zichtbaar effect;
 - elke call in `docs/LIBR5.md` en `docs/APPEARANCE-KIT.md` met een kort voorbeeld, in dezelfde commit.
 
 **Testen, eerlijk:**
 - QEMU op Lavapipe: met beide vinkjes uit `compose compare ok` en nooit `MISMATCH`; beide vinkjes aan en uit met de logregels; Revert en Defaults; een venster slepen over glas; een programma zonder glas-call ziet er hetzelfde uit; schermafbeeldingen in het rapport.
-- Metingen in `CHANGELOG.md`, Lavapipe 1080p: compose-tijd zonder effecten (kleine damage en slepen), alleen schaduw (slepen), alleen glas (tab en kader), en glas over het hele scherm als slechtste geval. Haalt dat laatste geen 16 ms: zeg het, niet zelf een lager niveau kiezen.
+- Metingen in `CHANGELOG.md`, Lavapipe 1080p: compose-tijd zonder effecten (kleine damage en slepen), alleen schaduw (slepen), alleen glas (tab en kader), en glas over het hele scherm als slechtste geval, voor elk van de drie sterktes. Haalt dat laatste geen 16 ms: zeg het, niet zelf een lager niveau kiezen.
 - RADV op de 5625U is "Onbewezen" tot de stick.
 
 Eigen tak `claude/m11-effects` vanaf `origin/main`. Vraag vóór je jamt, pusht en een PR opent. Meld kort: Veranderd / Getest / Onbewezen / Documentatie, en stop.
