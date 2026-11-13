@@ -151,10 +151,10 @@ These tasks move from the accelerant into the kernel driver:
 Not built yet; the design is `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy design (step 3a)", with its open questions. In short:
 
 - `BO_EXPORT` (`+ 17`) and `BO_IMPORT` (`+ 18`) keep their numbers and start to work. Export returns an export number in an opaque 128-bit field: unique and never reused, like an `area_id` (a 64-bit counter mixed with `secure_random_value()`), not a secret. The safety boundary is the kernel's check at import: only `/system/servers/app_server` (the check of `R5_GPU_SCANOUT_BO`), only for the team pinned at export (app_server passes `ClientTeam()`), once, within 5 s. At most 32 pending exports per file.
-- One additive, vendor-neutral call at the first free number: `BO_PRESENT_MARK` (`+ 32`). The exporter records on its buffer the ring number of its file's last submit; the kernel takes the number itself. app_server reads it and asks `FENCE_WAIT` with timeout 0. No sync objects are shared between teams.
+- One additive, vendor-neutral call at the first free number: `BO_PRESENT_MARK` (`+ 32`). The exporter records on its buffer the ring number of its file's last submit; the kernel takes the number itself. app_server reads it and asks `FENCE_WAIT` with timeout 0. No sync objects are shared between teams; "free again" is a Haiku semaphore per image, made by the program and released by app_server.
 - A buffer gets a reference count: each file's handle, each pending export, and a parked handle for GPU work in flight. The memory goes with the last reference.
 - Haiku has no dma-buf, and no area is used for sharing (the kernel area of a buffer is not cloneable).
-- Buffer slots: the system limit (`kMaxBo`, 256 today) goes up and the per-file limit (`kMaxClientBo`, also 256 today) goes to half of it, as starting values. The real values follow from `bo_count` before and after VulkanTeapot in the self-test.
+- Buffer slots: the system limit (`kMaxBo`, 256 today) goes up and the per-file limit (`kMaxClientBo`, also 256 today) goes to half of it, with a fixed reserve that only app_server can use, all as starting values. The real values follow from `bo_count` before and after VulkanTeapot in the self-test.
 
 ## R5 DRM library (userland)
 

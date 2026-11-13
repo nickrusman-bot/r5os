@@ -222,7 +222,10 @@ Today a slot is the memory and the handle at the same time. Sharing splits it:
 
 - **Ready, at present.** When the program presents image *i*, the WSI calls `BO_PRESENT_MARK` with `SET` on that image's buffer. The kernel records the calling file's `lastSequence` on the backing; the program cannot give a number. Mesa's WSI submits the blit into the linear buffer before it calls the swapchain's present, so that number covers the frame. If another thread of the program submitted in between, the number is later than needed: the frame waits a little longer, it is never shown too early.
 - **The compose never waits.** At the start of a frame app_server calls `BO_PRESENT_MARK` with `GET` on its imported handle, then `FENCE_WAIT` with that number and timeout 0. Passed: it samples the new image. Not passed: that window keeps its previous image.
-- **Free again** goes back as a link message to the program after app_server's compose fence, the frame no longer samples that image. The WSI waits for it before `vkAcquireNextImageKHR` hands the image out again, with the program's own timeout.
+- **Free again: one semaphore per swapchain image** (user, 13 Nov 2026). The WSI creates it (`create_sem`, count 0) and sends its `sem_id` with that image's export number in the once-message.
+  - After its compose fence, app_server calls `release_sem_etc(sem, 1, B_DO_NOT_RESCHEDULE)` for each image that the frame no longer samples. It never waits on a program.
+  - Before it uses a `sem_id`, app_server checks with `get_sem_info` that the semaphore's `team` is `ClientTeam()` of that connection; otherwise that window's zero-copy is refused (`zero-copy off: sem`). That check is the protection: Haiku's `release_sem_etc` lets any team release a semaphore of another user team and only refuses a user call on a kernel-team semaphore (`src/system/kernel/sem.cpp`).
+  - In `vkAcquireNextImageKHR` the WSI waits with `acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, timeout)`, the program's own timeout. When nothing comes in that time, it returns `VK_ERROR_OUT_OF_DATE_KHR`, so the program makes a new swapchain.
 
 ### The link message
 
@@ -235,9 +238,9 @@ New messages next to `SetViewBitmap` (15b); the CPU path stays as it is. **No ch
 
 The messages:
 
-- **Once per swapchain (program → app_server):** the view token, the image count, and per image the export number, width, height, pitch and format. The reply has one status per image, so the WSI can fall back to the copy path at once.
+- **Once per swapchain (program → app_server):** the view token, the image count, and per image the export number, the free semaphore's `sem_id`, width, height, pitch and format. The reply has one status per image, so the WSI can fall back to the copy path at once.
 - **Per present (program → app_server):** the view token and the image index, after `BO_PRESENT_MARK`.
-- **Free again (app_server → program):** see open question 1.
+- **Free again (app_server → program):** not a message but the image's semaphore (above), so the link stays a request and reply channel. `AppServerLink` holds the application's link lock while it waits for a reply (`src/kits/app/AppServerLink.cpp`), so app_server cannot send on it by itself.
 - **Once at the end (program → app_server):** the swapchain is gone; app_server closes its imports after the next fence.
 
 ### The R5 DRM library and the fifth libdrm patch
@@ -279,6 +282,7 @@ The messages:
 `kMaxBo` and `kMaxClientBo` are both 256 today (`r5_gpu_internal.h`), so one program can take every slot and no one else, app_server included, gets a buffer.
 
 - **Starting values for 3b:** the system limit goes well up, to 1024, and the per-file limit is half of it, 512. Both are starting values, not the result of a measurement.
+- **A fixed reserve for app_server:** a number of the system slots that only `gpu_caller_is_app_server()` can use; other programs get `B_NO_MEMORY` when only the reserve is left. Starting value 64, also measured on the stick (app_server's `bo_count` with the desktop composed and a few windows open).
 - **A file that hits its limit** gets `B_NO_MEMORY`, as today, plus one line per file: `radeon_hd: buffer limit <n> reached, team <id>`.
 - **The measurement** (user, 13 Nov 2026): the self-test reads `bo_count` from `R5_GPU_GET_COUNTERS` before and after VulkanTeapot, on the next stick, in a boot that runs anyway (no boot of its own). The real values follow from that count and replace the starting values, recorded in `CHANGELOG.md`.
 
@@ -297,18 +301,18 @@ One line per test, from the 3b row of the brief. A test program, `r5-share-test`
 | exporter killed before the import | `r5-share-test: killed before import, gtt returned: pass` |
 | exporter killed after the import | `r5-share-test: killed after import, still readable, gtt returned at close: pass` |
 | a size that lies | `app_server: window <id> zero-copy off: size` and `r5-share-test: lying size refused: pass` |
+| a semaphore of another team in the once-message | `app_server: window <id> zero-copy off: sem` and `r5-share-test: other team's semaphore refused: pass` |
+| no free in time | `r5-share-test: acquire timeout gives out of date: pass` |
 | a submit that never finishes | `r5-share-test: stuck image, desktop composes, previous frame kept: pass` |
 | one program allocating until refused | `r5-share-test: per-file limit, app_server still allocates: pass` |
+| programs allocating until only the reserve is left | `r5-share-test: reserve kept for app_server: pass` |
 | Lavapipe | `app_server: window <id> zero-copy off: lavapipe` |
 
 A failure prints the same text with `fail` and the reason. "GTT returned" is read with `R5_GPU_GET_COUNTERS` before and after, as the M5 counters are.
 
 ### Open questions (step 3a)
 
-1. **How "free again" reaches the program.** `AppServerLink` is a request and reply channel: the program asks, `ServerApp` answers on the link's reply port, and the link is locked for that application while it waits (`src/kits/app/AppServerLink.cpp`). app_server cannot send on it by itself after its compose fence, and a reply held back until the fence would block every other call of that application to app_server. Options:
-   - **a.** The WSI makes a port of its own and sends its id in the once-message; after each compose fence app_server writes the free indexes to that port with `write_port_etc` and timeout 0. The WSI waits on that port in `vkAcquireNextImageKHR`. One message per fence, no lock on the link.
-   - **b.** The WSI asks per image ("is image *i* free?") on the link, and app_server answers at once from what its last fence released. The WSI polls; no new port.
-   - Recommendation: **a**, because it does not poll and keeps the link free. It is not literally "a link message", which is why it is asked here.
+None left. The user answered the last ones on 13 Nov 2026: the link through the WSI's own `AppServerLink`, the count with `bo_count` on the next stick, and a semaphore per image for "free again".
 
 ## The direct-window pause (decision 9)
 
