@@ -135,6 +135,13 @@ MyApp::MessageReceived(BMessage* message)
 			<p>Rebuild an old decorator against the R5 headers to fix that. A new hook comes after these three, and
 			the version goes up by one.</p>
 
+			<h3>The default decorator</h3>
+			<p>On R5 the R5 decorator is the default. app_server loads it when no decorator was chosen, and
+			<code class="inline">BPrivate::DecorInfoUtility::DefaultDecorator()</code> returns it when it is installed,
+			so Defaults in Appearance picks it. <code class="inline">"Default"</code> still names Haiku's built-in
+			decorator; a program that sets it gets Haiku's look. When the R5 decorator is missing, both fall back to
+			the built-in one.</p>
+
 			<h3>Resizing by the edge</h3>
 			<p>On R5, dragging a border or a corner with the primary button resizes the window on that side, with every
 			decorator, and the resize cursor shows while the mouse is over it. Dragging the tab moves the window. A

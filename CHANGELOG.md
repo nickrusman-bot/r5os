@@ -1,5 +1,18 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - The R5 window frame is the default
+
+Problem: after M11 step 1 the R5 decorator could be selected, but a new installation still started with Haiku's built-in decorator, and Defaults in Appearance went back to it.
+
+What changed:
+- `DecorManager` (app_server): when no decorator was chosen, or the chosen add-on cannot be loaded, app_server loads `/system/add-ons/decorators/R5Decorator`. Without it, Haiku's built-in decorator stays, with one line `app_server: decorator r5 not loaded: <error>`. A saved choice, Haiku's "Default" included, is kept.
+- `DecorInfoUtility::DefaultDecorator()` (libbe, `distro/desktop/src/kits/interface/DecorInfo.cpp`, no new call, no ABI change) returns the R5 decorator when it is installed, so Defaults in Settings and in the Appearance program picks R5. `FindDecorator("Default")` still returns Haiku's built-in decorator, so a saved "Default" is shown correctly.
+- R5Book, Decorator hooks: "The default decorator".
+
+Tested: `jam-r5-raw.sh` `jam_exit=0`, `mesa_exit=0`. QEMU (KVM, a fresh copy of the image, window): Sign in shows the R5 frame without any choice made; syslog `decorator: r5 loaded` at start, no app_server crash.
+
+Not tested: the Defaults button in Settings and in Appearance, a saved "Default" after an update, an image without the R5 add-on. Not on the 5625U, not in VirtualBox.
+
 ## 2026-11-13 - M11 step 1: the R5 window frame, decorator hooks, and resizing by the edge
 
 Problem: M11 needs one R5 window frame (decision 2: Haiku's tab, a 1-pixel frame, resize by the edge) and decorator hooks for the shadow and the glass of later steps. `DecorManager` loaded any add-on on `instantiate_decor_addon` alone, so an add-on built against another `Decorator` layout could crash app_server.
