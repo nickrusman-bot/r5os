@@ -181,38 +181,8 @@ def patch_jams() -> None:
         "SYSTEM_ADD_ONS_SETTINGS += settings_appearance ;\n",
         "settings addon list",
     )
-    replace_once(
-        HAIKU / "build" / "jam" / "packages" / "Haiku",
-        "AddFilesToPackage add-ons Screen\\ Savers : "
-        "$(SYSTEM_ADD_ONS_SCREENSAVERS) ;\n",
-        "AddFilesToPackage add-ons Screen\\ Savers : "
-        "$(SYSTEM_ADD_ONS_SCREENSAVERS) ;\n"
-        "\n"
-        "AddFilesToPackage add-ons Settings : $(SYSTEM_ADD_ONS_SETTINGS) ;\n",
-        "settings addon package",
-    )
-    replace_once(
-        HAIKU / "build" / "jam" / "packages" / "Haiku",
-        "AddFilesToPackage data fonts psfonts : $(psFonts) ;\n",
-        "AddFilesToPackage data fonts psfonts : $(psFonts) ;\n"
-        "\n"
-        "local settingsFontDir = [ FDirName $(HAIKU_TOP) data system data "
-        "settings fonts ] ;\n"
-        "local settingsFonts = [ Glob $(settingsFontDir) : *.ttf *.txt ] ;\n"
-        "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n",
-        "settings fonts",
-    )
-    replace_once(
-        HAIKU / "build" / "jam" / "packages" / "Haiku",
-        "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n",
-        "AddFilesToPackage data settings fonts : $(settingsFonts) ;\n"
-        "\n"
-        "local uiFontDir = [ FDirName $(HAIKU_TOP) data system data fonts "
-        "ttfonts ] ;\n"
-        "local uiFonts = [ Glob $(uiFontDir) : manrope-*.ttf *.txt ] ;\n"
-        "AddFilesToPackage data fonts ttfonts : $(uiFonts) ;\n",
-        "ui fonts",
-    )
+    # The Settings add-ons, settings fonts and ui fonts are packaged by the
+    # native build/jam/packages/Haiku in distro/desktop.
     split = (
         "SYSTEM_ADD_ONS_SETTINGS += settings_fonts ;\n"
         "SYSTEM_ADD_ONS_SETTINGS += settings_look ;\n"

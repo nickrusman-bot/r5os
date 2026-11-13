@@ -258,39 +258,13 @@ def install_usb_stability() -> None:
         print(f"copied {relative}")
 
 
-def install_i2c_hid_package() -> None:
-    # The driver is built and was not installed. RenkuOS b37a078925 adds it
-    # next to i2c_elan.
-    insert_once(
-        HAIKU / "build/jam/packages/Haiku",
-        "\ti2c_elan\n",
-        "\ti2c_elan\n\ti2c_hid\n",
-        "\ti2c_hid\n",
-        "i2c_hid package",
-    )
-
-
-def install_acpi_cstates_package() -> None:
-    # The module is built and was not installed. air/OS 2c48d1ae0 adds it
-    # before x86_cstates; on AMD it ranks above x86_cstates when the
-    # firmware has a state deeper than C1, elsewhere x86_cstates stays.
-    insert_once(
-        HAIKU / "build/jam/packages/Haiku",
-        "AddFilesToPackage add-ons kernel power cpuidle :\n\tx86_cstates@x86,x86_64\n",
-        "AddFilesToPackage add-ons kernel power cpuidle :\n"
-        "\tx86_acpi_cstates@x86,x86_64\n\tx86_cstates@x86,x86_64\n",
-        "\tx86_acpi_cstates@x86,x86_64\n",
-        "x86_acpi_cstates package",
-    )
-
-
 def main() -> int:
     install_smp_boot()
     install_kernel_sources()
     install_pstate()
     install_usb_stability()
-    install_i2c_hid_package()
-    install_acpi_cstates_package()
+    # i2c_hid (RenkuOS b37a078925) and x86_acpi_cstates (air/OS 2c48d1ae0)
+    # are listed in the native build/jam/packages/Haiku in distro/desktop.
     return 0
 
 

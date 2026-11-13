@@ -24,11 +24,9 @@ def enable_virtio_block(path: pathlib.Path) -> None:
 
 
 def main() -> int:
-    for rel in (
-        "build/jam/packages/Haiku",
-        "build/jam/packages/HaikuBootstrap",
-    ):
-        enable_virtio_block(HAIKU / rel)
+    # build/jam/packages/Haiku is a native copy in distro/desktop
+    # (apply-desktop-native.py) and already lists virtio_block.
+    enable_virtio_block(HAIKU / "build/jam/packages/HaikuBootstrap")
     return 0
 
 

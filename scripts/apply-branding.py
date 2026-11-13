@@ -163,21 +163,8 @@ def install_wallpaper(haiku: pathlib.Path) -> None:
     shutil.copyfile(source, dest)
     print(f"copied {dest}")
 
-    package = haiku / "build" / "jam" / "packages" / "Haiku"
-    text = package.read_text(encoding="utf-8")
-    old = (
-        "local logoArtwork =\n"
-        '\t$(HAIKU_INCLUDE_TRADEMARKS)"HAIKU logo - white on blue - big.png"\n'
-        '\t$(HAIKU_INCLUDE_TRADEMARKS)"HAIKU logo - white on blue - normal.png" ;\n'
-    )
-    new = "local logoArtwork = r5-wallpaper.jpg ;\n"
-    if "local logoArtwork = r5-wallpaper.jpg ;" in text:
-        print(f"already {package.name} (wallpaper)")
-    elif old not in text:
-        raise SystemExit(f"Haiku artwork list not found in {package}")
-    else:
-        package.write_text(text.replace(old, new, 1), encoding="utf-8")
-        print(f"patched {package} (wallpaper)")
+    # The wallpaper is packaged by the native build/jam/packages/Haiku in
+    # distro/desktop (logoArtwork = r5-wallpaper.jpg).
 
     desktop = haiku / "src" / "data" / "directory_attrs" / "home-desktop.rdef"
     rdef = desktop.read_text(encoding="utf-8")
