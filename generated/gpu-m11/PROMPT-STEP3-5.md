@@ -14,27 +14,22 @@ Eén documentatie-PR vanaf `origin/main`, tak `claude/m11-zero-copy-design`, all
 
 ## Stap 3b
 
-Voer stap 3b uit van `generated/gpu-m11/BRIEF.md`: Vulkan-vensters zonder kopie (A2). Alleen 3b; de scanout in Vulkan is 3c. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan besluit 15 en 15b in de brief en in `docs/APP-SERVER-COMPOSITOR.md` het hele 3a-ontwerp (gemerged in #4251 en #4252), behalve "The scanout import into Vulkan". Je eerste antwoord: de regels die gelden, het plan per laag, en wat je niet in QEMU kunt testen. Wacht op mijn "ga".
+Voer stap 3b uit van `generated/gpu-m11/BRIEF.md`: Vulkan-vensters zonder kopie (A2) en de scanout in Vulkan, in één keer. Alleen 3b. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan besluit 15 en 15b in de brief en in `docs/APP-SERVER-COMPOSITOR.md` het hele 3a-ontwerp (gemerged in #4251 en #4252), ook "The scanout import into Vulkan". Je eerste antwoord: de regels die gelden, het plan per laag, en wat je niet in QEMU kunt testen. Wacht op mijn "ga".
 
 Bouw precies het ontwerp, geen call of nummer dat er niet in staat:
 - kernel: `BO_EXPORT` / `BO_IMPORT` (`+ 17`, `+ 18`), het exportnummer met de rechtencontrole (team vastgelegd bij export, alleen app_server, één keer, 5 s, 32 per bestand), de splitsing van plek en geheugen met de teller, `BO_PRESENT_MARK` (`+ 32`), de grenzen (1024, 512 per bestand, 64 als reserve voor app_server) met de logregel bij een volle grens;
 - R5 DRM-bibliotheek: PRIME via een lokale fd, `GEM_OP` en `GEM_METADATA`; de vijfde libdrm-patch voor de grootte; libdrm opnieuw gebouwd;
 - WSI: een eigen `AppServerLink` (geen wijziging in libbe), lineaire beelden, een semafoor per beeld, `VK_ERROR_OUT_OF_DATE_KHR` na de timeout; een nieuw `mesa_radv`-pakket met de pin en de libdrm-symboolcheck;
 - app_server: de import met de controle van grootte en semafoor tegen `ClientTeam()`, "klaar" met `FENCE_WAIT` timeout 0, "weer vrij" met `release_sem_etc`, en de reset zoals in het ontwerp;
-- het testprogramma `r5-share-test` met de pass- en failregels uit het ontwerp.
+- het testprogramma `r5-share-test` met de pass- en failregels uit het ontwerp;
+- de scanout in Vulkan: de export van de scanout naar app_server zelf, de import, een `vkCmdCopyBuffer` van de gewijzigde rijen in dezelfde submit, een nieuwe import na een moduswissel. Het vervangt de CPU-kopie naar de back buffer en de M8-`DMA_DATA`-kopie alleen als het niet slechter meet; beide wegen blijven kiesbaar tot de stick het laat zien, en beide tijden komen in het rapport. Een aparte commit binnen deze stap.
 
 Testen, eerlijk:
 - In QEMU en VirtualBox start `radeon_hd` niet; daar draait alleen het kopiepad op Lavapipe (`zero-copy off: lavapipe`) en moet het bureaublad werken zoals na stap 2.
 - De logica van nummers, rechten, verlopen, grenzen en de teller zet je in losse functies met een hosttest, zoals `scripts/test-r5-gpu-checks.cpp` in M10. Die moet slagen.
-- `r5-share-test` en het echte pad zonder kopie draaien pas op de 5625U (de stick); schrijf dat als "Onbewezen".
+- `r5-share-test`, het echte pad zonder kopie en de scanout-import draaien pas op de 5625U (de stick); schrijf dat als "Onbewezen".
 
 Vóór de jam: SMAP-review van de diff en de QEMU-SMAP-boot. Eigen tak `claude/m11-zero-copy` vanaf `origin/main`. Vraag vóór je jamt, pusht en een PR opent. Meld kort en stop.
-
-## Stap 3c
-
-Voer stap 3c uit van `generated/gpu-m11/BRIEF.md`: de scanout in Vulkan. Alleen 3c, na de merge van 3b. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan "The scanout import into Vulkan" in `docs/APP-SERVER-COMPOSITOR.md`. Je eerste antwoord: de regels die gelden en het plan. Wacht op mijn "ga".
-
-De export van de scanout naar app_server zelf, de import in Vulkan, een `vkCmdCopyBuffer` van de gewijzigde rijen in dezelfde submit, en een nieuwe import na een moduswissel. Het vervangt de CPU-kopie naar de back buffer en de M8-`DMA_DATA`-kopie alleen als het niet slechter meet: zet beide tijden naast elkaar in het rapport, en laat de oude weg staan als de nieuwe slechter is. Ook dit kan alleen op de 5625U; in QEMU blijft het kopiepad. Eigen tak `claude/m11-scanout-import`. Vraag vóór je jamt, pusht en een PR opent. Meld kort en stop.
 
 ---
 
