@@ -47,13 +47,15 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 
 - Native Vulkan (no Linux kernel) \*
 - Native OpenGL, running on top of Vulkan \*
+- On a laptop with an AMD Ryzen 5 5625U the graphics chip is used by default, after a check at start; if the chip hangs, R5 restarts it on its own
 - Your existing Haiku apps keep working, unchanged
-- Software rendering as a fallback
+- Software rendering as a fallback, and wherever the chip is not supported yet
 
-\* In active development. Hardware support is still limited. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
+\* In active development. Only the Ryzen 5 5625U has been tested so far; other graphics chips draw in software. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
 
 ### Processor
 - Better CPU support (AMD/Intel)
+- AMD processors load AMD's latest microcode at start
 
 ### Virtual machines
 - VirtualBox Guest Additions 7.2.22 are included: the guest modules, `VBoxService`, `VBoxTray` and `VBoxControl`.
