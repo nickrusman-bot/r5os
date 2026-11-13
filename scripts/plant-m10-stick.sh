@@ -6,6 +6,9 @@
 # "gpu_selftest true" and nothing else) into r5-os-anyboot.iso, so the
 # first boot runs the self-test with every GPU switch at its default.
 # check, boot-next and check-user come from the mesa_radv package.
+# Test only: a UserBootscript that syncs every 2 s, so the syslog and the
+# self-test file survive the power button (round 2 lost everything after
+# 21 s).
 # Run in WSL after the anyboot jam, before write-stick.py.
 set -eu
 HAIKU=/home/nickr/r5os/haiku
@@ -18,12 +21,18 @@ mkdir -p "$STAGE"
 GIT="/mnt/c/Program Files/Git/bin/git.exe"
 WINROOT=$(wslpath -w "$ROOT")
 "$GIT" -C "$WINROOT" show "HEAD:distro/graphics/boot/radeon_hd" > "$STAGE/radeon_hd"
+printf '#!/bin/sh
+(while true; do sync; sleep 2; done) &
+' > "$STAGE/UserBootscript"
 "$BFS" --start-offset 6291456 "$IMG" <<EOT
 mkdir myfs/home/config
 mkdir myfs/home/config/settings
 mkdir myfs/home/config/settings/kernel
 mkdir myfs/home/config/settings/kernel/drivers
 put $STAGE/radeon_hd myfs/home/config/settings/kernel/drivers/radeon_hd
+mkdir myfs/home/config/settings/boot
+put $STAGE/UserBootscript myfs/home/config/settings/boot/UserBootscript
+chmod 755 myfs/home/config/settings/boot/UserBootscript
 quit
 EOT
 echo planted
