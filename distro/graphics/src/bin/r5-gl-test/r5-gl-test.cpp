@@ -66,10 +66,10 @@ zink_asked()
 	if (handle == NULL)
 		return false;
 	bool asked = get_driver_boolean_parameter(handle, "gpu_opengl", false,
-			false)
+			true)
 		&& get_driver_boolean_parameter(handle, "gpu", true, true)
 		&& !get_driver_boolean_parameter(handle, "gpu_opengl_fail", false,
-			false);
+			true);
 	unload_driver_settings(handle);
 	if (!asked)
 		return false;

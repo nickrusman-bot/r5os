@@ -48,7 +48,7 @@
  };
  
  struct haiku_egl_config {
-@@ -89,6 +116,383 @@
+@@ -89,6 +116,384 @@
     struct pipe_fence_handle *throttle_fence;
  };
  
@@ -323,10 +323,11 @@
 +   if (handle == NULL)
 +      return;
 +   settings->gpuOff = !get_driver_boolean_parameter(handle, "gpu", true, true);
++   // A key without a value means true, as for every R5 kernel switch.
 +   settings->opengl = get_driver_boolean_parameter(handle, "gpu_opengl",
-+                                                   false, false);
++                                                   false, true);
 +   settings->forceFail = get_driver_boolean_parameter(handle,
-+      "gpu_opengl_fail", false, false);
++      "gpu_opengl_fail", false, true);
 +   unload_driver_settings(handle);
 +}
 +
@@ -432,7 +433,7 @@
  // #pragma mark EGLSurface
  
  // Called via eglCreateWindowSurface(), drv->CreateWindowSurface().
-@@ -120,6 +524,18 @@
+@@ -120,6 +525,18 @@
        return NULL;
     }
  
@@ -451,7 +452,7 @@
     // Unset and delete previously set bitmap if any.
     delete ((BitmapHook *)native_window)->SetBitmap(NULL);
  
-@@ -161,6 +577,18 @@
+@@ -161,6 +578,18 @@
        return NULL;
     }
  
@@ -470,7 +471,7 @@
     wgl_surf->fb->newWidth = wgl_surf->base.Width;
     wgl_surf->fb->newHeight = wgl_surf->base.Height;
     p_atomic_inc(&wgl_surf->fb->base.stamp);
-@@ -180,8 +608,15 @@
+@@ -180,8 +609,15 @@
        // Unset bitmap to release ownership. Bitmap will be deleted later
        // when destroying framebuffer.
        BitmapHook *bitmapHook = (BitmapHook*)hgl_surf->fb->winsysContext;
@@ -487,7 +488,7 @@
  
        hgl_destroy_st_framebuffer(hgl_surf->fb);
        free(surf);
-@@ -192,6 +627,13 @@
+@@ -192,6 +628,13 @@
  static void
  update_size(struct hgl_buffer *buffer)
  {
@@ -501,7 +502,7 @@
     uint32_t newWidth, newHeight;
     ((BitmapHook *)buffer->winsysContext)->GetSize(newWidth, newHeight);
     if (buffer->newWidth != newWidth || buffer->newHeight != newHeight) {
-@@ -233,9 +675,21 @@
+@@ -233,9 +676,21 @@
     hgl_surf->throttle_fence = new_fence;
  
     // flush back buffer and swap buffers if double buffering is used
@@ -525,7 +526,7 @@
        std::swap(frontBuffer, backBuffer);
        p_atomic_inc(&buffer->base.stamp);
     }
-@@ -246,6 +700,12 @@
+@@ -246,6 +701,12 @@
  
     st_context_invalidate_state(st, ST_INVALIDATE_FB_STATE);
  
@@ -538,7 +539,7 @@
     return EGL_TRUE;
  }
  
-@@ -346,7 +806,19 @@
+@@ -346,7 +807,19 @@
     disp->DriverData = (void *)hgl_dpy;
  
     struct sw_winsys *winsys = hgl_create_sw_winsys();

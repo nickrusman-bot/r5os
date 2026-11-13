@@ -53,6 +53,8 @@ Once per process, in `haiku_initialize_impl()`, in this order:
 | 7 | otherwise | Zink | `egl: opengl zink: <renderer>` |
 
 - The settings are the radeon_hd driver settings, read with `load_driver_settings()`: `/boot/home/config/settings/kernel/drivers/radeon_hd`, then `/boot/system/settings/kernel/drivers/radeon_hd` (the order the R5 DRM library uses). The first file that exists is used. A file that exists but cannot be read, such as the administrator's file for a standard account, means "not set"; the system file is not read in its place. Not tested as a standard account.
+- Limit until M10: `/boot/home` is 0711 and the administrator's settings are private, so a standard account cannot read `gpu_opengl true` there. It gets llvmpipe with no line, while the administrator gets Zink. The R5 DRM library's `gpu_debug` has the same limit. The availability bit (M10, PR C) replaces this file for the choice.
+- A key without a value (`gpu_opengl` alone) means true, as for every R5 kernel switch.
 - `gpu_opengl true` is opt-in for now. It becomes the default with the availability check (M10).
 - With `R5_GL_TRACE=1` every line also goes to stderr. Cases 1 and 2 then print `egl: opengl <zink|llvmpipe>: <renderer>` to stderr only; the window test reads that line.
 - When no driver can start at all, `eglInitialize` fails with `EGL_NOT_INITIALIZED`. Before, the EGL driver used a NULL screen and crashed.
