@@ -126,6 +126,7 @@ For Cursor or Claude. It does not override `AGENTS.md` or `docs/GPU-ARCHITECTURE
     - **Shadow:** an alpha mask per window, blurred once at create and resize, kept; per frame it is only blended. The damage of a window that changes or moves grows on the shadow side by the offset plus the shadow radius.
     - **Frosted glass:** Dual Kawase, starting at two levels down and two up (a quarter of the resolution); the level is a starting value for the measurement, not a constant. The blurred result is kept per glass area and redone only when there is damage beneath it, or the glass window moves or changes size. Damage under or next to glass is grown by the blur radius for the input; the blur runs only for `(grown damage) ∩ (glass regions)` and skips entirely when that is empty; it writes only inside the real damage.
     - **One submit and one fence per frame,** as in step 2, with barriers between dependent layers.
+    - **Alpha only inside glass (13 Nov 2026).** Painter does not write reliable alpha into a 32-bit buffer. The compose uses alpha only inside the glass region (the tab, the frame line, and views that asked for glass); outside it every pixel is opaque, whatever its alpha says. Glass views need correct alpha from what the program draws on them: step 4 first checks Painter's `B_ALPHA_COMPOSITE` paths on paper; if that is not small, glass views come with M12 (Skia keeps alpha) and M11 has glass on the tab and the frame line, with `set_view_glass()` accepted and stored.
     - **The queue stays the GFX queue in M11.** The R5 DRM library accepts only GFX submissions (`r5_translate.c`, the IB check), so a compute-only queue family would make every submit fail. Step 2 logs the queue families once (`app_server: vulkan queue family <i> flags <hex>`) and keeps the choice on a family with the graphics bit. Priority through the compute queue (MEC) for user work is after M11 (see "Not in M11").
 
 **References (read, do not copy):** haiku-pi `docs/design/gpu-present.md` (no licence). air/OS Summit (licence unclear). hans2294/haiku-amdgpu (MIT) patches `0010` and `0011` (app_server giving up a direct window) may be adapted with credit. X547's HaiWay (MIT) for surface locking and resizing.
@@ -171,6 +172,7 @@ PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not ne
    - `app_server: window memory <n> MB` at least once;
    - `app_server: window memory type <i> flags <hex>` with the cached bit, and the kernel `bo` line with `snooped 1`;
    - the Painter write test: the window buffer not much slower than `malloc` (both times recorded);
+   - VulkanTeapot FPS with zero-copy and with the copy path (`gpu_compositor_zero_copy false` or the switch step 3b provides), on the same boot, and app_server's CPU time with both, recorded in `CHANGELOG.md`;
    - `app_server: animation open`, `close` and `workspace` lines, and `animations off` / `on`;
    - `compositor paused: direct window` and `resumed`;
    - no `gpu compositor off`.
