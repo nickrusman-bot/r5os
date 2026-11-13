@@ -12,6 +12,7 @@
 
 #include <FindDirectory.h>
 #include <Path.h>
+#include <Roster.h>
 
 #include <OS.h>
 
@@ -596,7 +597,6 @@ stage_regs(FILE* out)
 	if (fd < 0) {
 		fprintf(out, "not available, no supported GPU\n");
 		fflush(out);
-		fsync(fileno(out));
 		return;
 	}
 	int ret = ioctl(fd, R5_GPU_LOG_REGS, &in, sizeof(in));
@@ -605,7 +605,6 @@ stage_regs(FILE* out)
 		fputs(in.line, out);
 	close(fd);
 	fflush(out);
-	fsync(fileno(out));
 }
 
 
@@ -822,6 +821,17 @@ run_isolation_stages(FILE* out)
 int
 main()
 {
+	// Login starts this at Sign in, next to Tracker and Deskbar. Loading
+	// RADV and LLVM (about 130 MB) at the same time kept the desktop from
+	// responding for about 20 s on the 5625U. Wait for both, up to 60 s.
+	for (int i = 0; i < 60; i++) {
+		if (be_roster->IsRunning("application/x-vnd.Be-TRAK")
+			&& be_roster->IsRunning("application/x-vnd.Be-TSKB"))
+			break;
+		snooze(1000000);
+	}
+	snooze(5000000);
+
 	BPath cache;
 	if (find_directory(B_USER_CACHE_DIRECTORY, &cache) != B_OK)
 		return 1;
