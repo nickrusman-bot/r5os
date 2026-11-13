@@ -1,0 +1,58 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 feature 54 pfp 197 mec 483
+stage bo
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 0
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+IB skipped
+GEM_VA unmap 0
+GEM_VA remap 0
+close 0
+stage P
+p1 WRITE_DATA ok
+p2 RELEASE_MEM ok
+p3 ACQUIRE_MEM ok
+p4 EVENT_2C ok
+p5 EVENT_2E ok
+p6 EVENT_0E ok
+p7 EVENT_407 ok
+p8 EVENT_410 ok
+p9 EVENT_ZPASS ok
+p10 DMA_DATA ok
+p11 LOAD_CONTEXT ok
+p12 INDEX_PRIM ok
+p13 INDEX_TYPE ok
+p14 IA_MULTI_VGT ok
+p15 MULTI_PRIM_RESET ok
+p16 CP_COHER_DELAY ok
+p17 SH_RSRC3_VS ok
+p18 DISPATCH ok
+p19 IB2 ok
+p20 CONTEXT_CONTROL ok
+p21 CLEAR_STATE ok
+p22 EVENT_19 ok
+p23 EVENT_1A ok
+p24 UC_30A00 ok
+p25 UC_30920 ok
+p26 UC_30968 ok
+p27 UC_30E00 ok
+p28 CONTEXT4 ok
+p29 SH_PREFIX ok
+p30 PREAMBLE_LO ok
+p31 PREAMBLE_HI ok
+p32 PREAMBLE ok
+p33 IB24 ok
+stage vulkaninfo
+skipped, gpu lost
+stage VulkanTeapot (sam)
+skipped, gpu lost
+stage VulkanTeapot
+skipped, gpu lost
+stage ib
+skipped, gpu lost
+stage selftest
+skipped, gpu lost

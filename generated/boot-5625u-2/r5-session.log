@@ -1,0 +1,54 @@
+18850841 uid=0 euid=0 sign-in user
+18851410 uid=0 euid=0 launch /system/Tracker
+18852860 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/Tracker
+18852904 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+18852932 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+18860353 uid=0 euid=0 r5-desktop /system/Tracker ok
+18860387 uid=0 euid=0 launch /system/Deskbar
+18861841 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/Deskbar
+18861887 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+18861929 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+18883142 uid=0 euid=0 r5-desktop /system/Deskbar ok
+18884188 uid=0 euid=0 application/x-vnd.Be-TRAK team 246 uid=1001 gid=100
+18984416 uid=0 euid=0 application/x-vnd.Be-TSKB team 249 uid=1001 gid=100
+18984491 uid=0 euid=0 launch /system/apps/r5-tray
+18986223 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/apps/r5-tray
+18986279 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+18986314 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+18992903 uid=0 euid=0 r5-desktop /system/apps/r5-tray ok
+18992940 uid=0 euid=0 launch /system/bin/desklink
+18994481 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/bin/desklink
+18994543 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+18994581 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19004063 uid=0 euid=0 r5-desktop /system/bin/desklink ok
+19004102 uid=0 euid=0 launch /system/servers/airplay_deskbar
+19005649 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/servers/airplay_deskbar
+19005701 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+19005736 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19015184 uid=0 euid=0 r5-desktop /system/servers/airplay_deskbar ok
+19015233 uid=0 euid=0 launch /system/servers/r5_vbox_clip
+19016629 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/servers/r5_vbox_clip
+19016678 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+19016711 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19022250 uid=0 euid=0 r5-desktop /system/servers/r5_vbox_clip ok
+19022297 uid=0 euid=0 launch /system/bin/dstcheck
+19023661 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/bin/dstcheck
+19023706 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+19023736 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19029762 uid=0 euid=0 r5-desktop /system/bin/dstcheck ok
+19029801 uid=0 euid=0 launch /system/bin/r5-gpu-selftest
+19031334 uid=0 euid=0 session user uid=1001 gid=100 cmd=/system/bin/r5-gpu-selftest
+19031384 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+19031417 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19036571 uid=0 euid=0 r5-desktop /system/bin/r5-gpu-selftest ok
+19037183 uid=0 euid=0 launch /bin/sh
+19038527 uid=0 euid=0 session user uid=1001 gid=100 cmd=/bin/sh
+19038610 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+19038958 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19040539 uid=0 euid=0 r5-desktop /bin/sh ok
+19040972 uid=0 euid=0 launch /bin/sh
+19042326 uid=0 euid=0 session user uid=1001 gid=100 cmd=/bin/sh
+19042377 uid=0 euid=0 settings chown /boot/home/config: Read-only file system
+19042408 uid=0 euid=0 settings chmod /boot/home/config: Read-only file system
+19043874 uid=0 euid=0 r5-desktop /bin/sh ok
+19043915 uid=0 euid=0 sign-in done: No error

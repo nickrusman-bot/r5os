@@ -1,0 +1,37 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 feature 54 pfp 197 mec 483
+stage bo
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 2 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 2147483643
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+IB skipped
+GEM_VA unmap 2147483643
+GEM_VA remap 2147483643
+close 0
+stage P
+p1 WRITE_DATA ok
+p2 RELEASE_MEM ok
+p3 ACQUIRE_MEM ok
+p4 EVENT_2C ok
+p5 EVENT_2E ok
+p6 EVENT_0E ok
+p7 EVENT_407 ok
+p8 EVENT_410 timeout
+skipped, gpu lost
+stage vulkaninfo
+skipped, gpu lost
+stage VulkanTeapot (sam)
+skipped, gpu lost
+stage VulkanTeapot
+skipped, gpu lost
+stage ib
+skipped, gpu lost
+stage selftest
+skipped, gpu lost

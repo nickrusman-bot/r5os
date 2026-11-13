@@ -1,0 +1,33 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 pfp 197 mec 483
+stage bo
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe errno -2147483632
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 2 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe errno -2147483632
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 2147483632
+GEM_MMAP -2147483648
+GEM_VA unmap 2147483643
+GEM_VA remap 2147483632
+close 0
+stage vulkaninfo
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0406448 nr 0x48 operation 1 va 0xffff800100000000 size 4096 flags 0xe errno -2147483632
+ERROR: [Loader Message] Code 0 : terminator_CreateDevice: Failed in ICD /boot/system/lib/libvulkan_radeon.so vkCreateDevice call
+ERROR: [Loader Message] Code 0 : vkCreateDevice:  Failed to create device chain.
+terminate called after throwing an instance of 'VulkanException'
+  what():  /home/nickr/r5os/mesa-build/Vulkan-Tools-1.4.367/vulkaninfo/vulkaninfo.h:1909:vkCreateDevice failed with ERROR_OUT_OF_DEVICE_MEMORY
+Abort
+stage VulkanTeapot
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_INFO linux 0x80206445 nr 0x45 errno -2147454967
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0406448 nr 0x48 operation 1 va 0xffff800100000000 size 4096 flags 0xe errno -2147483632
+vkCreateDevice (-2)

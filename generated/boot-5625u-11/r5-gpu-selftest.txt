@@ -1,0 +1,81 @@
+stage render node: api 1.0 device 15e7 cu 7
+firmware me 167 pfp 197 mec 483
+stage bo
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 2 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+r5 libdrm: DRM_IOCTL_AMDGPU_GEM_VA linux 0xc0286448 nr 0x48 operation 1 va 0xffff800000000000 size 4096 flags 0xe errno -2147483643
+device 0
+GEM_CREATE vram 0
+GEM_CREATE gtt 0
+GEM_VA low 0
+GEM_VA high 2147483643
+GEM_MMAP 0
+cpu write 5a5a5a5a read 5a5a5a5a
+IB skipped
+GEM_VA unmap 2147483643
+GEM_VA remap 2147483643
+close 0
+stage vulkaninfo
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.4.367
+
+
+Instance Extensions: count = 10
+-------------------------------
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_headless_surface                : extension revision 1
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_portability_enumeration         : extension revision 1
+VK_LUNARG_direct_driver_loading        : extension revision 1
+
+Instance Layers:
+----------------
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.4.328
+	driverVersion      = 25.3.6
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 21.1.8, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 25.3.6 (LLVM 21.1.8)
+	conformanceVersion = 1.3.1.1
+	deviceUUID         = 6d657361-3235-2e33-2e36-000000000000
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000
+GPU1:
+	apiVersion         = 1.4.328
+	driverVersion      = 25.3.6
+	vendorID           = 0x1002
+	deviceID           = 0x15e7
+	deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+	deviceName         = AMD Radeon Graphics (RADV RENOIR)
+	driverID           = DRIVER_ID_MESA_RADV
+	driverName         = radv
+	driverInfo         = Mesa 25.3.6
+	conformanceVersion = 1.4.0.0
+	deviceUUID         = 00000000-0400-0000-0000-000000000000
+	driverUUID         = 414d442d-4d45-5341-2d44-525600000000
+exit 0
+stage VulkanTeapot (sam)
+r5 libdrm: ioctl linux 0xc02864c3 nr 0xc3 errno -2147454929
+vkQueueWaitIdle (-13)
+vkQueueWaitIdle -13
+exit 1
+stage VulkanTeapot
+skipped, gpu lost
+stage ib
+skipped, gpu lost
+stage selftest
+skipped, gpu lost
