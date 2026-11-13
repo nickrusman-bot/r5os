@@ -195,7 +195,10 @@ runlive() {
 	shift
 	: > "$keep/$name.txt"
 	if [ "$live" -eq 1 ]; then
-		timeout 180 "$@" > "$keep/$name.txt" 2>&1 || true
+		start=$(date +%s)
+		R5_GL_TRACE=1 timeout 180 "$@" > "$keep/$name.txt" 2>&1
+		echo "exit $? after $(( $(date +%s) - start )) s" >> "$keep/$name.txt"
+		sync
 		sleep 3
 	fi
 }
@@ -375,5 +378,7 @@ if [ "$bad" -eq 0 ]; then
 else
 	emit FAIL
 fi
+# On the stick even after the power button.
+sync
 echo "check: files in $keep"
 [ "$bad" -eq 0 ]
