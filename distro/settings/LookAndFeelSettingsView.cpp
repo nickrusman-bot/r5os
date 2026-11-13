@@ -41,6 +41,12 @@
 #include <TextView.h>
 
 #include "AppearanceNotify.h"
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+#include "SettingsFont.h"
+#include "WindowEffectsBox.h"
+// SPDX-SnippetEnd
 #include "FakeScrollBar.h"
 
 
@@ -77,6 +83,11 @@ LookAndFeelSettingsView::LookAndFeelSettingsView(const char* name)
 	fControlLookMenu(NULL),
 	fArrowStyleSingle(NULL),
 	fArrowStyleDouble(NULL),
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	fWindowEffects(NULL),
+// SPDX-SnippetEnd
 	fSavedDecor(NULL),
 	fCurrentDecor(NULL),
 	fSavedControlLook(NULL),
@@ -133,6 +144,16 @@ LookAndFeelSettingsView::LookAndFeelSettingsView(const char* name)
 		B_ALIGN_VERTICAL_CENTER));
 	arrowStyleBox->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 4: shadow, frosted glass and their strength (decision 8)
+	fWindowEffects = new WindowEffectsBox("window effects", r5_settings_box_title("Window effects"));
+	fWindowEffects->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
+		B_ALIGN_TOP));
+	fWindowEffects->SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET));
+// SPDX-SnippetEnd
+
 	BStringView* scrollBarLabel
 		= new BStringView("scroll bar", B_TRANSLATE("Scroll bar:"));
 	scrollBarLabel->SetExplicitAlignment(
@@ -148,7 +169,13 @@ LookAndFeelSettingsView::LookAndFeelSettingsView(const char* name)
 		.Add(fControlLookInfoButton, 2, 1)
 		.Add(scrollBarLabel, 0, 2)
 		.Add(arrowStyleBox, 1, 2)
-		.AddGlue(0, 3)
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		.Add(fWindowEffects, 1, 3)
+		.AddGlue(0, 4)
+// SPDX-SnippetEnd
+
 		.SetInsets(B_USE_WINDOW_SPACING);
 
 	// TODO : Decorator Preview Image?
@@ -174,6 +201,11 @@ LookAndFeelSettingsView::AttachedToWindow()
 	fControlLookInfoButton->SetTarget(this);
 	fArrowStyleSingle->SetTarget(this);
 	fArrowStyleDouble->SetTarget(this);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	fWindowEffects->SetTarget(this);
+// SPDX-SnippetEnd
 
 	if (fSavedDoubleArrowsValue)
 		fArrowStyleDouble->SetValue(B_CONTROL_ON);
@@ -269,6 +301,14 @@ LookAndFeelSettingsView::MessageReceived(BMessage* message)
 		case kMsgArrowStyleDouble:
 			_SetDoubleScrollBarArrows(true);
 			break;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		case kMsgWindowEffectsChanged:
+			appearance_notify(this);
+			break;
+// SPDX-SnippetEnd
 
 		default:
 			BView::MessageReceived(message);
@@ -434,7 +474,13 @@ LookAndFeelSettingsView::IsDefaultable()
 {
 	return fCurrentDecor != fDecorUtility.DefaultDecorator()->ShortcutName()
 		|| fCurrentControlLook.Length() != 0
-		|| _DoubleScrollBarArrows() != false;
+		|| _DoubleScrollBarArrows() != false
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		|| fWindowEffects->IsDefaultable()
+// SPDX-SnippetEnd
+		;
 }
 
 
@@ -444,6 +490,11 @@ LookAndFeelSettingsView::SetDefaults()
 	_SetDecor(fDecorUtility.DefaultDecorator());
 	_SetControlLook(BString(""));
 	_SetDoubleScrollBarArrows(false);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	fWindowEffects->SetDefaults();
+// SPDX-SnippetEnd
 }
 
 
@@ -452,7 +503,13 @@ LookAndFeelSettingsView::IsRevertable()
 {
 	return fCurrentDecor != fSavedDecor
 		|| fCurrentControlLook != fSavedControlLook
-		|| _DoubleScrollBarArrows() != fSavedDoubleArrowsValue;
+		|| _DoubleScrollBarArrows() != fSavedDoubleArrowsValue
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		|| fWindowEffects->IsRevertable()
+// SPDX-SnippetEnd
+		;
 }
 
 
@@ -463,5 +520,10 @@ LookAndFeelSettingsView::Revert()
 		_SetDecor(fSavedDecor);
 		_SetControlLook(fSavedControlLook);
 		_SetDoubleScrollBarArrows(fSavedDoubleArrowsValue);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		fWindowEffects->Revert();
+// SPDX-SnippetEnd
 	}
 }

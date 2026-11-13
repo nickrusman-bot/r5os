@@ -1,0 +1,46 @@
+SubDir HAIKU_TOP src preferences appearance ;
+
+AddSubDirSupportedPlatforms libbe_test ;
+
+UsePrivateHeaders shared app interface [ FDirName servers app ] ;
+
+# SPDX-SnippetBegin
+# SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+# M11 step 4: the "Window effects" box is the one Settings uses. This
+# directory is searched first, so only WindowEffectsBox.cpp comes from there.
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src preferences settings ] ;
+# SPDX-SnippetEnd
+
+Application Appearance :
+	AntialiasingSettingsView.cpp
+	Appearance.cpp
+	AppearanceWindow.cpp
+	Colors.cpp
+	ColorsView.cpp
+	FakeScrollBar.cpp
+	FontSelectionView.cpp
+	FontView.cpp
+	LookAndFeelSettingsView.cpp
+	WindowEffectsBox.cpp
+
+	: be [ TargetLibstdc++ ] [ TargetLibsupc++ ] localestub shared libr5ui.so
+	: Appearance.rdef
+	;
+
+DoCatalogs Appearance :
+	x-vnd.Haiku-Appearance
+	:
+	AntialiasingSettingsView.cpp
+	ColorsView.cpp
+	AppearanceWindow.cpp
+	Colors.cpp
+	LookAndFeelSettingsView.cpp
+	FontView.cpp
+	FontSelectionView.cpp
+;
+
+if $(TARGET_PLATFORM) = libbe_test {
+	HaikuInstall install-test-apps : $(HAIKU_APP_TEST_DIR) : Appearance
+		: tests!apps ;
+}

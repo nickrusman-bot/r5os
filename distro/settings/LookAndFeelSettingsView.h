@@ -22,6 +22,11 @@ class BCheckBox;
 class BMenuField;
 class BPopUpMenu;
 class FakeScrollBar;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+class WindowEffectsBox;
+// SPDX-SnippetEnd
 
 class LookAndFeelSettingsView : public BView {
 public:
@@ -63,6 +68,11 @@ private:
 
 			FakeScrollBar*		fArrowStyleSingle;
 			FakeScrollBar*		fArrowStyleDouble;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+			WindowEffectsBox*	fWindowEffects;
+// SPDX-SnippetEnd
 
 			BString				fSavedDecor;
 			BString				fCurrentDecor;

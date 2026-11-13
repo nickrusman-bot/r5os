@@ -28,6 +28,8 @@ SOURCES = (
     "FontsModule.cpp",
     "LookAndFeelSettingsView.cpp",
     "LookAndFeelSettingsView.h",
+    "WindowEffectsBox.cpp",
+    "WindowEffectsBox.h",
     "LookModule.cpp",
     "HomeView.cpp",
     "HomeView.h",
