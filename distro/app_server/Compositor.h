@@ -125,6 +125,7 @@ private:
 			void				_ShareFree(Share* share);
 			void				_ShareRetire();
 			bool				_ShareReady(uint64 sequence);
+			void				_ShareRetireDone();
 			void				_ScanoutFree(CompositorVulkan* vk);
 			bool				_ScanoutPrepare(RenderingBuffer* back);
 			void				_TurnOff(const char* reason);
@@ -159,6 +160,9 @@ private:
 			BObjectList<Share, false> fShares;
 			int32				fShareCounter;
 			int					fFenceFd;
+			// An overtaken image still waits for its mark (written under
+			// fShareLock, read by the compose thread without it).
+	volatile bool				fShareRetiring;
 
 			BLocker				fLayerLock;
 			LayerList*			fLayers;

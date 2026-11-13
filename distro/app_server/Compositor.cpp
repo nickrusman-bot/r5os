@@ -326,6 +326,9 @@ struct Compositor::Share {
 		uint32			width;
 		uint32			height;
 		uint32			pitch;
+		// overtaken while pending; back to the program once its mark has
+		// passed (_ShareRetireDone)
+		bool			retiring;
 	};
 
 	Window*				window;
@@ -466,6 +469,7 @@ Compositor::Compositor(Desktop* desktop, HWInterface* screen)
 	fShares(10),
 	fShareCounter(0),
 	fFenceFd(-1),
+	fShareRetiring(false),
 	fLayerLock("compositor layers"),
 	fLayers(NULL),
 	fBackground(0xff000000),
@@ -1329,8 +1333,17 @@ Compositor::_ComposeLoop()
 	fCpuAtReport = thread_cpu_time();
 
 	while (true) {
+		// An overtaken image goes back once the GPU is done with it; until
+		// then the thread looks again every refresh period, also without
+		// damage (a hidden window).
+		bigtime_t wait = fDebug ? kReportInterval : B_INFINITE_TIMEOUT;
+		if (fShareRetiring) {
+			bigtime_t slice = fPeriod > 0 ? fPeriod : 16667;
+			if (wait == B_INFINITE_TIMEOUT || slice < wait)
+				wait = slice;
+		}
 		status_t status = acquire_sem_etc(fWakeSem, 1, B_RELATIVE_TIMEOUT,
-			fDebug ? kReportInterval : B_INFINITE_TIMEOUT);
+			wait);
 		if (status != B_OK && status != B_TIMED_OUT)
 			return;
 		if (fDebug)
@@ -1343,6 +1356,7 @@ Compositor::_ComposeLoop()
 			_TurnOff("window memory");
 			return;
 		}
+		_ShareRetireDone();
 		if (status == B_TIMED_OUT)
 			continue;
 
@@ -2138,8 +2152,11 @@ Compositor::_ShareRetire()
 bool
 Compositor::_ShareReady(uint64 sequence)
 {
+	// 0: no submit was ever marked on this image (a new buffer, or a mark
+	// set before the file's first submit). It is not shown; the WSI marks
+	// after the copy into the image, so its mark is never 0.
 	if (sequence == 0)
-		return true;
+		return false;
 	r5_gpu_fence wait;
 	memset(&wait, 0, sizeof(wait));
 	wait.size = sizeof(wait);
@@ -2148,6 +2165,45 @@ Compositor::_ShareReady(uint64 sequence)
 	wait.timeout_us = 0;
 	return fFenceFd >= 0
 		&& ioctl(fFenceFd, R5_GPU_FENCE_WAIT, &wait, sizeof(wait)) == 0;
+}
+
+
+/*!	Gives back each overtaken image whose present mark the ring has
+	passed: until then the copy into it may still run (review, M11 step
+	3b). Compose thread; sets fShareRetiring while one still waits.
+*/
+void
+Compositor::_ShareRetireDone()
+{
+	if (!fShareRetiring)
+		return;
+	BAutolock _(fShareLock);
+	bool waiting = false;
+	for (int32 i = 0; i < fShares.CountItems(); i++) {
+		Share* share = fShares.ItemAt(i);
+		for (uint32 n = 0; n < share->count; n++) {
+			Share::Image& image = share->images[n];
+			if (!image.retiring)
+				continue;
+			uint64 sequence = 0;
+			bool gone = share->ended || share->broken || fVulkan == NULL
+				|| share->generation != fGeneration
+				|| fVulkan->markGet(image.importId, &sequence) != 0;
+			if (gone) {
+				// nothing reads it any more; an ended share's program
+				// has stopped waiting on it
+				image.retiring = false;
+				continue;
+			}
+			if (!_ShareReady(sequence)) {
+				waiting = true;
+				continue;
+			}
+			image.retiring = false;
+			release_sem_etc(image.sem, 1, B_DO_NOT_RESCHEDULE);
+		}
+	}
+	fShareRetiring = waiting;
 }
 
 
@@ -2248,7 +2304,7 @@ Compositor::ShareImages(Window* window, int32 viewToken, team_id team,
 		}
 		if (images[i].pitch % 4 != 0
 			|| !r5_share_size_ok(images[i].width, images[i].height,
-				images[i].pitch, ~0ull)) {
+				images[i].pitch, R5_SHARE_MAX_IMAGE_BYTES)) {
 			_ShareLog(window, "size");
 			return B_BAD_VALUE;
 		}
@@ -2394,14 +2450,20 @@ Compositor::SharePresent(team_id team, int32 viewToken, int32 shareId,
 		if (share->broken || !fActive)
 			return B_NOT_ALLOWED;
 		if ((int32)index != share->current && (int32)index != share->pending) {
-			if (share->pending >= 0)
-				release_sem_etc(share->images[share->pending].sem, 1,
-					B_DO_NOT_RESCHEDULE);
+			// The overtaken image is never shown, but the copy into it
+			// may still run: it goes back once its mark has passed
+			// (_ShareRetireDone), not at once.
+			if (share->pending >= 0) {
+				share->images[share->pending].retiring = true;
+				fShareRetiring = true;
+			}
 			share->pending = index;
 		}
 		damage = share->shape;
 	}
 	Damage(damage);
+	if (fShareRetiring)
+		release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
 	return B_OK;
 }
 

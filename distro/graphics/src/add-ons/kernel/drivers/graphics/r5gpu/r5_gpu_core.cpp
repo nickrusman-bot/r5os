@@ -594,8 +594,24 @@ gpu_backing_drop(gpu_backing* backing)
 	if (!r5_share_ref_drop(&backing->refs))
 		return;
 	if (backing->domain == R5_GPU_DOMAIN_VRAM && !backing->borrowed) {
-		if (!sDeferred || !r5_defer_add(sDefer, kMaxBo, backing->vramOffset))
+		if (!sDeferred)
 			gpu_hw_vram_free(backing->vramOffset);
+		else if (!r5_defer_add(sDefer, kMaxBo, backing->vramOffset)) {
+			// Review (M11 step 3b): a full list must not free the page at
+			// once, the GPU may still point at it. First give back what
+			// is done, then try again; if every row still waits for a VM
+			// flush, the page is kept out of the allocator (only with
+			// gfx9_deferred_free true).
+			gpu_defer_reclaim(gpu_hw_seen());
+			if (!r5_defer_add(sDefer, kMaxBo, backing->vramOffset)) {
+				static bool sLogged = false;
+				if (!sLogged) {
+					sLogged = true;
+					dprintf("radeon_hd: deferred free list full, vram page "
+						"%llx kept\n", (unsigned long long)backing->vramOffset);
+				}
+			}
+		}
 	}
 	if (backing->kernelArea >= 0)
 		delete_area(backing->kernelArea);

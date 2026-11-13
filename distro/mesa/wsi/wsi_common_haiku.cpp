@@ -190,6 +190,9 @@ struct r5_swapchain {
 	int32 view_token;
 	int32 share_id;
 	uint64_t present_count;
+	/* Acquires that wait outside chain->mu; destroy waits for them to
+	 * leave before it frees the chain (review, M11 step 3b). */
+	int32_t waiters;
 };
 
 static void r5_share_off_once(struct r5_surface *surface, const char *reason);
@@ -576,9 +579,14 @@ r5_acquire_shared(struct r5_swapchain *chain,
 			if (left < slice)
 				slice = left;
 		}
+		chain->waiters++;
 		pthread_mutex_unlock(&chain->mu);
 		status_t got = acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, slice);
 		pthread_mutex_lock(&chain->mu);
+		chain->waiters--;
+		pthread_cond_broadcast(&chain->cv);
+		if (chain->lost)
+			continue;
 		if (got == B_OK) {
 			oldest->with_server = false;
 			continue;
@@ -913,6 +921,14 @@ r5_swapchain_destroy(struct wsi_swapchain *wsi_chain,
 	struct r5_swapchain *chain = (struct r5_swapchain *)wsi_chain;
 	struct r5_surface *surface = chain->surface;
 
+	if (chain->shared) {
+		/* An acquire still waiting on one of the semaphores wakes when
+		 * they are deleted and sees the chain lost; the chain is freed
+		 * only after it has left. */
+		pthread_mutex_lock(&chain->mu);
+		chain->lost = true;
+		pthread_mutex_unlock(&chain->mu);
+	}
 	if (chain->shared && chain->share_id > 0) {
 		/* app_server stops releasing these semaphores before it replies,
 		 * and closes its imports after its next fence. */
@@ -927,6 +943,12 @@ r5_swapchain_destroy(struct wsi_swapchain *wsi_chain,
 		if (chain->images[i].free_sem >= 0)
 			delete_sem(chain->images[i].free_sem);
 		chain->images[i].free_sem = -1;
+	}
+	if (chain->shared) {
+		pthread_mutex_lock(&chain->mu);
+		while (chain->waiters > 0)
+			pthread_cond_wait(&chain->cv, &chain->mu);
+		pthread_mutex_unlock(&chain->mu);
 	}
 
 	BBitmap *showing = r5_view_bitmap(surface);

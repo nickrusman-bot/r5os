@@ -265,6 +265,12 @@ sizes()
 	failed |= check(!r5_share_size_ok(0, 480, 2560, 1ull << 30), "zero width");
 	failed |= check(!r5_share_size_ok(0xffffffffu, 0xffffffffu, 0xffffffffu,
 		~0ull), "huge values refused");
+	/* app_server's first check, before any Vulkan buffer: the kernel's
+	 * largest buffer (review: pitch 0xfffffffc, height 0xffffffff). */
+	failed |= check(!r5_share_size_ok(0x3fffffffu, 0xffffffffu, 0xfffffffcu,
+		R5_SHARE_MAX_IMAGE_BYTES), "image over the kernel's largest refused");
+	failed |= check(r5_share_size_ok(3840, 2160, 3840 * 4,
+		R5_SHARE_MAX_IMAGE_BYTES), "a 4K image fits");
 	return failed;
 }
 

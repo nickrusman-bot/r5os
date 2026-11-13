@@ -23,6 +23,9 @@
 #define R5_SHARE_RESERVE 64u
 
 #define R5_SHARE_BYTES 16u
+/* The largest buffer the kernel makes (kMaxBoBytes): app_server refuses a
+ * larger image before it makes any Vulkan buffer for it. */
+#define R5_SHARE_MAX_IMAGE_BYTES (64ull * 1024ull * 1024ull)
 
 /* One pending export. backing is an index into the kernel's backing
  * table; the record holds one reference on it. */

@@ -28,7 +28,8 @@ static const uint32 kMaxRange = 8;
 static const uint32 kMaxJob = 64;
 static const uint32 kMaxList = 8;
 static const uint32 kMaxPrt = 32;
-static const uint64 kMaxBoBytes = 64ull * 1024ull * 1024ull;
+// The same as R5_SHARE_MAX_IMAGE_BYTES (r5_share.h), app_server's cap.
+static const uint64 kMaxBoBytes = R5_SHARE_MAX_IMAGE_BYTES;
 static const uint64 kRoomWaitUs = 100000;
 static const uint64 kFreeWaitUs = 5000000;
 /* amdgpu.lockup_timeout for GFX is 10000 ms. Client waits do not use this. */
