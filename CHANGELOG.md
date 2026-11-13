@@ -17,9 +17,9 @@ What changed:
 Mistake and fix: a heredoc turned `
 ` and `` in two inserted strings into a real newline and a bell character; `DecorManager.cpp` failed to compile. Fixed before the full jam. The Windows checkout had CRLF in `distro` and `scripts`, so `jam-r5-raw.sh` stopped at `sh -n m8-run`; checked out again with LF.
 
-Tested: `jam -q app_server R5Decorator R5DecoratorAbiTest BeDecorator FlatDecorator MacDecorator WinDecorator` exit 0; `jam-r5-raw.sh` with `R5_DECORATOR_ABI_TEST=1` `jam_exit=0`, `mesa_exit=0`. `haiku.hpkg` lists `add-ons/decorators/R5Decorator`; the image has `R5DecoratorAbiTest` in `system/non-packaged/add-ons/decorators` only. QEMU (KVM, a copy of the image): boots to the Welcome window with the default decorator.
+Tested: `jam -q app_server R5Decorator R5DecoratorAbiTest BeDecorator FlatDecorator MacDecorator WinDecorator` exit 0; `jam-r5-raw.sh` with `R5_DECORATOR_ABI_TEST=1` `jam_exit=0`, `mesa_exit=0`. `haiku.hpkg` lists `add-ons/decorators/R5Decorator`; the image has `R5DecoratorAbiTest` in `system/non-packaged/add-ons/decorators` only. QEMU (KVM, a copy of the image, window): boots to the Welcome window with the default decorator. The user then ran the test card (select R5, resize from the edges and corners, the scroll bar, move by the tab, select the test add-on) and reported that it worked. Syslog of that boot: `decorator: r5 loaded`, then `app_server: decorator R5DecoratorAbiTest refused: abi 0, need 1`, then `decorator: r5 loaded` again; no app_server crash.
 
-Not tested yet: selecting R5, resizing from each edge and corner, the hover cursor, the scroll bar at the edge, a window that is not resizable, the refusal line, stacking and tiling with the R5 frame, outline resize (`B_OUTLINE_RESIZE`), the left-titled look. The interactive test is `generated/gpu-m11/STEP1-CARD.md`. Not on the 5625U, not in VirtualBox.
+Not tested: stacking and tiling with the R5 frame, outline resize (`B_OUTLINE_RESIZE`), the left-titled look, a larger font scale. No screenshot in this record. Not on the 5625U, not in VirtualBox.
 
 ## 2026-11-13 - Network settings in Settings: Connections and Discovery, and .local after the network is up (build 10062)
 
