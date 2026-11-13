@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 #
 # M10 stick: PASS or FAIL per line for the current boot. The boot is read
-# from the radeon_hd settings file: none = 1, gpu_opengl true = 1b,
+# from the radeon_hd settings file: none or only gpu_selftest true = 1, gpu_opengl true = 1b,
 # gpu_hang_test 1 = 2, gpu_hang_test 2 = 3, gpu false = 4,
 # gpu_app_server true = 5 and with gpu_app_server_fail true = 6 (both
 # optional). boot-next notes
@@ -53,6 +53,9 @@ elif grep -Eq '^gpu_hang_test[[:space:]]+1' "$settings"; then
 	boot=2
 elif grep -q '^gpu_opengl true' "$settings"; then
 	boot=1b
+elif ! grep -Ev '^(gpu_selftest true)?[[:space:]]*$' "$settings" | grep -q .; then
+	# Only gpu_selftest true: boot 1, every GPU switch at its default.
+	boot=1
 else
 	echo "FAIL settings match no boot: $settings"
 	echo FAIL
