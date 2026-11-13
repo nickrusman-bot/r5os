@@ -456,3 +456,18 @@ Built in step 2, and how it differs from the sections above:
 - **The memory budget:** over the budget, the buffers of windows that are not on screen (hidden, minimised, another workspace) are freed first, the one shown longest ago first; such a window draws all of itself again when it shows. A window on screen that still cannot get a buffer turns the GPU mode off (`window memory`). A window without a buffer draws nothing: `Window::_ClipToBuffer` limits every drawable region to the window's buffer, and logs `app_server: draw outside buffer: ...` once per window if a region ever reaches past it.
 - **Decision 14:** a lost device on RADV is followed by one restart once `GET_INFO` reports the GPU available again (up to 15 s); the buffers of the lost device are not freed through the new one.
 
+
+## Decided in step 3b (13 Nov 2026)
+
+Where the source differed from the step 3a design, the user chose:
+
+1. **app_server reads the present mark through the R5 DRM library.** RADV does the import itself (`PRIME_FD_TO_HANDLE` on its own device fd), so app_server never sees that fd or the new handle. `r5_drm_token_to_fd(device_fd, token, client_team, &fd, &id)` returns, beside the fd, an id of its own. At `PRIME_FD_TO_HANDLE` the library stores RADV's device fd and the new handle under that id, not under the fd number: RADV closes the fd after a successful import, and the number comes back for the next one. `r5_drm_mark_get(id, &sequence)` sends `BO_PRESENT_MARK` `GET` on that device fd with that handle. `GEM_CLOSE` of that handle ends the id; a `mark_get` after that fails, and app_server puts that window on the copy path. `device_fd` is not used in version 1 (pass -1).
+2. **The WSI sets the mark the same way.** `r5_drm_fd_to_token(fd, token, &id)` returns, beside the number, an export id; the library keeps RADV's device fd and the handle of `PRIME_HANDLE_TO_FD` under it. `r5_drm_mark_set(id)` sends `BO_PRESENT_MARK` `SET` there. A second export of the same buffer keeps the same id; `GEM_CLOSE` of that handle ends it.
+3. No patch in RADV, no new kernel number, nothing in libbe. The four library calls are additive and MIT (`distro/graphics/libdrm-r5/r5_translate.h`).
+
+Built in step 3b, and how it differs from the sections above:
+
+- **The local fd** is a descriptor of `/dev/null`, a number the caller can close; a table in the library says what it stands for. A row is free again after its one use (`r5_drm_fd_to_token` for an export, `r5_drm_import_bytes` for an import), so the table of 64 rows does not fill.
+- **Pending exports per backing:** a buffer whose exporter freed its handle before the import is held only by the pending export; the backing table has the size of the slot table (1024), and such a backing goes at most 5 s later.
+- **`vram_usage` and `gtt_usage`** in `GET_INFO` count the memory (backings), not the handles, so a shared buffer is counted once.
+- **Refusal words** in the kernel log line (`radeon_hd: refuse BO_IMPORT <why>`): `caller`, `team`, `token`, `expired`, `lost`, `target`; `BO_EXPORT limit`, `target`. An expired number is reported as `expired` when it is still in the table, `token` after the watchdog removed it.
