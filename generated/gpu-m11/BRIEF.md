@@ -80,6 +80,7 @@ For Cursor or Claude. It does not override `AGENTS.md` or `docs/GPU-ARCHITECTURE
 
    Round corners belong to the later round decorator, not to M11.
    **Two separate settings** (user decision, 12 Nov 2026), in a "Window effects" box on the Look and feel tab of the Appearance page: a "Shadow" checkbox and a "Frosted glass" checkbox. Each works on its own. A new control, not a reorder: the tabs and the layout in `AGENTS.md` stay. A change applies at once; Defaults turns both on; Revert restores both values from when the page was opened. With both off, GPU mode still composes (A1 and A2 stay). The separate Appearance program gets the same two checkboxes.
+   **A third checkbox, "Animations"** (user decision, 13 Nov 2026, step 4b), in the same box, default on: open and close (fade and scale) and the workspace switch (slide). Off is instant. It is the third flag of the same call pair, `B_WINDOW_ANIMATIONS = 0x00000004` after `B_WINDOW_SHADOW` and `B_WINDOW_FROSTED_GLASS` in `<WindowEffects.h>`; no new call. Defaults turns all three on; Revert restores all three. Hide and show into Deskbar are not in M11 (they need Deskbar to tell app_server where a window's line is; with Deskbar NextGen).
 9. **Programs that write straight to the screen** (`BDirectWindow` with direct access, `BWindowScreen`): while such a window has direct access, the compositor pauses and the screen is drawn the CPU-mode way. When it closes, composing resumes and every window is redrawn once. Step 0 designs that switch, including the lock order. `BDirectWindow` programs that do not ask for direct access are ordinary windows.
 10. **Decorator API: hooks at the end, with a version check (user, 12 Nov 2026).** Only decorator add-ons are affected, not applications. The hooks for the shadow extent and the glass region are virtual functions at the end of `Decorator`, with defaults (the default shadow, no glass). Every decorator add-on exports a decorator ABI version; `DecorManager` refuses an add-on without the current version with one line and uses the built-in default, so an old add-on never crashes app_server. The Haiku decorators in the tree (Be, Flat, Mac, Win) are migrated: rebuilt with the version, they implement the hooks, and they are made nicer (step 1b). Details: `docs/APP-SERVER-COMPOSITOR.md`, "Decided after step 0". A hook for a corner radius comes with the round decorator, later, also at the end. The decorator header stays MIT.
 11. **Fallback.**
@@ -134,10 +135,11 @@ For Cursor or Claude. It does not override `AGENTS.md` or `docs/GPU-ARCHITECTURE
 | 3a | **Design on paper** for zero-copy, from decision 15: the export and import structures (`+ 17`, `+ 18`), the token, its target, expiry and limit, the reference count, the two sync objects and their new calls, the protocol message with the tokens, the R5 DRM library's token-to-fd step and how RADV and the WSI use it (checked in the Mesa source), the scanout import into Vulkan, the reset path, the pass and fail lines. Checked in the Haiku source (WSL tree): the kernel's secure random source, `get_port_message_info_etc` / `BMessage` sender, that areas are not used for GPU buffers. In `docs/APP-SERVER-COMPOSITOR.md` and `docs/GPU-ARCHITECTURE.md`. The user reviews it before code | – | – |
 | 3b | **Zero-copy windows (A2)** as 3a: the kernel calls, the R5 DRM library, the WSI, app_server's import and sync, the scanout import that replaces the CPU copy into the back buffer and the extra `DMA_DATA` copy if it measures no worse. A new `mesa_radv` package if the WSI changes, with the pin and the libdrm symbol check. Kernel code: SMAP review and the QEMU SMAP boot before the jam. On Lavapipe the copy path is used and logged | VirtualBox or QEMU (copy path only); host or VM tests: another team imports the same token → refused; 1000 guessed tokens → all refused; a second import of the same token → refused; the exporter killed before import → its GTT returns; killed after import → app_server still reads, GTT returns when it closes; a size that lies → window refused; a sync that never signals → the rest of the desktop keeps composing | `app_server: window <id> zero-copy off: <reason>` on Lavapipe; one pass or fail line per test |
 | 4 | **The shadow (A3) and frosted glass (A4)** plus the two checkboxes in Settings and in Appearance | VirtualBox with Lavapipe, the M11 scenario for 60 s | `app_server: shadow on` / `shadow off` and `app_server: frosted on` / `frosted off` when toggled; `app_server: compose median <n> us cpu <n> ms per 10 s` with and without effects, recorded in `CHANGELOG.md` |
+| 4b | **Window animations** as `generated/gpu-m11/ANIMATIONS.md`: open and close (fade, scale 95 % → 100 %), the workspace switch (slide), and the "Animations" checkbox (decision 8). In the compositor only, on the effects pipeline of decision 16; programs and Deskbar unchanged. An animation never delays input; a new event starts from where the running one is. Not animated: windows with direct access, the CPU mode. The compare runs only on a still frame with effects and animations off. Lengths are starting values, logged | VirtualBox or QEMU with Lavapipe: open and close Terminal ten times, switch workspaces ten times, type into a window while it opens, the checkbox off and on | `app_server: animations on` / `animations off` when toggled; `app_server: animation <open\|close\|workspace> <n> ms frames <n>` per animation; compose median during animations, recorded in `CHANGELOG.md` |
 | 5 | **The direct-window pause and the forced failure** (`gpu_compositor_fail true`, test switch: the first submit fails) | VirtualBox: a `BDirectWindow` test program, and the forced failure | `app_server: compositor paused: direct window` and `resumed`; `app_server: gpu compositor off: forced failure` exactly once |
 | 6 | **The stick** (one, after M10 has passed) | 5625U | below |
 
-PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not need the compositor). Step 1b: the pictures first (for approval), then its own PR. Step 1c: the same, its own PR. Steps 2–5 depend on each other: **one PR**, one commit per step, from `origin/main`, not stacked. If the review of step 0 changes a decision, that PR follows it before merge.
+PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not need the compositor). Step 1b: the pictures first (for approval), then its own PR. Step 1c: the same, its own PR. Steps 2–5 (with 3b and 4b) depend on each other: **one PR**, one commit per step, from `origin/main`, not stacked. If the review of step 0 changes a decision, that PR follows it before merge.
 
 ---
 
@@ -148,7 +150,7 @@ PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not ne
 **Boot 1:** M10 needs no switches any more on `0x15e7`. The settings file has only `gpu_compositor true` and `gpu_debug true`. The R5 decorator selected.
 1. Sign in. The desktop must come up as usual.
 2. Scenario, 60 s: drag a Tracker window in circles over other windows for 20 s, scroll a long Terminal output for 20 s, run VulkanTeapot and `vkcube` side by side for 20 s.
-3. Toggle "Shadow" off and on once, then "Frosted glass" off and on once.
+3. Toggle "Shadow" off and on once, then "Frosted glass" off and on once. Open and close Terminal five times and switch workspaces five times; toggle "Animations" off and on once.
 4. Start the `BDirectWindow` test program, then close it.
 5. Open Terminal and type `check`. It prints PASS or FAIL per line:
    - `radeon_hd: gpu available`;
@@ -159,6 +161,7 @@ PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not ne
    - `app_server: window memory <n> MB` at least once;
    - `app_server: window memory type <i> flags <hex>` with the cached bit, and the kernel `bo` line with `snooped 1`;
    - the Painter write test: the window buffer not much slower than `malloc` (both times recorded);
+   - `app_server: animation open`, `close` and `workspace` lines, and `animations off` / `on`;
    - `compositor paused: direct window` and `resumed`;
    - no `gpu compositor off`.
 
@@ -206,7 +209,7 @@ Counted in sessions, not weeks; the bottleneck is testing.
 | 0 (may run during the after-M10 round) | The pictures of steps 1b and 1c on one design page, `docs/design/decorators/` (HTML, drawn in code, no Windows assets), for the user's approval and the 1c name | none, the page is shown to the user | – |
 | 1 | Step 1 | one | VirtualBox or QEMU, one boot |
 | 2 | Steps 1b and 1c, after the pictures are approved | two, not stacked | VirtualBox, one boot for both |
-| 3 | Steps 2, 3a (paper, review), 3b, 4, 5 | one code PR, a commit per step; 3a as its own documentation PR | VirtualBox or QEMU, one boot per step |
+| 3 | Steps 2, 3a (paper, review), 3b, 4, 4b, 5 | one code PR, a commit per step; 3a as its own documentation PR | VirtualBox or QEMU, one boot per step |
 | 4 | The stick (step 6) | results in `CHANGELOG.md` | 5625U, four boots |
 
 Rounds 2 and 3 may overlap (decorator add-ons against `Desktop`/`Window`/compositor), but only one agent jams at a time.
@@ -219,7 +222,7 @@ Rounds 2 and 3 may overlap (decorator add-ons against `Desktop`/`Window`/composi
 - Effects in the CPU mode (the emergency fallback) beyond the decorator's shape and colours.
 - A software path other than Lavapipe.
 - Programming DCN, vsync, scanout planes for a full-screen window, more than one screen.
-- Window animations (open, close, hide, workspace switch): a step after step 4, see `generated/gpu-m11/ANIMATIONS.md`. HiDPI scaling.
+- Hide and show animated into Deskbar (with Deskbar NextGen; open, close and the workspace switch are step 4b). HiDPI scaling.
 - Changes to the Haiku decorators beyond the version, the hooks and what the user approves in step 1b.
 - The round R5 decorator (large round corners).
 - Glass, shadow and the pill for Deskbar (Deskbar NextGen, after step 4, through `set_view_glass()`; `generated/deskbar-nextgen/DESIGN.md`).

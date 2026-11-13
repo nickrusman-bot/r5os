@@ -34,6 +34,14 @@ De calls heten zoals in het ontwerp (`<WindowEffects.h>`, `BAppearanceKit`); bed
 
 ---
 
+## Stap 4b
+
+Voer stap 4b uit van `generated/gpu-m11/BRIEF.md`: vensteranimaties. Alleen stap 4b. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan besluit 8 en 16 in de brief en `generated/gpu-m11/ANIMATIONS.md`. Je eerste antwoord: de regels die gelden en het plan. Wacht op mijn "ga".
+
+Openen en sluiten (vervagen en schalen) en het wisselen van werkruimte (schuiven), alleen in de compositor, op de effecten-pipeline van stap 4. Het vinkje "Animations" in het vak "Window effects" is de vlag `B_WINDOW_ANIMATIONS` van `set_window_effects()`; geen nieuwe call. Bijwerken in `docs/LIBR5.md` en `docs/APPEARANCE-KIT.md`. Niet: verbergen en terugzetten naar de Deskbar, iets in de Deskbar of in programma's. Een animatie houdt nooit invoer op; vergelijken alleen op een stilstaand beeld. De lengtes zijn startwaarden; maak eerst een korte opname of reeks schermafbeeldingen van open en dicht en stop, ik kijk mee. Vraag vóór je jamt. Test en passregels: de brief, stap 4b. Meld kort en stop.
+
+---
+
 ## Stap 5
 
 Voer stap 5 uit van `generated/gpu-m11/BRIEF.md`: de pauze voor direct windows en de geforceerde fout. Alleen stap 5. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan `docs/APP-SERVER-COMPOSITOR.md`, "The direct-window pause" en "The switch to the CPU mode". Je eerste antwoord: de regels die gelden, het plan, en de volgorde van de locks zoals jij die in de bron vindt. Wacht op mijn "ga".
