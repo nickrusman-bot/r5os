@@ -1,0 +1,8 @@
+SubDir HAIKU_TOP src bin r5-share-check ;
+
+UsePrivateHeaders app r5gpu shared ;
+
+Application r5-share-check :
+	r5-share-check.cpp
+	: be [ TargetLibsupc++ ]
+	;
