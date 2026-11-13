@@ -2,7 +2,8 @@
  * SPDX-FileCopyrightText: 2026 R5OS Contributors
  * SPDX-License-Identifier: MIT
  * R5OS: advertise hostname.local (A/AAAA) and AirPlay/RAOP over mDNS
- * on IPv4 (224.0.0.251) and IPv6 (ff02::fb).
+ * on IPv4 (224.0.0.251) and IPv6 (ff02::fb), plus SSH and FTP when they
+ * are on.
  */
 
 #include <arpa/inet.h>
@@ -17,10 +18,21 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <Entry.h>
+#include <FindDirectory.h>
+#include <Looper.h>
 #include <NetworkInterface.h>
+#include <NetworkNotifications.h>
 #include <NetworkRoster.h>
+#include <NetworkSettings.h>
+#include <NodeMonitor.h>
 #include <OS.h>
+#include <Path.h>
 #include <SupportDefs.h>
+
+
+using BNetworkKit::BNetworkServiceSettings;
+using BNetworkKit::BNetworkSettings;
 
 
 static const uint16 kMdnsPort = 5353;
@@ -28,6 +40,12 @@ static const char* kMdnsAddr4 = "224.0.0.251";
 static const char* kMdnsAddr6 = "ff02::fb";
 static const uint32 kAnnounceUsec = 120 * 1000000;
 static const uint16 kAirPlayPort = 7000;
+static const char* kDiscoverySettings = "network/discovery";
+static const uint32 kServiceSSH = 0x01;
+static const uint32 kServiceFTP = 0x02;
+
+// what is announced besides AirPlay (kService*)
+static uint32 sServices = 0;
 
 
 static size_t
@@ -318,34 +336,6 @@ collect_ipv6(struct in6_addr* addrs, int max)
 }
 
 
-static int
-collect_ifindexes(uint32* indexes, int max)
-{
-	BNetworkRoster& roster = BNetworkRoster::Default();
-	BNetworkInterface interface;
-	uint32 cookie = 0;
-	int count = 0;
-
-	while (count < max && roster.GetNextInterface(&cookie, interface) == B_OK) {
-		if ((interface.Flags() & IFF_UP) == 0
-			|| (interface.Flags() & IFF_LOOPBACK) != 0)
-			continue;
-		uint32 index = interface.Index();
-		if (index == 0)
-			continue;
-		bool seen = false;
-		for (int i = 0; i < count; i++) {
-			if (indexes[i] == index)
-				seen = true;
-		}
-		if (seen)
-			continue;
-		indexes[count++] = index;
-	}
-	return count;
-}
-
-
 static bool
 first_mac(uint8_t mac[6])
 {
@@ -396,6 +386,28 @@ our_local_name(char* out, size_t cap)
 		strlcpy(out, host, cap);
 	else
 		snprintf(out, cap, "%s.local", host);
+}
+
+
+// "name._ssh._tcp.local" for "name.local"
+static void
+service_instance(char* out, size_t cap, const char* host, const char* type)
+{
+	char shortHost[128];
+	strlcpy(shortHost, host, sizeof(shortHost));
+	size_t n = strlen(shortHost);
+	if (n > 6 && strcasecmp(shortHost + n - 6, ".local") == 0)
+		shortHost[n - 6] = '\0';
+	snprintf(out, cap, "%s.%s", shortHost, type);
+}
+
+
+static bool
+service_matches(const char* qname, const char* host, const char* type)
+{
+	char instance[192];
+	service_instance(instance, sizeof(instance), host, type);
+	return strcasecmp(qname, type) == 0 || strcasecmp(qname, instance) == 0;
 }
 
 
@@ -509,6 +521,32 @@ build_response(uint8_t* out, size_t cap, const char* host)
 		return 0;
 	nrr++;
 
+	struct {
+		uint32		flag;
+		const char*	type;
+		uint16_t	port;
+	} services[] = {
+		{ kServiceSSH, "_ssh._tcp.local", 22 },
+		{ kServiceFTP, "_ftp._tcp.local", 21 }
+	};
+	const char* emptyTxt[] = { "", NULL };
+	for (size_t s = 0; s < sizeof(services) / sizeof(services[0]); s++) {
+		if ((sServices & services[s].flag) == 0)
+			continue;
+		char instance[192];
+		service_instance(instance, sizeof(instance), host, services[s].type);
+		off = put_ptr(out, cap, off, services[s].type, instance);
+		if (off == 0)
+			return 0;
+		off = put_srv(out, cap, off, instance, host, services[s].port);
+		if (off == 0)
+			return 0;
+		off = put_txt(out, cap, off, instance, emptyTxt);
+		if (off == 0)
+			return 0;
+		nrr += 3;
+	}
+
 	out[6] = (uint8_t)(nrr >> 8);
 	out[7] = (uint8_t)nrr;
 	return off;
@@ -560,17 +598,23 @@ query_is_ours(const uint8_t* msg, size_t len, const char* host)
 			|| strcasecmp(qname, raopInst) == 0
 			|| strcasecmp(qname, airInst) == 0)
 			return true;
+		if ((sServices & kServiceSSH) != 0
+			&& service_matches(qname, host, "_ssh._tcp.local"))
+			return true;
+		if ((sServices & kServiceFTP) != 0
+			&& service_matches(qname, host, "_ftp._tcp.local"))
+			return true;
 	}
 	return false;
 }
 
 
+// The groups are joined later, per interface (update_groups()).
 static int
 open_mdns4()
 {
 	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	struct sockaddr_in bindAddr;
-	struct ip_mreq mreq;
 	int reuse = 1;
 	int loop = 1;
 
@@ -582,14 +626,12 @@ open_mdns4()
 	bindAddr.sin_family = AF_INET;
 	bindAddr.sin_port = htons(kMdnsPort);
 	bindAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	if (bind(sock, (struct sockaddr*)&bindAddr, sizeof(bindAddr)) < 0) {
+	if (bind(sock, reinterpret_cast<struct sockaddr*>(&bindAddr),
+			sizeof(bindAddr)) < 0) {
+		syslog(LOG_ERR, "mdns: IPv4 bind: %s\n", strerror(errno));
 		close(sock);
 		return -1;
 	}
-	memset(&mreq, 0, sizeof(mreq));
-	inet_pton(AF_INET, kMdnsAddr4, &mreq.imr_multiaddr);
-	mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-	setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
 	setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
 	return sock;
 }
@@ -600,7 +642,6 @@ open_mdns6()
 {
 	int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	struct sockaddr_in6 bindAddr;
-	struct ipv6_mreq mreq;
 	int reuse = 1;
 	int only = 1;
 	int loop = 1;
@@ -613,28 +654,219 @@ open_mdns6()
 	bindAddr.sin6_len = sizeof(bindAddr);
 	bindAddr.sin6_family = AF_INET6;
 	bindAddr.sin6_port = htons(kMdnsPort);
-	if (bind(sock, (struct sockaddr*)&bindAddr, sizeof(bindAddr)) < 0) {
+	if (bind(sock, reinterpret_cast<struct sockaddr*>(&bindAddr),
+			sizeof(bindAddr)) < 0) {
+		syslog(LOG_ERR, "mdns: IPv6 bind: %s\n", strerror(errno));
 		close(sock);
 		return -1;
-	}
-	memset(&mreq, 0, sizeof(mreq));
-	inet_pton(AF_INET6, kMdnsAddr6, &mreq.ipv6mr_multiaddr);
-	mreq.ipv6mr_interface = 0;
-	setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
-	uint32 indexes[8];
-	int nIf = collect_ifindexes(indexes, 8);
-	for (int i = 0; i < nIf; i++) {
-		mreq.ipv6mr_interface = indexes[i];
-		setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
 	}
 	setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &loop, sizeof(loop));
 	return sock;
 }
 
 
+// #pragma mark - group membership per interface
+
+
+static const int32 kMaxGroups = 8;
+
+struct Group {
+	uint32			index;
+	struct in_addr	addr;			// IPv4 only
+	char			name[IF_NAMESIZE];
+	bool			joined;
+	status_t		lastError;		// last one logged
+};
+
+static Group sGroups4[kMaxGroups];
+static int32 sCount4 = 0;
+static Group sGroups6[kMaxGroups];
+static int32 sCount6 = 0;
+
+
+static int32
+find_group(const Group* groups, int32 count, uint32 index,
+	const struct in_addr* addr)
+{
+	for (int32 i = 0; i < count; i++) {
+		if (groups[i].index != index)
+			continue;
+		if (addr == NULL || groups[i].addr.s_addr == addr->s_addr)
+			return i;
+	}
+	return -1;
+}
+
+
+static bool
+join4(int sock, const Group& group, bool join)
+{
+	struct ip_mreq mreq;
+	memset(&mreq, 0, sizeof(mreq));
+	inet_pton(AF_INET, kMdnsAddr4, &mreq.imr_multiaddr);
+	mreq.imr_interface = group.addr;
+	return setsockopt(sock, IPPROTO_IP,
+		join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &mreq,
+		sizeof(mreq)) == 0;
+}
+
+
+static bool
+join6(int sock, const Group& group, bool join)
+{
+	struct ipv6_mreq mreq;
+	memset(&mreq, 0, sizeof(mreq));
+	inet_pton(AF_INET6, kMdnsAddr6, &mreq.ipv6mr_multiaddr);
+	mreq.ipv6mr_interface = group.index;
+	return setsockopt(sock, IPPROTO_IPV6,
+		join ? IPV6_JOIN_GROUP : IPV6_LEAVE_GROUP, &mreq, sizeof(mreq)) == 0;
+}
+
+
+// Logs a failure once, and tries again on the next network event.
+static bool
+try_join(int sock, Group& group, bool v6)
+{
+	if (group.joined)
+		return false;
+	if (v6 ? join6(sock, group, true) : join4(sock, group, true)) {
+		group.joined = true;
+		group.lastError = B_OK;
+		if (v6) {
+			syslog(LOG_INFO, "mdns: joined %s on %s\n", kMdnsAddr6,
+				group.name);
+		} else {
+			char text[INET_ADDRSTRLEN];
+			inet_ntop(AF_INET, &group.addr, text, sizeof(text));
+			syslog(LOG_INFO, "mdns: joined %s on %s (%s)\n", kMdnsAddr4,
+				group.name, text);
+		}
+		return true;
+	}
+	if (group.lastError != errno) {
+		group.lastError = errno;
+		syslog(LOG_ERR, "mdns: join %s on %s: %s\n",
+			v6 ? kMdnsAddr6 : kMdnsAddr4, group.name, strerror(errno));
+	}
+	return false;
+}
+
+
+static void
+merge_groups(int sock, Group* groups, int32& count, const Group* now,
+	int32 nowCount, bool v6, bool& joined)
+{
+	for (int32 i = 0; i < count; i++) {
+		if (find_group(now, nowCount, groups[i].index,
+				v6 ? NULL : &groups[i].addr) >= 0)
+			continue;
+		if (groups[i].joined) {
+			if (v6)
+				join6(sock, groups[i], false);
+			else
+				join4(sock, groups[i], false);
+			syslog(LOG_INFO, "mdns: left %s on %s\n",
+				v6 ? kMdnsAddr6 : kMdnsAddr4, groups[i].name);
+		}
+		groups[i] = groups[--count];
+		i--;
+	}
+	for (int32 i = 0; i < nowCount; i++) {
+		int32 at = find_group(groups, count, now[i].index,
+			v6 ? NULL : &now[i].addr);
+		if (at < 0) {
+			if (count >= kMaxGroups)
+				continue;
+			groups[count] = now[i];
+			at = count++;
+		}
+		if (try_join(sock, groups[at], v6))
+			joined = true;
+	}
+}
+
+
+// Joins new interfaces, leaves gone ones. True if anything was joined.
+static bool
+update_groups(int sock4, int sock6)
+{
+	Group now4[kMaxGroups];
+	Group now6[kMaxGroups];
+	int32 count4 = 0;
+	int32 count6 = 0;
+
+	BNetworkRoster& roster = BNetworkRoster::Default();
+	BNetworkInterface interface;
+	uint32 cookie = 0;
+	while (roster.GetNextInterface(&cookie, interface) == B_OK) {
+		if ((interface.Flags() & IFF_UP) == 0
+			|| (interface.Flags() & IFF_LOOPBACK) != 0)
+			continue;
+		uint32 index = interface.Index();
+		if (index == 0)
+			continue;
+		bool have4 = false;
+		bool have6 = false;
+		int32 n = interface.CountAddresses();
+		for (int32 i = 0; i < n; i++) {
+			BNetworkInterfaceAddress address;
+			if (interface.GetAddressAt(i, address) != B_OK)
+				continue;
+			const BNetworkAddress& addr = address.Address();
+			if (addr.Family() == AF_INET && !have4 && count4 < kMaxGroups) {
+				const sockaddr_in* sin = reinterpret_cast<const sockaddr_in*>(
+					&addr.SockAddr());
+				if (sin->sin_addr.s_addr == INADDR_ANY)
+					continue;
+				Group& group = now4[count4++];
+				memset(&group, 0, sizeof(group));
+				group.index = index;
+				group.addr = sin->sin_addr;
+				strlcpy(group.name, interface.Name(), sizeof(group.name));
+				have4 = true;
+			} else if (addr.Family() == AF_INET6 && !have6
+				&& count6 < kMaxGroups) {
+				Group& group = now6[count6++];
+				memset(&group, 0, sizeof(group));
+				group.index = index;
+				strlcpy(group.name, interface.Name(), sizeof(group.name));
+				have6 = true;
+			}
+		}
+	}
+
+	bool joined = false;
+	if (sock4 >= 0)
+		merge_groups(sock4, sGroups4, sCount4, now4, count4, false, joined);
+	if (sock6 >= 0)
+		merge_groups(sock6, sGroups6, sCount6, now6, count6, true, joined);
+	return joined;
+}
+
+
+// #pragma mark - announcing
+
+
+static bool sAnnounceFailed = false;
+
+
+// One line, until an announcement works again.
+static void
+announce_failed(const char* family, const char* name)
+{
+	if (sAnnounceFailed)
+		return;
+	sAnnounceFailed = true;
+	syslog(LOG_ERR, "mdns: %s announce on %s: %s\n", family, name,
+		strerror(errno));
+}
+
+
 static void
 send_announce(int sock4, int sock6, const uint8_t* buf, size_t rlen)
 {
+	bool sent = false;
+
 	if (sock4 >= 0) {
 		struct sockaddr_in dest;
 		memset(&dest, 0, sizeof(dest));
@@ -642,7 +874,17 @@ send_announce(int sock4, int sock6, const uint8_t* buf, size_t rlen)
 		dest.sin_family = AF_INET;
 		dest.sin_port = htons(kMdnsPort);
 		inet_pton(AF_INET, kMdnsAddr4, &dest.sin_addr);
-		sendto(sock4, buf, rlen, 0, (struct sockaddr*)&dest, sizeof(dest));
+		for (int32 i = 0; i < sCount4; i++) {
+			if (!sGroups4[i].joined)
+				continue;
+			setsockopt(sock4, IPPROTO_IP, IP_MULTICAST_IF, &sGroups4[i].addr,
+				sizeof(sGroups4[i].addr));
+			if (sendto(sock4, buf, rlen, 0,
+					reinterpret_cast<struct sockaddr*>(&dest), sizeof(dest)) < 0)
+				announce_failed("IPv4", sGroups4[i].name);
+			else
+				sent = true;
+		}
 	}
 	if (sock6 >= 0) {
 		struct sockaddr_in6 dest;
@@ -651,23 +893,139 @@ send_announce(int sock4, int sock6, const uint8_t* buf, size_t rlen)
 		dest.sin6_family = AF_INET6;
 		dest.sin6_port = htons(kMdnsPort);
 		inet_pton(AF_INET6, kMdnsAddr6, &dest.sin6_addr);
-		uint32 indexes[8];
-		int nIf = collect_ifindexes(indexes, 8);
-		if (nIf == 0) {
-			if (sendto(sock6, buf, rlen, 0, (struct sockaddr*)&dest,
-					sizeof(dest)) < 0) {
-				syslog(LOG_ERR, "mdns: IPv6 announce: %s\n", strerror(errno));
-			}
-		} else {
-			for (int i = 0; i < nIf; i++) {
-				dest.sin6_scope_id = indexes[i];
-				if (sendto(sock6, buf, rlen, 0, (struct sockaddr*)&dest,
-						sizeof(dest)) < 0) {
-					syslog(LOG_ERR, "mdns: IPv6 announce if %" B_PRIu32 ": %s\n",
-						indexes[i], strerror(errno));
-				}
-			}
+		for (int32 i = 0; i < sCount6; i++) {
+			if (!sGroups6[i].joined)
+				continue;
+			dest.sin6_scope_id = sGroups6[i].index;
+			if (sendto(sock6, buf, rlen, 0,
+					reinterpret_cast<struct sockaddr*>(&dest), sizeof(dest)) < 0)
+				announce_failed("IPv6", sGroups6[i].name);
+			else
+				sent = true;
 		}
+	}
+	if (sent)
+		sAnnounceFailed = false;
+}
+
+
+// #pragma mark - settings
+
+
+// "Let other devices find this computer" (Settings, Discovery). Our own
+// .local lookups (r5_mdns.c) do not depend on it.
+static bool
+read_discoverable()
+{
+	BPath path;
+	if (find_directory(B_SYSTEM_SETTINGS_DIRECTORY, &path) != B_OK
+		|| path.Append(kDiscoverySettings) != B_OK)
+		return true;
+	FILE* file = fopen(path.Path(), "r");
+	if (file == NULL)
+		return true;
+	bool discoverable = true;
+	char line[128];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		char key[64];
+		char value[32];
+		if (line[0] == '#' || sscanf(line, "%63s %31s", key, value) != 2)
+			continue;
+		if (strcmp(key, "discoverable") == 0)
+			discoverable = strcmp(value, "false") != 0;
+	}
+	fclose(file);
+	return discoverable;
+}
+
+
+// SSH and FTP are announced while they are enabled.
+static uint32
+read_services()
+{
+	BNetworkSettings settings;
+	uint32 services = 0;
+	BMessage message;
+	if (settings.GetService("ssh", message) == B_OK
+		&& BNetworkServiceSettings(message).IsEnabled())
+		services |= kServiceSSH;
+	message.MakeEmpty();
+	if (settings.GetService("ftp", message) == B_OK
+		&& BNetworkServiceSettings(message).IsEnabled())
+		services |= kServiceFTP;
+	return services;
+}
+
+
+// #pragma mark - watching
+
+
+// Set by the watcher, picked up by the r5-mdns thread within a second.
+static int32 sNetworkChanged = 1;
+static int32 sSettingsChanged = 1;
+
+
+// Watches the interfaces and the hostname, discovery and services files.
+class MdnsWatcher : public BLooper {
+public:
+								MdnsWatcher();
+
+	virtual	void				MessageReceived(BMessage* message);
+
+			void				WatchFiles();
+};
+
+
+MdnsWatcher::MdnsWatcher()
+	:
+	BLooper("r5-mdns watcher")
+{
+}
+
+
+void
+MdnsWatcher::WatchFiles()
+{
+	stop_watching(this);
+	BPath directory;
+	if (find_directory(B_SYSTEM_SETTINGS_DIRECTORY, &directory) != B_OK
+		|| directory.Append("network") != B_OK)
+		return;
+	node_ref ref;
+	BEntry entry(directory.Path());
+	if (entry.GetNodeRef(&ref) == B_OK)
+		watch_node(&ref, B_WATCH_DIRECTORY, this);
+	const char* files[] = { "hostname", "discovery", "services" };
+	for (uint32 i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
+		BPath path(directory.Path(), files[i]);
+		BEntry file(path.Path());
+		if (file.GetNodeRef(&ref) == B_OK)
+			watch_node(&ref, B_WATCH_STAT, this);
+	}
+}
+
+
+void
+MdnsWatcher::MessageReceived(BMessage* message)
+{
+	switch (message->what) {
+		case B_NETWORK_MONITOR:
+			atomic_set(&sNetworkChanged, 1);
+			break;
+		case B_NODE_MONITOR:
+		{
+			int32 opcode;
+			if (message->FindInt32("opcode", &opcode) == B_OK
+				&& opcode != B_STAT_CHANGED) {
+				// created, removed or replaced: watch again
+				WatchFiles();
+			}
+			atomic_set(&sSettingsChanged, 1);
+			break;
+		}
+		default:
+			BLooper::MessageReceived(message);
+			break;
 	}
 }
 
@@ -678,22 +1036,47 @@ mdns_thread(void* /*data*/)
 	int sock4 = open_mdns4();
 	int sock6 = open_mdns6();
 	char fqdn[256];
-	bigtime_t nextAnnounce;
+	bigtime_t nextAnnounce = 0;
+	bool discoverable = true;
 
 	if (sock4 < 0 && sock6 < 0)
 		return B_ERROR;
 
 	our_local_name(fqdn, sizeof(fqdn));
-	nextAnnounce = 0;
 
 	for (;;) {
 		uint8_t buf[1500];
 		struct pollfd pfd[2];
 		int nfds = 0;
 		int n;
-		bigtime_t now = system_time();
 
-		if (now >= nextAnnounce) {
+		if (atomic_get_and_set(&sNetworkChanged, 0) != 0) {
+			if (update_groups(sock4, sock6))
+				nextAnnounce = 0;
+		}
+		if (atomic_get_and_set(&sSettingsChanged, 0) != 0) {
+			char name[256];
+			our_local_name(name, sizeof(name));
+			if (strcasecmp(name, fqdn) != 0) {
+				strlcpy(fqdn, name, sizeof(fqdn));
+				syslog(LOG_INFO, "mdns: host name is now %s\n", fqdn);
+				nextAnnounce = 0;
+			}
+			bool value = read_discoverable();
+			if (value != discoverable) {
+				syslog(LOG_INFO, "mdns: other devices %s find %s\n",
+					value ? "can" : "cannot", fqdn);
+				nextAnnounce = 0;
+			}
+			discoverable = value;
+			uint32 services = read_services();
+			if (services != sServices)
+				nextAnnounce = 0;
+			sServices = services;
+		}
+
+		bigtime_t now = system_time();
+		if (discoverable && now >= nextAnnounce) {
 			size_t rlen = build_response(buf, sizeof(buf), fqdn);
 			if (rlen > 0)
 				send_announce(sock4, sock6, buf, rlen);
@@ -720,10 +1103,10 @@ mdns_thread(void* /*data*/)
 			sockaddr_storage from;
 			socklen_t fromLen = sizeof(from);
 			ssize_t got = recvfrom(pfd[i].fd, buf, sizeof(buf), 0,
-				(struct sockaddr*)&from, &fromLen);
-			if (got <= 0)
+				reinterpret_cast<struct sockaddr*>(&from), &fromLen);
+			if (got <= 0 || !discoverable)
 				continue;
-			if (query_is_ours(buf, (size_t)got, fqdn)) {
+			if (query_is_ours(buf, static_cast<size_t>(got), fqdn)) {
 				size_t rlen = build_response(buf, sizeof(buf), fqdn);
 				if (rlen > 0)
 					send_announce(sock4, sock6, buf, rlen);
@@ -736,6 +1119,16 @@ mdns_thread(void* /*data*/)
 void
 r5_start_mdns_service()
 {
+	MdnsWatcher* watcher = new MdnsWatcher();
+	watcher->Run();
+	if (start_watching_network(B_WATCH_NETWORK_INTERFACE_CHANGES
+			| B_WATCH_NETWORK_LINK_CHANGES, watcher) != B_OK)
+		syslog(LOG_ERR, "mdns: cannot watch the network interfaces\n");
+	if (watcher->Lock()) {
+		watcher->WatchFiles();
+		watcher->Unlock();
+	}
+
 	thread_id thread = spawn_thread(mdns_thread, "r5-mdns", B_NORMAL_PRIORITY,
 		NULL);
 	if (thread >= 0)
