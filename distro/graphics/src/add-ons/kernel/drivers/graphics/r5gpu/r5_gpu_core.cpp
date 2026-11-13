@@ -42,6 +42,8 @@ extern "C" status_t vm_delete_area(team_id teamID, area_id areaID, bool kernel);
 extern "C" bool team_is_valid(team_id id);
 extern "C" status_t vm_set_area_page_memory_type(area_id id, uint32 type);
 extern "C" team_id team_get_current_team_id(void);
+/* src/system/kernel/util/Random.cpp (headers/private/kernel/util/Random.h). */
+extern "C" unsigned int secure_random_value(void);
 
 static void r5_gpu_eop();
 static void gpu_fault_retire();
@@ -63,6 +65,9 @@ int sDeferred = 0;
 static r5_defer sDefer[256];
 
 gpu_bo sBo[kMaxBo];
+gpu_backing sBacking[kMaxBo];
+/* M11 step 3b: the export counter. Only goes up; 0 is never handed out. */
+static uint64 sShareCounter = 0;
 gpu_job sJobs[kMaxJob];
 static gpu_prt sPrt[kMaxPrt];
 uint64 sHighestSequence;
@@ -107,6 +112,10 @@ static void gpu_defer_reclaim(uint64 seen);
 static void gpu_prt_release_tree(r5_vm* vm);
 static void gpu_hang_test_step();
 static void gpu_wait_reset();
+static bool gpu_caller_is_app_server();
+static status_t gpu_bo_fill(gpu_client* client, gpu_bo* bo, r5_gpu_bo* request,
+	uint64 bytes);
+static void gpu_share_purge(bigtime_t now);
 
 
 
@@ -553,24 +562,62 @@ gpu_bo_unmap(gpu_bo* bo)
 }
 
 
+/* M11 step 3b: a new backing with one reference, for the slot that
+ * creates it. NULL when the table is full. */
+static gpu_backing*
+gpu_backing_take()
+{
+	for (uint32 i = 0; i < kMaxBo; i++) {
+		gpu_backing* backing = &sBacking[i];
+		if (backing->live)
+			continue;
+		memset(backing, 0, sizeof(*backing));
+		backing->live = true;
+		backing->refs = 1;
+		backing->kernelArea = -1;
+		return backing;
+	}
+	return NULL;
+}
+
+
+/* Drops one reference. The last one frees the VRAM (not the borrowed
+ * framebuffer) and deletes the kernel area. Every user clone of that
+ * area is gone by then: each slot deletes its own before it drops. */
+static void
+gpu_backing_drop(gpu_backing* backing)
+{
+	if (backing == NULL || !backing->live)
+		return;
+	if (!r5_share_ref_drop(&backing->refs))
+		return;
+	if (backing->domain == R5_GPU_DOMAIN_VRAM && !backing->borrowed) {
+		if (!sDeferred || !r5_defer_add(sDefer, 256, backing->vramOffset))
+			gpu_hw_vram_free(backing->vramOffset);
+	}
+	if (backing->kernelArea >= 0)
+		delete_area(backing->kernelArea);
+	backing->kernelArea = -1;
+	backing->kernel = NULL;
+	backing->live = false;
+}
+
+
 void
 gpu_bo_release(gpu_bo* bo)
 {
 	if (!bo->live)
 		return;
 	gpu_bo_unmap(bo);
-	if (bo->domain == R5_GPU_DOMAIN_VRAM && !bo->borrowed) {
-		if (!sDeferred || !r5_defer_add(sDefer, 256, bo->vramOffset))
-			gpu_hw_vram_free(bo->vramOffset);
-	}
 	/* The user clone belongs to mapTeam. A team that has already ended
 	 * took its areas with it. team_is_valid is the check; do not delete
 	 * an id in a team that is gone.
 	 */
 	if (bo->area >= 0 && team_is_valid(bo->mapTeam))
 		vm_delete_area(bo->mapTeam, bo->area, true);
-	if (bo->kernelArea >= 0)
-		delete_area(bo->kernelArea);
+	gpu_backing* backing = bo->backing;
+	bo->backing = NULL;
+	gpu_backing_drop(backing);
 	bo->live = false;
 	bo->owner = NULL;
 	bo->parked = false;
@@ -582,8 +629,38 @@ gpu_bo_release(gpu_bo* bo)
 	}
 	bo->area = -1;
 	bo->mapTeam = -1;
-	bo->kernelArea = -1;
-	bo->kernel = NULL;
+}
+
+
+/* M11 step 3b: a free slot for one more handle of this file, or -1.
+ * The limits are r5_share_slot_check; a refusal logs one line per file
+ * (docs/APP-SERVER-COMPOSITOR.md, "Limits on buffer slots"). */
+static int
+gpu_slot_take(gpu_client* client, int* reason)
+{
+	uint32 live = 0;
+	int slot = -1;
+	for (uint32 i = 0; i < kMaxBo; i++) {
+		if (sBo[i].live)
+			live++;
+		else if (slot < 0)
+			slot = (int)i;
+	}
+	/* The team info is read only when the reserve is all that is left. */
+	int appServer = live >= kMaxBo - R5_SHARE_RESERVE
+		&& gpu_caller_is_app_server() ? 1 : 0;
+	*reason = r5_share_slot_check(live, client->handleCount, appServer);
+	if (*reason == R5_SHARE_OK && slot >= 0)
+		return slot;
+	if (*reason == R5_SHARE_OK)
+		*reason = R5_SHARE_SYSTEM;
+	if (!client->limitLogged) {
+		client->limitLogged = true;
+		dprintf("radeon_hd: buffer limit %lu reached, team %ld\n",
+			(unsigned long)r5_share_limit_of(*reason),
+			(long)team_get_current_team_id());
+	}
+	return -1;
 }
 
 
@@ -600,28 +677,50 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 	if (in.domain != R5_GPU_DOMAIN_VRAM && in.domain != R5_GPU_DOMAIN_GTT)
 		return gpu_refuse("BO_CREATE", "domain", B_BAD_VALUE, 0, in.domain,
 			in.bytes, 0, 0, 0, in.flags);
-	if (client->handleCount >= kMaxClientBo)
-		return gpu_refuse("BO_CREATE", "handles", B_NO_MEMORY, 0, in.domain,
-			in.bytes, 0, 0, 0, in.flags);
 	uint64 bytes = (in.bytes + 4095ull) & ~4095ull;
-	int slot = -1;
-	for (uint32 i = 0; i < kMaxBo; i++) {
-		if (!sBo[i].live) {
-			slot = (int)i;
-			break;
-		}
-	}
+	int reason = R5_SHARE_OK;
+	int slot = gpu_slot_take(client, &reason);
 	if (slot < 0)
+		return gpu_refuse("BO_CREATE", r5_share_reason(reason), B_NO_MEMORY,
+			0, in.domain, bytes, 0, 0, 0, in.flags);
+	gpu_backing* backing = gpu_backing_take();
+	if (backing == NULL)
 		return gpu_refuse("BO_CREATE", "slots", B_NO_MEMORY, 0, in.domain,
 			bytes, 0, 0, 0, in.flags);
+	/* Until the slot is live, a refusal below gives the backing back. */
 	gpu_bo* bo = &sBo[slot];
 	memset(bo, 0, sizeof(*bo));
 	bo->area = -1;
 	bo->mapTeam = -1;
-	bo->kernelArea = -1;
-	bo->domain = in.domain;
-	bo->flags = in.flags;
-	bo->bytes = bytes;
+	bo->backing = backing;
+	backing->domain = in.domain;
+	backing->flags = in.flags;
+	backing->bytes = bytes;
+	status = gpu_bo_fill(client, bo, &in, bytes);
+	if (status != B_OK) {
+		bo->backing = NULL;
+		gpu_backing_drop(backing);
+		return status;
+	}
+	bo->live = true;
+	bo->owner = client;
+	client->handles[client->handleCount++] = (uint32)slot + 1u;
+	in.handle = (uint32)slot + 1u;
+	in.area = bo->area;
+	in.bytes = bytes;
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_CREATE", "copy", status, in.handle, in.domain,
+			bytes, 0, 0, 0, in.flags);
+	return B_OK;
+}
+
+
+/* The memory of a new backing. A refusal leaves nothing allocated. */
+static status_t
+gpu_bo_fill(gpu_client* client, gpu_bo* bo, r5_gpu_bo* request, uint64 bytes)
+{
+	r5_gpu_bo& in = *request;
 	if (in.domain == R5_GPU_DOMAIN_VRAM) {
 		uint64 offset = 0;
 		if (client->tree != NULL) {
@@ -633,8 +732,8 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 			uint64 held = 0;
 			for (uint32 i = 0; i < kMaxBo; i++) {
 				if (sBo[i].live && sBo[i].owner == client
-					&& sBo[i].domain == R5_GPU_DOMAIN_VRAM)
-					held += sBo[i].bytes;
+					&& sBo[i].backing->domain == R5_GPU_DOMAIN_VRAM)
+					held += sBo[i].backing->bytes;
 			}
 			if (!r5_vram_fits(limit, held, client->tree->vm.used, bytes))
 				return gpu_refuse("BO_CREATE", "vram", B_NO_MEMORY, 0,
@@ -647,7 +746,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		if (gR5GpuOps.vram_alloc(bytes, &offset) != B_OK)
 			return gpu_refuse("BO_CREATE", "vram", B_NO_MEMORY, 0, in.domain,
 				bytes, 0, 0, 0, in.flags);
-		bo->vramOffset = offset;
+		bo->backing->vramOffset = offset;
 	} else {
 		void* kernel = NULL;
 		/* Not B_CLONEABLE_AREA. The user mapping is vm_clone_area below,
@@ -660,8 +759,8 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		if (area < 0 || kernel == NULL)
 			return gpu_refuse("BO_CREATE", "gtt", area < 0 ? area : B_NO_MEMORY,
 				0, in.domain, bytes, 0, 0, 0, in.flags);
-		bo->kernelArea = area;
-		bo->kernel = kernel;
+		bo->backing->kernelArea = area;
+		bo->backing->kernel = kernel;
 	}
 	/* The reply carries the flags that were used. Write-combined GTT
 	 * needs gfx9_wc_gtt. Otherwise the page stays cached and snooped. */
@@ -670,7 +769,7 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		if ((used & R5_GPU_BO_WC) != 0) {
 			int allow = in.domain == R5_GPU_DOMAIN_GTT
 				&& gR5GpuOps.gtt_wc != NULL && gR5GpuOps.gtt_wc() != 0;
-			if (!allow || vm_set_area_page_memory_type(bo->kernelArea,
+			if (!allow || vm_set_area_page_memory_type(bo->backing->kernelArea,
 					B_WRITE_COMBINING_MEMORY) != B_OK)
 				used &= ~R5_GPU_BO_WC;
 		}
@@ -684,16 +783,6 @@ gpu_bo_create(gpu_client* client, void* buffer, size_t length)
 		}
 		in.flags = used;
 	}
-	bo->live = true;
-	bo->owner = client;
-	client->handles[client->handleCount++] = (uint32)slot + 1u;
-	in.handle = (uint32)slot + 1u;
-	in.area = bo->area;
-	in.bytes = bytes;
-	status = gpu_copy_out(buffer, length, &in, sizeof(in));
-	if (status != B_OK)
-		return gpu_refuse("BO_CREATE", "copy", status, in.handle, in.domain,
-			bytes, 0, 0, 0, in.flags);
 	return B_OK;
 }
 
@@ -870,6 +959,9 @@ gpu_hang(gpu_job* job, bigtime_t now)
 static void
 gpu_watchdog()
 {
+	/* M11 step 3b: exports not imported within five seconds go. */
+	if (!sResetting)
+		gpu_share_purge(system_time());
 	if (sLost || sGpuOff || sResetting || sInfo == NULL)
 		return;
 	bigtime_t now = system_time();
@@ -1183,10 +1275,10 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 	if (bo == NULL)
 		return gpu_refuse("VA_MAP", "bo", B_BAD_VALUE, in.handle, 0, 0,
 			in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
-	if ((in.bo_offset & 0xfffull) != 0 || in.bo_offset > bo->bytes
-		|| in.map_bytes > bo->bytes - in.bo_offset)
-		return gpu_refuse("VA_MAP", "offset", B_BAD_VALUE, in.handle, bo->domain,
-			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+	if ((in.bo_offset & 0xfffull) != 0 || in.bo_offset > bo->backing->bytes
+		|| in.map_bytes > bo->backing->bytes - in.bo_offset)
+		return gpu_refuse("VA_MAP", "offset", B_BAD_VALUE, in.handle, bo->backing->domain,
+			bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	for (uint32 i = 0; i < kMaxRange; i++) {
 		gpu_range* range = &bo->ranges[i];
 		if (!range->live)
@@ -1196,7 +1288,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 			|| r5_range_overlap(in.gpu_va, in.map_bytes, range->va,
 				range->bytes))
 			return gpu_refuse("VA_MAP", "overlap", B_BAD_VALUE, in.handle,
-				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
+				bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
 				in.flags);
 	}
 	int slot = -1;
@@ -1207,42 +1299,42 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 		}
 	}
 	if (slot < 0)
-		return gpu_refuse("VA_MAP", "ranges", B_NO_MEMORY, in.handle, bo->domain,
-			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+		return gpu_refuse("VA_MAP", "ranges", B_NO_MEMORY, in.handle, bo->backing->domain,
+			bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	if (gR5GpuOps.vmid_prepare == NULL)
 		return gpu_refuse("VA_MAP", "vmid", B_NOT_SUPPORTED, in.handle,
-			bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
+			bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
 			in.flags);
 	if (!gpu_hw_prepare())
-		return gpu_refuse("VA_MAP", "vmid", B_NO_INIT, in.handle, bo->domain,
-			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+		return gpu_refuse("VA_MAP", "vmid", B_NO_INIT, in.handle, bo->backing->domain,
+			bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	uint32 flags = in.flags;
 	if (flags == 0)
 		flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
-	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+	if (bo->backing->domain == R5_GPU_DOMAIN_VRAM) {
 		if (gR5GpuOps.vram_phys == NULL || gR5GpuOps.encode_pte == NULL)
 			return gpu_refuse("VA_MAP", "pte", B_NOT_SUPPORTED, in.handle,
-				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
+				bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
 				in.flags);
 		uint64 phys = 0;
 		if (gR5GpuOps.vram_phys(client->info,
-				bo->vramOffset + in.bo_offset, &phys) != B_OK)
+				bo->backing->vramOffset + in.bo_offset, &phys) != B_OK)
 			return gpu_refuse("VA_MAP", "pte", B_NOT_SUPPORTED, in.handle,
-				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
+				bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
 				in.flags);
 		uint64 pte = gR5GpuOps.encode_pte(phys, flags, 0);
 		for (uint64 page = 0; page < in.map_bytes; page += 4096) {
 			if (gpu_hw_lookup(gpu_vm(client), in.gpu_va + page)) {
 				gpu_va_clear(gpu_vm(client), in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE, in.handle,
-					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
+					bo->backing->domain, bo->backing->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 			}
 			if (!gpu_hw_map(gpu_vm(client), in.gpu_va + page, pte)) {
 				dprintf("radeon_hd: page table pool full\n");
 				gpu_va_clear(gpu_vm(client), in.gpu_va, page);
 				return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY, in.handle,
-					bo->domain, bo->bytes, in.gpu_va + page, in.bo_offset,
+					bo->backing->domain, bo->backing->bytes, in.gpu_va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 			}
 			pte += 4096;
@@ -1255,10 +1347,10 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 		 * address selects the kernel address space inside that call.
 		 * More than 256 physical pieces continues after B_BUFFER_OVERFLOW.
 		 */
-		if (bo->kernel == NULL)
-			return gpu_refuse("VA_MAP", "gtt", B_NO_INIT, in.handle, bo->domain,
-				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
-		uint8* cursor = (uint8*)bo->kernel + in.bo_offset;
+		if (bo->backing->kernel == NULL)
+			return gpu_refuse("VA_MAP", "gtt", B_NO_INIT, in.handle, bo->backing->domain,
+				bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+		uint8* cursor = (uint8*)bo->backing->kernel + in.bo_offset;
 		uint64 filled = 0;
 		while (filled < in.map_bytes) {
 			physical_entry entries[256];
@@ -1268,7 +1360,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 			if (mapped != B_OK && mapped != B_BUFFER_OVERFLOW) {
 				gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 				return gpu_refuse("VA_MAP", "phys", mapped, in.handle,
-					bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
+					bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, filled,
 					in.flags);
 			}
 			uint64 step = 0;
@@ -1280,13 +1372,13 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 					if (gpu_hw_lookup(gpu_vm(client), in.gpu_va + filled)) {
 						gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "mapped", B_BAD_VALUE,
-							in.handle, bo->domain, bo->bytes,
+							in.handle, bo->backing->domain, bo->backing->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
 					}
 					if (gR5GpuOps.encode_pte == NULL)
 						return gpu_refuse("VA_MAP", "pte", B_NOT_SUPPORTED,
-							in.handle, bo->domain, bo->bytes,
+							in.handle, bo->backing->domain, bo->backing->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
 					uint64 pte = gR5GpuOps.encode_pte(address, flags, 1);
@@ -1294,7 +1386,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 						dprintf("radeon_hd: page table pool full\n");
 						gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 						return gpu_refuse("VA_MAP", "pte", B_NO_MEMORY,
-							in.handle, bo->domain, bo->bytes,
+							in.handle, bo->backing->domain, bo->backing->bytes,
 							in.gpu_va + filled, in.bo_offset, in.map_bytes,
 							in.flags);
 					}
@@ -1311,18 +1403,18 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 		if (filled != in.map_bytes) {
 			gpu_va_clear(gpu_vm(client), in.gpu_va, filled);
 			return gpu_refuse("VA_MAP", "short", B_BAD_DATA, in.handle,
-				bo->domain, bo->bytes, in.gpu_va, in.bo_offset, filled,
+				bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, filled,
 				in.flags);
 		}
 	}
 	if (gR5GpuOps.vm_flush == NULL || gR5GpuOps.vm_map == NULL)
 		return gpu_refuse("VA_MAP", "flush", B_NOT_SUPPORTED, in.handle,
-			bo->domain, bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
+			bo->backing->domain, bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes,
 			in.flags);
 	if (!gpu_hw_flush()) {
 		gpu_va_clear(gpu_vm(client), in.gpu_va, in.map_bytes);
-		return gpu_refuse("VA_MAP", "flush", B_ERROR, in.handle, bo->domain,
-			bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+		return gpu_refuse("VA_MAP", "flush", B_ERROR, in.handle, bo->backing->domain,
+			bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 	}
 	bo->ranges[slot].live = true;
 	bo->ranges[slot].va = in.gpu_va;
@@ -1334,7 +1426,7 @@ gpu_va_map_copied(gpu_client* client, const r5_gpu_va* copied)
 			(long long)system_time(),
 			(unsigned long long)in.gpu_va,
 			(unsigned long long)in.map_bytes,
-			(unsigned long)bo->domain);
+			(unsigned long)bo->backing->domain);
 	return B_OK;
 }
 
@@ -1427,18 +1519,18 @@ gpu_va_unmap(gpu_client* client, void* buffer, size_t length)
 		for (uint64 page = 0; page < range->bytes; page += 4096) {
 			if (!gpu_hw_map(vm, range->va + page, 0))
 				return gpu_refuse("VA_UNMAP", "pte", B_BAD_ADDRESS, in.handle,
-					bo->domain, bo->bytes, range->va + page, in.bo_offset,
+					bo->backing->domain, bo->backing->bytes, range->va + page, in.bo_offset,
 					in.map_bytes, in.flags);
 		}
 		if (!gpu_hw_flush())
-			return gpu_refuse("VA_UNMAP", "flush", B_ERROR, in.handle, bo->domain,
-				bo->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
+			return gpu_refuse("VA_UNMAP", "flush", B_ERROR, in.handle, bo->backing->domain,
+				bo->backing->bytes, in.gpu_va, in.bo_offset, in.map_bytes, in.flags);
 		range->live = false;
 		range->vm = NULL;
 		return B_OK;
 	}
 	return gpu_refuse("VA_UNMAP", "range", B_BAD_VALUE, in.handle,
-		bo != NULL ? bo->domain : 0, bo != NULL ? bo->bytes : 0, in.gpu_va,
+		bo != NULL ? bo->backing->domain : 0, bo != NULL ? bo->backing->bytes : 0, in.gpu_va,
 		in.bo_offset, in.map_bytes, in.flags);
 }
 
@@ -1646,8 +1738,8 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 		uint64 bytes = (uint64)ibs[i].dwords * 4;
 		for (uint32 h = 0; h < client->handleCount; h++) {
 			gpu_bo* bo = gpu_bo_get(client, client->handles[h]);
-			if (bo == NULL || bo->domain != R5_GPU_DOMAIN_GTT
-				|| bo->kernel == NULL)
+			if (bo == NULL || bo->backing->domain != R5_GPU_DOMAIN_GTT
+				|| bo->backing->kernel == NULL)
 				continue;
 			for (uint32 r = 0; r < kMaxRange; r++) {
 				gpu_range* range = &bo->ranges[r];
@@ -1656,7 +1748,7 @@ gpu_submit(gpu_client* client, void* buffer, size_t length)
 				if (ibs[i].gpu_va < range->va
 					|| ibs[i].gpu_va + bytes > range->va + range->bytes)
 					continue;
-				uint8* cpu = (uint8*)bo->kernel + range->offset
+				uint8* cpu = (uint8*)bo->backing->kernel + range->offset
 					+ (ibs[i].gpu_va - range->va);
 				uintptr_t start = (uintptr_t)cpu & ~(uintptr_t)63;
 				uintptr_t end = ((uintptr_t)cpu + (uintptr_t)bytes + 63)
@@ -2378,26 +2470,22 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 	if (gR5GpuOps.scanout(client->info, &width, &height, &pitch, &format,
 			&offset, &bytes) != B_OK)
 		return B_ERROR;
-	if (client->handleCount >= kMaxClientBo)
-		return B_NO_MEMORY;
-	int slot = -1;
-	for (uint32 i = 0; i < kMaxBo; i++) {
-		if (!sBo[i].live) {
-			slot = (int)i;
-			break;
-		}
-	}
+	int reason = R5_SHARE_OK;
+	int slot = gpu_slot_take(client, &reason);
 	if (slot < 0)
+		return B_NO_MEMORY;
+	gpu_backing* backing = gpu_backing_take();
+	if (backing == NULL)
 		return B_NO_MEMORY;
 	gpu_bo* bo = &sBo[slot];
 	memset(bo, 0, sizeof(*bo));
 	bo->area = -1;
 	bo->mapTeam = -1;
-	bo->kernelArea = -1;
-	bo->domain = R5_GPU_DOMAIN_VRAM;
-	bo->bytes = bytes;
-	bo->vramOffset = offset;
-	bo->borrowed = true;
+	bo->backing = backing;
+	backing->domain = R5_GPU_DOMAIN_VRAM;
+	backing->bytes = bytes;
+	backing->vramOffset = offset;
+	backing->borrowed = true;
 	bo->live = true;
 	bo->owner = client;
 
@@ -2411,7 +2499,7 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 		va += 0x4000000ull;
 	}
 	if (!freeVa) {
-		bo->live = false;
+		gpu_bo_release(bo);
 		return B_NO_MEMORY;
 	}
 	r5_gpu_va map;
@@ -2425,8 +2513,7 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 	map.flags = R5_GPU_VA_READ | R5_GPU_VA_WRITE;
 	status = gpu_va_map_copied(client, &map);
 	if (status != B_OK) {
-		bo->live = false;
-		bo->owner = NULL;
+		gpu_bo_release(bo);
 		return status;
 	}
 	client->handles[client->handleCount++] = map.handle;
@@ -2443,6 +2530,187 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 		gpu_bo_release(bo);
 	}
 	return status;
+}
+
+
+/* M11 step 3b (docs/APP-SERVER-COMPOSITOR.md, "Zero-copy design").
+ * Removes one pending export and the reference it holds. */
+static void
+gpu_share_remove(r5_share_export* record)
+{
+	if (!record->live)
+		return;
+	record->live = 0;
+	if (record->backing < kMaxBo)
+		gpu_backing_drop(&sBacking[record->backing]);
+	memset(record, 0, sizeof(*record));
+}
+
+
+/* Removes every pending export older than five seconds. Called at each
+ * export and import and from the watchdog, with the GPU lock. */
+static void
+gpu_share_purge(bigtime_t now)
+{
+	for (gpu_client* scan = sClientList; scan != NULL; scan = scan->next) {
+		for (uint32 i = 0; i < R5_SHARE_EXPORTS_PER_FILE; i++) {
+			r5_share_export* record = &scan->exports[i];
+			if (record->live && r5_share_expired(now, record->made))
+				gpu_share_remove(record);
+		}
+	}
+}
+
+
+/* R5_GPU_BO_EXPORT (+ 17). Any file may export its own buffer to the
+ * compositor. The calling team is pinned in the record. */
+static status_t
+gpu_bo_export(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_bo_export in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_EXPORT", "copy", status, 0, 0, 0, 0, 0, 0, 0);
+	if (in.version != 1)
+		return gpu_refuse("BO_EXPORT", "version", B_BAD_VALUE, in.handle, 0, 0,
+			0, 0, 0, in.flags);
+	gpu_bo* bo = gpu_bo_get(client, in.handle);
+	if (bo == NULL)
+		return gpu_refuse("BO_EXPORT", "bo", B_BAD_VALUE, in.handle, 0, 0, 0,
+			0, 0, in.flags);
+	bigtime_t now = system_time();
+	gpu_share_purge(now);
+	uint32 pending = r5_share_pending(client->exports,
+		R5_SHARE_EXPORTS_PER_FILE);
+	int reason = r5_share_check_export(in.target, R5_GPU_SHARE_COMPOSITOR,
+		in.target_team, in.flags, pending);
+	if (reason != R5_SHARE_OK) {
+		return gpu_refuse("BO_EXPORT", r5_share_reason(reason),
+			reason == R5_SHARE_LIMIT ? B_NO_MEMORY : B_BAD_VALUE, in.handle,
+			bo->backing->domain, bo->backing->bytes, 0, 0, 0, in.flags);
+	}
+	r5_share_export* record = NULL;
+	for (uint32 i = 0; i < R5_SHARE_EXPORTS_PER_FILE; i++) {
+		if (!client->exports[i].live) {
+			record = &client->exports[i];
+			break;
+		}
+	}
+	if (record == NULL)
+		return B_NO_MEMORY;
+	sShareCounter++;
+	memset(record, 0, sizeof(*record));
+	r5_share_make_token(sShareCounter, secure_random_value(),
+		secure_random_value(), record->token);
+	record->backing = (uint32)(bo->backing - sBacking);
+	record->team = team_get_current_team_id();
+	record->made = now;
+	record->target = in.target;
+	record->live = 1;
+	r5_share_ref_hold(&bo->backing->refs);
+	in.bytes = bo->backing->bytes;
+	memcpy(in.token, record->token, sizeof(in.token));
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		gpu_share_remove(record);
+	return status;
+}
+
+
+/* R5_GPU_BO_IMPORT (+ 18). Only app_server, for the team it names, once,
+ * within five seconds. A refused number stays where it was: a forwarded
+ * number does not take the window of the team that exported it. */
+static status_t
+gpu_bo_import(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_bo_import in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return gpu_refuse("BO_IMPORT", "copy", status, 0, 0, 0, 0, 0, 0, 0);
+	if (in.version != 1)
+		return gpu_refuse("BO_IMPORT", "version", B_BAD_VALUE, 0, 0, 0, 0, 0,
+			0, in.flags);
+	int appServer = gpu_caller_is_app_server() ? 1 : 0;
+	bigtime_t now = system_time();
+	r5_share_export* record = NULL;
+	gpu_client* exporter = NULL;
+	if (appServer) {
+		/* The match is read before the purge, so a number that just
+		 * expired says "expired", not "token". */
+		for (gpu_client* scan = sClientList; scan != NULL && record == NULL;
+				scan = scan->next) {
+			int found = r5_share_find(scan->exports,
+				R5_SHARE_EXPORTS_PER_FILE, in.token);
+			if (found >= 0) {
+				record = &scan->exports[found];
+				exporter = scan;
+			}
+		}
+	}
+	int reason = r5_share_check_import(appServer, in.flags, record,
+		in.client_team, now, exporter != NULL && gpu_gone(exporter));
+	if (reason == R5_SHARE_EXPIRED)
+		gpu_share_remove(record);
+	gpu_share_purge(now);
+	if (reason != R5_SHARE_OK) {
+		status_t refused = reason == R5_SHARE_CALLER
+			|| reason == R5_SHARE_TEAM ? B_NOT_ALLOWED : B_BAD_VALUE;
+		if (reason == R5_SHARE_LOST)
+			refused = ECANCELED;
+		return gpu_refuse("BO_IMPORT", r5_share_reason(reason), refused, 0, 0,
+			0, 0, 0, 0, in.flags);
+	}
+	int slotReason = R5_SHARE_OK;
+	int slot = gpu_slot_take(client, &slotReason);
+	if (slot < 0 || record->backing >= kMaxBo) {
+		return gpu_refuse("BO_IMPORT", r5_share_reason(slotReason),
+			B_NO_MEMORY, 0, 0, 0, 0, 0, 0, in.flags);
+	}
+	gpu_backing* backing = &sBacking[record->backing];
+	/* The record's reference becomes the reference of the new slot. */
+	record->live = 0;
+	memset(record, 0, sizeof(*record));
+	gpu_bo* bo = &sBo[slot];
+	memset(bo, 0, sizeof(*bo));
+	bo->area = -1;
+	bo->mapTeam = -1;
+	bo->backing = backing;
+	bo->live = true;
+	bo->owner = client;
+	client->handles[client->handleCount++] = (uint32)slot + 1u;
+	in.handle = (uint32)slot + 1u;
+	in.domain = backing->domain;
+	in.bo_flags = backing->flags;
+	in._pad = 0;
+	in.bytes = backing->bytes;
+	status = gpu_copy_out(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		gpu_bo_detach(client, bo, in.handle);
+	return status;
+}
+
+
+/* R5_GPU_BO_PRESENT_MARK (+ 32). SET records the calling file's last
+ * submit on its own buffer; the program cannot give a number. GET reads
+ * it, for app_server's FENCE_WAIT with timeout 0. */
+static status_t
+gpu_bo_mark(gpu_client* client, void* buffer, size_t length)
+{
+	r5_gpu_bo_mark in;
+	status_t status = gpu_copy_in(buffer, length, &in, sizeof(in));
+	if (status != B_OK)
+		return status;
+	if (in.version != 1)
+		return B_BAD_VALUE;
+	gpu_bo* bo = gpu_bo_get(client, in.handle);
+	if (bo == NULL)
+		return B_BAD_VALUE;
+	if (in.op == R5_GPU_MARK_SET)
+		bo->backing->readySequence = client->lastSequence;
+	else if (in.op != R5_GPU_MARK_GET)
+		return B_BAD_VALUE;
+	in.sequence = bo->backing->readySequence;
+	return gpu_copy_out(buffer, length, &in, sizeof(in));
 }
 
 
@@ -2477,8 +2745,6 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 	}
 	if (!gpu_render_enabled())
 		return B_NOT_ALLOWED;
-	if (op == R5_GPU_BO_EXPORT || op == R5_GPU_BO_IMPORT)
-		return B_UNSUPPORTED;
 
 	gpu_lock();
 	gpu_wait_reset();
@@ -2554,6 +2820,12 @@ gpu_control(void* cookie, uint32 op, void* buffer, size_t length)
 		status = gpu_bo_create(client, buffer, length);
 	else if (op == R5_GPU_SCANOUT_BO)
 		status = gpu_scanout(client, buffer, length);
+	else if (op == R5_GPU_BO_EXPORT)
+		status = gpu_bo_export(client, buffer, length);
+	else if (op == R5_GPU_BO_IMPORT)
+		status = gpu_bo_import(client, buffer, length);
+	else if (op == R5_GPU_BO_PRESENT_MARK)
+		status = gpu_bo_mark(client, buffer, length);
 	else if (op == R5_GPU_BO_FREE)
 		status = gpu_bo_free(client, buffer, length);
 	else if (op == R5_GPU_BO_MAP)
@@ -2828,47 +3100,50 @@ gpu_bo_map(gpu_client* client, void* buffer, size_t length)
 	if (bo->area >= 0) {
 		if (bo->mapTeam != team)
 			return gpu_refuse("BO_MAP", "team", B_NOT_ALLOWED, in.handle,
-				bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+				bo->backing->domain, bo->backing->bytes, 0, bo->backing->vramOffset, 0, bo->backing->flags);
 		in.area = bo->area;
 		return gpu_copy_out(buffer, length, &in, sizeof(in));
 	}
-	if (bo->domain == R5_GPU_DOMAIN_VRAM) {
+	/* M11 step 3b: the kernel area belongs to the backing. A second
+	 * slot of the same backing (an import) clones the one that exists. */
+	if (bo->backing->domain == R5_GPU_DOMAIN_VRAM
+		&& bo->backing->kernelArea < 0) {
 		void* kernel = NULL;
 		if (gR5GpuOps.map_vram == NULL)
 			return gpu_refuse("BO_MAP", "vram", B_NOT_SUPPORTED, in.handle,
-				bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-		area_id kernelArea = gR5GpuOps.map_vram(bo->vramOffset, bo->bytes,
+				bo->backing->domain, bo->backing->bytes, 0, bo->backing->vramOffset, 0, bo->backing->flags);
+		area_id kernelArea = gR5GpuOps.map_vram(bo->backing->vramOffset, bo->backing->bytes,
 			&kernel);
 		if (kernelArea < 0 || kernel == NULL)
-			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->domain,
-				bo->bytes, 0, bo->vramOffset, 0, bo->flags);
-		bo->kernelArea = kernelArea;
-		bo->kernel = kernel;
+			return gpu_refuse("BO_MAP", "vram", kernelArea, in.handle, bo->backing->domain,
+				bo->backing->bytes, 0, bo->backing->vramOffset, 0, bo->backing->flags);
+		bo->backing->kernelArea = kernelArea;
+		bo->backing->kernel = kernel;
 	}
 	void* user = NULL;
 	area_id area = vm_clone_area(team, "r5 gpu bo", &user, B_ANY_ADDRESS,
-		B_READ_AREA | B_WRITE_AREA, kRegionNoPrivateMap, bo->kernelArea,
+		B_READ_AREA | B_WRITE_AREA, kRegionNoPrivateMap, bo->backing->kernelArea,
 		true);
 	if (area < 0)
-		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->domain,
-			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+		return gpu_refuse("BO_MAP", "clone", area, in.handle, bo->backing->domain,
+			bo->backing->bytes, 0, bo->backing->vramOffset, 0, bo->backing->flags);
 	/* vm_clone_area() copies the memory type for device areas only.
 	 * A GTT buffer is RAM, so the program's mapping stays write-back
 	 * until this call. */
-	if ((bo->flags & R5_GPU_BO_WC) != 0
+	if ((bo->backing->flags & R5_GPU_BO_WC) != 0
 		&& vm_set_area_page_memory_type(area, B_WRITE_COMBINING_MEMORY)
 			!= B_OK) {
 		vm_delete_area(team, area, true);
 		return gpu_refuse("BO_MAP", "wc", B_NOT_SUPPORTED, in.handle,
-			bo->domain, bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+			bo->backing->domain, bo->backing->bytes, 0, bo->backing->vramOffset, 0, bo->backing->flags);
 	}
 	bo->area = area;
 	bo->mapTeam = team;
 	in.area = area;
 	status = gpu_copy_out(buffer, length, &in, sizeof(in));
 	if (status != B_OK)
-		return gpu_refuse("BO_MAP", "copy", status, in.handle, bo->domain,
-			bo->bytes, 0, bo->vramOffset, 0, bo->flags);
+		return gpu_refuse("BO_MAP", "copy", status, in.handle, bo->backing->domain,
+			bo->backing->bytes, 0, bo->backing->vramOffset, 0, bo->backing->flags);
 	return B_OK;
 }
 
@@ -2897,6 +3172,9 @@ gpu_free(void* cookie)
 		if (sJobs[i].owner == client)
 			sJobs[i].owner = NULL;
 	}
+	/* M11 step 3b: exports not imported yet go with their file. */
+	for (uint32 i = 0; i < R5_SHARE_EXPORTS_PER_FILE; i++)
+		gpu_share_remove(&client->exports[i]);
 	for (uint32 i = 0; i < client->handleCount; i++) {
 		uint32 handle = client->handles[i];
 		if (handle == 0 || handle > kMaxBo)

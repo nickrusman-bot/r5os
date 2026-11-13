@@ -10,6 +10,7 @@
 
 #include "r5_gpu_backend.h"
 #include "r5_pasid.h"
+#include "r5_share.h"
 #include "r5_vm.h"
 
 #include <condition_variable.h>
@@ -17,8 +18,11 @@
 
 #include <SupportDefs.h>
 
-static const uint32 kMaxBo = 256;
-static const uint32 kMaxClientBo = 256;
+/* M11 step 3b (docs/APP-SERVER-COMPOSITOR.md, "Limits on buffer slots"):
+ * starting values. The last R5_SHARE_RESERVE slots are only for
+ * app_server (r5_share_slot_check). */
+static const uint32 kMaxBo = R5_SHARE_MAX_BO;
+static const uint32 kMaxClientBo = R5_SHARE_MAX_FILE_BO;
 static const uint32 kMaxSync = 128;
 static const uint32 kMaxRange = 8;
 static const uint32 kMaxJob = 64;
@@ -63,23 +67,37 @@ struct r5_file_tree {
 };
 
 
-struct gpu_bo {
+/* M11 step 3b: the memory of a buffer, apart from the handle. refs is
+ * each live slot (also a parked one, which is how GPU work in flight is
+ * counted) and each pending export. Only the last reference frees the
+ * VRAM or deletes the kernel area. */
+struct gpu_backing {
 	bool			live;
+	uint32			refs;
 	uint32			domain;
 	uint32			flags;
 	uint64			bytes;
 	uint64			vramOffset;
-	area_id			area;
-	team_id			mapTeam;
 	area_id			kernelArea;
 	void*			kernel;
+	/* The framebuffer. The last reference does not free the pages. */
+	bool			borrowed;
+	/* BO_PRESENT_MARK: the exporter's lastSequence at its last present. */
+	uint64			readySequence;
+};
+
+
+/* One handle of one file. The CPU mapping stays per team. */
+struct gpu_bo {
+	bool			live;
+	area_id			area;
+	team_id			mapTeam;
 	gpu_client*		owner;
 	bool			parked;
 	uint64			parkSequence;
 	/* One hold on the file tree, taken when this buffer is parked. */
 	r5_file_tree*	hold;
-	/* The framebuffer. Release unmaps it and does not free the pages. */
-	bool			borrowed;
+	gpu_backing*	backing;
 	gpu_range		ranges[kMaxRange];
 };
 
@@ -125,6 +143,10 @@ struct gpu_client {
 	bool			guilty;
 	gpu_client*		next;
 	gpu_sync		syncs[kMaxSync];
+	/* M11 step 3b: this file's exports not imported yet. */
+	r5_share_export	exports[R5_SHARE_EXPORTS_PER_FILE];
+	/* "buffer limit <n> reached" was logged for this file. */
+	bool			limitLogged;
 };
 
 
@@ -135,6 +157,7 @@ extern int sSelftestOn;
 extern int sSubmitLogOn;
 extern int sDeferred;
 extern gpu_bo sBo[kMaxBo];
+extern gpu_backing sBacking[kMaxBo];
 extern gpu_job sJobs[kMaxJob];
 extern uint64 sHighestSequence;
 extern uint64 sLastIbVa;

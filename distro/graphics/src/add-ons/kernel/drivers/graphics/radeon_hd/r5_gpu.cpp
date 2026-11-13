@@ -236,13 +236,15 @@ gpu_get_info(gpu_client* client, void* buffer, size_t length)
 		out.vram_bytes = (uint64)info->shared_info->frame_buffer_size * 1024ull;
 		out.gtt_bytes = out.vram_bytes;
 	}
+	/* M11 step 3b: the memory, not the handles. A shared buffer has a
+	 * slot in each file that holds it and is counted once. */
 	for (uint32 i = 0; i < kMaxBo; i++) {
-		if (!sBo[i].live)
+		if (!sBacking[i].live)
 			continue;
-		if (sBo[i].domain == R5_GPU_DOMAIN_VRAM)
-			out.vram_usage += sBo[i].bytes;
-		else if (sBo[i].domain == R5_GPU_DOMAIN_GTT)
-			out.gtt_usage += sBo[i].bytes;
+		if (sBacking[i].domain == R5_GPU_DOMAIN_VRAM)
+			out.vram_usage += sBacking[i].bytes;
+		else if (sBacking[i].domain == R5_GPU_DOMAIN_GTT)
+			out.gtt_usage += sBacking[i].bytes;
 	}
 	/* The whole BAR is CPU-visible on this APU. There is no invisible heap. */
 	out.visible_vram_usage = out.vram_usage;

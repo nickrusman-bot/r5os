@@ -61,7 +61,11 @@ enum {
 	R5_GPU_IH_COUNTS = R5_GPU_OP_BASE + 30,
 	/* The framebuffer on screen. Only app_server. Older callers
 	 * never send this opcode. */
-	R5_GPU_SCANOUT_BO = R5_GPU_OP_BASE + 31
+	R5_GPU_SCANOUT_BO = R5_GPU_OP_BASE + 31,
+	/* M11 step 3b: the exporter records its file's last submit on a
+	 * shared buffer; the importer reads it. Older callers never send
+	 * this opcode. */
+	R5_GPU_BO_PRESENT_MARK = R5_GPU_OP_BASE + 32
 };
 
 #define R5_GPU_CAP_RENDER 1u
@@ -536,6 +540,53 @@ typedef struct {
 	uint64_t	gpu_va;
 	uint64_t	bytes;
 } r5_gpu_scanout;
+
+/* M11 step 3b: sharing a buffer with app_server (docs/APP-SERVER-
+ * COMPOSITOR.md, "Zero-copy design"). The token is an export number,
+ * unique and never reused, in an opaque field: callers only copy it.
+ * The kernel pins the exporting team at export. An import succeeds only
+ * for app_server, for the team app_server names (ClientTeam() of the
+ * connection), once, and within 5 s. Version 1 knows one target. */
+#define R5_GPU_SHARE_TOKEN_BYTES 16u	/* opaque, 128 bits */
+#define R5_GPU_SHARE_COMPOSITOR 1u	/* the only target in version 1 */
+#define R5_GPU_SHARE_TEAM 2u		/* one named team; refused in version 1 */
+
+/* R5_GPU_BO_EXPORT (+ 17) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;		/* in: a buffer of the calling file */
+	uint32_t	target;		/* in: R5_GPU_SHARE_COMPOSITOR */
+	int32_t		target_team;	/* in: for R5_GPU_SHARE_TEAM; 0 now */
+	uint32_t	flags;		/* in: 0 */
+	uint64_t	bytes;		/* out: the real size */
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* out */
+} r5_gpu_bo_export;
+
+/* R5_GPU_BO_IMPORT (+ 18) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* in */
+	int32_t		client_team;	/* in: ServerApp::ClientTeam() */
+	uint32_t	flags;		/* in: 0 */
+	uint32_t	handle;		/* out: a new handle in the calling file */
+	uint32_t	domain;		/* out: R5_GPU_DOMAIN_* */
+	uint32_t	bo_flags;	/* out: the flags of BO_CREATE */
+	uint32_t	_pad;
+	uint64_t	bytes;		/* out: the real size */
+} r5_gpu_bo_import;
+
+/* R5_GPU_BO_PRESENT_MARK (+ 32) */
+#define R5_GPU_MARK_SET 1u	/* exporter: record the file's last submit */
+#define R5_GPU_MARK_GET 2u	/* importer: read what was recorded */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;		/* in: the caller's own handle */
+	uint32_t	op;		/* in: SET or GET */
+	uint64_t	sequence;	/* out: the ring number recorded */
+} r5_gpu_bo_mark;
 
 
 static inline int
