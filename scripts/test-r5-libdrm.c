@@ -1630,6 +1630,11 @@ share_ids(int node)
 	uint64_t seen = 0;
 	CHECK(r5_drm_mark_get(id1, &seen) == 0 && seen == markA);
 	CHECK(r5_drm_mark_get(id2, &seen) == 0 && seen == markB);
+	/* The real size, by id, for app_server's check. */
+	uint64_t size = 0;
+	CHECK(r5_drm_import_size(id1, &size) == 0 && size == 8192);
+	CHECK(r5_drm_import_size(id2, &size) == 0 && size == 16384);
+	CHECK(r5_drm_import_size(0, &size) != 0);
 	CHECK(r5_drm_mark_get(0, &seen) != 0);
 	CHECK(r5_drm_mark_get(id2 + 100, &seen) != 0);
 
@@ -1663,6 +1668,7 @@ share_ids(int node)
 	closing.handle = imported1;
 	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
 	CHECK(r5_drm_mark_get(id1, &seen) != 0);
+	CHECK(r5_drm_import_size(id1, &size) != 0);
 	CHECK(r5_drm_mark_get(id2, &seen) == 0 && seen == markB);
 	op.handle = imported1;
 	CHECK(drmCommandWriteRead(node, DRM_AMDGPU_GEM_OP, &op, sizeof(op)) != 0);

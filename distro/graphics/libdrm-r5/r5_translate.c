@@ -773,6 +773,26 @@ r5_drm_mark_get(uint32_t id, uint64_t *sequence)
 }
 
 
+/* app_server: the real size of an import, from BO_IMPORT, to check the
+ * width, height and pitch of the program's message against. */
+drm_public int
+r5_drm_import_size(uint32_t id, uint64_t *bytes)
+{
+	r5_share_import *import;
+	int ret = r5_neg(ENOENT);
+	if (bytes == NULL)
+		return r5_neg(EINVAL);
+	pthread_mutex_lock(&sShareLock);
+	import = r5_share_import_find(id);
+	if (import != NULL) {
+		*bytes = import->bytes;
+		ret = 0;
+	}
+	pthread_mutex_unlock(&sShareLock);
+	return ret;
+}
+
+
 /* AMDGPU_GEM_OP_GET_GEM_CREATE_INFO for an imported buffer: the size,
  * domain and flags that BO_IMPORT returned. */
 static int

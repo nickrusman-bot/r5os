@@ -45,5 +45,9 @@ int64_t r5_drm_import_bytes(int fd);
  * import. Fails once GEM_CLOSE closed that handle, and for an id that
  * never imported. */
 int r5_drm_mark_get(uint32_t id, uint64_t *sequence);
+/* app_server: the real size of that import (BO_IMPORT), to check the
+ * program's width, height and pitch against. Fails once GEM_CLOSE closed
+ * that handle, and for an id that never imported. */
+int r5_drm_import_size(uint32_t id, uint64_t *bytes);
 
 #endif
