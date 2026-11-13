@@ -66,7 +66,7 @@ def libdrm():
     (lib / "libdrm.so.2").symlink_to("libdrm.so.2.124.0")
     (lib / "libdrm_amdgpu.so.1").symlink_to("libdrm_amdgpu.so.1.124.0")
     info(root / ".PackageInfo", """name\t\t\tlibdrm
-version\t\t\t2.4.124-1
+version\t\t\t2.4.124-2
 architecture\t\tx86_64
 summary\t\t\t"R5 libdrm for the AMD render node"
 description\t\t"Translates AMDGPU ioctls onto the R5 GPU interface."
@@ -83,7 +83,7 @@ requires {
 \thaiku >= r1~beta5_hrev57937_5-1
 }
 """)
-    create(root, OUT / "libdrm-2.4.124-1-x86_64.hpkg")
+    create(root, OUT / "libdrm-2.4.124-2-x86_64.hpkg")
 
 
 def radv():
@@ -175,6 +175,9 @@ if __name__ == "__main__":
     # "mesa" packs only the EGL vendor (build-radv.sh). No argument packs all.
     if sys.argv[1:] == ["mesa"]:
         zink()
+    # M11 step 3b: only the R5 libdrm (its sharing calls).
+    elif sys.argv[1:] == ["libdrm"]:
+        libdrm()
     else:
         libdrm()
         radv()

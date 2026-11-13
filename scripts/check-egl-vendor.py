@@ -58,7 +58,7 @@ def main():
     for root in (
         DL / "llvm21_runtime-21.1.8-1-x86_64.hpkg",
         DL / "zlib-1.3.2-1-x86_64.hpkg",
-        DL / "libdrm-2.4.124-1-x86_64.hpkg",
+        DL / "libdrm-2.4.124-2-x86_64.hpkg",
         DL / "expat-2.8.2-1-x86_64.hpkg",
         DL / "gcc_syslibs-13.3.0_2023_08_10-6-x86_64.hpkg",
     ):

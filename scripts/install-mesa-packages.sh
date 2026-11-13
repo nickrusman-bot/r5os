@@ -17,17 +17,17 @@ EOF
 )"
 printf '%s\n' "$out" | grep -E 'mesa|libglvnd|llvm21_runtime|vulkan_loader' || true
 
-if printf '%s\n' "$out" | grep -E -q 'mesa-22|mesa_devel-22|mesa_swpipe-22|mesa-25.3.6-1|mesa-25.3.6-2|mesa-25.3.6-3|mesa-25.3.6-4|mesa_zink-25|mesa_radv-25.3.6-1|mesa_radv-25.3.6-2|mesa_radv-25.3.6-3|mesa_radv-25.3.6-4|mesa_radv-25.3.6-5|mesa_radv-25.3.6-6|mesa_lavapipe-25.3.6-2|mesa_lavapipe-25.3.6-3|vulkan_loader-1.4.367-2|vulkan_loader-1.4.367-3|vulkanteapot-1.0.0-1|vulkanteapot-1.0.0-2|vulkanteapot-1.0.0-3'; then
+if printf '%s\n' "$out" | grep -E -q 'mesa-22|mesa_devel-22|mesa_swpipe-22|mesa-25.3.6-1|mesa-25.3.6-2|mesa-25.3.6-3|mesa-25.3.6-4|mesa_zink-25|mesa_radv-25.3.6-1|mesa_radv-25.3.6-2|mesa_radv-25.3.6-3|mesa_radv-25.3.6-4|mesa_radv-25.3.6-5|mesa_radv-25.3.6-6|mesa_radv-25.3.6-7|mesa_lavapipe-25.3.6-4|libdrm-2.4.124-1|mesa_lavapipe-25.3.6-2|mesa_lavapipe-25.3.6-3|vulkan_loader-1.4.367-2|vulkan_loader-1.4.367-3|vulkanteapot-1.0.0-1|vulkanteapot-1.0.0-2|vulkanteapot-1.0.0-3'; then
 	echo "the image still has the old mesa package" >&2
 	exit 1
 fi
 for name in \
 	libglvnd-1.7.0-1-x86_64.hpkg \
-	libdrm-2.4.124-1-x86_64.hpkg \
+	libdrm-2.4.124-2-x86_64.hpkg \
 	mesa-25.3.6-5-x86_64.hpkg \
 	mesa_devel-25.3.6-1-x86_64.hpkg \
-	mesa_lavapipe-25.3.6-4-x86_64.hpkg \
-	mesa_radv-25.3.6-7-x86_64.hpkg \
+	mesa_lavapipe-25.3.6-5-x86_64.hpkg \
+	mesa_radv-25.3.6-8-x86_64.hpkg \
 	llvm21_runtime-21.1.8-1-x86_64.hpkg \
 	vulkan_loader-1.4.367-4-x86_64.hpkg \
 	vulkan_tools-1.4.367-2-x86_64.hpkg \
@@ -46,10 +46,10 @@ fi
 PKG="$HAIKU/generated.x86_64/objects/linux/x86_64/release/tools/package/package"
 LEAK="$(mktemp -d)"
 for name in \
-	libdrm-2.4.124-1-x86_64.hpkg \
+	libdrm-2.4.124-2-x86_64.hpkg \
 	mesa-25.3.6-5-x86_64.hpkg \
-	mesa_radv-25.3.6-7-x86_64.hpkg \
-	mesa_lavapipe-25.3.6-4-x86_64.hpkg \
+	mesa_radv-25.3.6-8-x86_64.hpkg \
+	mesa_lavapipe-25.3.6-5-x86_64.hpkg \
 	vulkanteapot-1.0.0-4-x86_64.hpkg
 do
 	rm -rf "$LEAK/$name"
