@@ -52,7 +52,7 @@ Once per process, in `haiku_initialize_impl()`, in this order:
 | 6 | Zink cannot start | llvmpipe | `egl: opengl llvmpipe: zink failed` |
 | 7 | otherwise | Zink | `egl: opengl zink: <renderer>` |
 
-- The settings are the radeon_hd driver settings, read with `load_driver_settings()`: `/boot/home/config/settings/kernel/drivers/radeon_hd`, then `/boot/system/settings/kernel/drivers/radeon_hd` (the order the R5 DRM library uses). A file that cannot be read means "not set".
+- The settings are the radeon_hd driver settings, read with `load_driver_settings()`: `/boot/home/config/settings/kernel/drivers/radeon_hd`, then `/boot/system/settings/kernel/drivers/radeon_hd` (the order the R5 DRM library uses). The first file that exists is used. A file that exists but cannot be read, such as the administrator's file for a standard account, means "not set"; the system file is not read in its place. Not tested as a standard account.
 - `gpu_opengl true` is opt-in for now. It becomes the default with the availability check (M10).
 - With `R5_GL_TRACE=1` every line also goes to stderr. Cases 1 and 2 then print `egl: opengl <zink|llvmpipe>: <renderer>` to stderr only; the window test reads that line.
 - When no driver can start at all, `eglInitialize` fails with `EGL_NOT_INITIALIZED`. Before, the EGL driver used a NULL screen and crashed.
@@ -76,7 +76,7 @@ Not in M9: frames straight to the screen, swap interval, and `BGLView::SwapBuffe
 ## Tests
 
 - `r5-gl-test --pbuffer <file>`: one fixed frame (clear, two overlapping triangles with the depth test, a 4 × 4 checker texture with `GL_NEAREST`, a blended quad) in a 256 × 256 pbuffer, then 300 timed frames. Prints `gl driver`, `gl version`, six `pixel` lines and `gl ms per frame`.
-- `r5-gl-test --selftest [--zink-cpu]`: run A (inherited environment, or Zink on Lavapipe with `--zink-cpu`) against run B (`LIBGL_ALWAYS_SOFTWARE=1`), compared with `r5_pixels_compare()`, max 2 per channel and 1%. Prints `pixels ok max 2 share <x>% limit 1%`, `pixels MISMATCH …` or `pixels ok llvmpipe only`.
+- `r5-gl-test --selftest [--zink-cpu]`: run A (inherited environment, or Zink on Lavapipe with `--zink-cpu`) against run B (`LIBGL_ALWAYS_SOFTWARE=1`), compared with `r5_pixels_compare()`, max 2 per channel and 1%. Prints `pixels ok max 2 share <x>% limit 1%`, `pixels MISMATCH …` or `pixels ok llvmpipe only`. When the settings and a render node make the driver choose Zink but run A still got llvmpipe, it prints `pixels FAIL llvmpipe only, gpu_opengl true asks for zink` (exit 3), so a silent fallback cannot pass.
 - Self-test stages `gl` and, without a render node, `gl zink-cpu`. Window tests `GLTeapot` and, without a render node, `GLTeapot-zink-cpu` (`win-glteapot.txt`, `win-glteapot-zink-cpu.txt`).
 
 ## Results

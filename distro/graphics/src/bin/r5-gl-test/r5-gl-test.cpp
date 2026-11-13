@@ -15,15 +15,20 @@
  */
 
 #include <Application.h>
+#include <driver_settings.h>
+#include <StorageDefs.h>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GL/gl.h>
 
+#include <dirent.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -37,6 +42,63 @@ static const int kFrames = 300;
 static const int kSampleAt[][2] = {
 	{16, 16}, {128, 53}, {128, 128}, {128, 89}, {60, 128}, {186, 128}
 };
+
+
+// True when the radeon_hd settings and the render node make Mesa's EGL driver
+// choose Zink (M9 decision 3): gpu_opengl true, no gpu false, no forced
+// failure, and an entry under /dev/gpu/<driver>/. The settings file is chosen
+// the way the EGL driver chooses it.
+static bool
+zink_asked()
+{
+	static const char* const kSettings[] = {
+		"/boot/home/config/settings/kernel/drivers/radeon_hd",
+		"/boot/system/settings/kernel/drivers/radeon_hd",
+	};
+	void* handle = NULL;
+	for (size_t i = 0; i < sizeof(kSettings) / sizeof(kSettings[0]); i++) {
+		struct stat st;
+		if (stat(kSettings[i], &st) != 0 && errno == ENOENT)
+			continue;
+		handle = load_driver_settings(kSettings[i]);
+		break;
+	}
+	if (handle == NULL)
+		return false;
+	bool asked = get_driver_boolean_parameter(handle, "gpu_opengl", false,
+			false)
+		&& get_driver_boolean_parameter(handle, "gpu", true, true)
+		&& !get_driver_boolean_parameter(handle, "gpu_opengl_fail", false,
+			false);
+	unload_driver_settings(handle);
+	if (!asked)
+		return false;
+
+	DIR* gpu = opendir("/dev/gpu");
+	if (gpu == NULL)
+		return false;
+	bool node = false;
+	struct dirent* driver;
+	while (!node && (driver = readdir(gpu)) != NULL) {
+		if (driver->d_name[0] == '.')
+			continue;
+		char path[B_PATH_NAME_LENGTH];
+		snprintf(path, sizeof(path), "/dev/gpu/%s", driver->d_name);
+		DIR* nodes = opendir(path);
+		if (nodes == NULL)
+			continue;
+		struct dirent* entry;
+		while ((entry = readdir(nodes)) != NULL) {
+			if (entry->d_name[0] != '.') {
+				node = true;
+				break;
+			}
+		}
+		closedir(nodes);
+	}
+	closedir(gpu);
+	return node;
+}
 
 
 static double
@@ -154,8 +216,14 @@ run_pbuffer(const char* file)
 		return 1;
 	}
 
-	printf("gl driver %s\n", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-	printf("gl version %s\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+	const GLubyte* renderer = glGetString(GL_RENDERER);
+	const GLubyte* version = glGetString(GL_VERSION);
+	if (renderer == NULL || version == NULL) {
+		printf("gl driver FAIL glGetString 0x%x\n", glGetError());
+		return 1;
+	}
+	printf("gl driver %s\n", reinterpret_cast<const char*>(renderer));
+	printf("gl version %s\n", reinterpret_cast<const char*>(version));
 
 	uint8_t checker[4 * 4 * 4];
 	for (int y = 0; y < 4; y++) {
@@ -304,6 +372,13 @@ run_selftest(const char* self, bool zinkCpu)
 	}
 	if (strncmp(rendererA, "llvmpipe", 8) == 0
 		&& strncmp(rendererB, "llvmpipe", 8) == 0) {
+		if (!zinkCpu && zink_asked()) {
+			// The settings ask for Zink and nothing in them asks for the
+			// fallback, so llvmpipe here means Zink did not start.
+			printf("pixels FAIL llvmpipe only, gpu_opengl true asks for"
+				" zink\n");
+			return 3;
+		}
 		printf("pixels ok llvmpipe only\n");
 		return 0;
 	}

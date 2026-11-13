@@ -1,6 +1,6 @@
 --- a/src/egl/drivers/haiku/egl_haiku.cpp
 +++ b/src/egl/drivers/haiku/egl_haiku.cpp
-@@ -29,6 +29,20 @@
+@@ -29,6 +29,21 @@
  
  #include <algorithm>
  
@@ -13,6 +13,7 @@
 +#include <stdlib.h>
 +#include <string.h>
 +#include <syslog.h>
++#include <sys/stat.h>
 +
 +#include <OS.h>
 +#include <driver_settings.h>
@@ -21,7 +22,7 @@
  #include "eglconfig.h"
  #include "eglcontext.h"
  #include "eglcurrent.h"
-@@ -44,6 +58,12 @@
+@@ -44,6 +59,12 @@
  #include "pipe/p_defines.h"
  #include "state_tracker/st_context.h"
  #include "util/u_atomic.h"
@@ -34,7 +35,7 @@
  #include "mesa/glapi/glapi/glapi.h"
  
  #include "hgl/hgl_sw_winsys.h"
-@@ -72,6 +92,12 @@
+@@ -72,6 +93,12 @@
  struct haiku_egl_display {
     int ref_count;
     struct hgl_display *disp;
@@ -47,7 +48,7 @@
  };
  
  struct haiku_egl_config {
-@@ -89,6 +115,371 @@
+@@ -89,6 +116,383 @@
     struct pipe_fence_handle *throttle_fence;
  };
  
@@ -98,7 +99,7 @@
 +   bigtime_t windowStart;
 +   uint32_t frames;
 +   uint32_t samples;
-+   bigtime_t sample[R5_PRESENT_SAMPLES];
++   bigtime_t *sample; // R5_GL_TRACE=1 only
 +};
 +
 +static bool
@@ -181,6 +182,12 @@
 +{
 +   if (!r5_gl_trace())
 +      return;
++   if (present->sample == NULL) {
++      present->sample = (bigtime_t *)calloc(R5_PRESENT_SAMPLES,
++                                            sizeof(bigtime_t));
++      if (present->sample == NULL)
++         return;
++   }
 +   if (present->windowStart == 0)
 +      present->windowStart = start;
 +   present->sample[present->frames % R5_PRESENT_SAMPLES] = end - start;
@@ -278,6 +285,7 @@
 +      delete present->hook->SetBitmap(NULL);
 +   for (int i = 0; i < R5_PRESENT_SPARES; i++)
 +      delete present->spare[i];
++   free(present->sample);
 +   free(present);
 +   buffer->present_data = NULL;
 +   buffer->present = NULL;
@@ -296,16 +304,21 @@
 +   bool forceFail;
 +};
 +
-+// The first file that can be read, in the order libdrm-r5 uses. A file that
-+// cannot be read means "not set".
++// The first file that exists, in the order libdrm-r5 and the kernel use.
++// A file that exists but cannot be read (another account's home) means
++// "not set"; the system file is not read in its place.
 +static void
 +r5_gl_read_settings(struct r5_gl_settings *settings)
 +{
 +   memset(settings, 0, sizeof(*settings));
 +   void *handle = NULL;
-+   for (size_t i = 0; handle == NULL
-+        && i < sizeof(kR5Settings) / sizeof(kR5Settings[0]); i++) {
++   for (size_t i = 0; i < sizeof(kR5Settings) / sizeof(kR5Settings[0]);
++        i++) {
++      struct stat st;
++      if (stat(kR5Settings[i], &st) != 0 && errno == ENOENT)
++         continue;
 +      handle = load_driver_settings(kR5Settings[i]);
++      break;
 +   }
 +   if (handle == NULL)
 +      return;
@@ -419,7 +432,7 @@
  // #pragma mark EGLSurface
  
  // Called via eglCreateWindowSurface(), drv->CreateWindowSurface().
-@@ -120,6 +511,18 @@
+@@ -120,6 +524,18 @@
        return NULL;
     }
  
@@ -438,7 +451,7 @@
     // Unset and delete previously set bitmap if any.
     delete ((BitmapHook *)native_window)->SetBitmap(NULL);
  
-@@ -161,6 +564,18 @@
+@@ -161,6 +577,18 @@
        return NULL;
     }
  
@@ -457,7 +470,7 @@
     wgl_surf->fb->newWidth = wgl_surf->base.Width;
     wgl_surf->fb->newHeight = wgl_surf->base.Height;
     p_atomic_inc(&wgl_surf->fb->base.stamp);
-@@ -180,8 +595,15 @@
+@@ -180,8 +608,15 @@
        // Unset bitmap to release ownership. Bitmap will be deleted later
        // when destroying framebuffer.
        BitmapHook *bitmapHook = (BitmapHook*)hgl_surf->fb->winsysContext;
@@ -474,7 +487,7 @@
  
        hgl_destroy_st_framebuffer(hgl_surf->fb);
        free(surf);
-@@ -192,6 +614,13 @@
+@@ -192,6 +627,13 @@
  static void
  update_size(struct hgl_buffer *buffer)
  {
@@ -488,7 +501,7 @@
     uint32_t newWidth, newHeight;
     ((BitmapHook *)buffer->winsysContext)->GetSize(newWidth, newHeight);
     if (buffer->newWidth != newWidth || buffer->newHeight != newHeight) {
-@@ -233,9 +662,21 @@
+@@ -233,9 +675,21 @@
     hgl_surf->throttle_fence = new_fence;
  
     // flush back buffer and swap buffers if double buffering is used
@@ -512,7 +525,7 @@
        std::swap(frontBuffer, backBuffer);
        p_atomic_inc(&buffer->base.stamp);
     }
-@@ -246,6 +687,12 @@
+@@ -246,6 +700,12 @@
  
     st_context_invalidate_state(st, ST_INVALIDATE_FB_STATE);
  
@@ -525,7 +538,7 @@
     return EGL_TRUE;
  }
  
-@@ -346,7 +793,19 @@
+@@ -346,7 +806,19 @@
     disp->DriverData = (void *)hgl_dpy;
  
     struct sw_winsys *winsys = hgl_create_sw_winsys();

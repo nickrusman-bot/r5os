@@ -17,7 +17,7 @@ EOF
 )"
 printf '%s\n' "$out" | grep -E 'mesa|libglvnd|llvm21_runtime|vulkan_loader' || true
 
-if printf '%s\n' "$out" | grep -E -q 'mesa-22|mesa_devel-22|mesa_swpipe-22|mesa-25.3.6-1|mesa-25.3.6-2|mesa_zink-25|mesa_radv-25.3.6-1|mesa_radv-25.3.6-2|mesa_radv-25.3.6-3|mesa_radv-25.3.6-4|mesa_lavapipe-25.3.6-2|vulkan_loader-1.4.367-2|vulkan_loader-1.4.367-3|vulkan_loader-1.4.367-3|vulkanteapot-1.0.0-1|vulkanteapot-1.0.0-2'; then
+if printf '%s\n' "$out" | grep -E -q 'mesa-22|mesa_devel-22|mesa_swpipe-22|mesa-25.3.6-1|mesa-25.3.6-2|mesa_zink-25|mesa_radv-25.3.6-1|mesa_radv-25.3.6-2|mesa_radv-25.3.6-3|mesa_radv-25.3.6-4|mesa_lavapipe-25.3.6-2|vulkan_loader-1.4.367-2|vulkan_loader-1.4.367-3|vulkanteapot-1.0.0-1|vulkanteapot-1.0.0-2'; then
 	echo "the image still has the old mesa package" >&2
 	exit 1
 fi

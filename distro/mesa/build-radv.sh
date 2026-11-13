@@ -38,7 +38,7 @@ fi
 # grep is the newest hunk, so an older revision of the patch fails loudly.
 if ! grep -q 'present_data' "$MESA/src/gallium/frontends/hgl/hgl_context.h" \
 	|| ! grep -q 'r5_gl_create_screen' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp" \
-	|| ! grep -q 'No driver could start' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
+	|| ! grep -q 'another account' "$MESA/src/egl/drivers/haiku/egl_haiku.cpp"; then
 	patch -p1 -d "$MESA" < "$ROOT/distro/mesa/patches/haiku-zink-present.patch"
 fi
 
