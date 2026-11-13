@@ -1275,7 +1275,7 @@ Decorator::GetInputMargin(BRect* margin)
 }
 
 
-/*!	Whether  where lies in the input margin, outside the border rect. */
+/*!	Whether \a where lies in the input margin, outside the border rect. */
 bool
 Decorator::InputMarginContains(BPoint where)
 {

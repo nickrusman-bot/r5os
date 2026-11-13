@@ -313,8 +313,7 @@ DecorManager::_LoadDecor(BString _path, status_t& error )
 	int32 version = abiVersion != NULL ? *abiVersion : 0;
 	if (version != R5_DECORATOR_ABI_VERSION) {
 		syslog(LOG_WARNING, "app_server: decorator %s refused: abi %" B_PRId32
-			", need %d
-", path.Leaf(), version, R5_DECORATOR_ABI_VERSION);
+			", need %d\n", path.Leaf(), version, R5_DECORATOR_ABI_VERSION);
 		unload_add_on(image);
 		error = B_MISMATCHED_VALUES;
 		return NULL;
