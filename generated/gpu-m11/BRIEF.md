@@ -139,7 +139,7 @@ For Cursor or Claude. It does not override `AGENTS.md` or `docs/GPU-ARCHITECTURE
 | 5 | **The direct-window pause and the forced failure** (`gpu_compositor_fail true`, test switch: the first submit fails) | VirtualBox: a `BDirectWindow` test program, and the forced failure | `app_server: compositor paused: direct window` and `resumed`; `app_server: gpu compositor off: forced failure` exactly once |
 | 6 | **The stick** (one, after M10 has passed) | 5625U | below |
 
-PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not need the compositor). Step 1b: the pictures first (for approval), then its own PR. Step 1c: the same, its own PR. Steps 2–5 (with 3b and 4b) depend on each other: **one PR**, one commit per step, from `origin/main`, not stacked. If the review of step 0 changes a decision, that PR follows it before merge.
+PRs: step 0 alone (documentation, done). Step 1 alone (the decorator does not need the compositor). Step 1b: the pictures first (for approval), then its own PR. Step 1c: the same, its own PR. Steps 2–5 (with 3a, 3b and 4b): **one PR per step** (user, 13 Nov 2026; step 2 merged as PR #4247), each from `origin/main` after the previous step is merged, not stacked. Every step stays off unless `gpu_compositor true`. If the review of step 0 changes a decision, that PR follows it before merge.
 
 ---
 
@@ -209,7 +209,7 @@ Counted in sessions, not weeks; the bottleneck is testing.
 | 0 (may run during the after-M10 round) | The pictures of steps 1b and 1c on one design page, `docs/design/decorators/` (HTML, drawn in code, no Windows assets), for the user's approval and the 1c name | none, the page is shown to the user | – |
 | 1 | Step 1 | one | VirtualBox or QEMU, one boot |
 | 2 | Steps 1b and 1c, after the pictures are approved | two, not stacked | VirtualBox, one boot for both |
-| 3 | Steps 2, 3a (paper, review), 3b, 4, 4b, 5 | one code PR, a commit per step; 3a as its own documentation PR | VirtualBox or QEMU, one boot per step |
+| 3 | Steps 2 (merged), 3a (paper, review), 3b, 4, 4b, 5 | one PR per step | VirtualBox or QEMU, one boot per step |
 | 4 | The stick (step 6) | results in `CHANGELOG.md` | 5625U, four boots |
 
 Rounds 2 and 3 may overlap (decorator add-ons against `Desktop`/`Window`/compositor), but only one agent jams at a time.

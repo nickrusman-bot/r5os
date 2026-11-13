@@ -17,7 +17,7 @@ Wat (volg het ontwerp, bedenk geen tweede weg):
 
 Niet: zero-copy, schaduw, glas, de vinkjes, de pauze voor direct windows (stap 3 tot 5). Geen kernelwijziging. Een programma dat alleen `libbe` gebruikt, merkt niets.
 
-Tak `claude/m11-compositor` vanaf `origin/main`, één commit voor deze stap. Vraag het vóór je jamt. Nog geen push en geen PR: die komen na stap 5.
+Tak `claude/m11-compositor` vanaf `origin/main`. Vraag het vóór je jamt. (Gedaan en gemerged als PR #4247, 13 nov.)
 
 Test: VirtualBox of QEMU met `gpu_compositor true` (Lavapipe), plus Pulse, ActivityMonitor en een klok half onder een ander venster, en dat venster weg. Passregels uit de brief, stap 2. Ook één boot zonder de instelling: dan geen regel met `compositor`. Laat een korte kaart achter.
 

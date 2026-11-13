@@ -1,10 +1,10 @@
-Drie korte prompts. Geef ze één voor één, elk pas na het rapport van de vorige. Dezelfde tak `claude/m11-compositor`, één commit per stap.
+Korte prompts. Geef ze één voor één, elk pas na het rapport van de vorige. Stap 2 is gemerged (PR #4247, 13 nov). Elke stap krijgt een eigen tak vanaf `origin/main` en een eigen PR, pas nadat de vorige stap gemerged is; niet gestapeld.
 
 ---
 
 ## Stap 3a (alleen papier)
 
-Voer stap 3a uit van `generated/gpu-m11/BRIEF.md`: het ontwerp voor vensters zonder kopie. Alleen documentatie: geen code, geen jam. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan besluit 15 in de brief, en `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy windows" en "Decided after step 0", punt 3. Je eerste antwoord: de regels die gelden en je plan. Wacht op mijn "ga".
+Voer stap 3a uit van `generated/gpu-m11/BRIEF.md`: het ontwerp voor vensters zonder kopie. Alleen documentatie: geen code, geen jam. Stap 2 (de compositor-kern, PR #4247) zit al in `main`: ontwerp op wat daar echt gebouwd is (`distro/app_server/Compositor.cpp`, `docs/APP-SERVER-COMPOSITOR.md`, "Decided in step 2"), niet op het oude ontwerp. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan besluit 15 in de brief, en `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy windows" en "Decided after step 0", punt 3. Je eerste antwoord: de regels die gelden en je plan. Wacht op mijn "ga".
 
 Werk besluit 15 uit zoals stap 3a in de tabel zegt. Kijk in de echte bron, niet uit je geheugen: de R5-interface (`r5_gpu.h`, de kernel, de R5 DRM-bibliotheek), Mesa (hoe RADV een fd importeert, en `wsi_common_haiku.cpp`) en de Haiku-boom in WSL (veilige willekeur in de kernel, de afzender van een port-bericht). Past de stap van token naar lokale fd niet zonder een RADV-wijziging: stop en vraag. Waar de bron iets anders zegt dan besluit 15: zet het onder "Open questions", niet zelf kiezen.
 
@@ -16,7 +16,7 @@ Eén documentatie-PR vanaf `origin/main`, tak `claude/m11-zero-copy-design`, all
 
 Voer stap 3b uit van `generated/gpu-m11/BRIEF.md`: vensters zonder kopie (A2), precies zoals het ontwerp van 3a dat ik heb goedgekeurd. Alleen stap 3b. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan het 3a-ontwerp. Je eerste antwoord: de regels die gelden en het plan. Wacht op mijn "ga".
 
-Dit raakt de kernel en de R5 DRM-bibliotheek: bekijk het pad en de foutgevallen. Geen call en geen nummer dat niet in het 3a-ontwerp staat. Wijzigt de WSI, dan een nieuw `mesa_radv`-pakket met de pin en de libdrm-symboolcheck. Vóór de jam: SMAP-review van de diff en de QEMU-SMAP-boot. De tests uit de tabel (stap 3b), elk met een pass- en een failregel. Vraag vóór je jamt. Meld kort en stop.
+Dit raakt de kernel en de R5 DRM-bibliotheek: bekijk het pad en de foutgevallen. Geen call en geen nummer dat niet in het 3a-ontwerp staat. Wijzigt de WSI, dan een nieuw `mesa_radv`-pakket met de pin en de libdrm-symboolcheck. Vóór de jam: SMAP-review van de diff en de QEMU-SMAP-boot. De tests uit de tabel (stap 3b), elk met een pass- en een failregel. Eigen tak `claude/m11-zero-copy` vanaf `origin/main`, na de merge van 3a. Vraag vóór je jamt, pusht en een PR opent. Meld kort en stop.
 
 ---
 
@@ -46,4 +46,4 @@ Openen en sluiten (vervagen en schalen) en het wisselen van werkruimte (schuiven
 
 Voer stap 5 uit van `generated/gpu-m11/BRIEF.md`: de pauze voor direct windows en de geforceerde fout. Alleen stap 5. Lees eerst `AGENTS.md` en de "Rules for the agent" opnieuw, dan `docs/APP-SERVER-COMPOSITOR.md`, "The direct-window pause" en "The switch to the CPU mode". Je eerste antwoord: de regels die gelden, het plan, en de volgorde van de locks zoals jij die in de bron vindt. Wacht op mijn "ga".
 
-Een klein `BDirectWindow`-testprogramma (niet in het image, tenzij de stick het nodig heeft) en `gpu_compositor_fail true`. Vraag vóór je jamt. Test: VirtualBox of QEMU, de passregels uit de brief, stap 5. Daarna: vraag of je mag pushen en een PR mag openen voor stap 2 tot 5 (titel bijvoorbeeld "Graphics - Windows are composed on the GPU"). Meld kort en stop.
+Een klein `BDirectWindow`-testprogramma (niet in het image, tenzij de stick het nodig heeft) en `gpu_compositor_fail true`. Vraag vóór je jamt. Test: VirtualBox of QEMU, de passregels uit de brief, stap 5. Daarna: vraag of je mag pushen en een PR mag openen voor deze stap. Meld kort en stop.
