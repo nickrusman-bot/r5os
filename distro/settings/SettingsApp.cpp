@@ -7,6 +7,7 @@
 #include "DeskbarModule.h"
 #include "ConnectionsModule.h"
 #include "DisplayModule.h"
+#include "DiscoveryModule.h"
 #include "InformationModule.h"
 #include "NotificationsModule.h"
 #include "VirtualMemoryModule.h"
@@ -56,6 +57,7 @@ SettingsApp::SettingsApp()
 	register_information_page(fManager);
 	register_wifi_page(fManager);
 	register_connections_page(fManager);
+	register_discovery_page(fManager);
 }
 
 

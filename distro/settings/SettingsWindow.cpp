@@ -1397,6 +1397,7 @@ module_icon(const char* moduleId)
 		{ "network", "application/x-vnd.Haiku-Network" },
 		{ "wifi", "application/x-vnd.Haiku-WiFi" },
 		{ "connections", "application/x-vnd.Haiku-Network" },
+		{ "discovery", "application/x-vnd.Haiku-Network" },
 		{ "accounts", "application/x-vnd.R5OS-Users" }
 	};
 	if (moduleId == NULL)

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 SubDir HAIKU_TOP src preferences settings ;
 
-UsePrivateHeaders interface shared app ;
+UsePrivateHeaders interface shared app net ;
 
 # Connections uses the address field and the link speed of the Network
 # program, unchanged (src/preferences/network, src/bin/network/ifconfig).
@@ -30,10 +30,12 @@ Application Settings :
 	DisplayScreens.cpp
 	WiFiModule.cpp
 	ConnectionsModule.cpp
+	DiscoveryModule.cpp
+	NetworkPage.cpp
 	IPAddressControl.cpp
 	: <src!bin!network!ifconfig>MediaTypes.o
 		be tracker translation shared libr5icons.so libr5ui.so libr5wifi.so
-		bnetapi [ TargetLibstdc++ ]
+		bnetapi network [ TargetLibstdc++ ]
 	: Settings.rdef
 	;
 

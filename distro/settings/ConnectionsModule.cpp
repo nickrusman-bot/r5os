@@ -13,6 +13,7 @@
 
 #include "ConnectionsModule.h"
 
+#include "NetworkPage.h"
 #include "SettingsFont.h"
 #include "SettingsManager.h"
 #include "SettingsMessages.h"
@@ -156,29 +157,6 @@ struct DnsSetup {
 
 
 // #pragma mark - settings
-
-
-static float
-unit()
-{
-	float size = be_plain_font != NULL ? be_plain_font->Size() : 13.0f;
-	return size / 13.0f;
-}
-
-
-static rgb_color
-quiet_color(uint8 amount)
-{
-	return mix_color(ui_color(B_DOCUMENT_BACKGROUND_COLOR),
-		ui_color(B_DOCUMENT_TEXT_COLOR), amount);
-}
-
-
-static rgb_color
-box_fill()
-{
-	return r5_settings_tile_fill();
-}
 
 
 // What the interface settings say for one family. No entry is automatic,
@@ -438,172 +416,6 @@ hardware_of(const char* name)
 // #pragma mark - views
 
 
-// Display's box: the fill starts at the top border line.
-class FilledBox : public BBox {
-public:
-	FilledBox(const char* name)
-		:
-		BBox(name)
-	{
-		SetViewUIColor(B_PANEL_BACKGROUND_COLOR);
-	}
-
-	virtual void Draw(BRect updateRect)
-	{
-		BRect fill = InnerFrame().InsetByCopy(-1, -1);
-		fill.top = TopBorderOffset() + 1;
-		SetHighColor(box_fill());
-		FillRect(fill);
-		BBox::Draw(updateRect);
-	}
-};
-
-
-// Display's box title: window grey above the border line, fill below.
-class BoxTitle : public BStringView {
-public:
-	BoxTitle(const char* text)
-		:
-		BStringView("box title", text)
-	{
-		SetFont(r5_settings_bold_font());
-	}
-
-	virtual void Draw(BRect updateRect)
-	{
-		(void)updateRect;
-		BRect bounds = Bounds();
-		float line = bounds.top + floorf(bounds.Height() / 2.0f);
-		BBox* box = dynamic_cast<BBox*>(Parent());
-		if (box != NULL)
-			line = box->TopBorderOffset() - Frame().top;
-		BRect top = bounds;
-		top.bottom = line;
-		BRect bottom = bounds;
-		bottom.top = line + 1;
-		SetHighColor(ui_color(B_PANEL_BACKGROUND_COLOR));
-		FillRect(top);
-		SetHighColor(box_fill());
-		FillRect(bottom);
-		font_height height;
-		GetFontHeight(&height);
-		float y = (bounds.top + bounds.bottom - ceilf(height.ascent)
-			- ceilf(height.descent)) / 2.0f + ceilf(height.ascent);
-		SetDrawingMode(B_OP_OVER);
-		SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
-		DrawString(Text(), BPoint(bounds.left, y));
-		SetDrawingMode(B_OP_COPY);
-	}
-};
-
-
-// A read-only field. A value that does not fit ends in "…", and the
-// tooltip shows all of it.
-class ValueField : public BView {
-public:
-								ValueField(const char* name);
-
-			void				SetText(const char* text);
-	virtual	void				Draw(BRect updateRect);
-	virtual	void				FrameResized(float width, float height);
-	virtual	BSize				MinSize();
-	virtual	BSize				MaxSize();
-	virtual	BSize				PreferredSize();
-
-private:
-			void				_UpdateTip();
-
-			BString				fText;
-};
-
-
-ValueField::ValueField(const char* name)
-	:
-	BView(name, B_WILL_DRAW | B_FRAME_EVENTS | B_FULL_UPDATE_ON_RESIZE)
-{
-	SetFont(be_fixed_font);
-	SetViewColor(B_TRANSPARENT_COLOR);
-}
-
-
-void
-ValueField::SetText(const char* text)
-{
-	if (fText == text)
-		return;
-	fText = text;
-	_UpdateTip();
-	Invalidate();
-}
-
-
-void
-ValueField::Draw(BRect updateRect)
-{
-	(void)updateRect;
-	BRect bounds = Bounds();
-	rgb_color panel = ui_color(B_PANEL_BACKGROUND_COLOR);
-	SetHighColor(mix_color(panel, ui_color(B_DOCUMENT_BACKGROUND_COLOR), 128));
-	FillRect(bounds);
-	SetHighColor(tint_color(panel, B_DARKEN_2_TINT));
-	StrokeRect(bounds);
-
-	float inset = be_control_look->DefaultLabelSpacing();
-	BString text(fText);
-	TruncateString(&text, B_TRUNCATE_END, bounds.Width() - inset * 2);
-	font_height height;
-	GetFontHeight(&height);
-	float y = floorf((bounds.top + bounds.bottom + height.ascent
-		- height.descent) / 2);
-	SetHighColor(quiet_color(160));
-	SetLowColor(mix_color(panel, ui_color(B_DOCUMENT_BACKGROUND_COLOR), 128));
-	DrawString(text.String(), BPoint(bounds.left + inset, y));
-}
-
-
-void
-ValueField::FrameResized(float width, float height)
-{
-	BView::FrameResized(width, height);
-	_UpdateTip();
-}
-
-
-BSize
-ValueField::MinSize()
-{
-	font_height height;
-	GetFontHeight(&height);
-	return BSize(StringWidth("0000:0000::"),
-		ceilf(height.ascent + height.descent) + unit() * 8);
-}
-
-
-BSize
-ValueField::MaxSize()
-{
-	return BSize(B_SIZE_UNLIMITED, MinSize().height);
-}
-
-
-BSize
-ValueField::PreferredSize()
-{
-	return MinSize();
-}
-
-
-void
-ValueField::_UpdateTip()
-{
-	float inset = be_control_look->DefaultLabelSpacing();
-	if (StringWidth(fText.String()) > Bounds().Width() - inset * 2)
-		SetToolTip(fText.String());
-	else
-		SetToolTip((const char*)NULL);
-}
-
-
 // A connection in the list: a dot, the kind in bold, the status under it.
 class ConnectionItem : public BListItem {
 public:
@@ -648,7 +460,7 @@ ConnectionItem::Update(BView* owner, const BFont* font)
 	font_height height;
 	font->GetHeight(&height);
 	float line = ceilf(height.ascent + height.descent + height.leading);
-	SetHeight(line * 2 + unit() * 12);
+	SetHeight(line * 2 + network_unit() * 12);
 }
 
 
@@ -664,7 +476,7 @@ ConnectionItem::DrawItem(BView* owner, BRect frame, bool complete)
 	owner->SetLowColor(background);
 	owner->FillRect(frame, B_SOLID_LOW);
 
-	float u = unit();
+	float u = network_unit();
 	font_height height;
 	be_plain_font->GetHeight(&height);
 	float line = ceilf(height.ascent + height.descent + height.leading);
@@ -683,7 +495,7 @@ ConnectionItem::DrawItem(BView* owner, BRect frame, bool complete)
 	BFont small(be_plain_font);
 	small.SetSize(be_plain_font->Size() * 0.9f);
 	owner->SetFont(&small);
-	owner->SetHighColor(quiet_color(140));
+	owner->SetHighColor(network_quiet_color(140));
 	BString status(fStatus);
 	owner->TruncateString(&status, B_TRUNCATE_END, frame.right - x - u * 4);
 	owner->DrawString(status.String(),
@@ -894,7 +706,7 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	fModule(module),
 	fTicker(NULL)
 {
-	float u = unit();
+	float u = network_unit();
 	BGridView* grid;
 
 	// the list
@@ -913,7 +725,7 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	fUp->SetFont(r5_settings_bold_font());
 	fDeviceBox->SetLabel(fUp);
 	BGridView* deviceGrid = new BGridView(u * 12, u * 6);
-	deviceGrid->SetViewColor(box_fill());
+	deviceGrid->SetViewColor(network_box_fill());
 	fDeviceBox->AddChild(deviceGrid);
 	fStatus = new ValueField("status");
 	fHardware = new ValueField("hardware");
@@ -959,7 +771,7 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 		"Addresses:");
 	addressesLabel->SetAlignment(B_ALIGN_RIGHT);
 	fAddresses6 = new BGroupView(B_VERTICAL, u * 3);
-	fAddresses6->SetViewColor(box_fill());
+	fAddresses6->SetViewColor(network_box_fill());
 	fAddress6 = new IPAddressControl(AF_INET6, "Address:", "address6");
 	fMask6 = new IPAddressControl(AF_INET6, "Netmask:", "mask6");
 	fRouter6 = new IPAddressControl(AF_INET6, "Router:", "router6");
@@ -1001,7 +813,7 @@ ConnectionsView::ConnectionsView(ConnectionsModule* module)
 	BFont hint(be_plain_font);
 	hint.SetSize(be_plain_font->Size() * 0.9f);
 	fHint4->SetFont(&hint);
-	fHint4->SetHighColor(quiet_color(140));
+	fHint4->SetHighColor(network_quiet_color(140));
 
 	BLayoutBuilder::Group<>(this, B_HORIZONTAL, u * 12)
 		.Add(listBox)
@@ -1028,11 +840,11 @@ ConnectionsView::~ConnectionsView()
 BBox*
 ConnectionsView::_Box(const char* name, const char* title, BGridView*& grid)
 {
-	float u = unit();
+	float u = network_unit();
 	BBox* box = new FilledBox(name);
 	box->SetLabel(new BoxTitle(title));
 	grid = new BGridView(u * 12, u * 6);
-	grid->SetViewColor(box_fill());
+	grid->SetViewColor(network_box_fill());
 	grid->GridLayout()->SetInsets(u * 12, u * 8, u * 12, u * 12);
 	grid->GridLayout()->SetColumnWeight(1, 1);
 	box->AddChild(grid);
