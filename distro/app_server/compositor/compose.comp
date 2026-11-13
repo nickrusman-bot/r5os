@@ -1,0 +1,48 @@
+// SPDX-FileCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+//
+// The A1 compose: copies one rectangle of a window buffer into the frame,
+// or fills one rectangle of the frame with the background colour. Pixels
+// are 32-bit words, copied unchanged, so the frame is the picture the CPU
+// mode would show. Compiled by scripts/gen-compositor-shaders.sh.
+
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Source {
+	uint pixels[];
+} source;
+
+layout(std430, set = 0, binding = 1) buffer Frame {
+	uint pixels[];
+} frame;
+
+layout(push_constant) uniform Rect {
+	uint sourceX;
+	uint sourceY;
+	uint sourceStride;
+	uint frameX;
+	uint frameY;
+	uint frameStride;
+	uint width;
+	uint height;
+	uint fill;
+	uint color;
+} rect;
+
+void
+main()
+{
+	uvec2 at = gl_GlobalInvocationID.xy;
+	if (at.x >= rect.width || at.y >= rect.height)
+		return;
+
+	uint target = (rect.frameY + at.y) * rect.frameStride + rect.frameX + at.x;
+	if (rect.fill != 0u) {
+		frame.pixels[target] = rect.color;
+		return;
+	}
+	frame.pixels[target] = source.pixels[(rect.sourceY + at.y)
+		* rect.sourceStride + rect.sourceX + at.x];
+}

@@ -1,5 +1,29 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - M11 step 2: the compositor core (A1), behind gpu_compositor
+
+Problem: M11 composes the desktop on the GPU. Step 2 is the core: one buffer per window, a compose with Vulkan, the fallback, and the compare and measurement of decision 7 and 14.
+
+What changed:
+- New in `distro/app_server` (MIT): `Compositor` (Vulkan loaded at run time; RADV when `R5_GPU_CAP_AVAILABLE` is set, otherwise Lavapipe, otherwise the CPU mode), `WindowBuffer`, `WindowHWInterface`, the shader `compositor/compose.comp` and its generated `compositor_shaders.h` (`scripts/gen-compositor-shaders.sh`, glslang 16.6.0 on the build host). Off unless `gpu_compositor true` in the radeon_hd settings, read the way the M8 copy reads `gpu_app_server`.
+- Every window draws into its own Vulkan buffer (host-visible, coherent, host-cached first; decision 5), through its own `WindowHWInterface`. Painter is unchanged: it gets a view of the buffer whose address is screen pixel (0, 0) (user's choice, "Decided in step 2").
+- **Covered parts are drawn ("Decided after step 0", point 1):** in the GPU mode a window draws all of itself, also what other windows cover, and also outside an update (`Window::DrawableRegion()`). When a window above goes away, what is below is already right. Programs that draw outside an update draw a little more.
+- Moving a window: no blit, no redraw of the windows below; the compose puts the window at its new place. A resize gets a new buffer with the old pixels copied by screen position.
+- The compose: only on damage, at most once per refresh period of the display mode; one compute dispatch per damaged rectangle, back to front; then the damage goes through the screen's back buffer and `CopyBackToFront` (CPU row copy on Lavapipe, the M8 `DMA_DATA` copy on RADV when `gpu_app_server` is on).
+- Decision 14: a late fence is not a failure (`compose late <n> ms`); a failed submit or a lost device ends the GPU mode (`gpu compositor off: <reason>`), with one restart on RADV after a successful reset. `gpu_compositor_fail true` makes the first submit fail.
+- `gpu_debug true`: every 100th frame (and the first) is composed again on the CPU from the same buffers and compared (`compose compare ok` / `MISMATCH at x,y`); every 10 s `compose median <n> us cpu <n> ms per 10 s` and `window memory <n> MB`. At start: `vulkan queue family <i> flags <hex>` per family (a family with the graphics bit is used, decision 16) and, at the first window buffer, `window memory type <i> flags <hex>`.
+- Memory budget (half the GTT on RADV, a quarter of RAM on Lavapipe): buffers of windows not on screen are freed first, the one shown longest ago first; a window on screen that cannot get a buffer ends the GPU mode (`window memory`).
+- glslang 16.6.0 is in `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md` as a build tool (its generated parser is GPL-3.0-or-later WITH Bison-exception-2.2; nothing of it ships).
+
+Mistakes and fixes during this step:
+- app_server crashed in `Painter::StraightLine` while Deskbar (created at -1000,-1000) and the notification window (at x -4) drew their border. First the Painter view became invalid for a window fully off the left or top, and Painter kept its old buffer; fixed by keeping the view valid. Then the real cause, found with temporary serial diagnostics: Painter multiplies a row by an unsigned stride, so it cannot draw at a negative coordinate. `Window::_ClipToBuffer` now limits every drawable region to the window's buffer and to x >= 0, y >= 0, and logs `draw outside buffer` once per window if a region ever reaches past the buffer. A part off the left or top is drawn when it comes on screen.
+- The first interactive test ran without the compositor: the settings file was written to a WSL `/tmp` that was emptied between two calls. The test was repeated with the setting checked in the image.
+- Two inserted log strings got a real newline instead of the `\n` escape; fixed before building.
+
+Tested (QEMU, KVM, usernet, Lavapipe, 13 Nov 2026), copy A with `gpu_compositor true` and `gpu_debug true`: `app_server: vulkan queue family 0 flags 0x7`, `app_server: gpu compositor on lavapipe: no render node`, `app_server: window memory type 0 flags 0xf`, `compose late 100 ms` twice (the first frames), `compose compare ok` 21 times, never `MISMATCH`, never `draw outside buffer`, no crash. Measured: `compose median` 4647 to 5302 us, cpu 572 to 613 ms per 10 s, window memory 8 MB. The user ran the test card: Pulse, ActivityMonitor and Clock half covered and then uncovered (correct at once), dragging past the left edge, resizing from the edges, switching workspace; all worked. Copy B without the setting: a full boot log with no line containing `compositor`.
+
+Not tested: RADV and the M8 copy after the compose (needs the 5625U), decision 14 on RADV (late fence under load, reset and restart), `gpu_compositor_fail`, the memory budget when it is exceeded (512 MB in QEMU was not reached), outline resize with `B_OUTLINE_RESIZE` specifically, VirtualBox.
+
 ## 2026-11-13 - Base package list: four duplicate patches retired
 
 Problem: since M11 step 1, `build/jam/packages/Haiku` is a native copy in `distro/desktop`, copied by `apply-desktop-native.py`. Four apply scripts still patched the same file; the lines were already in the copy, so they only printed "already Haiku (...)".
