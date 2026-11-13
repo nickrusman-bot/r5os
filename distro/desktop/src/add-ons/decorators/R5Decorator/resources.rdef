@@ -1,0 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: 2026 R5OS Contributors
+ * SPDX-License-Identifier: MIT
+ */
+
+resource("be:decor:info") message('deco') {
+	"name"				= "R5",
+	"authors"			= "R5OS Contributors",
+	"short_descr"		= "Haiku's tab with a thin frame",
+	"long_descr"		= "",
+	"lic_url"			= "",
+	"lic_name"			= "MIT",
+	"support_url"		= "https://github.com/r5-operating-system/r5os",
+	float "version"		= 1.0
+};

@@ -45,6 +45,18 @@ switch $(HAIKU_BUILD_PROFILE) {
 		AddPackageFilesToHaikuImage system packages
 			: userland_fs.hpkg smbfs.hpkg ;
 
+		# The R5 window frame, selectable in Appearance next to Default.
+		# The Haiku decorators (Be, Flat, Mac, Win) are built, not installed.
+		AddFilesToHaikuImage system non-packaged add-ons decorators
+			: R5Decorator ;
+
+		# Only for the refusal test: jam -sR5_DECORATOR_ABI_TEST=1 adds an
+		# add-on without the decorator ABI version. Never in a release image.
+		if $(R5_DECORATOR_ABI_TEST) = 1 {
+			AddFilesToHaikuImage system non-packaged add-ons decorators
+				: R5DecoratorAbiTest ;
+		}
+
 		# The downloaded HaikuPorts catalog still lists Mesa 22. The image
 		# solver uses these files instead, written by scripts/pin-mesa-packages.sh.
 		local r5Download = [ FDirName $(HAIKU_OUTPUT_DIR) download ] ;
