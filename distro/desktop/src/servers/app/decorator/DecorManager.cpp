@@ -25,6 +25,11 @@
 #include <Path.h>
 #include <Rect.h>
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+#include <string.h>
+// SPDX-SnippetEnd
 #include <syslog.h>
 
 #include "AppServer.h"
@@ -121,7 +126,31 @@ DecorManager::DecorManager()
 	fPreviewWindow(NULL),
 	fCurrentDecorPath("Default")
 {
-	_LoadSettingsFromDisk();
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	if (_LoadSettingsFromDisk())
+		return;
+
+	// No decorator was chosen, or the chosen one cannot be loaded: the R5
+	// window frame is the default. Without it, Haiku's built-in one stays.
+	// DecorInfoUtility::DefaultDecorator() names the same add-on.
+	BPath path;
+	if (find_directory(B_SYSTEM_ADDONS_DIRECTORY, &path) != B_OK
+		|| path.Append("decorators/R5Decorator") != B_OK) {
+		return;
+	}
+
+	status_t error = B_OK;
+	DecorAddOn* decor = _LoadDecor(path.Path(), error);
+	if (decor == NULL) {
+		syslog(LOG_WARNING, "app_server: decorator r5 not loaded: %s\n",
+			strerror(error));
+		return;
+	}
+	fCurrentDecor = decor;
+	fCurrentDecorPath = path.Path();
+// SPDX-SnippetEnd
 }
 
 

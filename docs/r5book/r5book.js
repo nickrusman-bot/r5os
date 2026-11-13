@@ -74,6 +74,17 @@
 			["accounts.html#session", "Lock and log out", true],
 			["accounts.html#example", "Example: Sign in", true],
 		]},
+		{ title: "Settings modules", file: "settings-modules.html", items: [
+			["settings-modules.html", "A page in Settings"],
+			["settings-modules.html#files", "Where it goes", true],
+			["settings-modules.html#entry-points", "Entry points", true],
+			["settings-modules.html#SettingsModule", "SettingsModule", true],
+			["settings-modules.html#SettingsContext", "SettingsContext", true],
+			["settings-modules.html#storage", "Where the values go", true],
+			["settings-modules.html#admin", "The lock", true],
+			["settings-modules.html#example", "Example", true],
+			["settings-modules.html#limits", "Not yet", true],
+		]},
 		{ title: "Haiku kits", file: "haiku-additions.html", items: [
 			["haiku-additions.html", "Additions to Haiku kits"],
 			["haiku-additions.html#BFormattingConventions", "BFormattingConventions", true],
@@ -122,6 +133,7 @@
 			<a href="icons-kit.html" class="${page === "icons" ? "active" : ""}">Icons Kit</a>
 			<a href="appearance-kit.html" class="${page === "appearance" ? "active" : ""}">Appearance Kit</a>
 			<a href="midi2-kit.html" class="${page === "midi2" ? "active" : ""}">MIDI 2 Kit</a>
+			<a href="wifi-kit.html" class="${page === "wifi" ? "active" : ""}">Wi-Fi Kit</a>
 			<a href="vulkan.html" class="${page === "vulkan" ? "active" : ""}">Vulkan</a>
 			<a href="guidelines.html" class="${page === "guidelines" ? "active" : ""}">Guidelines</a>
 			<a href="https://github.com/r5-operating-system/r5os" class="nav-pill">GitHub</a>

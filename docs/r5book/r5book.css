@@ -107,6 +107,7 @@ a.brand-lockup svg {
 .brand-lockup-text {
 	font-size: 17px;
 	letter-spacing: -0.015em;
+	white-space: nowrap;
 }
 
 .brand-lockup-text strong {
@@ -122,7 +123,7 @@ a.brand-lockup svg {
 nav.nav-links {
 	display: flex;
 	align-items: center;
-	gap: 28px;
+	gap: 22px;
 	flex-wrap: wrap;
 }
 
@@ -463,6 +464,46 @@ figure.stage figcaption {
 	color: var(--slate-500);
 	border-top: 1px dashed var(--slate-200);
 	padding-top: 10px;
+}
+
+.badge-shot {
+	font-size: 11px;
+	font-weight: 700;
+	color: #047857;
+	background: rgba(101, 184, 145, 0.16);
+	border: 1px solid rgba(101, 184, 145, 0.45);
+	padding: 1px 8px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+/* A screenshot from R5: shown at its own size, never stretched. */
+figure.stage > img,
+figure.stage .shots img {
+	max-width: 100%;
+	height: auto;
+	display: block;
+	border-radius: 8px;
+	box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+figure.stage .shots {
+	display: flex;
+	gap: 16px;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: flex-start;
+}
+
+figure.stage .shots img {
+	width: 300px;
+}
+
+figure.stage .shots .cap {
+	font-size: 12px;
+	color: var(--slate-500);
+	text-align: center;
+	margin-top: 8px;
 }
 
 .badge-mockup {

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 R5OS Contributors
+  SPDX-License-Identifier: MIT
+-->
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Settings modules</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="r5book.css" />
+</head>
+<body data-page="settings">
+
+<div class="book">
+	<aside class="toc"></aside>
+
+	<main class="page">
+		<section class="page-hero">
+			<span class="kit-label">Settings add-on</span>
+			<h1>Settings modules</h1>
+			<p>A page in Settings is an add-on. Settings finds it at start, lists it under its category, and
+			shows its view when someone opens it. A new page needs no change to the Settings window. Fonts and
+			Look and feel are built this way.</p>
+		</section>
+
+		<table class="facts">
+			<tr><th>Declared in</th><td>SettingsModule.h (in the R5 source, <code class="inline">distro/settings</code>; not yet in a development package)</td></tr>
+			<tr><th>API version</th><td><code class="inline">kSettingsApiVersion</code> = 2</td></tr>
+			<tr><th>Build rule</th><td><code class="inline">Addon</code></td></tr>
+			<tr><th>Contract</th><td>distro/settings/ModuleAPI.md, docs/SETTINGS.md</td></tr>
+		</table>
+
+		<div class="note"><strong>Built for one version.</strong> Settings loads a module only when
+		<code class="inline">settings_api_version()</code> returns the version Settings was built with. A module
+		for another version is skipped, with a line in the syslog that starts with
+		<code class="inline">settings:</code>. A new call is added only at the end of the class, with a new
+		version number.</div>
+
+		<section class="entry" id="files">
+			<div class="entry-header"><h2 class="plain">Where it goes</h2></div>
+			<p>Install the add-on in a folder named <code class="inline">Settings</code> in one of the add-ons
+			folders. Settings reads all four.</p>
+			<table class="spec">
+				<tr><th>Folder</th><th>For</th></tr>
+				<tr><td><code>/boot/system/add-ons/Settings</code></td><td>Pages that ship with R5</td></tr>
+				<tr><td><code>/boot/system/non-packaged/add-ons/Settings</code></td><td>For every account, outside a package</td></tr>
+				<tr><td><code>/boot/home/config/add-ons/Settings</code></td><td>One account, from a package</td></tr>
+				<tr><td><code>/boot/home/config/non-packaged/add-ons/Settings</code></td><td>One account, outside a package</td></tr>
+			</table>
+			<p>A module that fails to load does not stop the others. If two modules have the same identifier,
+			only one is loaded.</p>
+		</section>
+
+		<section class="entry" id="entry-points">
+			<div class="entry-header"><h2 class="plain">Entry points</h2><span class="kind">two exported functions</span></div>
+			<p>Both are <code class="inline">extern "C"</code>, exported, and not inline. Include
+			<code class="inline">SettingsModule.h</code> only, not the Settings window or its host.</p>
+<pre class="code"><span class="k">#include</span> <span class="s">"SettingsModule.h"</span>
+
+<span class="k">extern</span> <span class="s">"C"</span> _EXPORT int32
+settings_api_version()
+{
+	<span class="k">return</span> kSettingsApiVersion;
+}
+
+<span class="k">extern</span> <span class="s">"C"</span> _EXPORT SettingsModule*
+instantiate_settings_module()
+{
+	<span class="k">return new</span> ExampleModule();
+}</pre>
+		</section>
+
+		<section class="entry" id="SettingsModule">
+			<div class="entry-header"><h2>SettingsModule</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>SettingsModule.h</td></tr>
+				<tr><th>Derived from</th><td>none</td></tr>
+				<tr><th>First user</th><td>Fonts (<code class="inline">settings_fonts</code>)</td></tr>
+			</table>
+			<p>One page. Derive from it and return a new one from
+			<code class="inline">instantiate_settings_module()</code>.</p>
+
+			<h3>What the page is</h3>
+			<div class="member"><div class="sig">virtual const char* Identifier() const = 0;</div>
+				<p>A stable id: letters, digits, <code class="inline">.</code>, <code class="inline">_</code> and
+				<code class="inline">-</code>, at most 64 characters. It is also the name of the page's settings
+				file.</p></div>
+			<div class="member"><div class="sig">virtual const char* Name() const = 0;
+virtual const char* Description() const = 0;
+virtual const char* Keywords() const;</div>
+				<p>The name in the list, the subtitle under the page title (and the line on the category card), and
+				extra words for Search. Search compares all three and ignores case.</p></div>
+			<div class="member"><div class="sig">virtual const char* Category() const = 0;</div>
+				<p>One of <code class="inline">personalization</code>, <code class="inline">system</code>,
+				<code class="inline">devices</code>, <code class="inline">network</code> and
+				<code class="inline">accounts</code>. Another id is listed too, with the id as its label. Pages
+				under a category are in alphabetical order.</p></div>
+			<div class="member"><div class="sig">virtual bool RequiresAdmin() const;</div>
+				<p>True for a page that changes the whole computer. The page is gray, and nothing is written, until
+				the lock is open. See <a href="#admin">The lock</a>.</p></div>
+			<div class="member"><div class="sig">virtual bool CanSave() const;</div>
+				<p>False for a page that only opens an existing preferences program, which keeps its own file.</p></div>
+
+			<h3>The view</h3>
+			<div class="member"><div class="sig">virtual BView* CreateView(SettingsContext* context, BRect frame) = 0;</div>
+				<p>The page content, shown under the subtitle. The window owns the view and deletes it; the module
+				must not. Keep a pointer only if the page has to update after Revert, and clear it in the view's
+				destructor. When the view is taller than the space, the page gets a scroll bar. Returning
+				<code class="inline">NULL</code> shows a short error; the rest of Settings stays open.</p></div>
+
+			<h3>Values</h3>
+			<div class="member"><div class="sig">virtual status_t LoadSettings(SettingsContext* context) = 0;</div>
+				<p>Reads the current values. Keep a copy: that is what Revert goes back to.</p></div>
+			<div class="member"><div class="sig">virtual status_t SaveSettings(SettingsContext* context) = 0;</div>
+				<p>Writes the values. The window calls it as soon as the page calls
+				<code class="inline">NotifyChanged()</code>. There is no Save button.</p></div>
+			<div class="member"><div class="sig">virtual status_t RevertSettings(SettingsContext* context) = 0;</div>
+				<p>Puts back, and applies, the values from when the page was opened, also after they were already
+				written.</p></div>
+			<div class="member"><div class="sig">virtual bool CanApplyDefaults() const;
+virtual status_t ApplyDefaults(SettingsContext* context);</div>
+				<p>Added in version 2. <code class="inline">CanApplyDefaults()</code> is true only when the page has
+				a factory setup; otherwise Defaults stays disabled. <code class="inline">ApplyDefaults()</code>
+				writes and applies that setup.</p></div>
+			<div class="member"><div class="sig">virtual bool IsModified() const;
+virtual int32 ApiVersion() const;</div>
+				<p>Whether the values differ from when the page was opened, and the version the module was built
+				for. Leave <code class="inline">ApiVersion()</code> as it is.</p></div>
+		</section>
+
+		<section class="entry" id="SettingsContext">
+			<div class="entry-header"><h2>SettingsContext</h2><span class="kind">class</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>SettingsModule.h</td></tr>
+				<tr><th>Made by</th><td>the Settings window</td></tr>
+			</table>
+			<p>What the window offers a page. The module receives it; it does not make one.</p>
+			<div class="member"><div class="sig">virtual status_t ReadSettings(const char* moduleId, BMessage&amp; settings) = 0;
+virtual status_t WriteSettings(const char* moduleId, const BMessage&amp; settings) = 0;</div>
+				<p>One flattened <code class="inline">BMessage</code> per page, in
+				<code class="inline">~/config/settings/r5-settings/&lt;identifier&gt;</code>. A missing file is
+				<code class="inline">B_ENTRY_NOT_FOUND</code>: use the defaults.</p></div>
+			<div class="member"><div class="sig">virtual void NotifyChanged(const char* moduleId) = 0;</div>
+				<p>Call it after the person changes a value. The window then calls
+				<code class="inline">SaveSettings()</code>.</p></div>
+			<div class="member"><div class="sig">virtual bool AdminChangeAllowed() const = 0;</div>
+				<p>True while the lock is open. This is <a href="appearance-kit.html#functions">r5_admin_change_allowed()</a>.</p></div>
+			<div class="member"><div class="sig">virtual status_t OpenPage(const char* moduleId) = 0;
+virtual status_t LaunchLegacy(const char* signature) = 0;</div>
+				<p>Open another page, or start a preferences program by its signature.</p></div>
+			<div class="member"><div class="sig">virtual void Log(const char* message) = 0;</div>
+				<p>A line in the syslog, after <code class="inline">settings:</code>.</p></div>
+		</section>
+
+		<section class="entry" id="storage">
+			<div class="entry-header"><h2 class="plain">Where the values go</h2></div>
+			<ul class="plain">
+				<li><strong>A new setting:</strong> use <code class="inline">ReadSettings()</code> and
+				<code class="inline">WriteSettings()</code>.</li>
+				<li><strong>A setting the system already reads:</strong> write that existing file, and keep no
+				second copy. Notifications writes <code class="inline">~/config/settings/system/notifications</code>.</li>
+				<li><strong>A running program:</strong> send it a message. Desktop and Deskbar messages the running
+				Deskbar and does not write Deskbar's file.</li>
+			</ul>
+		</section>
+
+		<section class="entry" id="admin">
+			<div class="entry-header"><h2 class="plain">The lock</h2></div>
+			<p>When <code class="inline">RequiresAdmin()</code> is true, the window refuses to save while
+			<code class="inline">AdminChangeAllowed()</code> is false. A check box in the page is not the check:
+			call <code class="inline">AdminChangeAllowed()</code> again in <code class="inline">SaveSettings()</code>
+			before writing a value for the whole computer. For a driver setting, the clock or the time zone, use
+			the administrator calls in <a href="appearance-kit.html#functions">R5UI.h</a>; the page itself runs
+			as the signed-in account.</p>
+		</section>
+
+		<section class="entry" id="example">
+			<div class="entry-header"><h2 class="plain">Example</h2></div>
+<pre class="code"><span class="k">class</span> ExampleModule : <span class="k">public</span> SettingsModule {
+<span class="k">public</span>:
+	<span class="k">const char</span>* Identifier() <span class="k">const</span> { <span class="k">return</span> <span class="s">"example"</span>; }
+	<span class="k">const char</span>* Name() <span class="k">const</span> { <span class="k">return</span> <span class="s">"Example"</span>; }
+	<span class="k">const char</span>* Category() <span class="k">const</span> { <span class="k">return</span> <span class="s">"system"</span>; }
+	<span class="k">const char</span>* Description() <span class="k">const</span> { <span class="k">return</span> <span class="s">"Try out a setting"</span>; }
+
+	BView* CreateView(SettingsContext* context, BRect frame);
+
+	status_t LoadSettings(SettingsContext* context)
+	{
+		<span class="k">if</span> (context-&gt;ReadSettings(Identifier(), fOpened) != B_OK)
+			fOpened.MakeEmpty();		<span class="c">// no file yet: the defaults</span>
+		fCurrent = fOpened;
+		<span class="k">return</span> B_OK;
+	}
+
+	status_t SaveSettings(SettingsContext* context)
+		{ <span class="k">return</span> context-&gt;WriteSettings(Identifier(), fCurrent); }
+
+	status_t RevertSettings(SettingsContext* context)
+	{
+		fCurrent = fOpened;
+		<span class="k">return</span> context-&gt;WriteSettings(Identifier(), fCurrent);
+	}
+
+<span class="k">private</span>:
+	BMessage fOpened;
+	BMessage fCurrent;
+};</pre>
+<pre class="code"><span class="c"># Jamfile</span>
+Addon settings_example :
+	ExampleModule.cpp
+	: be libr5ui.so [ TargetLibstdc++ ]
+	;</pre>
+		</section>
+
+		<section class="entry" id="limits">
+			<div class="entry-header"><h2 class="plain">Not yet</h2></div>
+			<ul class="plain">
+				<li>The page icon is chosen by the Settings window from a list of the pages it knows. A page from
+				another add-on shows no icon at the right of its title yet.</li>
+				<li><code class="inline">SettingsModule.h</code> is not in a development package yet. Copy it from
+				the R5 source.</li>
+			</ul>
+		</section>
+	</main>
+</div>
+
+<script src="r5book.js"></script>
+</body>
+</html>
