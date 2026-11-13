@@ -1,5 +1,17 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Stick scripts: the new SanDisk test stick
+
+Problem: the new test stick, a SanDisk Ultra USB 3, was not accepted. `scripts/write-stick.py` and `scripts/read-stick-logs.py` only took a USB disk whose Windows FriendlyName is `General UDisk`.
+
+What changed:
+- Both scripts have one list, `STICK_NAMES`: `USB SanDisk 3.2Gen1` (the name Get-Disk reports for the SanDisk, 61504880640 bytes) and `General UDisk`. The old stick keeps working.
+- The safety rules are the same: BusType USB, exactly one matching disk, disk 0 refused. With both sticks plugged in, the scripts stop. `write-stick.py --name` still picks one name by hand.
+- AGENTS.md: the stick line names the list instead of the General UDisk.
+- `tools/r5-befs` needs no change: it lists every removable or USB disk except disk 0, and Win32_DiskDrive reports the SanDisk as `Removable Media`.
+
+Tested: both scripts parse. The name match against Get-Disk on the Windows machine found exactly disk 2, the SanDisk. Not tested: a write, a read-back, or reading logs from the SanDisk (no image written yet), and whether R5 runs the stick at USB 3 speed (R5 has no UAS driver).
+
 ## 2026-11-13 - M11 step 2: the compositor core (A1), behind gpu_compositor
 
 Problem: M11 composes the desktop on the GPU. Step 2 is the core: one buffer per window, a compose with Vulkan, the fallback, and the compare and measurement of decision 7 and 14.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 R5OS Contributors
 # SPDX-License-Identifier: MIT
-"""Write an R5 image to the USB stick (the General UDisk) and read it back.
+"""Write an R5 image to the USB stick and read it back.
 
 The one tool for writing a stick on Windows. Run it from Windows Python:
 
@@ -14,9 +14,9 @@ prints the log. The log is also written next to the image
 image to be built from this branch. --no-source-check skips that.
 
 Safety:
-- It writes only to a disk whose FriendlyName is the stick name (default
-  "General UDisk") with BusType USB, and only when exactly one such disk
-  exists. Disk 0 is refused everywhere, also by path.
+- It writes only to a disk whose FriendlyName is one of STICK_NAMES (the
+  SanDisk Ultra USB 3 and the old General UDisk) or the --name given,
+  with BusType USB, and only when exactly one such disk exists. Disk 0 is refused everywhere, also by path.
 - The image must fit on the stick. Its size is read from the file.
 - After writing, it reads the whole image size back from the stick and
   compares the SHA-256 with the image. A mismatch is an error.
@@ -44,6 +44,9 @@ import sys
 import time
 from ctypes import wintypes
 from datetime import datetime
+
+# FriendlyName of the test sticks, as Get-Disk shows them.
+STICK_NAMES = ("USB SanDisk 3.2Gen1", "General UDisk")
 
 CHUNK = 1024 * 1024
 SAMPLE = 65536
@@ -176,7 +179,7 @@ def ioctl(handle, code, in_buf, out_size):
 	return out.raw[:got.value]
 
 
-def find_stick(name, image_size):
+def find_stick(names, image_size):
 	script = ("Get-Disk | Select-Object Number,FriendlyName,BusType,Size "
 		"| ConvertTo-Json -Compress")
 	raw = subprocess.check_output(
@@ -190,12 +193,12 @@ def find_stick(name, image_size):
 		print(f"disk {number}: {disk['FriendlyName']} {disk['BusType']} {disk['Size']}")
 		if number == 0:
 			continue
-		if str(disk["FriendlyName"]) == name and str(disk["BusType"]) == "USB":
+		if str(disk["FriendlyName"]) in names and str(disk["BusType"]) == "USB":
 			chosen.append((number, int(disk["Size"])))
 	if not chosen:
-		die(f"no USB disk named {name!r}")
+		die(f"no USB disk named one of {names!r}")
 	if len(chosen) > 1:
-		die(f"more than one USB disk named {name!r}")
+		die(f"more than one USB disk named one of {names!r}")
 	number, size = chosen[0]
 	if number == 0:
 		die("refusing disk 0")
@@ -441,8 +444,8 @@ def main():
 		help="text that must be in the image (repeatable), e.g. a settings line")
 	parser.add_argument("--no-efi-check", action="store_true",
 		help="write an image without an EFI partition anyway")
-	parser.add_argument("--name", default="General UDisk",
-		help="FriendlyName of the stick (default: General UDisk)")
+	parser.add_argument("--name",
+		help="FriendlyName of the stick (default: any of %s)" % ", ".join(STICK_NAMES))
 	parser.add_argument("--keep-old", action="store_true",
 		help="do not remove older stick images after the write")
 	parser.add_argument("--no-source-check", action="store_true",
@@ -470,7 +473,7 @@ def main():
 		print("start", datetime.now().isoformat(timespec="seconds"))
 		size = os.path.getsize(image_path)
 		print(f"image {image_path}, {size} bytes")
-		number, drive = find_stick(args.name, size)
+		number, drive = find_stick((args.name,) if args.name else STICK_NAMES, size)
 		expected = hash_image(image_path, args.expect)
 		print("image sha256", expected)
 		held = lock_stick_volumes(number)
