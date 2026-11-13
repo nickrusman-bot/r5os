@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - AMD processors load their microcode update again
+
+Problem: on the Ryzen 5 5625U every thread logged `find_microcode_amd incorrect alignment` and `no fw update found for this cpu`, so the CPU kept the BIOS microcode (`0xa50000f`). The matching patch in `microcode_amd_fam19h.bin` (equiv `a500`, 5568 bytes) starts at an offset that is 4 mod 16, and the loader skipped any patch that was not 16-byte aligned.
+
+What changed (`distro/kernel/src/system/kernel/arch/x86/arch_cpu.cpp`):
+- A patch that is not aligned is copied into one 16-byte aligned buffer that lives as long as the kernel, the way Linux copies a patch out of the container before loading it (`arch/x86/kernel/cpu/microcode/amd.c`). It is read only through that pointer, also by the other threads.
+- A thread that already reports the new level (the second thread of a core shares its microcode) logs `already at revision` instead of `update failed`.
+
+Tested: the kernel compiles (`jam kernel_x86_64`). On the 5625U, one boot of the M10 stick (round 4, with only the first part of this change) logged `CPU 0: updated from revision 0xa50000f to 0xa500012`, and six threads `update failed`, which this change turns into `already at revision`. That boot had a separate GPU self-test freeze; the change was taken out of the next M10 stick so the two do not mix. Not tested: a boot with exactly this PR. QEMU cannot test it (no microcode under a hypervisor).
+
 ## 2026-11-13 - Printers, Mail tray menu and the Tracker version column (not built, not booted)
 
 Three small bugs from Haiku Trac, picked from `generated/issues-2/BRIEF.md`. Each cause was read in the source; nothing was built or run. Copies of Haiku files are in `distro/rest/` (applied by `apply-rest-native.py`); the Tracker file was already an R5 copy in `distro/desktop/`. R5 lines are in SPDX-Snippet blocks (MIT).
