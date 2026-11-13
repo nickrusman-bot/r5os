@@ -59,7 +59,7 @@ $setup \
 	-Dgallium-rusticl=false -Dgallium-drivers=llvmpipe,zink \
 	-Dvulkan-drivers=amd,swrast -Dllvm=enabled \
 	-Dprefix=/home/nickr/r5os/mesa-build/sysroot -Dlibdir=lib \
-	-Dbuildtype=debugoptimized
+	-Dbuildtype=release -Db_ndebug=true
 # An existing build directory keeps its old c_args. Put the platform
 # define back, then reconfigure so ninja sees it.
 python3 "$ROOT/distro/mesa/ensure-cargs.py"
@@ -70,7 +70,7 @@ python3 /home/nickr/r5os/mesa-build/meson-1.7.0/meson.py setup --reconfigure bui
 	-Dgallium-rusticl=false -Dgallium-drivers=llvmpipe,zink \
 	-Dvulkan-drivers=amd,swrast -Dllvm=enabled \
 	-Dprefix=/home/nickr/r5os/mesa-build/sysroot -Dlibdir=lib \
-	-Dbuildtype=debugoptimized
+	-Dbuildtype=release -Db_ndebug=true
 ninja -C build-radv src/gallium/targets/lavapipe/libvulkan_lvp.so \
 	src/amd/vulkan/libvulkan_radeon.so src/egl/libEGL_mesa.so.0.0.0
 python3 "$ROOT/distro/mesa/pack-lavapipe.py" "$ROOT"
