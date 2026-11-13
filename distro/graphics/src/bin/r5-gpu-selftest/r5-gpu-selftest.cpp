@@ -516,9 +516,6 @@ write_ring_line(FILE* out)
 		ih.msi, ih.early, ih.eop, ih.wake);
 	fprintf(out, "selftest done\n");
 	fflush(out);
-	// The stick card says to wait for this before running check.
-	system("/bin/notify --group 'GPU self-test' --title 'GPU self-test done'"
-		" --timeout 60 'Open Terminal and type check.' >/dev/null 2>&1");
 }
 
 
@@ -825,6 +822,30 @@ run_isolation_stages(FILE* out)
 int
 main()
 {
+	// Once per boot. The stages are written to run before any other GPU
+	// client; Login starts this program for every sign-in, and the second
+	// run (the standard account on the M10 stick) is where the machine
+	// froze. The marker holds the boot time in seconds.
+	{
+		long long booted = (long long)real_time_clock()
+			- (long long)(system_time() / 1000000);
+		const char* marker = "/tmp/r5-gpu-selftest.boot";
+		FILE* old = fopen(marker, "r");
+		long long seen = 0;
+		if (old != NULL) {
+			if (fscanf(old, "%lld", &seen) != 1)
+				seen = 0;
+			fclose(old);
+		}
+		if (seen != 0 && llabs(seen - booted) <= 10)
+			return 0;
+		FILE* mark = fopen(marker, "w");
+		if (mark != NULL) {
+			fprintf(mark, "%lld\n", booted);
+			fclose(mark);
+		}
+	}
+
 	BPath cache;
 	if (find_directory(B_USER_CACHE_DIRECTORY, &cache) != B_OK)
 		return 1;

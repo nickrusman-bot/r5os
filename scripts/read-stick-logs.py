@@ -44,6 +44,9 @@ WANTED = (
     ("home/win-glteapot.txt", "win-glteapot.txt"),
     ("home/win-glteapot-zink-cpu.txt", "win-glteapot-zink-cpu.txt"),
     ("home/wsi.txt", "wsi.txt"),
+    # The standard account of the stick card (check-user).
+    ("home/users/test/config/cache/r5-gpu-selftest.txt", "r5-gpu-selftest-test.txt"),
+    ("home/users/test/config/settings/kernel/drivers/radeon_hd", "radeon_hd-test"),
 )
 
 

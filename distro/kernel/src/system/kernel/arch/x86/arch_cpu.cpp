@@ -1195,28 +1195,10 @@ find_microcode_amd(addr_t data, size_t size, uint32 patchLevel)
 			dprintf("find_microcode_amd update chipset specific firmware\n");
 			continue;
 		}
-// SPDX-SnippetBegin
-// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
-// SPDX-License-Identifier: MIT
 		if (((addr_t)header % 16) != 0) {
-			// The patches in a container are not 16-byte aligned: the
-			// fam19h patch for the 5625U (equiv a500, 5568 bytes) starts
-			// at an offset that is 4 mod 16, and every core skipped it.
-			// Linux copies a patch out of the container before it loads
-			// it (arch/x86/kernel/cpu/microcode/amd.c); here it goes into
-			// one aligned buffer that lives as long as the kernel, since
-			// sLoadedUcodeUpdate keeps pointing at it for the other cores.
-			static uint8 sAlignedPatch[8192] __attribute__((aligned(16)));
-			if (section->size > sizeof(sAlignedPatch)) {
-				dprintf("find_microcode_amd patch too large to align: %"
-					B_PRIu32 "\n", (uint32)section->size);
-				continue;
-			}
-			memcpy(sAlignedPatch, header, section->size);
-			header = (struct amd_microcode_header*)sAlignedPatch;
-			dprintf("find_microcode_amd patch copied to an aligned buffer\n");
+			dprintf("find_microcode_amd incorrect alignment\n");
+			continue;
 		}
-// SPDX-SnippetEnd
 
 		return header;
 	}
