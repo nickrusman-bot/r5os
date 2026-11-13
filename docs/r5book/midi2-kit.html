@@ -125,6 +125,14 @@ void midi2_encode_control_change(uchar channel, uchar controller, uint32 value, 
 uint8 midi2_note_on_midi1_velocity(uint16 velocity);</div>
 				<p>Value scaling as in Appendix D of the specification. A 16-bit note-on velocity becomes at least 1
 				in MIDI 1.0, so it never turns into a note-off.</p></div>
+			<div class="member"><div class="sig">int midi2_channel_voice_to_midi1(const uint32_t* words, size_t wordCount, uint8_t* out);</div>
+				<p>Turns one MIDI 2.0 channel voice packet (type 0x4, two words) into MIDI 1.0 bytes, as in
+				Appendix D of the specification. <code class="inline">out</code> holds 12 bytes. Returns the number of
+				bytes written: 3 for a note, control change or pitch bend, 2 for channel pressure, up to 8 for a
+				program change with a bank, and 12 for a registered or assignable controller (four control
+				changes). Returns 0 for a packet that has no MIDI 1.0 form, such as a per-note controller. Declared
+				in <code class="inline">&lt;Midi2Translate.h&gt;</code>, which <code class="inline">&lt;Midi2Defs.h&gt;</code>
+				includes; it is inline and needs no library.</p></div>
 		</section>
 
 		<!-- Receiving -->
