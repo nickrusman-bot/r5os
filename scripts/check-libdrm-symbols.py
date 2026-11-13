@@ -42,6 +42,15 @@ def undefined(path):
 # and vk_drm_syncobj_copy_payloads merge two sync files. That fd is not the
 # render node, and drmIoctl would not translate it.
 ALLOWED_IOCTL = {0xC0303E03}
+# One more known use, allowed only in the one function that makes it:
+# R5_GPU_GET_INFO (R5_GPU_OP_BASE + 0 = 30479, r5_gpu.h) in the R5 WSI
+# (distro/mesa/wsi/wsi_common_haiku.cpp, r5_gpu_available, since M10). It
+# reads the R5_GPU_CAP_AVAILABLE bit to decide whether RADV may present.
+# That is R5 code reading the R5 GPU interface directly, which is allowed.
+# It is not a Linux DRM request, so drmIoctl has nothing to translate. The
+# Lavapipe build carries the same WSI. The same number in any other
+# function, and any other request, still fails.
+ALLOWED_IOCTL_IN = {(30479, "_ZL16r5_gpu_availablev")}
 REG_ALIAS = {
     "eax": "rax", "ebx": "rbx", "ecx": "rcx", "edx": "rdx",
     "esi": "rsi", "edi": "rdi", "ebp": "rbp", "esp": "rsp",
@@ -58,11 +67,14 @@ def ioctl_requests(binary):
     text = subprocess.check_output(["objdump", "-d", str(binary)], text=True, errors="replace")
     regs = {}
     found = []
+    function = None
     imm = re.compile(r"mov\s+\$(0x[0-9a-f]+),%([a-z0-9]+)")
     copy = re.compile(r"mov\s+%([a-z0-9]+),%([a-z0-9]+)")
     for line in text.splitlines():
-        if re.search(r"<.*>:$", line):
+        header = re.search(r"<(.*)>:$", line)
+        if header:
             regs = {}
+            function = header.group(1)
             continue
         match = imm.search(line)
         if match:
@@ -78,7 +90,7 @@ def ioctl_requests(binary):
                 regs.pop(dst, None)
             continue
         if "__ioctl@plt" in line:
-            found.append(regs.get("rsi"))
+            found.append((regs.get("rsi"), function))
             continue
         written = re.search(r",%([a-z0-9]+)\s*$", line)
         if written:
@@ -109,13 +121,19 @@ def main():
         if "__ioctl" not in names:
             continue
         requests = ioctl_requests(binary)
-        if not requests or any(item not in ALLOWED_IOCTL for item in requests):
-            ioctl_hits.append(f"{binary.name} __ioctl {requests}")
+        bad = [
+            (request, function) for request, function in requests
+            if request not in ALLOWED_IOCTL
+            and (request, function) not in ALLOWED_IOCTL_IN
+        ]
+        if not requests or bad:
+            ioctl_hits.append(f"{binary.name} __ioctl {bad or requests}")
     if ioctl_hits:
         print("ioctl")
         print("\n".join(ioctl_hits))
         print("Mesa drm_ioctl must call drmIoctl on Haiku.")
-        print("The only allow-list entry is __ioctl for SYNC_IOC_MERGE.")
+        print("Allowed: __ioctl for SYNC_IOC_MERGE, and R5_GPU_GET_INFO only in")
+        print("the WSI's r5_gpu_available.")
         return 1
     radeon = BINARIES[0]
     if radeon.exists():

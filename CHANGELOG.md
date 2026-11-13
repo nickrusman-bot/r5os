@@ -1,5 +1,9 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Three old check failures fixed: the WSI ioctl, guilty after a reset, the share check name
+
+Symbol check: `scripts/check-libdrm-symbols.py` rejected `__ioctl` request 30479 in `libvulkan_radeon.so` and `libvulkan_lvp.so` since M10. That is `R5_GPU_GET_INFO` in `r5_gpu_available` of the R5 WSI (`distro/mesa/wsi/wsi_common_haiku.cpp`), which reads `R5_GPU_CAP_AVAILABLE` before RADV may present. R5 code may read the R5 GPU interface directly, and it is not a Linux DRM request that `drmIoctl` would translate, so the use is correct. The check now allows that request only in that one function (`ALLOWED_IOCTL_IN`, by symbol name); `SYNC_IOC_MERGE` stays allowed everywhere as before, and everything else still fails. Tested on the build host against the Mesa build already in `~/r5os` (no rebuild): `ok libdrm symbols`. Two scratch libraries, built in a temp folder and added to the check's list only for that run: an undefined `drmUnknownR5Probe` printed `missing` and rc 1; request 30479 from another function printed `__ioctl [(30479, 'other_caller')]` and rc 1.
+
 ## 2026-11-13 - M11 step 3b: Vulkan windows without a copy (A2) and the scanout through Vulkan, behind gpu_compositor
 
 Problem: a Vulkan window was copied by the CPU into a `BBitmap` every frame, and the composed screen went through a CPU copy into the back buffer and the M8 `DMA_DATA` copy. Step 3b builds the 3a design (`docs/APP-SERVER-COMPOSITOR.md`, #4251, #4252) and decision 15b.
