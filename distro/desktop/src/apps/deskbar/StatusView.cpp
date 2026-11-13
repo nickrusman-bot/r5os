@@ -1351,6 +1351,14 @@ TReplicantTray::_SaveSettings()
 		BFile file(path.Path(), B_READ_WRITE | B_CREATE_FILE | B_ERASE_FILE);
 		if ((result = file.InitCheck()) == B_OK)
 			result = fAddOnSettings.Flatten(&file);
+		// SPDX-SnippetBegin
+		// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+		// SPDX-License-Identifier: MIT
+		// To the disk now: after the power button the file kept its new
+		// size with old blocks in it, and Deskbar crashed on the next start.
+		if (result == B_OK)
+			file.Sync();
+		// SPDX-SnippetEnd
 	}
 
 	return result;

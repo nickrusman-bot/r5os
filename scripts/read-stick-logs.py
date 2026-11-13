@@ -38,6 +38,12 @@ WANTED = (
     ("home/config/settings/kernel/drivers/radeon_hd", "radeon_hd-home"),
     # Deskbar's add-on list (TReplicantTray). The M10 stick crashed in it.
     ("home/config/settings/deskbar/replicants", "deskbar-replicants"),
+    # The self-test's window and WSI files, also when check never ran.
+    ("home/win-teapot.txt", "win-teapot.txt"),
+    ("home/win-vkcube.txt", "win-vkcube.txt"),
+    ("home/win-glteapot.txt", "win-glteapot.txt"),
+    ("home/win-glteapot-zink-cpu.txt", "win-glteapot-zink-cpu.txt"),
+    ("home/wsi.txt", "wsi.txt"),
 )
 
 
