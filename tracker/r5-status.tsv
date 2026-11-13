@@ -1501,7 +1501,7 @@ id	r5_status	branch	commit	notes
 13582	open			
 13584	open			
 13591	open			
-13596	open			
+13596	fixed	claude/issues-1-apps	47031c3136	The link check for file names uses its own word characters with +; selection is unchanged. Not built and not tested.
 13603	open			
 13612	open			
 13615	open			
@@ -2123,7 +2123,7 @@ id	r5_status	branch	commit	notes
 15993	open			
 15997	open			
 15998	open			
-16002	open			
+16002	fixed	claude/issues-2-prefs	82184968c2	The three standard menu links go through B_TRANSLATE; Dutch catalog lines not added yet. Not built and not tested.
 16004	open			
 16005	open			
 16007	open			
@@ -2163,12 +2163,12 @@ id	r5_status	branch	commit	notes
 16097	open			
 16098	open			
 16100	open			
-16103	open			
+16103	fixed	claude/issues-2-prefs	82184968c2	fPendingJobs is cleared before BStringFormat::Format, which appends. Not built and not tested.
 16110	open			
 16111	open			
 16112	open			
 16113	open			
-16114	open			
+16114	fixed	claude/issues-1-apps	47031c3136	The rest of the error output is passed to the window when the output ends. Listing still ignores errors. Not built and not tested.
 16116	fixed			Desktop 48px default icon size (apply-ui-bugs.py)
 16117	open			
 16123	open			
@@ -2281,7 +2281,7 @@ id	r5_status	branch	commit	notes
 16394	open			
 16402	open			
 16403	open			
-16405	open			
+16405	fixed	claude/issues-1-apps	47031c3136	open passes spaces as %20; BUrl encode flag left unchanged in libbe. Not built and not tested.
 16406	open			
 16409	open			
 16410	open			
@@ -2351,7 +2351,7 @@ id	r5_status	branch	commit	notes
 16589	open			
 16590	open			
 16593	open			
-16600	open			
+16600	fixed	claude/issues-1-apps	47031c3136	Controller guards _FrameDuration() == 0 for clips shorter than one video frame. Not built and not tested.
 16604	open			
 16605	open			
 16606	open			
@@ -3206,7 +3206,7 @@ id	r5_status	branch	commit	notes
 18862	open			
 18863	open			
 18866	open			
-18869	open			
+18869	fixed	claude/issues-1-apps	47031c3136	The zoom button fits the window to the image; full screen stays on the View menu, toolbar and Enter. Not built and not tested.
 18870	open			
 18878	open			
 18879	open			
@@ -3301,7 +3301,7 @@ id	r5_status	branch	commit	notes
 19124	open			
 19126	open			
 19127	open			
-19128	open			
+19128	fixed	claude/issues-2-prefs	82184968c2	The Version column shows major.middle.minor instead of short_info. Not built and not tested.
 19129	open			
 19131	open			
 19133	open			
@@ -3838,7 +3838,7 @@ id	r5_status	branch	commit	notes
 20299	open			
 20301	open			
 20304	open			
-20306	open			
+20306	fixed	claude/issues-1-apps	47031c3136	The window takes Alt+C: filter-field selection is copied as before, otherwise the character. Not built and not tested.
 20307	open			
 20308	open			
 20309	open			
