@@ -1,0 +1,242 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 R5OS Contributors -->
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>R5 Settings – Network (mockup)</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#c9dbf6;font-family:'Manrope',system-ui,sans-serif;color:#141414}
+a{color:#0070db}
+.desk{width:1190px;height:770px;position:relative;overflow:hidden;background:#c9dbf6}
+.cap{width:1190px;padding:18px 80px 0;box-sizing:border-box;font-size:14px;font-weight:700;color:#1e3a5f}
+.win{position:absolute;left:80px;top:60px;width:1030px}
+.tab{display:inline-flex;align-items:center;gap:8px;height:26px;box-sizing:border-box;padding:0 18px 0 8px;background:#f8cc26;border:1px solid #a88200;border-bottom:none;font-size:13px;font-weight:700}
+.box11{width:11px;height:11px;box-sizing:border-box;background:#ffe88a;border:1px solid #a88200}
+.body{width:1030px;height:610px;box-sizing:border-box;background:#ededed;border:1px solid #8c8c8c;box-shadow:inset 1px 1px 0 #fff,0 24px 48px rgba(15,23,42,.18);padding:12px;display:flex;gap:14px}
+.side{width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+nav{flex:1;background:#fff;border:1px solid #c4c4c4;padding:8px 6px;display:flex;flex-direction:column;gap:2px}
+.cat{display:flex;align-items:center;gap:9px;height:36px;padding:0 8px;font-size:13px;font-weight:600}
+.cat .n{font-size:11px;color:#64748b}
+.grp{background:#f3f6fb;border-radius:6px;padding-bottom:4px}
+.sub{display:flex;align-items:center;height:27px;margin:0 4px 0 32px;padding:0 8px;border-radius:4px;color:#334155;font-size:12.5px;font-weight:500}
+.sub.on{background:#0084ff;color:#fff;font-weight:700}
+.search{display:flex;align-items:center;gap:8px;height:34px;box-sizing:border-box;padding:0 10px;background:#fff;border:1px solid #aaa;font-size:13px;color:#94a3b8}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.head{background:#fff;border:1px solid #c4c4c4;padding:12px 16px;display:flex;align-items:center;gap:14px}
+.head .c{font-size:12px;font-weight:600;color:#64748b}
+.head .t{font-size:22px;font-weight:800;letter-spacing:-.015em;line-height:1.2}
+.head .s{font-size:12.5px;color:#475569;margin-top:2px}
+.page{flex:1;min-height:0;display:flex;gap:12px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+fieldset{margin:0;background:#e4e4e4;border:1px solid #c4c4c4;padding:8px 12px 12px;display:flex;flex-direction:column;gap:7px;font-size:12px;min-width:0}
+legend{padding:0 4px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+input[type=checkbox]{margin:0;accent-color:#0084ff}
+.row{display:flex;align-items:center;gap:8px}
+.lab{width:92px;flex-shrink:0;color:#334155;font-weight:600}
+.val{color:#141414}
+.ip .lab{width:auto;min-width:72px}
+.ip .menu{white-space:nowrap}
+.mono{font-family:'Noto Sans Mono',ui-monospace,monospace;font-size:11.5px}
+.menu{height:24px;box-sizing:border-box;padding:0 8px;background:#f4f4f4;border:1px solid #8c8c8c;box-shadow:inset 1px 1px 0 #fff;display:inline-flex;align-items:center;gap:8px;font-size:12px}
+.field{height:22px;line-height:20px;box-sizing:border-box;padding:0 6px;background:#fff;border:1px solid #aaa;display:block;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.field.ro{background:#f3f3f3;color:#475569}
+.list{background:#fff;border:1px solid #aaa}
+.li{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #eee}
+.li:last-child{border-bottom:none}
+.li.on{background:#dbeafe}
+.li b{font-size:12px}
+.li small{display:block;font-size:11px;color:#64748b}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.later{font-size:10px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:3px;padding:0 4px;letter-spacing:.02em}
+.hint{font-size:11px;color:#64748b;line-height:1.45}
+.btn{height:34px;padding:0 16px;background:#f4f4f4;border:1px solid #8c8c8c;box-shadow:inset 1px 1px 0 #fff;font-family:inherit;font-size:13px}
+.sbtn{height:24px;padding:0 10px;background:#f4f4f4;border:1px solid #8c8c8c;box-shadow:inset 1px 1px 0 #fff;font-family:inherit;font-size:12px}
+.bottom{height:34px;display:flex;align-items:center;gap:6px}
+.lock{width:38px;height:34px;background:#f4f4f4;border:1px solid #8c8c8c;display:flex;align-items:center;justify-content:center}
+.notes{width:1030px;margin:0 80px 40px;box-sizing:border-box;background:#fff;border:1px solid #c4c4c4;padding:14px 18px;font-size:13px;line-height:1.55}
+.notes h3{margin:0 0 6px;font-size:14px}
+.notes ul{margin:0;padding-left:18px}
+</style>
+</head>
+<body>
+
+<!-- ================= Screen 1: Connections ================= -->
+<div class="cap">1 · Connections — wired, IPv4, IPv6 and DNS</div>
+<div class="desk" style="height:700px">
+<div class="win" style="top:14px">
+  <div class="tab"><span class="box11"></span>Settings<span style="width:120px"></span><span class="box11"></span></div>
+  <div class="body">
+    <div class="side">
+      <nav>
+        <div class="cat" style="font-weight:700"><img src="icons/r5-symbol.svg" width="22" height="22" alt="">Home</div>
+        <div style="height:1px;background:#e2e2e2;margin:6px 4px"></div>
+        <div class="cat"><img src="icons/appearance.svg" width="24" height="24" alt=""><span style="flex:1">Personalization</span><span class="n">4</span></div>
+        <div class="cat"><img src="icons/screen.svg" width="24" height="24" alt=""><span style="flex:1">System</span><span class="n">5</span></div>
+        <div class="cat"><img src="icons/devices.svg" width="24" height="24" alt=""><span style="flex:1">Devices</span><span class="n">4</span></div>
+        <div class="grp">
+          <div class="cat" style="font-weight:700"><img src="icons/network.svg" width="24" height="24" alt=""><span style="flex:1">Network</span>⌄</div>
+          <div class="sub on">Connections<span style="flex:1"></span>🔒︎</div>
+          <div class="sub">Discovery<span style="flex:1"></span><span style="opacity:.5">🔒︎</span></div>
+          <div class="sub">Wi-Fi</div>
+        </div>
+        <div class="cat"><img src="icons/people.svg" width="24" height="24" alt=""><span style="flex:1">Accounts</span><span class="n">1</span></div>
+      </nav>
+      <div class="search">⌕ Search</div>
+    </div>
+
+    <div class="main">
+      <div class="head">
+        <div style="flex:1"><div class="c">Network</div><div class="t">Connections</div><div class="s">Wired connections, addresses, and DNS</div></div>
+        <span style="position:relative;width:48px;height:48px"><img src="icons/network.svg" width="48" height="48" alt=""><img src="icons/prefs-wrench.svg" width="48" height="48" alt="" style="position:absolute;left:0;top:0"></span>
+      </div>
+
+      <div class="page">
+        <!-- connection list -->
+        <div class="col" style="width:196px;flex-shrink:0">
+          <fieldset style="flex:1">
+            <legend>Connections</legend>
+            <div class="list">
+              <div class="li on"><span class="dot" style="background:#16a34a"></span><div><b>Ethernet</b><small>Connected · 1 Gbit/s</small></div></div>
+              <div class="li"><span class="dot" style="background:#16a34a"></span><div><b>Wi-Fi</b><small>Connected to “Home”</small></div></div>
+              <div class="li"><span class="dot" style="background:#cbd5e1"></span><div><b>USB Ethernet</b><small>Cable unplugged</small></div></div>
+              <div class="li" style="color:#94a3b8"><span class="dot" style="background:#e2e8f0"></span><div><b>VPN “Office”</b><small>WireGuard · <span class="later">LATER</span></small></div></div>
+            </div>
+            <div class="row"><button class="sbtn">Add…</button><span class="later">LATER</span></div>
+            <span class="hint">Add is for a VPN or a tunnel. Network cards show up by themselves.</span>
+          </fieldset>
+        </div>
+
+        <!-- details -->
+        <div class="col" style="flex:1">
+          <fieldset>
+            <legend><input type="checkbox" checked aria-label="Use this connection">Ethernet</legend>
+            <div class="row"><span class="lab">Status</span><span class="val"><b style="color:#15803d">Connected</b> · 1 Gbit/s full duplex</span></div>
+            <div class="row"><span class="lab">Hardware</span><span class="val">Realtek RTL8125 · <span class="mono">a4:bb:6d:12:34:56</span></span></div>
+          </fieldset>
+
+          <div style="display:flex;gap:12px">
+            <fieldset class="ip" style="flex:1">
+              <legend>IPv4</legend>
+              <div class="row"><span class="lab">Configure</span><span class="menu">Automatic (DHCP) ▾</span></div>
+              <div class="row"><span class="lab">Address</span><div class="field ro mono">192.168.1.42</div></div>
+              <div class="row"><span class="lab">Subnet mask</span><div class="field ro mono">255.255.255.0</div></div>
+              <div class="row"><span class="lab">Router</span><div class="field ro mono">192.168.1.1</div></div>
+              <span class="hint">Lease renews in 11 hours. Manual makes these fields editable.</span>
+            </fieldset>
+            <fieldset class="ip" style="flex:1">
+              <legend>IPv6</legend>
+              <div class="row"><span class="lab">Configure</span><span class="menu">Automatic ▾</span></div>
+              <div class="row" style="align-items:flex-start"><span class="lab">Addresses</span>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                  <div class="field ro mono">2a02:a46:1f2::42/64</div>
+                  <div class="field ro mono">fe80::a6bb:6dff:fe12:3456</div>
+                </div></div>
+              <div class="row"><span class="lab">Router</span><div class="field ro mono">fe80::1</div></div>
+              <div class="row"><input type="checkbox" checked aria-label="Temporary addresses">Use temporary addresses for privacy <span class="later">LATER</span></div>
+            </fieldset>
+          </div>
+
+          <fieldset>
+            <legend>DNS</legend>
+            <div class="row"><span class="lab">Servers</span><div class="field ro mono">192.168.1.1, 2a02:a46:1f2::1</div><button class="sbtn">Edit…</button></div>
+            <div class="row"><span class="lab">Search domain</span><div class="field ro">home</div></div>
+            <div class="row"><input type="checkbox" aria-label="Encrypted DNS">Encrypted DNS (DNS over TLS) <span class="later">LATER</span></div>
+          </fieldset>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <div class="lock"><img src="icons/unlocked.svg" width="22" height="22" alt="Lock open"></div>
+        <span style="flex:1"></span><button class="btn">Revert</button><button class="btn">Defaults</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ================= Screen 2: Discovery ================= -->
+<div class="cap">2 · Discovery — the computer's .local name, Bonjour, and what it offers</div>
+<div class="desk" style="height:700px">
+<div class="win" style="top:14px">
+  <div class="tab"><span class="box11"></span>Settings<span style="width:120px"></span><span class="box11"></span></div>
+  <div class="body">
+    <div class="side">
+      <nav>
+        <div class="cat" style="font-weight:700"><img src="icons/r5-symbol.svg" width="22" height="22" alt="">Home</div>
+        <div style="height:1px;background:#e2e2e2;margin:6px 4px"></div>
+        <div class="cat"><img src="icons/appearance.svg" width="24" height="24" alt=""><span style="flex:1">Personalization</span><span class="n">4</span></div>
+        <div class="cat"><img src="icons/screen.svg" width="24" height="24" alt=""><span style="flex:1">System</span><span class="n">5</span></div>
+        <div class="cat"><img src="icons/devices.svg" width="24" height="24" alt=""><span style="flex:1">Devices</span><span class="n">4</span></div>
+        <div class="grp">
+          <div class="cat" style="font-weight:700"><img src="icons/network.svg" width="24" height="24" alt=""><span style="flex:1">Network</span>⌄</div>
+          <div class="sub"><span>Connections</span><span style="flex:1"></span><span style="opacity:.5">🔒︎</span></div>
+          <div class="sub on">Discovery<span style="flex:1"></span>🔒︎</div>
+          <div class="sub">Wi-Fi</div>
+        </div>
+        <div class="cat"><img src="icons/people.svg" width="24" height="24" alt=""><span style="flex:1">Accounts</span><span class="n">1</span></div>
+      </nav>
+      <div class="search">⌕ Search</div>
+    </div>
+
+    <div class="main">
+      <div class="head">
+        <div style="flex:1"><div class="c">Network</div><div class="t">Discovery</div><div class="s">Find devices and services on this network</div></div>
+        <span style="position:relative;width:48px;height:48px"><img src="icons/network.svg" width="48" height="48" alt=""><img src="icons/prefs-wrench.svg" width="48" height="48" alt="" style="position:absolute;left:0;top:0"></span>
+      </div>
+
+      <div class="page">
+        <div class="col" style="flex:1">
+          <fieldset>
+            <legend>This computer</legend>
+            <div class="row"><span class="lab">Name</span><span class="val"><b>r5-laptop</b></span> <a href="#">Rename…</a></div>
+            <div class="row"><span class="lab">On this network</span><span class="mono">r5-laptop.local</span></div>
+            <div class="row"><input type="checkbox" checked aria-label="Announce">Let other devices find this computer <span class="later">LATER</span></div>
+            <span class="hint">Rename… is the same name as on Information.</span>
+          </fieldset>
+
+          <fieldset style="flex:1">
+            <legend>Shared from this computer</legend>
+            <div class="list">
+              <div class="li"><input type="checkbox" checked aria-label="SSH"><div style="flex:1"><b>Remote login (SSH)</b><small>Port 22 · password or key</small></div></div>
+              <div class="li"><input type="checkbox" aria-label="FTP"><div style="flex:1"><b>File transfer (FTP)</b><small>Off · not encrypted</small></div></div>
+              <div class="li" style="color:#94a3b8"><input type="checkbox" disabled aria-label="File sharing"><div style="flex:1"><b>File sharing (SMB)</b><small>Shares the Public folder</small></div><span class="later">LATER</span></div>
+            </div>
+            <span class="hint">An item that is on is also announced, so other devices list it.</span>
+          </fieldset>
+        </div>
+
+        <div class="col" style="flex:1">
+          <fieldset style="flex:1">
+            <legend><input type="checkbox" checked aria-label="Find devices">Find devices (Bonjour)</legend>
+            <div class="list" style="flex:1">
+              <div class="li"><span style="width:22px;text-align:center">🖨︎</span><div style="flex:1"><b>HP LaserJet M110</b><small>Printer · hp-m110.local</small></div></div>
+              <div class="li"><span style="width:22px;text-align:center">🔊︎</span><div style="flex:1"><b>Living room</b><small>AirPlay speaker · IPv4</small></div></div>
+              <div class="li"><span style="width:22px;text-align:center">🖥︎</span><div style="flex:1"><b>r5-desktop</b><small>R5 · SSH · r5-desktop.local</small></div></div>
+              <div class="li"><span style="width:22px;text-align:center">📁︎</span><div style="flex:1"><b>nas</b><small>File sharing · nas.local</small></div><a href="#" style="font-size:11px">Open</a></div>
+            </div>
+            <div class="row"><span class="hint" style="flex:1">Programs can reach a <span class="mono">.local</span> name. Printers and speakers in this list are also offered by Printers and AirPlay.</span><button class="sbtn">Refresh</button></div>
+          </fieldset>
+        </div>
+      </div>
+
+      <div class="bottom">
+        <div class="lock"><img src="icons/unlocked.svg" width="22" height="22" alt="Lock open"></div>
+        <span style="flex:1"></span><button class="btn">Revert</button><button class="btn">Defaults</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="notes">
+  <h3>Legend</h3>
+  <ul>
+    <li><span class="later">LATER</span> marks a place kept free for work that is not in R5 yet. The item stays off the page until it works, so the layout does not have to change.</li>
+    <li>Both pages need the lock: Connections changes the network setup and Discovery changes what the computer shares. Wi-Fi keeps its own page.</li>
+    <li>The separate Network program stays installed.</li>
+  </ul>
+</div>
+</body>
+</html>

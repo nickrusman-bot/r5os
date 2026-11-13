@@ -8,6 +8,7 @@ The design the user chose for the R5 Settings window. Settings is rebuilt to loo
 | `information.png` | The Information page: a device card, six tiles, and a footer. |
 | `display.png` | The Display page. The picture has two screens. The page shows one screen until a second screen exists, and leaves out Scale, Rotation, Main screen, and Mirror or Extend. |
 | `notifications.png`, `notifications.html` | An open page (Notifications). Its category, System, is open in the list. |
+| `network.html` | The two Network pages, Connections and Discovery, one above the other. Items marked LATER are not part of the first version. |
 | `icons/` | The icons the pages use (see "Icons" below) |
 
 The HTML pages open in a browser without a server. The PNGs are those pages at 1190 by 770.
