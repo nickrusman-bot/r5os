@@ -1,5 +1,20 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Small fixes in Terminal, CharacterMap, ShowImage, MediaPlayer, Expander and open (not built, not booted)
+
+Six small application bugs from Haiku Trac, picked from `generated/issues-1/BRIEF.md`. Each cause was read in the source; nothing was built or run. The changed Haiku files are copied into `distro/rest/` (applied by `apply-rest-native.py`), with the R5 lines in SPDX-Snippet blocks (MIT).
+
+- Terminal links a path with `+` (`mkdir c++`, Alt+Ctrl over it). Cause: the link check for file names used the selection word characters (`:@-./_~`). A separate `kPathAdditionalWordCharacters` with `+` is used for links only; double-click selection is unchanged. `TermConst.cpp/.h`, `TermViewStates.cpp/.h`. [#1602](https://github.com/r5-operating-system/r5os/issues/1602), Trac 13596.
+- CharacterMap: Alt+C copies the selected character. Cause: the filter field keeps the focus, so the default copy shortcut went to its empty selection. The window now takes Alt+C: text selected in the filter field is copied as before, otherwise the character. `CharacterWindow.cpp`. [#3944](https://github.com/r5-operating-system/r5os/issues/3944), Trac 20306.
+- ShowImage: the window zoom button fits the window to the image instead of going full screen. Full screen stays on the View menu, the toolbar and Enter; in full screen the zoom button leaves it. `ShowImageWindow.cpp`. [#3310](https://github.com/r5-operating-system/r5os/issues/3310), Trac 18869.
+- MediaPlayer: a clip shorter than one video frame (25 fps) no longer crashes with a divide error. Cause, from the Trac debug report: `Controller::_TimePosition()` divides by `_FrameDuration()`, which is 0 for such a clip. Guarded there, in `TimePositionFor()` and in the resume question. `Controller.cpp`. [#2455](https://github.com/r5-operating-system/r5os/issues/2455), Trac 16600.
+- Expander shows the error when the unpack command is missing, instead of a blank window. Cause: when the command fails at once, its output closes before its error is read, and the error was dropped. The rest of the error output is passed to the window before the end. Limit: while only listing the contents, the window still ignores errors (unchanged). `ExpanderThread.cpp`. [#2271](https://github.com/r5-operating-system/r5os/issues/2271), Trac 16114.
+- `open` accepts a URL with spaces. Cause: `BUrl(url, true)` does not encode (`SetUrlString` drops the result of `UrlEncode`), and a space makes the URL invalid. `open` now passes spaces as `%20`. `libbe` is not changed: fixing the flag there would double-encode URLs that other programs already pass encoded. `src/bin/open.cpp`. [#2384](https://github.com/r5-operating-system/r5os/issues/2384), Trac 16405.
+
+Dropped from the brief: StyledEdit font menu (#1965, the ticket is only a screenshot) and `pkgman search` width (#3232, the table truncates on purpose; wrapping is a larger change).
+
+Not tested: no jam, no QEMU boot, no hardware. The GitHub issues stay open and the tracker is unchanged until a test boot.
+
 ## 2026-11-12 - OpenGL through Zink: the driver choice and the window path (M9 steps 1-4, QEMU only)
 
 Problem: Zink was built into `libEGL_mesa` but could not show a frame. `haiku_swap_buffers()` presents with `flush_frontbuffer()`, and `zink_flush_frontbuffer()` returns at once without a kopper swapchain. Recorded in QEMU before the change: `GALLIUM_DRIVER=zink LIBGL_ALWAYS_SOFTWARE=1 GLTeapot` opened a white window, printed nothing, and kept running.
