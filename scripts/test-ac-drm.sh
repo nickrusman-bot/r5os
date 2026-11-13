@@ -15,9 +15,10 @@ if [[ ! -f $LIBDRM/build-host/build.ninja ]]; then
 		-Dman-pages=disabled -Dcairo-tests=disabled \
 		-Dc_args=-DR5_HOST_TEST
 fi
-if [[ ! -f $LIBDRM/build-host/libdrm.so.2.124.0.p/r5_translate.c.o ]]; then
-	ninja -C "$LIBDRM/build-host" || true
-fi
+# Always: ninja rebuilds only what changed, so a libdrm patch applied after
+# the first build reaches the objects. The link of libdrm.so fails on the
+# host (r5_host_ioctl, r5_area_address); the objects are what this needs.
+ninja -C "$LIBDRM/build-host" || true
 INC=(
 	-I"$MESA/src" -I"$MESA/src/amd/common" -I"$MESA/include"
 	-I"$LIBDRM" -I"$LIBDRM/amdgpu" -I"$LIBDRM/include" -I"$LIBDRM/include/drm"
