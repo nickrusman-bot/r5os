@@ -2144,7 +2144,14 @@ VersionAttributeText::ReadValue(BString* outString)
 		if (info.InitCheck() == B_OK
 			&& info.GetVersionInfo(&version, fAppVersion
 				? B_APP_VERSION_KIND : B_SYSTEM_VERSION_KIND) == B_OK) {
-			*outString = version.short_info;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+			// short_info is free text and often holds a description, not a
+			// version. Show the version number.
+			outString->SetToFormat("%" B_PRIu32 ".%" B_PRIu32 ".%" B_PRIu32,
+				version.major, version.middle, version.minor);
+// SPDX-SnippetEnd
 			fValueIsDefined = true;
 			return;
 		}
