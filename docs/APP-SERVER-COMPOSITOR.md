@@ -118,6 +118,189 @@ The R5 decorator implements all three. app_server adds the glass views of the wi
 - app_server imports them with `R5_GPU_BO_IMPORT` and creates a Vulkan image for each. On present, the client sends the image index and a sync object that its rendering signals; the compose waits on it before it samples that image, and signals one back when it is done, so the client can reuse the image.
 - Whether an interface call is needed for sharing a sync object between teams is checked in step 3. If one is needed, it is additive (`R5_GPU_OP_BASE + 32` onward), vendor-neutral, and documented in the header and `docs/GPU-ARCHITECTURE.md` in the same change.
 - When export or import fails, or on Lavapipe, the M7 copy into a `BBitmap` stays, and app_server logs `app_server: window <id> zero-copy off: <reason>` once per window.
+- The design that step 3a worked out from decision 15 is the next section. Where it and this list differ, the next section counts.
+
+## Zero-copy design (step 3a, 13 Nov 2026)
+
+Paper only: nothing below is built yet. It works decision 15 of the brief out against the source as it is on `main` after step 2. Every point names the file it was checked in. Where the source does not match decision 15, the point is under [Open questions (step 3a)](#open-questions-step-3a) and is not chosen here.
+
+### What the source has today
+
+- **Kernel** (`distro/graphics/src/add-ons/kernel/drivers/graphics/r5gpu/`): `R5_GPU_BO_EXPORT` (`+ 17`) and `R5_GPU_BO_IMPORT` (`+ 18`) return `B_UNSUPPORTED` (`r5_gpu_core.cpp`, before the GPU lock). There is no structure for them in `r5_gpu.h`. A buffer is one slot in the global table `sBo[kMaxBo]` (256 slots for the whole system, `r5_gpu_internal.h`); the handle is the slot number plus one. A slot has exactly one `owner` (the open file), one user area (`area`, `mapTeam`) and the memory itself (`kernelArea`, `vramOffset`). `gpu_bo_get` refuses a handle of another file. A file that closes while its GPU work runs **parks** its buffers (`parked`, `parkSequence`), and the retire thread frees them after that fence (`gpu_release_parked`). There is no reference count. `borrowed` marks the framebuffer from `R5_GPU_SCANOUT_BO`: release unmaps it and does not free it.
+- **Sync objects** live inside the file: `gpu_client::syncs[kMaxSync]`, 128 per file, and the handle is the index. Jobs point at them (`gpu_job::syncs`). `gpu_free` clears them when the file closes.
+- **The app_server check:** `gpu_caller_is_app_server()` compares the path that `load_image` stored in `team_info.args` with `/system/servers/app_server` and `/boot/system/servers/app_server`. `R5_GPU_SCANOUT_BO` uses it.
+- **Areas:** a GTT buffer is a kernel area (`create_area`, deliberately not `B_CLONEABLE_AREA`) plus a clone into the one team that maps it (`vm_clone_area`, `BO_MAP`). So areas are used for the CPU mapping of a buffer, but no other team can clone it. Sharing does not go through areas.
+- **The R5 DRM library** (`distro/graphics/libdrm-r5/r5_translate.c`): `DRM_IOCTL_PRIME_HANDLE_TO_FD`, `PRIME_FD_TO_HANDLE`, `SYNCOBJ_HANDLE_TO_FD` and `SYNCOBJ_FD_TO_HANDLE` are logged as unknown (`ENOSYS`). `DRM_IOCTL_AMDGPU_GEM_METADATA` and `DRM_IOCTL_AMDGPU_GEM_OP` are not translated either. Timeline sync objects are (`SYNCOBJ_TIMELINE_WAIT`, `_SIGNAL`, the CS timeline chunks).
+- **The WSI** (`distro/mesa/wsi/wsi_common_haiku.cpp`): on RADV a `WSI_IMAGE_TYPE_CPU` swapchain with `wsi_configure_buffer_image` (a device image blitted into a linear buffer), then a CPU copy of the rows into a `BBitmap` per image, shown with `BView::SetViewBitmap()`. Present waits for `BWindow::Sync()`. There is no BMessage of its own: the "view-surface protocol" is `SetViewBitmap`, which travels as `AS_VIEW_SET_VIEW_BITMAP` over the window's link (`src/servers/app/ServerWindow.cpp`).
+- **app_server** has two GPU files: RADV's (through the Vulkan device of `Compositor.cpp`) and the one of the M8 copy (`GPUCopy.cpp` opens `/dev/gpu/radeon_hd/0` itself and holds the `R5_GPU_SCANOUT_BO` handle).
+
+### How RADV and libdrm import a buffer fd
+
+Checked in Mesa 25.3.6 (`src/amd/vulkan/winsys/amdgpu/radv_amdgpu_bo.c`, `src/amd/common/ac_linux_drm.c`) and libdrm 2.4.124 (`amdgpu/amdgpu_bo.c`):
+
+1. `vkAllocateMemory` with `VkImportMemoryFdInfoKHR` (opaque fd or dma-buf) calls `radv_amdgpu_winsys_bo_from_fd` and, on success, **closes the fd** (`radv_device_memory.c`).
+2. `ac_drm_bo_import` calls libdrm `amdgpu_bo_import`, which does `drmPrimeFDToHandle(dev->fd, fd)` (an ioctl on RADV's own render-node file, so it reaches the R5 DRM library) and then **`lseek(fd, 0, SEEK_END)` on the fd itself** for the size. That `lseek` is ordinary libc, not an ioctl, so the library does not see it.
+3. RADV then asks `ac_drm_bo_query_info`: `DRM_AMDGPU_GEM_METADATA` (get) and `DRM_AMDGPU_GEM_OP` (get create info) for the heap and the flags, then maps the buffer in its own address space with `GEM_VA`.
+4. `vkGetMemoryFdPropertiesKHR` (dma-buf) imports the fd, queries it and **frees it again** (`radv_amdgpu_bo_get_flags_from_fd`).
+5. Export: `vkGetMemoryFdKHR` calls `amdgpu_bo_export(dma_buf_fd)`, that is `drmPrimeHandleToFD`, a second ioctl the library sees.
+6. Sync objects: `vk_drm_syncobj_import_opaque_fd` and `_export_opaque_fd` (`src/vulkan/runtime/vk_drm_syncobj.c`) only call `drmSyncobjFDToHandle` / `HandleToFD`. Nothing reads the fd itself.
+
+So the token-to-fd step fits **without a change in RADV**: everything RADV does with the fd either reaches the library as an ioctl, or is the `lseek` of step 2. What the fd must be for that `lseek` is open question 1. The library has to learn `GEM_METADATA` and `GEM_OP` for step 3, which is a library change, not a RADV change.
+
+### The structures
+
+Additive, in `r5_gpu.h`, version 1. Calls `+ 17` and `+ 18` keep their numbers and start to work; the sync calls take the first free numbers, `+ 32` and `+ 33` (`R5_GPU_SCANOUT_BO` is `+ 31`).
+
+```c
+#define R5_GPU_SHARE_TOKEN_BYTES 16u	/* 128 bits */
+#define R5_GPU_SHARE_COMPOSITOR 1u	/* the only target in version 1 */
+#define R5_GPU_SHARE_TEAM 2u		/* one named team; refused in version 1 */
+
+/* R5_GPU_BO_EXPORT (+ 17) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;		/* in: a buffer of the calling file */
+	uint32_t	target;		/* in: R5_GPU_SHARE_COMPOSITOR */
+	int32_t		target_team;	/* in: for R5_GPU_SHARE_TEAM; 0 now */
+	uint32_t	flags;		/* in: 0 */
+	uint64_t	bytes;		/* out: the real size */
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* out */
+} r5_gpu_bo_export;
+
+/* R5_GPU_BO_IMPORT (+ 18) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* in */
+	uint32_t	flags;		/* in: 0 */
+	uint32_t	handle;		/* out: a new handle in the calling file */
+	uint32_t	domain;		/* out: R5_GPU_DOMAIN_* */
+	uint32_t	bo_flags;	/* out: the flags of BO_CREATE */
+	uint64_t	bytes;		/* out: the real size */
+	int32_t		exporter_team;	/* out: see open question 4 */
+	uint32_t	_pad;
+} r5_gpu_bo_import;
+
+/* R5_GPU_SYNCOBJ_EXPORT (+ 32) and R5_GPU_SYNCOBJ_IMPORT (+ 33) */
+typedef struct {
+	uint32_t	size;
+	uint32_t	version;
+	uint32_t	handle;		/* export: in; import: out */
+	uint32_t	target;		/* export: in, as for buffers */
+	int32_t		target_team;	/* export: in, 0 now */
+	uint32_t	flags;		/* 0 */
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];	/* export: out; import: in */
+	int32_t		exporter_team;	/* import: out */
+	uint32_t	_pad;
+} r5_gpu_syncobj_share;
+```
+
+### The token, its target, expiry and limit
+
+- **Made by the kernel** at `BO_EXPORT` / `SYNCOBJ_EXPORT`, 128 bits. Which random source is open question 2. The token is compared in constant time.
+- **Target:** only `R5_GPU_SHARE_COMPOSITOR`. `BO_IMPORT` and `SYNCOBJ_IMPORT` first call `gpu_caller_is_app_server()`; anyone else gets `B_NOT_ALLOWED` (refusal `BO_IMPORT caller`). `R5_GPU_SHARE_TEAM` and a non-zero `target_team` are refused with `B_BAD_VALUE` until a later version uses them.
+- **One use:** a pending export is a record `{token, object, exporter file, exporter team, made at, target}` in a global table. The import that matches removes it. A second import of the same token finds nothing (`BO_IMPORT token`, `B_BAD_VALUE`), just like a wrong token.
+- **Expiry:** a record that is not imported within its lifetime is removed at the next export or import, and by the watchdog (`gpu_watchdog`, which already runs). The lifetime is a radeon_hd setting with a starting value; see open question 5.
+- **Limit:** at most a fixed number of pending exports per file (`B_NO_MEMORY`, refusal `BO_EXPORT limit`), plus the existing global limits (`kMaxBo`, `kMaxSync`). A pending export holds a reference, so an export that is never imported holds GTT until it expires or its file closes, never longer.
+- **Exports not yet imported are removed when their file closes** (`gpu_free`), as decision 15 says.
+
+### The reference count
+
+Today a slot is the memory and the handle at the same time. Sharing splits it:
+
+- a **backing** record: `refs`, `domain`, `flags`, `bytes`, `vramOffset`, `kernelArea`, `kernel`, `borrowed`;
+- the **slot** per file, as today: `owner`, `ranges`, `area` and `mapTeam` (the CPU mapping stays per team), `parked`, `parkSequence`, `hold`, and a pointer to its backing.
+
+`refs` counts each live slot (also a parked one, which is how "the GPU work in flight" is counted: a parked slot is freed by the retire thread after its fence) and each pending export. `gpu_bo_release` unmaps that slot's ranges and deletes that slot's user area, then drops one reference. Only the last reference frees the VRAM or deletes the kernel area. A `borrowed` backing (the scanout) is never freed. So:
+
+- the program frees its handle or crashes: only its slot goes (parked if its work still runs). What app_server imported stays valid;
+- app_server closes its handle: its slot goes, and the memory goes when the program's slot is gone too.
+
+Sync objects get the same split: a shared sync object moves out of `gpu_client::syncs[]` into a global table with `refs`; the file's handle then points at it. Jobs keep their pointer as today, and `gpu_free` drops the file's references instead of clearing a shared object. How large that change is, is part of open question 3.
+
+### The two sync objects per swapchain image
+
+- Per image, the **program** creates two timeline sync objects and exports both to the compositor: **ready** (the program's submit signals point *n* when frame *n* in that image is drawn) and **free** (app_server's compose signals point *n* when it no longer samples that image for frame *n*). Both point the same way as decision 15 says (program → app_server and app_server → program); both are made by the program because the target in version 1 is only the compositor.
+- **The compose never waits** for ready. At the start of a frame app_server asks `SYNCOBJ_QUERY` (no wait): reached → it samples the new image; not reached → it keeps the previous image of that window. The compose's submit signals free with its own fence.
+- The WSI waits for free before it hands that image out in `vkAcquireNextImageKHR`, with the program's own timeout.
+- Mesa already has this pattern: `wsi_create_image_explicit_sync_drm` in `src/vulkan/wsi/wsi_common_drm.c` (Wayland explicit sync) makes the two timeline semaphores per image and gets their sync-object fds with `vkGetSemaphoreFdKHR`. The R5 WSI uses that code.
+
+### The protocol message
+
+Decision 15 says "the existing `BMessage`". In the source there is none (see open question 4): the WSI uses `SetViewBitmap`, a link message. The design is one new link message at the end of the `AS_*` codes, sent by the WSI once per swapchain, then one per present:
+
+- **once:** the view, the image count, and per image the buffer token, width, height, pitch, format, and the ready and free tokens;
+- **per present:** the image index and the frame number *n*.
+
+app_server answers the first message with one status per image, so the WSI can fall back to the copy path at once when an import fails.
+
+### The R5 DRM library: token to fd, and back
+
+- **Export side (the program).** `vkGetMemoryFdKHR` reaches `PRIME_HANDLE_TO_FD`; the library calls `BO_EXPORT` with target compositor and returns a **local fd** that stands for that token (open question 1 says what kind of fd). The library keeps a small table `fd → token`. A new library call, `r5_drm_fd_to_token(fd, token)`, gives the WSI the token to put in the message. The same for `SYNCOBJ_HANDLE_TO_FD` and `SYNCOBJ_EXPORT`.
+- **Import side (app_server).** A new library call, `r5_drm_token_to_fd(device_fd, token, bytes, &fd)`, makes a local fd for a token that arrived in the message and records it. app_server passes that fd in `VkImportMemoryFdInfoKHR`. RADV's `PRIME_FD_TO_HANDLE` reaches the library, which looks up the token, calls `BO_IMPORT` once, removes the entry and returns the new handle. `lseek(fd, 0, SEEK_END)` must return `bytes` (open question 1). `GEM_METADATA` (get) and `GEM_OP` (get create info) are added to the library and answered from `domain` and `bo_flags` of `BO_IMPORT`. RADV then closes the fd. The same for sync objects, with `SYNCOBJ_FD_TO_HANDLE` and `SYNCOBJ_IMPORT`.
+- **app_server must not call `vkGetMemoryFdPropertiesKHR`** on such an fd: RADV imports and frees it there (step 4 above), and that would use up the one-use token. app_server picks the memory type itself from `domain` (GTT on RADV).
+- **No new RADV patch.** Both calls are additive library calls, MIT, documented in `docs/GPU-ARCHITECTURE.md` in the same change. A stale fd number in the table (the program closed it and the number was reused) is caught because the entry is removed at the first use and the library compares the fd's `fstat` identity with what it recorded.
+
+### The WSI
+
+- On RADV the swapchain becomes a `WSI_IMAGE_TYPE_DRM` swapchain with a linear, exportable buffer (the "prime" path of `wsi_common_drm.c`: `wsi_create_prime_image_mem` with `VkExportMemoryAllocateInfo`, then `vkGetMemoryFdKHR`), plus the explicit-sync semaphores above. Only `wsi_common_haiku.cpp` (R5's own file) changes; the common Mesa WSI files are used as they are.
+- When export or the first message fails, the WSI keeps today's path (the CPU copy into a `BBitmap`). On Lavapipe there is no render node, so the WSI does not try, and app_server logs `app_server: window <id> zero-copy off: lavapipe`.
+- If `wsi_common_haiku.cpp` changes, a new `mesa_radv` package follows with the pin and the libdrm symbol check (`docs/GPU-ARCHITECTURE.md`, "Updating Mesa").
+
+### app_server's import and check
+
+- In the GPU mode only, on RADV only. For each image: `r5_drm_token_to_fd`, `vkAllocateMemory` with the import, a `VkBuffer` over it (the compose reads `VkBuffer`s, decision 16). Then the ready and free sync objects as imported timeline semaphores.
+- **app_server believes the kernel:** it checks the width, height, pitch and format from the message against `bytes` from `BO_IMPORT` (`pitch × height ≤ bytes`, pitch at least `width × 4`, format one of the formats the copy path accepts). A wrong value refuses that window's zero-copy (`zero-copy off: size`), and the copy path stays. A lie can only spoil that program's own window.
+- The imported buffer is treated like a window buffer of step 2 for the compose: one more source per window, back to front, the same barriers.
+
+### The scanout import into Vulkan
+
+- app_server's M8 file (`GPUCopy.cpp`) already holds the scanout handle (`R5_GPU_SCANOUT_BO`). It exports it with `BO_EXPORT` to the compositor (app_server is the target, so this works for itself), and the Vulkan device imports it with `r5_drm_token_to_fd`, as a `VkBuffer` in VRAM.
+- After the compose, a `vkCmdCopyBuffer` of the damaged rows from the frame buffer into the scanout, in the same submit, signalled by the same fence. That replaces the CPU copy into the back buffer and the M8 `DMA_DATA` copy, **only if it measures no worse** (brief, step 3b). The pointer is drawn after it, as today.
+- A mode change gives a new scanout: the old import is closed after the next fence, and the new one is exported and imported again.
+
+### The reset path
+
+- The kernel closes nothing by itself at a hang: the M10 policy marks each file with a context `lost`. The imported slots are freed with app_server's lost file when the compositor drops that device (decision 14, step 2: one restart after a successful reset). The backing of a program's buffer stays until the program's slot goes too.
+- Pending exports of a lost file stay until they expire or that file closes; an import of them after the reset is refused (`BO_IMPORT lost`).
+- After the restart, app_server has no imported buffers. Decision 15 says the windows of Vulkan programs then show their last frame until the program presents again. That frame was in the imported buffer, which is gone; see open question 6.
+
+### Pass and fail lines (for step 3b)
+
+One line per test, from the 3b row of the brief. A host or VM test program, `r5-share-test`, prints them; app_server prints the `zero-copy off` lines.
+
+| Test | Pass line |
+|---|---|
+| another team imports a token | `r5-share-test: import by other team refused: pass` |
+| 1000 guessed tokens | `r5-share-test: 1000 guessed tokens refused: pass` |
+| the same token twice | `r5-share-test: second import refused: pass` |
+| an export not imported in time | `r5-share-test: expired token refused: pass` |
+| more exports than the limit | `r5-share-test: export limit refused: pass` |
+| exporter killed before the import | `r5-share-test: killed before import, gtt returned: pass` |
+| exporter killed after the import | `r5-share-test: killed after import, still readable, gtt returned at close: pass` |
+| a size that lies | `app_server: window <id> zero-copy off: size` and `r5-share-test: lying size refused: pass` |
+| ready never signals | `r5-share-test: stuck ready, desktop still composes: pass` |
+| Lavapipe | `app_server: window <id> zero-copy off: lavapipe` |
+
+A failure prints the same text with `fail` and the reason in place of `pass`. "GTT returned" is read with `R5_GPU_GET_COUNTERS` before and after, as the M5 counters are.
+
+### Open questions (step 3a)
+
+Where the source says something other than decision 15, or something the decision does not settle. None of these is chosen here.
+
+1. **What the local fd is.** libdrm reads the size with `lseek(fd, 0, SEEK_END)` (`amdgpu_bo_import`). Haiku's devfs gives a device file size 0 (`devfs.cpp`, `devfs_read_stat`: the `B_GET_GEOMETRY` branch is `#if 0`), so a second open of the render node does not work. Options:
+   - **a.** The library makes an anonymous file with `shm_open` (Haiku: a file under `/var/shared_memory/`), removes its name at once, and gives it the size with `ftruncate`; the fd only carries that size and an identity. No Haiku, libdrm or RADV change; the cost is one small file per import.
+   - **b.** A small change in the R5 libdrm patch (`haiku-bo-map.patch` style) in `amdgpu_bo_import` that asks the library for the size instead of `lseek`. No RADV change, but a libdrm patch more.
+   - **c.** Make devfs report a size through a driver call. A Haiku kernel change.
+   - Recommendation: **a**, because it stays inside the R5 DRM library.
+2. **The secure random source.** Haiku's kernel `secure_random_value()` (`src/system/kernel/util/Random.cpp`) is a hash of a counter, the time, the thread, the CPU and the last values: not a generator seeded with entropy. The real generator (Yarrow) is behind `/dev/random`, in `bus_managers/random`, and only has a device read and a `RANDOM_GET_ENTROPY` generic syscall for users; its kernel module exports only `queue_randomness`. Options: **a.** the driver reads from `/dev/random` through the kernel's own file calls when it exports; **b.** a new exported read in the R5 copy of the random bus manager (a Haiku file into `distro/`); **c.** `secure_random_value()` with the exporter-team check of question 4 as the real protection. Recommendation: **b**, because it is the generator Haiku already trusts and needs no file access in the driver.
+3. **Sharing a sync object needs a larger kernel change than decision 15 suggests.** Sync objects live inside the file (`gpu_client::syncs[]`), so one cannot outlive its file or be in two files. The design above moves shared ones to a global, counted table. The alternative: share no sync object, and send the submit sequence of the program's frame in the present message; app_server compares it with the fence (`FENCE_WAIT` with timeout 0), and answers with its own compose sequence. That needs no new call, but Vulkan programs then do not get the Mesa explicit-sync path, and the WSI waits for a number instead of a semaphore. Which one?
+4. **The message and its sender.** There is no `BMessage` in the view-surface protocol: the WSI uses `BView::SetViewBitmap()`, a link message, and `LinkReceiver` reads the port without looking at the sender (`src/kits/app/LinkReceiver.cpp`). Only the registrar uses `get_port_message_info_etc` (`AuthenticationManager.cpp`). Two things to decide:
+   - **how the WSI sends the tokens:** a new link code at the end of `AS_*`, through a new private, additive `BView` call in libbe (the WSI only has public calls today); or a `BMessage` to app_server's own port (a second channel, which decision 15 rules out);
+   - **how app_server knows the sender:** `BO_IMPORT` returns `exporter_team`, and app_server compares it with `ServerApp::ClientTeam()` of the window. Then a token from another team is refused whoever wrote the message, and `get_port_message_info_etc` is not needed. The other way is `get_port_message_info_etc` in `LinkReceiver` for that one message.
+5. **The lifetime and the limit.** Decision 15 says "a short time" and "a maximum". The source has no value to copy (Linux dma-buf has no expiry). Starting values to measure in 3b: lifetime 2 s, 16 pending exports per file. Also: `kMaxBo` is 256 for the whole system and an import uses a slot of its own, so three images per Vulkan window take six slots (program and app_server). Is 256 still the limit for M11?
+6. **The last frame after a reset.** After the compositor restart the imported buffers are gone, so the "last frame" of decision 15 is not there to show. Options: show the window's background until the program presents again (the program's own device is usually lost too, and it presents again once it recreates its device); or keep a copy of each window's last frame in app_server's own memory, which costs a copy per frame and undoes some of zero-copy.
 
 ## The direct-window pause (decision 9)
 

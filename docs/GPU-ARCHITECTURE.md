@@ -146,6 +146,15 @@ These tasks move from the accelerant into the kernel driver:
   - **Renoir page tables.** The 6 Nov 2026 capture `capture-20261106-194121` logs `vm size is 262144 GB, 4 levels, block size is 9-bit, fragment size is 9-bit`, and its indirect buffers sit at `0xffff8001…`. M4 programs that four-level, 48-bit table (`VM_CTX1_PT_END` `0x0000000fffffffff`). M5 keeps that table. `GET_INFO` reports `high_va_offset` `0xffff800000000000` and `high_va_max` `0xffffffffffbfe000`, the range v6.18 `amdgpu_kms.c` reports for this VM (`AMDGPU_VA_RESERVED_TRAP_SIZE` is `(2ULL << 12)`). `VM_CONTEXT1_CNTL` bit 7 (retry) stays off: R5 does not handle a retry fault.
 - **Security.** The render node is published only when `gfx9_kernel`, `gfx9_irq` and `gfx9_gart` are on. Without those three the node does not exist, so RADV and the Vulkan loader stay quiet, as on Linux without amdgpu. A published node only accepts submissions when `gpu_render true` is in the driver settings. That is a development switch. With the node published and that switch off, the node only answers `GET_INFO`, so `vulkaninfo` shows the GPU and RADV reports that it cannot create a device; Vulkan then uses Lavapipe. Whether user IBs can reach VMID 0 addresses through the system aperture is checked in M4 and recorded in `GRAPHICS.md`. Stick 32 still booted with `gpu_render true`. Turning that switch off, and a standard account, were not part of that boot, so the switch stays. Isolation comes from M5, not from who is signed in. M10: on a release-supported GPU the node is published and accepts submissions by default (`gpu_render` defaults to on). Isolation then comes from M5's address space per open node (`gfx9_vmids` and `gfx9_vmid_per_file`, also on by default), not from the development switch.
 
+### Sharing a buffer between teams (M11 step 3a, design)
+
+Not built yet; the design is `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy design (step 3a)", with its open questions. In short:
+
+- `BO_EXPORT` (`+ 17`) and `BO_IMPORT` (`+ 18`) keep their numbers and start to work. Export returns a 128-bit token from the kernel for one target; in version 1 the only target is the compositor, and only `/system/servers/app_server` may import (the check of `R5_GPU_SCANOUT_BO`). A token works once, expires when it is not imported in time, and each file has a limit of pending exports.
+- Two additive, vendor-neutral calls at the first free numbers: `SYNCOBJ_EXPORT` (`+ 32`) and `SYNCOBJ_IMPORT` (`+ 33`), with the same token rule.
+- A buffer gets a reference count: each file's handle, each pending export, and a parked handle for GPU work in flight. The memory goes with the last reference.
+- Haiku has no dma-buf, and no area is used for sharing (the kernel area of a buffer is not cloneable).
+
 ## R5 DRM library (userland)
 
 - Provides **`libdrm.so.2`** (the common part: device enumeration, versions, sync objects, `drmIoctl`) and **one front end per vendor**, with the same names and function signatures as the **upstream libdrm headers**. That way Mesa builds against the ordinary headers and runs unchanged.
@@ -155,6 +164,7 @@ These tasks move from the accelerant into the kernel driver:
 - Only implements what Mesa (RADV, Zink and the winsys) actually calls. Everything else returns `-ENOSYS` and logs once.
 - **Symbol check.** A script lists which libdrm symbols the Mesa build imports (`nm -D` / `readelf --dyn-syms` on the RADV ICD and libgallium). It checks that the library exports them all. That runs at every Mesa update.
 - Talks only to the R5 GPU interface. It does not touch the hardware.
+- **Sharing (M11 step 3a, design):** `PRIME_HANDLE_TO_FD` / `PRIME_FD_TO_HANDLE` and `SYNCOBJ_HANDLE_TO_FD` / `FD_TO_HANDLE` map to the export and import calls through a local fd that stands for a token, so RADV keeps its ordinary `VK_KHR_external_memory_fd` path without a patch. Two new library calls, `r5_drm_fd_to_token` and `r5_drm_token_to_fd`, give the WSI and app_server the token. `GEM_METADATA` and `GEM_OP` are added because RADV queries an imported buffer with them.
 
 ## Release mechanism
 
