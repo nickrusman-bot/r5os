@@ -30,6 +30,8 @@
 #include <FindDirectory.h>
 
 #include <r5_gpu.h>
+#include <r5_share.h>
+#include <TokenSpace.h>
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
@@ -38,6 +40,9 @@
 #include "DrawingEngine.h"
 #include "HWInterface.h"
 #include "RenderingBuffer.h"
+#include "ServerApp.h"
+#include "ServerWindow.h"
+#include "View.h"
 #include "Window.h"
 #include "WindowBuffer.h"
 #include "WindowHWInterface.h"
@@ -199,6 +204,12 @@ thread_cpu_time()
 
 #define VK_DECLARE(name) PFN_##name name;
 
+// M11 step 3b: the R5 DRM library that RADV loaded (r5_translate.h, MIT).
+typedef int (*r5_token_to_fd_hook)(int, const uint8_t[16], int32_t, int*,
+	uint32_t*);
+typedef int (*r5_mark_get_hook)(uint32_t, uint64_t*);
+typedef int (*r5_import_size_hook)(uint32_t, uint64_t*);
+
 
 struct CompositorVulkan {
 	void*						library;
@@ -223,6 +234,13 @@ struct CompositorVulkan {
 	VkDeviceMemory				frameMemory;
 	uint32*						frameBits;
 	char						deviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
+
+	// M11 step 3b: imports of shared views (RADV only).
+	bool						canImport;
+	void*						drm;
+	r5_token_to_fd_hook			tokenToFd;
+	r5_mark_get_hook			markGet;
+	r5_import_size_hook			importSize;
 };
 
 
@@ -251,7 +269,8 @@ struct Compositor::Entry : public BReferenceable {
 		:
 		window(window),
 		iface(iface),
-		lastShown(0)
+		lastShown(0),
+		shareLogged(false)
 	{
 	}
 
@@ -263,6 +282,62 @@ struct Compositor::Entry : public BReferenceable {
 	Window*				window;
 	WindowHWInterface*	iface;
 	bigtime_t			lastShown;
+	// "window <id> zero-copy off: <reason>" was logged for this window.
+	bool				shareLogged;
+};
+
+
+/*!	M11 step 3b: the images of one Vulkan view's swapchain, imported from
+	the program. current is the image the compose samples, pending the one
+	presented last and not shown yet. Every other image is the program's;
+	its semaphore was released when it left current or pending. The
+	compose waits for its fence every frame, so an image that left current
+	at the start of a frame is read by no GPU work.
+*/
+struct Compositor::Share {
+	struct Image {
+		VkBuffer		buffer;
+		VkDeviceMemory	memory;
+		uint32			importId;
+		sem_id			sem;
+		uint32			width;
+		uint32			height;
+		uint32			pitch;
+	};
+
+	Window*				window;
+	int32				viewToken;
+	team_id				team;
+	int32				id;
+	uint32				count;
+	uint32				generation;
+	Image				images[kMaxShareImages];
+	int32				current;
+	int32				pending;
+	// No more semaphores released, no more presents taken; freed by the
+	// compose thread at the start of its next frame.
+	bool				ended;
+	// The import is gone (mark_get failed): the program gets a refusal
+	// at its next present and makes a copy swapchain.
+	bool				broken;
+	// From the last clipping rebuild: the view's part of the screen and
+	// the screen position of the image's pixel (0, 0).
+	BRegion				shape;
+	int32				left;
+	int32				top;
+};
+
+
+//!	One shared image in one frame, copied under fShareLock.
+struct Compositor::ShareDraw {
+	Window*				window;
+	VkBuffer			buffer;
+	uint32				width;
+	uint32				height;
+	uint32				pitch;
+	BRegion				shape;
+	int32				left;
+	int32				top;
 };
 
 
@@ -313,6 +388,11 @@ Compositor::Create(Desktop* desktop, HWInterface* screen)
 			}
 			log_line("gpu compositor on radv (%s)",
 				compositor->fVulkan->deviceName);
+			// M11 step 3b: FENCE_WAIT with timeout 0 for the present mark
+			// of a shared view. The sequence is the one GFX ring's, so any
+			// file of the render node can ask.
+			compositor->fFenceFd = open("/dev/gpu/radeon_hd/0",
+				O_RDWR | O_CLOEXEC);
 		} else {
 			reason = radvReason;
 			radv = false;
@@ -354,6 +434,10 @@ Compositor::Compositor(Desktop* desktop, HWInterface* screen)
 	fGeneration(0),
 	fEntryLock("compositor entries"),
 	fEntries(20),
+	fShareLock("compositor shares"),
+	fShares(10),
+	fShareCounter(0),
+	fFenceFd(-1),
 	fLayerLock("compositor layers"),
 	fLayers(NULL),
 	fBackground(0xff000000),
@@ -392,6 +476,8 @@ Compositor::~Compositor()
 	delete fLayers;
 	_ExitVulkan();
 	free(fScratch);
+	if (fFenceFd >= 0)
+		close(fFenceFd);
 }
 
 
@@ -499,6 +585,8 @@ Compositor::_InitVulkan(bool radv, const char** _reason)
 	VkExtensionProperties* extensions
 		= new(std::nothrow) VkExtensionProperties[extensionCount + 1];
 	bool pushDescriptor = false;
+	bool memoryFd = false;
+	bool dmaBuf = false;
 	if (extensions != NULL) {
 		vk->vkEnumerateDeviceExtensionProperties(vk->physical, NULL,
 			&extensionCount, extensions);
@@ -506,9 +594,17 @@ Compositor::_InitVulkan(bool radv, const char** _reason)
 			if (strcmp(extensions[i].extensionName,
 					VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME) == 0)
 				pushDescriptor = true;
+			if (strcmp(extensions[i].extensionName,
+					VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME) == 0)
+				memoryFd = true;
+			if (strcmp(extensions[i].extensionName,
+					VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME) == 0)
+				dmaBuf = true;
 		}
 		delete[] extensions;
 	}
+	// M11 step 3b: shared views are imported on RADV only.
+	vk->canImport = radv && memoryFd && dmaBuf;
 	if (!pushDescriptor) {
 		*_reason = "no push descriptor";
 		return B_ERROR;
@@ -569,12 +665,14 @@ Compositor::_InitVulkan(bool radv, const char** _reason)
 	queueInfo.queueFamilyIndex = family;
 	queueInfo.queueCount = 1;
 	queueInfo.pQueuePriorities = &priority;
-	const char* deviceExtensions[] = { VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME };
+	const char* deviceExtensions[] = { VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+		VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+		VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME };
 	VkDeviceCreateInfo deviceInfo = {};
 	deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceInfo.queueCreateInfoCount = 1;
 	deviceInfo.pQueueCreateInfos = &queueInfo;
-	deviceInfo.enabledExtensionCount = 1;
+	deviceInfo.enabledExtensionCount = vk->canImport ? 3 : 1;
 	deviceInfo.ppEnabledExtensionNames = deviceExtensions;
 	if (vk->vkCreateDevice(vk->physical, &deviceInfo, NULL, &vk->device)
 			!= VK_SUCCESS) {
@@ -588,6 +686,22 @@ Compositor::_InitVulkan(bool radv, const char** _reason)
 	VK_DEVICE_FUNCTIONS(VK_LOAD_DEVICE)
 
 	vk->vkGetDeviceQueue(vk->device, family, 0, &vk->queue);
+
+	// The R5 DRM library RADV loaded: dlopen of a loaded library returns
+	// that image, so these calls see RADV's import table.
+	if (vk->canImport) {
+		vk->drm = dlopen("libdrm.so.2", RTLD_NOW | RTLD_LOCAL);
+		if (vk->drm != NULL) {
+			vk->tokenToFd = (r5_token_to_fd_hook)dlsym(vk->drm,
+				"r5_drm_token_to_fd");
+			vk->markGet = (r5_mark_get_hook)dlsym(vk->drm, "r5_drm_mark_get");
+			vk->importSize = (r5_import_size_hook)dlsym(vk->drm,
+				"r5_drm_import_size");
+		}
+		if (vk->tokenToFd == NULL || vk->markGet == NULL
+			|| vk->importSize == NULL)
+			vk->canImport = false;
+	}
 
 	VkShaderModuleCreateInfo shaderInfo = {};
 	shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -683,6 +797,19 @@ Compositor::_ExitVulkan()
 	// are loaded in this order, so the last one tells all were.
 	if (vk->device != VK_NULL_HANDLE && vk->vkDeviceWaitIdle != NULL) {
 		vk->vkDeviceWaitIdle(vk->device);
+		// M11 step 3b: the imports of shared views go with this device;
+		// the programs get a refusal at their next present.
+		{
+			BAutolock _(fShareLock);
+			fVulkan = vk;
+			for (int32 i = fShares.CountItems(); i-- > 0;) {
+				Share* share = fShares.ItemAt(i);
+				_ShareFree(share);
+				fShares.RemoveItemAt(i);
+				delete share;
+			}
+			fVulkan = NULL;
+		}
 		if (vk->frame != VK_NULL_HANDLE)
 			vk->vkDestroyBuffer(vk->device, vk->frame, NULL);
 		if (vk->frameMemory != VK_NULL_HANDLE)
@@ -702,6 +829,8 @@ Compositor::_ExitVulkan()
 		vk->vkDestroyDevice(vk->device, NULL);
 	if (vk->instance != VK_NULL_HANDLE && vk->vkDestroyInstance != NULL)
 		vk->vkDestroyInstance(vk->instance, NULL);
+	if (vk->drm != NULL)
+		dlclose(vk->drm);
 	if (vk->library != NULL)
 		dlclose(vk->library);
 	delete vk;
@@ -935,6 +1064,16 @@ Compositor::RemoveWindow(Window* window)
 	fEntries.RemoveItem(entry);
 	entry->window = NULL;
 	entry->ReleaseReference();
+
+	// M11 step 3b: the window's shared views end with it.
+	BAutolock shareLock(fShareLock);
+	for (int32 i = 0; i < fShares.CountItems(); i++) {
+		Share* share = fShares.ItemAt(i);
+		if (share->window == window) {
+			share->ended = true;
+			share->window = NULL;
+		}
+	}
 }
 
 
@@ -1059,6 +1198,24 @@ Compositor::ClippingChanged()
 		layers->AddItem(layer);
 	}
 	fEntryLock.Unlock();
+
+	// M11 step 3b: where each shared view is now. A view that moved or
+	// changed its shape is damaged where it was and where it is.
+	{
+		BAutolock shareLock(fShareLock);
+		for (int32 i = 0; i < fShares.CountItems(); i++) {
+			Share* share = fShares.ItemAt(i);
+			BRegion before = share->shape;
+			int32 left = share->left;
+			int32 top = share->top;
+			_ShareShape(share);
+			if (before == share->shape && left == share->left
+				&& top == share->top)
+				continue;
+			damage.Include(&before);
+			damage.Include(&share->shape);
+		}
+	}
 
 	// What changed on screen: a window that came, went, moved, changed
 	// shape or changed its place in the stack.
@@ -1210,13 +1367,20 @@ Compositor::_ComposeLoop()
 			}
 		}
 
+		// M11 step 3b: shared views. A presented image that is not ready
+		// yet keeps the previous one, and its view comes back next period.
+		ShareDrawList shares(4);
+		BRegion retry;
+		_ShareFrame(shares, retry);
+
 		fLastCompose = system_time();
-		if (!_Compose(damage, layers)) {
+		if (!_Compose(damage, layers, shares)) {
 			if (!fActive)
 				return;
 			// keep the damage for the next try after a restart
 			Damage(damage);
 		}
+		Damage(retry);
 	}
 }
 
@@ -1226,7 +1390,8 @@ Compositor::_ComposeLoop()
 	damage on the screen. Returns false when the GPU mode ended.
 */
 bool
-Compositor::_Compose(const BRegion& damage, const LayerList& layers)
+Compositor::_Compose(const BRegion& damage, const LayerList& layers,
+	const ShareDrawList& shares)
 {
 	CompositorVulkan* vk = fVulkan;
 	fFrames++;
@@ -1313,6 +1478,48 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers)
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &between, 0, NULL,
 			0, NULL);
+
+		// M11 step 3b: the window's shared views, over its own pixels and
+		// under the next window.
+		for (int32 s = 0; layer != NULL && s < shares.CountItems(); s++) {
+			ShareDraw* draw = shares.ItemAt(s);
+			if (draw->window == NULL || draw->window != layer->entry->window)
+				continue;
+			BRegion view(part);
+			view.IntersectWith(&draw->shape);
+			BRegion image(BRect((float)draw->left, (float)draw->top,
+				(float)draw->left + draw->width - 1,
+				(float)draw->top + draw->height - 1));
+			view.IntersectWith(&image);
+			if (view.CountRects() == 0)
+				continue;
+			VkDescriptorBufferInfo shareInfo = frameInfo;
+			shareInfo.buffer = draw->buffer;
+			writes[0].pBufferInfo = &shareInfo;
+			writes[1].pBufferInfo = &frameInfo;
+			vk->vkCmdPushDescriptorSetKHR(vk->commands,
+				VK_PIPELINE_BIND_POINT_COMPUTE, vk->pipelineLayout, 0, 2,
+				writes);
+			rect.fill = 0;
+			rect.sourceStride = draw->pitch / 4;
+			for (int32 i = 0; i < view.CountRects(); i++) {
+				clipping_rect r = view.RectAtInt(i);
+				rect.frameX = r.left;
+				rect.frameY = r.top;
+				rect.width = r.right - r.left + 1;
+				rect.height = r.bottom - r.top + 1;
+				rect.sourceX = r.left - draw->left;
+				rect.sourceY = r.top - draw->top;
+				vk->vkCmdPushConstants(vk->commands, vk->pipelineLayout,
+					VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(rect), &rect);
+				vk->vkCmdDispatch(vk->commands, (rect.width + 15) / 16,
+					(rect.height + 15) / 16, 1);
+			}
+			vk->vkCmdPipelineBarrier(vk->commands,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &between, 0, NULL,
+				0, NULL);
+		}
 	}
 
 	VkMemoryBarrier toHost = {};
@@ -1380,7 +1587,11 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers)
 		fSamples[fSampleCount++] = took;
 
 	if (compare) {
-		_Compare(damage, layers, background);
+		// The CPU cannot read an imported image; those parts are left out.
+		BRegion shared;
+		for (int32 s = 0; s < shares.CountItems(); s++)
+			shared.Include(&shares.ItemAt(s)->shape);
+		_Compare(damage, layers, background, shared);
 		for (int32 i = 0; i < layers.CountItems(); i++)
 			layers.ItemAt(i)->entry->iface->UnlockExclusiveAccess();
 	}
@@ -1426,7 +1637,7 @@ Compositor::_Present(const BRegion& damage)
 */
 bool
 Compositor::_Compare(const BRegion& damage, const LayerList& layers,
-	uint32 background)
+	uint32 background, const BRegion& shared)
 {
 	if (fScratch == NULL)
 		return false;
@@ -1457,8 +1668,10 @@ Compositor::_Compare(const BRegion& damage, const LayerList& layers,
 		}
 	}
 	const uint32* frame = fVulkan->frameBits;
-	for (int32 i = 0; i < damage.CountRects(); i++) {
-		clipping_rect r = damage.RectAtInt(i);
+	BRegion checked(damage);
+	checked.Exclude(&shared);
+	for (int32 i = 0; i < checked.CountRects(); i++) {
+		clipping_rect r = checked.RectAtInt(i);
 		for (int32 y = r.top; y <= r.bottom; y++) {
 			for (int32 x = r.left; x <= r.right; x++) {
 				uint32 at = y * stride + x;
@@ -1554,6 +1767,13 @@ Compositor::_TurnOff(const char* reason)
 	}
 	fEntryLock.Unlock();
 	{
+		// M11 step 3b: the programs get a refusal at their next present
+		// and make copy swapchains; the imports go with the device.
+		BAutolock _(fShareLock);
+		for (int32 i = 0; i < fShares.CountItems(); i++)
+			fShares.ItemAt(i)->broken = true;
+	}
+	{
 		BAutolock _(fLayerLock);
 		fLayers->MakeEmpty();
 	}
@@ -1563,6 +1783,384 @@ Compositor::_TurnOff(const char* reason)
 	fDesktop->UnlockAllWindows();
 	// The device goes when the compose thread ends, after its last
 	// references to the window buffers are gone.
+}
+
+
+//	#pragma mark - shared views (M11 step 3b)
+
+
+/*!	"app_server: window <id> zero-copy off: <reason>", once per window.
+	Called with all windows locked.
+*/
+void
+Compositor::_ShareLog(Window* window, const char* reason)
+{
+	BAutolock _(fEntryLock);
+	Entry* entry = _FindEntry(window);
+	if (entry == NULL || entry->shareLogged)
+		return;
+	entry->shareLogged = true;
+	int32 id = window->ServerWindow() != NULL
+		? window->ServerWindow()->ClientToken() : -1;
+	log_line("window %" B_PRId32 " zero-copy off: %s", id, reason);
+}
+
+
+/*!	The view's part of the screen and the screen position of its pixel
+	(0, 0), from its window. Called with all windows and fShareLock locked.
+	A view that is gone, or that is in another window now, has no shape.
+*/
+void
+Compositor::_ShareShape(Share* share)
+{
+	share->shape.MakeEmpty();
+	Window* window = share->window;
+	if (window == NULL || share->ended || window->ServerWindow() == NULL)
+		return;
+	View* view = NULL;
+	if (window->ServerWindow()->App()->ViewTokens().GetToken(share->viewToken,
+			B_HANDLER_TOKEN, (void**)&view) != B_OK
+		|| view == NULL || view->Window() != window || !view->IsVisible())
+		return;
+	BRegion content;
+	window->GetContentRegion(&content);
+	share->shape = view->ScreenAndUserClipping(&content);
+	IntRect bounds = view->Bounds();
+	IntPoint origin(bounds.left, bounds.top);
+	view->LocalToScreenTransform().Apply(&origin);
+	share->left = origin.x;
+	share->top = origin.y;
+}
+
+
+/*!	Frees the imports of a share, with the device they were made on. The
+	library's GEM_CLOSE ends each import's id. Called with fShareLock.
+*/
+void
+Compositor::_ShareFree(Share* share)
+{
+	CompositorVulkan* vk = fVulkan;
+	for (uint32 i = 0; i < share->count; i++) {
+		Share::Image& image = share->images[i];
+		if (vk != NULL && share->generation == fGeneration) {
+			if (image.buffer != VK_NULL_HANDLE)
+				vk->vkDestroyBuffer(vk->device, image.buffer, NULL);
+			if (image.memory != VK_NULL_HANDLE)
+				vk->vkFreeMemory(vk->device, image.memory, NULL);
+		}
+		image.buffer = VK_NULL_HANDLE;
+		image.memory = VK_NULL_HANDLE;
+	}
+	share->count = 0;
+}
+
+
+//!	Frees the shares that ended. Compose thread, between frames.
+void
+Compositor::_ShareRetire()
+{
+	for (int32 i = fShares.CountItems(); i-- > 0;) {
+		Share* share = fShares.ItemAt(i);
+		if (!share->ended)
+			continue;
+		_ShareFree(share);
+		fShares.RemoveItemAt(i);
+		delete share;
+	}
+}
+
+
+/*!	1 when the ring has passed the image's present mark, 0 when not yet,
+	-1 when the import is gone. FENCE_WAIT with timeout 0: the compose
+	never waits for a program.
+*/
+bool
+Compositor::_ShareReady(uint32 importId)
+{
+	uint64 sequence = 0;
+	if (fVulkan == NULL || fVulkan->markGet(importId, &sequence) != 0)
+		return false;
+	if (sequence == 0)
+		return true;
+	r5_gpu_fence wait;
+	memset(&wait, 0, sizeof(wait));
+	wait.size = sizeof(wait);
+	wait.version = 1;
+	wait.sequence = sequence;
+	wait.timeout_us = 0;
+	return fFenceFd >= 0
+		&& ioctl(fFenceFd, R5_GPU_FENCE_WAIT, &wait, sizeof(wait)) == 0;
+}
+
+
+/*!	The start of a frame: frees what ended, shows each pending image whose
+	present mark the ring has passed, gives the image it replaces back to
+	the program, and copies what this frame draws. A pending image that is
+	not ready yet keeps the previous one; its view goes into retry.
+*/
+void
+Compositor::_ShareFrame(ShareDrawList& draws, BRegion& retry)
+{
+	BAutolock _(fShareLock);
+	_ShareRetire();
+	for (int32 i = 0; i < fShares.CountItems(); i++) {
+		Share* share = fShares.ItemAt(i);
+		if (share->broken || share->generation != fGeneration)
+			continue;
+		if (share->pending >= 0) {
+			Share::Image& next = share->images[share->pending];
+			uint64 sequence = 0;
+			if (fVulkan->markGet(next.importId, &sequence) != 0) {
+				share->broken = true;
+				continue;
+			}
+			if (_ShareReady(next.importId)) {
+				int32 old = share->current;
+				share->current = share->pending;
+				share->pending = -1;
+				// the last frame that read it is done (its fence)
+				if (old >= 0)
+					release_sem_etc(share->images[old].sem, 1,
+						B_DO_NOT_RESCHEDULE);
+			} else
+				retry.Include(&share->shape);
+		}
+		if (share->current < 0 || share->shape.CountRects() == 0)
+			continue;
+		Share::Image& image = share->images[share->current];
+		ShareDraw* draw = new(std::nothrow) ShareDraw;
+		if (draw == NULL)
+			continue;
+		draw->window = share->window;
+		draw->buffer = image.buffer;
+		draw->width = image.width;
+		draw->height = image.height;
+		draw->pitch = image.pitch;
+		draw->shape = share->shape;
+		draw->left = share->left;
+		draw->top = share->top;
+		if (!draws.AddItem(draw))
+			delete draw;
+	}
+}
+
+
+void
+Compositor::ShareDeclined(Window* window)
+{
+	_ShareLog(window, "lavapipe");
+}
+
+
+/*!	Imports a Vulkan view's swapchain images. app_server believes the
+	kernel: each image's real size (BO_IMPORT, through the library) must
+	hold its pitch times its height, and its semaphore must belong to the
+	connection's team. Any refusal refuses the whole swapchain, and the
+	program keeps the copy path.
+*/
+status_t
+Compositor::ShareImages(Window* window, int32 viewToken, team_id team,
+	uint32 count, const compositor_share_image* images, int32* _shareId)
+{
+	if (!fActive)
+		return B_NOT_ALLOWED;
+	if (fOnLavapipe) {
+		_ShareLog(window, "lavapipe");
+		return B_NOT_ALLOWED;
+	}
+	CompositorVulkan* vk = fVulkan;
+	if (vk == NULL || !vk->canImport || fFenceFd < 0) {
+		_ShareLog(window, "no import");
+		return B_NOT_ALLOWED;
+	}
+	if (count == 0 || count > kMaxShareImages)
+		return B_BAD_VALUE;
+
+	for (uint32 i = 0; i < count; i++) {
+		sem_info info;
+		if (get_sem_info(images[i].sem, &info) != B_OK || info.team != team) {
+			_ShareLog(window, "sem");
+			return B_NOT_ALLOWED;
+		}
+		if (images[i].format != (uint32)B_RGBA32
+			&& images[i].format != (uint32)B_RGB32) {
+			_ShareLog(window, "format");
+			return B_BAD_VALUE;
+		}
+		if (images[i].pitch % 4 != 0
+			|| !r5_share_size_ok(images[i].width, images[i].height,
+				images[i].pitch, ~0ull)) {
+			_ShareLog(window, "size");
+			return B_BAD_VALUE;
+		}
+	}
+
+	Share* share = new(std::nothrow) Share;
+	if (share == NULL)
+		return B_NO_MEMORY;
+	share->window = window;
+	share->viewToken = viewToken;
+	share->team = team;
+	share->count = 0;
+	share->generation = fGeneration;
+	share->current = -1;
+	share->pending = -1;
+	share->ended = false;
+	share->broken = false;
+	share->left = 0;
+	share->top = 0;
+
+	const char* reason = NULL;
+	for (uint32 i = 0; i < count && reason == NULL; i++) {
+		const compositor_share_image& in = images[i];
+		Share::Image& image = share->images[i];
+		memset(&image, 0, sizeof(image));
+		share->count = i + 1;
+		image.sem = in.sem;
+		image.width = in.width;
+		image.height = in.height;
+		image.pitch = in.pitch;
+
+		VkExternalMemoryBufferCreateInfo external = {};
+		external.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO;
+		external.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+		VkBufferCreateInfo bufferInfo = {};
+		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferInfo.pNext = &external;
+		bufferInfo.size = (uint64)in.pitch * in.height;
+		bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		if (vk->vkCreateBuffer(vk->device, &bufferInfo, NULL, &image.buffer)
+				!= VK_SUCCESS) {
+			image.buffer = VK_NULL_HANDLE;
+			reason = "import";
+			break;
+		}
+		VkMemoryRequirements requirements;
+		vk->vkGetBufferMemoryRequirements(vk->device, image.buffer,
+			&requirements);
+
+		int fd = -1;
+		if (vk->tokenToFd(-1, in.token, team, &fd, &image.importId) != 0) {
+			reason = "import";
+			break;
+		}
+		// RADV takes the fd on success; on a failure it stays ours.
+		VkImportMemoryFdInfoKHR import = {};
+		import.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR;
+		import.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+		import.fd = fd;
+		VkMemoryAllocateInfo allocateInfo = {};
+		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocateInfo.pNext = &import;
+		allocateInfo.allocationSize = requirements.size;
+		allocateInfo.memoryTypeIndex = vk->memoryType;
+		if ((requirements.memoryTypeBits & (1u << vk->memoryType)) == 0
+			|| vk->vkAllocateMemory(vk->device, &allocateInfo, NULL,
+				&image.memory) != VK_SUCCESS) {
+			image.memory = VK_NULL_HANDLE;
+			close(fd);
+			reason = "import";
+			break;
+		}
+		// The kernel's size, not the program's: pitch times height, and
+		// the buffer RADV binds, must fit in it.
+		uint64 bytes = 0;
+		if (vk->importSize(image.importId, &bytes) != 0
+			|| !r5_share_size_ok(in.width, in.height, in.pitch, bytes)
+			|| requirements.size > bytes) {
+			reason = "size";
+			break;
+		}
+		if (vk->vkBindBufferMemory(vk->device, image.buffer, image.memory, 0)
+				!= VK_SUCCESS) {
+			reason = "import";
+			break;
+		}
+	}
+
+	if (reason != NULL) {
+		// Not in the list yet, so no lock: and _ShareLog takes fEntryLock,
+		// which comes before fShareLock (RemoveWindow).
+		_ShareFree(share);
+		delete share;
+		_ShareLog(window, reason);
+		return B_NOT_ALLOWED;
+	}
+	BAutolock _(fShareLock);
+	// A view has one swapchain: an older one of the same view ends.
+	for (int32 i = 0; i < fShares.CountItems(); i++) {
+		Share* old = fShares.ItemAt(i);
+		if (old->team == team && old->viewToken == viewToken)
+			old->ended = true;
+	}
+	share->id = ++fShareCounter;
+	if (!fShares.AddItem(share)) {
+		_ShareFree(share);
+		delete share;
+		return B_NO_MEMORY;
+	}
+	_ShareShape(share);
+	*_shareId = share->id;
+	return B_OK;
+}
+
+
+/*!	A present: the image becomes pending. An image that was pending and
+	was never shown goes back to the program at once. The compose shows
+	the new one once its mark has passed.
+*/
+status_t
+Compositor::SharePresent(team_id team, int32 viewToken, int32 shareId,
+	uint32 index)
+{
+	BRegion damage;
+	{
+		BAutolock _(fShareLock);
+		Share* share = NULL;
+		for (int32 i = 0; i < fShares.CountItems(); i++) {
+			Share* scan = fShares.ItemAt(i);
+			if (scan->id == shareId && scan->team == team
+				&& scan->viewToken == viewToken) {
+				share = scan;
+				break;
+			}
+		}
+		if (share == NULL || share->ended || share->broken || !fActive
+			|| index >= share->count)
+			return B_NOT_ALLOWED;
+		if ((int32)index != share->current && (int32)index != share->pending) {
+			if (share->pending >= 0)
+				release_sem_etc(share->images[share->pending].sem, 1,
+					B_DO_NOT_RESCHEDULE);
+			share->pending = index;
+		}
+		damage = share->shape;
+	}
+	Damage(damage);
+	return B_OK;
+}
+
+
+/*!	The program's swapchain is gone. From the reply on, no semaphore of it
+	is released; the imports are freed at the start of the next frame.
+*/
+void
+Compositor::ShareEnd(team_id team, int32 viewToken, int32 shareId)
+{
+	BRegion damage;
+	{
+		BAutolock _(fShareLock);
+		for (int32 i = 0; i < fShares.CountItems(); i++) {
+			Share* share = fShares.ItemAt(i);
+			if (share->id == shareId && share->team == team
+				&& share->viewToken == viewToken) {
+				share->ended = true;
+				damage = share->shape;
+			}
+		}
+	}
+	Damage(damage);
 }
 
 

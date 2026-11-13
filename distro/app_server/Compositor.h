@@ -19,6 +19,20 @@
 #include <Region.h>
 
 
+// M11 step 3b: one image of a Vulkan view's swapchain, from the program's
+// AS_R5_SHARE_IMAGES message (docs/APP-SERVER-COMPOSITOR.md).
+struct compositor_share_image {
+	uint8		token[16];
+	sem_id		sem;
+	uint32		width;
+	uint32		height;
+	uint32		pitch;
+	uint32		format;
+};
+
+static const uint32 kMaxShareImages = 4;
+
+
 class Desktop;
 class DrawingEngine;
 class HWInterface;
@@ -56,12 +70,28 @@ public:
 			bool				BufferBounds(Window* window,
 									clipping_rect* _bounds);
 
+	// M11 step 3b, from a ServerApp thread. ShareImages and ShareDeclined
+	// with all windows locked; window is the view's window, team the
+	// connection's ServerApp::ClientTeam().
+			status_t			ShareImages(Window* window, int32 viewToken,
+									team_id team, uint32 count,
+									const compositor_share_image* images,
+									int32* _shareId);
+			void				ShareDeclined(Window* window);
+			status_t			SharePresent(team_id team, int32 viewToken,
+									int32 shareId, uint32 index);
+			void				ShareEnd(team_id team, int32 viewToken,
+									int32 shareId);
+
 private:
 	friend class WindowBuffer;
 
 			struct Entry;
 			struct Layer;
+			struct Share;
+			struct ShareDraw;
 			typedef BObjectList<Layer, true> LayerList;
+			typedef BObjectList<ShareDraw, true> ShareDrawList;
 
 								Compositor(Desktop* desktop,
 									HWInterface* screen);
@@ -80,11 +110,20 @@ private:
 	static	status_t			_ComposeThread(void* data);
 			void				_ComposeLoop();
 			bool				_Compose(const BRegion& damage,
-									const LayerList& layers);
+									const LayerList& layers,
+									const ShareDrawList& shares);
 			void				_Present(const BRegion& damage);
 			bool				_Compare(const BRegion& damage,
 									const LayerList& layers,
-									uint32 background);
+									uint32 background,
+									const BRegion& shared);
+			void				_ShareLog(Window* window, const char* reason);
+			void				_ShareShape(Share* share);
+			void				_ShareFrame(ShareDrawList& draws,
+									BRegion& retry);
+			void				_ShareFree(Share* share);
+			void				_ShareRetire();
+			bool				_ShareReady(uint32 importId);
 			void				_TurnOff(const char* reason);
 			bool				_RestartAfterReset();
 			void				_Report();
@@ -103,6 +142,13 @@ private:
 
 			BLocker				fEntryLock;
 			BObjectList<Entry, false> fEntries;
+
+			// M11 step 3b: shared views. fShareLock is taken after the
+			// window lock and fEntryLock, never before.
+			BLocker				fShareLock;
+			BObjectList<Share, false> fShares;
+			int32				fShareCounter;
+			int					fFenceFd;
 
 			BLocker				fLayerLock;
 			LayerList*			fLayers;
