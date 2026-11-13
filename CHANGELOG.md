@@ -1,5 +1,26 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - M11 step 1: the R5 window frame, decorator hooks, and resizing by the edge
+
+Problem: M11 needs one R5 window frame (decision 2: Haiku's tab, a 1-pixel frame, resize by the edge) and decorator hooks for the shadow and the glass of later steps. `DecorManager` loaded any add-on on `instantiate_decor_addon` alone, so an add-on built against another `Decorator` layout could crash app_server.
+
+What changed:
+- `Decorator` (copied into `distro/desktop`): `GetShadowExtent`, `GetGlassRegion` and `GetInputMargin` after every other virtual function, with defaults (a small shadow from the border width, no glass, no margin), plus the helper `InputMarginContains()`. ABI version 1: `R5_DECORATOR_ABI_EXPORT` exports `r5_decorator_abi_version`.
+- `DecorManager::_LoadDecor()` refuses an add-on without that version with `app_server: decorator <name> refused: abi <n>, need <m>` and keeps the default decorator.
+- New add-on `R5Decorator` (MIT): Haiku's tab, buttons and yellow (without the tint per title of R5's `DefaultDecorator`), a 1-pixel line, no knob, an input margin outside the line as wide as Haiku's border (5 or 3 times the font scale, minus the line), not in the footprint. Corners `fBorderResizeLength` long on all four. Logs `decorator: r5 loaded`. In the base package: `build/jam/packages/Haiku` is now a native copy in `distro/desktop` (as the four apply scripts leave it, plus this add-on).
+- `Desktop::WindowAt()` also returns a window for a point in its input margin, when no window in front shows there. The mouse filter resets the resize cursor when the mouse leaves a window.
+- `DefaultWindowBehaviour`, for every decorator (user, 13 Nov 2026): dragging a border or corner with the primary button resizes on that side (it moved the window before; only the bottom-right corner resized); a side that cannot be resized still moves the window. The resize cursor shows while hovering an edge (before: only while dragging).
+- Be, Flat, Mac and Win export the version and are built, not installed (the image had none of them before either).
+- `R5DecoratorAbiTest`: an add-on without the version, only in an image built with `R5_DECORATOR_ABI_TEST=1`.
+- `scripts/apply-desktop-native.py` creates the directory of a new component.
+
+Mistake and fix: a heredoc turned `
+` and `` in two inserted strings into a real newline and a bell character; `DecorManager.cpp` failed to compile. Fixed before the full jam. The Windows checkout had CRLF in `distro` and `scripts`, so `jam-r5-raw.sh` stopped at `sh -n m8-run`; checked out again with LF.
+
+Tested: `jam -q app_server R5Decorator R5DecoratorAbiTest BeDecorator FlatDecorator MacDecorator WinDecorator` exit 0; `jam-r5-raw.sh` with `R5_DECORATOR_ABI_TEST=1` `jam_exit=0`, `mesa_exit=0`. `haiku.hpkg` lists `add-ons/decorators/R5Decorator`; the image has `R5DecoratorAbiTest` in `system/non-packaged/add-ons/decorators` only. QEMU (KVM, a copy of the image, window): boots to the Welcome window with the default decorator. The user then ran the test card (select R5, resize from the edges and corners, the scroll bar, move by the tab, select the test add-on) and reported that it worked. Syslog of that boot: `decorator: r5 loaded`, then `app_server: decorator R5DecoratorAbiTest refused: abi 0, need 1`, then `decorator: r5 loaded` again; no app_server crash.
+
+Not tested: stacking and tiling with the R5 frame, outline resize (`B_OUTLINE_RESIZE`), the left-titled look, a larger font scale. No screenshot in this record. Not on the 5625U, not in VirtualBox.
+
 ## 2026-11-13 - Network settings in Settings: Connections and Discovery, and .local after the network is up (build 10062)
 
 Problem: Settings only had a Network row that opened the separate Network program. `r5-mdns` (in `net_server`) joined `224.0.0.251` once at start with `INADDR_ANY`, before Wi-Fi and DHCP were up; the result was not checked and the join was never tried again, so `.local` names could not work after a normal start. The host name was read once, so a rename was not announced.

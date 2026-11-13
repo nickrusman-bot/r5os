@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+SubDir HAIKU_TOP src add-ons decorators R5Decorator ;
+
+UseBuildFeatureHeaders freetype ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app stackandtile ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app decorator ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app font ] ;
+UsePrivateHeaders app shared interface graphics ;
+UseLibraryHeaders agg ;
+
+AddResources R5Decorator : resources.rdef ;
+
+Includes [ FGristFiles R5Decorator.cpp ]
+	: [ BuildFeatureAttribute freetype : headers ] ;
+
+Addon R5Decorator :
+	R5Decorator.cpp
+	: be <nogrist>app_server [ TargetLibstdc++ ] [ TargetLibsupc++ ]
+;

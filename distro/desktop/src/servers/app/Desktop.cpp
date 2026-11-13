@@ -156,6 +156,11 @@ private:
 	int32		fResetClickCount;
 	BPoint		fLastClickPoint;
 	ClickTarget	fLastClickTarget;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	const Window* fLastHoverWindow;
+// SPDX-SnippetEnd
 };
 
 
@@ -288,7 +293,12 @@ MouseFilter::MouseFilter(Desktop* desktop)
 	fLastClickModifiers(0),
 	fResetClickCount(0),
 	fLastClickPoint(),
-	fLastClickTarget()
+	fLastClickTarget(),
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	fLastHoverWindow(NULL)
+// SPDX-SnippetEnd
 {
 }
 
@@ -313,6 +323,19 @@ MouseFilter::Filter(BMessage* message, EventTarget** _target, int32* _viewToken,
 	Window* window = fDesktop->MouseEventWindow();
 	if (window == NULL)
 		window = fDesktop->WindowAt(where);
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// The resize cursor shown over an edge belongs to the window under the
+	// mouse. When the mouse leaves that window, the normal cursor returns.
+	if (message->what == B_MOUSE_MOVED
+		&& fDesktop->MouseEventWindow() == NULL) {
+		if (window != fLastHoverWindow)
+			fDesktop->SetManagementCursor(NULL);
+		fLastHoverWindow = window;
+	}
+// SPDX-SnippetEnd
 
 	if (window != NULL) {
 		// dispatch event to the window
@@ -2055,6 +2078,18 @@ Desktop::WindowAt(BPoint where)
 			window = window->PreviousWindow(fCurrentWorkspace)) {
 		if (window->IsVisible() && window->VisibleRegion().Contains(where))
 			return window->StackedWindowAt(where);
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		// The resize margin outside a thin border is input only. It is not
+		// in the visible region, so a window in front of it, checked
+		// earlier in this loop, still gets the click.
+		::Decorator* decorator = window->Decorator();
+		if (window->IsVisible() && decorator != NULL
+			&& decorator->InputMarginContains(where)) {
+			return window;
+		}
+// SPDX-SnippetEnd
 	}
 
 	return NULL;

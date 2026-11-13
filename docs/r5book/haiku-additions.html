@@ -87,6 +87,95 @@ MyApp::MessageReceived(BMessage* message)
 }</pre>
 		</section>
 
+		<!-- Decorator hooks -->
+		<section class="entry" id="decorator">
+			<div class="entry-header"><h2>Decorator hooks and the decorator ABI version</h2><span class="kind">Decorators (app_server add-ons)</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>src/servers/app/decorator/Decorator.h (private to app_server)</td></tr>
+				<tr><th>Installed in</th><td>/system/add-ons/decorators</td></tr>
+				<tr><th>For</th><td>Decorator add-ons, not applications</td></tr>
+				<tr><th>First user</th><td>The R5 decorator (R5 2026.1, M11 step 1)</td></tr>
+			</table>
+
+			<p>A decorator draws the window frame: the tab, the buttons and the border. It is an add-on that subclasses
+			Haiku's <code class="inline">Decorator</code> and exports <code class="inline">instantiate_decor_addon()</code>,
+			as on Haiku. Applications do not see any of this; they keep talking to app_server through
+			<code class="inline">BWindow</code>.</p>
+
+			<p>R5 adds three hooks at the end of <code class="inline">Decorator</code>. Each has a default, so a
+			decorator only overrides the ones it needs. The rectangles hold a width per side, not a position.</p>
+
+			<div class="member"><div class="sig">virtual void GetShadowExtent(BRect* extent);</div>
+				<p>How far the window shadow reaches past the border on each side. The default is a small shadow that
+				falls down, derived from the border width. The shadow is drawn only when windows are composed on the GPU;
+				until then the value is unused.</p></div>
+
+			<div class="member"><div class="sig">virtual void GetGlassRegion(BRegion* region);</div>
+				<p>The part of the frame, in screen coordinates, that is frosted glass when windows are composed on the
+				GPU. The default is empty: no glass.</p></div>
+
+			<div class="member"><div class="sig">virtual void GetInputMargin(BRect* margin);</div>
+				<p>An area outside the border where the window can be resized, although nothing is drawn there. It is not
+				part of the footprint, does not cover the windows below, and has no pixels. The default is 0 on every
+				side. Return 0 for a side that cannot be resized (<code class="inline">B_NOT_RESIZABLE</code>,
+				<code class="inline">B_NOT_H_RESIZABLE</code>, <code class="inline">B_NOT_V_RESIZABLE</code>), and
+				classify the margin in <code class="inline">RegionAt()</code> as a border or a corner.</p></div>
+
+			<div class="member"><div class="sig">bool InputMarginContains(BPoint where);</div>
+				<p>Not a hook: whether <code class="inline">where</code> lies in the input margin, outside the border.
+				app_server uses it to find the window under the mouse.</p></div>
+
+			<h3>The ABI version</h3>
+			<p>The hooks change the layout of <code class="inline">Decorator</code>, so an add-on built before them
+			would crash app_server. Every decorator add-on therefore exports the ABI version it was built with. Put
+			<code class="inline">R5_DECORATOR_ABI_EXPORT</code> in one source file of the add-on. app_server loads
+			only an add-on with the current version (<code class="inline">R5_DECORATOR_ABI_VERSION</code>, now 1).
+			Any other add-on is refused with one line in the syslog, and the default decorator is used:</p>
+<pre class="code">app_server: decorator OldDecorator refused: abi 0, need 1</pre>
+			<p>Rebuild an old decorator against the R5 headers to fix that. A new hook comes after these three, and
+			the version goes up by one.</p>
+
+			<h3>Resizing by the edge</h3>
+			<p>On R5, dragging a border or a corner with the primary button resizes the window on that side, with every
+			decorator, and the resize cursor shows while the mouse is over it. Dragging the tab moves the window. A
+			window that cannot be resized in that direction is moved, as on Haiku.</p>
+
+<pre class="code"><span class="k">#include</span> <span class="s">"DecorManager.h"</span>
+<span class="k">#include</span> <span class="s">"SATDecorator.h"</span>
+
+<span class="k">class</span> MyDecorator : <span class="k">public</span> SATDecorator {
+<span class="k">public</span>:
+	MyDecorator(DesktopSettings&amp; settings, BRect frame, Desktop* desktop)
+		: SATDecorator(settings, frame, desktop) {}
+
+	<span class="k">virtual void</span> GetGlassRegion(BRegion* region)
+	{
+		region-&gt;MakeEmpty();
+		region-&gt;Include(&amp;fTabsRegion);	<span class="c">// the tab is glass</span>
+	}
+};
+
+<span class="k">class</span> MyDecorAddOn : <span class="k">public</span> DecorAddOn {
+<span class="k">public</span>:
+	MyDecorAddOn(image_id id, <span class="k">const char</span>* name) : DecorAddOn(id, name) {}
+
+<span class="k">protected</span>:
+	<span class="k">virtual</span> Decorator* _AllocateDecorator(DesktopSettings&amp; settings,
+		BRect rect, Desktop* desktop)
+	{
+		<span class="k">return new</span> (std::nothrow) MyDecorator(settings, rect, desktop);
+	}
+};
+
+R5_DECORATOR_ABI_EXPORT	<span class="c">// without it, app_server refuses the add-on</span>
+
+<span class="k">extern</span> <span class="s">"C"</span> DecorAddOn*
+instantiate_decor_addon(image_id id, <span class="k">const char</span>* name)
+{
+	<span class="k">return new</span> (std::nothrow) MyDecorAddOn(id, name);
+}</pre>
+		</section>
+
 		<!-- USB device speed -->
 		<section class="entry" id="usb-speed">
 			<div class="entry-header"><h2>B_USB_IOCTL_GET_DEVICE_SPEED</h2><span class="kind">USB (drivers)</span></div>

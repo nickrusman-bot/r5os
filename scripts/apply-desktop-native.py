@@ -26,7 +26,12 @@ def main() -> int:
         relative = path.relative_to(SOURCE)
         destination = HAIKU / relative
         if not destination.parent.is_dir():
-            raise SystemExit(f"missing {destination.parent}")
+            # A new R5 component (such as the R5 decorator add-on) brings
+            # its own directory. Its parent must already be in the tree.
+            if not destination.parent.parent.is_dir():
+                raise SystemExit(f"missing {destination.parent.parent}")
+            destination.parent.mkdir()
+            print(f"created {destination.parent.relative_to(HAIKU).as_posix()}")
         data = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
         if destination.is_file() and destination.read_bytes().replace(
             b"\r\n", b"\n"

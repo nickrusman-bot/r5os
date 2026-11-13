@@ -1,0 +1,13 @@
+SubDir HAIKU_TOP src add-ons decorators ;
+
+SubInclude HAIKU_TOP src add-ons decorators BeDecorator ;
+SubInclude HAIKU_TOP src add-ons decorators FlatDecorator ;
+SubInclude HAIKU_TOP src add-ons decorators MacDecorator ;
+SubInclude HAIKU_TOP src add-ons decorators WinDecorator ;
+
+# SPDX-SnippetBegin
+# SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+SubInclude HAIKU_TOP src add-ons decorators R5Decorator ;
+SubInclude HAIKU_TOP src add-ons decorators R5DecoratorAbiTest ;
+# SPDX-SnippetEnd

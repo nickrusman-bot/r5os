@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 R5OS Contributors
+# SPDX-License-Identifier: MIT
+SubDir HAIKU_TOP src add-ons decorators R5DecoratorAbiTest ;
+
+# A decorator add-on without the R5 ABI version, for the refusal test.
+# It is built, never packaged; a test image adds it by hand.
+
+UseBuildFeatureHeaders freetype ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app stackandtile ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app decorator ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app drawing Painter ] ;
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app font ] ;
+UsePrivateHeaders app shared interface graphics ;
+UseLibraryHeaders agg ;
+
+Includes [ FGristFiles R5DecoratorAbiTest.cpp ]
+	: [ BuildFeatureAttribute freetype : headers ] ;
+
+Addon R5DecoratorAbiTest :
+	R5DecoratorAbiTest.cpp
+	: be <nogrist>app_server [ TargetLibstdc++ ] [ TargetLibsupc++ ]
+;
