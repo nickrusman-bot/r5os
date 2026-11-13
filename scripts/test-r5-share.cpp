@@ -269,11 +269,62 @@ sizes()
 }
 
 
+/* Each refusal of the design's pass table, with the error it returns
+ * (docs/APP-SERVER-COMPOSITOR.md, "Pass and fail lines"). */
+static int
+errors()
+{
+	int failed = 0;
+	r5_share_export live = record(9, kClient, kNow);
+	struct {
+		int			reason;
+		int			error;
+		const char*	what;
+	} cases[] = {
+		{ r5_share_check_import(0, 0, &live, kClient, kNow, 0),
+			R5_SHARE_E_NOT_ALLOWED, "error: import by other team" },
+		{ r5_share_check_import(1, 0, &live, kOther, kNow, 0),
+			R5_SHARE_E_NOT_ALLOWED, "error: forwarded number" },
+		{ r5_share_check_import(1, 0, NULL, kClient, kNow, 0),
+			R5_SHARE_E_BAD_VALUE, "error: guessed or second import" },
+		{ r5_share_check_import(1, 0, &live, kClient,
+			kNow + R5_SHARE_LIFE_US, 0),
+			R5_SHARE_E_BAD_VALUE, "error: expired" },
+		{ r5_share_check_import(1, 0, &live, kClient, kNow, 1),
+			R5_SHARE_E_CANCELED, "error: lost exporter" },
+		{ r5_share_check_export(R5_GPU_SHARE_COMPOSITOR,
+			R5_GPU_SHARE_COMPOSITOR, 0, 0, R5_SHARE_EXPORTS_PER_FILE),
+			R5_SHARE_E_NO_MEMORY, "error: export limit" },
+		{ r5_share_check_export(R5_GPU_SHARE_TEAM, R5_GPU_SHARE_COMPOSITOR, 0,
+			0, 0), R5_SHARE_E_BAD_VALUE, "error: target" },
+		{ r5_share_slot_check(0, R5_SHARE_MAX_FILE_BO, 0),
+			R5_SHARE_E_NO_MEMORY, "error: per-file limit" },
+		{ r5_share_slot_check(R5_SHARE_MAX_BO - R5_SHARE_RESERVE, 0, 0),
+			R5_SHARE_E_NO_MEMORY, "error: reserve" },
+		{ r5_share_slot_check(R5_SHARE_MAX_BO, 0, 1),
+			R5_SHARE_E_NO_MEMORY, "error: system full" },
+		{ r5_share_check_import(1, 0, &live, kClient, kNow, 0),
+			R5_SHARE_E_OK, "error: none for a good import" },
+	};
+	for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++)
+		failed |= check(r5_share_error(cases[i].reason) == cases[i].error,
+			cases[i].what);
+
+	/* The "free again" semaphore of another team is refused. */
+	failed |= check(r5_share_sem_ok(kClient, kClient), "own semaphore");
+	failed |= check(!r5_share_sem_ok(kOther, kClient),
+		"semaphore of another team refused");
+	failed |= check(!r5_share_sem_ok(-1, kClient), "no semaphore refused");
+	return failed;
+}
+
+
 int
 main()
 {
 	int failed = 0;
 	failed |= numbers();
+	failed |= errors();
 	failed |= imports();
 	failed |= exports();
 	failed |= slots();

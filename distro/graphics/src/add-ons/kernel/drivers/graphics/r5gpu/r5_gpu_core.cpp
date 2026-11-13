@@ -2533,6 +2533,24 @@ gpu_scanout(gpu_client* client, void* buffer, size_t length)
 }
 
 
+/* The Haiku status of a refusal (r5_share_error, host-tested). */
+static status_t
+gpu_share_status(int reason)
+{
+	switch (r5_share_error(reason)) {
+		case R5_SHARE_E_OK:
+			return B_OK;
+		case R5_SHARE_E_NOT_ALLOWED:
+			return B_NOT_ALLOWED;
+		case R5_SHARE_E_NO_MEMORY:
+			return B_NO_MEMORY;
+		case R5_SHARE_E_CANCELED:
+			return ECANCELED;
+	}
+	return B_BAD_VALUE;
+}
+
+
 /* M11 step 3b (docs/APP-SERVER-COMPOSITOR.md, "Zero-copy design").
  * Removes one pending export and the reference it holds. */
 static void
@@ -2586,8 +2604,8 @@ gpu_bo_export(gpu_client* client, void* buffer, size_t length)
 		in.target_team, in.flags, pending);
 	if (reason != R5_SHARE_OK) {
 		return gpu_refuse("BO_EXPORT", r5_share_reason(reason),
-			reason == R5_SHARE_LIMIT ? B_NO_MEMORY : B_BAD_VALUE, in.handle,
-			bo->backing->domain, bo->backing->bytes, 0, 0, 0, in.flags);
+			gpu_share_status(reason), in.handle, bo->backing->domain,
+			bo->backing->bytes, 0, 0, 0, in.flags);
 	}
 	r5_share_export* record = NULL;
 	for (uint32 i = 0; i < R5_SHARE_EXPORTS_PER_FILE; i++) {
@@ -2653,12 +2671,8 @@ gpu_bo_import(gpu_client* client, void* buffer, size_t length)
 		gpu_share_remove(record);
 	gpu_share_purge(now);
 	if (reason != R5_SHARE_OK) {
-		status_t refused = reason == R5_SHARE_CALLER
-			|| reason == R5_SHARE_TEAM ? B_NOT_ALLOWED : B_BAD_VALUE;
-		if (reason == R5_SHARE_LOST)
-			refused = ECANCELED;
-		return gpu_refuse("BO_IMPORT", r5_share_reason(reason), refused, 0, 0,
-			0, 0, 0, 0, in.flags);
+		return gpu_refuse("BO_IMPORT", r5_share_reason(reason),
+			gpu_share_status(reason), 0, 0, 0, 0, 0, 0, in.flags);
 	}
 	int slotReason = R5_SHARE_OK;
 	int slot = gpu_slot_take(client, &slotReason);

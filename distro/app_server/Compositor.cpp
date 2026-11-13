@@ -2209,7 +2209,8 @@ Compositor::ShareImages(Window* window, int32 viewToken, team_id team,
 
 	for (uint32 i = 0; i < count; i++) {
 		sem_info info;
-		if (get_sem_info(images[i].sem, &info) != B_OK || info.team != team) {
+		if (get_sem_info(images[i].sem, &info) != B_OK
+			|| !r5_share_sem_ok(info.team, team)) {
 			_ShareLog(window, "sem");
 			return B_NOT_ALLOWED;
 		}

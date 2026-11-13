@@ -178,6 +178,49 @@ r5_share_slot_check(uint32_t live, uint32_t handles, int callerIsAppServer)
 }
 
 
+/* The error each refusal returns, so the host test checks it. The kernel
+ * turns these into B_NOT_ALLOWED, B_BAD_VALUE, B_NO_MEMORY and
+ * ECANCELED. */
+enum {
+	R5_SHARE_E_OK = 0,
+	R5_SHARE_E_NOT_ALLOWED = 1,
+	R5_SHARE_E_BAD_VALUE = 2,
+	R5_SHARE_E_NO_MEMORY = 3,
+	R5_SHARE_E_CANCELED = 4
+};
+
+
+static inline int
+r5_share_error(int reason)
+{
+	switch (reason) {
+		case R5_SHARE_OK:
+			return R5_SHARE_E_OK;
+		case R5_SHARE_CALLER:
+		case R5_SHARE_TEAM:
+			return R5_SHARE_E_NOT_ALLOWED;
+		case R5_SHARE_LIMIT:
+		case R5_SHARE_FILE:
+		case R5_SHARE_SYSTEM:
+		case R5_SHARE_RESERVE_LEFT:
+			return R5_SHARE_E_NO_MEMORY;
+		case R5_SHARE_LOST:
+			return R5_SHARE_E_CANCELED;
+	}
+	/* token, expired, target */
+	return R5_SHARE_E_BAD_VALUE;
+}
+
+
+/* app_server: a "free again" semaphore must belong to the team of the
+ * connection the message came on. release_sem_etc does not check it. */
+static inline int
+r5_share_sem_ok(int32_t semTeam, int32_t clientTeam)
+{
+	return semTeam >= 0 && semTeam == clientTeam;
+}
+
+
 /* The <n> of "radeon_hd: buffer limit <n> reached, team <id>". */
 static inline uint32_t
 r5_share_limit_of(int reason)
