@@ -516,6 +516,9 @@ write_ring_line(FILE* out)
 		ih.msi, ih.early, ih.eop, ih.wake);
 	fprintf(out, "selftest done\n");
 	fflush(out);
+	// The stick card says to wait for this before running check.
+	system("/bin/notify --group 'GPU self-test' --title 'GPU self-test done'"
+		" --timeout 60 'Open Terminal and type check.' >/dev/null 2>&1");
 }
 
 
