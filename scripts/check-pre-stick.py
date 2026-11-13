@@ -31,8 +31,8 @@ PKG = f"{GENERATED}/objects/linux/x86_64/release/tools/package/package"
 OFFSET = "6291456"
 
 PACKAGES = (
-    "mesa_lavapipe-25.3.6-3-x86_64.hpkg",
-    "mesa_radv-25.3.6-6-x86_64.hpkg",
+    "mesa_lavapipe-25.3.6-4-x86_64.hpkg",
+    "mesa_radv-25.3.6-7-x86_64.hpkg",
     "vulkan_loader-1.4.367-4-x86_64.hpkg",
     "vulkan_tools-1.4.367-2-x86_64.hpkg",
     "vulkanteapot-1.0.0-4-x86_64.hpkg",
@@ -225,7 +225,7 @@ def extract(iso_wsl: str, out: str) -> None:
         f"'{BFS}' --start-offset {OFFSET} '{iso_wsl}' <<EOF\n"
         + "\n".join(gets) + "\nquit\nEOF\n"
         f"'{PKG}' extract -C {out}/haiku {out}/{HAIKU_PKG}\n"
-        f"'{PKG}' extract -C {out}/radv {out}/mesa_radv-25.3.6-6-x86_64.hpkg\n"
+        f"'{PKG}' extract -C {out}/radv {out}/mesa_radv-25.3.6-7-x86_64.hpkg\n"
         f"'{PKG}' extract -C {out}/teapot {out}/vulkanteapot-1.0.0-4-x86_64.hpkg\n"
         f"test -s {out}/haiku/bin/r5-gpu-selftest\n"
         f"test -s {out}/haiku/servers/app_server\n"

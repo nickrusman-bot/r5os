@@ -35,7 +35,7 @@ def main() -> None:
     root = Path(sys.argv[1])
     out_dir = root / "distro" / "packages" / "x86_64"
     previous = out_dir / "mesa_lavapipe-25.3.6-1-x86_64.hpkg"
-    dest = out_dir / "mesa_lavapipe-25.3.6-3-x86_64.hpkg"
+    dest = out_dir / "mesa_lavapipe-25.3.6-4-x86_64.hpkg"
     stage = Path("/tmp/r5-lavapipe-pkg")
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
@@ -48,7 +48,7 @@ def main() -> None:
         raise SystemExit("libvulkan_lvp.so still contains /home/nickr")
     info = stage / ".PackageInfo"
     text = info.read_text(encoding="utf-8")
-    text = text.replace("version\t\t\t25.3.6-1", "version\t\t\t25.3.6-3")
+    text = text.replace("version\t\t\t25.3.6-1", "version\t\t\t25.3.6-4")
     if "2026 R5OS Contributors" not in text:
         text = text.replace(
             '\t"1999-2026 Brian Paul and others"\n',

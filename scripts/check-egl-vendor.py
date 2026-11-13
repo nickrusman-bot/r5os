@@ -41,7 +41,7 @@ def exports(path):
 def main():
     if STAGE.exists():
         shutil.rmtree(STAGE)
-    mesa = DL / "mesa-25.3.6-4-x86_64.hpkg"
+    mesa = DL / "mesa-25.3.6-5-x86_64.hpkg"
     extract(mesa, STAGE / "mesa")
     json_path = STAGE / "mesa/add-ons/opengl/egl_vendor.d/50_mesa.json"
     text = json_path.read_text()
