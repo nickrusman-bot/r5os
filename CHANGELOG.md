@@ -1,5 +1,13 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Programs no longer crash on a settings file that was cut short
+
+Problem: on the 5625U, Deskbar crashed at start and media_server at shutdown, both in `BMessage::_AddField`. Their settings files had been cut short by the power button: the file had its new size but old blocks (Deskbar's `replicants`: a header for 22 fields in 254 bytes). `BMessage::Unflatten()` read the header, then a short field table, and returned an error without resetting the message: `field_count` stayed 22 over a half-read table, and the next `Add*()` walked garbage.
+
+What changed: `distro/desktop/src/kits/app/Message.cpp` (Haiku `src/kits/app/Message.cpp`, MIT, copied unchanged, then one R5 snippet): a short read of the field table frees it and resets the header, as the data read right below already did. A program that unflattens a damaged file now gets an empty message and an error, and can go on.
+
+Tested: see the PR (QEMU, a small program that unflattens the real 254-byte file from the stick and then adds a field). Not tested on the 5625U.
+
 ## 2026-11-13 - Printers, Mail tray menu and the Tracker version column (not built, not booted)
 
 Three small bugs from Haiku Trac, picked from `generated/issues-2/BRIEF.md`. Each cause was read in the source; nothing was built or run. Copies of Haiku files are in `distro/rest/` (applied by `apply-rest-native.py`); the Tracker file was already an R5 copy in `distro/desktop/`. R5 lines are in SPDX-Snippet blocks (MIT).
