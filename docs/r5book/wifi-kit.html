@@ -40,7 +40,7 @@
 		sends messages and receives the state.</div>
 
 		<section class="entry" id="view">
-			<div class="entry-header"><h2>WiFiView</h2><span class="kind">the panel</span></div>
+			<div class="entry-header"><h2>WiFiView</h2><span class="kind">class</span></div>
 			<table class="facts">
 				<tr><th>Declared in</th><td>&lt;R5WiFiView.h&gt;</td></tr>
 				<tr><th>Derived from</th><td>BGroupView</td></tr>
@@ -49,7 +49,10 @@
 			Join other network and Advanced. It starts its own <code class="inline">WiFiController</code> when it is
 			attached to a window and stops it when it is detached, so a typed password does not outlive the
 			view.</p>
-			<figure class="stage"><img src="img/wifi-page-qemu.png" alt="The Wi-Fi page in Settings" style="max-width:100%" /></figure>
+			<figure class="stage">
+				<img src="img/wifi-page-qemu.png" alt="The Wi-Fi page in Settings" />
+				<figcaption><span>The Wi-Fi page in Settings, R5 in QEMU without a Wi-Fi adapter, 12 Nov 2026</span><span class="badge-shot">Screenshot</span></figcaption>
+			</figure>
 			<div class="member"><div class="sig">WiFiView(bool settingsPage = false);</div>
 				<p><code class="inline">false</code>: the program's look, with the large icon and window insets, and
 				Join as the window's default button. <code class="inline">true</code>: for a Settings page, without
@@ -62,7 +65,7 @@ BLayoutBuilder::Group&lt;&gt;(this, B_VERTICAL, 0)
 		</section>
 
 		<section class="entry" id="controller">
-			<div class="entry-header"><h2>WiFiController</h2><span class="kind">the state machine</span></div>
+			<div class="entry-header"><h2>WiFiController</h2><span class="kind">class</span></div>
 			<table class="facts">
 				<tr><th>Declared in</th><td>&lt;R5WiFi.h&gt;</td></tr>
 				<tr><th>Derived from</th><td>BLooper</td></tr>
@@ -92,7 +95,7 @@ BLayoutBuilder::Group&lt;&gt;(this, B_VERTICAL, 0)
 		</section>
 
 		<section class="entry" id="state">
-			<div class="entry-header"><h2>WiFiState</h2><span class="kind">what the controller reports</span></div>
+			<div class="entry-header"><h2>WiFiState</h2><span class="kind">struct</span></div>
 			<p><code class="inline">state</code> is one of <code class="inline">WIFI_STATE_NO_ADAPTER</code>,
 			<code class="inline">OFF</code>, <code class="inline">DISCONNECTED</code>, <code class="inline">CONNECTING</code>,
 			<code class="inline">OBTAINING_ADDRESS</code>, <code class="inline">NO_INTERNET</code> and
@@ -128,7 +131,7 @@ BLayoutBuilder::Group&lt;&gt;(this, B_VERTICAL, 0)
 		</section>
 
 		<section class="entry" id="roster">
-			<div class="entry-header"><h2>BNetworkRoster</h2><span class="kind">one addition</span></div>
+			<div class="entry-header"><h2>BNetworkRoster</h2><span class="kind">Network Kit, one addition</span></div>
 			<div class="member"><div class="sig">status_t AddPersistentNetwork(const wireless_network&amp; network, const char* password);</div>
 				<p>Saves a network with its password, so net_server joins it again after a restart. The one-argument
 				call stays and saves no password. Added by air/OS; R5 ships it in libbnetapi.so. In the same change,
