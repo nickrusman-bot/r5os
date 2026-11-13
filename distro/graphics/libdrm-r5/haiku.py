@@ -22,6 +22,8 @@ patches = [
     "haiku-drmioctl.patch",
     "haiku-bo-map.patch",
     "haiku-meson.patch",
+    # M11 step 3b: amdgpu_bo_import takes the size from BO_IMPORT.
+    "haiku-import-size.patch",
 ]
 for name in patches:
     patch = here / "patches" / name

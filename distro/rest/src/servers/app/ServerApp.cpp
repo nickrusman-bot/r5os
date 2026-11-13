@@ -129,6 +129,12 @@ r5_screen_change_allowed(team_id team)
 #include "ServerTokenSpace.h"
 #include "ServerWindow.h"
 #include "Window.h"
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+#include "Compositor.h"
+#include "View.h"
+// SPDX-SnippetEnd
 
 
 //#define DEBUG_SERVERAPP
@@ -3620,6 +3626,101 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			fLink.Flush();
 			break;
 		}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		// M11 step 3b (docs/APP-SERVER-COMPOSITOR.md, "The link message"):
+		// a Vulkan view's swapchain images. The view is found by its token
+		// in this application's token space, so a view of another
+		// application is never found. The team that goes to BO_IMPORT is
+		// this connection's, never one from the message.
+		case AS_R5_SHARE_IMAGES:
+		{
+			int32 viewToken = -1;
+			uint32 count = 0;
+			link.Read<int32>(&viewToken);
+			status_t status = link.Read<uint32>(&count);
+			// The rest of a refused message is skipped by the link.
+			if (status == B_OK && count > kMaxShareImages)
+				status = B_BAD_VALUE;
+			compositor_share_image images[kMaxShareImages];
+			for (uint32 i = 0; status == B_OK && i < count; i++) {
+				link.Read(images[i].token, sizeof(images[i].token));
+				link.Read<sem_id>(&images[i].sem);
+				link.Read<uint32>(&images[i].width);
+				link.Read<uint32>(&images[i].height);
+				link.Read<uint32>(&images[i].pitch);
+				status = link.Read<uint32>(&images[i].format);
+			}
+
+			int32 shareId = -1;
+			Compositor* compositor = fDesktop->GetCompositor();
+			if (status == B_OK && (compositor == NULL
+					|| !compositor->IsActive()))
+				status = B_NOT_ALLOWED;
+			if (status == B_OK) {
+				status = B_BAD_VALUE;
+				if (fDesktop->LockAllWindows()) {
+					View* view = NULL;
+					if (fViewTokens.GetToken(viewToken, B_HANDLER_TOKEN,
+							(void**)&view) == B_OK && view != NULL
+						&& view->Window() != NULL) {
+						if (count == 0) {
+							compositor->ShareDeclined(view->Window());
+							status = B_NOT_ALLOWED;
+						} else {
+							status = compositor->ShareImages(view->Window(),
+								viewToken, fClientTeam, count, images,
+								&shareId);
+						}
+					}
+					fDesktop->UnlockAllWindows();
+				}
+			}
+			fLink.StartMessage(status);
+			if (status == B_OK) {
+				fLink.Attach<int32>(shareId);
+				for (uint32 i = 0; i < count; i++)
+					fLink.Attach<int32>(B_OK);
+			}
+			fLink.Flush();
+			break;
+		}
+
+		case AS_R5_SHARE_PRESENT:
+		{
+			int32 viewToken = -1;
+			int32 shareId = -1;
+			uint32 index = 0;
+			link.Read<int32>(&viewToken);
+			link.Read<int32>(&shareId);
+			status_t status = link.Read<uint32>(&index);
+			Compositor* compositor = fDesktop->GetCompositor();
+			if (status == B_OK)
+				status = compositor != NULL
+					? compositor->SharePresent(fClientTeam, viewToken,
+						shareId, index)
+					: B_NOT_ALLOWED;
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
+		case AS_R5_SHARE_END:
+		{
+			int32 viewToken = -1;
+			int32 shareId = -1;
+			link.Read<int32>(&viewToken);
+			status_t status = link.Read<int32>(&shareId);
+			Compositor* compositor = fDesktop->GetCompositor();
+			if (status == B_OK && compositor != NULL)
+				compositor->ShareEnd(fClientTeam, viewToken, shareId);
+			fLink.StartMessage(B_OK);
+			fLink.Flush();
+			break;
+		}
+// SPDX-SnippetEnd
 
 		default:
 			printf("ServerApp %s received unhandled message code %" B_PRId32

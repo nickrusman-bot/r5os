@@ -15,6 +15,7 @@
 #include <OS.h>
 
 #include <new>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,6 +82,15 @@ struct copy_times {
 
 copy_times sCpuTimes;
 copy_times sGpuTimes;
+
+// M11 step 3b: a new back buffer or scanout gives a new generation, so the
+// compositor imports again; and the thread whose frame is already on the
+// front (decision 4).
+uint32 sGeneration = 1;
+thread_id sFrontCurrent = -1;
+// The scanout and its handle: GPUCopy::Copy (a CopyBackToFront caller) and
+// the compositor's thread (ExportForCompositor) both reach them.
+pthread_mutex_t sScanLock = PTHREAD_MUTEX_INITIALIZER;
 
 
 void
@@ -158,6 +168,65 @@ map_bo(uint32* handle, uint64 va, uint64 bytes, uint32 flags, void** cpu)
 	map.flags = flags;
 	if (ioctl(sFd, R5_GPU_VA_MAP, &map, sizeof(map)) != 0)
 		return false;
+	return true;
+}
+
+
+/*!	The scanout for this back buffer: the one already held, or a new one
+	from R5_GPU_SCANOUT_BO when the size changed. A new one is a new
+	generation.
+*/
+bool
+ensure_scanout(RenderingBuffer* back, r5_gpu_scanout* scan)
+{
+	if (sScanHandle != 0 && (sScanWidth != back->Width()
+			|| sScanHeight != back->Height()
+			|| sScanPitch != back->BytesPerRow())) {
+		r5_gpu_bo gone;
+		memset(&gone, 0, sizeof(gone));
+		gone.size = (uint32)sizeof(gone);
+		gone.version = 1;
+		gone.handle = sScanHandle;
+		ioctl(sFd, R5_GPU_BO_FREE, &gone, sizeof(gone));
+		sScanHandle = 0;
+	}
+	memset(scan, 0, sizeof(*scan));
+	if (sScanHandle == 0) {
+		scan->size = (uint32)sizeof(*scan);
+		scan->version = 1;
+		if (ioctl(sFd, R5_GPU_SCANOUT_BO, scan, sizeof(*scan)) != 0) {
+			off("scanout refused");
+			return false;
+		}
+		sScanHandle = scan->handle;
+		sScanVa = scan->gpu_va;
+		sScanWidth = scan->width;
+		sScanHeight = scan->height;
+		sScanPitch = scan->bytes_per_row;
+		sGeneration++;
+	} else {
+		scan->handle = sScanHandle;
+		scan->width = sScanWidth;
+		scan->height = sScanHeight;
+		scan->bytes_per_row = sScanPitch;
+		scan->gpu_va = sScanVa;
+	}
+	return true;
+}
+
+
+bool
+export_bo(uint32 handle, uint8 token[16])
+{
+	r5_gpu_bo_export out;
+	memset(&out, 0, sizeof(out));
+	out.size = (uint32)sizeof(out);
+	out.version = 1;
+	out.handle = handle;
+	out.target = R5_GPU_SHARE_COMPOSITOR;
+	if (ioctl(sFd, R5_GPU_BO_EXPORT, &out, sizeof(out)) != 0)
+		return false;
+	memcpy(token, out.token, sizeof(out.token));
 	return true;
 }
 
@@ -454,6 +523,7 @@ GPUCopy::BackBuffer(uint32 width, uint32 height, uint32 bytesPerRow)
 	}
 	sBits = bits;
 	sBackVa = 0x200000000ull;
+	sGeneration++;
 	memset(bits, 255, (size_t)bytes);
 	return new(std::nothrow) GpuBackBuffer(width, height, bytesPerRow, bits);
 }
@@ -510,37 +580,12 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		return false;
 	if (bandCount == 0)
 		return true;
-	if (sScanHandle != 0 && (sScanWidth != back->Width()
-			|| sScanHeight != back->Height()
-			|| sScanPitch != back->BytesPerRow())) {
-		r5_gpu_bo gone;
-		memset(&gone, 0, sizeof(gone));
-		gone.size = (uint32)sizeof(gone);
-		gone.version = 1;
-		gone.handle = sScanHandle;
-		ioctl(sFd, R5_GPU_BO_FREE, &gone, sizeof(gone));
-		sScanHandle = 0;
-	}
 	r5_gpu_scanout scan;
-	memset(&scan, 0, sizeof(scan));
-	if (sScanHandle == 0) {
-		scan.size = (uint32)sizeof(scan);
-		scan.version = 1;
-		if (ioctl(sFd, R5_GPU_SCANOUT_BO, &scan, sizeof(scan)) != 0) {
-			off("scanout refused");
-			return false;
-		}
-		sScanHandle = scan.handle;
-		sScanVa = scan.gpu_va;
-		sScanWidth = scan.width;
-		sScanHeight = scan.height;
-		sScanPitch = scan.bytes_per_row;
-	} else {
-		scan.width = sScanWidth;
-		scan.height = sScanHeight;
-		scan.bytes_per_row = sScanPitch;
-		scan.gpu_va = sScanVa;
-	}
+	pthread_mutex_lock(&sScanLock);
+	bool scanOk = ensure_scanout(back, &scan);
+	pthread_mutex_unlock(&sScanLock);
+	if (!scanOk)
+		return false;
 	if (scan.bytes_per_row != back->BytesPerRow()
 		|| scan.width != back->Width() || scan.height != back->Height()) {
 		off("pitch");
@@ -619,6 +664,49 @@ GPUCopy::Copy(const BRegion& region, RenderingBuffer* back,
 		bandBounds->bottom = bottom;
 	}
 	return true;
+}
+
+
+bool
+GPUCopy::ExportForCompositor(RenderingBuffer* back, uint8 backToken[16],
+	uint8 scanToken[16], uint32* scanPitch, uint32* generation)
+{
+	load_settings();
+	if (!sWant || sOff || back == NULL || back->Bits() != sBits || sFd < 0
+		|| sBackHandle == 0)
+		return false;
+	r5_gpu_scanout scan;
+	pthread_mutex_lock(&sScanLock);
+	bool ok = ensure_scanout(back, &scan)
+		&& scan.width == back->Width() && scan.height == back->Height()
+		&& export_bo(sBackHandle, backToken) && export_bo(sScanHandle, scanToken);
+	if (ok) {
+		*scanPitch = scan.bytes_per_row;
+		*generation = sGeneration;
+	}
+	pthread_mutex_unlock(&sScanLock);
+	return ok;
+}
+
+
+uint32
+GPUCopy::Generation()
+{
+	return sGeneration;
+}
+
+
+void
+GPUCopy::SetFrontCurrent(bool current)
+{
+	sFrontCurrent = current ? find_thread(NULL) : -1;
+}
+
+
+bool
+GPUCopy::FrontCurrent()
+{
+	return sFrontCurrent >= 0 && sFrontCurrent == find_thread(NULL);
 }
 
 

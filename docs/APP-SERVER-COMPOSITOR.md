@@ -225,7 +225,7 @@ Today a slot is the memory and the handle at the same time. Sharing splits it:
 - **Free again: one semaphore per swapchain image** (user, 13 Nov 2026). The WSI creates it (`create_sem`, count 0) and sends its `sem_id` with that image's export number in the once-message.
   - After its compose fence, app_server calls `release_sem_etc(sem, 1, B_DO_NOT_RESCHEDULE)` for each image that the frame no longer samples. It never waits on a program.
   - Before it uses a `sem_id`, app_server checks with `get_sem_info` that the semaphore's `team` is `ClientTeam()` of that connection; otherwise that window's zero-copy is refused (`zero-copy off: sem`). That check is the protection: Haiku's `release_sem_etc` lets any team release a semaphore of another user team and only refuses a user call on a kernel-team semaphore (`src/system/kernel/sem.cpp`).
-  - In `vkAcquireNextImageKHR` the WSI waits with `acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, timeout)`, the program's own timeout. When nothing comes in that time, it returns `VK_ERROR_OUT_OF_DATE_KHR`, so the program makes a new swapchain.
+  - In `vkAcquireNextImageKHR` the WSI waits with `acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, timeout)`, the program's own timeout. When nothing comes in that time, it returns `VK_TIMEOUT`, as the Vulkan specification says and as the copy path does (decided in step 3b, point 5); a semaphore that is gone makes the surface lost. An app_server that stops taking a view's images refuses the next present, and the WSI then returns `VK_ERROR_OUT_OF_DATE_KHR`.
 
 ### The link message
 
@@ -288,27 +288,22 @@ The messages:
 
 ### Pass and fail lines (for step 3b)
 
-One line per test, from the 3b row of the brief. A test program, `r5-share-test`, prints them; app_server prints the `zero-copy off` lines.
+Changed in step 3b (user, 13 Nov 2026): the refusal rules are cases of the host test, each with the error it returns; the machine runs a short conformance check with ordinary calls (`r5-share-check`, like `r5-gpu-isolation`); the job that never finishes is the M10 test switch `gpu_hang_test`, no new shader. A failure prints the same text with `fail` and the reason.
 
-| Test | Pass line |
-|---|---|
-| another team imports a number | `r5-share-test: import by other team refused: pass` |
-| a guessed number, and a number forwarded from another team into this team's message | `r5-share-test: guessed or forwarded number refused: pass` |
-| 1000 guessed numbers | `r5-share-test: 1000 guessed numbers refused: pass` |
-| the same number twice | `r5-share-test: second import refused: pass` |
-| an export not imported within 5 s | `r5-share-test: expired number refused: pass` |
-| more than 32 pending exports | `r5-share-test: export limit refused: pass` |
-| exporter killed before the import | `r5-share-test: killed before import, gtt returned: pass` |
-| exporter killed after the import | `r5-share-test: killed after import, still readable, gtt returned at close: pass` |
-| a size that lies | `app_server: window <id> zero-copy off: size` and `r5-share-test: lying size refused: pass` |
-| a semaphore of another team in the once-message | `app_server: window <id> zero-copy off: sem` and `r5-share-test: other team's semaphore refused: pass` |
-| no free in time | `r5-share-test: acquire timeout gives out of date: pass` |
-| a submit that never finishes | `r5-share-test: stuck image, desktop composes, previous frame kept: pass` |
-| one program allocating until refused | `r5-share-test: per-file limit, app_server still allocates: pass` |
-| programs allocating until only the reserve is left | `r5-share-test: reserve kept for app_server: pass` |
-| Lavapipe | `app_server: window <id> zero-copy off: lavapipe` |
+| Test | Where | Pass line |
+|---|---|---|
+| import by another team, a forwarded number, a guessed number, a second import, an expired number, the export limit, the per-file limit, the reserve, the system limit, a lost exporter, a semaphore of another team, the reference count, a size that lies | host test (`scripts/test-r5-share.cpp`, `r5_share.h`), each case with its error | `ok gpu share <n> cases` |
+| the import id after close, a reused fd number, RADV's import and query path | host test (`scripts/test-ac-drm.sh`) | `ok ac drm family RV cu 7 firmware map share` |
+| a program that sets argv[0] to app_server's path, run as a user (the caller check needs effective uid 0 and the path) | host test, and the machine: `r5-share-check` | `r5-share-check: argv[0] app_server as a user refused: pass` |
+| an import by a program that is not app_server | the machine: `r5-share-check` | `r5-share-check: import by a program that is not app_server refused: pass` |
+| the same number offered twice (needs the compositor on RADV) | the machine: `r5-share-check` | `r5-share-check: second import of the same number refused: pass` |
+| the exporter stopped before an import | the stick script: `r5-share-check count`, `r5-share-check hold &`, `kill` it, `r5-share-check count` | the two `r5-share-check: buffers <n>` lines show the same number |
+| a size that lies, a semaphore of another team | app_server, once per window | `app_server: window <id> zero-copy off: size`, `... off: sem` |
+| a job that never finishes, with VulkanTeapot open | the stick: `gpu_hang_test 1` (M10) | `app_server: gpu compositor restarted after reset`; the teapot window shows its window background, then turns again |
+| Lavapipe | QEMU or VirtualBox | `app_server: window <id> zero-copy off: lavapipe` |
+| the two scanout ways (decision 4) | the stick, `gpu_debug`, once with and once without `gpu_compositor_scanout true` | `app_server: present median <us> (vulkan)` and `... (cpu)`, both in `CHANGELOG.md` |
 
-A failure prints the same text with `fail` and the reason. "GTT returned" is read with `R5_GPU_GET_COUNTERS` before and after, as the M5 counters are.
+An acquire timeout (`VK_TIMEOUT`, decision 5) has no test of its own: a program that waits with `UINT64_MAX`, as VulkanTeapot does, never sees it.
 
 ### Open questions (step 3a)
 
@@ -456,3 +451,20 @@ Built in step 2, and how it differs from the sections above:
 - **The memory budget:** over the budget, the buffers of windows that are not on screen (hidden, minimised, another workspace) are freed first, the one shown longest ago first; such a window draws all of itself again when it shows. A window on screen that still cannot get a buffer turns the GPU mode off (`window memory`). A window without a buffer draws nothing: `Window::_ClipToBuffer` limits every drawable region to the window's buffer, and logs `app_server: draw outside buffer: ...` once per window if a region ever reaches past it.
 - **Decision 14:** a lost device on RADV is followed by one restart once `GET_INFO` reports the GPU available again (up to 15 s); the buffers of the lost device are not freed through the new one.
 
+
+## Decided in step 3b (13 Nov 2026)
+
+Where the source differed from the step 3a design, the user chose:
+
+1. **app_server reads the present mark through the R5 DRM library.** RADV does the import itself (`PRIME_FD_TO_HANDLE` on its own device fd), so app_server never sees that fd or the new handle. `r5_drm_token_to_fd(device_fd, token, client_team, &fd, &id)` returns, beside the fd, an id of its own. At `PRIME_FD_TO_HANDLE` the library stores RADV's device fd and the new handle under that id, not under the fd number: RADV closes the fd after a successful import, and the number comes back for the next one. `r5_drm_mark_get(id, &sequence)` sends `BO_PRESENT_MARK` `GET` on that device fd with that handle. `GEM_CLOSE` of that handle ends the id; a `mark_get` after that fails, and app_server puts that window on the copy path. `device_fd` is not used in version 1 (pass -1).
+2. **The WSI sets the mark the same way.** `r5_drm_fd_to_token(fd, token, &id)` returns, beside the number, an export id; the library keeps RADV's device fd and the handle of `PRIME_HANDLE_TO_FD` under it. `r5_drm_mark_set(id)` sends `BO_PRESENT_MARK` `SET` there. A second export of the same buffer keeps the same id; `GEM_CLOSE` of that handle ends it.
+3. No patch in RADV, no new kernel number, nothing in libbe. The four library calls are additive and MIT (`distro/graphics/libdrm-r5/r5_translate.h`).
+4. **The scanout: the frame is the back buffer** (option A, user, 13 Nov 2026). The software cursor reads the back buffer (`HWInterface::_DrawCursor`, and `Invalidate` restores the area under a moved cursor from it), so the back buffer must stay current. `GPUCopy` exports both its GTT back buffer and the scanout to app_server itself; the Vulkan device imports both. The compose writes into the back buffer, and one `vkCmdCopyBuffer` of the damaged rows from the back buffer into the scanout follows in the same submit. The frame stride is the back buffer's `BytesPerRow() / 4`. After the fence app_server lets `HWInterface` draw the cursor again where the damage touches it; the R5 `AccelerantHWInterface::_CopyBackToFront` skips the copy for a region the GPU has already put on the front. This only runs when the back buffer is `GPUCopy`'s GTT buffer (`gpu_app_server` on, RADV); otherwise, and on Lavapipe, `_Present` copies as in step 2. The old way (CPU copy into the back buffer and the M8 `DMA_DATA` copy) stays selectable until the stick measures both. A mode change gives a new back buffer and scanout: the old imports are closed after the next fence and both are exported and imported again.
+5. **An acquire timeout is `VK_TIMEOUT`** (user, 13 Nov 2026, after review), not `VK_ERROR_OUT_OF_DATE_KHR`: a program that polls with a short timeout must not rebuild its swapchain each time. The way out of a stuck app_server is the refused present.
+
+Built in step 3b, and how it differs from the sections above:
+
+- **The local fd** is a descriptor of `/dev/null`, a number the caller can close; a table in the library says what it stands for. A row is free again after its one use (`r5_drm_fd_to_token` for an export, `r5_drm_import_bytes` for an import), so the table of 64 rows does not fill.
+- **Pending exports per backing:** a buffer whose exporter freed its handle before the import is held only by the pending export; the backing table has the size of the slot table (1024), and such a backing goes at most 5 s later.
+- **`vram_usage` and `gtt_usage`** in `GET_INFO` count the memory (backings), not the handles, so a shared buffer is counted once.
+- **Refusal words** in the kernel log line (`radeon_hd: refuse BO_IMPORT <why>`): `caller`, `team`, `token`, `expired`, `lost`, `target`; `BO_EXPORT limit`, `target`. An expired number is reported as `expired` when it is still in the table, `token` after the watchdog removed it.

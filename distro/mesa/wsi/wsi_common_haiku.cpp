@@ -28,6 +28,15 @@
  * write-combined mapping, and there is no second mapping.
  * Written from the R5 view-surface specification. No code is taken from
  * haiku-amdgpu, haiku-rpi, or summit.
+ *
+ * M11 step 3b (docs/APP-SERVER-COMPOSITOR.md, "The WSI"): on RADV the
+ * swapchain first tries to share its images with app_server. It is then
+ * a WSI_IMAGE_TYPE_DRM swapchain with linear, exportable buffers (the
+ * prime path of wsi_common_drm.c). Each buffer's export number and a
+ * "free again" semaphore go to app_server once, on the application's own
+ * link; a present marks the buffer (BO_PRESENT_MARK through the R5 DRM
+ * library) and names the image. When app_server refuses, or on Lavapipe,
+ * the copy into a BBitmap below stays.
  */
 
 #define VK_USE_PLATFORM_VIEW_RFIVE 1
@@ -39,12 +48,17 @@
 #include "vk_queue.h"
 #include "vulkan/vulkan_r5.h"
 
+#include <Application.h>
 #include <Bitmap.h>
 #include <FindDirectory.h>
 #include <Messenger.h>
 #include <Screen.h>
 #include <View.h>
 #include <Window.h>
+
+#include <AppMisc.h>
+#include <AppServerLink.h>
+#include <ServerProtocol.h>
 
 #include <OS.h>
 #include <syslog.h>
@@ -60,6 +74,18 @@
 #include <string.h>
 #include <time.h>
 
+/* The R5 DRM library (distro/graphics/libdrm-r5/r5_translate.h, MIT),
+ * linked into RADV. Weak, so a driver without it keeps the copy path. */
+extern "C" {
+int r5_drm_fd_to_token(int fd, uint8_t token[16], uint32_t *id)
+	__attribute__((weak));
+int r5_drm_mark_set(uint32_t id) __attribute__((weak));
+}
+
+/* Three images: one on screen, one presented and not composed yet, one
+ * for the program. app_server holds at most the first two. */
+#define R5_SHARE_IMAGES 3u
+
 struct r5_surface {
 	VkIcdSurfaceViewRFIVE icd;
 	BMessenger window;
@@ -69,6 +95,8 @@ struct r5_surface {
 	bigtime_t refresh;
 	BBitmap *view_bitmap;
 	pthread_mutex_t bitmap_mu;
+	/* app_server refused sharing for this view: the copy path from now. */
+	bool no_share;
 
 	r5_surface()
 		: window(),
@@ -76,7 +104,8 @@ struct r5_surface {
 		  width(1),
 		  height(1),
 		  refresh(16667),
-		  view_bitmap(NULL)
+		  view_bitmap(NULL),
+		  no_share(false)
 	{
 		icd.base.platform = VK_ICD_WSI_PLATFORM_VIEW_RFIVE;
 		icd.view = NULL;
@@ -131,6 +160,13 @@ struct r5_image {
 	struct wsi_image base;
 	BBitmap *bitmap;
 	bool held;
+	/* Shared images: the export id for the present mark, the semaphore
+	 * app_server releases once it no longer reads the image, and whether
+	 * app_server holds the image now. */
+	uint32_t export_id;
+	sem_id free_sem;
+	bool with_server;
+	uint64_t presented;
 };
 
 struct r5_swapchain {
@@ -149,7 +185,17 @@ struct r5_swapchain {
 	bool retrace_failed;
 	/* The image after the last one presented. Zero until the first present. */
 	uint32_t next_image;
+	/* M11 step 3b: the images are shared with app_server. */
+	bool shared;
+	int32 view_token;
+	int32 share_id;
+	uint64_t present_count;
+	/* Acquires that wait outside chain->mu; destroy waits for them to
+	 * leave before it frees the chain (review, M11 step 3b). */
+	int32_t waiters;
 };
+
+static void r5_share_off_once(struct r5_surface *surface, const char *reason);
 
 static struct r5_surface *
 r5_surface_from_icd(VkIcdSurfaceBase *base)
@@ -463,11 +509,102 @@ r5_get_wsi_image(struct wsi_swapchain *wsi_chain, uint32_t image_index)
 	return &chain->images[image_index].base;
 }
 
+/* A shared image is free when app_server released its semaphore. The
+ * wait is the program's own timeout; nothing in that time is VK_TIMEOUT,
+ * as the Vulkan specification says and as the copy path does (decided in
+ * step 3b). A semaphore that is gone makes the surface lost. */
+static VkResult
+r5_acquire_shared(struct r5_swapchain *chain,
+	const VkAcquireNextImageInfoKHR *info, uint32_t *image_index)
+{
+	bigtime_t deadline = 0;
+	bool forever = info->timeout == UINT64_MAX;
+	if (!forever && info->timeout != 0)
+		deadline = system_time() + (bigtime_t)(info->timeout / 1000);
+
+	pthread_mutex_lock(&chain->mu);
+	for (;;) {
+		if (chain->lost) {
+			pthread_mutex_unlock(&chain->mu);
+			return VK_ERROR_SURFACE_LOST_KHR;
+		}
+		uint32_t count = chain->base.image_count;
+		uint32_t start = chain->next_image;
+		for (uint32_t n = 0; n < count; n++) {
+			uint32_t i = (start + n) % count;
+			if (chain->images[i].held || chain->images[i].with_server)
+				continue;
+			chain->images[i].held = true;
+			*image_index = i;
+			pthread_mutex_unlock(&chain->mu);
+			return VK_SUCCESS;
+		}
+		/* app_server gives an image back when it leaves its current or
+		 * pending place, which is not always the oldest one (a pending
+		 * image that is overtaken goes back at once). So every image it
+		 * holds is tried without waiting first; only then is the oldest
+		 * waited on, for at most one refresh period, and all are tried
+		 * again. */
+		struct r5_image *oldest = NULL;
+		bool freed = false;
+		for (uint32_t i = 0; i < count; i++) {
+			struct r5_image *image = &chain->images[i];
+			if (!image->with_server || image->held)
+				continue;
+			status_t got = acquire_sem_etc(image->free_sem, 1,
+				B_RELATIVE_TIMEOUT, 0);
+			if (got == B_OK) {
+				image->with_server = false;
+				freed = true;
+			} else if (got != B_WOULD_BLOCK && got != B_TIMED_OUT
+				&& got != B_INTERRUPTED)
+				chain->lost = true;
+			else if (oldest == NULL || image->presented < oldest->presented)
+				oldest = image;
+		}
+		if (freed || chain->lost)
+			continue;
+		if (oldest == NULL || info->timeout == 0) {
+			pthread_mutex_unlock(&chain->mu);
+			return VK_TIMEOUT;
+		}
+		sem_id sem = oldest->free_sem;
+		bigtime_t slice = chain->refresh > 0 ? chain->refresh : 16667;
+		if (!forever) {
+			bigtime_t left = deadline - system_time();
+			if (left <= 0) {
+				pthread_mutex_unlock(&chain->mu);
+				return VK_TIMEOUT;
+			}
+			if (left < slice)
+				slice = left;
+		}
+		chain->waiters++;
+		pthread_mutex_unlock(&chain->mu);
+		status_t got = acquire_sem_etc(sem, 1, B_RELATIVE_TIMEOUT, slice);
+		pthread_mutex_lock(&chain->mu);
+		chain->waiters--;
+		pthread_cond_broadcast(&chain->cv);
+		if (chain->lost)
+			continue;
+		if (got == B_OK) {
+			oldest->with_server = false;
+			continue;
+		}
+		if (got == B_TIMED_OUT || got == B_WOULD_BLOCK
+			|| got == B_INTERRUPTED)
+			continue;
+		chain->lost = true;
+	}
+}
+
 static VkResult
 r5_acquire_next_image(struct wsi_swapchain *wsi_chain,
 	const VkAcquireNextImageInfoKHR *info, uint32_t *image_index)
 {
 	struct r5_swapchain *chain = (struct r5_swapchain *)wsi_chain;
+	if (chain->shared)
+		return r5_acquire_shared(chain, info, image_index);
 	struct timespec deadline;
 	bool timed = info->timeout != UINT64_MAX;
 	if (timed && info->timeout != 0) {
@@ -563,6 +700,71 @@ r5_fifo_wait(struct r5_swapchain *chain, BWindow *window)
 	chain->last_present = system_time();
 }
 
+/* A shared present. Mesa submitted the copy into the linear buffer
+ * before this call, so the mark (the file's last submit) covers the
+ * frame. app_server shows it once the ring has passed that number. */
+static VkResult
+r5_present_shared(struct r5_swapchain *chain, uint32_t image_index)
+{
+	struct r5_surface *surface = chain->surface;
+	struct r5_image *image = &chain->images[image_index];
+
+	BWindow *window = NULL;
+	if (!r5_lock_window(surface, chain->refresh, &window)) {
+		if (!surface->window.IsValid()) {
+			pthread_mutex_lock(&chain->mu);
+			chain->lost = true;
+			pthread_mutex_unlock(&chain->mu);
+			r5_release_image(chain, image_index);
+			return VK_ERROR_SURFACE_LOST_KHR;
+		}
+		r5_release_image(chain, image_index);
+		return VK_SUCCESS;
+	}
+	BRect bounds = surface->view->Bounds();
+	uint32_t live_w = (uint32_t)(bounds.IntegerWidth() + 1);
+	uint32_t live_h = (uint32_t)(bounds.IntegerHeight() + 1);
+	bool mismatch = live_w != chain->width || live_h != chain->height;
+	/* WaitForRetrace can need the window thread. Do not hold its lock. */
+	window->Unlock();
+	r5_fifo_wait(chain, window);
+
+	status_t code = B_ERROR;
+	if (r5_drm_mark_set != NULL && r5_drm_mark_set(image->export_id) == 0) {
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_R5_SHARE_PRESENT);
+		link.Attach<int32>(chain->view_token);
+		link.Attach<int32>(chain->share_id);
+		link.Attach<uint32>(image_index);
+		if (link.FlushWithReply(code) != B_OK)
+			code = B_ERROR;
+	}
+	pthread_mutex_lock(&chain->mu);
+	if (code != B_OK) {
+		/* B_BAD_VALUE: this swapchain is not the view's one any more (a
+		 * newer one replaced it after a resize); the new one shares.
+		 * Anything else: app_server stopped taking this view's images (a
+		 * reset, the CPU mode, a lost import), and a new swapchain takes
+		 * the copy path. */
+		if (code != B_BAD_VALUE)
+			r5_share_off_once(surface, "present refused");
+		chain->out_of_date = true;
+		image->held = false;
+		pthread_cond_broadcast(&chain->cv);
+		pthread_mutex_unlock(&chain->mu);
+		return VK_ERROR_OUT_OF_DATE_KHR;
+	}
+	image->with_server = true;
+	image->presented = ++chain->present_count;
+	image->held = false;
+	chain->next_image = (image_index + 1) % chain->base.image_count;
+	pthread_cond_broadcast(&chain->cv);
+	if (mismatch)
+		chain->out_of_date = true;
+	pthread_mutex_unlock(&chain->mu);
+	return mismatch ? VK_SUBOPTIMAL_KHR : VK_SUCCESS;
+}
+
 static VkResult
 r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 	uint64_t present_id, const VkPresentRegionKHR *damage)
@@ -591,6 +793,12 @@ r5_queue_present(struct wsi_swapchain *wsi_chain, uint32_t image_index,
 		r5_release_image(chain, image_index);
 		pthread_mutex_unlock(&chain->present_mu);
 		return VK_ERROR_OUT_OF_DATE_KHR;
+	}
+
+	if (chain->shared) {
+		VkResult shared = r5_present_shared(chain, image_index);
+		pthread_mutex_unlock(&chain->present_mu);
+		return shared;
 	}
 
 	if (image->base.cpu_map == NULL || image->bitmap == NULL) {
@@ -713,6 +921,36 @@ r5_swapchain_destroy(struct wsi_swapchain *wsi_chain,
 	struct r5_swapchain *chain = (struct r5_swapchain *)wsi_chain;
 	struct r5_surface *surface = chain->surface;
 
+	if (chain->shared) {
+		/* An acquire still waiting on one of the semaphores wakes when
+		 * they are deleted and sees the chain lost; the chain is freed
+		 * only after it has left. */
+		pthread_mutex_lock(&chain->mu);
+		chain->lost = true;
+		pthread_mutex_unlock(&chain->mu);
+	}
+	if (chain->shared && chain->share_id > 0) {
+		/* app_server stops releasing these semaphores before it replies,
+		 * and closes its imports after its next fence. */
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_R5_SHARE_END);
+		link.Attach<int32>(chain->view_token);
+		link.Attach<int32>(chain->share_id);
+		int32 code;
+		link.FlushWithReply(code);
+	}
+	for (uint32_t i = 0; chain->shared && i < chain->base.image_count; i++) {
+		if (chain->images[i].free_sem >= 0)
+			delete_sem(chain->images[i].free_sem);
+		chain->images[i].free_sem = -1;
+	}
+	if (chain->shared) {
+		pthread_mutex_lock(&chain->mu);
+		while (chain->waiters > 0)
+			pthread_cond_wait(&chain->cv, &chain->mu);
+		pthread_mutex_unlock(&chain->mu);
+	}
+
 	BBitmap *showing = r5_view_bitmap(surface);
 	bool ours = false;
 	for (uint32_t i = 0; i < chain->base.image_count; i++) {
@@ -742,6 +980,158 @@ r5_swapchain_destroy(struct wsi_swapchain *wsi_chain,
 	return VK_SUCCESS;
 }
 
+static void
+r5_share_off_once(struct r5_surface *surface, const char *reason)
+{
+	if (surface->no_share)
+		return;
+	surface->no_share = true;
+	syslog(LOG_INFO, "r5 wsi: zero-copy off: %s", reason);
+}
+
+/* Tells app_server that this view's swapchain does not share (Lavapipe
+ * has no render node). app_server logs it once per window. */
+static void
+r5_share_decline(struct r5_surface *surface)
+{
+	if (be_app == NULL || surface->no_share)
+		return;
+	surface->no_share = true;
+	BPrivate::AppServerLink link;
+	link.StartMessage(AS_R5_SHARE_IMAGES);
+	link.Attach<int32>(_get_object_token_(surface->view));
+	link.Attach<uint32>(0);
+	int32 code;
+	link.FlushWithReply(code);
+}
+
+/* The shared swapchain. VK_SUCCESS with *out set, or an error after
+ * which the caller makes the copy swapchain. */
+static VkResult
+r5_create_shared(struct r5_surface *surface, VkDevice device,
+	struct wsi_device *wsi_device, const VkSwapchainCreateInfoKHR *info,
+	const VkAllocationCallbacks *allocator, struct wsi_swapchain **out)
+{
+	if (be_app == NULL || r5_drm_fd_to_token == NULL
+		|| r5_drm_mark_set == NULL) {
+		r5_share_off_once(surface, "no r5 library");
+		return VK_ERROR_INITIALIZATION_FAILED;
+	}
+	uint32_t count = R5_SHARE_IMAGES;
+	if (info->minImageCount > count) {
+		static bool sLogged;
+		if (!sLogged) {
+			sLogged = true;
+			syslog(LOG_INFO, "r5 wsi: zero-copy off: %u images asked",
+				info->minImageCount);
+		}
+		return VK_ERROR_INITIALIZATION_FAILED;
+	}
+
+	struct r5_swapchain *chain = (struct r5_swapchain *)vk_zalloc(allocator,
+		sizeof(*chain), 8, VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+	if (chain == NULL)
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+	/* Not the same GPU as far as Mesa knows: that gives a buffer blit
+	 * into a linear buffer that is exported (wsi_configure_prime_image).
+	 * No modifiers, no explicit sync; the mark is the sync. */
+	struct wsi_drm_image_params params = {};
+	params.base.image_type = WSI_IMAGE_TYPE_DRM;
+	params.same_gpu = false;
+	params.explicit_sync = false;
+	VkResult result = wsi_swapchain_init(wsi_device, &chain->base, device,
+		info, &params.base, allocator);
+	if (result != VK_SUCCESS) {
+		vk_free(allocator, chain);
+		r5_share_off_once(surface, "swapchain");
+		return result;
+	}
+	chain->images = (struct r5_image *)vk_zalloc(allocator,
+		sizeof(chain->images[0]) * count, 8,
+		VK_SYSTEM_ALLOCATION_SCOPE_OBJECT);
+	if (chain->images == NULL) {
+		wsi_swapchain_finish(&chain->base);
+		vk_free(allocator, chain);
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+	for (uint32_t i = 0; i < count; i++)
+		chain->images[i].free_sem = -1;
+
+	chain->surface = surface;
+	chain->width = info->imageExtent.width;
+	chain->height = info->imageExtent.height;
+	chain->refresh = surface->refresh;
+	chain->shared = true;
+	chain->view_token = _get_object_token_(surface->view);
+	pthread_mutex_init(&chain->mu, NULL);
+	pthread_cond_init(&chain->cv, NULL);
+	pthread_mutex_init(&chain->present_mu, NULL);
+	chain->base.destroy = r5_swapchain_destroy;
+	chain->base.get_wsi_image = r5_get_wsi_image;
+	chain->base.acquire_next_image = r5_acquire_next_image;
+	chain->base.release_images = r5_release_images;
+	chain->base.queue_present = r5_queue_present;
+	chain->base.present_mode = VK_PRESENT_MODE_FIFO_KHR;
+	chain->base.image_count = count;
+
+	uint8_t tokens[R5_SHARE_IMAGES][16];
+	const char *reason = NULL;
+	for (uint32_t i = 0; i < count && reason == NULL; i++) {
+		struct r5_image *image = &chain->images[i];
+		result = wsi_create_image(&chain->base, &chain->base.image_info,
+			&image->base);
+		if (result != VK_SUCCESS) {
+			chain->base.image_count = i;
+			reason = "image";
+			break;
+		}
+		if (image->base.dma_buf_fd < 0
+			|| r5_drm_fd_to_token(image->base.dma_buf_fd, tokens[i],
+				&image->export_id) != 0)
+			reason = "export";
+		image->free_sem = create_sem(0, "r5 wsi free");
+		if (image->free_sem < 0)
+			reason = "semaphore";
+	}
+
+	int32 code = B_ERROR;
+	if (reason == NULL) {
+		BPrivate::AppServerLink link;
+		link.StartMessage(AS_R5_SHARE_IMAGES);
+		link.Attach<int32>(chain->view_token);
+		link.Attach<uint32>(count);
+		for (uint32_t i = 0; i < count; i++) {
+			struct r5_image *image = &chain->images[i];
+			link.Attach(tokens[i], sizeof(tokens[i]));
+			link.Attach<int32>(image->free_sem);
+			link.Attach<uint32>(chain->width);
+			link.Attach<uint32>(chain->height);
+			link.Attach<uint32>(image->base.row_pitches[0]);
+			link.Attach<uint32>((uint32)B_RGBA32);
+		}
+		if (link.FlushWithReply(code) != B_OK)
+			code = B_ERROR;
+		if (code == B_OK) {
+			link.Read<int32>(&chain->share_id);
+			for (uint32_t i = 0; i < count; i++) {
+				int32 status = B_ERROR;
+				if (link.Read<int32>(&status) != B_OK || status != B_OK)
+					code = B_ERROR;
+			}
+		}
+		if (code != B_OK)
+			reason = "refused";
+	}
+	if (reason != NULL) {
+		r5_share_off_once(surface, reason);
+		r5_swapchain_destroy(&chain->base, allocator);
+		return VK_ERROR_INITIALIZATION_FAILED;
+	}
+	*out = &chain->base;
+	return VK_SUCCESS;
+}
+
 static VkResult
 r5_create_swapchain(VkIcdSurfaceBase *icd, VkDevice device,
 	struct wsi_device *wsi_device, const VkSwapchainCreateInfoKHR *info,
@@ -765,6 +1155,17 @@ r5_create_swapchain(VkIcdSurfaceBase *icd, VkDevice device,
 	}
 	if (!format_ok)
 		return VK_ERROR_INITIALIZATION_FAILED;
+
+	if (wsi_device->sw)
+		r5_share_decline(surface);
+	else if (!surface->no_share) {
+		VkResult shared = r5_create_shared(surface, device, wsi_device, info,
+			allocator, out);
+		if (shared == VK_SUCCESS)
+			return VK_SUCCESS;
+		if (shared == VK_ERROR_OUT_OF_HOST_MEMORY)
+			return shared;
+	}
 
 	uint32_t count = info->minImageCount;
 	if (count < 2)

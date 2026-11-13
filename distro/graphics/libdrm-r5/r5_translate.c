@@ -19,6 +19,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -383,16 +384,490 @@ r5_gem_create(int fd, union drm_amdgpu_gem_create *gem)
 }
 
 
+/* M11 step 3b (docs/APP-SERVER-COMPOSITOR.md, "The R5 DRM library and
+ * the fifth libdrm patch", and "Decided in step 3b"). Haiku has no
+ * dma-buf. A shared buffer travels as an export number; inside this
+ * process a local fd stands for it, so RADV and libdrm see their usual
+ * PRIME calls.
+ *
+ * - A local fd is a descriptor of /dev/null: a number the caller can
+ *   close. The table below says what it stands for. A new fd with a
+ *   number that was closed and handed out again replaces the old row.
+ * - An import is remembered by an id of its own, not by the fd number:
+ *   RADV closes the fd after a successful import. The id names the
+ *   device fd that imported and the new handle; GEM_CLOSE of that
+ *   handle ends it, and r5_drm_mark_get() on it fails after that. */
+#define R5_SHARE_FDS 64
+#define R5_SHARE_IMPORTS 128
+
+enum {
+	R5_FD_FREE = 0,
+	R5_FD_EXPORT = 1,		/* from PRIME_HANDLE_TO_FD */
+	R5_FD_IMPORT = 2,		/* from r5_drm_token_to_fd, not imported yet */
+	R5_FD_IMPORTED = 3		/* PRIME_FD_TO_HANDLE done; bytes for libdrm */
+};
+
+typedef struct {
+	int			state;
+	int			fd;
+	uint8_t		token[R5_GPU_SHARE_TOKEN_BYTES];
+	int32_t		client_team;
+	uint64_t	bytes;
+	uint32_t	id;
+	/* R5_FD_EXPORT: RADV's device fd and handle, for the export id. */
+	int			device_fd;
+	uint32_t	handle;
+} r5_share_fd;
+
+/* The program's side: one id per exported (device fd, handle), for
+ * r5_drm_mark_set. A second export of the same handle keeps the id. */
+typedef struct {
+	uint32_t	id;		/* 0 is a free row */
+	int			device_fd;
+	uint32_t	handle;
+} r5_share_export_id;
+
+typedef struct {
+	uint32_t	id;		/* 0 is a free row */
+	int			device_fd;
+	uint32_t	handle;
+	uint32_t	domain;
+	uint32_t	bo_flags;
+	uint64_t	bytes;
+} r5_share_import;
+
+static pthread_mutex_t sShareLock = PTHREAD_MUTEX_INITIALIZER;
+static r5_share_fd sShareFds[R5_SHARE_FDS];
+static r5_share_import sShareImports[R5_SHARE_IMPORTS];
+static r5_share_export_id sShareExports[R5_SHARE_IMPORTS];
+static uint32_t sShareNextId = 1;
+
+
+/* Ids of imports and exports come from one counter, so one id never
+ * names both. */
+static uint32_t
+r5_share_next_id(void)
+{
+	uint32_t id = sShareNextId++;
+	if (sShareNextId == 0)
+		sShareNextId = 1;
+	return id;
+}
+
+
+static r5_share_fd *
+r5_share_fd_find(int fd)
+{
+	int i;
+	if (fd < 0)
+		return NULL;
+	for (i = 0; i < R5_SHARE_FDS; i++) {
+		if (sShareFds[i].state != R5_FD_FREE && sShareFds[i].fd == fd)
+			return &sShareFds[i];
+	}
+	return NULL;
+}
+
+
+/* A row for a new local fd. A row with the same number is stale: that
+ * fd was closed and the number came back. */
+static r5_share_fd *
+r5_share_fd_new(int fd)
+{
+	r5_share_fd *row = r5_share_fd_find(fd);
+	int i;
+	if (row == NULL) {
+		for (i = 0; i < R5_SHARE_FDS && row == NULL; i++) {
+			if (sShareFds[i].state == R5_FD_FREE)
+				row = &sShareFds[i];
+		}
+	}
+	/* Full: a row whose fd is closed is stale. */
+	for (i = 0; i < R5_SHARE_FDS && row == NULL; i++) {
+		if (fcntl(sShareFds[i].fd, F_GETFD) < 0)
+			row = &sShareFds[i];
+	}
+	if (row == NULL)
+		return NULL;
+	memset(row, 0, sizeof(*row));
+	row->fd = fd;
+	return row;
+}
+
+
+static int
+r5_share_local_fd(uint32_t flags)
+{
+	int mode = O_RDONLY;
+	if ((flags & DRM_CLOEXEC) != 0)
+		mode |= O_CLOEXEC;
+	return open("/dev/null", mode);
+}
+
+
+static r5_share_import *
+r5_share_import_find(uint32_t id)
+{
+	int i;
+	if (id == 0)
+		return NULL;
+	for (i = 0; i < R5_SHARE_IMPORTS; i++) {
+		if (sShareImports[i].id == id)
+			return &sShareImports[i];
+	}
+	return NULL;
+}
+
+
+static r5_share_import *
+r5_share_import_of(int fd, uint32_t handle)
+{
+	int i;
+	for (i = 0; i < R5_SHARE_IMPORTS; i++) {
+		if (sShareImports[i].id != 0 && sShareImports[i].device_fd == fd
+			&& sShareImports[i].handle == handle)
+			return &sShareImports[i];
+	}
+	return NULL;
+}
+
+
+/* DRM_IOCTL_PRIME_HANDLE_TO_FD: BO_EXPORT to the compositor. */
+static int
+r5_prime_export(int fd, struct drm_prime_handle *prime)
+{
+	r5_gpu_bo_export call;
+	r5_share_fd *row;
+	int local;
+	memset(&call, 0, sizeof(call));
+	call.size = (uint32_t)sizeof(call);
+	call.version = 1;
+	call.handle = prime->handle;
+	call.target = R5_GPU_SHARE_COMPOSITOR;
+	snprintf(sIoctlDetail, sizeof(sIoctlDetail), "export handle %u",
+		prime->handle);
+	if (r5_call(fd, R5_GPU_BO_EXPORT, &call, sizeof(call)) != 0)
+		return -1;
+	local = r5_share_local_fd(prime->flags);
+	if (local < 0)
+		return -1;
+	pthread_mutex_lock(&sShareLock);
+	row = r5_share_fd_new(local);
+	if (row != NULL) {
+		row->state = R5_FD_EXPORT;
+		memcpy(row->token, call.token, sizeof(row->token));
+		row->bytes = call.bytes;
+		row->device_fd = fd;
+		row->handle = prime->handle;
+	}
+	pthread_mutex_unlock(&sShareLock);
+	if (row == NULL) {
+		/* The number expires in the kernel after five seconds. */
+		close(local);
+		return r5_fail(ENOMEM);
+	}
+	prime->fd = local;
+	return 0;
+}
+
+
+/* DRM_IOCTL_PRIME_FD_TO_HANDLE: BO_IMPORT of the number that
+ * r5_drm_token_to_fd put behind this fd, on the device fd of the call. */
+static int
+r5_prime_import(int fd, struct drm_prime_handle *prime)
+{
+	r5_gpu_bo_import call;
+	r5_share_fd *row;
+	r5_share_import *import = NULL;
+	int i;
+	memset(&call, 0, sizeof(call));
+	call.size = (uint32_t)sizeof(call);
+	call.version = 1;
+	pthread_mutex_lock(&sShareLock);
+	row = r5_share_fd_find(prime->fd);
+	if (row == NULL || row->state != R5_FD_IMPORT) {
+		pthread_mutex_unlock(&sShareLock);
+		snprintf(sIoctlDetail, sizeof(sIoctlDetail), "import fd %d unknown",
+			prime->fd);
+		return r5_fail(EINVAL);
+	}
+	memcpy(call.token, row->token, sizeof(call.token));
+	call.client_team = row->client_team;
+	pthread_mutex_unlock(&sShareLock);
+	snprintf(sIoctlDetail, sizeof(sIoctlDetail), "import fd %d", prime->fd);
+	if (r5_call(fd, R5_GPU_BO_IMPORT, &call, sizeof(call)) != 0)
+		return -1;
+	pthread_mutex_lock(&sShareLock);
+	row = r5_share_fd_find(prime->fd);
+	for (i = 0; i < R5_SHARE_IMPORTS && import == NULL; i++) {
+		if (sShareImports[i].id == 0)
+			import = &sShareImports[i];
+	}
+	if (row == NULL || row->state != R5_FD_IMPORT || import == NULL) {
+		r5_gpu_bo bo;
+		pthread_mutex_unlock(&sShareLock);
+		memset(&bo, 0, sizeof(bo));
+		bo.size = (uint32_t)sizeof(bo);
+		bo.version = 1;
+		bo.handle = call.handle;
+		r5_call(fd, R5_GPU_BO_FREE, &bo, sizeof(bo));
+		return r5_fail(ENOMEM);
+	}
+	import->id = row->id;
+	import->device_fd = fd;
+	import->handle = call.handle;
+	import->domain = call.domain;
+	import->bo_flags = call.bo_flags;
+	import->bytes = call.bytes;
+	row->state = R5_FD_IMPORTED;
+	row->bytes = call.bytes;
+	pthread_mutex_unlock(&sShareLock);
+	prime->handle = call.handle;
+	return 0;
+}
+
+
+drm_public int
+r5_drm_fd_to_token(int fd, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES],
+	uint32_t *id)
+{
+	r5_share_fd *row;
+	r5_share_export_id *export = NULL;
+	r5_share_export_id *free_row = NULL;
+	int ret = r5_neg(EINVAL);
+	int i;
+	if (token == NULL || id == NULL)
+		return ret;
+	pthread_mutex_lock(&sShareLock);
+	row = r5_share_fd_find(fd);
+	if (row != NULL && row->state == R5_FD_EXPORT) {
+		for (i = 0; i < R5_SHARE_IMPORTS && export == NULL; i++) {
+			r5_share_export_id *scan = &sShareExports[i];
+			if (scan->id != 0 && scan->device_fd == row->device_fd
+				&& scan->handle == row->handle)
+				export = scan;
+			else if (scan->id == 0 && free_row == NULL)
+				free_row = scan;
+		}
+		if (export == NULL && free_row != NULL) {
+			export = free_row;
+			export->id = r5_share_next_id();
+			export->device_fd = row->device_fd;
+			export->handle = row->handle;
+		}
+		if (export != NULL) {
+			/* One use, like the number: the row is free again. */
+			memcpy(token, row->token, R5_GPU_SHARE_TOKEN_BYTES);
+			*id = export->id;
+			memset(row, 0, sizeof(*row));
+			ret = 0;
+		} else
+			ret = r5_neg(ENOMEM);
+	}
+	pthread_mutex_unlock(&sShareLock);
+	return ret;
+}
+
+
+drm_public int
+r5_drm_mark_set(uint32_t id)
+{
+	r5_gpu_bo_mark call;
+	int device = -1;
+	int i;
+	memset(&call, 0, sizeof(call));
+	call.size = (uint32_t)sizeof(call);
+	call.version = 1;
+	call.op = R5_GPU_MARK_SET;
+	pthread_mutex_lock(&sShareLock);
+	for (i = 0; i < R5_SHARE_IMPORTS && id != 0; i++) {
+		if (sShareExports[i].id == id) {
+			device = sShareExports[i].device_fd;
+			call.handle = sShareExports[i].handle;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&sShareLock);
+	if (device < 0)
+		return r5_neg(ENOENT);
+	if (r5_call(device, R5_GPU_BO_PRESENT_MARK, &call, sizeof(call)) != 0)
+		return r5_neg(errno);
+	return 0;
+}
+
+
+drm_public int
+r5_drm_token_to_fd(int device_fd, const uint8_t token[R5_GPU_SHARE_TOKEN_BYTES],
+	int32_t client_team, int *fd, uint32_t *id)
+{
+	r5_share_fd *row;
+	int local;
+	(void)device_fd;
+	if (token == NULL || fd == NULL || id == NULL)
+		return r5_neg(EINVAL);
+	local = r5_share_local_fd(DRM_CLOEXEC);
+	if (local < 0)
+		return r5_neg(errno);
+	pthread_mutex_lock(&sShareLock);
+	row = r5_share_fd_new(local);
+	if (row != NULL) {
+		row->state = R5_FD_IMPORT;
+		memcpy(row->token, token, sizeof(row->token));
+		row->client_team = client_team;
+		row->id = r5_share_next_id();
+		*id = row->id;
+	}
+	pthread_mutex_unlock(&sShareLock);
+	if (row == NULL) {
+		close(local);
+		return r5_neg(ENOMEM);
+	}
+	*fd = local;
+	return 0;
+}
+
+
+drm_public int64_t
+r5_drm_import_bytes(int fd)
+{
+	r5_share_fd *row;
+	int64_t bytes = -1;
+	pthread_mutex_lock(&sShareLock);
+	row = r5_share_fd_find(fd);
+	if (row != NULL && row->state == R5_FD_IMPORTED) {
+		/* libdrm asks once, right after PRIME_FD_TO_HANDLE. The id
+		 * lives on in the import table. */
+		bytes = (int64_t)row->bytes;
+		memset(row, 0, sizeof(*row));
+	}
+	pthread_mutex_unlock(&sShareLock);
+	return bytes;
+}
+
+
+drm_public int
+r5_drm_mark_get(uint32_t id, uint64_t *sequence)
+{
+	r5_gpu_bo_mark call;
+	r5_share_import *import;
+	int device = -1;
+	if (sequence == NULL)
+		return r5_neg(EINVAL);
+	memset(&call, 0, sizeof(call));
+	call.size = (uint32_t)sizeof(call);
+	call.version = 1;
+	call.op = R5_GPU_MARK_GET;
+	pthread_mutex_lock(&sShareLock);
+	import = r5_share_import_find(id);
+	if (import != NULL) {
+		device = import->device_fd;
+		call.handle = import->handle;
+	}
+	pthread_mutex_unlock(&sShareLock);
+	if (device < 0)
+		return r5_neg(ENOENT);
+	if (r5_call(device, R5_GPU_BO_PRESENT_MARK, &call, sizeof(call)) != 0)
+		return r5_neg(errno);
+	*sequence = call.sequence;
+	return 0;
+}
+
+
+/* app_server: the real size of an import, from BO_IMPORT, to check the
+ * width, height and pitch of the program's message against. */
+drm_public int
+r5_drm_import_size(uint32_t id, uint64_t *bytes)
+{
+	r5_share_import *import;
+	int ret = r5_neg(ENOENT);
+	if (bytes == NULL)
+		return r5_neg(EINVAL);
+	pthread_mutex_lock(&sShareLock);
+	import = r5_share_import_find(id);
+	if (import != NULL) {
+		*bytes = import->bytes;
+		ret = 0;
+	}
+	pthread_mutex_unlock(&sShareLock);
+	return ret;
+}
+
+
+/* AMDGPU_GEM_OP_GET_GEM_CREATE_INFO for an imported buffer: the size,
+ * domain and flags that BO_IMPORT returned. */
+static int
+r5_gem_op(int fd, struct drm_amdgpu_gem_op *op)
+{
+	struct drm_amdgpu_gem_create_in *info;
+	r5_share_import *import;
+	if (op->op != AMDGPU_GEM_OP_GET_GEM_CREATE_INFO || op->value == 0)
+		return r5_fail(EINVAL);
+	info = (struct drm_amdgpu_gem_create_in *)(uintptr_t)op->value;
+	pthread_mutex_lock(&sShareLock);
+	import = r5_share_import_of(fd, op->handle);
+	if (import != NULL) {
+		memset(info, 0, sizeof(*info));
+		info->bo_size = import->bytes;
+		info->alignment = 4096;
+		info->domains = import->domain == R5_GPU_DOMAIN_VRAM
+			? AMDGPU_GEM_DOMAIN_VRAM : AMDGPU_GEM_DOMAIN_GTT;
+		if ((import->bo_flags & R5_GPU_BO_WC) != 0)
+			info->domain_flags |= AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+	}
+	pthread_mutex_unlock(&sShareLock);
+	if (import == NULL)
+		return r5_fail(EINVAL);
+	return 0;
+}
+
+
+/* Shared images are linear: no tiling, no metadata of the driver. A set
+ * is not kept (RADV sends it only for GFX12 and ignores the result). */
+static int
+r5_gem_metadata(int fd, struct drm_amdgpu_gem_metadata *meta)
+{
+	(void)fd;
+	if (meta->op == AMDGPU_GEM_METADATA_OP_GET_METADATA) {
+		memset(&meta->data, 0, sizeof(meta->data));
+		return 0;
+	}
+	if (meta->op == AMDGPU_GEM_METADATA_OP_SET_METADATA)
+		return 0;
+	return r5_fail(EINVAL);
+}
+
+
 static int
 r5_gem_close(int fd, struct drm_gem_close *close)
 {
 	r5_gpu_bo bo;
+	r5_share_import *import;
 	memset(&bo, 0, sizeof(bo));
 	bo.size = (uint32_t)sizeof(bo);
 	bo.version = 1;
 	bo.handle = close->handle;
 	if (r5_call(fd, R5_GPU_BO_FREE, &bo, sizeof(bo)) != 0)
 		return -1;
+	/* The id of an imported or exported handle ends with it. */
+	pthread_mutex_lock(&sShareLock);
+	import = r5_share_import_of(fd, close->handle);
+	if (import != NULL)
+		memset(import, 0, sizeof(*import));
+	{
+		int i;
+		for (i = 0; i < R5_SHARE_IMPORTS; i++) {
+			if (sShareExports[i].id != 0 && sShareExports[i].device_fd == fd
+				&& sShareExports[i].handle == close->handle)
+				memset(&sShareExports[i], 0, sizeof(sShareExports[i]));
+		}
+		for (i = 0; i < R5_SHARE_FDS; i++) {
+			if (sShareFds[i].state == R5_FD_EXPORT
+				&& sShareFds[i].device_fd == fd
+				&& sShareFds[i].handle == close->handle)
+				memset(&sShareFds[i], 0, sizeof(sShareFds[i]));
+		}
+	}
+	pthread_mutex_unlock(&sShareLock);
 	return 0;
 }
 
@@ -1076,11 +1551,14 @@ r5_drm_ioctl_body(int fd, unsigned long request, void *arg, size_t size)
 			return -1;
 		return 0;
 	}
-	if (nr == R5_IOC_NR(DRM_IOCTL_PRIME_HANDLE_TO_FD)
-		|| nr == R5_IOC_NR(DRM_IOCTL_PRIME_FD_TO_HANDLE)) {
-		r5_unknown(nr, "DRM_IOCTL_PRIME");
-		return r5_fail(ENOSYS);
-	}
+	if (nr == R5_IOC_NR(DRM_IOCTL_PRIME_HANDLE_TO_FD))
+		return r5_prime_export(fd, arg);
+	if (nr == R5_IOC_NR(DRM_IOCTL_PRIME_FD_TO_HANDLE))
+		return r5_prime_import(fd, arg);
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_OP))
+		return r5_gem_op(fd, arg);
+	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_METADATA))
+		return r5_gem_metadata(fd, arg);
 	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_INFO))
 		return r5_amdgpu_info(fd, arg);
 	if (nr == R5_IOC_NR(DRM_IOCTL_AMDGPU_GEM_CREATE))

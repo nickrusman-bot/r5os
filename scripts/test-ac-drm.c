@@ -13,6 +13,12 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+
+/* distro/graphics/libdrm-r5/r5_translate.h (M11 step 3b). */
+int r5_drm_fd_to_token(int fd, uint8_t token[16], uint32_t *id);
+int r5_drm_token_to_fd(int device_fd, const uint8_t token[16],
+	int32_t client_team, int *fd, uint32_t *id);
 
 
 int
@@ -148,6 +154,48 @@ ac_drm_replay(int fd)
 		return 1;
 	}
 
-	printf("ok ac drm family RV cu 7 firmware map\n");
+	/* M11 step 3b: RADV's import path (radv_amdgpu_winsys_bo_from_fd):
+	 * ac_drm_bo_import, the KMS handle, then ac_drm_bo_query_info, which
+	 * sends GEM_METADATA and GEM_OP. */
+	{
+		uint32_t exported = 0;
+		uint8_t token[16];
+		int fd = -1;
+		uint32_t id = 0;
+		struct ac_drm_bo_import_result imported;
+		struct amdgpu_bo_info info;
+		uint32_t kms = 0;
+		memset(&imported, 0, sizeof(imported));
+		memset(&info, 0, sizeof(info));
+		if (ac_drm_bo_export(device, bo, amdgpu_bo_handle_type_dma_buf_fd,
+				&exported) != 0
+			|| r5_drm_fd_to_token((int)exported, token, &id) != 0) {
+			fprintf(stderr, "share export\n");
+			return 1;
+		}
+		close((int)exported);
+		if (r5_drm_token_to_fd(-1, token, 77, &fd, &id) != 0
+			|| ac_drm_bo_import(device, amdgpu_bo_handle_type_dma_buf_fd,
+				(uint32_t)fd, &imported) != 0) {
+			fprintf(stderr, "share import\n");
+			return 1;
+		}
+		close(fd);
+		if (ac_drm_bo_export(device, imported.bo, amdgpu_bo_handle_type_kms,
+				&kms) != 0
+			|| ac_drm_bo_query_info(device, kms, &info) != 0
+			|| imported.alloc_size != 4096 || info.alloc_size != 4096
+			|| info.preferred_heap != AMDGPU_GEM_DOMAIN_GTT
+			|| info.metadata.size_metadata != 0) {
+			fprintf(stderr, "share query size %llu %llu heap %u\n",
+				(unsigned long long)imported.alloc_size,
+				(unsigned long long)info.alloc_size,
+				(unsigned)info.preferred_heap);
+			return 1;
+		}
+		ac_drm_bo_free(device, imported.bo);
+	}
+
+	printf("ok ac drm family RV cu 7 firmware map share\n");
 	return 0;
 }

@@ -22,8 +22,14 @@ ARGS = [
 def main() -> None:
     path = Path("/home/nickr/r5os/mesa-build/mesa-25.3.6/build-radv/meson-private/coredata.dat")
     data = pickle.loads(path.read_bytes())
-    for name in ("c_args", "cpp_args"):
-        data.set_option(OptionKey(name), ARGS)
+    data.set_option(OptionKey("c_args"), ARGS)
+    # M11 step 3b: the view-surface WSI (C++) uses AppServerLink and
+    # ServerProtocol.h. Last in the search order, so they hide nothing of
+    # Mesa's own headers.
+    data.set_option(OptionKey("cpp_args"), ARGS + [
+        "-idirafter", "/home/nickr/r5os/haiku/headers/private/app",
+        "-idirafter", "/home/nickr/r5os/haiku/headers/private/shared",
+    ])
     path.write_bytes(pickle.dumps(data))
     print("c_args", data.get_option(OptionKey("c_args")))
 

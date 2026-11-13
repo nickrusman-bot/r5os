@@ -18,4 +18,4 @@ pkg_config_libdir = '/home/nickr/r5os/r5-sysroot/lib/pkgconfig:/home/nickr/r5os/
 
 [built-in options]
 c_args = ['-DVK_USE_PLATFORM_VIEW_RFIVE', '-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h']
-cpp_args = ['-DVK_USE_PLATFORM_VIEW_RFIVE', '-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h']
+cpp_args = ['-DVK_USE_PLATFORM_VIEW_RFIVE', '-I/home/nickr/r5os/r5-sysroot/include', '-include', '/home/nickr/r5os/r5-sysroot/include/r5/haiku_ioc.h', '-idirafter', '/home/nickr/r5os/haiku/headers/private/app', '-idirafter', '/home/nickr/r5os/haiku/headers/private/shared']

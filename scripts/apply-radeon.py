@@ -70,6 +70,8 @@ FILES = (
     "headers/private/r5gpu/r5_gpu_checks.h",
     "headers/private/r5gpu/r5_sha256.h",
     "headers/private/r5gpu/r5_vram_pool.h",
+    # M11 step 3b: the sharing logic (r5_share.h), host-tested.
+    "headers/private/r5gpu/r5_share.h",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/Jamfile",
     "src/add-ons/kernel/drivers/graphics/radeon_hd/radeon_hd_private.h",
     "headers/private/graphics/radeon_hd/radeon_hd.h",
@@ -85,6 +87,9 @@ FILES = (
     "src/bin/r5-gpu-isolation/r5-gpu-isolation.cpp",
     "src/bin/r5-wsi-test/Jamfile",
     "src/bin/r5-wsi-test/r5-wsi-test.cpp",
+    # M11 step 3b: the conformance check of buffer sharing.
+    "src/bin/r5-share-check/Jamfile",
+    "src/bin/r5-share-check/r5-share-check.cpp",
 )
 
 
@@ -190,6 +195,24 @@ def hook_gfxinfo(haiku: pathlib.Path) -> None:
             raise SystemExit("wsi-test anchor missing in regular image")
         regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
         print("patched regular image wsi-test")
+
+    jam = haiku / "src" / "bin" / "Jamfile"
+    text = jam.read_text(encoding="utf-8")
+    line = "SubInclude HAIKU_TOP src bin r5-share-check ;\n"
+    if line not in text:
+        anchor = "SubInclude HAIKU_TOP src bin r5-wsi-test ;\n"
+        if anchor not in text:
+            raise SystemExit("share-check anchor missing in src/bin/Jamfile")
+        jam.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched src/bin/Jamfile share-check")
+    text = regular.read_text(encoding="utf-8")
+    line = "SYSTEM_BIN += r5-share-check ;\n"
+    if line not in text:
+        anchor = "SYSTEM_BIN += r5-wsi-test ;\n"
+        if anchor not in text:
+            raise SystemExit("share-check anchor missing in regular image")
+        regular.write_text(text.replace(anchor, anchor + line, 1), encoding="utf-8")
+        print("patched regular image share-check")
 
     launch = haiku / "data" / "launch" / "user"
     text = launch.read_text(encoding="utf-8")
