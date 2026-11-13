@@ -5,6 +5,7 @@
 
 
 #include "DeskbarModule.h"
+#include "ConnectionsModule.h"
 #include "DisplayModule.h"
 #include "InformationModule.h"
 #include "NotificationsModule.h"
@@ -54,6 +55,7 @@ SettingsApp::SettingsApp()
 	register_wallpaper_page(fManager);
 	register_information_page(fManager);
 	register_wifi_page(fManager);
+	register_connections_page(fManager);
 }
 
 
