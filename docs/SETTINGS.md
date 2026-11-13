@@ -46,9 +46,17 @@ The contract is `distro/settings/SettingsModule.h`, version 2. `distro/settings/
 
 Fonts (`settings_fonts`) and Look and Feel (`settings_look`) are pages under Personalization. There is no Appearance page and there are no tabs. Fonts uses the font rows from the separate Appearance program. Its subtitle is "Change the default fonts". Antialiasing is a box on that page. Look and Feel uses the decorator, control look, and arrow style from that program. Its subtitle is "Change the default decorator and colors". Colors is a box on that page. A change is applied at once, through the same calls the separate program uses. Neither page writes a settings file of its own. Revert and Defaults are the window buttons. The pages are not locked. The separate Appearance program stays installed. Both pages use that program's icon. The other four category descriptions stay as they are.
 
+## Network
+
+Network has three pages: Connections, Discovery and Wi-Fi. Connections and Discovery need the lock. The separate Network program stays installed.
+
+Connections ("Wired connections, addresses, and DNS") lists the network cards with a dot and their status. The card's box has its on/off switch as the title (drawn like `BoxTitle`), the status with the link speed (`media_type_to_string()` of ifconfig) and the hardware. IPv4 and IPv6 sit side by side, equally wide, built as `InterfaceAddressView` of the Network program builds them: Configure (Automatic, Manual, Off), the address fields (`IPAddressControl`), and Apply, which is shown only for Manual. A manual address waits for Apply; the other changes are applied at once. IPv6 Automatic lists every address of the card; an address that does not fit ends in "…" with a tooltip. DNS shows the servers and the search domain; Edit… sets them by hand (`# Static DNS Only` in `resolv.conf`) or gives them back to the network. Wi-Fi in the list opens the Wi-Fi page. "Show in Deskbar" is the Network program's NetworkStatus switch. Like Display, a change is applied after `AdminChangeAllowed()` through the calls the Network program uses (`BNetworkSettings`, `BNetworkInterface`). Revert applies the setup from when the page was opened. Defaults is automatic IPv4 and IPv6, every card on, and DNS from the network.
+
+Discovery ("Find devices and services on this network") shows the computer's name with Rename… (the same `sethostname()` and check as Information), its `.local` name, and "Let other devices find this computer", on by default, in `B_SYSTEM_SETTINGS_DIRECTORY/network/discovery` (`discoverable true|false`), which `r5-mdns` reads. Shared from this computer loads the Network program's service add-ons (`Network Settings`) and lists those with an Enable button (`ServiceView`): FTP, SSH, Telnet, beside the chosen service's text and button. Find devices lists printers, AirPlay speakers, SSH and file sharing through `r5_mdns_browse()`, with Refresh. Revert puts back the name, the setting and the services. Defaults is found by others, SSH and FTP off; the name stays.
+
 ## Legacy programs
 
-`LegacyPages.cpp` is a table of programs that already exist: Sounds, Keymap, Input, Bluetooth, Printers, Network, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Appearance, Screen, Backgrounds, the Deskbar preferences program, Notifications, and VirtualMemory stay installed and are not in this table.
+`LegacyPages.cpp` is a table of programs that already exist: Sounds, Keymap, Input, Bluetooth, Printers, and Users & Accounts. Each row is a page with an Open button. `BRoster::Launch` starts that program. Nothing is embedded, because those programs are windows, not views we can reuse. Appearance, Screen, Backgrounds, the Deskbar preferences program, Notifications, and VirtualMemory stay installed and are not in this table.
 
 Adding a row there is how an old preference shows up before it is rewritten. A new native page does not need a row and does not need a change to the window.
 
@@ -60,4 +68,4 @@ New R5 values are `BMessage` files under `~/config/settings/r5-settings/<module 
 
 ## Not in this foundation
 
-Power, storage, sharing, sign-in options, permissions, installed applications, and default applications have no page yet. Wi-Fi stays inside the existing Network preferences. Catalogs are not wired, so the strings are English.
+Power, storage, sharing, sign-in options, permissions, installed applications, and default applications have no page yet. Catalogs are not wired, so the strings are English.
