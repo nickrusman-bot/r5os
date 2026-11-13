@@ -16,7 +16,7 @@
 #include <unistd.h>
 
 /* distro/graphics/libdrm-r5/r5_translate.h (M11 step 3b). */
-int r5_drm_fd_to_token(int fd, uint8_t token[16]);
+int r5_drm_fd_to_token(int fd, uint8_t token[16], uint32_t *id);
 int r5_drm_token_to_fd(int device_fd, const uint8_t token[16],
 	int32_t client_team, int *fd, uint32_t *id);
 
@@ -169,7 +169,7 @@ ac_drm_replay(int fd)
 		memset(&info, 0, sizeof(info));
 		if (ac_drm_bo_export(device, bo, amdgpu_bo_handle_type_dma_buf_fd,
 				&exported) != 0
-			|| r5_drm_fd_to_token((int)exported, token) != 0) {
+			|| r5_drm_fd_to_token((int)exported, token, &id) != 0) {
 			fprintf(stderr, "share export\n");
 			return 1;
 		}

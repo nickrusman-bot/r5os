@@ -25,8 +25,13 @@ int r5_bo_cpu_unmap(int fd, int area);
 /* M11 step 3b: buffers shared with app_server (docs/APP-SERVER-
  * COMPOSITOR.md, "The R5 DRM library and the fifth libdrm patch" and
  * "Decided in step 3b"). The number is 16 bytes, opaque. */
-/* The program: the export number behind an fd from PRIME_HANDLE_TO_FD. */
-int r5_drm_fd_to_token(int fd, uint8_t token[16]);
+/* The program: the export number behind an fd from PRIME_HANDLE_TO_FD,
+ * and an export id of its own for r5_drm_mark_set (decided in step 3b).
+ * A second export of the same buffer gives the same id. */
+int r5_drm_fd_to_token(int fd, uint8_t token[16], uint32_t *id);
+/* The program, at present: BO_PRESENT_MARK SET on RADV's device fd and
+ * handle of that export. Fails once GEM_CLOSE closed that handle. */
+int r5_drm_mark_set(uint32_t id);
 /* app_server: a local fd for a number that came in the message, for
  * VkImportMemoryFdInfoKHR, and an id of its own for r5_drm_mark_get. The
  * import happens when RADV sends PRIME_FD_TO_HANDLE with that fd. device_fd

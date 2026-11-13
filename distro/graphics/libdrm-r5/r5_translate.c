@@ -414,7 +414,18 @@ typedef struct {
 	int32_t		client_team;
 	uint64_t	bytes;
 	uint32_t	id;
+	/* R5_FD_EXPORT: RADV's device fd and handle, for the export id. */
+	int			device_fd;
+	uint32_t	handle;
 } r5_share_fd;
+
+/* The program's side: one id per exported (device fd, handle), for
+ * r5_drm_mark_set. A second export of the same handle keeps the id. */
+typedef struct {
+	uint32_t	id;		/* 0 is a free row */
+	int			device_fd;
+	uint32_t	handle;
+} r5_share_export_id;
 
 typedef struct {
 	uint32_t	id;		/* 0 is a free row */
@@ -428,7 +439,20 @@ typedef struct {
 static pthread_mutex_t sShareLock = PTHREAD_MUTEX_INITIALIZER;
 static r5_share_fd sShareFds[R5_SHARE_FDS];
 static r5_share_import sShareImports[R5_SHARE_IMPORTS];
+static r5_share_export_id sShareExports[R5_SHARE_IMPORTS];
 static uint32_t sShareNextId = 1;
+
+
+/* Ids of imports and exports come from one counter, so one id never
+ * names both. */
+static uint32_t
+r5_share_next_id(void)
+{
+	uint32_t id = sShareNextId++;
+	if (sShareNextId == 0)
+		sShareNextId = 1;
+	return id;
+}
 
 
 static r5_share_fd *
@@ -533,6 +557,8 @@ r5_prime_export(int fd, struct drm_prime_handle *prime)
 		row->state = R5_FD_EXPORT;
 		memcpy(row->token, call.token, sizeof(row->token));
 		row->bytes = call.bytes;
+		row->device_fd = fd;
+		row->handle = prime->handle;
 	}
 	pthread_mutex_unlock(&sShareLock);
 	if (row == NULL) {
@@ -602,22 +628,71 @@ r5_prime_import(int fd, struct drm_prime_handle *prime)
 
 
 drm_public int
-r5_drm_fd_to_token(int fd, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES])
+r5_drm_fd_to_token(int fd, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES],
+	uint32_t *id)
 {
 	r5_share_fd *row;
+	r5_share_export_id *export = NULL;
+	r5_share_export_id *free_row = NULL;
 	int ret = r5_neg(EINVAL);
-	if (token == NULL)
+	int i;
+	if (token == NULL || id == NULL)
 		return ret;
 	pthread_mutex_lock(&sShareLock);
 	row = r5_share_fd_find(fd);
 	if (row != NULL && row->state == R5_FD_EXPORT) {
-		/* One use, like the number: the row is free again. */
-		memcpy(token, row->token, R5_GPU_SHARE_TOKEN_BYTES);
-		memset(row, 0, sizeof(*row));
-		ret = 0;
+		for (i = 0; i < R5_SHARE_IMPORTS && export == NULL; i++) {
+			r5_share_export_id *scan = &sShareExports[i];
+			if (scan->id != 0 && scan->device_fd == row->device_fd
+				&& scan->handle == row->handle)
+				export = scan;
+			else if (scan->id == 0 && free_row == NULL)
+				free_row = scan;
+		}
+		if (export == NULL && free_row != NULL) {
+			export = free_row;
+			export->id = r5_share_next_id();
+			export->device_fd = row->device_fd;
+			export->handle = row->handle;
+		}
+		if (export != NULL) {
+			/* One use, like the number: the row is free again. */
+			memcpy(token, row->token, R5_GPU_SHARE_TOKEN_BYTES);
+			*id = export->id;
+			memset(row, 0, sizeof(*row));
+			ret = 0;
+		} else
+			ret = r5_neg(ENOMEM);
 	}
 	pthread_mutex_unlock(&sShareLock);
 	return ret;
+}
+
+
+drm_public int
+r5_drm_mark_set(uint32_t id)
+{
+	r5_gpu_bo_mark call;
+	int device = -1;
+	int i;
+	memset(&call, 0, sizeof(call));
+	call.size = (uint32_t)sizeof(call);
+	call.version = 1;
+	call.op = R5_GPU_MARK_SET;
+	pthread_mutex_lock(&sShareLock);
+	for (i = 0; i < R5_SHARE_IMPORTS && id != 0; i++) {
+		if (sShareExports[i].id == id) {
+			device = sShareExports[i].device_fd;
+			call.handle = sShareExports[i].handle;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&sShareLock);
+	if (device < 0)
+		return r5_neg(ENOENT);
+	if (r5_call(device, R5_GPU_BO_PRESENT_MARK, &call, sizeof(call)) != 0)
+		return r5_neg(errno);
+	return 0;
 }
 
 
@@ -639,9 +714,7 @@ r5_drm_token_to_fd(int device_fd, const uint8_t token[R5_GPU_SHARE_TOKEN_BYTES],
 		row->state = R5_FD_IMPORT;
 		memcpy(row->token, token, sizeof(row->token));
 		row->client_team = client_team;
-		row->id = sShareNextId++;
-		if (sShareNextId == 0)
-			sShareNextId = 1;
+		row->id = r5_share_next_id();
 		*id = row->id;
 	}
 	pthread_mutex_unlock(&sShareLock);
@@ -755,11 +828,25 @@ r5_gem_close(int fd, struct drm_gem_close *close)
 	bo.handle = close->handle;
 	if (r5_call(fd, R5_GPU_BO_FREE, &bo, sizeof(bo)) != 0)
 		return -1;
-	/* The id of an imported handle ends with it. */
+	/* The id of an imported or exported handle ends with it. */
 	pthread_mutex_lock(&sShareLock);
 	import = r5_share_import_of(fd, close->handle);
 	if (import != NULL)
 		memset(import, 0, sizeof(*import));
+	{
+		int i;
+		for (i = 0; i < R5_SHARE_IMPORTS; i++) {
+			if (sShareExports[i].id != 0 && sShareExports[i].device_fd == fd
+				&& sShareExports[i].handle == close->handle)
+				memset(&sShareExports[i], 0, sizeof(sShareExports[i]));
+		}
+		for (i = 0; i < R5_SHARE_FDS; i++) {
+			if (sShareFds[i].state == R5_FD_EXPORT
+				&& sShareFds[i].device_fd == fd
+				&& sShareFds[i].handle == close->handle)
+				memset(&sShareFds[i], 0, sizeof(sShareFds[i]));
+		}
+	}
 	pthread_mutex_unlock(&sShareLock);
 	return 0;
 }

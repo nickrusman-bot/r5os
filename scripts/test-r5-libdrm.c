@@ -1551,7 +1551,8 @@ share_import(int node, int fd)
 
 
 static int
-share_export(int node, uint32_t handle, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES])
+share_export(int node, uint32_t handle, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES],
+	uint32_t *id)
 {
 	struct drm_prime_handle prime;
 	memset(&prime, 0, sizeof(prime));
@@ -1559,7 +1560,7 @@ share_export(int node, uint32_t handle, uint8_t token[R5_GPU_SHARE_TOKEN_BYTES])
 	prime.flags = DRM_CLOEXEC | DRM_RDWR;
 	if (drmIoctl(node, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) != 0)
 		return -1;
-	if (r5_drm_fd_to_token(prime.fd, token) != 0) {
+	if (r5_drm_fd_to_token(prime.fd, token, id) != 0) {
 		close(prime.fd);
 		return -1;
 	}
@@ -1577,23 +1578,26 @@ share_ids(int node)
 	uint32_t a = share_new_bo(node, 8192);
 	uint32_t b = share_new_bo(node, 16384);
 	CHECK(a != 0 && b != 0);
-	CHECK(share_export(node, a, first) == 0);
-	CHECK(share_export(node, b, second) == 0);
+	uint32_t exportA = 0;
+	uint32_t exportB = 0;
+	uint32_t exportAgain = 0;
+	uint8_t again[R5_GPU_SHARE_TOKEN_BYTES];
+	CHECK(share_export(node, a, first, &exportA) == 0);
+	CHECK(share_export(node, b, second, &exportB) == 0);
 	CHECK(memcmp(first, second, sizeof(first)) != 0);
+	CHECK(exportA != 0 && exportB != 0 && exportA != exportB);
+	/* A second export of the same buffer: a new number, the same id. */
+	CHECK(share_export(node, a, again, &exportAgain) == 0);
+	CHECK(exportAgain == exportA);
+	CHECK(memcmp(again, first, sizeof(first)) != 0);
 
-	/* The program marks both at present. */
-	r5_gpu_bo_mark mark;
-	memset(&mark, 0, sizeof(mark));
-	mark.size = (uint32_t)sizeof(mark);
-	mark.version = 1;
-	mark.op = R5_GPU_MARK_SET;
-	mark.handle = a;
-	CHECK(r5_host_ioctl(node, R5_GPU_BO_PRESENT_MARK, &mark, sizeof(mark)) == 0);
-	uint64_t markA = mark.sequence;
-	mark.handle = b;
-	CHECK(r5_host_ioctl(node, R5_GPU_BO_PRESENT_MARK, &mark, sizeof(mark)) == 0);
-	uint64_t markB = mark.sequence;
-	CHECK(markA != markB);
+	/* The program marks both at present, by export id. */
+	CHECK(r5_drm_mark_set(exportA) == 0);
+	CHECK(r5_drm_mark_set(exportB) == 0);
+	CHECK(r5_drm_mark_set(0) != 0);
+	uint64_t markA = gMark[a - 1];
+	uint64_t markB = gMark[b - 1];
+	CHECK(markA != 0 && markB != 0 && markA != markB);
 
 	/* app_server: the first number, imported the way RADV does it. */
 	int fd1 = -1;
@@ -1674,7 +1678,8 @@ share_ids(int node)
 	CHECK(r5_drm_mark_get(id3, &seen) != 0);
 	close(fd3);
 	/* An fd that is not ours has no number. */
-	CHECK(r5_drm_fd_to_token(node, guessed) != 0);
+	uint32_t none = 0;
+	CHECK(r5_drm_fd_to_token(node, guessed, &none) != 0);
 	/* 200 exports with fd_to_token and close: the table of 64 rows
 	 * never fills, because each row is free after its one use. */
 	{
@@ -1685,7 +1690,7 @@ share_ids(int node)
 			prime.handle = b;
 			gExportCount = 0;
 			if (drmIoctl(node, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime) != 0
-				|| r5_drm_fd_to_token(prime.fd, guessed) != 0)
+				|| r5_drm_fd_to_token(prime.fd, guessed, &none) != 0)
 				fills++;
 			if (prime.fd > 0)
 				close(prime.fd);
@@ -1699,8 +1704,12 @@ share_ids(int node)
 	CHECK(r5_drm_mark_get(id2, &seen) != 0);
 	closing.handle = a;
 	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
+	/* GEM_CLOSE ends the export id too. */
+	CHECK(r5_drm_mark_set(exportA) != 0);
+	CHECK(r5_drm_mark_set(exportB) == 0);
 	closing.handle = b;
 	CHECK(drmIoctl(node, DRM_IOCTL_GEM_CLOSE, &closing) == 0);
+	CHECK(r5_drm_mark_set(exportB) != 0);
 }
 
 
@@ -1721,7 +1730,9 @@ share_libdrm(amdgpu_device_handle dev)
 	CHECK(amdgpu_bo_alloc(dev, &request, &bo) == 0);
 	CHECK(amdgpu_bo_export(bo, amdgpu_bo_handle_type_dma_buf_fd,
 		&exported) == 0);
-	CHECK(r5_drm_fd_to_token((int)exported, token) == 0);
+	uint32_t exportId = 0;
+	CHECK(r5_drm_fd_to_token((int)exported, token, &exportId) == 0);
+	CHECK(r5_drm_mark_set(exportId) == 0);
 	close((int)exported);
 
 	int fd = -1;
