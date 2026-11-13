@@ -1,5 +1,20 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Combined stick after M10: everything open from M10 passes
+
+Image `d0856ac3bf` (main with the Deskbar hang fix #4235 and the Mesa release build #4234, plus AMD microcode #4231). Boot 1 (`gpu_selftest true` only): `check` PASS (24 lines). As standard account `test`, `check-user` PASS: r5-gl-test (Zink on RADV) and VulkanTeapot (RADV) `pixels ok max 2`, exits after 1 and 5 s (round 5: time-outs after 180 s); the isolation test hung the ring as before, and the reset brought it back: `[125.799] gpu hang ring gfx seq 1662 after 10004 ms`, `[125.824] reset psp ring stop ok 80030000`, `[125.825] gpu reset mode2 ok`, `[125.944] gpu selftest after reset ok`. Deskbar: Terminal opened and closed from Deskbar, no hang. Boot 4 (`gpu false`): `check` PASS (round 5 hung). Shutdown of boot 1: 9 s from `boot-next` to the last heartbeat. Syslog time stamps work (`KERN: [0.173] …`).
+
+Speed: much better than rounds 3-5 (no periodic sync), but some self-test stages are still slower than round 1: vulkaninfo 5.5 s (1.6), gl 11.4 s (0.7), window tests 11-18 s (8-9). Not explained yet (a cold shader cache on a fresh stick is a candidate).
+
+## 2026-11-13 - AMD processors load their microcode update again
+
+Problem: on the Ryzen 5 5625U every thread logged `find_microcode_amd incorrect alignment` and `no fw update found for this cpu`, so the CPU kept the BIOS microcode (`0xa50000f`). The matching patch in `microcode_amd_fam19h.bin` (equiv `a500`, 5568 bytes) starts at an offset that is 4 mod 16, and the loader skipped any patch that was not 16-byte aligned.
+
+What changed (`distro/kernel/src/system/kernel/arch/x86/arch_cpu.cpp`):
+- A patch that is not aligned is copied into one 16-byte aligned buffer that lives as long as the kernel, the way Linux copies a patch out of the container before loading it (`arch/x86/kernel/cpu/microcode/amd.c`). It is read only through that pointer, also by the other threads.
+- A thread that already reports the new level (the second thread of a core shares its microcode) logs `already at revision` instead of `update failed`.
+
+Tested on the 5625U (combined stick, 13 Nov, image `d0856ac3bf` = main + this PR): `CPU 0: updated from revision 0xa50000f to 0xa500012`, the other first threads the same, the second threads `already at revision 0xa500012`; boots 1 and 4 PASS. QEMU cannot test it (no microcode under a hypervisor). Not tested: other AMD families.
 ## 2026-11-13 - Deskbar no longer hangs after an app it started quits (kernel, upstream Haiku fix)
 
 Problem: in QEMU, after closing Terminal or AboutSystem started from Deskbar, Deskbar stopped drawing. Three of its threads (`w>Twitcher`, `w>Deskbar`, `_BMediaRoster_`) used about 52 s CPU each; `strace` showed an endless `block_thread(0x0, 0x0) = B_INTERRUPTED (0 us)`.
