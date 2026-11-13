@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - Base package list: four duplicate patches retired
+
+Problem: since M11 step 1, `build/jam/packages/Haiku` is a native copy in `distro/desktop`, copied by `apply-desktop-native.py`. Four apply scripts still patched the same file; the lines were already in the copy, so they only printed "already Haiku (...)".
+
+What changed: the `packages/Haiku` patches are removed from `apply-branding.py` (wallpaper `logoArtwork`), `apply-kernel-bugs.py` (`i2c_hid`, `x86_acpi_cstates`), `apply-qemu-drivers.py` (`virtio_block`) and `apply-settings.py` (Settings add-ons, settings fonts, ui fonts). Everything else in those scripts stays, including the `virtio_block` patch of `packages/HaikuBootstrap`. No other script patches `packages/Haiku`. No change to the image.
+
+Tested: `scripts/apply-overlay.sh` into the WSL tree, exit 0, no "pattern not found"; no "already Haiku (...)" line is printed for `packages/Haiku` any more. `build/jam/packages/Haiku` in the tree is byte for byte the copy in `distro/desktop` (diff against Haiku HEAD: 33 lines, the same as that copy).
+
+Not tested: no jam, no boot (the package list itself did not change).
+
 ## 2026-11-13 - M11 step 1: the R5 window frame, decorator hooks, and resizing by the edge
 
 Problem: M11 needs one R5 window frame (decision 2: Haiku's tab, a 1-pixel frame, resize by the edge) and decorator hooks for the shadow and the glass of later steps. `DecorManager` loaded any add-on on `instantiate_decor_addon` alone, so an add-on built against another `Decorator` layout could crash app_server.
