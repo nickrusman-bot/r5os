@@ -54,7 +54,7 @@ These libraries sit next to `libbe`. They do not replace it. A Haiku program tha
 
 A helper written for R5, and used by more than one program, goes in one of these libraries. Add the function at the end. Do not change a function that already shipped. Describe the call in `docs/LIBR5.md` in the same change. The C++ is MIT, so any application can link these libraries. Code added to them must be MIT-compatible. A program that does not link it is unchanged.
 
-Before UI work, read `docs/LIBR5.md`, `docs/APPEARANCE-KIT.md`, R5Book and one existing Settings page. When the owner points to an existing implementation, use that one. If it does not fit, stop and say why; do not write a second one.
+Before UI work, read `docs/LIBR5.md`, `docs/APPEARANCE-KIT.md`, R5Book and one existing Settings page. Look for an existing implementation in this order: the R5 libraries first, then the Haiku kits and Haiku's own apps and preferences (`haiku/headers/os`, `haiku/src/kits`, `haiku/src/apps`, `haiku/src/preferences`). Use the first one that fits. When the owner points to an existing implementation, use that one. If none fits, stop and say why; do not write a second one.
 
 - `libr5icons.so`, header `R5Icons.h`, source `distro/icons`. Icons. `docs/ICONS.md`.
 - `libr5ui.so`, headers `R5UI.h` and `Card.h`, source `distro/ui`. The screen picture, and the Appearance Kit classes (`BAppearanceKit::BCard`). `docs/LIBR5.md`. Which class to use for what: `docs/APPEARANCE-KIT.md`.
