@@ -2251,6 +2251,13 @@ r5_gfx9_kernel_reset()
 	sIhWbReady = false;
 	kwrite(sInfo, oss_byte(mmIH_RB_CNTL), 0);
 	kwrite(sInfo, gc_byte(mmCP_INT_CNTL_RING0), 0);
+	/* Linux suspends PSP before the reset (r5_gfx9_psp_ring_stop). A
+	 * failed stop is logged; the reset still runs, and the restart's ring
+	 * create then decides. */
+	uint32 pspSeen = 0;
+	bool pspStopped = r5_gfx9_psp_ring_stop(&pspSeen);
+	dprintf("radeon_hd: reset psp ring stop %s %08lx\n",
+		pspStopped ? "ok" : "timeout", (unsigned long)pspSeen);
 
 	uint32 header[kPciHeaderDwords];
 	for (uint32 i = 0; i < kPciHeaderDwords; i++)

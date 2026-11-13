@@ -494,24 +494,28 @@ TReplicantTray::InitAddOnSupport()
 
 		BFile file(path.Path(), B_READ_ONLY);
 		if (file.InitCheck() == B_OK) {
-			status_t result;
 			BEntry entry;
 			int32 id;
 			BString path;
-			if (fAddOnSettings.Unflatten(&file) == B_OK) {
-				for (int32 i = 0; fAddOnSettings.FindString(kReplicantPathField,
-					i, &path) == B_OK; i++) {
-					if (entry.SetTo(path.String()) == B_OK && entry.Exists()) {
-						result = LoadAddOn(&entry, &id, false);
-					} else
-						result = B_ENTRY_NOT_FOUND;
-
-					if (result != B_OK) {
-						fAddOnSettings.RemoveData(kReplicantPathField, i);
-						--i;
+			// SPDX-SnippetBegin
+			// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+			// SPDX-License-Identifier: MIT
+			// The file is read into a message of its own. A file cut short
+			// (a restart right after a save) made Unflatten() fail on
+			// fAddOnSettings and left it half built, and the next
+			// AddString() crashed Deskbar. Only the paths that load are
+			// copied over, so a damaged file is dropped at the next save.
+			BMessage stored;
+			if (stored.Unflatten(&file) == B_OK) {
+				for (int32 i = 0; stored.FindString(kReplicantPathField, i,
+						&path) == B_OK; i++) {
+					if (entry.SetTo(path.String()) == B_OK && entry.Exists()
+						&& LoadAddOn(&entry, &id, false) == B_OK) {
+						fAddOnSettings.AddString(kReplicantPathField, path);
 					}
 				}
 			}
+			// SPDX-SnippetEnd
 		}
 	}
 }

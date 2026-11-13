@@ -664,6 +664,38 @@ radeon_psp_byte(uint32 index)
 }
 
 
+/* M10 reset. Linux v6.12 stops the PSP ring before a reset:
+ * amdgpu_device_pre_asic_reset() suspends the IP blocks
+ * (amdgpu_device_ip_suspend), psp_suspend() calls psp_ring_stop(), and on
+ * Renoir and Green Sardine that is psp_v12_0.c psp_v12_0_ring_stop() (MIT,
+ * Copyright 2019 Advanced Micro Devices, Inc.): GFX_CTRL_CMD_ID_DESTROY_RINGS
+ * (0x00030000, psp_gfx_if.h) to C2PMSG_64, mdelay(20), then wait for bit
+ * 31 of C2PMSG_64 (psp_wait_for, adev->usec_timeout 100 ms). Without it
+ * the restart's ring create was refused (M10 stick, boot 2: PSP ring init
+ * 0x80020115). The boot path never calls this. */
+static bool radeon_psp_wait(uint32 byteOffset, uint32 mask, uint32 value,
+	int milliseconds, uint32* _seen);
+
+
+bool
+r5_gfx9_psp_ring_stop(uint32* _seen)
+{
+	uint32 seen = 0;
+	if (sHost == NULL) {
+		if (_seen != NULL)
+			*_seen = 0;
+		return false;
+	}
+	const uint32 command = radeon_psp_byte(0x80);
+	Write32(OUT, command, 0x00030000);
+	snooze(20000);
+	bool ok = radeon_psp_wait(command, 0x80000000, 0x80000000, 100, &seen);
+	if (_seen != NULL)
+		*_seen = seen;
+	return ok;
+}
+
+
 static void
 radeon_visible_barrier()
 {

@@ -1,5 +1,15 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-13 - M10 stick, first run: boot 1 passed, the reset did not come back; Deskbar crash
+
+Stick (13 Nov), image `cursor/m9-m10-stick` at `7ea2f881f2`. Boot 1 (only `gpu_selftest true`): every `check` line PASS: `radeon_hd: gpu available`, RADV device 0, `egl: opengl zink: zink Vulkan 1.4(AMD Radeon Graphics (RADV RENOIR))`, VulkanTeapot and `gl` `pixels ok max 2`, every GLTeapot window action ok; GLTeapot from Demos at about 2200 FPS (user). As the standard account `test`, `check-user`: r5-gl-test and VulkanTeapot on RADV, isolation owner unchanged and fault seen; only `isolation: exit 0` failed.
+
+Found:
+- The isolation client's write faults (`vm fault vmid 4 addr 0000000080000000`), and the faulting job stalls the ring. Before M10 the watchdog declared the device lost (ECANCELED); now it is a hang and a reset, and the client's own 10 s wait returned `B_TIMED_OUT` first. `r5-gpu-isolation` accepts both; the guarantee (owner unchanged) is checked by the parent as before. A fault that stalls the ring still costs a reset: open.
+- The reset did not come back, in boot 1 (after the isolation hang) and in boot 2 (`gpu_hang_test 1`): `gpu reset mode2 ok`, then `PSP ring init 0x80020115`, `k0 fail fence`, `gpu off until reboot: reset failed`. Linux v6.12 stops the PSP ring before a reset (`psp_suspend()` -> `psp_v12_0_ring_stop()`: `GFX_CTRL_CMD_ID_DESTROY_RINGS` to `C2PMSG_64`, 20 ms, bit 31). `r5_gfx9_kernel_reset()` now does the same first (`r5_gfx9_psp_ring_stop()`, `radeon_hd: reset psp ring stop ok|timeout <hex>`). The boot path is unchanged. Recorded in the `GFX9 reset on GC 9.3` draft.
+- Deskbar crashed twice in boot 2 in `TReplicantTray::LoadAddOn` -> `BMessage::AddString`. Its add-on list `~/config/settings/deskbar/replicants` was 254 bytes with a header that says 321 (cut short by the restart after a save); `Unflatten()` failed and left `fAddOnSettings` half built. Deskbar now reads the file into a message of its own and keeps only paths that load. `read-stick-logs.py` copies that file.
+- The card was too short: it did not say plainly to open Terminal and type `check`. Boots 3 and 4 did not run.
+
 ## 2026-11-13 - The graphics chip is used by default on the 5625U (M10 step 7, draft, not booted)
 
 Problem: the GPU path (RADV, Zink, the render node) stayed opt-in per machine, through about ten radeon_hd switches. M10 makes it the default on the one GC 9.3 machine that passed M4-M8, and keeps software as the fallback.
