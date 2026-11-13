@@ -12,7 +12,7 @@ The developer guide to what R5 adds to Haiku for programs: LibR5, the MIDI 2 and
 | `vulkan.html` | Vulkan in a `BView`: `VK_RFIVE_view_surface` | `distro/vulkan/include/vulkan/vulkan_r5.h`, `docs/VULKAN-WSI.md` |
 | `accounts.html` | Accounts, sessions, lock and log out; Sign in as an example, with screenshots in `img/` | `docs/MULTIUSER.md`, `distro/login` |
 | `settings-modules.html` | A page in Settings as an add-on: `SettingsModule`, `SettingsContext`, entry points | `distro/settings/SettingsModule.h`, `distro/settings/ModuleAPI.md` |
-| `haiku-additions.html` | Public calls R5 added to Haiku classes and modules (Locale Kit, USB module), and the decorator hooks for decorator add-ons | the `SPDX-Snippet` parts of the public headers in `distro/` |
+| `haiku-additions.html` | Public calls R5 added to Haiku classes and modules (Locale Kit, Device Kit USB stream, touchpad scroll phase, USB module), and the decorator hooks for decorator add-ons | the `SPDX-Snippet` parts of the public headers in `distro/` |
 | `guidelines.html` | How an R5 window is put together | `docs/STYLE.md`, `docs/SETTINGS.md`, `AGENTS.md` |
 
 ## Pictures

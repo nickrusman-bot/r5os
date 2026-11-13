@@ -20,7 +20,7 @@
 
 	<main class="page">
 		<section class="page-hero">
-			<span class="kit-label">libbe</span>
+			<span class="kit-label">Haiku kits</span>
 			<h1>Additions to Haiku kits</h1>
 			<p>Public calls R5 added to classes that Haiku already has. The rest of each class is as the Haiku Book
 			describes it. A program that uses one of these calls runs on R5, not on Haiku.</p>
@@ -85,6 +85,68 @@ MyApp::MessageReceived(BMessage* message)
 	}
 	BApplication::MessageReceived(message);
 }</pre>
+		</section>
+
+		<!-- BUSBEndpoint -->
+		<section class="entry" id="BUSBEndpoint">
+			<div class="entry-header"><h2>BUSBEndpoint isochronous stream</h2><span class="kind">Device Kit</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;USBKit.h&gt;</td></tr>
+				<tr><th>Library</th><td>libdevice.so</td></tr>
+				<tr><th>Haiku Book</th><td>BUSBEndpoint</td></tr>
+				<tr><th>First user</th><td>The USB webcam add-on (UVC)</td></tr>
+			</table>
+
+			<p>Haiku's <code class="inline">IsochronousTransfer()</code> reads one transfer per call. What the device
+			sends between two calls is lost, so a camera or a microphone drops data. A stream keeps transfers queued in
+			the system and holds what arrived until you read it. There is one stream per device.</p>
+
+			<div class="member"><div class="sig">status_t StartIsochronousStream(size_t packetSize, uint32 packetsPerTransfer = 32, uint32 transferCount = 4, size_t bufferSize = 0) const;</div>
+				<p>Starts the stream on an isochronous input endpoint: <code class="inline">transferCount</code>
+				transfers of <code class="inline">packetsPerTransfer</code> packets stay queued, and up to
+				<code class="inline">bufferSize</code> bytes are held. <code class="inline">B_BAD_VALUE</code> for an
+				endpoint or interface that does not fit, <code class="inline">B_NO_MEMORY</code> when the buffers cannot
+				be made.</p></div>
+
+			<div class="member"><div class="sig">ssize_t ReadIsochronousStream(void* data, size_t length, bigtime_t timeout) const;</div>
+				<p>Waits up to <code class="inline">timeout</code> for packets and stores them one after another, each
+				as a <code class="inline">usb_stream_packet_header</code> followed by its data. A packet without data is
+				left out. Returns the number of bytes stored, <code class="inline">B_TIMED_OUT</code>, or another error
+				when the stream has ended.</p></div>
+
+			<div class="member"><div class="sig">status_t StopIsochronousStream() const;</div>
+				<p>Stops the stream, so another one can be started.</p></div>
+
+			<div class="member"><div class="sig">struct usb_stream_packet_header {
+	uint16 length;
+	uint16 flags;
+};</div>
+				<p><code class="inline">length</code> is the size of the data that follows.
+				<code class="inline">B_USB_STREAM_PACKET_ERROR</code>: the packet arrived with an error.
+				<code class="inline">B_USB_STREAM_PACKET_GAP</code>: packets before this one were lost.</p></div>
+
+<pre class="code"><span class="k">if</span> (endpoint-&gt;StartIsochronousStream(packetSize) != B_OK)
+	<span class="k">return</span>;
+
+<span class="k">while</span> (running) {
+	ssize_t length = endpoint-&gt;ReadIsochronousStream(buffer, size, 100000);
+	<span class="k">if</span> (length == B_TIMED_OUT)
+		<span class="k">continue</span>;
+	<span class="k">if</span> (length &lt; 0)
+		<span class="k">break</span>;		<span class="c">// the stream has ended</span>
+
+	size_t offset = 0;
+	<span class="k">while</span> (offset + <span class="k">sizeof</span>(usb_stream_packet_header) &lt;= (size_t)length) {
+		usb_stream_packet_header header;
+		memcpy(&amp;header, buffer + offset, <span class="k">sizeof</span>(header));
+		offset += <span class="k">sizeof</span>(header);
+		<span class="k">if</span> (offset + header.length &gt; (size_t)length)
+			<span class="k">break</span>;
+		handle_packet(buffer + offset, header.length, header.flags);
+		offset += header.length;
+	}
+}
+endpoint-&gt;StopIsochronousStream();</pre>
 		</section>
 
 		<!-- Decorator hooks -->
@@ -180,6 +242,52 @@ R5_DECORATOR_ABI_EXPORT	<span class="c">// without it, app_server refuses the ad
 instantiate_decor_addon(image_id id, <span class="k">const char</span>* name)
 {
 	<span class="k">return new</span> (std::nothrow) MyDecorAddOn(id, name);
+}</pre>
+		</section>
+
+		<!-- Scroll phase -->
+		<section class="entry" id="wheel-phase">
+			<div class="entry-header"><h2>input_wheel_phase</h2><span class="kind">Interface Kit (input)</span></div>
+			<table class="facts">
+				<tr><th>Declared in</th><td>&lt;Input.h&gt;</td></tr>
+				<tr><th>Sent by</th><td>the mouse add-on of input_server, for a touchpad</td></tr>
+				<tr><th>Haiku Book</th><td>B_MOUSE_WHEEL_CHANGED</td></tr>
+			</table>
+
+			<p>Haiku's <code class="inline">be:wheel_delta_x</code> and <code class="inline">be:wheel_delta_y</code>
+			are whole wheel steps, and say nothing about when a gesture starts or stops. When two fingers scroll on a
+			touchpad, R5 adds three fields to <code class="inline">B_MOUSE_WHEEL_CHANGED</code>. The whole-step fields
+			stay as they are, so a Haiku program keeps working.</p>
+
+			<table class="spec">
+				<tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+				<tr><td><code>be:wheel_precise_delta_x</code>, <code>be:wheel_precise_delta_y</code></td><td>float</td><td>The same movement in wheel steps, with fractions, for smooth scrolling.</td></tr>
+				<tr><td><code>be:wheel_phase</code></td><td>int32</td><td>An <code>input_wheel_phase</code>.</td></tr>
+			</table>
+
+			<div class="member"><div class="sig">enum input_wheel_phase {
+	B_WHEEL_PHASE_NONE	= 0,
+	B_WHEEL_PHASE_BEGAN	= 1,
+	B_WHEEL_PHASE_CHANGED	= 2,
+	B_WHEEL_PHASE_ENDED	= 3
+};</div>
+				<p><code class="inline">BEGAN</code> when the fingers start scrolling, <code class="inline">CHANGED</code>
+				while they move, <code class="inline">ENDED</code> when they lift or start moving the pointer. The ended
+				message can have no movement at all; it only says the gesture is over. A mouse wheel sends no phase.</p></div>
+
+<pre class="code"><span class="k">case</span> B_MOUSE_WHEEL_CHANGED:
+{
+	int32 phase;
+	<span class="k">float</span> dy;
+	<span class="k">if</span> (message-&gt;FindInt32(<span class="s">"be:wheel_phase"</span>, &amp;phase) == B_OK
+		&amp;&amp; message-&gt;FindFloat(<span class="s">"be:wheel_precise_delta_y"</span>, &amp;dy) == B_OK) {
+		ScrollSmoothly(dy);
+		<span class="k">if</span> (phase == B_WHEEL_PHASE_ENDED)
+			SettleScroll();		<span class="c">// for example, snap to a line</span>
+		<span class="k">break</span>;
+	}
+	BView::MessageReceived(message);	<span class="c">// a mouse wheel: whole steps</span>
+	<span class="k">break</span>;
 }</pre>
 		</section>
 
