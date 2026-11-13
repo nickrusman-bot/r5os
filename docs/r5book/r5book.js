@@ -35,6 +35,7 @@
 			["appearance-kit.html#BUserCard", "BUserCard", true],
 			["appearance-kit.html#BUserListItem", "BUserListItem", true],
 			["appearance-kit.html#functions", "Functions", true],
+			["appearance-kit.html#window-effects", "Window effects", true],
 		]},
 		{ title: "MIDI 2 Kit", file: "midi2-kit.html", items: [
 			["midi2-kit.html", "Overview"],

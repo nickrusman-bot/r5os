@@ -25,6 +25,24 @@ The R5 interface classes: what exists, and when to use it. The exact calls, colo
 | `BIconView` | `<R5IconView.h>` | One icon at its own pixel size, such as a logo beside a heading | An icon that has to grow or shrink with the view. Render a new bitmap instead | Sign in, for the R5 pebble and the clock |
 | `BAccentButton` | `<AccentButton.h>` | The one main action of a window, in the accent blue | Every button in a row. Restart, Cancel and the like stay plain `BButton`s | Sign in, for Sign in |
 
+## Functions
+
+Not every part of the kit is a class. These are free functions in `BAppearanceKit`, the way Haiku has `ui_color()` beside its classes.
+
+| Header | Use it for | Do not use it for | First user |
+|---|---|---|---|
+| `<WindowEffects.h>` | The user's window effects (`window_effects()` / `set_window_effects()` with `B_WINDOW_SHADOW`, `B_WINDOW_FROSTED_GLASS`, `B_WINDOW_ANIMATIONS`; `window_effect_strength()` / `set_window_effect_strength()` with Quiet, Balanced, Glassy), and a glass background behind a program's own window or view (`set_window_glass()`, `set_view_glass()`). The calls and an example are in `docs/LIBR5.md`, "Window effects" | `B_TRANSPARENT_COLOR`, which keeps meaning "do not erase". A program setting the user's choice: only Settings and the Appearance program call the two setters | The "Window effects" box on Look and feel, in Settings and in the Appearance program |
+
+```cpp
+#include <WindowEffects.h>
+
+MyWindow::MyWindow()
+	: BWindow(BRect(100, 100, 500, 400), "Glass", B_TITLED_WINDOW, 0)
+{
+	BAppearanceKit::set_window_glass(this, true);
+}
+```
+
 ## Adding a class
 
 - Add it only when a program needs it and a second program will use it (`AGENTS.md`, LibR5). Do not add a class that only renames a `libbe` class.

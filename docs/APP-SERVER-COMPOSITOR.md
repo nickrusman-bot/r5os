@@ -349,7 +349,8 @@ namespace BAppearanceKit {
 
 enum {
 	B_WINDOW_SHADOW			= 0x00000001,
-	B_WINDOW_FROSTED_GLASS	= 0x00000002
+	B_WINDOW_FROSTED_GLASS	= 0x00000002,
+	B_WINDOW_ANIMATIONS		= 0x00000004	// step 4b
 };
 
 // The user's choice, for Settings and the Appearance program.
@@ -359,6 +360,16 @@ status_t	set_window_effects(uint32 effects);
 // A program asks for glass behind its own content. Opt-in.
 status_t	set_window_glass(BWindow* window, bool glass);
 status_t	set_view_glass(BView* view, bool glass);
+
+// One step for the shadow and the glass (decision 8, 13 Nov 2026).
+enum window_effect_strength {
+	B_WINDOW_EFFECTS_QUIET		= 1,
+	B_WINDOW_EFFECTS_BALANCED	= 2,
+	B_WINDOW_EFFECTS_GLASSY		= 3
+};
+window_effect_strength	window_effect_strength();
+// the function hides the type's name: write "enum window_effect_strength"
+status_t	set_window_effect_strength(enum window_effect_strength strength);
 
 }
 ```
@@ -468,3 +479,19 @@ Built in step 3b, and how it differs from the sections above:
 - **Pending exports per backing:** a buffer whose exporter freed its handle before the import is held only by the pending export; the backing table has the size of the slot table (1024), and such a backing goes at most 5 s later.
 - **`vram_usage` and `gtt_usage`** in `GET_INFO` count the memory (backings), not the handles, so a shared buffer is counted once.
 - **Refusal words** in the kernel log line (`radeon_hd: refuse BO_IMPORT <why>`): `caller`, `team`, `token`, `expired`, `lost`, `target`; `BO_EXPORT limit`, `target`. An expired number is reported as `expired` when it is still in the table, `token` after the watchdog removed it.
+
+
+## Built in step 4 (14 Nov 2026)
+
+The shadow (A3), the frosted glass (A4), the three strengths and the "Window effects" box. Night run without the user; the choices below are the agent's and are listed in the step report for review.
+
+- **The alpha of glass views (decision 16, checked on paper first).** Painter's `B_ALPHA_COMPOSITE` paths already write correct straight alpha over a transparent target: `BLEND_COMPOSITE` and `BLEND_COMPOSITE_SUBPIX` (`drawing_modes/DrawingMode.h`) take the target's alpha into account and write `alphaTemp / 255`, and they are what `B_OP_ALPHA` with `B_ALPHA_COMPOSITE` uses for text, shapes, lines, bitmaps and gradients (`DrawingModeAlphaCC`, `AlphaPC`, the `SUBPIX` forms). Every other mode writes alpha 255. `FillRectNoClipping` writes the colour's own alpha. So no Painter change is needed: `View::Draw` fills a glass view's background with its view colour and alpha 0 (only in the GPU mode with frosted glass on), and Painter does the rest. Glass views are in step 4, not M12.
+- **Where the compose uses alpha.** Outside the glass region every pixel is opaque. In the glass region of the decorator (`GetGlassRegion()`: the R5 tab and the frame line) the pixel's alpha is ignored and the step's "tab see-through" is used. In a window with a glass view the alpha of its whole content area is used: alpha 0 shows the pixel's colour with the blur showing through by the same see-through value, alpha 255 is the pixel, and anything between is the pixel over the blur by its alpha. The content area and not the views' exact rectangles, because a view can move inside its window (layout) without a clipping rebuild, and the compose thread does not take the window lock.
+- **Two pipelines (decision 16).** `compose.comp` is unchanged and its SPIR-V is byte-identical to step 2's; a frame in which no window on screen has a shadow or glass runs exactly step 2's commands. `effects.comp` is the second compute pipeline (three storage buffers, push descriptors), with four modes: shadow, Dual Kawase down, Dual Kawase up, glass. It unpacks to `vec4` and filters bilinearly itself. Both run on the GFX queue in the one submit with one fence per frame. Per window, back to front: the blur of what lies below it, then its shadow, then its opaque pixels with the copy shader and its glass pixels with the glass mode, then a barrier.
+- **The shadow** is one byte per pixel per window: the footprint (tab and frame), blurred on the CPU three times along the rows and three times along the columns with a box of radius `softness / 3`, in a host-visible buffer counted in the window memory. It is made again only when the footprint, the window's focus or the step changes, by the compose thread, never under the window lock. It is drawn outside the footprint only, offset down, inside the extent from `GetShadowExtent()`. The R5 decorator's extent comes from the same table. A window without a decorator has no shadow, except menus (`kMenuWindowFeel`), which get the small one. Inactive windows and menus get half the softness and offset (decision 8). Focus changes rebuild the layer list (`Desktop::SetFocusWindow`), so the shadow follows.
+- **The glass** keeps one full-size blur per window, one pixel per glass pixel, the rectangles of its glass region one after another. Dual Kawase with the step's levels (two: a quarter of the resolution) and an offset of `blur / 2^levels - 1` source pixels (at least 0.5). It is made again only where something below the window changed, grown by the blur's reach, or all of it when the window moved or resized, its glass region changed, the windows below it changed, or the step changed. Damage now says who caused it: a window's own drawing (`WindowHWInterface::ContentDamage`) and its moves and stack changes from the clipping rebuild count for the windows above it; a window that went away and the background count for everyone. For each glass rectangle the blur covers the box around what is new in it, from an input grown by the reach (Quiet 18, Balanced 29, Glassy 55 pixels), and that input is composed fresh in the same frame. The glass pixels are written only inside the real damage.
+- **One table** of the starting values, `src/servers/app/WindowEffectLevels.h` (`distro/desktop/src/servers/app/`): the five values of decision 8 per step and the levels, used by the R5 decorator and the compositor; the shadow and glass geometry are derived there.
+- **Settings in app_server:** `DesktopSettingsPrivate` keeps `window shadow`, `window frosted glass` (bools) and `window effect strength` (int32) in the `appearance` file. Missing keys: both on, Balanced. The log lines (`app_server: shadow on`, `frosted off`, `effect strength glassy`, and `animations on/off` for step 4b) come from `ServerApp` for every change, in both modes.
+- **The box:** `WindowEffectsBox` (`distro/settings`, one source for Settings' Look and Feel page and the Appearance program's Look and feel tab), under the arrow style: "Shadow", "Frosted glass", "Strength:" Quiet / Balanced / Glassy as a pop-up menu, and the hint "Less effect uses less CPU". Each change is applied at once. Defaults: both on, Balanced. Revert: the values from when the page opened.
+- **The compare** (`gpu_debug`) runs only on a frame without effects; with effects on screen it is skipped.
+- **Measurement:** with `gpu_debug`, every 10 s after `compose median` a line `app_server: compose effects shadow <on|off> frosted <on|off> strength <step>`. `r5-effects-test` (in `/system/bin`) sets the effects from a shell and opens a glass, plain or full-screen glass window for the measurement.

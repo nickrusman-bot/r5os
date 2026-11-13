@@ -681,6 +681,44 @@ float r5_avatar_icon_side(float circleSide);</div>
 BBitmap* people = r5_mime_icon_bitmap(<span class="s">"application/x-vnd.Be-PEPL"</span>, side);
 r5_avatar_draw(<span class="k">this</span>, BRect(0, 0, 43, 43), people, <span class="k">true</span>);</pre>
 		</section>
+
+		<section class="entry" id="window-effects">
+			<div class="entry-header"><h2 class="plain">Window effects</h2><span class="kind">&lt;WindowEffects.h&gt;</span></div>
+
+			<p>The shadow and the frosted glass of windows, shown in the GPU mode only. Free functions in
+			<code class="inline">BAppearanceKit</code>, like <code class="inline">ui_color()</code>: each sends one
+			message to app_server. In the CPU mode every call is accepted and stored and nothing changes on screen.
+			<code class="inline">B_TRANSPARENT_COLOR</code> keeps meaning "do not erase" and never becomes glass.
+			First user: the "Window effects" box on Look and feel, in Settings and in the Appearance program.</p>
+
+			<div class="member"><div class="sig">uint32 window_effects();
+status_t set_window_effects(uint32 effects);</div>
+				<p>The user's choice of <code class="inline">B_WINDOW_SHADOW</code>,
+				<code class="inline">B_WINDOW_FROSTED_GLASS</code> and <code class="inline">B_WINDOW_ANIMATIONS</code>,
+				for the whole desktop. app_server keeps it with its other appearance settings. Only Settings and the
+				Appearance program set it.</p></div>
+			<div class="member"><div class="sig">enum window_effect_strength window_effect_strength();
+status_t set_window_effect_strength(enum window_effect_strength strength);</div>
+				<p>One step for the shadow and the glass: <code class="inline">B_WINDOW_EFFECTS_QUIET</code>,
+				<code class="inline">B_WINDOW_EFFECTS_BALANCED</code> (the default) or
+				<code class="inline">B_WINDOW_EFFECTS_GLASSY</code>. The function has the name of the type, as
+				<code class="inline">stat()</code> has that of <code class="inline">struct stat</code>, so the type
+				is written <code class="inline">enum window_effect_strength</code>.</p></div>
+			<div class="member"><div class="sig">status_t set_window_glass(BWindow* window, bool glass);
+status_t set_view_glass(BView* view, bool glass);</div>
+				<p>A program asks for glass behind its own content. The view's background is drawn with alpha 0 and
+				the blur behind the window shows through. What the view draws with <code class="inline">B_OP_ALPHA</code>
+				and <code class="inline">B_ALPHA_COMPOSITE</code> keeps its alpha; every other mode stays opaque.
+				The view must be attached and its window locked.</p></div>
+
+<pre class="code"><span class="k">#include</span> &lt;WindowEffects.h&gt;
+
+MyWindow::MyWindow()
+	: BWindow(BRect(100, 100, 500, 400), <span class="s">"Glass"</span>, B_TITLED_WINDOW, 0)
+{
+	BAppearanceKit::set_window_glass(<span class="k">this</span>, <span class="k">true</span>);
+}</pre>
+		</section>
 	</main>
 </div>
 
