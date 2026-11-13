@@ -226,14 +226,19 @@ Today a slot is the memory and the handle at the same time. Sharing splits it:
 
 ### The link message
 
-A new link message next to `SetViewBitmap` (15b); the CPU path stays as it is.
+New messages next to `SetViewBitmap` (15b); the CPU path stays as it is. **No change in libbe** (user, 13 Nov 2026):
 
-- **app_server → program:** nothing until the program asks.
-- **program → app_server, once per swapchain:** the view, the image count, and per image the export number, width, height, pitch and format. app_server answers with one status per image, so the WSI can fall back to the copy path at once.
-- **program → app_server, per present:** the image index.
-- **app_server → program, after each compose fence:** the indexes that are free again.
+- The WSI opens its own `BPrivate::AppServerLink`, the way `libr5ui` will for `set_view_glass()` (decision 13, "What programs and developers see"). The view is named by `_get_object_token_(view)` (`headers/private/app/AppMisc.h`).
+- New codes go at the end of `ServerProtocol.h`, before `AS_LAST_CODE` (the R5 copy in `distro/`).
+- app_server's `ServerApp` of that connection looks up the window and the view by that token, and refuses a view of another application.
+- `ServerApp::ClientTeam()` of that connection is the team app_server passes to `BO_IMPORT`, and the kernel compares it with the team it pinned at export.
 
-How the WSI sends a link message is open question 1.
+The messages:
+
+- **Once per swapchain (program → app_server):** the view token, the image count, and per image the export number, width, height, pitch and format. The reply has one status per image, so the WSI can fall back to the copy path at once.
+- **Per present (program → app_server):** the view token and the image index, after `BO_PRESENT_MARK`.
+- **Free again (app_server → program):** see open question 1.
+- **Once at the end (program → app_server):** the swapchain is gone; app_server closes its imports after the next fence.
 
 ### The R5 DRM library and the fifth libdrm patch
 
@@ -271,7 +276,11 @@ How the WSI sends a link message is open question 1.
 
 ### Limits on buffer slots
 
-`kMaxBo` and `kMaxClientBo` are both 256 today, so one program can take every slot and no one else, app_server included, gets a buffer. In 3b the system limit goes up and the per-file limit goes well below it. Both values come from a count of how many buffers RADV makes for VulkanTeapot (open question 2), not from a guess.
+`kMaxBo` and `kMaxClientBo` are both 256 today (`r5_gpu_internal.h`), so one program can take every slot and no one else, app_server included, gets a buffer.
+
+- **Starting values for 3b:** the system limit goes well up, to 1024, and the per-file limit is half of it, 512. Both are starting values, not the result of a measurement.
+- **A file that hits its limit** gets `B_NO_MEMORY`, as today, plus one line per file: `radeon_hd: buffer limit <n> reached, team <id>`.
+- **The measurement** (user, 13 Nov 2026): the self-test reads `bo_count` from `R5_GPU_GET_COUNTERS` before and after VulkanTeapot, on the next stick, in a boot that runs anyway (no boot of its own). The real values follow from that count and replace the starting values, recorded in `CHANGELOG.md`.
 
 ### Pass and fail lines (for step 3b)
 
@@ -296,8 +305,10 @@ A failure prints the same text with `fail` and the reason. "GTT returned" is rea
 
 ### Open questions (step 3a)
 
-1. **How the WSI sends a link message.** The WSI uses only public calls today (`BView::SetViewBitmap`). A new link message next to it needs a sender inside libbe: a new private, additive `BView` call (added at the end, no existing call changes), which the WSI calls. `AGENTS.md` keeps LibR5 calls out of `libbe`; this would be a private libbe call for app_server's protocol, not a LibR5 helper. Is that the way?
-2. **How many buffers RADV makes for VulkanTeapot cannot be read or measured here.** The source has no fixed number: RADV allocates per device (shader arenas, the border-colour and trace buffers, query and upload buffers) and per command buffer, as it needs them. RADV only runs on the 5625U (QEMU and VirtualBox have Lavapipe), and no local boot log holds a count (`generated/boot-5625u-23` has only a listing). Proposal: in the next 5625U boot, `R5_GPU_GET_COUNTERS` (`bo_count`) before and after VulkanTeapot in the self-test, or the libdrm `kernel bo domain` lines of that run counted in the syslog. Which one, and in which boot?
+1. **How "free again" reaches the program.** `AppServerLink` is a request and reply channel: the program asks, `ServerApp` answers on the link's reply port, and the link is locked for that application while it waits (`src/kits/app/AppServerLink.cpp`). app_server cannot send on it by itself after its compose fence, and a reply held back until the fence would block every other call of that application to app_server. Options:
+   - **a.** The WSI makes a port of its own and sends its id in the once-message; after each compose fence app_server writes the free indexes to that port with `write_port_etc` and timeout 0. The WSI waits on that port in `vkAcquireNextImageKHR`. One message per fence, no lock on the link.
+   - **b.** The WSI asks per image ("is image *i* free?") on the link, and app_server answers at once from what its last fence released. The WSI polls; no new port.
+   - Recommendation: **a**, because it does not poll and keeps the link free. It is not literally "a link message", which is why it is asked here.
 
 ## The direct-window pause (decision 9)
 

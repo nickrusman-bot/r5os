@@ -154,6 +154,7 @@ Not built yet; the design is `docs/APP-SERVER-COMPOSITOR.md`, "Zero-copy design 
 - One additive, vendor-neutral call at the first free number: `BO_PRESENT_MARK` (`+ 32`). The exporter records on its buffer the ring number of its file's last submit; the kernel takes the number itself. app_server reads it and asks `FENCE_WAIT` with timeout 0. No sync objects are shared between teams.
 - A buffer gets a reference count: each file's handle, each pending export, and a parked handle for GPU work in flight. The memory goes with the last reference.
 - Haiku has no dma-buf, and no area is used for sharing (the kernel area of a buffer is not cloneable).
+- Buffer slots: the system limit (`kMaxBo`, 256 today) goes up and the per-file limit (`kMaxClientBo`, also 256 today) goes to half of it, as starting values. The real values follow from `bo_count` before and after VulkanTeapot in the self-test.
 
 ## R5 DRM library (userland)
 
