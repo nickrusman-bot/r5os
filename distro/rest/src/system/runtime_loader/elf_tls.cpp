@@ -140,6 +140,15 @@ TLSBlockTemplates::Unregister(unsigned dso)
 		return;
 
 	fGeneration++;
+	// SPDX-SnippetBegin
+	// SPDX-License-Identifier: MIT
+	// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+	// The library's memory goes away. A thread that starts later must not
+	// copy its TLS image (Materialize() skips a template with no static
+	// offset).
+	fTemplates[dso] = TLSBlockTemplate();
+	fTemplates[dso].SetGeneration(fGeneration);
+	// SPDX-SnippetEnd
 	fFreeDSOs.push_back(dso);
 }
 

@@ -51,7 +51,22 @@ public:
 	static	Compositor*			Create(Desktop* desktop, HWInterface* screen);
 								~Compositor();
 
-			bool				IsActive() const { return fActive; }
+	// Whether windows draw into their buffers and the compose runs now.
+	// False in the CPU mode and while paused for direct access (step 5).
+			bool				IsActive() const
+									{ return fActive && !fPaused; }
+	// The GPU mode for this session, also while paused.
+			bool				IsEnabled() const { return fActive; }
+
+	// M11 step 5, decision 9: programs that write straight to the screen.
+	// fWindowLock write-locked, before the program gets B_DIRECT_START:
+	// waits for the compose in flight and pauses.
+			void				DirectAccessStarting();
+	// fWindowLock write-locked, after the program's state changed.
+			void				DirectAccessChanged(Window* window,
+									bool accessing);
+	// BWindowScreen (Desktop::LockDirectScreen), no lock held.
+			void				DirectScreenChanged(bool locked);
 
 	// ServerWindow::_CreateWindow: the engine of a new window.
 			DrawingEngine*		CreateWindowEngine(WindowHWInterface** _iface);
@@ -177,6 +192,10 @@ private:
 			void				_ScanoutFree(CompositorVulkan* vk);
 			bool				_ScanoutPrepare(RenderingBuffer* back);
 			void				_TurnOff(const char* reason);
+			void				_ApplyMode();
+			void				_RebindEngines(bool toBuffers);
+			void				_DropAnimations();
+			void				_ReturnSharedImages();
 			bool				_RestartAfterReset();
 			void				_Report();
 			void				_UpdatePeriod();
@@ -259,10 +278,22 @@ private:
 	volatile bool				fAnimationsRunning;
 			// This frame's, the compose thread's own
 			LayerList*			fFrameGhosts;
+
 			bool				fFrameAnimating;
 			bool				fFrameSlide;
 			bool				fFrameSlideSnapshot;
 			int32				fFrameSlideShift;
+
+			// M11 step 5. fComposeSlot is held by the compose thread for
+			// one frame; it never takes the window lock while holding it.
+			// Order: fWindowLock (write) -> fComposeSlot -> HWInterface.
+			BLocker				fComposeSlot;
+	volatile bool				fPaused;
+	volatile bool				fModePending;
+			bool				fPauseRedraw;
+			BObjectList<Window, false> fDirectWindows;
+	volatile bool				fDirectScreen;
+			const char*	volatile fFailure;
 };
 
 

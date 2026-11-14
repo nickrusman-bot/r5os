@@ -678,7 +678,14 @@ Compositor::Compositor(Desktop* desktop, HWInterface* screen)
 	fFrameAnimating(false),
 	fFrameSlide(false),
 	fFrameSlideSnapshot(false),
-	fFrameSlideShift(0)
+	fFrameSlideShift(0),
+	fComposeSlot("compositor slot"),
+	fPaused(false),
+	fModePending(false),
+	fPauseRedraw(false),
+	fDirectWindows(4),
+	fDirectScreen(false),
+	fFailure(NULL)
 {
 }
 
@@ -1059,7 +1066,9 @@ Compositor::_ExitVulkan()
 		vk->vkDeviceWaitIdle(vk->device);
 		_ScanoutFree(vk);
 		// M11 step 3b: the imports of shared views go with this device;
-		// the programs get a refusal at their next present.
+		// the programs get a refusal at their next present. Step 5: the
+		// images app_server holds go back first.
+		_ReturnSharedImages();
 		{
 			BAutolock _(fShareLock);
 			fVulkan = vk;
@@ -1332,8 +1341,13 @@ Compositor::AddWindow(Window* window, WindowHWInterface* iface)
 	if (entry == NULL)
 		return;
 	BAutolock _(fEntryLock);
-	if (!fEntries.AddItem(entry))
+	if (!fEntries.AddItem(entry)) {
 		entry->ReleaseReference();
+		return;
+	}
+	// M11 step 5: made during a pause; the resume binds it to its buffer
+	if (fPaused && window->GetDrawingEngine() != NULL)
+		window->GetDrawingEngine()->SetHWInterface(fScreen);
 }
 
 
@@ -1347,6 +1361,12 @@ Compositor::RemoveWindow(Window* window)
 	fEntries.RemoveItem(entry);
 	entry->window = NULL;
 	entry->ReleaseReference();
+
+	// M11 step 5: it cannot hold direct access any more
+	if (fDirectWindows.RemoveItem(window) && fDirectWindows.IsEmpty()) {
+		fModePending = true;
+		release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
+	}
 
 	// M11 step 3b: the window's shared views end with it.
 	BAutolock shareLock(fShareLock);
@@ -1395,7 +1415,7 @@ Compositor::_FindEntry(Window* window) const
 void
 Compositor::ClippingChanged()
 {
-	if (!fActive)
+	if (!IsActive())
 		return;
 
 	LayerList* layers = new(std::nothrow) LayerList(20);
@@ -1717,7 +1737,7 @@ Compositor::Damage(const BRegion& region)
 void
 Compositor::Damage(const BRegion& region, WindowHWInterface* source)
 {
-	if (!fActive || region.CountRects() == 0)
+	if (!IsActive() || region.CountRects() == 0)
 		return;
 	BAutolock _(fDamageLock);
 	fDamage.Include(&region);
@@ -1757,7 +1777,7 @@ Compositor::SetEffects(uint32 effects, int32 strength)
 		!= 0;
 	fEffects = effects;
 	fStrength = strength;
-	if (!fActive)
+	if (!IsActive())
 		return;
 
 	ClippingChanged();
@@ -1785,7 +1805,7 @@ Compositor::SetEffects(uint32 effects, int32 strength)
 bool
 Compositor::GlassActive() const
 {
-	return fActive && (fEffects & kWindowEffectFrostedGlass) != 0;
+	return IsActive() && (fEffects & kWindowEffectFrostedGlass) != 0;
 }
 
 
@@ -1794,7 +1814,7 @@ void
 Compositor::GlassViewChanged(Window* window, View* view)
 {
 	(void)view;
-	if (!fActive || window == NULL)
+	if (!IsActive() || window == NULL)
 		return;
 	bool hasGlass = window->TopView() != NULL
 		&& window->TopView()->HasGlass();
@@ -1833,6 +1853,23 @@ Compositor::_ComposeLoop()
 	fCpuAtReport = thread_cpu_time();
 
 	while (true) {
+		// A compose that failed, outside the compose slot: the switch to
+		// the CPU mode and the restart take the window lock (step 5).
+		if (fFailure != NULL) {
+			const char* failure = fFailure;
+			fFailure = NULL;
+			// one restart after a successful reset (RADV only)
+			if (!fOnLavapipe && !fRestarted
+				&& strcmp(failure, "device lost") == 0
+				&& _RestartAfterReset()) {
+				Damage(BRegion(BRect(0, 0, (float)fFrameWidth - 1,
+					(float)fFrameHeight - 1)));
+				continue;
+			}
+			_TurnOff(failure);
+			return;
+		}
+
 		// An overtaken image goes back once the GPU is done with it; until
 		// then the thread looks again every refresh period, also without
 		// damage (a hidden window).
@@ -1858,8 +1895,18 @@ Compositor::_ComposeLoop()
 			return;
 		}
 		_ShareRetireDone();
+		// M11 step 5: the pause's redraw, and the resume
+		if (fModePending)
+			_ApplyMode();
+		if (fPaused)
+			continue;
 		bool animating = _AnimationDamage(system_time());
 		if (status == B_TIMED_OUT && !animating)
+			continue;
+
+		// One frame, in the compose slot: a pause waits for it to end.
+		BAutolock slot(fComposeSlot);
+		if (fPaused)
 			continue;
 
 		// at most once per refresh period
@@ -1894,8 +1941,8 @@ Compositor::_ComposeLoop()
 			continue;
 		if (back->Width() != fFrameWidth || back->Height() != fFrameHeight) {
 			if (!_EnsureFrame(back->Width(), back->Height())) {
-				_TurnOff("window memory");
-				return;
+				fFailure = "window memory";
+				continue;
 			}
 			damage.Set(BRect(0, 0, (float)fFrameWidth - 1,
 				(float)fFrameHeight - 1));
@@ -1960,10 +2007,9 @@ Compositor::_ComposeLoop()
 
 		fLastCompose = system_time();
 		if (!_Compose(damage, layers, shares, effects)) {
-			if (!fActive)
-				return;
-			// keep the damage for the next try after a restart
-			Damage(damage);
+			// fFailure is set; the top of the loop handles it, after the
+			// slot is released
+			continue;
 		}
 		Damage(retry);
 	}
@@ -2290,11 +2336,9 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 			for (int32 i = 0; i < layers.CountItems(); i++)
 				layers.ItemAt(i)->entry->iface->UnlockExclusiveAccess();
 		}
-		// one restart after a successful reset (RADV only)
-		if (!fOnLavapipe && !fRestarted && strcmp(failure, "device lost") == 0
-			&& _RestartAfterReset())
-			return false;
-		_TurnOff(failure);
+		// handled by _ComposeLoop() once the compose slot is free: the
+		// restart after a reset, or the CPU mode (step 5)
+		fFailure = failure;
 		return false;
 	}
 
@@ -2498,6 +2542,7 @@ Compositor::_TurnOff(const char* reason)
 		return;
 
 	fActive = false;
+	fPaused = false;
 	_DropEffects();
 	fEntryLock.Lock();
 	for (int32 i = 0; i < fEntries.CountItems(); i++) {
@@ -2511,9 +2556,7 @@ Compositor::_TurnOff(const char* reason)
 	{
 		// M11 step 3b: the programs get a refusal at their next present
 		// and make copy swapchains; the imports go with the device.
-		BAutolock _(fShareLock);
-		for (int32 i = 0; i < fShares.CountItems(); i++)
-			fShares.ItemAt(i)->broken = true;
+		_ReturnSharedImages();
 	}
 	{
 		BAutolock _(fLayerLock);
@@ -3337,6 +3380,174 @@ Compositor::_RecordSlide(uint64 frame, uint32 frameStride)
 	effect.offset = fSlideDirection > 0 ? 1.0f : -1.0f;
 	dispatch_effect(vk, effect);
 	effect_barrier(vk);
+}
+
+
+//	#pragma mark - direct access (M11 step 5, decision 9)
+
+
+/*!	A program is about to get B_DIRECT_START (a BDirectWindow) or has the
+	screen (BWindowScreen). Called with fWindowLock write-locked, before the
+	program learns the front buffer: waits for the compose in flight (a late
+	fence is not a failure, decision 14), then every window draws to the
+	screen again. The redraw the CPU-mode way follows from the compose
+	thread once this write lock is released (_ApplyMode), because this can
+	be called from inside a clipping rebuild.
+*/
+void
+Compositor::DirectAccessStarting()
+{
+	if (!fActive || fPaused)
+		return;
+	{
+		BAutolock slot(fComposeSlot);
+		fPaused = true;
+	}
+	_RebindEngines(false);
+	{
+		BAutolock _(fLayerLock);
+		fLayers->MakeEmpty();
+	}
+	_DropAnimations();
+	log_line("compositor paused: direct window");
+
+	fPauseRedraw = true;
+	fModePending = true;
+	release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
+/*!	fWindowLock write-locked. When the last direct access stops, the resume
+	is left to the compose thread: it takes the window lock after the one
+	held now, so a direct window that is moved (stop, then start, under one
+	write lock) never resumes and pauses the compositor.
+*/
+void
+Compositor::DirectAccessChanged(Window* window, bool accessing)
+{
+	BAutolock _(fEntryLock);
+	if (accessing) {
+		if (!fDirectWindows.HasItem(window))
+			fDirectWindows.AddItem(window);
+		return;
+	}
+	if (fDirectWindows.RemoveItem(window) && fDirectWindows.IsEmpty()
+		&& fPaused) {
+		fModePending = true;
+		release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
+	}
+}
+
+
+//!	BWindowScreen: Desktop::LockDirectScreen() and UnlockDirectScreen().
+void
+Compositor::DirectScreenChanged(bool locked)
+{
+	if (!fActive)
+		return;
+	if (locked) {
+		if (!fDesktop->LockAllWindows())
+			return;
+		// set before the pause, so a resume the pause schedules sees it
+		fDirectScreen = true;
+		DirectAccessStarting();
+		fDesktop->UnlockAllWindows();
+		return;
+	}
+	fDirectScreen = false;
+	fModePending = true;
+	release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
+/*!	The compose thread, outside the compose slot: after a pause, the desktop
+	is redrawn the CPU-mode way; once no program has direct access, the
+	windows go back to their buffers, every window draws once, and the
+	compose starts again.
+*/
+void
+Compositor::_ApplyMode()
+{
+	if (!fDesktop->LockAllWindows())
+		return;
+	fModePending = false;
+	fEntryLock.Lock();
+	bool direct = !fDirectWindows.IsEmpty() || fDirectScreen;
+	fEntryLock.Unlock();
+	if (fActive && fPaused && !direct) {
+		_RebindEngines(true);
+		fPaused = false;
+		fPauseRedraw = false;
+		// the clipping is rebuilt with the GPU mode's regions, the buffers
+		// are checked, and every window draws all of itself once
+		fDesktop->CompositorTurnedOff();
+		Damage(BRegion(BRect(0, 0, (float)fFrameWidth - 1,
+			(float)fFrameHeight - 1)));
+		log_line("compositor resumed");
+	} else if (fPaused && fPauseRedraw) {
+		fPauseRedraw = false;
+		fDesktop->CompositorTurnedOff();
+	}
+	fDesktop->UnlockAllWindows();
+}
+
+
+//!	All windows locked: every window draws into its buffer, or to the screen.
+void
+Compositor::_RebindEngines(bool toBuffers)
+{
+	BAutolock _(fEntryLock);
+	for (int32 i = 0; i < fEntries.CountItems(); i++) {
+		Entry* entry = fEntries.ItemAt(i);
+		if (entry->window == NULL || entry->window->GetDrawingEngine() == NULL)
+			continue;
+		if (toBuffers)
+			entry->window->GetDrawingEngine()->SetHWInterface(entry->iface);
+		else
+			entry->window->GetDrawingEngine()->SetHWInterface(fScreen);
+	}
+}
+
+
+//!	No animation while paused (step 5) or after the switch to the CPU mode.
+void
+Compositor::_DropAnimations()
+{
+	BAutolock entryLock(fEntryLock);
+	BAutolock _(fAnimLock);
+	for (int32 i = 0; i < fEntries.CountItems(); i++)
+		fEntries.ItemAt(i)->animOpen = false;
+	fGhosts.MakeEmpty();
+	fSlideActive = false;
+	fAnimationsRunning = false;
+}
+
+
+/*!	The CPU mode, or the device goes: every shared image that app_server
+	holds goes back to its program, so none waits in its acquire for an
+	image that will never be shown. Its next present is refused and it makes
+	a copy swapchain (docs/APP-SERVER-COMPOSITOR.md, "The reset path").
+*/
+void
+Compositor::_ReturnSharedImages()
+{
+	BAutolock _(fShareLock);
+	for (int32 i = 0; i < fShares.CountItems(); i++) {
+		Share* share = fShares.ItemAt(i);
+		share->broken = true;
+		if (share->ended)
+			continue;
+		for (uint32 n = 0; n < share->count; n++) {
+			Share::Image& image = share->images[n];
+			if ((int32)n == share->current || (int32)n == share->pending
+				|| image.retiring) {
+				image.retiring = false;
+				release_sem_etc(image.sem, 1, B_DO_NOT_RESCHEDULE);
+			}
+		}
+		share->current = -1;
+		share->pending = -1;
+	}
 }
 
 
