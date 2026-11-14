@@ -1101,6 +1101,14 @@ Desktop::LockDirectScreen(team_id team)
 	if (status == B_OK)
 		fDirectScreenTeam = team;
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 5, decision 9: a BWindowScreen pauses the compositor
+	if (status == B_OK && fCompositor != NULL)
+		fCompositor->DirectScreenChanged(true);
+// SPDX-SnippetEnd
+
 	return status;
 }
 
@@ -1111,6 +1119,12 @@ Desktop::UnlockDirectScreen(team_id team)
 	if (fDirectScreenTeam == team) {
 		fDirectScreenLock.Unlock();
 		fDirectScreenTeam = -1;
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		if (fCompositor != NULL)
+			fCompositor->DirectScreenChanged(false);
+// SPDX-SnippetEnd
 		return B_OK;
 	}
 

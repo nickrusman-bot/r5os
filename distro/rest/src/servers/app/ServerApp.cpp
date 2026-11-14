@@ -3687,8 +3687,10 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 
 			int32 shareId = -1;
 			Compositor* compositor = fDesktop->GetCompositor();
+			// Step 5: also while paused for direct access; the view is
+			// composed again after the resume.
 			if (status == B_OK && (compositor == NULL
-					|| !compositor->IsActive()))
+					|| !compositor->IsEnabled()))
 				status = B_NOT_ALLOWED;
 			if (status == B_OK) {
 				status = B_BAD_VALUE;

@@ -4432,7 +4432,9 @@ ServerWindow::MakeWindow(BRect frame, const char* name,
 	// In the GPU mode (M11) the window draws into its own buffer, through
 	// an interface the compositor owns.
 	Compositor* compositor = fDesktop->GetCompositor();
-	if (compositor != NULL && compositor->IsActive()) {
+	// M11 step 5: also while paused for direct access; the window then
+	// draws to the screen until the resume.
+	if (compositor != NULL && compositor->IsEnabled()) {
 		WindowHWInterface* iface = NULL;
 		DrawingEngine* engine = compositor->CreateWindowEngine(&iface);
 		if (engine != NULL) {
@@ -4467,6 +4469,18 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 	STRACE(("HandleDirectConnection(bufferState = %" B_PRId32 ", driverState = "
 		"%" B_PRId32 ")\n", bufferState, driverState));
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 5, decision 9: the compositor pauses before the program
+	// learns the front buffer, so it never writes what the compositor
+	// still writes.
+	Compositor* compositor = fDesktop->GetCompositor();
+	if (compositor != NULL
+		&& (bufferState & B_DIRECT_MODE_MASK) == B_DIRECT_START)
+		compositor->DirectAccessStarting();
+// SPDX-SnippetEnd
+
 	status_t status = fDirectWindowInfo->SetState(
 		(direct_buffer_state)bufferState, (direct_driver_state)driverState,
 		fDesktop->HWInterface()->FrontBuffer(), fWindow->Frame(),
@@ -4487,6 +4501,15 @@ ServerWindow::HandleDirectConnection(int32 bufferState, int32 driverState)
 		fIsDirectlyAccessing = true;
 	else if ((bufferState & B_DIRECT_MODE_MASK) == B_DIRECT_STOP)
 		fIsDirectlyAccessing = false;
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	if (compositor != NULL) {
+		compositor->DirectAccessChanged(fWindow.Get(),
+			fIsDirectlyAccessing && fDirectWindowInfo.IsSet());
+	}
+// SPDX-SnippetEnd
 }
 
 
