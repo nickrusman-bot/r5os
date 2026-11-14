@@ -9,6 +9,7 @@
  *   r5-effects-test get
  *   r5-effects-test shadow|frosted|animations on|off
  *   r5-effects-test strength quiet|balanced|glassy
+ *   r5-effects-test workspace <index>   (step 4b: the slide)
  *   r5-effects-test glass|plain|full|tick|slide [seconds]
  *
  * glass and plain open the same window with and without set_window_glass(),
@@ -24,6 +25,7 @@
 #include <string.h>
 
 #include <Application.h>
+#include <InterfaceDefs.h>
 #include <MessageRunner.h>
 #include <Screen.h>
 #include <String.h>
@@ -179,6 +181,13 @@ private:
 				names[window_effect_strength()]);
 			return 0;
 		}
+		if (strcmp(what, "workspace") == 0 && value != NULL) {
+			int32 index = atoi(value);
+			if (count_workspaces() <= index)
+				set_workspace_count(index + 1);
+			activate_workspace(index);
+			return 0;
+		}
 		if (strcmp(what, "strength") == 0 && value != NULL) {
 			enum window_effect_strength strength = B_WINDOW_EFFECTS_BALANCED;
 			if (strcmp(value, "quiet") == 0)
@@ -271,6 +280,7 @@ private:
 		fprintf(stderr, "usage: r5-effects-test get\n"
 			"       r5-effects-test shadow|frosted|animations on|off\n"
 			"       r5-effects-test strength quiet|balanced|glassy\n"
+			"       r5-effects-test workspace <index>\n"
 			"       r5-effects-test glass|plain|full|tick|slide [seconds]\n");
 		return 2;
 	}

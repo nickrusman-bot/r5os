@@ -343,8 +343,8 @@ The shadow and the frosted glass of windows, in the GPU mode (`docs/APP-SERVER-C
 
 | Call | What it does |
 |---|---|
-| `window_effects()` | The user's effects: `B_WINDOW_SHADOW` (`0x1`), `B_WINDOW_FROSTED_GLASS` (`0x2`), `B_WINDOW_ANIMATIONS` (`0x4`). All set when app_server cannot be asked |
-| `set_window_effects(effects)` | Sets them for the whole desktop, at once. app_server keeps them in its `appearance` file; a file without the keys means shadow and glass on. `B_BAD_VALUE` for an unknown bit. Settings and the Appearance program use it; a program normally does not |
+| `window_effects()` | The user's effects: `B_WINDOW_SHADOW` (`0x1`), `B_WINDOW_FROSTED_GLASS` (`0x2`), `B_WINDOW_ANIMATIONS` (`0x4`: windows fade in and out and the workspace switch slides). All set when app_server cannot be asked |
+| `set_window_effects(effects)` | Sets them for the whole desktop, at once. app_server keeps them in its `appearance` file; a file without the keys means all three on. `B_BAD_VALUE` for an unknown bit. Settings and the Appearance program use it; a program normally does not |
 | `window_effect_strength()` | `B_WINDOW_EFFECTS_QUIET` (1), `B_WINDOW_EFFECTS_BALANCED` (2, the default) or `B_WINDOW_EFFECTS_GLASSY` (3). One step sets the shadow and the glass together |
 | `set_window_effect_strength(strength)` | Sets the step. `B_BAD_VALUE` outside 1 to 3 |
 | `set_window_glass(window, glass)` | The window's background is glass: its top view gets the background of a glass view (below). Call it after the `BWindow` constructor |

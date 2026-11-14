@@ -19,11 +19,13 @@
 
 static const uint32 kMsgShadow = 'wesh';
 static const uint32 kMsgGlass = 'wegl';
+static const uint32 kMsgAnimations = 'wean';
 static const uint32 kMsgStrength = 'west';
 
-// Defaults: both on and Balanced (docs/APP-SERVER-COMPOSITOR.md, "Settings").
+// Defaults: all three on and Balanced (decision 8).
 static const uint32 kDefaultEffects = BAppearanceKit::B_WINDOW_SHADOW
-	| BAppearanceKit::B_WINDOW_FROSTED_GLASS;
+	| BAppearanceKit::B_WINDOW_FROSTED_GLASS
+	| BAppearanceKit::B_WINDOW_ANIMATIONS;
 static const int32 kDefaultStrength = BAppearanceKit::B_WINDOW_EFFECTS_BALANCED;
 // The checkboxes of this box. Other bits are kept as they are.
 static const uint32 kBoxEffects = kDefaultEffects;
@@ -56,6 +58,8 @@ WindowEffectsBox::WindowEffectsBox(const char* name, BView* label)
 	fShadow = new BCheckBox("shadow", "Shadow", new BMessage(kMsgShadow));
 	fGlass = new BCheckBox("frosted glass", "Frosted glass",
 		new BMessage(kMsgGlass));
+	fAnimations = new BCheckBox("animations", "Animations",
+		new BMessage(kMsgAnimations));
 
 	fStrengthMenu = new BPopUpMenu("strength");
 	for (size_t i = 0; i < sizeof(kStrengths) / sizeof(kStrengths[0]); i++) {
@@ -69,6 +73,7 @@ WindowEffectsBox::WindowEffectsBox(const char* name, BView* label)
 	BView* content = BLayoutBuilder::Group<>(B_VERTICAL, B_USE_SMALL_SPACING)
 		.Add(fShadow)
 		.Add(fGlass)
+		.Add(fAnimations)
 		.AddGroup(B_HORIZONTAL)
 			.Add(fStrengthField)
 			.AddGlue()
@@ -87,6 +92,7 @@ WindowEffectsBox::AttachedToWindow()
 	BBox::AttachedToWindow();
 	fShadow->SetTarget(this);
 	fGlass->SetTarget(this);
+	fAnimations->SetTarget(this);
 	fStrengthMenu->SetTargetForItems(this);
 }
 
@@ -97,11 +103,17 @@ WindowEffectsBox::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kMsgShadow:
 		case kMsgGlass:
+		case kMsgAnimations:
 		{
-			uint32 flag = message->what == kMsgShadow
-				? (uint32)BAppearanceKit::B_WINDOW_SHADOW
-				: (uint32)BAppearanceKit::B_WINDOW_FROSTED_GLASS;
-			BCheckBox* box = message->what == kMsgShadow ? fShadow : fGlass;
+			uint32 flag = (uint32)BAppearanceKit::B_WINDOW_ANIMATIONS;
+			BCheckBox* box = fAnimations;
+			if (message->what == kMsgShadow) {
+				flag = BAppearanceKit::B_WINDOW_SHADOW;
+				box = fShadow;
+			} else if (message->what == kMsgGlass) {
+				flag = BAppearanceKit::B_WINDOW_FROSTED_GLASS;
+				box = fGlass;
+			}
 			uint32 effects = fEffects & ~flag;
 			if (box->Value() == B_CONTROL_ON)
 				effects |= flag;
@@ -182,6 +194,8 @@ WindowEffectsBox::_Update()
 	fShadow->SetValue((fEffects & BAppearanceKit::B_WINDOW_SHADOW) != 0
 		? B_CONTROL_ON : B_CONTROL_OFF);
 	fGlass->SetValue((fEffects & BAppearanceKit::B_WINDOW_FROSTED_GLASS) != 0
+		? B_CONTROL_ON : B_CONTROL_OFF);
+	fAnimations->SetValue((fEffects & BAppearanceKit::B_WINDOW_ANIMATIONS) != 0
 		? B_CONTROL_ON : B_CONTROL_OFF);
 	for (int32 i = 0; i < fStrengthMenu->CountItems(); i++) {
 		BMenuItem* item = fStrengthMenu->ItemAt(i);

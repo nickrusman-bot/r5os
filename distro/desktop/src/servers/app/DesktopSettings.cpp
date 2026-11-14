@@ -69,8 +69,10 @@ DesktopSettingsPrivate::_SetDefaults()
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
-	// M11 step 4: a file without the keys means both on and Balanced.
-	fWindowEffects = kWindowEffectShadow | kWindowEffectFrostedGlass;
+	// M11 step 4: a file without the keys means both on and Balanced;
+	// step 4b: animations on too.
+	fWindowEffects = kWindowEffectShadow | kWindowEffectFrostedGlass
+		| kWindowEffectAnimations;
 	fWindowEffectStrength = kWindowEffectsBalanced;
 	gWindowEffectStrength = fWindowEffectStrength;
 // SPDX-SnippetEnd
@@ -340,6 +342,12 @@ DesktopSettingsPrivate::_Load()
 				else
 					fWindowEffects &= ~(uint32)kWindowEffectFrostedGlass;
 			}
+			if (settings.FindBool("window animations", &effect) == B_OK) {
+				if (effect)
+					fWindowEffects |= kWindowEffectAnimations;
+				else
+					fWindowEffects &= ~(uint32)kWindowEffectAnimations;
+			}
 			int32 strength;
 			if (settings.FindInt32("window effect strength", &strength)
 					== B_OK) {
@@ -505,6 +513,8 @@ DesktopSettingsPrivate::Save(uint32 mask)
 				(fWindowEffects & kWindowEffectShadow) != 0);
 			settings.AddBool("window frosted glass",
 				(fWindowEffects & kWindowEffectFrostedGlass) != 0);
+			settings.AddBool("window animations",
+				(fWindowEffects & kWindowEffectAnimations) != 0);
 			settings.AddInt32("window effect strength", fWindowEffectStrength);
 // SPDX-SnippetEnd
 

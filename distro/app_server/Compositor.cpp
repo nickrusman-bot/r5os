@@ -255,6 +255,13 @@ struct CompositorVulkan {
 	VkBuffer					scratch;
 	VkDeviceMemory				scratchMemory;
 	uint64						scratchBytes;
+
+	// M11 step 4b: the workspace slide, the old picture and the new one
+	VkBuffer					slideOld;
+	VkDeviceMemory				slideOldMemory;
+	VkBuffer					slideNew;
+	VkDeviceMemory				slideNewMemory;
+	uint64						slideBytes;
 	char						deviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
 
 	// M11 step 3b: imports of shared views (RADV only).
@@ -298,13 +305,16 @@ struct effect_rect {
 	uint32	auxStride;
 	uint32	amount;
 	float	offset;
+	int32	shape[16];		// mode 4: four rectangles, left top right bottom
 };
 
 enum {
 	kEffectShadow = 0,
 	kEffectDown = 1,
 	kEffectUp = 2,
-	kEffectGlass = 3
+	kEffectGlass = 3,
+	kEffectWindow = 4,
+	kEffectSlide = 5
 };
 
 static const uint32 kEffectFixedGlass = 0x100;
@@ -347,7 +357,11 @@ struct Compositor::Entry : public BReferenceable {
 		glassTop(0),
 		glassStrength(0),
 		glassBelow(0),
-		glassValid(false)
+		glassValid(false),
+		animOpen(false),
+		animStart(0),
+		animFrom(0),
+		animFrames(0)
 	{
 	}
 
@@ -387,6 +401,30 @@ struct Compositor::Entry : public BReferenceable {
 	int32				glassStrength;
 	uint32				glassBelow;		// which windows lay below
 	bool				glassValid;
+
+	// M11 step 4b, under fAnimLock: the open animation
+	bool				animOpen;
+	bigtime_t			animStart;
+	float				animFrom;
+	int32				animFrames;
+	BRegion				animArea;
+};
+
+
+/*!	M11 step 4b: a window that closed, drawn from its last buffer while it
+	fades and shrinks. Under fAnimLock.
+*/
+struct Compositor::Ghost {
+	BReference<Entry>			entry;
+	BReference<WindowBuffer>	buffer;
+	int32						left;
+	int32						top;
+	BRegion						shape;
+	BRegion						area;
+	bigtime_t					start;
+	float						from;
+	float						visible;
+	int32						frames;
 };
 
 
@@ -457,7 +495,9 @@ struct Compositor::Layer {
 		top(0),
 		shadow(false),
 		shadowSmall(false),
-		belowHash(0)
+		belowHash(0),
+		animatable(false),
+		visible(-1)
 	{
 	}
 
@@ -487,7 +527,26 @@ struct Compositor::Layer {
 	BRegion						contentDamage;
 	BRegion						blurRegion;
 	uint32						belowHash;
+
+	// M11 step 4b: may be animated (a decorated window, not a menu, no
+	// direct access), and this frame's visibility while it opens (-1:
+	// not animating)
+	bool						animatable;
+	float						visible;
 };
+
+
+//!	M11 step 4b: ease out, cubic.
+static float
+ease_out(float t)
+{
+	if (t >= 1.0f)
+		return 1.0f;
+	if (t <= 0.0f)
+		return 0.0f;
+	float rest = 1.0f - t;
+	return 1.0f - rest * rest * rest;
+}
 
 
 //	#pragma mark - Compositor
@@ -602,9 +661,24 @@ Compositor::Compositor(Desktop* desktop, HWInterface* screen)
 	fReportStart(0),
 	fCpuAtReport(0),
 	fLateLogged(0),
-	fEffects(kWindowEffectShadow | kWindowEffectFrostedGlass),
+	fEffects(kWindowEffectShadow | kWindowEffectFrostedGlass
+		| kWindowEffectAnimations),
 	fStrength(kWindowEffectsBalanced),
-	fEffectsLogged(false)
+	fEffectsLogged(false),
+	fAnimLock("compositor animations"),
+	fGhosts(4),
+	fLastWorkspace(-1),
+	fSlideActive(false),
+	fSlideSnapshot(false),
+	fSlideStart(0),
+	fSlideDirection(1),
+	fSlideFrames(0),
+	fAnimationsRunning(false),
+	fFrameGhosts(NULL),
+	fFrameAnimating(false),
+	fFrameSlide(false),
+	fFrameSlideSnapshot(false),
+	fFrameSlideShift(0)
 {
 }
 
@@ -620,6 +694,8 @@ Compositor::~Compositor()
 	if (fWakeSem >= 0)
 		delete_sem(fWakeSem);
 	delete fLayers;
+	delete fFrameGhosts;
+	fGhosts.MakeEmpty();
 	_ExitVulkan();
 	free(fScratch);
 	if (fFenceFd >= 0)
@@ -1003,6 +1079,14 @@ Compositor::_ExitVulkan()
 			vk->vkDestroyBuffer(vk->device, vk->scratch, NULL);
 		if (vk->scratchMemory != VK_NULL_HANDLE)
 			vk->vkFreeMemory(vk->device, vk->scratchMemory, NULL);
+		if (vk->slideOld != VK_NULL_HANDLE)
+			vk->vkDestroyBuffer(vk->device, vk->slideOld, NULL);
+		if (vk->slideOldMemory != VK_NULL_HANDLE)
+			vk->vkFreeMemory(vk->device, vk->slideOldMemory, NULL);
+		if (vk->slideNew != VK_NULL_HANDLE)
+			vk->vkDestroyBuffer(vk->device, vk->slideNew, NULL);
+		if (vk->slideNewMemory != VK_NULL_HANDLE)
+			vk->vkFreeMemory(vk->device, vk->slideNewMemory, NULL);
 		if (vk->effectsPipeline != VK_NULL_HANDLE)
 			vk->vkDestroyPipeline(vk->device, vk->effectsPipeline, NULL);
 		if (vk->effectsPipelineLayout != VK_NULL_HANDLE) {
@@ -1322,6 +1406,19 @@ Compositor::ClippingChanged()
 	BRegion damage;
 	int32 workspace = fDesktop->CurrentWorkspace();
 
+	// M11 step 4b: a workspace switch slides; it opens and closes nothing
+	bool animations = (fEffects & kWindowEffectAnimations) != 0;
+	bool switched = fLastWorkspace >= 0 && workspace != fLastWorkspace;
+	if (switched && animations) {
+		BAutolock _(fAnimLock);
+		fSlideDirection = workspace > fLastWorkspace ? 1 : -1;
+		fSlideStart = system_time();
+		fSlideSnapshot = true;
+		fSlideFrames = 0;
+		fSlideActive = true;
+	}
+	fLastWorkspace = workspace;
+
 	fEntryLock.Lock();
 	for (Window* window = fDesktop->CurrentWindows().FirstWindow();
 			window != NULL; window = window->NextWindow(workspace)) {
@@ -1341,6 +1438,7 @@ Compositor::ClippingChanged()
 
 		WindowHWInterface* iface = entry->iface;
 		WindowBuffer* buffer = iface->Buffer();
+		bool firstBuffer = buffer == NULL;
 		if (buffer == NULL || buffer->Width() != width
 			|| buffer->Height() != height) {
 			WindowBuffer* newBuffer = _AllocateOrMakeRoom(width, height,
@@ -1449,6 +1547,27 @@ Compositor::ClippingChanged()
 				layer->glassAlpha.Exclude(&layer->glassFixed);
 			}
 		}
+
+		// M11 step 4b: a window that shows for the first time opens
+		layer->animatable = decorator != NULL && !menu
+			&& !window->ServerWindow()->IsDirectlyAccessing();
+		if (firstBuffer && animations && !switched && layer->animatable) {
+			BAutolock _(fAnimLock);
+			entry->animOpen = true;
+			entry->animStart = system_time();
+			entry->animFrom = 0;
+			entry->animFrames = 0;
+			entry->animArea = layer->shape;
+			entry->animArea.Include(&layer->shadowArea);
+		} else if (!firstBuffer) {
+			// A window that grows or moves while it opens (a layout after
+			// its first show): the last frame must cover where it is now.
+			BAutolock _(fAnimLock);
+			if (entry->animOpen) {
+				entry->animArea.Include(&layer->shape);
+				entry->animArea.Include(&layer->shadowArea);
+			}
+		}
 		layers->AddItem(layer);
 	}
 	fEntryLock.Unlock();
@@ -1507,6 +1626,38 @@ Compositor::ClippingChanged()
 			bool stays = false;
 			for (int32 j = 0; !stays && j < layers->CountItems(); j++)
 				stays = layers->ItemAt(j)->entry.Get() == layer->entry.Get();
+			// M11 step 4b: a window that closed (not one that went to
+			// Deskbar or to another workspace) fades and shrinks away
+			Window* gone = layer->entry->window;
+			if (side == 0 && !stays && animations && !switched
+				&& layer->animatable && layer->buffer.IsSet()
+				&& (gone == NULL
+					|| (gone->IsHidden() && !gone->IsMinimized()))) {
+				Ghost* ghost = new(std::nothrow) Ghost;
+				if (ghost != NULL) {
+					BAutolock _(fAnimLock);
+					Entry* entry = layer->entry.Get();
+					ghost->entry = layer->entry;
+					ghost->buffer = layer->buffer;
+					ghost->left = layer->left;
+					ghost->top = layer->top;
+					ghost->shape = layer->shape;
+					ghost->area = area;
+					ghost->start = system_time();
+					// from where a running open animation is
+					ghost->from = 1.0f;
+					if (entry->animOpen) {
+						ghost->from = entry->animFrom + (1.0f - entry->animFrom)
+							* ease_out((float)(ghost->start - entry->animStart)
+								/ kOpenAnimation);
+						entry->animOpen = false;
+					}
+					ghost->visible = ghost->from;
+					ghost->frames = 0;
+					if (!fGhosts.AddItem(ghost))
+						delete ghost;
+				}
+			}
 			WindowDamage* item = stays ? new(std::nothrow) WindowDamage
 				: NULL;
 			if (item != NULL) {
@@ -1686,7 +1837,8 @@ Compositor::_ComposeLoop()
 		// then the thread looks again every refresh period, also without
 		// damage (a hidden window).
 		bigtime_t wait = fDebug ? kReportInterval : B_INFINITE_TIMEOUT;
-		if (fShareRetiring) {
+		// M11 step 4b: an animation composes every refresh period
+		if (fShareRetiring || fAnimationsRunning) {
 			bigtime_t slice = fPeriod > 0 ? fPeriod : 16667;
 			if (wait == B_INFINITE_TIMEOUT || slice < wait)
 				wait = slice;
@@ -1706,7 +1858,8 @@ Compositor::_ComposeLoop()
 			return;
 		}
 		_ShareRetireDone();
-		if (status == B_TIMED_OUT)
+		bool animating = _AnimationDamage(system_time());
+		if (status == B_TIMED_OUT && !animating)
 			continue;
 
 		// at most once per refresh period
@@ -1776,6 +1929,7 @@ Compositor::_ComposeLoop()
 				copy->shadowArea = source->shadowArea;
 				copy->glassFixed = source->glassFixed;
 				copy->glassAlpha = source->glassAlpha;
+				copy->animatable = source->animatable;
 				layers.AddItem(copy);
 			}
 		}
@@ -1789,6 +1943,9 @@ Compositor::_ComposeLoop()
 				effects |= layer->HasEffects();
 			}
 		}
+		// M11 step 4b: where each animation is in this frame
+		_AnimationFrame(layers, system_time());
+
 		// M11 step 4: the shadow masks and the kept blur, and the damage
 		// grown where the blur needs fresh input. Without an effect on
 		// screen nothing of this runs, and the compose is step 2's.
@@ -1825,7 +1982,8 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 	fFrames++;
 	// M11 step 4: the CPU compare knows no effects; it runs only on a
 	// frame without them.
-	bool compare = fDebug && fFrames % 100 == 1 && !effects;
+	bool compare = fDebug && fFrames % 100 == 1 && !effects
+		&& !fFrameAnimating;
 	uint32 background = fBackground;
 
 	// A compare frame keeps the windows from drawing until the CPU copy
@@ -1858,6 +2016,13 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 	memset(&rect, 0, sizeof(rect));
 	rect.frameStride = vk->scanActive ? vk->backPitch / 4 : fFrameWidth;
 
+	// M11 step 4b: the picture shown now is the old side of the slide
+	bool slide = fFrameSlide && _EnsureSlideBuffers(rect.frameStride);
+	if (slide && fFrameSlideSnapshot) {
+		_RecordSlideCopy((uint64)frameInfo.buffer, (uint64)vk->slideOld,
+			rect.frameStride);
+	}
+
 	for (int32 layerIndex = -1; layerIndex < layers.CountItems();
 			layerIndex++) {
 		Layer* layer = layerIndex >= 0 ? layers.ItemAt(layerIndex) : NULL;
@@ -1867,6 +2032,20 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 		bool withEffects = effects && layer != NULL && layer->HasEffects()
 			&& layer->buffer.IsSet();
 		BRegion glassPart;
+		if (layer != NULL && layer->visible >= 0 && layer->buffer.IsSet()) {
+			// M11 step 4b: opening, scaled and faded, without its effects
+			_RecordWindowAnimation(layer->buffer->VulkanBuffer(),
+				layer->buffer->Width(), layer->buffer->Height(), layer->left,
+				layer->top, layer->shape, layer->visible, damage,
+				(uint64)frameInfo.buffer, rect.frameStride);
+			vk->vkCmdPipelineBarrier(vk->commands,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &between, 0, NULL,
+				0, NULL);
+			vk->vkCmdBindPipeline(vk->commands,
+				VK_PIPELINE_BIND_POINT_COMPUTE, vk->pipeline);
+			continue;
+		}
 		if (layer != NULL) {
 			if (!layer->buffer.IsSet())
 				continue;
@@ -1982,6 +2161,25 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &between, 0, NULL,
 				0, NULL);
 		}
+	}
+
+	// M11 step 4b: windows that closed, over the others, then the slide
+	for (int32 i = 0; fFrameGhosts != NULL && i < fFrameGhosts->CountItems();
+			i++) {
+		Layer* ghost = fFrameGhosts->ItemAt(i);
+		_RecordWindowAnimation(ghost->buffer->VulkanBuffer(),
+			ghost->buffer->Width(), ghost->buffer->Height(), ghost->left,
+			ghost->top, ghost->shape, ghost->visible, damage,
+			(uint64)frameInfo.buffer, rect.frameStride);
+		vk->vkCmdPipelineBarrier(vk->commands,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &between, 0, NULL, 0,
+			NULL);
+	}
+	if (slide) {
+		_RecordSlideCopy((uint64)frameInfo.buffer, (uint64)vk->slideNew,
+			rect.frameStride);
+		_RecordSlide((uint64)frameInfo.buffer, rect.frameStride);
 	}
 
 	// Decision 4: the damaged rows of the back buffer onto the scanout, in
@@ -2860,6 +3058,285 @@ Compositor::_DropEffects()
 		entry->glass.Unset();
 		entry->glassValid = false;
 	}
+	BAutolock animLock(fAnimLock);
+	for (int32 i = 0; i < fEntries.CountItems(); i++)
+		fEntries.ItemAt(i)->animOpen = false;
+	fGhosts.MakeEmpty();
+	fSlideActive = false;
+	fAnimationsRunning = false;
+	delete fFrameGhosts;
+	fFrameGhosts = NULL;
+}
+
+
+//	#pragma mark - animations (M11 step 4b)
+
+
+/*!	Before a frame: damages where an animation draws, ends the ones that
+	are over (one line each, with its length and frames), and says whether
+	one still runs. An animation never holds input: the windows draw and
+	get their events as always; only the compose is drawn differently.
+*/
+bool
+Compositor::_AnimationDamage(bigtime_t now)
+{
+	BRegion area;
+	bool running = false;
+	{
+		BAutolock entryLock(fEntryLock);
+		BAutolock _(fAnimLock);
+		for (int32 i = 0; i < fEntries.CountItems(); i++) {
+			Entry* entry = fEntries.ItemAt(i);
+			if (!entry->animOpen)
+				continue;
+			area.Include(&entry->animArea);
+			bigtime_t took = now - entry->animStart;
+			if (took < kOpenAnimation) {
+				running = true;
+				continue;
+			}
+			entry->animOpen = false;
+			log_line("animation open %" B_PRId64 " ms frames %" B_PRId32,
+				took / 1000, entry->animFrames);
+		}
+		for (int32 i = fGhosts.CountItems(); i-- > 0;) {
+			Ghost* ghost = fGhosts.ItemAt(i);
+			area.Include(&ghost->area);
+			bigtime_t took = now - ghost->start;
+			if (took < kCloseAnimation) {
+				running = true;
+				continue;
+			}
+			log_line("animation close %" B_PRId64 " ms frames %" B_PRId32,
+				took / 1000, ghost->frames);
+			delete fGhosts.RemoveItemAt(i);
+		}
+		if (fSlideActive) {
+			area.Include(BRect(0, 0, (float)fFrameWidth - 1,
+				(float)fFrameHeight - 1));
+			bigtime_t took = now - fSlideStart;
+			if (took < kWorkspaceAnimation)
+				running = true;
+			else {
+				fSlideActive = false;
+				log_line("animation workspace %" B_PRId64 " ms frames %"
+					B_PRId32, took / 1000, fSlideFrames);
+			}
+		}
+	}
+	fAnimationsRunning = running;
+	Damage(area);
+	return running;
+}
+
+
+//!	This frame's visibility of each opening window, the ghosts, the slide.
+void
+Compositor::_AnimationFrame(LayerList& layers, bigtime_t now)
+{
+	LayerList* ghosts = new(std::nothrow) LayerList(4);
+	fFrameAnimating = false;
+	fFrameSlide = false;
+	fFrameSlideSnapshot = false;
+	{
+		BAutolock _(fAnimLock);
+		for (int32 i = 0; i < layers.CountItems(); i++) {
+			Layer* layer = layers.ItemAt(i);
+			Entry* entry = layer->entry.Get();
+			layer->visible = -1;
+			if (!entry->animOpen)
+				continue;
+			float t = (float)(now - entry->animStart) / kOpenAnimation;
+			layer->visible = entry->animFrom
+				+ (1.0f - entry->animFrom) * ease_out(t);
+			entry->animFrames++;
+			fFrameAnimating = true;
+		}
+		for (int32 i = 0; ghosts != NULL && i < fGhosts.CountItems(); i++) {
+			Ghost* ghost = fGhosts.ItemAt(i);
+			float t = (float)(now - ghost->start) / kCloseAnimation;
+			ghost->visible = ghost->from * (1.0f - ease_out(t));
+			ghost->frames++;
+			Layer* layer = new(std::nothrow) Layer;
+			if (layer == NULL)
+				continue;
+			layer->entry = ghost->entry;
+			layer->buffer = ghost->buffer;
+			layer->left = ghost->left;
+			layer->top = ghost->top;
+			layer->shape = ghost->shape;
+			layer->visible = ghost->visible;
+			ghosts->AddItem(layer);
+			fFrameAnimating = true;
+		}
+		if (fSlideActive) {
+			float t = (float)(now - fSlideStart) / kWorkspaceAnimation;
+			fFrameSlide = true;
+			fFrameSlideSnapshot = fSlideSnapshot;
+			fSlideSnapshot = false;
+			fFrameSlideShift = (int32)(ease_out(t) * fFrameWidth);
+			if (fFrameSlideShift >= (int32)fFrameWidth)
+				fFrameSlideShift = fFrameWidth;
+			fSlideFrames++;
+			fFrameAnimating = true;
+		}
+	}
+	delete fFrameGhosts;
+	fFrameGhosts = ghosts;
+}
+
+
+/*!	A window scaled about its centre (95 % to 100 %) and faded (\a visible
+	from 0 to 1), where the damage is. Only its footprint is drawn.
+*/
+void
+Compositor::_RecordWindowAnimation(uint64 buffer, uint32 width,
+	uint32 height, int32 left, int32 top, const BRegion& shape, float visible,
+	const BRegion& damage, uint64 frame, uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	if (visible <= 0.0f)
+		return;
+	BRegion part(damage);
+	BRegion bounds(BRect((float)left, (float)top,
+		(float)left + width - 1, (float)top + height - 1));
+	part.IntersectWith(&bounds);
+	if (part.CountRects() == 0)
+		return;
+
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->effectsPipeline);
+	push_effect_buffers(vk, (VkBuffer)buffer, (VkBuffer)frame,
+		(VkBuffer)frame);
+	effect_rect effect;
+	memset(&effect, 0, sizeof(effect));
+	effect.mode = kEffectWindow;
+	effect.targetStride = frameStride;
+	effect.sourceStride = width;
+	effect.sourceWidth = width;
+	effect.sourceHeight = height;
+	effect.offset = kOpenAnimationScale
+		+ (1.0f - kOpenAnimationScale) * visible;
+	effect.amount = (uint32)(visible * 255.0f + 0.5f);
+	if (effect.amount > 255)
+		effect.amount = 255;
+	// The footprint in buffer coordinates; more than four rectangles (a
+	// stack of tabs) are drawn as their bounding box.
+	for (int32 i = 0; i < 4; i++) {
+		effect.shape[i * 4] = 1;
+		effect.shape[i * 4 + 2] = 0;
+	}
+	int32 count = shape.CountRects();
+	for (int32 i = 0; i < count && i < 4; i++) {
+		clipping_rect r = count > 4 ? shape.FrameInt() : shape.RectAtInt(i);
+		effect.shape[i * 4] = r.left - left;
+		effect.shape[i * 4 + 1] = r.top - top;
+		effect.shape[i * 4 + 2] = r.right - left;
+		effect.shape[i * 4 + 3] = r.bottom - top;
+		if (count > 4)
+			break;
+	}
+	for (int32 i = 0; i < part.CountRects(); i++) {
+		clipping_rect r = part.RectAtInt(i);
+		effect.width = r.right - r.left + 1;
+		effect.height = r.bottom - r.top + 1;
+		effect.targetX = r.left;
+		effect.targetY = r.top;
+		effect.auxX = r.left - left;
+		effect.auxY = r.top - top;
+		dispatch_effect(vk, effect);
+	}
+}
+
+
+//!	The old and the new picture of the slide, each as large as the frame.
+bool
+Compositor::_EnsureSlideBuffers(uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	uint64 bytes = (uint64)frameStride * fFrameHeight * 4;
+	if (vk->slideOld != VK_NULL_HANDLE && vk->slideBytes == bytes)
+		return true;
+	if (vk->slideOld != VK_NULL_HANDLE) {
+		// between two composes the GPU is idle
+		vk->vkDestroyBuffer(vk->device, vk->slideOld, NULL);
+		vk->vkFreeMemory(vk->device, vk->slideOldMemory, NULL);
+		vk->vkDestroyBuffer(vk->device, vk->slideNew, NULL);
+		vk->vkFreeMemory(vk->device, vk->slideNewMemory, NULL);
+		vk->slideOld = VK_NULL_HANDLE;
+		vk->slideNew = VK_NULL_HANDLE;
+		vk->slideBytes = 0;
+	}
+	void* bits;
+	if (!allocate_host_buffer(vk, bytes, &vk->slideOld, &vk->slideOldMemory,
+			&bits))
+		return false;
+	if (!allocate_host_buffer(vk, bytes, &vk->slideNew, &vk->slideNewMemory,
+			&bits)) {
+		vk->vkDestroyBuffer(vk->device, vk->slideOld, NULL);
+		vk->vkFreeMemory(vk->device, vk->slideOldMemory, NULL);
+		vk->slideOld = VK_NULL_HANDLE;
+		return false;
+	}
+	vk->slideBytes = bytes;
+	return true;
+}
+
+
+//!	The whole frame into a slide buffer, with the copy shader.
+void
+Compositor::_RecordSlideCopy(uint64 from, uint64 to, uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->pipeline);
+	VkDescriptorBufferInfo infos[2] = {};
+	infos[0].buffer = (VkBuffer)from;
+	infos[0].range = VK_WHOLE_SIZE;
+	infos[1].buffer = (VkBuffer)to;
+	infos[1].range = VK_WHOLE_SIZE;
+	VkWriteDescriptorSet writes[2] = {};
+	for (int i = 0; i < 2; i++) {
+		writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[i].dstBinding = i;
+		writes[i].descriptorCount = 1;
+		writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		writes[i].pBufferInfo = &infos[i];
+	}
+	vk->vkCmdPushDescriptorSetKHR(vk->commands,
+		VK_PIPELINE_BIND_POINT_COMPUTE, vk->pipelineLayout, 0, 2, writes);
+	compose_rect rect;
+	memset(&rect, 0, sizeof(rect));
+	rect.sourceStride = frameStride;
+	rect.frameStride = frameStride;
+	rect.width = fFrameWidth;
+	rect.height = fFrameHeight;
+	vk->vkCmdPushConstants(vk->commands, vk->pipelineLayout,
+		VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(rect), &rect);
+	vk->vkCmdDispatch(vk->commands, (rect.width + 15) / 16,
+		(rect.height + 15) / 16, 1);
+	effect_barrier(vk);
+}
+
+
+//!	The frame from the old picture and the new one, side by side.
+void
+Compositor::_RecordSlide(uint64 frame, uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->effectsPipeline);
+	push_effect_buffers(vk, vk->slideOld, (VkBuffer)frame, vk->slideNew);
+	effect_rect effect;
+	memset(&effect, 0, sizeof(effect));
+	effect.mode = kEffectSlide;
+	effect.width = fFrameWidth;
+	effect.height = fFrameHeight;
+	effect.targetStride = frameStride;
+	effect.amount = fFrameSlideShift;
+	effect.offset = fSlideDirection > 0 ? 1.0f : -1.0f;
+	dispatch_effect(vk, effect);
+	effect_barrier(vk);
 }
 
 

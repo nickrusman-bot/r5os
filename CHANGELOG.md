@@ -1,5 +1,21 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-14 - M11 step 4b: windows fade in and out, and the workspace switch slides, behind gpu_compositor
+
+Problem: windows appeared and disappeared at once, and the workspace switch jumped. `generated/gpu-m11/ANIMATIONS.md` and decision 8 ask for open and close (fade, 95 % to 100 %) and the workspace slide, in the compositor only, with an "Animations" checkbox.
+
+What changed:
+- Compositor: two modes in `effects.comp` (a window scaled about its centre and faded; the slide), no new pipeline and no change to `compose.comp`. A window's first show opens (150 ms); a window that is hidden (not minimised) or removed closes from its last buffer (120 ms, a "ghost" that holds the buffer and is drawn over the others); a close during an open starts from where the open is. A workspace switch keeps the picture shown, composes the new workspace in full each frame, and slides the two (200 ms); a switch during a slide starts from the picture shown. Ease-out. While an animation runs the compose thread composes every refresh period; each ends with `app_server: animation <open|close|workspace> <n> ms frames <n>`.
+- Not animated: windows without a decorator (menus, tool tips, the desktop, Deskbar), windows with direct access, minimise to Deskbar and back, a window moved to another workspace, windows shown by a workspace switch, the CPU mode. An opening window is drawn without its shadow and glass until it ends. The compare runs only on a still frame (no effect, no animation).
+- The lengths and the scale are starting values in `WindowEffectLevels.h`. The flag `B_WINDOW_ANIMATIONS` of `set_window_effects()` (no new call) is kept as `window animations` in the `appearance` file (missing: on). The "Animations" checkbox is the third in the "Window effects" box; Defaults turns all three on, Revert restores all three; `app_server: animations on|off`.
+- `r5-effects-test workspace <index>` (`activate_workspace()`).
+
+Mistakes and fixes during this step: the first image left a faded strip under the Appearance window, which grows (its layout) while it opens; the last frame of an open only redrew the area of the first show. The area now grows with the window while it opens. Seen in QEMU, fixed, and checked in a second boot (below).
+
+Tested (QEMU, KVM, Lavapipe, 1280 × 800, 14 Nov 2026), a scripted session: Terminal opened and closed ten times: `animation open` 151–170 ms with 9–12 frames, `animation close` 123–133 ms with 8–9 frames; the workspace switched ten times: `animation workspace` 200–211 ms with 10–13 frames; the checkbox off and on twice: `animations off`, `animations on`. Compose median during the Terminal stage 5.3–5.8 ms, during the slides 12.5 ms (Lavapipe, shadow and glass on, Balanced). Typing into Terminal from the moment of the click (QMP): every key after the first arrived; the first was lost the same way with animations off (the program had no window yet), so the animation holds no input. A series of screendumps 27 ms apart shows the Terminal fade in and grow: `docs/images/m11-animation-open.png`. Check of the fix (a second image, the same session start): Appearance opened and grew while opening; 4, 8 and 12 s later its whole window was drawn, no faded strip. In that boot with all three effects off: `compose compare ok` 4 times, no `MISMATCH`.
+
+Not tested: RADV; VirtualBox; a `BDirectWindow` program (step 5); the Settings page's checkbox by mouse (the same box as the Appearance program's); a close animation of a window that is still on screen when its program crashes.
+
 ## 2026-11-14 - M11 step 4: window shadows and frosted glass in three strengths (A3, A4), behind gpu_compositor
 
 Problem: the composed desktop (steps 2 and 3b) showed exactly the CPU picture. Decision 2 and 8 ask for a small shadow and frosted glass in the GPU mode, two settings and three strengths; decision 13 for the calls a program uses; decision 16 for how the compose draws them.

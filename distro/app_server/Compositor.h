@@ -103,6 +103,7 @@ private:
 	friend class WindowBuffer;
 
 			struct Entry;
+			struct Ghost;
 			struct Layer;
 			struct Share;
 			struct ShareDraw;
@@ -146,6 +147,20 @@ private:
 									const BRegion& damage, uint64 frame,
 									uint32 frameStride);
 			void				_DropEffects();
+			// M11 step 4b
+			bool				_AnimationDamage(bigtime_t now);
+			void				_AnimationFrame(LayerList& layers,
+									bigtime_t now);
+			void				_RecordWindowAnimation(uint64 buffer,
+									uint32 width, uint32 height, int32 left,
+									int32 top, const BRegion& shape,
+									float visible, const BRegion& damage,
+									uint64 frame, uint32 frameStride);
+			bool				_EnsureSlideBuffers(uint32 frameStride);
+			void				_RecordSlideCopy(uint64 from, uint64 to,
+									uint32 frameStride);
+			void				_RecordSlide(uint64 frame,
+									uint32 frameStride);
 			void				_Present(const BRegion& damage);
 			bool				_Compare(const BRegion& damage,
 									const LayerList& layers,
@@ -230,6 +245,24 @@ private:
 	volatile int32				fStrength;
 			BRegion				fGenericDamage;
 			bool				fEffectsLogged;
+
+			// M11 step 4b: the animations. fAnimLock is taken after the
+			// window lock, fEntryLock and fLayerLock, never before.
+			BLocker				fAnimLock;
+			BObjectList<Ghost, true> fGhosts;
+			int32				fLastWorkspace;
+			bool				fSlideActive;
+			bool				fSlideSnapshot;
+			bigtime_t			fSlideStart;
+			int32				fSlideDirection;
+			int32				fSlideFrames;
+	volatile bool				fAnimationsRunning;
+			// This frame's, the compose thread's own
+			LayerList*			fFrameGhosts;
+			bool				fFrameAnimating;
+			bool				fFrameSlide;
+			bool				fFrameSlideSnapshot;
+			int32				fFrameSlideShift;
 };
 
 
