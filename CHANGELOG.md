@@ -11,12 +11,13 @@ What changed:
 - Windows made during a pause still get a window buffer, and draw to the screen until the resume. Shares (3b) can still be offered during a pause.
 - The switch to the CPU mode and a device that goes away give every shared image app_server holds back to its program, so none waits in its acquire.
 - A `BWindowScreen` program that ended (killed) with the screen held kept the direct screen lock, and the compositor paused, for good; its `ServerApp` thread now gives the lock back when its loop ends. (In Haiku the lock stayed taken too.)
+- `Desktop::LockDirectScreen()` pauses first (window lock) and takes the direct screen lock after: `_SetCurrentWorkspaceConfiguration()` takes the two the other way round, with a 1 s timeout after which it stops the program. A lock that times out while another team holds the screen keeps the pause.
 
 Mistakes and fixes during this step: two members out of initialisation order (`-Werror=reorder`); my first boot-A script had the wrong VulkanTeapot path (`/system/bin/VulkanTeapot`) and planted the two test programs without execute rights for the session user. A killed ParticlesII left the compositor paused (above), found in the first boot and fixed.
 
 Tested (QEMU, KVM, Lavapipe, 14 Nov 2026), copies of the image with `gpu_compositor true` and `gpu_debug true`, effects off so the compare runs:
 - Chart (Haiku demo, `BDirectWindow`), Display "DirectWindow", Slow rotation at 60 frames/s, dragged twice by its tab (QMP), closed: one `compositor paused: direct window` when it opened, one `compositor resumed` when it closed, nothing for the drags; `compose compare ok` 6 times after. A second boot with VulkanTeapot open: the same pair; VulkanTeapot kept rotating during and after the pause.
-- `BWindowScreen`: Haiku's own tests ParticlesII and PageFlipper (`src/tests/kits/game`, planted in the test copy only, not in the image). ParticlesII killed while holding the screen: paused, then `resumed` at the kill (after the fix). PageFlipper: paused and resumed in the same second (it gives the screen back at once in QEMU).
+- `BWindowScreen`: Haiku's own tests ParticlesII and PageFlipper (`src/tests/kits/game`, planted in the test copy only, not in the image). ParticlesII killed while holding the screen: paused, then `resumed` at the kill (after the fix). PageFlipper: paused and resumed in the same second (it gives the screen back at once in QEMU). The same again after the lock-order change: `compose compare ok` 12 times, no crash.
 - Without settings: no line containing `compositor` in the whole syslog, no crash.
 - `compose compare ok` 11 times in the BWindowScreen boot, never `MISMATCH`.
 
