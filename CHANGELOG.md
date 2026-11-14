@@ -1,5 +1,31 @@
 # R5OS changelog (lokaal)
 
+## 2026-11-14 - M11 step 5: the compositor pauses for programs that write straight to the screen; the forced failure crashes (open)
+
+Problem: a `BDirectWindow` with direct access and a `BWindowScreen` write the front buffer, which the compositor also writes. Decision 9 asks for a pause, the CPU-mode way, and a resume when the last direct access ends; decision 11 for a forced failure that ends in the CPU mode.
+
+What changed:
+- Compositor: `IsActive()` is false while paused, `IsEnabled()` stays true for the session; everything in Desktop, Window and ServerWindow that asks `IsActive()` takes the CPU-mode path by itself. A compose slot is held for one frame; the compose thread never takes the window lock while holding it (a failed compose is handled at the top of the loop, outside the slot). Lock order: `fWindowLock` (write) → compose slot → `HWInterface`.
+- Pause: `ServerWindow::HandleDirectConnection()` with `B_DIRECT_START`, before `SetState()`, and `Desktop::LockDirectScreen()`: waits for the compose in flight, rebinds every engine to the screen, drops the layers and animations, `app_server: compositor paused: direct window`; the compose thread then redraws the desktop the CPU-mode way once the caller's write lock is released.
+- Resume: when no window has direct access and no team holds the direct screen, the compose thread (under `LockAllWindows()`) rebinds the engines to their buffers, rebuilds the clipping, lets every window draw once, `app_server: compositor resumed`. Moving a direct window (stop and start under one write lock) neither resumes nor pauses.
+- Windows made during a pause still get a window buffer, and draw to the screen until the resume. Shares (3b) can still be offered during a pause.
+- The switch to the CPU mode and a device that goes away give every shared image app_server holds back to its program, so none waits in its acquire.
+- A `BWindowScreen` program that ended (killed) with the screen held kept the direct screen lock, and the compositor paused, for good; its `ServerApp` thread now gives the lock back when its loop ends. (In Haiku the lock stayed taken too.)
+
+Mistakes and fixes during this step: two members out of initialisation order (`-Werror=reorder`); my first boot-A script had the wrong VulkanTeapot path (`/system/bin/VulkanTeapot`) and planted the two test programs without execute rights for the session user. A killed ParticlesII left the compositor paused (above), found in the first boot and fixed.
+
+Tested (QEMU, KVM, Lavapipe, 14 Nov 2026), copies of the image with `gpu_compositor true` and `gpu_debug true`, effects off so the compare runs:
+- Chart (Haiku demo, `BDirectWindow`), Display "DirectWindow", Slow rotation at 60 frames/s, dragged twice by its tab (QMP), closed: one `compositor paused: direct window` when it opened, one `compositor resumed` when it closed, nothing for the drags; `compose compare ok` 6 times after. A second boot with VulkanTeapot open: the same pair; VulkanTeapot kept rotating during and after the pause.
+- `BWindowScreen`: Haiku's own tests ParticlesII and PageFlipper (`src/tests/kits/game`, planted in the test copy only, not in the image). ParticlesII killed while holding the screen: paused, then `resumed` at the kill (after the fix). PageFlipper: paused and resumed in the same second (it gives the screen back at once in QEMU).
+- Without settings: no line containing `compositor` in the whole syslog, no crash.
+- `compose compare ok` 11 times in the BWindowScreen boot, never `MISMATCH`.
+
+Failed, not fixed (stopped after two tries, as the night prompt says): with `gpu_compositor_fail true` app_server crashes a few seconds into the boot. A new app_server thread (`a:186:x-vnd.Haiku-notification_`) gets a segment violation in the runtime loader's TLS copy (`TLSBlockTemplates::Materialize`). Likely cause: the switch to the CPU mode destroys the Vulkan instance, the Vulkan loader unloads Lavapipe (Mesa uses thread-local storage), and a thread starting at that moment copies a stale template. Keeping app_server's own `dlopen` handles did not help (tried, undone). This turn-off path is from step 2 and had never run; it is the same path a real failed submit or a lost device without restart takes. So `gpu compositor off: forced failure`, the desktop after it, and the Vulkan windows on the copy path are not proven.
+
+Seen: in the BWindowScreen boot one `draw outside buffer: Deskbar` line, because `BWindowScreen` sets its screen mode before it takes the screen lock (the safety check caught it; not drawn). VulkanTeapot's copy path shows half-drawn frames (white bands) now and then, in the CPU mode as well as composed; not from this step.
+
+Not tested: RADV on the 5625U (shared images during a pause, the scanout copy with the pause), VirtualBox, a `BDirectWindow` that never asks for direct access (in Haiku every `BDirectWindow` gets direct access when shown).
+
 ## 2026-11-14 - M11 step 4b: windows fade in and out, and the workspace switch slides, behind gpu_compositor
 
 Problem: windows appeared and disappeared at once, and the workspace switch jumped. `generated/gpu-m11/ANIMATIONS.md` and decision 8 ask for open and close (fade, 95 % to 100 %) and the workspace slide, in the compositor only, with an "Animations" checkbox.
