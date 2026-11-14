@@ -13,7 +13,7 @@ The R5Book (`docs/r5book/index.html`) shows each part with a picture, what it is
 | Library | Header | Source | What it is |
 |---|---|---|---|
 | `libr5icons.so` | `<R5Icons.h>` | `distro/icons` | Icons and icon buttons. `docs/ICONS.md` |
-| `libr5ui.so` | `<R5UI.h>` | `distro/ui` | The screen picture, cards, the sidebar, the page heading, and the administrator lock (`<AdminLock.h>`). It links `libr5icons.so` because a locked sidebar row draws `R5_ICON_LOCKED` |
+| `libr5ui.so` | `<R5UI.h>` | `distro/ui` | The screen picture, cards, the sidebar, the page heading, the administrator lock (`<AdminLock.h>`), and the window effects (`<WindowEffects.h>`). It links `libr5icons.so` because a locked sidebar row draws `R5_ICON_LOCKED` |
 | `libr5wifi.so` | `<R5WiFi.h>` | `distro/wifi/lib` | The Wi-Fi panel (`WiFiView`), the Wi-Fi state machine (`WiFiController`), the network list, and the Wi-Fi glyphs. From air/OS, MIT. Regular image only. See "Wi-Fi Kit" below |
 
 `scripts/apply-icons.py` and `scripts/apply-r5ui.py` copy the sources into the Haiku tree, copy the header to `headers/os/interface/`, and add the library to the regular image and the minimum image. On a running system the files are `/system/lib/libr5icons.so` and `/system/lib/libr5ui.so`. The soname is the file name, with no version suffix, the same way `libbe.so` is named.
@@ -336,6 +336,42 @@ BLayoutBuilder::Group<>(this, B_HORIZONTAL)
 ```
 
 The message codes Login answers are in `distro/ui/AdminLockProtocol.h` (private) and `distro/users/AccountAdmin.h`, with the same values. A code that shipped does not change.
+
+## Window effects
+
+The shadow and the frosted glass of windows, in the GPU mode (`docs/APP-SERVER-COMPOSITOR.md`). The header is `<WindowEffects.h>`, namespace `BAppearanceKit`, in `libr5ui.so`. Free functions, like `ui_color()` and `set_decorator()`: each one sends one message to app_server over the program's own `BPrivate::AppServerLink` (codes `AS_R5_GET_WINDOW_EFFECTS` to `AS_R5_SET_WINDOW_EFFECT_STRENGTH`, at the end of `ServerProtocol.h`). Nothing is in `libbe`. `B_TRANSPARENT_COLOR` keeps its Haiku meaning ("do not erase") and never becomes glass. In the CPU mode every call is accepted and stored, and nothing changes on screen. A program that does not link `libr5ui.so` looks as it did.
+
+| Call | What it does |
+|---|---|
+| `window_effects()` | The user's effects: `B_WINDOW_SHADOW` (`0x1`), `B_WINDOW_FROSTED_GLASS` (`0x2`), `B_WINDOW_ANIMATIONS` (`0x4`). All set when app_server cannot be asked |
+| `set_window_effects(effects)` | Sets them for the whole desktop, at once. app_server keeps them in its `appearance` file; a file without the keys means shadow and glass on. `B_BAD_VALUE` for an unknown bit. Settings and the Appearance program use it; a program normally does not |
+| `window_effect_strength()` | `B_WINDOW_EFFECTS_QUIET` (1), `B_WINDOW_EFFECTS_BALANCED` (2, the default) or `B_WINDOW_EFFECTS_GLASSY` (3). One step sets the shadow and the glass together |
+| `set_window_effect_strength(strength)` | Sets the step. `B_BAD_VALUE` outside 1 to 3 |
+| `set_window_glass(window, glass)` | The window's background is glass: its top view gets the background of a glass view (below). Call it after the `BWindow` constructor |
+| `set_view_glass(view, glass)` | One view's background is glass. The view must be attached and its window locked; the call syncs the window first, so app_server knows the view. `B_BAD_VALUE` for a view of another team or one that is not attached |
+
+What glass means for the pixels: app_server fills the view's background with its view colour and alpha 0. What the program draws on it with `B_OP_ALPHA` and `B_ALPHA_COMPOSITE` keeps its alpha (Painter's composite modes are made for a transparent target); every other drawing mode writes alpha 255 and stays opaque, as on a normal view, with antialiased edges blended against the view colour. The compose shows the view colour with the blur behind it showing through by the step's "see-through" value, and composite pixels over the blur by their alpha. Child views with their own colour stay opaque. In a window that has a glass view, a bitmap with alpha 0 drawn with `B_OP_COPY` is see-through there too, because the compose uses the alpha of the whole content area of such a window.
+
+```cpp
+#include <WindowEffects.h>
+
+MyWindow::MyWindow()
+	: BWindow(BRect(100, 100, 500, 400), "Glass", B_TITLED_WINDOW, 0)
+{
+	BAppearanceKit::set_window_glass(this, true);
+}
+
+void
+MyView::Draw(BRect)
+{
+	// smooth text over the glass
+	SetDrawingMode(B_OP_ALPHA);
+	SetBlendingMode(B_PIXEL_ALPHA, B_ALPHA_COMPOSITE);
+	DrawString("Hello", BPoint(20, 40));
+}
+```
+
+Link `libr5ui.so`. `r5-effects-test` (in `/system/bin`) is a small user of every call: `r5-effects-test shadow off`, `r5-effects-test strength glassy`, `r5-effects-test glass 30`.
 
 ## Wi-Fi Kit
 

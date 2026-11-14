@@ -21,6 +21,9 @@
 
 SubDir HAIKU_TOP src preferences r5ui ;
 
+# M11 step 4: <WindowEffects.h> talks to app_server over AppServerLink.
+UsePrivateHeaders app interface ;
+
 # Primary arch: the target name is libr5ui.so. That is also the soname.
 # Both images install it through HaikuImageGetSystemLibs.
 SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
@@ -38,5 +41,6 @@ SharedLibrary [ MultiArchDefaultGristFiles libr5ui.so ] :
 	AccentButton.cpp
 	AdminLock.cpp
 	DriverSettings.cpp
+	WindowEffects.cpp
 	: be libr5icons.so [ TargetLibstdc++ ]
 	;

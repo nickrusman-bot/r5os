@@ -379,6 +379,19 @@ enum {
 	AS_R5_SHARE_END,
 // SPDX-SnippetEnd
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 4: <WindowEffects.h> in libr5ui (docs/APP-SERVER-COMPOSITOR.md,
+	// "What programs and developers see"). Sent on the application's link.
+	AS_R5_GET_WINDOW_EFFECTS,
+	AS_R5_SET_WINDOW_EFFECTS,
+	AS_R5_SET_WINDOW_GLASS,
+	AS_R5_SET_VIEW_GLASS,
+	AS_R5_GET_WINDOW_EFFECT_STRENGTH,
+	AS_R5_SET_WINDOW_EFFECT_STRENGTH,
+// SPDX-SnippetEnd
+
 	AS_LAST_CODE
 };
 

@@ -1,0 +1,167 @@
+// SPDX-FileCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+//
+// M11 step 4 (decision 16): the effects pipeline. The copy shader
+// (compose.comp) stays as it is for everything without an effect. This one
+// unpacks the 32-bit words to vec4, blends, and filters bilinearly itself
+// (the buffers are VkBuffers, not images). One mode per dispatch:
+//
+//   0 shadow: darkens the frame by a window's blurred alpha mask
+//   1 down:   one Dual Kawase level down (5 taps, half the size)
+//   2 up:     one Dual Kawase level up (8 taps, twice the size)
+//   3 glass:  a window's pixels over the kept blur of what lies behind
+//
+// Compiled by scripts/gen-compositor-shaders.sh.
+
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Source {
+	uint pixels[];
+} source;
+
+layout(std430, set = 0, binding = 1) buffer Target {
+	uint pixels[];
+} target;
+
+layout(std430, set = 0, binding = 2) readonly buffer Aux {
+	uint pixels[];
+} aux;
+
+layout(push_constant) uniform Effect {
+	uint mode;
+	uint width;			// the rectangle written
+	uint height;
+	uint targetX;		// its place in the target buffer
+	uint targetY;
+	uint targetStride;
+	uint sourceX;		// shadow: in the mask, glass: in the window buffer,
+	uint sourceY;		// down/up: the source level's place in its buffer
+	uint sourceStride;	// (shadow: in bytes)
+	uint sourceWidth;	// down/up: the source level, for clamping
+	uint sourceHeight;
+	uint auxX;			// glass: the rectangle in the blur cache;
+	uint auxY;			// down/up: the rectangle's place in its level
+	uint auxStride;
+	uint amount;		// shadow: strength, glass: see-through (0..255),
+						// bit 8 for glass: fixed (tab and frame line)
+	float offset;		// down/up: the Kawase offset in source pixels
+} effect;
+
+
+vec4
+unpack(uint word)
+{
+	return vec4(float(word & 0xffu), float((word >> 8) & 0xffu),
+		float((word >> 16) & 0xffu), float(word >> 24)) / 255.0;
+}
+
+
+uint
+pack(vec4 color)
+{
+	uvec4 c = uvec4(clamp(color, 0.0, 1.0) * 255.0 + 0.5);
+	return c.x | (c.y << 8) | (c.z << 16) | (c.w << 24);
+}
+
+
+vec4
+texel(int x, int y)
+{
+	x = clamp(x, 0, int(effect.sourceWidth) - 1);
+	y = clamp(y, 0, int(effect.sourceHeight) - 1);
+	return unpack(source.pixels[(effect.sourceY + uint(y))
+		* effect.sourceStride + effect.sourceX + uint(x)]);
+}
+
+
+// Bilinear filtering of the source level at a position in texel-centre
+// coordinates (texel i is at i), clamped to the level's edge.
+vec4
+sampleBilinear(vec2 at)
+{
+	vec2 base = floor(at);
+	vec2 f = at - base;
+	int x = int(base.x);
+	int y = int(base.y);
+	vec4 top = mix(texel(x, y), texel(x + 1, y), f.x);
+	vec4 bottom = mix(texel(x, y + 1), texel(x + 1, y + 1), f.x);
+	return mix(top, bottom, f.y);
+}
+
+
+void
+main()
+{
+	uvec2 at = gl_GlobalInvocationID.xy;
+	if (at.x >= effect.width || at.y >= effect.height)
+		return;
+	uint index = (effect.targetY + at.y) * effect.targetStride
+		+ effect.targetX + at.x;
+
+	if (effect.mode == 0u) {
+		uint byteIndex = (effect.sourceY + at.y) * effect.sourceStride
+			+ effect.sourceX + at.x;
+		uint mask = (source.pixels[byteIndex >> 2] >> ((byteIndex & 3u) * 8u))
+			& 0xffu;
+		uint dim = mask * effect.amount;
+		if (dim == 0u)
+			return;
+		vec4 color = unpack(target.pixels[index]);
+		color.rgb *= 1.0 - float(dim) / 65025.0;
+		color.a = 1.0;
+		target.pixels[index] = pack(color);
+		return;
+	}
+
+	if (effect.mode == 1u) {
+		// The centre of this pixel lies between four source texels.
+		vec2 centre = vec2(at + uvec2(effect.auxX, effect.auxY)) * 2.0 + 0.5;
+		float o = effect.offset;
+		vec4 sum = sampleBilinear(centre) * 4.0;
+		sum += sampleBilinear(centre + vec2(-o, -o));
+		sum += sampleBilinear(centre + vec2(o, o));
+		sum += sampleBilinear(centre + vec2(o, -o));
+		sum += sampleBilinear(centre + vec2(-o, o));
+		target.pixels[index] = pack(sum / 8.0);
+		return;
+	}
+
+	if (effect.mode == 2u) {
+		vec2 centre = (vec2(at + uvec2(effect.auxX, effect.auxY)) + 0.5)
+			* 0.5 - 0.5;
+		float o = effect.offset;
+		vec4 sum = sampleBilinear(centre + vec2(-2.0 * o, 0.0));
+		sum += sampleBilinear(centre + vec2(2.0 * o, 0.0));
+		sum += sampleBilinear(centre + vec2(0.0, -2.0 * o));
+		sum += sampleBilinear(centre + vec2(0.0, 2.0 * o));
+		sum += sampleBilinear(centre + vec2(-o, o)) * 2.0;
+		sum += sampleBilinear(centre + vec2(o, o)) * 2.0;
+		sum += sampleBilinear(centre + vec2(o, -o)) * 2.0;
+		sum += sampleBilinear(centre + vec2(-o, -o)) * 2.0;
+		target.pixels[index] = pack(sum / 12.0);
+		return;
+	}
+
+	// mode 3: glass. Outside the glass region every pixel is opaque, so
+	// this mode only runs inside it (decision 16).
+	vec4 pixel = unpack(source.pixels[(effect.sourceY + at.y)
+		* effect.sourceStride + effect.sourceX + at.x]);
+	vec4 blur = unpack(aux.pixels[(effect.auxY + at.y) * effect.auxStride
+		+ effect.auxX + at.x]);
+	float seeThrough = float(effect.amount & 0xffu) / 255.0;
+	bool fixedGlass = (effect.amount & 0x100u) != 0u;
+	vec3 color;
+	if (fixedGlass || pixel.a == 0.0) {
+		// The tab and the frame line, and a glass view's own background:
+		// its colour, with this much of the blur showing through.
+		color = mix(pixel.rgb, blur.rgb, seeThrough);
+	} else if (pixel.a == 1.0) {
+		color = pixel.rgb;
+	} else {
+		// what a program drew with B_ALPHA_COMPOSITE on a glass view
+		color = mix(blur.rgb, pixel.rgb, pixel.a);
+	}
+	target.pixels[index] = pack(vec4(color, 1.0));
+}

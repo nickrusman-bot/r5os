@@ -20,6 +20,7 @@
 #include <WindowPrivate.h>
 
 #include "DrawingEngine.h"
+#include "WindowEffectLevels.h"
 
 
 static const int32 kFrameWidth = 1;
@@ -156,9 +157,15 @@ R5Decorator::GetShadowExtent(BRect* extent)
 		return;
 	}
 
-	// The same small shadow as a Haiku frame, from Haiku's border width.
-	int32 width = fHaikuBorderWidth;
-	extent->Set(width, (width + 1) / 2, width, width * 2);
+	// M11 step 4: the shadow of the chosen step (Quiet, Balanced, Glassy),
+	// from the one table in WindowEffectLevels.h.
+	int32 left;
+	int32 top;
+	int32 right;
+	int32 bottom;
+	window_shadow_extent(gWindowEffectStrength, &left, &top, &right,
+		&bottom);
+	extent->Set(left, top, right, bottom);
 }
 
 

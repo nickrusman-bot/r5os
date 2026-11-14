@@ -134,6 +134,37 @@ r5_screen_change_allowed(team_id team)
 // SPDX-License-Identifier: MIT
 #include "Compositor.h"
 #include "View.h"
+#include "WindowEffectLevels.h"
+
+
+/*!	M11 step 4: one line when the user changes a window effect, in both
+	modes (docs/APP-SERVER-COMPOSITOR.md, "Settings").
+*/
+static void
+log_window_effects(uint32 before, uint32 after, int32 strengthBefore,
+	int32 strengthAfter)
+{
+	struct {
+		uint32		flag;
+		const char*	name;
+	} effects[] = {
+		{ kWindowEffectShadow, "shadow" },
+		{ kWindowEffectFrostedGlass, "frosted" },
+		{ kWindowEffectAnimations, "animations" }
+	};
+	for (size_t i = 0; i < sizeof(effects) / sizeof(effects[0]); i++) {
+		if (((before ^ after) & effects[i].flag) == 0)
+			continue;
+		const char* state = (after & effects[i].flag) != 0 ? "on" : "off";
+		fprintf(stderr, "app_server: %s %s\n", effects[i].name, state);
+		syslog(LOG_INFO, "app_server: %s %s\n", effects[i].name, state);
+	}
+	if (strengthBefore != strengthAfter) {
+		const char* name = window_effect_level_for(strengthAfter).name;
+		fprintf(stderr, "app_server: effect strength %s\n", name);
+		syslog(LOG_INFO, "app_server: effect strength %s\n", name);
+	}
+}
 // SPDX-SnippetEnd
 
 
@@ -3717,6 +3748,114 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			if (status == B_OK && compositor != NULL)
 				compositor->ShareEnd(fClientTeam, viewToken, shareId);
 			fLink.StartMessage(B_OK);
+			fLink.Flush();
+			break;
+		}
+// SPDX-SnippetEnd
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+		// M11 step 4: <WindowEffects.h>. Stored in the appearance file in
+		// both modes; only the GPU mode shows them.
+		case AS_R5_GET_WINDOW_EFFECTS:
+		{
+			DesktopSettings settings(fDesktop);
+			fLink.StartMessage(B_OK);
+			fLink.Attach<uint32>(settings.WindowEffects());
+			fLink.Flush();
+			break;
+		}
+
+		case AS_R5_GET_WINDOW_EFFECT_STRENGTH:
+		{
+			DesktopSettings settings(fDesktop);
+			fLink.StartMessage(B_OK);
+			fLink.Attach<int32>(settings.WindowEffectStrength());
+			fLink.Flush();
+			break;
+		}
+
+		case AS_R5_SET_WINDOW_EFFECTS:
+		case AS_R5_SET_WINDOW_EFFECT_STRENGTH:
+		{
+			int32 value = 0;
+			status_t status = link.Read<int32>(&value);
+			if (status == B_OK && code == AS_R5_SET_WINDOW_EFFECT_STRENGTH
+				&& (value < kWindowEffectsQuiet
+					|| value > kWindowEffectsGlassy))
+				status = B_BAD_VALUE;
+			if (status == B_OK && code == AS_R5_SET_WINDOW_EFFECTS
+				&& ((uint32)value & ~(uint32)kWindowEffectsAll) != 0)
+				status = B_BAD_VALUE;
+			if (status == B_OK) {
+				uint32 before;
+				int32 strengthBefore;
+				uint32 after;
+				int32 strengthAfter;
+				{
+					// all windows locked while it lives
+					LockedDesktopSettings settings(fDesktop);
+					before = settings.WindowEffects();
+					strengthBefore = settings.WindowEffectStrength();
+					if (code == AS_R5_SET_WINDOW_EFFECTS)
+						status = settings.SetWindowEffects((uint32)value);
+					else
+						status = settings.SetWindowEffectStrength(value);
+					after = settings.WindowEffects();
+					strengthAfter = settings.WindowEffectStrength();
+					Compositor* compositor = fDesktop->GetCompositor();
+					if (compositor != NULL)
+						compositor->SetEffects(after, strengthAfter);
+				}
+				log_window_effects(before, after, strengthBefore,
+					strengthAfter);
+			}
+			fLink.StartMessage(status);
+			fLink.Flush();
+			break;
+		}
+
+		case AS_R5_SET_WINDOW_GLASS:
+		case AS_R5_SET_VIEW_GLASS:
+		{
+			int32 token = -1;
+			bool glass = false;
+			link.Read<int32>(&token);
+			status_t status = link.Read<bool>(&glass);
+			if (status == B_OK && !fDesktop->LockAllWindows())
+				status = B_ERROR;
+			if (status == B_OK) {
+				// Only this team's own windows and views: both tokens are
+				// looked up in this ServerApp's lists.
+				View* view = NULL;
+				if (code == AS_R5_SET_VIEW_GLASS) {
+					if (fViewTokens.GetToken(token, B_HANDLER_TOKEN,
+							(void**)&view) != B_OK)
+						view = NULL;
+				} else {
+					// With all windows locked no window goes away.
+					for (Window* window = fDesktop->AllWindows().FirstWindow();
+							window != NULL;
+							window = window->NextWindow(kAllWindowList)) {
+						if (window->ServerWindow()->App() == this
+							&& window->ServerWindow()->ClientToken() == token) {
+							view = window->TopView();
+							break;
+						}
+					}
+				}
+				if (view == NULL || view->Window() == NULL)
+					status = B_BAD_VALUE;
+				else if (view->IsGlass() != glass) {
+					view->SetGlass(glass);
+					Compositor* compositor = fDesktop->GetCompositor();
+					if (compositor != NULL)
+						compositor->GlassViewChanged(view->Window(), view);
+				}
+				fDesktop->UnlockAllWindows();
+			}
+			fLink.StartMessage(status);
 			fLink.Flush();
 			break;
 		}

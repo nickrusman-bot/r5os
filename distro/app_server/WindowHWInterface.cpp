@@ -157,7 +157,7 @@ WindowHWInterface::IsDoubleBuffered() const
 status_t
 WindowHWInterface::InvalidateRegion(const BRegion& region)
 {
-	fCompositor->Damage(region);
+	fCompositor->Damage(region, this);
 	return B_OK;
 }
 
@@ -165,7 +165,7 @@ WindowHWInterface::InvalidateRegion(const BRegion& region)
 status_t
 WindowHWInterface::Invalidate(const BRect& frame)
 {
-	fCompositor->Damage(BRegion(frame));
+	fCompositor->Damage(BRegion(frame), this);
 	return B_OK;
 }
 

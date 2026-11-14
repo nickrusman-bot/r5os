@@ -687,6 +687,11 @@ Desktop::Init()
 	// M11: the compositor, when gpu_compositor is set. Without it, or
 	// when no Vulkan device starts, the desktop is the CPU mode.
 	fCompositor = Compositor::Create(this, fVirtualScreen.HWInterface());
+	// M11 step 4: the window effects from the appearance file
+	if (fCompositor != NULL) {
+		fCompositor->SetInitialEffects(fSettings->WindowEffects(),
+			fSettings->WindowEffectStrength());
+	}
 // SPDX-SnippetEnd
 
 	BRegion stillAvailableOnScreen;
@@ -2287,6 +2292,14 @@ Desktop::SetFocusWindow(Window* nextFocus)
 		// make sure the cursor is visible
 		HWInterface()->SetCursorVisible(true);
 	}
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 4: an inactive window's shadow is smaller (decision 8)
+	if (fCompositor != NULL)
+		fCompositor->ClippingChanged();
+// SPDX-SnippetEnd
 
 	UnlockAllWindows();
 

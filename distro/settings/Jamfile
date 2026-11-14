@@ -59,5 +59,6 @@ Addon settings_look :
 	ColorsView.cpp
 	Colors.cpp
 	SettingsFont.cpp
-	: be shared localestub [ TargetLibstdc++ ]
+	WindowEffectsBox.cpp
+	: be shared localestub libr5ui.so [ TargetLibstdc++ ]
 	;

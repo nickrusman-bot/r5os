@@ -48,6 +48,10 @@
 #include "Window.h"
 #include "WindowBuffer.h"
 #include "WindowHWInterface.h"
+#include "WindowEffectLevels.h"
+#include "decorator/Decorator.h"
+
+#include <WindowPrivate.h>
 
 #include "compositor_shaders.h"
 
@@ -242,6 +246,15 @@ struct CompositorVulkan {
 	VkBuffer					frame;
 	VkDeviceMemory				frameMemory;
 	uint32*						frameBits;
+
+	// M11 step 4 (decision 16): the effects pipeline, and the levels of
+	// the Dual Kawase blur.
+	VkDescriptorSetLayout		effectsSetLayout;
+	VkPipelineLayout			effectsPipelineLayout;
+	VkPipeline					effectsPipeline;
+	VkBuffer					scratch;
+	VkDeviceMemory				scratchMemory;
+	uint64						scratchBytes;
 	char						deviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
 
 	// M11 step 3b: imports of shared views (RADV only).
@@ -265,6 +278,36 @@ struct CompositorVulkan {
 	VkDeviceMemory				scanoutMemory;
 	uint32						scanPitch;
 };
+
+
+// M11 step 4: the push constants of effects.comp.
+struct effect_rect {
+	uint32	mode;
+	uint32	width;
+	uint32	height;
+	uint32	targetX;
+	uint32	targetY;
+	uint32	targetStride;
+	uint32	sourceX;
+	uint32	sourceY;
+	uint32	sourceStride;
+	uint32	sourceWidth;
+	uint32	sourceHeight;
+	uint32	auxX;
+	uint32	auxY;
+	uint32	auxStride;
+	uint32	amount;
+	float	offset;
+};
+
+enum {
+	kEffectShadow = 0,
+	kEffectDown = 1,
+	kEffectUp = 2,
+	kEffectGlass = 3
+};
+
+static const uint32 kEffectFixedGlass = 0x100;
 
 
 struct compose_rect {
@@ -293,7 +336,18 @@ struct Compositor::Entry : public BReferenceable {
 		window(window),
 		iface(iface),
 		lastShown(0),
-		shareLogged(false)
+		shareLogged(false),
+		hasGlassViews(false),
+		maskWidth(0),
+		maskHeight(0),
+		maskReach(0),
+		maskSmall(false),
+		maskStrength(0),
+		glassLeft(0),
+		glassTop(0),
+		glassStrength(0),
+		glassBelow(0),
+		glassValid(false)
 	{
 	}
 
@@ -307,6 +361,32 @@ struct Compositor::Entry : public BReferenceable {
 	bigtime_t			lastShown;
 	// "window <id> zero-copy off: <reason>" was logged for this window.
 	bool				shareLogged;
+	// M11 step 4: ContentDamage taken by the compose thread this frame.
+	BRegion				takenDamage;
+
+	// M11 step 4. Written with all windows locked: one of its views asked
+	// for glass. Everything below is the compose thread's own.
+	bool				hasGlassViews;
+
+	// The shadow mask: one byte per pixel, the footprint blurred once
+	// when its shape, its focus or the step changes; kept.
+	BReference<WindowBuffer> mask;
+	int32				maskWidth;
+	int32				maskHeight;
+	int32				maskReach;
+	bool				maskSmall;
+	int32				maskStrength;
+	BRegion				maskShape;		// footprint, window coordinates
+
+	// The kept blur behind the glass: one full-size pixel per glass pixel,
+	// the rectangles of glassShape one after another.
+	BReference<WindowBuffer> glass;
+	BRegion				glassShape;		// screen coordinates
+	int32				glassLeft;
+	int32				glassTop;
+	int32				glassStrength;
+	uint32				glassBelow;		// which windows lay below
+	bool				glassValid;
 };
 
 
@@ -371,11 +451,42 @@ struct Compositor::ShareDraw {
 	Desktop lock, so the compose thread never needs that lock.
 */
 struct Compositor::Layer {
+	Layer()
+		:
+		left(0),
+		top(0),
+		shadow(false),
+		shadowSmall(false),
+		belowHash(0)
+	{
+	}
+
+	bool HasEffects() const
+	{
+		return shadow || glassFixed.CountRects() > 0
+			|| glassAlpha.CountRects() > 0;
+	}
+
 	BReference<Entry>			entry;
 	BReference<WindowBuffer>	buffer;
 	int32						left;
 	int32						top;
 	BRegion						shape;
+
+	// M11 step 4, from the clipping rebuild: where the shadow falls
+	// (outside the footprint, inside the decorator's extent), and the
+	// glass of the tab and frame line (fixed) and of glass views (alpha).
+	bool						shadow;
+	bool						shadowSmall;
+	BRegion						shadowArea;
+	BRegion						glassFixed;
+	BRegion						glassAlpha;
+
+	// Per frame: what this window changed, what the blur is redone for,
+	// and which windows lie below it.
+	BRegion						contentDamage;
+	BRegion						blurRegion;
+	uint32						belowHash;
 };
 
 
@@ -490,7 +601,10 @@ Compositor::Compositor(Desktop* desktop, HWInterface* screen)
 	fSampleCount(0),
 	fReportStart(0),
 	fCpuAtReport(0),
-	fLateLogged(0)
+	fLateLogged(0),
+	fEffects(kWindowEffectShadow | kWindowEffectFrostedGlass),
+	fStrength(kWindowEffectsBalanced),
+	fEffectsLogged(false)
 {
 }
 
@@ -790,6 +904,44 @@ Compositor::_InitVulkan(bool radv, const char** _reason)
 		return B_ERROR;
 	}
 
+	// M11 step 4 (decision 16): the second compute pipeline, for the
+	// effects. Three storage buffers: a source, the target, and the kept
+	// blur for the glass.
+	shaderInfo.codeSize = sizeof(kEffectsSpirv);
+	shaderInfo.pCode = kEffectsSpirv;
+	if (vk->vkCreateShaderModule(vk->device, &shaderInfo, NULL, &shader)
+			!= VK_SUCCESS) {
+		*_reason = "effects shader";
+		return B_ERROR;
+	}
+	VkDescriptorSetLayoutBinding effectBindings[3] = {};
+	for (int i = 0; i < 3; i++) {
+		effectBindings[i].binding = i;
+		effectBindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		effectBindings[i].descriptorCount = 1;
+		effectBindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	}
+	setInfo.bindingCount = 3;
+	setInfo.pBindings = effectBindings;
+	range.size = sizeof(effect_rect);
+	layoutInfo.pSetLayouts = &vk->effectsSetLayout;
+	pipelineInfo.stage.module = shader;
+	pipelineOk
+		= vk->vkCreateDescriptorSetLayout(vk->device, &setInfo, NULL,
+			&vk->effectsSetLayout) == VK_SUCCESS
+		&& vk->vkCreatePipelineLayout(vk->device, &layoutInfo, NULL,
+			&vk->effectsPipelineLayout) == VK_SUCCESS;
+	if (pipelineOk) {
+		pipelineInfo.layout = vk->effectsPipelineLayout;
+		pipelineOk = vk->vkCreateComputePipelines(vk->device, VK_NULL_HANDLE,
+			1, &pipelineInfo, NULL, &vk->effectsPipeline) == VK_SUCCESS;
+	}
+	vk->vkDestroyShaderModule(vk->device, shader, NULL);
+	if (!pipelineOk) {
+		*_reason = "effects pipeline";
+		return B_ERROR;
+	}
+
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -847,6 +999,20 @@ Compositor::_ExitVulkan()
 			vk->vkDestroyBuffer(vk->device, vk->frame, NULL);
 		if (vk->frameMemory != VK_NULL_HANDLE)
 			vk->vkFreeMemory(vk->device, vk->frameMemory, NULL);
+		if (vk->scratch != VK_NULL_HANDLE)
+			vk->vkDestroyBuffer(vk->device, vk->scratch, NULL);
+		if (vk->scratchMemory != VK_NULL_HANDLE)
+			vk->vkFreeMemory(vk->device, vk->scratchMemory, NULL);
+		if (vk->effectsPipeline != VK_NULL_HANDLE)
+			vk->vkDestroyPipeline(vk->device, vk->effectsPipeline, NULL);
+		if (vk->effectsPipelineLayout != VK_NULL_HANDLE) {
+			vk->vkDestroyPipelineLayout(vk->device, vk->effectsPipelineLayout,
+				NULL);
+		}
+		if (vk->effectsSetLayout != VK_NULL_HANDLE) {
+			vk->vkDestroyDescriptorSetLayout(vk->device, vk->effectsSetLayout,
+				NULL);
+		}
 		if (vk->fence != VK_NULL_HANDLE)
 			vk->vkDestroyFence(vk->device, vk->fence, NULL);
 		if (vk->commandPool != VK_NULL_HANDLE)
@@ -1228,6 +1394,61 @@ Compositor::ClippingChanged()
 		layer->left = bounds.left;
 		layer->top = bounds.top;
 		layer->shape = full;
+
+		// M11 step 4: the shadow and the glass of this window, from its
+		// decorator's hooks (decision 10) and the glass views.
+		uint32 effects = fEffects;
+		int32 strength = fStrength;
+		::Decorator* decorator = window->Decorator();
+		bool menu = window->Feel() == kMenuWindowFeel;
+		if ((effects & kWindowEffectShadow) != 0
+			&& (decorator != NULL || menu)) {
+			layer->shadowSmall = !window->IsFocus() || menu;
+			window_shadow_geometry shadow = window_shadow_for(strength,
+				layer->shadowSmall);
+			int32 extentLeft;
+			int32 extentTop;
+			int32 extentRight;
+			int32 extentBottom;
+			if (decorator != NULL) {
+				BRect extent;
+				decorator->GetShadowExtent(&extent);
+				extentLeft = (int32)extent.left;
+				extentTop = (int32)extent.top;
+				extentRight = (int32)extent.right;
+				extentBottom = (int32)extent.bottom;
+			} else {
+				window_shadow_extent(strength, &extentLeft, &extentTop,
+					&extentRight, &extentBottom);
+			}
+			clipping_rect area;
+			area.left = max_c(bounds.left - shadow.reach,
+				bounds.left - extentLeft);
+			area.top = max_c(bounds.top - shadow.reach + shadow.offset,
+				bounds.top - extentTop);
+			area.right = min_c(bounds.right + shadow.reach,
+				bounds.right + extentRight);
+			area.bottom = min_c(bounds.bottom + shadow.reach + shadow.offset,
+				bounds.bottom + extentBottom);
+			if (area.left <= area.right && area.top <= area.bottom) {
+				layer->shadowArea.Set(area);
+				layer->shadowArea.Exclude(&full);
+			}
+			layer->shadow = layer->shadowArea.CountRects() > 0;
+		}
+		if ((effects & kWindowEffectFrostedGlass) != 0) {
+			if (decorator != NULL) {
+				decorator->GetGlassRegion(&layer->glassFixed);
+				layer->glassFixed.IntersectWith(&full);
+			}
+			// A window with a glass view uses the alpha of its content;
+			// only glass views are filled with alpha 0 (View::Draw).
+			if (entry->hasGlassViews) {
+				window->GetContentRegion(&layer->glassAlpha);
+				layer->glassAlpha.IntersectWith(&full);
+				layer->glassAlpha.Exclude(&layer->glassFixed);
+			}
+		}
 		layers->AddItem(layer);
 	}
 	fEntryLock.Unlock();
@@ -1251,7 +1472,15 @@ Compositor::ClippingChanged()
 	}
 
 	// What changed on screen: a window that came, went, moved, changed
-	// shape or changed its place in the stack.
+	// shape or changed its place in the stack. M11 step 4: with its
+	// shadow, and told to the compose as that window's own change, so the
+	// glass of the windows above it is blurred again there; a window that
+	// went is nobody's.
+	struct WindowDamage {
+		WindowHWInterface*	iface;
+		BRegion				region;
+	};
+	BObjectList<WindowDamage, true> windowDamage(10);
 	fLayerLock.Lock();
 	LayerList* old = fLayers;
 	int32 count = max_c(old->CountItems(), layers->CountItems());
@@ -1262,15 +1491,43 @@ Compositor::ClippingChanged()
 			&& before->entry.Get() == after->entry.Get()
 			&& before->buffer.Get() == after->buffer.Get()
 			&& before->left == after->left && before->top == after->top
-			&& before->shape == after->shape)
+			&& before->shape == after->shape
+			&& before->shadow == after->shadow
+			&& before->shadowSmall == after->shadowSmall
+			&& before->shadowArea == after->shadowArea
+			&& before->glassFixed == after->glassFixed
+			&& before->glassAlpha == after->glassAlpha)
 			continue;
-		if (before != NULL)
-			damage.Include(&before->shape);
-		if (after != NULL)
-			damage.Include(&after->shape);
+		for (int32 side = 0; side < 2; side++) {
+			Layer* layer = side == 0 ? before : after;
+			if (layer == NULL)
+				continue;
+			BRegion area(layer->shape);
+			area.Include(&layer->shadowArea);
+			bool stays = false;
+			for (int32 j = 0; !stays && j < layers->CountItems(); j++)
+				stays = layers->ItemAt(j)->entry.Get() == layer->entry.Get();
+			WindowDamage* item = stays ? new(std::nothrow) WindowDamage
+				: NULL;
+			if (item != NULL) {
+				item->iface = layer->entry->iface;
+				item->region = area;
+				if (!windowDamage.AddItem(item)) {
+					delete item;
+					item = NULL;
+				}
+			}
+			if (item == NULL)
+				damage.Include(&area);
+		}
 	}
 	fLayers = layers;
 	fLayerLock.Unlock();
+	// old still holds its entries, so each interface is alive here
+	for (int32 i = 0; i < windowDamage.CountItems(); i++) {
+		WindowDamage* item = windowDamage.ItemAt(i);
+		Damage(item->region, item->iface);
+	}
 	delete old;
 
 	// A window that got its first buffer draws all of it once.
@@ -1302,14 +1559,106 @@ Compositor::SetBackgroundColor(rgb_color color)
 void
 Compositor::Damage(const BRegion& region)
 {
+	Damage(region, NULL);
+}
+
+
+void
+Compositor::Damage(const BRegion& region, WindowHWInterface* source)
+{
 	if (!fActive || region.CountRects() == 0)
 		return;
 	BAutolock _(fDamageLock);
 	fDamage.Include(&region);
+	// M11 step 4: who changed it, for the kept blur of the glass
+	if (source != NULL)
+		source->ContentDamage().Include(&region);
+	else
+		fGenericDamage.Include(&region);
 	if (!fWakePending) {
 		fWakePending = true;
 		release_sem_etc(fWakeSem, 1, B_DO_NOT_RESCHEDULE);
 	}
+}
+
+
+//	#pragma mark - window effects (M11 step 4)
+
+
+void
+Compositor::SetInitialEffects(uint32 effects, int32 strength)
+{
+	fEffects = effects & kWindowEffectsAll;
+	fStrength = window_effect_strength_valid(strength);
+}
+
+
+/*!	All windows locked. The layers get their new shadow and glass, the
+	whole screen is composed again, and windows with glass views draw their
+	background again (alpha 0 only while frosted glass is on).
+*/
+void
+Compositor::SetEffects(uint32 effects, int32 strength)
+{
+	effects &= kWindowEffectsAll;
+	strength = window_effect_strength_valid(strength);
+	bool glassChanged = ((fEffects ^ effects) & kWindowEffectFrostedGlass)
+		!= 0;
+	fEffects = effects;
+	fStrength = strength;
+	if (!fActive)
+		return;
+
+	ClippingChanged();
+	if (glassChanged) {
+		BObjectList<Window, false> redraw(10);
+		fEntryLock.Lock();
+		for (int32 i = 0; i < fEntries.CountItems(); i++) {
+			Entry* entry = fEntries.ItemAt(i);
+			if (entry->hasGlassViews && entry->window != NULL)
+				redraw.AddItem(entry->window);
+		}
+		fEntryLock.Unlock();
+		for (int32 i = 0; i < redraw.CountItems(); i++) {
+			BRegion content;
+			redraw.ItemAt(i)->GetContentRegion(&content);
+			redraw.ItemAt(i)->ProcessDirtyRegion(content, content);
+		}
+	}
+	BRegion screen(BRect(0, 0, (float)fFrameWidth - 1,
+		(float)fFrameHeight - 1));
+	Damage(screen);
+}
+
+
+bool
+Compositor::GlassActive() const
+{
+	return fActive && (fEffects & kWindowEffectFrostedGlass) != 0;
+}
+
+
+//!	All windows locked: a view of \a window was marked or unmarked as glass.
+void
+Compositor::GlassViewChanged(Window* window, View* view)
+{
+	(void)view;
+	if (!fActive || window == NULL)
+		return;
+	bool hasGlass = window->TopView() != NULL
+		&& window->TopView()->HasGlass();
+	fEntryLock.Lock();
+	Entry* entry = _FindEntry(window);
+	if (entry != NULL)
+		entry->hasGlassViews = hasGlass;
+	fEntryLock.Unlock();
+
+	if (GlassActive()) {
+		BRegion content;
+		window->GetContentRegion(&content);
+		window->ProcessDirtyRegion(content, content);
+	}
+	ClippingChanged();
 }
 
 
@@ -1368,11 +1717,22 @@ Compositor::_ComposeLoop()
 		}
 
 		BRegion damage;
+		BRegion generic;
 		{
+			// M11 step 4: with it, what each window changed itself
+			// (WindowHWInterface::ContentDamage) and what nobody did.
+			BAutolock entryLock(fEntryLock);
 			BAutolock _(fDamageLock);
 			fWakePending = false;
 			damage = fDamage;
 			fDamage.MakeEmpty();
+			generic = fGenericDamage;
+			fGenericDamage.MakeEmpty();
+			for (int32 i = 0; i < fEntries.CountItems(); i++) {
+				Entry* entry = fEntries.ItemAt(i);
+				entry->takenDamage = entry->iface->ContentDamage();
+				entry->iface->ContentDamage().MakeEmpty();
+			}
 		}
 
 		// the frame follows the screen size (a mode change)
@@ -1411,9 +1771,29 @@ Compositor::_ComposeLoop()
 				copy->left = source->left;
 				copy->top = source->top;
 				copy->shape = source->shape;
+				copy->shadow = source->shadow;
+				copy->shadowSmall = source->shadowSmall;
+				copy->shadowArea = source->shadowArea;
+				copy->glassFixed = source->glassFixed;
+				copy->glassAlpha = source->glassAlpha;
 				layers.AddItem(copy);
 			}
 		}
+		bool effects = false;
+		{
+			BAutolock _(fEntryLock);
+			for (int32 i = 0; i < layers.CountItems(); i++) {
+				Layer* layer = layers.ItemAt(i);
+				layer->contentDamage = layer->entry->takenDamage;
+				layer->entry->takenDamage.MakeEmpty();
+				effects |= layer->HasEffects();
+			}
+		}
+		// M11 step 4: the shadow masks and the kept blur, and the damage
+		// grown where the blur needs fresh input. Without an effect on
+		// screen nothing of this runs, and the compose is step 2's.
+		if (effects && !_PrepareEffects(damage, layers, generic))
+			effects = false;
 
 		// M11 step 3b: shared views. A presented image that is not ready
 		// yet keeps the previous one, and its view comes back next period.
@@ -1422,7 +1802,7 @@ Compositor::_ComposeLoop()
 		_ShareFrame(shares, retry);
 
 		fLastCompose = system_time();
-		if (!_Compose(damage, layers, shares)) {
+		if (!_Compose(damage, layers, shares, effects)) {
 			if (!fActive)
 				return;
 			// keep the damage for the next try after a restart
@@ -1439,11 +1819,13 @@ Compositor::_ComposeLoop()
 */
 bool
 Compositor::_Compose(const BRegion& damage, const LayerList& layers,
-	const ShareDrawList& shares)
+	const ShareDrawList& shares, bool effects)
 {
 	CompositorVulkan* vk = fVulkan;
 	fFrames++;
-	bool compare = fDebug && fFrames % 100 == 1;
+	// M11 step 4: the CPU compare knows no effects; it runs only on a
+	// frame without them.
+	bool compare = fDebug && fFrames % 100 == 1 && !effects;
 	uint32 background = fBackground;
 
 	// A compare frame keeps the windows from drawing until the CPU copy
@@ -1480,12 +1862,35 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 			layerIndex++) {
 		Layer* layer = layerIndex >= 0 ? layers.ItemAt(layerIndex) : NULL;
 		BRegion part(damage);
+		// M11 step 4: a window with a shadow or glass. Without one, this
+		// loop is step 2's copy.
+		bool withEffects = effects && layer != NULL && layer->HasEffects()
+			&& layer->buffer.IsSet();
+		BRegion glassPart;
 		if (layer != NULL) {
 			if (!layer->buffer.IsSet())
 				continue;
 			part.IntersectWith(&layer->shape);
-			if (part.CountRects() == 0)
+			bool shadowHit = withEffects && layer->shadow
+				&& damage.Intersects(layer->shadowArea.Frame());
+			if (part.CountRects() == 0 && !shadowHit)
 				continue;
+		}
+		if (withEffects) {
+			// The blur reads what lies below, before this window's own
+			// shadow darkens it; then the shadow; then the window.
+			if (layer->blurRegion.CountRects() > 0)
+				_RecordBlur(layer, (uint64)frameInfo.buffer, rect.frameStride);
+			if (layer->shadow) {
+				_RecordShadow(layer, damage, (uint64)frameInfo.buffer,
+					rect.frameStride);
+			}
+			glassPart = layer->glassFixed;
+			glassPart.Include(&layer->glassAlpha);
+			glassPart.IntersectWith(&part);
+			part.Exclude(&glassPart);
+			vk->vkCmdBindPipeline(vk->commands,
+				VK_PIPELINE_BIND_POINT_COMPUTE, vk->pipeline);
 		}
 
 		VkDescriptorBufferInfo sourceInfo = frameInfo;
@@ -1520,6 +1925,15 @@ Compositor::_Compose(const BRegion& damage, const LayerList& layers,
 				VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(rect), &rect);
 			vk->vkCmdDispatch(vk->commands, (rect.width + 15) / 16,
 				(rect.height + 15) / 16, 1);
+		}
+		if (withEffects && glassPart.CountRects() > 0) {
+			// next to the copy above, on other pixels: no barrier between
+			_RecordGlass(layer, glassPart, (uint64)frameInfo.buffer,
+				rect.frameStride);
+			vk->vkCmdBindPipeline(vk->commands,
+				VK_PIPELINE_BIND_POINT_COMPUTE, vk->pipeline);
+			// a shared view below is drawn over all of the window's part
+			part.Include(&glassPart);
 		}
 		// the next layer writes over this one
 		vk->vkCmdPipelineBarrier(vk->commands,
@@ -1852,6 +2266,7 @@ Compositor::_RestartAfterReset()
 		fLayers->MakeEmpty();
 	}
 
+	_DropEffects();
 	const char* initReason = NULL;
 	RenderingBuffer* back = fScreen->BackBuffer();
 	bool ok = back != NULL && _InitVulkan(true, &initReason) == B_OK
@@ -1885,6 +2300,7 @@ Compositor::_TurnOff(const char* reason)
 		return;
 
 	fActive = false;
+	_DropEffects();
 	fEntryLock.Lock();
 	for (int32 i = 0; i < fEntries.CountItems(); i++) {
 		Entry* entry = fEntries.ItemAt(i);
@@ -1911,6 +2327,539 @@ Compositor::_TurnOff(const char* reason)
 	fDesktop->UnlockAllWindows();
 	// The device goes when the compose thread ends, after its last
 	// references to the window buffers are gone.
+}
+
+
+//	#pragma mark - effects (M11 step 4, decision 16)
+
+
+//!	\a region with every rectangle grown by \a by on each side.
+static BRegion
+grow_region(const BRegion& region, int32 by)
+{
+	BRegion grown;
+	for (int32 i = 0; i < region.CountRects(); i++) {
+		clipping_rect r = region.RectAtInt(i);
+		r.left -= by;
+		r.top -= by;
+		r.right += by;
+		r.bottom += by;
+		grown.Include(r);
+	}
+	return grown;
+}
+
+
+//!	One box blur of radius \a radius along rows or columns, zero outside.
+static void
+box_blur(uint8* bits, int32 width, int32 height, int32 radius, bool rows,
+	uint8* line)
+{
+	int32 count = rows ? height : width;
+	int32 length = rows ? width : height;
+	int32 step = rows ? 1 : width;
+	int32 divisor = 2 * radius + 1;
+	for (int32 n = 0; n < count; n++) {
+		uint8* start = rows ? bits + n * width : bits + n;
+		for (int32 i = 0; i < length; i++)
+			line[i] = start[i * step];
+		int32 sum = 0;
+		for (int32 i = 0; i <= radius && i < length; i++)
+			sum += line[i];
+		for (int32 i = 0; i < length; i++) {
+			start[i * step] = (uint8)(sum / divisor);
+			int32 add = i + radius + 1;
+			int32 drop = i - radius;
+			if (add < length)
+				sum += line[add];
+			if (drop >= 0)
+				sum -= line[drop];
+		}
+	}
+}
+
+
+/*!	The shadow mask of a layer's window: its footprint, blurred three
+	times along the rows and three times along the columns. Made again only
+	when the footprint, the focus or the step changes (decision 16).
+*/
+bool
+Compositor::_EnsureShadowMask(Layer* layer)
+{
+	Entry* entry = layer->entry.Get();
+	int32 strength = fStrength;
+	BRegion local(layer->shape);
+	local.OffsetBy(-layer->left, -layer->top);
+	if (entry->mask.IsSet() && entry->mask->Generation() == fGeneration
+		&& entry->maskSmall == layer->shadowSmall
+		&& entry->maskStrength == strength && entry->maskShape == local)
+		return true;
+
+	window_shadow_geometry shadow = window_shadow_for(strength,
+		layer->shadowSmall);
+	clipping_rect frame = local.FrameInt();
+	int32 width = frame.right + 1 + 2 * shadow.reach;
+	int32 height = frame.bottom + 1 + 2 * shadow.reach;
+	uint64 bytes = (uint64)width * height;
+	uint8* line = (uint8*)malloc(max_c(width, height));
+	WindowBuffer* buffer = line != NULL
+		? _AllocateBuffer((uint32)((bytes + 3) / 4), 1) : NULL;
+	if (buffer == NULL) {
+		free(line);
+		entry->mask.Unset();
+		if (!fEffectsLogged) {
+			fEffectsLogged = true;
+			log_line("shadow skipped: window memory");
+		}
+		return false;
+	}
+	uint8* bits = (uint8*)buffer->Bits();
+	memset(bits, 0, buffer->Bytes());
+	for (int32 i = 0; i < local.CountRects(); i++) {
+		clipping_rect r = local.RectAtInt(i);
+		for (int32 y = r.top; y <= r.bottom; y++) {
+			memset(bits + (y + shadow.reach) * width + r.left + shadow.reach,
+				255, r.right - r.left + 1);
+		}
+	}
+	for (int32 pass = 0; pass < 3; pass++)
+		box_blur(bits, width, height, shadow.radius, true, line);
+	for (int32 pass = 0; pass < 3; pass++)
+		box_blur(bits, width, height, shadow.radius, false, line);
+	free(line);
+
+	entry->mask.SetTo(buffer, true);
+	entry->maskWidth = width;
+	entry->maskHeight = height;
+	entry->maskReach = shadow.reach;
+	entry->maskSmall = layer->shadowSmall;
+	entry->maskStrength = strength;
+	entry->maskShape = local;
+	return true;
+}
+
+
+//!	A kept blur buffer as large as the glass of the window.
+bool
+Compositor::_EnsureGlassCache(Layer* layer, const BRegion& glass)
+{
+	Entry* entry = layer->entry.Get();
+	uint64 pixels = 0;
+	for (int32 i = 0; i < glass.CountRects(); i++) {
+		clipping_rect r = glass.RectAtInt(i);
+		pixels += (uint64)(r.right - r.left + 1) * (r.bottom - r.top + 1);
+	}
+	if (pixels == 0 || pixels > UINT32_MAX)
+		return false;
+	if (!entry->glass.IsSet() || entry->glass->Generation() != fGeneration
+		|| entry->glass->Width() < pixels) {
+		entry->glass.Unset();
+		WindowBuffer* buffer = _AllocateBuffer((uint32)pixels, 1);
+		if (buffer == NULL) {
+			entry->glassValid = false;
+			if (!fEffectsLogged) {
+				fEffectsLogged = true;
+				log_line("frosted skipped: window memory");
+			}
+			return false;
+		}
+		entry->glass.SetTo(buffer, true);
+	}
+	entry->glassShape = glass;
+	entry->glassLeft = layer->left;
+	entry->glassTop = layer->top;
+	entry->glassStrength = fStrength;
+	entry->glassBelow = layer->belowHash;
+	entry->glassValid = true;
+	return true;
+}
+
+
+//!	The levels of the Dual Kawase blur, for a frame of the current size.
+bool
+Compositor::_EnsureScratch()
+{
+	CompositorVulkan* vk = fVulkan;
+	uint64 bytes = 0;
+	for (int32 k = 1; k <= 4; k++) {
+		bytes += 2 * (uint64)((fFrameWidth >> k) + 2)
+			* ((fFrameHeight >> k) + 2) * 4;
+	}
+	if (vk->scratch != VK_NULL_HANDLE && vk->scratchBytes >= bytes)
+		return true;
+	if (vk->scratch != VK_NULL_HANDLE) {
+		// between two composes the GPU is idle
+		vk->vkDestroyBuffer(vk->device, vk->scratch, NULL);
+		vk->vkFreeMemory(vk->device, vk->scratchMemory, NULL);
+		vk->scratch = VK_NULL_HANDLE;
+		vk->scratchMemory = VK_NULL_HANDLE;
+		vk->scratchBytes = 0;
+	}
+	void* bits;
+	if (!allocate_host_buffer(vk, bytes, &vk->scratch, &vk->scratchMemory,
+			&bits))
+		return false;
+	vk->scratchBytes = bytes;
+	return true;
+}
+
+
+/*!	Before the compose: the shadow masks, the kept blur of each glass
+	window, and the damage grown so the blur gets fresh input. The blur of
+	a window is made again only where something below it changed (grown by
+	the blur's reach), or all of it when the window moved, changed its
+	glass or the windows below it, or the step changed.
+*/
+bool
+Compositor::_PrepareEffects(BRegion& damage, const LayerList& layers,
+	const BRegion& generic)
+{
+	BRegion screen(BRect(0, 0, (float)fFrameWidth - 1,
+		(float)fFrameHeight - 1));
+	int32 strength = fStrength;
+	window_glass_geometry glassGeometry = window_glass_for(strength);
+	bool scratch = _EnsureScratch();
+
+	BRegion below(generic);
+	uint32 belowHash = 0;
+	BRegion grown;
+	for (int32 i = 0; i < layers.CountItems(); i++) {
+		Layer* layer = layers.ItemAt(i);
+		Entry* entry = layer->entry.Get();
+		layer->belowHash = belowHash;
+		layer->blurRegion.MakeEmpty();
+
+		if (layer->shadow && !_EnsureShadowMask(layer))
+			layer->shadow = false;
+
+		BRegion glass(layer->glassFixed);
+		glass.Include(&layer->glassAlpha);
+		glass.IntersectWith(&screen);
+		if (glass.CountRects() > 0 && layer->buffer.IsSet() && scratch) {
+			bool valid = entry->glassValid && entry->glass.IsSet()
+				&& entry->glass->Generation() == fGeneration
+				&& entry->glassShape == glass
+				&& entry->glassLeft == layer->left
+				&& entry->glassTop == layer->top
+				&& entry->glassStrength == strength
+				&& entry->glassBelow == belowHash;
+			if (!valid) {
+				if (_EnsureGlassCache(layer, glass))
+					layer->blurRegion = glass;
+				else {
+					layer->glassFixed.MakeEmpty();
+					layer->glassAlpha.MakeEmpty();
+				}
+			} else {
+				layer->blurRegion = grow_region(below, glassGeometry.reach);
+				layer->blurRegion.IntersectWith(&glass);
+			}
+			// The blur is made per glass rectangle, for the box around
+			// what is new in it; its input must be composed fresh.
+			for (int32 g = 0; g < glass.CountRects()
+					&& layer->blurRegion.CountRects() > 0; g++) {
+				BRegion part(layer->blurRegion);
+				BRegion rectangle;
+				rectangle.Set(glass.RectAtInt(g));
+				part.IntersectWith(&rectangle);
+				if (part.CountRects() == 0)
+					continue;
+				BRegion box(part.Frame());
+				BRegion input = grow_region(box, glassGeometry.reach);
+				grown.Include(&input);
+			}
+		} else if (glass.CountRects() > 0) {
+			layer->glassFixed.MakeEmpty();
+			layer->glassAlpha.MakeEmpty();
+		}
+
+		below.Include(&layer->contentDamage);
+		belowHash = belowHash * 31 + (uint32)((addr_t)entry >> 4);
+	}
+	damage.Include(&grown);
+	damage.IntersectWith(&screen);
+	return true;
+}
+
+
+//!	Pushes the three buffers of effects.comp.
+static void
+push_effect_buffers(CompositorVulkan* vk, VkBuffer source, VkBuffer target,
+	VkBuffer aux)
+{
+	VkDescriptorBufferInfo infos[3] = {};
+	infos[0].buffer = source;
+	infos[1].buffer = target;
+	infos[2].buffer = aux;
+	VkWriteDescriptorSet writes[3] = {};
+	for (int i = 0; i < 3; i++) {
+		infos[i].range = VK_WHOLE_SIZE;
+		writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writes[i].dstBinding = i;
+		writes[i].descriptorCount = 1;
+		writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		writes[i].pBufferInfo = &infos[i];
+	}
+	vk->vkCmdPushDescriptorSetKHR(vk->commands,
+		VK_PIPELINE_BIND_POINT_COMPUTE, vk->effectsPipelineLayout, 0, 3,
+		writes);
+}
+
+
+static void
+dispatch_effect(CompositorVulkan* vk, const effect_rect& effect)
+{
+	vk->vkCmdPushConstants(vk->commands, vk->effectsPipelineLayout,
+		VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(effect), &effect);
+	vk->vkCmdDispatch(vk->commands, (effect.width + 15) / 16,
+		(effect.height + 15) / 16, 1);
+}
+
+
+static void
+effect_barrier(CompositorVulkan* vk)
+{
+	VkMemoryBarrier barrier = {};
+	barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+	barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+		| VK_ACCESS_SHADER_WRITE_BIT;
+	vk->vkCmdPipelineBarrier(vk->commands,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, NULL, 0,
+		NULL);
+}
+
+
+/*!	Dual Kawase over what is composed below the window (the frame now),
+	into the window's kept blur: per glass rectangle, the box around what is
+	new in it, down the step's levels and up again (a quarter of the
+	resolution with two levels).
+*/
+void
+Compositor::_RecordBlur(Layer* layer, uint64 frame, uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	Entry* entry = layer->entry.Get();
+	window_glass_geometry geometry = window_glass_for(entry->glassStrength);
+	VkBuffer frameBuffer = (VkBuffer)frame;
+	VkBuffer cache = (VkBuffer)entry->glass->VulkanBuffer();
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->effectsPipeline);
+
+	uint32 cacheOffset = 0;
+	const BRegion& glass = entry->glassShape;
+	for (int32 g = 0; g < glass.CountRects(); g++) {
+		clipping_rect area = glass.RectAtInt(g);
+		uint32 areaWidth = area.right - area.left + 1;
+		uint32 areaPixels = areaWidth * (area.bottom - area.top + 1);
+		BRegion part(layer->blurRegion);
+		BRegion rectangle;
+		rectangle.Set(area);
+		part.IntersectWith(&rectangle);
+		if (part.CountRects() == 0) {
+			cacheOffset += areaPixels;
+			continue;
+		}
+		clipping_rect box = part.FrameInt();
+		clipping_rect input;
+		input.left = max_c(box.left - geometry.reach, 0);
+		input.top = max_c(box.top - geometry.reach, 0);
+		input.right = min_c(box.right + geometry.reach,
+			(int32)fFrameWidth - 1);
+		input.bottom = min_c(box.bottom + geometry.reach,
+			(int32)fFrameHeight - 1);
+
+		uint32 width[5];
+		uint32 height[5];
+		uint32 down[5];
+		uint32 up[5];
+		width[0] = input.right - input.left + 1;
+		height[0] = input.bottom - input.top + 1;
+		uint32 next = 0;
+		for (int32 k = 1; k <= geometry.levels; k++) {
+			width[k] = (width[k - 1] + 1) / 2;
+			height[k] = (height[k - 1] + 1) / 2;
+			down[k] = next;
+			next += width[k] * height[k];
+			up[k] = next;
+			next += width[k] * height[k];
+		}
+
+		effect_rect effect;
+		memset(&effect, 0, sizeof(effect));
+		effect.offset = geometry.offset;
+		for (int32 k = 1; k <= geometry.levels; k++) {
+			effect.mode = kEffectDown;
+			effect.width = width[k];
+			effect.height = height[k];
+			effect.targetX = down[k];
+			effect.targetY = 0;
+			effect.targetStride = width[k];
+			if (k == 1) {
+				effect.sourceX = input.left;
+				effect.sourceY = input.top;
+				effect.sourceStride = frameStride;
+				push_effect_buffers(vk, frameBuffer, vk->scratch, frameBuffer);
+			} else {
+				effect.sourceX = down[k - 1];
+				effect.sourceY = 0;
+				effect.sourceStride = width[k - 1];
+				push_effect_buffers(vk, vk->scratch, vk->scratch, frameBuffer);
+			}
+			effect.sourceWidth = width[k - 1];
+			effect.sourceHeight = height[k - 1];
+			effect.auxX = 0;
+			effect.auxY = 0;
+			dispatch_effect(vk, effect);
+			effect_barrier(vk);
+		}
+		for (int32 k = geometry.levels; k >= 1; k--) {
+			effect.mode = kEffectUp;
+			effect.sourceX = k == geometry.levels ? down[k] : up[k];
+			effect.sourceY = 0;
+			effect.sourceStride = width[k];
+			effect.sourceWidth = width[k];
+			effect.sourceHeight = height[k];
+			if (k > 1) {
+				effect.width = width[k - 1];
+				effect.height = height[k - 1];
+				effect.targetX = up[k - 1];
+				effect.targetY = 0;
+				effect.targetStride = width[k - 1];
+				effect.auxX = 0;
+				effect.auxY = 0;
+				push_effect_buffers(vk, vk->scratch, vk->scratch, frameBuffer);
+			} else {
+				// the last level writes only the box, into the kept blur
+				effect.width = box.right - box.left + 1;
+				effect.height = box.bottom - box.top + 1;
+				effect.targetX = cacheOffset + (box.left - area.left);
+				effect.targetY = box.top - area.top;
+				effect.targetStride = areaWidth;
+				effect.auxX = box.left - input.left;
+				effect.auxY = box.top - input.top;
+				push_effect_buffers(vk, vk->scratch, cache, frameBuffer);
+			}
+			dispatch_effect(vk, effect);
+			effect_barrier(vk);
+		}
+		cacheOffset += areaPixels;
+	}
+}
+
+
+//!	The shadow under the window, where the damage touches it.
+void
+Compositor::_RecordShadow(Layer* layer, const BRegion& damage, uint64 frame,
+	uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	Entry* entry = layer->entry.Get();
+	BRegion part(damage);
+	part.IntersectWith(&layer->shadowArea);
+	if (part.CountRects() == 0 || !entry->mask.IsSet())
+		return;
+	window_shadow_geometry shadow = window_shadow_for(entry->maskStrength,
+		entry->maskSmall);
+	int32 maskLeft = layer->left - shadow.reach;
+	int32 maskTop = layer->top - shadow.reach + shadow.offset;
+
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->effectsPipeline);
+	push_effect_buffers(vk, (VkBuffer)entry->mask->VulkanBuffer(),
+		(VkBuffer)frame, (VkBuffer)frame);
+	effect_rect effect;
+	memset(&effect, 0, sizeof(effect));
+	effect.mode = kEffectShadow;
+	effect.targetStride = frameStride;
+	effect.sourceStride = entry->maskWidth;
+	effect.amount = shadow.strength;
+	for (int32 i = 0; i < part.CountRects(); i++) {
+		clipping_rect r = part.RectAtInt(i);
+		// the mask covers the whole shadow area by construction
+		if (r.left < maskLeft || r.top < maskTop
+			|| r.right >= maskLeft + entry->maskWidth
+			|| r.bottom >= maskTop + entry->maskHeight)
+			continue;
+		effect.width = r.right - r.left + 1;
+		effect.height = r.bottom - r.top + 1;
+		effect.targetX = r.left;
+		effect.targetY = r.top;
+		effect.sourceX = r.left - maskLeft;
+		effect.sourceY = r.top - maskTop;
+		dispatch_effect(vk, effect);
+	}
+	effect_barrier(vk);
+}
+
+
+//!	The window's glass pixels over its kept blur, where the damage is.
+void
+Compositor::_RecordGlass(Layer* layer, const BRegion& damage, uint64 frame,
+	uint32 frameStride)
+{
+	CompositorVulkan* vk = fVulkan;
+	Entry* entry = layer->entry.Get();
+	if (!entry->glass.IsSet())
+		return;
+	window_glass_geometry geometry = window_glass_for(entry->glassStrength);
+	vk->vkCmdBindPipeline(vk->commands, VK_PIPELINE_BIND_POINT_COMPUTE,
+		vk->effectsPipeline);
+	push_effect_buffers(vk, (VkBuffer)layer->buffer->VulkanBuffer(),
+		(VkBuffer)frame, (VkBuffer)entry->glass->VulkanBuffer());
+	effect_rect effect;
+	memset(&effect, 0, sizeof(effect));
+	effect.mode = kEffectGlass;
+	effect.targetStride = frameStride;
+	effect.sourceStride = layer->buffer->Width();
+
+	uint32 cacheOffset = 0;
+	const BRegion& glass = entry->glassShape;
+	for (int32 g = 0; g < glass.CountRects(); g++) {
+		clipping_rect area = glass.RectAtInt(g);
+		uint32 areaWidth = area.right - area.left + 1;
+		for (int32 kind = 0; kind < 2; kind++) {
+			BRegion part(damage);
+			BRegion rectangle;
+			rectangle.Set(area);
+			part.IntersectWith(&rectangle);
+			if (kind == 0)
+				part.IntersectWith(&layer->glassFixed);
+			else
+				part.IntersectWith(&layer->glassAlpha);
+			effect.amount = geometry.seeThrough
+				| (kind == 0 ? kEffectFixedGlass : 0);
+			effect.auxStride = areaWidth;
+			for (int32 i = 0; i < part.CountRects(); i++) {
+				clipping_rect r = part.RectAtInt(i);
+				effect.width = r.right - r.left + 1;
+				effect.height = r.bottom - r.top + 1;
+				effect.targetX = r.left;
+				effect.targetY = r.top;
+				effect.sourceX = r.left - layer->left;
+				effect.sourceY = r.top - layer->top;
+				effect.auxX = cacheOffset + (r.left - area.left);
+				effect.auxY = r.top - area.top;
+				dispatch_effect(vk, effect);
+			}
+		}
+		cacheOffset += areaWidth * (area.bottom - area.top + 1);
+	}
+}
+
+
+//!	After a restart or the switch to the CPU mode: no mask, no kept blur.
+void
+Compositor::_DropEffects()
+{
+	BAutolock _(fEntryLock);
+	for (int32 i = 0; i < fEntries.CountItems(); i++) {
+		Entry* entry = fEntries.ItemAt(i);
+		entry->mask.Unset();
+		entry->glass.Unset();
+		entry->glassValid = false;
+	}
 }
 
 
@@ -2514,6 +3463,12 @@ Compositor::_Report()
 	}
 	log_line("compose median %" B_PRId64 " us cpu %" B_PRId64
 		" ms per 10 s", median, (cpu - fCpuAtReport) / 1000);
+	// M11 step 4: what the median above was measured with
+	uint32 effects = fEffects;
+	log_line("compose effects shadow %s frosted %s strength %s",
+		(effects & kWindowEffectShadow) != 0 ? "on" : "off",
+		(effects & kWindowEffectFrostedGlass) != 0 ? "on" : "off",
+		window_effect_level_for(fStrength).name);
 	// Decision 4: the time after the fence, per way, for the stick report
 	// (vulkan: the cursor only; cpu: the copy into the back buffer plus
 	// CopyBackToFront, the M8 DMA_DATA copy when gpu_app_server is on).
