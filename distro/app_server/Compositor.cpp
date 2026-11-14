@@ -3448,8 +3448,9 @@ Compositor::DirectScreenChanged(bool locked)
 	if (locked) {
 		if (!fDesktop->LockAllWindows())
 			return;
-		DirectAccessStarting();
+		// set before the pause, so a resume the pause schedules sees it
 		fDirectScreen = true;
+		DirectAccessStarting();
 		fDesktop->UnlockAllWindows();
 		return;
 	}

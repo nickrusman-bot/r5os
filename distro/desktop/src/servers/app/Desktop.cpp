@@ -1097,6 +1097,16 @@ Desktop::LockDirectScreen(team_id team)
 	// TODO: BWindowScreens should use the same mechanism as BDirectWindow,
 	// which would make this method superfluous.
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 5, decision 9: a BWindowScreen pauses the compositor. The
+	// pause takes the window lock, so it comes before the direct screen
+	// lock: _SetCurrentWorkspaceConfiguration() takes them the other way.
+	if (fCompositor != NULL)
+		fCompositor->DirectScreenChanged(true);
+// SPDX-SnippetEnd
+
 	status_t status = fDirectScreenLock.LockWithTimeout(1000000L);
 	if (status == B_OK)
 		fDirectScreenTeam = team;
@@ -1104,9 +1114,11 @@ Desktop::LockDirectScreen(team_id team)
 // SPDX-SnippetBegin
 // SPDX-SnippetCopyrightText: 2026 R5OS Contributors
 // SPDX-License-Identifier: MIT
-	// M11 step 5, decision 9: a BWindowScreen pauses the compositor
-	if (status == B_OK && fCompositor != NULL)
-		fCompositor->DirectScreenChanged(true);
+	else if (fCompositor != NULL && fDirectScreenTeam < 0) {
+		// nobody has the screen (another team still holding it keeps the
+		// pause)
+		fCompositor->DirectScreenChanged(false);
+	}
 // SPDX-SnippetEnd
 
 	return status;
