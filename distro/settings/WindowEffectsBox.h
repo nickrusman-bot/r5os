@@ -43,6 +43,7 @@ private:
 
 			BCheckBox*			fShadow;
 			BCheckBox*			fGlass;
+			BCheckBox*			fAnimations;
 			BMenuField*			fStrengthField;
 			BPopUpMenu*			fStrengthMenu;
 			BHandler*			fTarget;

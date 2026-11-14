@@ -495,3 +495,15 @@ The shadow (A3), the frosted glass (A4), the three strengths and the "Window eff
 - **The box:** `WindowEffectsBox` (`distro/settings`, one source for Settings' Look and Feel page and the Appearance program's Look and feel tab), under the arrow style: "Shadow", "Frosted glass", "Strength:" Quiet / Balanced / Glassy as a pop-up menu, and the hint "Less effect uses less CPU". Each change is applied at once. Defaults: both on, Balanced. Revert: the values from when the page opened.
 - **The compare** (`gpu_debug`) runs only on a frame without effects; with effects on screen it is skipped.
 - **Measurement:** with `gpu_debug`, every 10 s after `compose median` a line `app_server: compose effects shadow <on|off> frosted <on|off> strength <step>`. `r5-effects-test` (in `/system/bin`) sets the effects from a shell and opens a glass, plain or full-screen glass window for the measurement.
+
+
+## Built in step 4b (14 Nov 2026)
+
+Window animations, `generated/gpu-m11/ANIMATIONS.md`. Night run without the user; the choices are listed in the step report.
+
+- **Where:** only in the compositor, on the effects pipeline (decision 16): `effects.comp` mode 4 draws a window scaled about its centre and faded, mode 5 the workspace slide. Nothing changes for programs or Deskbar, and no new call: the flag `B_WINDOW_ANIMATIONS` of `set_window_effects()`, kept as `window animations` in the `appearance` file (missing: on). The "Animations" checkbox is the third in the "Window effects" box; Defaults turns all three on.
+- **Open:** a window that gets its first buffer (its first show) fades in and grows from 95 % to 100 % in 150 ms, ease-out. **Close:** a window that is hidden (not minimised) or removed is drawn from its last buffer, over the others, fading and shrinking in 120 ms (a "ghost" that holds the buffer until it ends). A close during an open starts from where the open is. **Workspace:** the picture shown is kept, the new workspace is composed in full each frame, and the two slide past each other in 200 ms (new from the right for a higher workspace). A switch during a slide starts from the picture shown then.
+- **The lengths and the scale** are starting values in one place, `WindowEffectLevels.h` (`kOpenAnimation`, `kCloseAnimation`, `kWorkspaceAnimation`, `kOpenAnimationScale`).
+- **Never in the way:** a window is a normal window from its first frame; it draws, gets input and moves as always, and only its compose is drawn differently. The compose thread composes every refresh period while an animation runs, and ends each with one line, `app_server: animation <open|close|workspace> <n> ms frames <n>`.
+- **Not animated:** windows without a decorator (menus, tool tips, the desktop, Deskbar), windows with direct access (`ServerWindow::IsDirectlyAccessing()`), hiding into Deskbar and showing out of it, a window moved to another workspace, windows that show because of a workspace switch, and the CPU mode (there is no compositor). An opening window is drawn without its shadow and glass until the animation ends.
+- **The compare** (`gpu_debug`) runs only on a frame without effects and without an animation, so only on a still picture.

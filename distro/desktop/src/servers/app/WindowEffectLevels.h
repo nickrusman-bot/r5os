@@ -148,6 +148,14 @@ window_glass_for(int32 strength)
 }
 
 
+// M11 step 4b: the window animations (generated/gpu-m11/ANIMATIONS.md).
+// Starting values for the measurement, logged with each animation.
+static const bigtime_t kOpenAnimation = 150000;		// fade in, 95 % to 100 %
+static const bigtime_t kCloseAnimation = 120000;	// the reverse, shorter
+static const bigtime_t kWorkspaceAnimation = 200000;	// the slide
+static const float kOpenAnimationScale = 0.95f;
+
+
 // The strength app_server uses now; set by DesktopSettingsPrivate when it
 // loads or stores the appearance file. Read by the R5 decorator for its
 // shadow extent.

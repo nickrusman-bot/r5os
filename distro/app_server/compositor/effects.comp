@@ -10,6 +10,9 @@
 //   1 down:   one Dual Kawase level down (5 taps, half the size)
 //   2 up:     one Dual Kawase level up (8 taps, twice the size)
 //   3 glass:  a window's pixels over the kept blur of what lies behind
+//   4 window: a window scaled about its centre and faded, for the open and
+//             close animations (step 4b)
+//   5 slide:  the workspace switch, the old picture and the new side by side
 //
 // Compiled by scripts/gen-compositor-shaders.sh.
 
@@ -46,7 +49,10 @@ layout(push_constant) uniform Effect {
 	uint auxStride;
 	uint amount;		// shadow: strength, glass: see-through (0..255),
 						// bit 8 for glass: fixed (tab and frame line)
-	float offset;		// down/up: the Kawase offset in source pixels
+	float offset;		// down/up: the Kawase offset in source pixels;
+						// window: the scale; slide: the direction (+1, -1)
+	ivec4 shape[4];		// window: its footprint, up to four rectangles in
+						// buffer coordinates (left, top, right, bottom)
 } effect;
 
 
@@ -141,6 +147,48 @@ main()
 		sum += sampleBilinear(centre + vec2(o, -o)) * 2.0;
 		sum += sampleBilinear(centre + vec2(-o, -o)) * 2.0;
 		target.pixels[index] = pack(sum / 12.0);
+		return;
+	}
+
+	if (effect.mode == 4u) {
+		// The output pixel, in the window buffer's coordinates, back to
+		// where it lies in the window before the scale.
+		vec2 size = vec2(float(effect.sourceWidth), float(effect.sourceHeight));
+		vec2 centre = size * 0.5;
+		vec2 here = vec2(at + uvec2(effect.auxX, effect.auxY)) + 0.5;
+		vec2 from = centre + (here - centre) / effect.offset - 0.5;
+		ivec2 nearest = ivec2(floor(from + 0.5));
+		bool inside = false;
+		for (int i = 0; i < 4; i++) {
+			ivec4 r = effect.shape[i];
+			if (r.x <= r.z && nearest.x >= r.x && nearest.x <= r.z
+				&& nearest.y >= r.y && nearest.y <= r.w)
+				inside = true;
+		}
+		if (!inside)
+			return;
+		vec4 window = sampleBilinear(from);
+		vec4 below = unpack(target.pixels[index]);
+		float alpha = float(effect.amount) / 255.0;
+		target.pixels[index] = pack(vec4(mix(below.rgb, window.rgb, alpha),
+			1.0));
+		return;
+	}
+
+	if (effect.mode == 5u) {
+		// source: the old picture, aux: the new one, both with the
+		// target's stride; amount: how far the new one has come in.
+		int width = int(effect.width);
+		int x = int(at.x + effect.targetX);
+		int shift = int(effect.amount);
+		uint row = (effect.targetY + at.y) * effect.targetStride;
+		int moved = effect.offset > 0.0 ? x + shift : x - shift;
+		if (moved >= 0 && moved < width)
+			target.pixels[index] = source.pixels[row + uint(moved)];
+		else {
+			int other = effect.offset > 0.0 ? moved - width : moved + width;
+			target.pixels[index] = aux.pixels[row + uint(other)];
+		}
 		return;
 	}
 
