@@ -3953,6 +3953,16 @@ ServerApp::_MessageLooper()
 		}
 	}
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 R5OS Contributors
+// SPDX-License-Identifier: MIT
+	// M11 step 5: a BWindowScreen program that ends without giving the
+	// screen back (killed, crashed) kept the direct screen lock, and the
+	// compositor paused, for good. This thread took the lock, so it can
+	// give it back; a team that does not hold it gets B_PERMISSION_DENIED.
+	fDesktop->UnlockDirectScreen(fClientTeam);
+// SPDX-SnippetEnd
+
 	// Quit() will send us a message; we're handling the exiting procedure
 	thread_id sender;
 	sem_id shutdownSemaphore;
