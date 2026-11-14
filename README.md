@@ -53,6 +53,19 @@ The name is a nod to BeOS R5, as history. It is not a product claim.
 
 \* In active development. Only the Ryzen 5 5625U has been tested so far; other graphics chips draw in software. Details: [`docs/GRAPHICS.md`](docs/GRAPHICS.md).
 
+### The desktop on the GPU (preview)
+**Your desktop, with depth.** Every window gets its own canvas, and the graphics chip puts the whole screen together from those canvases, frame by frame. Your apps don't change. The desktop just feels lighter.
+
+- **Soft shadows** lift windows off the desktop, so you see at a glance what's on top.
+- **Frosted glass** lets the desktop show through window tabs and menus, softly blurred.
+- **Three looks:** Quiet, Balanced and Glassy. Pick the one you like in Settings → Appearance → Look and feel. Less effect uses less processor time.
+- **Gentle animations:** windows fade in and out, and workspaces slide into place. One switch turns them off.
+- **Vulkan apps and games go straight to the screen**, without an extra copy along the way.
+- **Full-screen games and video keep working.** When a program wants to draw on the screen itself, the compositor steps aside, and it comes back when the program is done.
+- **There's always a way back.** If the graphics chip ever stops, the desktop carries on in the classic way, without a restart. On a computer without a supported chip, the same desktop is drawn in software.
+
+This is a preview: it stays off by default while it is tested on real hardware.
+
 ### Processor
 - Better CPU support (AMD/Intel)
 - AMD processors load AMD's latest microcode at start
@@ -64,7 +77,7 @@ The full list, build by build, is in About R5 → What's new ([`distro/WHATSNEW`
 
 ## Not there yet
 
-- No GPU acceleration for the desktop. The desktop is still drawn by the CPU.
+- The desktop on the GPU is not on by default yet. Until it is, the desktop is drawn by the CPU.
 - One graphical session at a time. There is no fast user switching and no guest account.
 - The bundled browser (WebPositive) is weak for today's web.
 - Sleep, backlight and HiDPI on the reference laptop are still open.
